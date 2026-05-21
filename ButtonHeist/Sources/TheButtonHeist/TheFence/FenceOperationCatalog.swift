@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 /// Failure produced while normalizing an external tool name into a Fence command.
 ///
@@ -68,26 +69,13 @@ public enum FenceOperationCatalog {
     }
 
     public static func normalizePlaybackStep(
-        _ step: [String: Any]
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        normalizeCanonicalStep(
-            step,
-            context: "heist step",
-            nonExecutableLabel: "playback-executable",
-            isExecutable: \.isPlaybackExecutable
-        )
-    }
-
-    public static func normalizePlaybackStep(
         commandName: String,
-        arguments: [String: Any]
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        normalizeCanonicalStep(
+        arguments: [String: HeistValue]
+    ) -> Result<TheFence.Command, FenceOperationRoutingError> {
+        normalizeTypedPlaybackStep(
             commandName: commandName,
             arguments: arguments,
-            context: "heist step",
-            nonExecutableLabel: "playback-executable",
-            isExecutable: \.isPlaybackExecutable
+            context: "heist step"
         )
     }
 
@@ -142,6 +130,30 @@ public enum FenceOperationCatalog {
         }
 
         return .success(NormalizedOperation(command: command, arguments: arguments))
+    }
+
+    private static func normalizeTypedPlaybackStep(
+        commandName: String,
+        arguments: [String: HeistValue],
+        context: String
+    ) -> Result<TheFence.Command, FenceOperationRoutingError> {
+        guard let command = TheFence.Command(rawValue: commandName) else {
+            return .failure(FenceOperationRoutingError(
+                message: "\(context) command must be a canonical TheFence.Command; unknown command \"\(commandName)\""
+            ))
+        }
+
+        guard command.isPlaybackExecutable else {
+            return .failure(FenceOperationRoutingError(
+                message: "\(context) command \"\(command.rawValue)\" is not playback-executable"
+            ))
+        }
+
+        if let error = typedPlaybackShapeError(for: command, arguments: arguments, context: context) {
+            return .failure(error)
+        }
+
+        return .success(command)
     }
 
     private static func routeCommandNamed(
@@ -211,6 +223,39 @@ public enum FenceOperationCatalog {
         }
 
         guard let selectorValue = arguments[selectorKey] as? String,
+              selector.consumesValue(selectorValue),
+              let selectedCommand = selector.command(for: selectorValue),
+              selectedCommand != command else {
+            return nil
+        }
+        return .init(
+            message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorValue) selector; " +
+                "use canonical Fence command \(selectedCommand.rawValue)."
+        )
+    }
+
+    private static func typedPlaybackShapeError(
+        for command: TheFence.Command,
+        arguments: [String: HeistValue],
+        context: String
+    ) -> FenceOperationRoutingError? {
+        guard let contract = TheFence.Command.mcpToolContract(named: command.rawValue),
+              let selector = contract.selector else {
+            return nil
+        }
+
+        let selectorKey = selector.parameter.key
+        guard arguments[selectorKey] != nil else { return nil }
+
+        let commandParameterKeys = Set(command.parameters.map(\.key))
+        if !commandParameterKeys.contains(selectorKey) {
+            return .init(
+                message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorKey) selector; " +
+                    "use canonical Fence commands \(rawCommandList(contract.commands))."
+            )
+        }
+
+        guard case .string(let selectorValue)? = arguments[selectorKey],
               selector.consumesValue(selectorValue),
               let selectedCommand = selector.command(for: selectorValue),
               selectedCommand != command else {

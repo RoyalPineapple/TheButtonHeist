@@ -375,7 +375,7 @@ extension TheFence {
     }
 
     func parsePlaybackOperation(_ operation: PlaybackOperation) throws -> ParsedRequest {
-        try parseRequest(command: operation.command, arguments: operation.requestArguments())
+        try parseRequest(operation: operation.normalizedOperation())
     }
 
     func decodeRequestPayload(

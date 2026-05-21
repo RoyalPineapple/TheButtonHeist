@@ -3109,6 +3109,49 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTypedPlaybackLoadsFlatHeistFileAtFileEdge() async throws {
+        let heist = HeistPlayback(
+            app: "com.test.mock",
+            steps: [
+                HeistEvidence(
+                    command: "activate",
+                    target: ElementMatcher(identifier: "submit"),
+                    arguments: ["expect": .object(["type": .string("screen_changed")])]
+                ),
+            ]
+        )
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let playback = try TheFence.TypedHeistPlayback(contentsOf: heistURL)
+
+        XCTAssertEqual(playback.app, "com.test.mock")
+        XCTAssertEqual(playback.steps.map(\.command), [.activate])
+        XCTAssertEqual(playback.steps.first?.target?.identifier, "submit")
+        let expect = playback.steps.first?.dispatchBridgeArguments()["expect"] as? [String: Any]
+        XCTAssertEqual(expect?["type"] as? String, "screen_changed")
+    }
+
+    @ButtonHeistActor
+    func testTypedPlaybackFileEdgeRejectsUnsupportedVersion() async throws {
+        let heist = HeistPlayback(
+            version: HeistPlayback.currentVersion + 1,
+            app: "com.test.mock",
+            steps: [HeistEvidence(command: "activate", target: ElementMatcher(identifier: "submit"))]
+        )
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        XCTAssertThrowsError(try TheFence.TypedHeistPlayback(contentsOf: heistURL)) { error in
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Unsupported heist file version \(HeistPlayback.currentVersion + 1)"))
+            XCTAssertTrue(message.contains("supports version \(HeistPlayback.currentVersion)"))
+        }
+    }
+
+    @ButtonHeistActor
     func testPlaybackOperationPreservesCanonicalExpectationPayload() async throws {
         let operation = try TheFence.PlaybackOperation(
             evidence: HeistEvidence(

@@ -563,25 +563,16 @@ extension TheFence {
             throw FenceError.invalidRequest("Invalid input path: must not be empty or contain '..' components")
         }
 
-        let heist = try TheBookKeeper.readHeist(from: resolvedURL)
-
-        guard heist.version == HeistPlayback.currentVersion else {
-            throw FenceError.invalidRequest(
-                "Unsupported heist file version \(heist.version). " +
-                    "This Button Heist build supports version \(HeistPlayback.currentVersion). " +
-                    "Re-record the heist with the current format."
-            )
-        }
+        let typedPlayback = try TypedHeistPlayback(contentsOf: resolvedURL)
 
         // Warn if the connected app doesn't match the app the heist was recorded against
         if let connectedBundle = handoff.serverInfo?.bundleIdentifier,
-           connectedBundle != heist.app {
+           connectedBundle != typedPlayback.app {
             logger.warning(
-                "Heist was recorded against \(heist.app) but connected app is \(connectedBundle)"
+                "Heist was recorded against \(typedPlayback.app) but connected app is \(connectedBundle)"
             )
         }
 
-        let typedPlayback = try TypedHeistPlayback(wire: heist)
         let heistName = resolvedURL.deletingPathExtension().lastPathComponent
         let playbackStart = CFAbsoluteTimeGetCurrent()
         var completedSteps = 0
