@@ -72,6 +72,10 @@ final class TheFenceParameterSpecTests: XCTestCase {
             XCTAssertEqual(descriptor.isBatchExecutable, command.isBatchExecutable)
             XCTAssertEqual(descriptor.isPlaybackExecutable, command.isPlaybackExecutable)
             XCTAssertEqual(descriptor.isHeistRecordable, command.isHeistRecordable)
+            XCTAssertEqual(
+                descriptor.requiresConnectionBeforeDispatch,
+                command.requiresConnectionBeforeDispatch
+            )
             XCTAssertFalse(descriptor.description.isEmpty)
         }
     }
@@ -93,6 +97,17 @@ final class TheFenceParameterSpecTests: XCTestCase {
             ]
         )
         XCTAssertTrue(TheFence.Command.allCases.allSatisfy { !$0.isHeistRecordable || $0.isPlaybackExecutable })
+    }
+
+    func testConnectionDispatchPolicyIsDescriptorOwned() {
+        let noConnectionCommands = TheFence.Command.allCases.filter { !$0.requiresConnectionBeforeDispatch }
+        XCTAssertEqual(
+            Set(noConnectionCommands),
+            [
+                .getSessionState, .listDevices, .connect, .listTargets,
+                .getSessionLog, .archiveSession, .startHeist, .stopHeist,
+            ]
+        )
     }
 
     func testCommandAliasesAreDescriptorOwned() {

@@ -83,6 +83,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let isBatchExecutable: Bool
     public let isPlaybackExecutable: Bool
     public let isHeistRecordable: Bool
+    public let requiresConnectionBeforeDispatch: Bool
     public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
     public let description: String
@@ -96,6 +97,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         isBatchExecutable: Bool,
         isPlaybackExecutable: Bool? = nil,
         isHeistRecordable: Bool? = nil,
+        requiresConnectionBeforeDispatch: Bool = true,
         humanPositionalSyntax: FenceHumanPositionalSyntax = .target,
         parameters: [FenceParameterSpec],
         description: String
@@ -110,6 +112,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         let resolvedPlaybackExecutable = isPlaybackExecutable ?? isBatchExecutable
         self.isPlaybackExecutable = resolvedPlaybackExecutable
         self.isHeistRecordable = isHeistRecordable ?? resolvedPlaybackExecutable
+        self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.humanPositionalSyntax = humanPositionalSyntax
         self.parameters = parameters
         self.description = description
@@ -263,6 +266,11 @@ public extension TheFence.Command {
         descriptor.isHeistRecordable
     }
 
+    /// Commands that should establish a device connection before dispatch.
+    var requiresConnectionBeforeDispatch: Bool {
+        descriptor.requiresConnectionBeforeDispatch
+    }
+
     static var mcpToolContracts: [MCPToolContract] {
         var toolNames: [String] = []
         var commandsByToolName: [String: [Self]] = [:]
@@ -313,6 +321,7 @@ extension TheFence.Command {
             isBatchExecutable: command.catalogBatchExecutable,
             isPlaybackExecutable: command.catalogPlaybackExecutable,
             isHeistRecordable: command.catalogHeistRecordable,
+            requiresConnectionBeforeDispatch: command.catalogRequiresConnectionBeforeDispatch,
             humanPositionalSyntax: command.catalogHumanPositionalSyntax,
             parameters: command.catalogParameters,
             description: mcpDescription(for: command.rawValue)
@@ -380,6 +389,16 @@ extension TheFence.Command {
 
     var catalogHeistRecordable: Bool {
         catalogPlaybackExecutable
+    }
+
+    var catalogRequiresConnectionBeforeDispatch: Bool {
+        switch self {
+        case .getSessionState, .listDevices, .connect, .listTargets,
+             .getSessionLog, .archiveSession, .startHeist, .stopHeist:
+            return false
+        default:
+            return true
+        }
     }
 
     var catalogHumanPositionalSyntax: FenceHumanPositionalSyntax {
