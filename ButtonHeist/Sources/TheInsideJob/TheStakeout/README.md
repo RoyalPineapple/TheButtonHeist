@@ -8,7 +8,7 @@ Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 
 
 ### State machine
 
-`StakeoutPhase`: `.idle` / `.recording(RecordingSession)` / `.finalizing(FinalizingSession)`. Each case carries exactly the data valid for that phase — `RecordingSession` holds the writer, input, adaptor, capture timer task, inactivity check task, frame count, interaction log; `FinalizingSession` drops the tasks and mutable bookkeeping.
+`StakeoutPhase`: `.idle` / `.recording(ActiveRecording)` / `.finalizing(FinalizingRecording)`. Each case carries only the data valid for that lifecycle phase. `ActiveRecording` groups writer resources, output shape, timing, evidence, capture loop, activity tracking, and interaction log state; `FinalizingRecording` drops active-only tasks and the pixel-buffer adaptor before building the payload.
 
 ### Recording lifecycle
 
@@ -19,9 +19,9 @@ Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 
 2. Checks file size (>7 MB → stop, `.fileSizeLimit`), max duration (configurable → stop)
 3. Allocates `CVPixelBuffer` from the adaptor's pool, draws the image into a `CGContext`, appends with `CMTime(value: frameCount, timescale: fps)`
 
-**Inactivity monitor** — wakes every 1s, checks `Date().timeIntervalSince(lastActivityTime)` against `inactivityTimeout`. Activity is bumped by `noteActivity()` (incoming commands) and `noteScreenChange()` (settled hierarchy changes reported by TheGetaway). The monitor only runs when `inactivityTimeout` is explicit; omitted values record until `maxDuration`, manual stop, or another hard cap.
+**Inactivity monitor** — represented as `ActivityLifecycle`: `.notTracked` when `inactivityTimeout` is omitted, `.tracking` when it is explicit. The monitor wakes every 1s, checks elapsed time since the last tracked activity, and is bumped by `noteActivity()` (incoming commands) and `noteScreenChange()` (settled hierarchy changes reported by TheGetaway). Omitted values record until `maxDuration`, manual stop, or another hard cap.
 
-**`stopRecording(reason:)`** — cancels both tasks, transitions to `.finalizing`, calls `finalizeRecording`.
+**`stopRecording(reason:)`** — cancels the capture task and any active inactivity monitor, transitions to `.finalizing`, calls `finalizeRecording`.
 
 **Finalization** — `videoInput.markAsFinished()` → `writer.finishWriting` → read output file → build `RecordingPayload` (base64 video, dimensions, duration, fps, frameCount, start/end times, stop reason, interaction log) → call `onRecordingComplete?(.success(payload))` → delete temp file → transition to `.idle`.
 

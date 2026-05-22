@@ -11,18 +11,34 @@ final class PingFastPathTests: XCTestCase {
     func testEncodedPongReturnsPongForPingRequest() throws {
         let request = RequestEnvelope(requestId: "req-1", message: .ping)
         let data = try JSONEncoder().encode(request)
+        let payload = PongPayload(
+            buttonHeistVersion: "test-version",
+            appName: "FastPathApp",
+            bundleIdentifier: "com.test.fastpath",
+            appVersion: "1.0",
+            appBuild: "1",
+            serverInstanceIdentifier: "fast-server"
+        )
+        let beforeMs = Int64(Date().timeIntervalSince1970 * 1000)
 
-        guard let pongData = PingFastPath.encodedPong(for: data) else {
+        guard let pongData = PingFastPath.encodedPong(for: data, payload: payload) else {
             XCTFail("Expected pong data, got nil")
             return
         }
+        let afterMs = Int64(Date().timeIntervalSince1970 * 1000)
 
         let response = try JSONDecoder().decode(ResponseEnvelope.self, from: pongData)
         XCTAssertEqual(response.requestId, "req-1")
-        guard case .pong = response.message else {
+        guard case .pong(let pongPayload) = response.message else {
             XCTFail("Expected .pong, got \(response.message)")
             return
         }
+        XCTAssertEqual(pongPayload.appName, "FastPathApp")
+        XCTAssertEqual(pongPayload.bundleIdentifier, "com.test.fastpath")
+        XCTAssertEqual(pongPayload.serverInstanceIdentifier, "fast-server")
+        let timestamp = try XCTUnwrap(pongPayload.serverTimestampMs)
+        XCTAssertGreaterThanOrEqual(timestamp, beforeMs)
+        XCTAssertLessThanOrEqual(timestamp, afterMs)
     }
 
     func testEncodedPongPreservesNilRequestId() throws {

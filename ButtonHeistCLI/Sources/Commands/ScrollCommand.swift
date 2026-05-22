@@ -12,13 +12,18 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             approximately one page in the given direction. Defaults to down.
 
             Examples:
+              buttonheist scroll
               buttonheist scroll btn_list
               buttonheist scroll btn_list -d up
+              buttonheist scroll --stable-id "main_scroll"
               buttonheist scroll -id "myElement" -d next
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
+
+    @Option(name: .customLong("stable-id"), help: "Scrollable container stableId from get_interface")
+    var stableId: String?
 
     @Option(name: .shortAndLong, help: "Scroll direction: up, down, left, right, next, previous (default: down)")
     var direction: String = "down"
@@ -29,8 +34,6 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        _ = try element.requireTarget()
-
         guard let scrollDirection = ScrollDirection(rawValue: direction.lowercased()) else {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
         }
@@ -39,6 +42,7 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             .direction: .string(scrollDirection.rawValue),
             .timeout: .double(timeoutOption.timeout),
         ])
+        if let stableId { request.set(.stableId, stableId) }
         try element.applyTo(&request)
 
         try await CLIRunner.run(

@@ -11,9 +11,14 @@ let packageSettings = PackageSettings(
         "AccessibilitySnapshotModel": .framework,
         "AccessibilitySnapshotParser": .framework,
         "AccessibilitySnapshotParser-ObjC": .framework,
-        "X509": .framework,
-        "Crypto": .framework,
-        "SwiftASN1": .framework,
+        "X509": .staticFramework,
+        "Crypto": .staticFramework,
+        "SwiftASN1": .staticFramework,
+        "CCryptoBoringSSL": .staticFramework,
+        "CCryptoBoringSSLShims": .staticFramework,
+        "CryptoBoringWrapper": .staticFramework,
+        "_CertificateInternals": .staticFramework,
+        "_CryptoExtras": .staticFramework,
     ]
 )
 #endif

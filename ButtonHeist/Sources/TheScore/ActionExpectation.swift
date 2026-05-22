@@ -33,6 +33,9 @@ import Foundation
 /// ```
 /// See `docs/WIRE-PROTOCOL.md` for the full shape.
 public enum ActionExpectation: Sendable, Equatable {
+    /// Expected the action to be delivered successfully. This is the explicit
+    /// operation-pipeline form of the baseline delivery check.
+    case delivery
     /// Expected a screen-level change (VC identity changed).
     case screenChanged
     /// Expected elements to be added, removed, updated, or the screen to change.
@@ -55,6 +58,8 @@ public enum ActionExpectation: Sendable, Equatable {
     /// Human-readable summary of this expectation, suitable for failure messages.
     public var summaryDescription: String {
         switch self {
+        case .delivery:
+            return "delivery"
         case .screenChanged:
             return "screen_changed"
         case .elementsChanged:
@@ -72,6 +77,7 @@ public enum ActionExpectation: Sendable, Equatable {
             let target = matcher.label ?? matcher.identifier ?? "element"
             return "element_disappeared(\(target))"
         case .compound(let expectations):
+            if expectations.isEmpty { return "delivery" }
             return "compound(\(expectations.count) expectations)"
         }
     }
@@ -80,6 +86,8 @@ public enum ActionExpectation: Sendable, Equatable {
 extension ActionExpectation: CustomStringConvertible {
     public var description: String {
         switch self {
+        case .delivery:
+            return "delivery"
         case .screenChanged:
             return "screen_changed"
         case .elementsChanged:
@@ -96,6 +104,7 @@ extension ActionExpectation: CustomStringConvertible {
         case .elementDisappeared(let matcher):
             return ScoreDescription.call("element_disappeared", [matcher.description])
         case .compound(let expectations):
+            if expectations.isEmpty { return "delivery" }
             return "compound(\(expectations.map(\.description).joined(separator: ", ")))"
         }
     }
@@ -110,6 +119,7 @@ extension ActionExpectation: Codable {
 
     /// Discriminator strings for the `type` field on the wire.
     private enum WireType: String, CaseIterable {
+        case delivery
         case screenChanged = "screen_changed"
         case elementsChanged = "elements_changed"
         case elementUpdated = "element_updated"
@@ -143,6 +153,8 @@ extension ActionExpectation: Codable {
             )
         }
         switch wireType {
+        case .delivery:
+            self = .delivery
         case .screenChanged:
             self = .screenChanged
         case .elementsChanged:
@@ -172,6 +184,9 @@ extension ActionExpectation: Codable {
 
     public func encode(to encoder: Encoder) throws {
         switch self {
+        case .delivery:
+            var container = encoder.container(keyedBy: DiscriminatorKey.self)
+            try container.encode(WireType.delivery.rawValue, forKey: .type)
         case .screenChanged:
             var container = encoder.container(keyedBy: DiscriminatorKey.self)
             try container.encode(WireType.screenChanged.rawValue, forKey: .type)
@@ -237,6 +252,12 @@ extension ActionExpectation {
         preActionElements: [HeistId: HeistElement] = [:]
     ) -> ExpectationResult {
         switch self {
+        case .delivery:
+            return ExpectationResult(
+                met: result.success,
+                expectation: self,
+                actual: result.success ? "delivered" : (result.message ?? "failed")
+            )
         case .screenChanged:
             let kindString = result.accessibilityDelta?.kindRawValue ?? "noChange"
             return ExpectationResult(

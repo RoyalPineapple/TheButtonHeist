@@ -133,6 +133,7 @@ final class TheFenceSecurityTests: XCTestCase {
     @ButtonHeistActor
     func testAllCatalogCommandsAreRouted() async {
         let (fence, _) = makeConnectedFence()
+        fence.handoff.connect(to: TheFenceFixtures.testDevice)
         let skipCommands: Set<TheFence.Command> = [.help, .quit, .exit]
 
         for command in TheFence.Command.allCases where !skipCommands.contains(command) {

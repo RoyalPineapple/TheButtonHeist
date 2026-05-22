@@ -83,6 +83,7 @@ extension ClientMessage {
         case .waitForIdle(let payload): return (.waitForIdle, payload)
         case .waitFor(let payload): return (.waitFor, payload)
         case .waitForChange(let payload): return (.waitForChange, payload)
+        case .batchExecutionPlan(let payload): return (.batchExecutionPlan, payload)
         case .startRecording(let payload): return (.startRecording, payload)
         }
     }
@@ -129,6 +130,7 @@ extension ClientMessage {
         case .waitForIdle: return .waitForIdle(try WaitForIdleTarget(from: try payload()))
         case .waitFor: return .waitFor(try WaitForTarget(from: try payload()))
         case .waitForChange: return .waitForChange(try WaitForChangeTarget(from: try payload()))
+        case .batchExecutionPlan: return .batchExecutionPlan(try TheScore.BatchPlan(from: try payload()))
         case .startRecording: return .startRecording(try RecordingConfig(from: try payload()))
         default:
             throw DecodingError.dataCorrupted(.init(

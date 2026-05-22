@@ -18,6 +18,10 @@ extension FenceResponse {
         case .status(let connected, let deviceName):
             if connected, let name = deviceName { return "connected: \(name)" }
             return "not connected"
+        case .pong(let payload):
+            let name = payload.appName.isEmpty ? "App" : payload.appName
+            let bundle = payload.bundleIdentifier.isEmpty ? "unknown" : payload.bundleIdentifier
+            return "pong: \(name) \(bundle) [ButtonHeist \(payload.buttonHeistVersion)]"
         case .devices(let devices):
             if devices.isEmpty { return "no devices" }
             return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }

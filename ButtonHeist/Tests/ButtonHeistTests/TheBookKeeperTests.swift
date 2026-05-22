@@ -652,7 +652,7 @@ final class TheBookKeeperTests: XCTestCase {
             return XCTFail("Expected typed batch step values")
         }
 
-        XCTAssertEqual(step["token"], .string("<redacted>"))
+        XCTAssertNil(step["token"], "Invalid/non-executable batch steps should not retain token fields")
         XCTAssertFalse(content.contains("nested-user-token"))
     }
 

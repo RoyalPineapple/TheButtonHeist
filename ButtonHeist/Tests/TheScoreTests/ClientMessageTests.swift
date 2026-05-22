@@ -46,6 +46,133 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    // MARK: - Batch Execution Plan Tests
+
+    func testBatchPlanClientMessageRoundTrip() throws {
+        let saveTarget = BatchExecutionTarget(
+            sourceHeistId: "button_save",
+            matcher: ElementMatcher(label: "Save", traits: [.button])
+        )
+        let plan = BatchPlan(
+            steps: [
+                .action(.activate(saveTarget), expect: .screenChanged),
+                .wait(.element(BatchWaitForTarget(target: saveTarget, absent: false, timeout: 2.5))),
+                .checkpoint(BatchExecutionCheckpoint(
+                    name: "saved",
+                    expect: .elementAppeared(ElementMatcher(label: "Done")),
+                    timeout: 1.0
+                )),
+            ],
+            policy: .continueOnError
+        )
+        let message = ClientMessage.batchExecutionPlan(plan)
+
+        let data = try JSONEncoder().encode(message)
+        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
+
+        guard case .batchExecutionPlan(let decodedPlan) = decoded else {
+            return XCTFail("Expected batchExecutionPlan, got \(decoded)")
+        }
+        XCTAssertEqual(decodedPlan.policy, .continueOnError)
+        XCTAssertEqual(decodedPlan.steps.count, 3)
+        guard case .activate(let decodedTarget) = decodedPlan.steps[0].action,
+              decodedPlan.steps[0].expectation == .screenChanged else {
+            return XCTFail("Expected activate action with screenChanged expectation")
+        }
+        XCTAssertEqual(decodedTarget.sourceHeistId, "button_save")
+        XCTAssertEqual(decodedTarget.matcher, ElementMatcher(label: "Save", traits: [.button]))
+        guard case .matcher(let executableMatcher, let ordinal) = decodedTarget.executableTarget else {
+            return XCTFail("Expected matcher executable target")
+        }
+        XCTAssertNil(executableMatcher.heistId)
+        XCTAssertEqual(executableMatcher.label, "Save")
+        XCTAssertNil(ordinal)
+    }
+
+    func testBatchPlanEnvelopeRoundTrip() throws {
+        let plan = BatchPlan(steps: [
+            .action(.typeText(BatchTypeTextTarget(
+                text: "hello",
+                target: BatchExecutionTarget(
+                    sourceHeistId: "field_name",
+                    matcher: ElementMatcher(identifier: "nameField")
+                )
+            ))),
+        ])
+        let envelope = RequestEnvelope(
+            requestId: "batch-1",
+            message: .batchExecutionPlan(plan)
+        )
+
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "batch-1")
+        guard case .batchExecutionPlan(let decodedPlan) = decoded.message,
+              let step = decodedPlan.steps.first,
+              case .typeText(let target) = step.action,
+              step.expectation == .delivery else {
+            return XCTFail("Expected batchExecutionPlan envelope, got \(decoded.message)")
+        }
+        XCTAssertEqual(target.text, "hello")
+        XCTAssertEqual(target.target?.sourceHeistId, "field_name")
+        XCTAssertEqual(target.target?.matcher.identifier, "nameField")
+    }
+
+    func testBatchExecutionDescriptionsMakeHeistIdMetadataExplicit() {
+        let target = BatchExecutionTarget(
+            sourceHeistId: "button_save",
+            matcher: ElementMatcher(label: "Save", traits: [.button]),
+            ordinal: 1
+        )
+        let step = BatchStep.action(.activate(target), expect: .screenChanged)
+        let message = ClientMessage.batchExecutionPlan(BatchPlan(steps: [step]))
+
+        XCTAssertEqual(
+            target.description,
+            #"batchTarget(sourceHeistId="button_save" matcher(label="Save" traits=[button]) ordinal=1)"#
+        )
+        XCTAssertEqual(
+            step.description,
+            #"step(action=activate(batchTarget(sourceHeistId="button_save" matcher(label="Save" traits=[button]) ordinal=1))"#
+                + #" expect=screen_changed deadline=deadline(*))"#
+        )
+        XCTAssertEqual(
+            message.description,
+            "batch_execution_plan(batchExecutionPlan(policy=stop_on_error steps=1))"
+        )
+    }
+
+    func testBatchExecutionTargetTreatsMatcherHeistIdAsSourceMetadata() {
+        let target = BatchExecutionTarget(
+            matcher: ElementMatcher(heistId: "button_save", label: "Save", traits: [.button])
+        )
+
+        XCTAssertEqual(target.sourceHeistId, "button_save")
+        XCTAssertNil(target.matcher.heistId)
+        guard case .matcher(let matcher, nil) = target.executableTarget else {
+            return XCTFail("Expected matcher executable target")
+        }
+        XCTAssertNil(matcher.heistId)
+        XCTAssertEqual(matcher.label, "Save")
+    }
+
+    func testBatchExecutionTargetRejectsSourceHeistIdOnlyWirePayload() {
+        let json = #"{"sourceHeistId":"button_save","matcher":{}}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(BatchExecutionTarget.self, from: Data(json.utf8)))
+    }
+
+    func testExistingActivateWireShapeIsUnchanged() throws {
+        let message = ClientMessage.activate(.heistId("button_login"))
+        let data = try JSONEncoder().encode(message)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(object["type"] as? String, "activate")
+        let payload = try XCTUnwrap(object["payload"] as? [String: Any])
+        XCTAssertEqual(payload["heistId"] as? String, "button_login")
+    }
+
     func testRequestScreenshotEncodeDecode() throws {
         let message = ClientMessage.requestScreen
         let data = try JSONEncoder().encode(message)

@@ -90,7 +90,7 @@ extension TheFence {
         )
     }
 
-    private func decodeRunBatchStep(_ step: [String: Any], index: Int) -> RunBatchStepRequest {
+    private func decodeRunBatchStep(_ step: [String: Any], index: Int) -> RunBatchStep {
         let originalCommandName = step["command"] as? String ?? "?"
         switch FenceOperationCatalog.normalizeBatchStep(step) {
         case .success(let operation):
@@ -101,11 +101,12 @@ extension TheFence {
                 )
             }
             do {
-                return .decoded(try parseRequest(operation: operation))
+                let request = try parseRequest(operation: operation)
+                return .planned(try batchStepPlan(operation: operation, request: request))
             } catch let error as SchemaValidationError {
                 return .invalid(
                     commandName: operation.command.rawValue,
-                    failure: BatchStepDecodeFailure(
+                    failure: BatchStepFailure(
                         message: error.message,
                         details: nil,
                         includeDetailsInResult: true
@@ -120,16 +121,25 @@ extension TheFence {
             } catch let error as FenceError {
                 return .invalid(
                     commandName: operation.command.rawValue,
-                    failure: BatchStepDecodeFailure(
+                    failure: BatchStepFailure(
                         message: error.coreMessage,
                         details: error.failureDetails,
                         includeDetailsInResult: true
                     )
                 )
+            } catch let error as BatchStepPlanBuildError {
+                return .invalid(
+                    commandName: operation.command.rawValue,
+                    failure: BatchStepFailure(
+                        message: error.message,
+                        details: nil,
+                        includeDetailsInResult: false
+                    )
+                )
             } catch {
                 return .invalid(
                     commandName: operation.command.rawValue,
-                    failure: BatchStepDecodeFailure(
+                    failure: BatchStepFailure(
                         message: error.localizedDescription,
                         details: nil,
                         includeDetailsInResult: false
@@ -141,7 +151,7 @@ extension TheFence {
             let fenceError = FenceError.invalidRequest("run_batch step \(index): \(error.message)")
             return .invalid(
                 commandName: originalCommandName,
-                failure: BatchStepDecodeFailure(
+                failure: BatchStepFailure(
                     message: fenceError.coreMessage,
                     details: fenceError.failureDetails,
                     includeDetailsInResult: false
@@ -150,10 +160,427 @@ extension TheFence {
         }
     }
 
+    private struct BatchStepPlanBuildError: Error {
+        let message: String
+    }
+
+    private struct BatchStepPlanningContext {
+        let operation: NormalizedOperation
+        let request: ParsedRequest
+        let expectation: ActionExpectation?
+        let timeout: Double?
+
+        init(operation: NormalizedOperation, request: ParsedRequest) {
+            self.operation = operation
+            self.request = request
+            expectation = request.expectationPayload.expectation
+            timeout = request.expectationPayload.timeout
+        }
+
+        func plan(
+            action: TheScore.Action,
+            expectation overrideExpectation: ActionExpectation? = nil,
+            timeout overrideTimeout: Double? = nil
+        ) -> RunBatchPreparedStep {
+            let stepTimeout = overrideTimeout ?? timeout
+            return RunBatchPreparedStep(
+                command: request.command,
+                operation: operation,
+                adapterRequest: request,
+                typedStep: TheScore.BatchStep(
+                    action: action,
+                    expectation: overrideExpectation ?? expectation ?? action.defaultExpectation,
+                    deadline: deadline(for: action, timeout: stepTimeout)
+                )
+            )
+        }
+
+        private func deadline(for action: TheScore.Action, timeout: Double?) -> Deadline {
+            timeout.map(TheScore.Deadline.init(timeout:)) ?? action.defaultDeadline
+        }
+    }
+
+    func batchStepPlan(
+        operation: NormalizedOperation,
+        request: ParsedRequest
+    ) throws -> RunBatchPreparedStep {
+        let context = BatchStepPlanningContext(operation: operation, request: request)
+        switch request.payload {
+        case .gesture(let payload):
+            return try batchGestureStep(payload, context: context)
+        case .scroll(let payload):
+            return try batchScrollStep(payload, context: context)
+        case .accessibility(let payload):
+            return try batchAccessibilityStep(payload, context: context)
+        case .rotor(let target):
+            let semanticTarget = semanticTarget(from: operation, fallback: target.elementTarget)
+            return try context.plan(action: .rotor(BatchRotorTarget(
+                target: requiredExecutionTarget(semanticTarget),
+                rotor: target.rotor,
+                rotorIndex: target.rotorIndex,
+                direction: target.direction,
+                currentSourceHeistId: target.currentHeistId,
+                currentTextRange: target.currentTextRange
+            )))
+        case .typeText(let target):
+            let semanticTarget = semanticTarget(from: operation, fallback: target.elementTarget)
+            return try context.plan(action: .typeText(BatchTypeTextTarget(
+                text: target.text,
+                target: optionalExecutionTarget(semanticTarget)
+            )))
+        case .editAction(let target):
+            return context.plan(action: .editAction(target))
+        case .setPasteboard(let target):
+            return context.plan(action: .setPasteboard(target))
+        case .none where request.command == .dismissKeyboard:
+            return context.plan(action: .resignFirstResponder)
+        case .waitFor(let target):
+            return try batchWaitForStep(target, context: context)
+        case .waitForChange:
+            let expectation = context.expectation ?? .screenChanged
+            return context.plan(
+                action: .waitForChange(WaitForChangeTarget(expect: expectation, timeout: context.timeout)),
+                expectation: expectation,
+                timeout: context.timeout
+            )
+        default:
+            throw BatchStepPlanBuildError(
+                message: "run_batch step command \"\(request.command.rawValue)\" is not a non-read batch Action"
+            )
+        }
+    }
+
+    private func batchGestureStep(
+        _ payload: GesturePayload,
+        context: BatchStepPlanningContext
+    ) throws -> RunBatchPreparedStep {
+        switch payload {
+        case .oneFingerTap(let payload):
+            let operation = context.operation
+            let target = semanticTarget(from: operation, fallback: payload.elementTarget)
+            return try context.plan(action: .touchTap(BatchTouchTapTarget(
+                target: optionalExecutionTarget(target),
+                pointX: payload.pointX,
+                pointY: payload.pointY
+            )))
+        case .longPress(let payload):
+            let operation = context.operation
+            let target = semanticTarget(from: operation, fallback: payload.elementTarget)
+            return try context.plan(action: .touchLongPress(BatchLongPressTarget(
+                target: optionalExecutionTarget(target),
+                pointX: payload.pointX,
+                pointY: payload.pointY,
+                duration: payload.duration
+            )))
+        case .swipe(let payload):
+            let operation = context.operation
+            let target = semanticTarget(from: operation, fallback: payload.elementTarget)
+            return try context.plan(action: .touchSwipe(BatchSwipeTarget(
+                target: optionalExecutionTarget(target),
+                startX: payload.startX,
+                startY: payload.startY,
+                endX: payload.endX,
+                endY: payload.endY,
+                direction: payload.direction,
+                duration: payload.duration,
+                start: payload.start,
+                end: payload.end
+            )))
+        case .drag(let payload):
+            let operation = context.operation
+            let target = semanticTarget(from: operation, fallback: payload.elementTarget)
+            return try context.plan(action: .touchDrag(BatchDragTarget(
+                target: optionalExecutionTarget(target),
+                startX: payload.startX,
+                startY: payload.startY,
+                endX: payload.endX,
+                endY: payload.endY,
+                duration: payload.duration
+            )))
+        case .pinch(let payload):
+            let operation = context.operation
+            let target = semanticTarget(from: operation, fallback: payload.elementTarget)
+            return try context.plan(action: .touchPinch(BatchPinchTarget(
+                target: optionalExecutionTarget(target),
+                centerX: payload.centerX,
+                centerY: payload.centerY,
+                scale: payload.scale,
+                spread: payload.spread,
+                duration: payload.duration
+            )))
+        case .rotate(let payload):
+            let operation = context.operation
+            let target = semanticTarget(from: operation, fallback: payload.elementTarget)
+            return try context.plan(action: .touchRotate(BatchRotateTarget(
+                target: optionalExecutionTarget(target),
+                centerX: payload.centerX,
+                centerY: payload.centerY,
+                angle: payload.angle,
+                radius: payload.radius,
+                duration: payload.duration
+            )))
+        case .twoFingerTap(let payload):
+            let operation = context.operation
+            let target = semanticTarget(from: operation, fallback: payload.elementTarget)
+            return try context.plan(action: .touchTwoFingerTap(BatchTwoFingerTapTarget(
+                target: optionalExecutionTarget(target),
+                centerX: payload.centerX,
+                centerY: payload.centerY,
+                spread: payload.spread
+            )))
+        case .drawPath(let payload):
+            return context.plan(action: .touchDrawPath(payload.target))
+        case .drawBezier(let payload):
+            return context.plan(action: .touchDrawBezier(payload.target))
+        }
+    }
+
+    private func batchScrollStep(
+        _ payload: ScrollPayload,
+        context: BatchStepPlanningContext
+    ) throws -> RunBatchPreparedStep {
+        switch payload {
+        case .scroll(let target):
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target.elementTarget)
+            return try context.plan(action: .scroll(BatchScrollTarget(
+                target: optionalExecutionTarget(semanticTarget),
+                direction: target.direction
+            )))
+        case .scrollToVisible(let target):
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target.elementTarget)
+            return try context.plan(action: .scrollToVisible(BatchScrollToVisibleTarget(
+                target: optionalExecutionTarget(semanticTarget)
+            )))
+        case .elementSearch(let target):
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target.elementTarget)
+            return try context.plan(action: .elementSearch(BatchElementSearchTarget(
+                target: optionalExecutionTarget(semanticTarget),
+                direction: target.direction
+            )))
+        case .scrollToEdge(let target):
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target.elementTarget)
+            return try context.plan(action: .scrollToEdge(BatchScrollToEdgeTarget(
+                target: optionalExecutionTarget(semanticTarget),
+                edge: target.edge
+            )))
+        }
+    }
+
+    private func batchAccessibilityStep(
+        _ payload: AccessibilityPayload,
+        context: BatchStepPlanningContext
+    ) throws -> RunBatchPreparedStep {
+        switch payload {
+        case .activate(let target, let actionName, let count):
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target)
+            let executionTarget = try requiredExecutionTarget(semanticTarget)
+            return try context.plan(action: batchAccessibilityAction(
+                target: executionTarget,
+                command: context.request.command,
+                actionName: actionName,
+                count: count
+            ))
+        case .increment(let target, let count):
+            try rejectRepeatedBatchCount(count, command: context.request.command)
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target)
+            return try context.plan(action: .increment(requiredExecutionTarget(semanticTarget)))
+        case .decrement(let target, let count):
+            try rejectRepeatedBatchCount(count, command: context.request.command)
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target)
+            return try context.plan(action: .decrement(requiredExecutionTarget(semanticTarget)))
+        case .performCustomAction(let target, let actionName, let count):
+            try rejectObservedBatchCount(count, command: context.request.command)
+            let semanticTarget = semanticTarget(from: context.operation, fallback: target)
+            return try context.plan(action: .performCustomAction(BatchCustomActionTarget(
+                target: requiredExecutionTarget(semanticTarget),
+                actionName: actionName
+            )))
+        }
+    }
+
+    private func batchWaitForStep(
+        _ target: WaitForTarget,
+        context: BatchStepPlanningContext
+    ) throws -> RunBatchPreparedStep {
+        let semanticTarget = semanticTarget(from: context.operation, fallback: target.elementTarget)
+        let resolvedTimeout = target.timeout ?? context.timeout
+        let waitAction = TheScore.Action.waitForElement(BatchWaitForTarget(
+            target: try requiredExecutionTarget(semanticTarget),
+            absent: target.absent,
+            timeout: resolvedTimeout
+        ))
+        return RunBatchPreparedStep(
+            command: context.request.command,
+            operation: context.operation,
+            adapterRequest: context.request,
+            typedStep: TheScore.BatchStep(
+                action: waitAction,
+                expectation: try waitExpectation(target: semanticTarget, absent: target.absent),
+                deadline: resolvedTimeout.map(TheScore.Deadline.init(timeout:)) ?? waitAction.defaultDeadline
+            )
+        )
+    }
+
+    private func batchAccessibilityAction(
+        target: BatchExecutionTarget,
+        command: Command,
+        actionName: String?,
+        count: CountArgument
+    ) throws -> TheScore.Action {
+        guard let actionName else {
+            try rejectObservedBatchCount(count, command: command)
+            return .activate(target)
+        }
+        switch actionName {
+        case Command.increment.rawValue:
+            try rejectRepeatedBatchCount(count, command: command)
+            return .increment(target)
+        case Command.decrement.rawValue:
+            try rejectRepeatedBatchCount(count, command: command)
+            return .decrement(target)
+        default:
+            try rejectObservedBatchCount(count, command: command)
+            let customName = actionName.hasPrefix("action:")
+                ? String(actionName.dropFirst("action:".count))
+                : actionName
+            guard !customName.isEmpty else {
+                throw BatchStepPlanBuildError(message: "action: prefix requires a name (e.g. \"action:myAction\")")
+            }
+            return .performCustomAction(BatchCustomActionTarget(target: target, actionName: customName))
+        }
+    }
+
+    private func waitExpectation(
+        target: BatchSemanticTarget?,
+        absent: Bool?
+    ) throws -> ActionExpectation {
+        let matcher = try expectationMatcher(target)
+        if absent == true {
+            return .elementDisappeared(matcher)
+        }
+        return .elementAppeared(matcher)
+    }
+
+    private func expectationMatcher(_ target: BatchSemanticTarget?) throws -> ElementMatcher {
+        guard let target else {
+            throw BatchStepPlanBuildError(message: "typed batch expectation requires matcher predicates")
+        }
+        switch target {
+        case .matcher(let matcher, _),
+             .sourceHeistIdWithMatcher(_, let matcher, _):
+            guard matcher.hasPredicates else {
+                throw BatchStepPlanBuildError(message: "typed batch expectation requires matcher predicates")
+            }
+            return matcher
+        case .sourceHeistId(let sourceHeistId):
+            throw BatchStepPlanBuildError(
+                message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates for typed batch expectation; heistId is source metadata only"
+            )
+        }
+    }
+
+    private func optionalExecutionTarget(_ target: BatchSemanticTarget?) throws -> BatchExecutionTarget? {
+        guard let target else { return nil }
+        return try executionTarget(target)
+    }
+
+    private func requiredExecutionTarget(_ target: BatchSemanticTarget?) throws -> BatchExecutionTarget {
+        guard let target else {
+            throw BatchStepPlanBuildError(message: "typed batch target requires matcher predicates or ordinal fallback")
+        }
+        return try executionTarget(target)
+    }
+
+    private func executionTarget(_ target: BatchSemanticTarget) throws -> BatchExecutionTarget {
+        switch target {
+        case .matcher(let matcher, let ordinal):
+            return try batchExecutionTarget(sourceHeistId: nil, matcher: matcher, ordinal: ordinal)
+        case .sourceHeistIdWithMatcher(let sourceHeistId, let matcher, let ordinal):
+            return try batchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
+        case .sourceHeistId(let sourceHeistId):
+            throw BatchStepPlanBuildError(
+                message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates or ordinal fallback; heistId is source metadata only"
+            )
+        }
+    }
+
+    private func batchExecutionTarget(
+        sourceHeistId: HeistId?,
+        matcher: ElementMatcher,
+        ordinal: Int?
+    ) throws -> BatchExecutionTarget {
+        guard matcher.hasPredicates || ordinal != nil else {
+            throw BatchStepPlanBuildError(
+                message: "typed batch target requires matcher predicates or ordinal fallback; heistId is source metadata only"
+            )
+        }
+        return BatchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
+    }
+
+    private func rejectRepeatedBatchCount(_ count: CountArgument, command: Command) throws {
+        guard let value = count.value, value != 1 else { return }
+        throw BatchStepPlanBuildError(
+            message: "run_batch step command \"\(command.rawValue)\" with count > 1 is not supported by typed batch execution"
+        )
+    }
+
+    private func rejectObservedBatchCount(_ count: CountArgument, command: Command) throws {
+        guard count.observed != nil else { return }
+        throw BatchStepPlanBuildError(
+            message: "run_batch step command \"\(command.rawValue)\" does not support count in typed batch execution"
+        )
+    }
+
+    private func semanticTarget(
+        from operation: NormalizedOperation,
+        fallback target: ElementTarget?
+    ) -> BatchSemanticTarget? {
+        let argumentTarget = semanticTarget(from: operation.arguments)
+        if argumentTarget != nil { return argumentTarget }
+        return semanticTarget(from: target)
+    }
+
+    private func semanticTarget(from arguments: [String: Any]) -> BatchSemanticTarget? {
+        let sourceHeistId = try? arguments.schemaString("heistId")
+        let ordinal = try? arguments.schemaInteger("ordinal")
+        let parsedMatcher = (try? elementMatcher(arguments)) ?? ElementMatcher()
+        let matcher = ElementMatcher(
+            label: parsedMatcher.label,
+            identifier: parsedMatcher.identifier,
+            value: parsedMatcher.value,
+            traits: parsedMatcher.traits,
+            excludeTraits: parsedMatcher.excludeTraits
+        )
+        if let sourceHeistId {
+            if matcher.hasPredicates || ordinal != nil {
+                return .sourceHeistIdWithMatcher(
+                    sourceHeistId: sourceHeistId,
+                    matcher: matcher,
+                    ordinal: ordinal
+                )
+            }
+            return .sourceHeistId(sourceHeistId)
+        }
+        if matcher.hasPredicates || ordinal != nil {
+            return .matcher(matcher, ordinal: ordinal)
+        }
+        return nil
+    }
+
+    private func semanticTarget(from target: ElementTarget?) -> BatchSemanticTarget? {
+        guard let target else { return nil }
+        switch target {
+        case .heistId(let heistId):
+            return .sourceHeistId(heistId)
+        case .matcher(let matcher, let ordinal):
+            return .matcher(matcher, ordinal: ordinal)
+        }
+    }
+
     private func batchBoundedResponseFailure(
         operation: NormalizedOperation,
         index: Int
-    ) -> BatchStepDecodeFailure? {
+    ) -> BatchStepFailure? {
         guard operation.command == .getScreen,
               operation.arguments["inlineData"] as? Bool == true
         else { return nil }
@@ -163,22 +590,22 @@ extension TheFence {
             observed: true,
             expected: "not allowed for get_screen inside run_batch; omit inlineData or call get_screen outside run_batch"
         )
-        return BatchStepDecodeFailure(
+        return BatchStepFailure(
             message: error.message,
             details: nil,
             includeDetailsInResult: true
         )
     }
 
-    private func batchStepFailure(from response: FenceResponse) -> BatchStepDecodeFailure {
+    private func batchStepFailure(from response: FenceResponse) -> BatchStepFailure {
         guard case .error(let message, let details) = response else {
-            return BatchStepDecodeFailure(
+            return BatchStepFailure(
                 message: response.humanFormatted(),
                 details: nil,
                 includeDetailsInResult: false
             )
         }
-        return BatchStepDecodeFailure(
+        return BatchStepFailure(
             message: message,
             details: details,
             includeDetailsInResult: true

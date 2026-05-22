@@ -8,20 +8,25 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Scroll to the edge of a scroll view",
         discussion: """
-            Finds the nearest scroll view ancestor of the target element and
-            scrolls it all the way to the specified edge. Defaults to bottom.
+            Scrolls an explicit or primary scroll view all the way to the
+            specified edge. Defaults to top.
 
             Examples:
+              buttonheist scroll_to_edge
               buttonheist scroll_to_edge btn_list
               buttonheist scroll_to_edge btn_list -e top
+              buttonheist scroll_to_edge --stable-id "main_scroll" -e left
               buttonheist scroll_to_edge -id "longList" -e left
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
 
-    @Option(name: .shortAndLong, help: "Edge to scroll to: top, bottom, left, right (default: bottom)")
-    var edge: String = "bottom"
+    @Option(name: .customLong("stable-id"), help: "Scrollable container stableId from get_interface")
+    var stableId: String?
+
+    @Option(name: .shortAndLong, help: "Edge to scroll to: top, bottom, left, right (default: top)")
+    var edge: String = "top"
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
@@ -29,8 +34,6 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        _ = try element.requireTarget()
-
         guard let scrollEdge = ScrollEdge(rawValue: edge.lowercased()) else {
             throw ValidationError("Invalid edge '\(edge)'. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
         }
@@ -39,6 +42,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
             .edge: .string(scrollEdge.rawValue),
             .timeout: .double(timeoutOption.timeout),
         ])
+        if let stableId { request.set(.stableId, stableId) }
         try element.applyTo(&request)
 
         try await CLIRunner.run(

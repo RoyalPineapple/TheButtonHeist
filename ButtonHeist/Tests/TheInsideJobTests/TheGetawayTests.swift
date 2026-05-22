@@ -177,6 +177,27 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertEqual(error.message, "Authentication required before status.")
     }
 
+    func testNormalPingReturnsCachedHealthPayloadWithTimestamp() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        let request = RequestEnvelope(requestId: "health-1", message: .ping)
+        let data = try JSONEncoder().encode(request)
+        var responseData: Data?
+        let beforeMs = Int64(Date().timeIntervalSince1970 * 1000)
+
+        await getaway.handleClientMessage(1, data: data) { responseData = $0 }
+        let afterMs = Int64(Date().timeIntervalSince1970 * 1000)
+
+        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: try XCTUnwrap(responseData))
+        XCTAssertEqual(envelope.requestId, "health-1")
+        guard case .pong(let payload) = envelope.message else {
+            return XCTFail("Expected pong, got \(envelope.message)")
+        }
+        XCTAssertEqual(payload.serverInstanceIdentifier, "test")
+        let timestamp = try XCTUnwrap(payload.serverTimestampMs)
+        XCTAssertGreaterThanOrEqual(timestamp, beforeMs)
+        XCTAssertLessThanOrEqual(timestamp, afterMs)
+    }
+
     // MARK: - Stale Targeted Actions
 
     func testStaleTargetedActionAfterScreenChangeReturnsFailureWithDeltaContext() async throws {

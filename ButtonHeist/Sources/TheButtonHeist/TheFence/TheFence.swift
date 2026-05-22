@@ -18,6 +18,8 @@ struct RecordingSnapshot {
 enum Timeouts {
     /// Standard action timeout (15 seconds)
     static let actionSeconds: TimeInterval = 15
+    /// Short health/read-control timeout (3 seconds)
+    static let healthSeconds: TimeInterval = 3
     /// Long action timeout (30 seconds)
     static let longActionSeconds: TimeInterval = 30
     /// Explore timeout (60 seconds) — scrolls entire screen, needs headroom
@@ -273,6 +275,8 @@ public final class TheFence {
                 connected: handoff.isConnected,
                 deviceName: handoff.connectedDevice.map { handoff.displayName(for: $0) }
             )
+        case (.ping, _):
+            return try await handlePing()
         case (.listDevices, _):
             return try await handleListDevices()
         case (.getInterface, .getInterface(let request)):

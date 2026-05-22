@@ -41,8 +41,15 @@ extension TheFence {
     }
 
     func decodedElementTarget(_ request: [String: Any]) throws -> ElementTarget? {
-        _ = try elementTargetOrdinal(request)
-        return try elementTarget(request)
+        try ElementTargetRequestInput(request, fence: self).target
+    }
+
+    func decodedScrollContainerTarget(_ request: [String: Any]) throws -> ScrollContainerTarget? {
+        let container = try request.schemaDictionary("container")
+        let stableId = try container?.schemaString("stableId") ?? request.schemaString("stableId")
+        let captureLocalRef = try container?.schemaString("captureLocalRef") ?? request.schemaString("captureLocalRef")
+        guard stableId != nil || captureLocalRef != nil else { return nil }
+        return ScrollContainerTarget(stableId: stableId, captureLocalRef: captureLocalRef)
     }
 
     func requiredElementTarget(_ request: [String: Any], command: Command) throws -> ElementTarget {
@@ -52,20 +59,8 @@ extension TheFence {
         return target
     }
 
-    private func elementTargetOrdinal(_ request: [String: Any]) throws -> Int? {
-        guard let ordinal = try request.schemaInteger("ordinal") else { return nil }
-        guard ordinal >= 0 else {
-            throw SchemaValidationError(field: "ordinal", observed: ordinal, expected: "integer >= 0")
-        }
-        return ordinal
-    }
-
     func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
-        ElementTarget(
-            heistId: try dictionary.schemaString("heistId"),
-            matcher: try elementMatcher(dictionary),
-            ordinal: try dictionary.schemaInteger("ordinal")
-        )
+        try ElementTargetRequestInput(dictionary, fence: self).target
     }
 
     func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
@@ -98,14 +93,40 @@ extension TheFence {
 
 private extension TheFence {
 
+    struct ElementTargetRequestInput {
+        let heistId: HeistId?
+        let matcher: ElementMatcher
+        let ordinal: Int?
+
+        var target: ElementTarget? {
+            ElementTarget(heistId: heistId, matcher: matcher, ordinal: ordinal)
+        }
+
+        @ButtonHeistActor
+        init(_ request: [String: Any], fence: TheFence) throws {
+            self.ordinal = try Self.ordinal(from: request)
+            self.heistId = try request.schemaString("heistId")
+            self.matcher = try fence.elementMatcher(request)
+        }
+
+        static func ordinal(from request: [String: Any]) throws -> Int? {
+            guard let ordinal = try request.schemaInteger("ordinal") else { return nil }
+            guard ordinal >= 0 else {
+                throw SchemaValidationError(field: "ordinal", observed: ordinal, expected: "integer >= 0")
+            }
+            return ordinal
+        }
+    }
+
     struct ScrollRequestInput {
         let target: ScrollTarget
 
         @ButtonHeistActor
         init(_ request: [String: Any], fence: TheFence) throws {
-            let direction = try request.requiredSchemaEnum("direction", as: ScrollDirection.self) { $0.lowercased() }
+            let direction = try request.schemaEnum("direction", as: ScrollDirection.self) { $0.lowercased() } ?? .down
             target = ScrollTarget(
-                elementTarget: try fence.requiredElementTarget(request, command: .scroll),
+                elementTarget: try fence.decodedElementTarget(request),
+                containerTarget: try fence.decodedScrollContainerTarget(request),
                 direction: direction
             )
         }
@@ -139,9 +160,10 @@ private extension TheFence {
 
         @ButtonHeistActor
         init(_ request: [String: Any], fence: TheFence) throws {
-            let edge = try request.requiredSchemaEnum("edge", as: ScrollEdge.self) { $0.lowercased() }
+            let edge = try request.schemaEnum("edge", as: ScrollEdge.self) { $0.lowercased() } ?? .top
             target = ScrollToEdgeTarget(
-                elementTarget: try fence.requiredElementTarget(request, command: .scrollToEdge),
+                elementTarget: try fence.decodedElementTarget(request),
+                containerTarget: try fence.decodedScrollContainerTarget(request),
                 edge: edge
             )
         }

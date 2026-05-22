@@ -125,13 +125,14 @@ MCP and session JSON requests can pass `subtree` to project the returned hierarc
 ### scroll / scroll_to_visible / scroll_to_edge
 
 ```bash
-buttonheist scroll --direction up --identifier scrollView
+buttonheist scroll
+buttonheist scroll --direction up --stable-id mainScroll
 buttonheist scroll_to_visible --identifier submitButton
-buttonheist scroll_to_edge --edge bottom --identifier scrollView
+buttonheist scroll_to_edge --edge bottom --stable-id mainScroll
 ```
 
-`scroll` flags: `--direction` (required: up/down/left/right/next/previous), `--identifier`, `--ordinal`.
-`scroll_to_edge` flags: `--edge` (required: top/bottom/left/right), `--identifier`, `--ordinal`.
+`scroll` flags: `--direction` (default: down), `--stable-id`, `--identifier`, `--ordinal`.
+`scroll_to_edge` flags: `--edge` (default: top), `--stable-id`, `--identifier`, `--ordinal`.
 `scroll_to_visible` flags: `--identifier`, `--ordinal`.
 
 ## Gesture Commands

@@ -90,11 +90,24 @@ final class TheFenceParameterSpecTests: XCTestCase {
             descriptors.filter(\.isHeistRecordable).map(\.command)
         )
 
+        let nonBatchCommands = TheFence.Command.allCases.filter { !$0.isBatchExecutable }
+        XCTAssertEqual(
+            Set(nonBatchCommands),
+            [
+                .help, .status, .ping, .quit, .exit,
+                .listDevices, .getInterface, .getScreen, .getPasteboard,
+                .getSessionState, .connect, .listTargets,
+                .getSessionLog, .archiveSession,
+                .startRecording, .stopRecording, .runBatch,
+                .startHeist, .stopHeist, .playHeist,
+            ]
+        )
+
         let nonPlaybackCommands = TheFence.Command.allCases.filter { !$0.isPlaybackExecutable }
         XCTAssertEqual(
             Set(nonPlaybackCommands),
             [
-                .help, .status, .quit, .exit,
+                .help, .status, .ping, .quit, .exit,
                 .listDevices, .getInterface, .getScreen, .getPasteboard,
                 .getSessionState, .connect, .listTargets,
                 .getSessionLog, .archiveSession,
@@ -108,7 +121,7 @@ final class TheFenceParameterSpecTests: XCTestCase {
     func testExecutionEligibilityCountsAreExplicit() {
         XCTAssertEqual(
             TheFence.Command.batchExecutableCases.count,
-            38,
+            24,
             "Batch-eligible command count changed - update run_batch schema tests and this canary"
         )
         XCTAssertEqual(
@@ -128,10 +141,17 @@ final class TheFenceParameterSpecTests: XCTestCase {
         XCTAssertEqual(
             Set(noConnectionCommands),
             [
-                .getSessionState, .listDevices, .connect, .listTargets,
+                .status, .ping, .getSessionState, .listDevices, .connect, .listTargets,
                 .getSessionLog, .archiveSession, .startHeist, .stopHeist,
             ]
         )
+    }
+
+    func testPingMCPAnnotationsAreReadOnlyAndIdempotent() {
+        let contract = TheFence.Command.mcpToolContract(named: TheFence.Command.ping.rawValue)
+
+        XCTAssertEqual(contract?.annotations?.readOnlyHint, true)
+        XCTAssertEqual(contract?.annotations?.idempotentHint, true)
     }
 
     func testCommandAliasesAreDescriptorOwned() {

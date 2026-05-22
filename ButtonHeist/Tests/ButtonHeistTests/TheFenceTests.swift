@@ -52,6 +52,7 @@ final class TheFenceTests: XCTestCase {
         let expected: [TheFence.Command: String] = [
             .help: "help",
             .status: "status",
+            .ping: "ping",
             .quit: "quit",
             .exit: "exit",
             .listDevices: "list_devices",
@@ -1821,6 +1822,7 @@ final class TheFenceTests: XCTestCase {
 
     func testTimeoutConstants() {
         XCTAssertEqual(Timeouts.actionSeconds, 15)
+        XCTAssertEqual(Timeouts.healthSeconds, 3)
         XCTAssertEqual(Timeouts.longActionSeconds, 30)
     }
 
@@ -2950,7 +2952,7 @@ final class TheFenceTests: XCTestCase {
         let trace = makeReceiptTestTrace(before: before, after: after)
 
         fence.handoff.handleServerMessage(
-            .pong,
+            .pong(),
             requestId: nil,
             accessibilityTrace: trace
         )

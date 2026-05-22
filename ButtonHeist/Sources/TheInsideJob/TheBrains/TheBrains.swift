@@ -768,6 +768,12 @@ final class TheBrains {
         elements: [HeistElement]
     ) -> ExpectationResult {
         switch expectation {
+        case .delivery:
+            return ExpectationResult(
+                met: true,
+                expectation: expectation,
+                actual: "delivered"
+            )
         case .screenChanged:
             return ExpectationResult(
                 met: false, expectation: expectation,

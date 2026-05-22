@@ -27,9 +27,7 @@ extension TheFence.Command {
     }
 
     func cliRequest(_ parameters: CLIRequestParameters = [:]) -> [String: Any] {
-        var request = FenceParameterKey.rawDictionary(parameters)
-        request[.command] = rawValue
-        return request
+        CLIRequestBuilder.request(command: self, parameters: parameters)
     }
 }
 

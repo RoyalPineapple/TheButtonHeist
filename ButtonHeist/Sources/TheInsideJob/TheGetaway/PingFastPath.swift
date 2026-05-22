@@ -12,8 +12,9 @@ import TheScore
 /// can stall ping handling long enough for the client's keepalive to time out
 /// and force-disconnect.
 ///
-/// `encodedPong(for:)` is `nonisolated` and pure: it decodes the request,
-/// matches `.ping`, and returns an encoded `ResponseEnvelope` carrying `.pong`.
+/// `encodedPong(for:)` is `nonisolated` and cheap: it decodes the request,
+/// matches `.ping`, stamps the cached health payload with server time, and
+/// returns an encoded `ResponseEnvelope` carrying `.pong`.
 /// Callers run it on the network queue before bridging to `@MainActor`, so
 /// pongs leave the wire without waiting on main.
 enum PingFastPath {
@@ -22,7 +23,7 @@ enum PingFastPath {
     /// request, otherwise `nil`. Returning `nil` means the caller must fall
     /// through to the normal `@MainActor` dispatch path — never treat `nil`
     /// as an error.
-    static func encodedPong(for data: Data) -> Data? {
+    static func encodedPong(for data: Data, payload: PongPayload = PongPayload()) -> Data? {
         let envelope: RequestEnvelope
         do {
             envelope = try RequestEnvelope.decoded(from: data)
@@ -31,7 +32,7 @@ enum PingFastPath {
         }
         guard case .ping = envelope.message else { return nil }
         do {
-            return try ResponseEnvelope(requestId: envelope.requestId, message: .pong).encoded()
+            return try ResponseEnvelope(requestId: envelope.requestId, message: .pong(payload.withServerTimestamp())).encoded()
         } catch {
             insideJobLogger.error("PingFastPath: failed to encode pong: \(error.localizedDescription)")
             return nil

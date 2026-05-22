@@ -23,7 +23,7 @@ extension TheBrains {
         switch message {
         case .activate, .increment, .decrement, .performCustomAction,
              .rotor,
-             .editAction, .setPasteboard, .getPasteboard, .resignFirstResponder:
+             .editAction, .setPasteboard, .resignFirstResponder:
             return await executeAccessibilityAction(message)
 
         case .touchTap, .touchLongPress, .touchSwipe, .touchDrag,
@@ -45,6 +45,8 @@ extension TheBrains {
             return await performInteraction(command: message) { await self.navigation.executeScrollToEdge(target) }
         case .waitFor(let target):
             return await performWaitFor(target: target)
+        case .batchExecutionPlan(let plan):
+            return await executeBatchExecutionPlan(plan)
         case .explore:
             return await performExplore()
 
@@ -52,6 +54,19 @@ extension TheBrains {
             insideJobLogger.error("Unhandled message type in executeCommand")
             return unsupportedCommandResult(for: message, context: "executeCommand")
         }
+    }
+
+    func executePasteboardRead() -> ActionResult {
+        let result = actions.executeGetPasteboard()
+        return ActionResult(
+            success: result.success,
+            method: result.method,
+            message: result.message,
+            errorKind: result.success ? nil : Self.actionErrorKind(for: result),
+            payload: result.payload,
+            screenName: stash.lastScreenName,
+            screenId: stash.lastScreenId
+        )
     }
 
     // MARK: - Interaction Pipeline
@@ -359,8 +374,6 @@ extension TheBrains {
             return await performInteraction(command: message) { await self.actions.executeEditAction(target) }
         case .setPasteboard(let target):
             return await performInteraction(command: message) { await self.actions.executeSetPasteboard(target) }
-        case .getPasteboard:
-            return await performInteraction(command: message) { self.actions.executeGetPasteboard() }
         case .resignFirstResponder:
             return await performInteraction(command: message) { await self.actions.executeResignFirstResponder() }
         default:
@@ -446,6 +459,7 @@ extension TheBrains {
         case .waitForIdle: return .waitForIdle
         case .waitFor: return .waitFor
         case .waitForChange: return .waitForChange
+        case .batchExecutionPlan: return .batchExecutionPlan
         case .explore: return .explore
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen,
@@ -502,6 +516,7 @@ private extension ClientMessage {
              .waitForIdle,
              .waitFor,
              .waitForChange,
+             .batchExecutionPlan,
              .requestScreen,
              .explore,
              .startRecording,

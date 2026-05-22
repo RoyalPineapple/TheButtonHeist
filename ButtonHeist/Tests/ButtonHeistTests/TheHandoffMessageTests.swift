@@ -259,7 +259,7 @@ final class TheHandoffMessageTests: XCTestCase {
     @ButtonHeistActor
     func testPongDoesNotMutateState() async {
         let handoff = TheHandoff()
-        handoff.handleServerMessage(.pong, requestId: nil)
+        handoff.handleServerMessage(.pong(), requestId: nil)
         assertDisconnected(handoff.connectionPhase)
     }
 
@@ -376,11 +376,33 @@ final class TheHandoffMessageTests: XCTestCase {
         XCTAssertEqual(handoff.tickKeepalive(), 3)
 
         // Server replies. The counter must drop back to zero.
-        handoff.handleServerMessage(.pong, requestId: nil)
+        handoff.handleServerMessage(.pong(), requestId: nil)
         XCTAssertEqual(handoff.missedPongCount, 0)
 
         // Subsequent ticks count again from zero.
         XCTAssertEqual(handoff.tickKeepalive(), 1)
+    }
+
+    @ButtonHeistActor
+    func testRequestScopedPongForwardsToPendingTrackers() async {
+        let handoff = TheHandoff()
+        connectMockHandoff(handoff)
+        var receivedMessage: ServerMessage?
+        var receivedRequestId: String?
+        handoff.onServerMessage = { message, requestId in
+            receivedMessage = message
+            receivedRequestId = requestId
+        }
+
+        let payload = PongPayload(appName: "MockApp", bundleIdentifier: "com.test.mock", serverTimestampMs: 1_700_000)
+        handoff.handleServerMessage(.pong(payload), requestId: "ping-1")
+
+        XCTAssertEqual(handoff.missedPongCount, 0)
+        XCTAssertEqual(receivedRequestId, "ping-1")
+        guard case .pong(let receivedPayload)? = receivedMessage else {
+            return XCTFail("Expected forwarded pong, got \(String(describing: receivedMessage))")
+        }
+        XCTAssertEqual(receivedPayload, payload)
     }
 
     @ButtonHeistActor
@@ -435,7 +457,7 @@ final class TheHandoffMessageTests: XCTestCase {
         for _ in 0..<8 {
             let count = handoff.tickKeepalive()
             XCTAssertLessThan(count, 6, "missedPongCount must never reach the disconnect threshold while pongs are flowing")
-            handoff.handleServerMessage(.pong, requestId: nil)
+            handoff.handleServerMessage(.pong(), requestId: nil)
             XCTAssertEqual(handoff.missedPongCount, 0)
         }
 

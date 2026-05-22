@@ -56,6 +56,11 @@ extension Navigation {
         case failed(ScrollTargetDiagnostic)
     }
 
+    @MainActor enum ContainerScrollResolution { // swiftlint:disable:this agent_main_actor_value_type
+        case resolved(ScrollableTarget)
+        case failed(String)
+    }
+
     enum ScrollTargetDiagnosticReason: Equatable {
         case noScrollView
         case unsafeProgrammaticScroll
@@ -132,6 +137,15 @@ extension Navigation {
         switch direction {
         case .up, .down: return .vertical
         case .left, .right: return .horizontal
+        }
+    }
+
+    private static func axisDescription(_ axis: ScrollAxis) -> String {
+        switch (axis.contains(.horizontal), axis.contains(.vertical)) {
+        case (true, true): return "horizontal and vertical scrolling"
+        case (true, false): return "horizontal scrolling"
+        case (false, true): return "vertical scrolling"
+        case (false, false): return "no scrolling"
         }
     }
 
@@ -308,41 +322,40 @@ extension Navigation {
     // MARK: - Scroll Command Execution
 
     func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult {
-        guard let elementTarget = target.elementTarget else {
-            return .failure(.scroll, message: "Element target required for scroll")
-        }
-        guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-            return liveScrollElementFailure(elementTarget, method: .scroll, commandName: ScrollMode.page.canonicalCommand)
-        }
         let axis = Self.requiredAxis(for: target.direction)
-        switch resolveScrollTargetResult(
-            screenElement: resolved.screenElement, axis: axis
+        switch resolveContainerScrollTarget(
+            containerTarget: target.containerTarget,
+            elementTarget: target.elementTarget,
+            axis: axis,
+            method: .scroll,
+            commandName: ScrollMode.page.canonicalCommand
         ) {
-        case .resolved(let scrollView):
+        case .resolved(let scrollTarget):
             let uiDirection = Self.uiScrollDirection(for: target.direction)
             let proof = await scrollOnePageAndSettle(
-                .uiScrollView(scrollView), direction: uiDirection
+                scrollTarget, direction: uiDirection
             )
             return proof.moved
                 ? .success(method: .scroll)
                 : .failure(.scroll, message: "scroll failed: observed target already at edge; try the opposite direction")
-        case .failed(let diagnostic):
-            return .failure(.scroll, message: diagnostic.message(for: resolved.screenElement))
+        case .failed(let message):
+            return .failure(.scroll, message: message)
         }
     }
 
     func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
-        guard let elementTarget = target.elementTarget else {
-            return .failure(.scrollToEdge, message: "Element target required for \(ScrollMode.toEdge.canonicalCommand)")
-        }
-        guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-            return liveScrollElementFailure(elementTarget, method: .scrollToEdge, commandName: ScrollMode.toEdge.canonicalCommand)
-        }
         let axis = Self.requiredAxis(for: target.edge)
-        switch resolveScrollTargetResult(
-            screenElement: resolved.screenElement, axis: axis
+        switch resolveContainerScrollTarget(
+            containerTarget: target.containerTarget,
+            elementTarget: target.elementTarget,
+            axis: axis,
+            method: .scrollToEdge,
+            commandName: ScrollMode.toEdge.canonicalCommand
         ) {
-        case .resolved(let scrollView):
+        case .resolved(let scrollTarget):
+            guard case .uiScrollView(let scrollView) = scrollTarget else {
+                return .failure(.scrollToEdge, message: "\(ScrollMode.toEdge.canonicalCommand) failed: selected container has no live UIScrollView")
+            }
             let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
 
             return moved
@@ -351,8 +364,8 @@ extension Navigation {
                     .scrollToEdge,
                     message: "\(ScrollMode.toEdge.canonicalCommand) failed: observed target already at requested edge"
                 )
-        case .failed(let diagnostic):
-            return .failure(.scrollToEdge, message: diagnostic.message(for: resolved.screenElement))
+        case .failed(let message):
+            return .failure(.scrollToEdge, message: message)
         }
     }
 
@@ -378,10 +391,17 @@ extension Navigation {
             return .failure(.scrollToVisible, message: "Element target required for \(ScrollMode.toVisible.canonicalCommand)")
         }
 
-        stash.refresh()
+        if recordedScreen == nil {
+            stash.refresh()
+        }
 
         let knownScreen = recordedScreen ?? stash.currentScreen
-        switch stash.resolveTarget(elementTarget, in: knownScreen) {
+        let normalizedTarget = stash.normalizeTarget(elementTarget, in: knownScreen)
+        let executableTarget = normalizedTarget.executableTarget
+        let targetResolution = recordedScreen == nil
+            ? resolvePositioningTarget(normalizedTarget)
+            : stash.resolveTarget(executableTarget, in: knownScreen)
+        switch targetResolution {
         case .resolved(let semanticTarget):
             let inflation = stash.inflateTarget(semanticTarget.screenElement)
             if case .failed = inflation {
@@ -394,10 +414,13 @@ extension Navigation {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 refresh()
             }
-            let liveResolution = stash.resolveVisibleTarget(elementTarget)
+            let liveResolution = stash.resolveVisibleTarget(executableTarget)
             guard let found = liveResolution.resolved else {
                 let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
-                return .failure(.scrollToVisible, message: "Element not visible after inflation\(suffix)")
+                return .failure(
+                    .scrollToVisible,
+                    message: normalizedTarget.diagnostics("Element not visible after inflation\(suffix)")
+                )
             }
             let ensureResult = await ensureVisibleResolvedTarget(found)
             guard ensureResult.succeeded else {
@@ -407,15 +430,18 @@ extension Navigation {
                     message: failure?.message ?? "Element is present but could not be scrolled fully on-screen"
                 )
             }
-            let refreshedResolution = stash.resolveVisibleTarget(elementTarget)
+            let refreshedResolution = stash.resolveVisibleTarget(executableTarget)
             guard refreshedResolution.resolved != nil else {
                 let suffix = refreshedResolution.diagnostics.isEmpty ? "" : ": \(refreshedResolution.diagnostics)"
-                return .failure(.scrollToVisible, message: "Element disappeared after inflation\(suffix)")
+                return .failure(
+                    .scrollToVisible,
+                    message: normalizedTarget.diagnostics("Element disappeared after inflation\(suffix)")
+                )
             }
             let message = inflation.didScroll ? nil : "Already visible"
             return .success(method: .scrollToVisible, message: message)
         case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
-            return .failure(.scrollToVisible, message: diagnostics)
+            return .failure(.scrollToVisible, message: normalizedTarget.diagnostics(diagnostics))
         }
     }
 
@@ -429,14 +455,36 @@ extension Navigation {
         }
         let searchDirection = target.resolvedDirection
 
-        stash.refresh()
         let requestedAxis = Self.requiredAxis(for: searchDirection)
+        let knownScreen = stash.currentScreen
         var candidates = scrollSearchCandidates(requiredAxis: requestedAxis)
         var progress = ScrollSearchProgress(
             initialVisibleHeistIds: stash.visibleIds,
             knownContainers: Set(candidates.map(\.container)),
             maxScrolls: Self.scrollSearchMaxScrolls
         )
+
+        let normalizedTarget = stash.normalizeTarget(searchTarget, in: knownScreen)
+        if case .notFound = resolvePositioningTarget(normalizedTarget) {
+            // Unknown targets still use iterative search below.
+        } else {
+            let direct = await executeScrollToVisible(
+                ScrollToVisibleTarget(elementTarget: searchTarget),
+                recordedScreen: knownScreen
+            )
+            stash.refresh()
+            if direct.success, let found = stash.resolveFirstVisibleMatch(searchTarget) {
+                return searchFoundResult(
+                    found, scrollCount: progress.scrollCount,
+                    uniqueElementsSeen: progress.uniqueElementsSeen
+                )
+            }
+            return .failure(
+                .elementSearch,
+                message: direct.message ?? "\(ScrollMode.search.canonicalCommand) failed to reveal known target",
+                payload: direct.payload
+            )
+        }
 
         // Check if already visible before searching
         if let found = stash.resolveFirstVisibleMatch(searchTarget) {
@@ -528,6 +576,71 @@ extension Navigation {
         .first
     }
 
+    private func resolveContainerScrollTarget(
+        containerTarget: ScrollContainerTarget?,
+        elementTarget: ElementTarget?,
+        axis: ScrollAxis,
+        method: ActionMethod,
+        commandName: String
+    ) -> ContainerScrollResolution {
+        if let containerTarget {
+            guard let plan = scrollPlan(for: containerTarget, requiredAxis: axis) else {
+                return .failed("\(commandName) failed: no visible scroll container matched \(containerTarget.description)")
+            }
+            return .resolved(plan.target)
+        }
+
+        if let elementTarget {
+            guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
+                return .failed(liveScrollElementFailure(elementTarget, method: method, commandName: commandName).message ?? "Element target not visible")
+            }
+            switch resolveScrollTargetResult(screenElement: resolved.screenElement, axis: axis) {
+            case .resolved(let scrollView):
+                return .resolved(.uiScrollView(scrollView))
+            case .failed(let diagnostic):
+                return .failed(diagnostic.message(for: resolved.screenElement))
+            }
+        }
+
+        let candidates = scrollSearchCandidates(requiredAxis: axis)
+        guard !candidates.isEmpty else {
+            return .failed("\(commandName) failed: no visible scroll container supports \(Self.axisDescription(axis))")
+        }
+        guard candidates.count == 1, let plan = candidates.first else {
+            return .failed(
+                "\(commandName) ambiguous: multiple visible scroll containers support \(Self.axisDescription(axis)); "
+                    + "specify stableId. Candidates: \(candidateContainerRefs(candidates))"
+            )
+        }
+        return .resolved(plan.target)
+    }
+
+    private func scrollPlan(for target: ScrollContainerTarget, requiredAxis axis: ScrollAxis) -> ScrollPlan? {
+        let ids = [target.stableId, target.captureLocalRef].compactMap { $0 }
+        guard !ids.isEmpty else { return nil }
+        return scrollSearchCandidates(requiredAxis: axis).first { plan in
+            guard let stableId = stableId(for: plan.container) else { return false }
+            return ids.contains(stableId)
+        }
+    }
+
+    private func stableId(for container: AccessibilityContainer) -> HeistContainer? {
+        if let stableId = stash.currentScreen.liveInterface.containerStableIds[container] {
+            return stableId
+        }
+        return stash.currentHierarchy.containerPaths.first { candidate, _ in
+            candidate == container
+        }.flatMap { _, path in
+            stash.currentScreen.liveInterface.containerStableIdsByPath[path]
+        }
+    }
+
+    private func candidateContainerRefs(_ candidates: [ScrollPlan]) -> String {
+        candidates.enumerated().map { index, plan in
+            stableId(for: plan.container) ?? "#\(index)"
+        }.joined(separator: ", ")
+    }
+
     func scrollSearchCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
@@ -589,12 +702,13 @@ extension Navigation {
         contentSize: AccessibilitySize
     ) -> ScrollableTarget? {
         let cgContentSize = contentSize.cgSize
+        if let scrollView = stash.scrollableContainerViews[container] as? UIScrollView {
+            guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
+            return .uiScrollView(scrollView)
+        }
         if let view = stash.scrollableContainerViews[container], view.window != nil {
             if let scrollView = view as? UIScrollView, scrollView.bhIsUnsafeForProgrammaticScrolling {
                 return nil
-            }
-            if let scrollView = view as? UIScrollView {
-                return .uiScrollView(scrollView)
             }
             let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil))
             return .swipeable(frame: screenFrame, contentSize: cgContentSize)
@@ -684,12 +798,17 @@ extension Navigation {
     }
 
     func ensureOnScreen(for target: ElementTarget, recordedScreen: Screen? = nil) async -> EnsureOnScreenResult {
-        if stash.activePendingRotorResult(for: target) != nil {
+        let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
+        return await ensureOnScreen(for: normalizedTarget)
+    }
+
+    func ensureOnScreen(for normalizedTarget: TheStash.NormalizedTarget) async -> EnsureOnScreenResult {
+        let target = normalizedTarget.executableTarget
+        if stash.activePendingRotorResult(for: normalizedTarget.originalTarget) != nil {
             return .operationLocalRotorResult
         }
 
-        let knownScreen = recordedScreen ?? stash.currentScreen
-        switch stash.resolveTarget(target, in: knownScreen) {
+        switch resolvePositioningTarget(normalizedTarget) {
         case .resolved(let semanticTarget):
             let inflation = stash.inflateTarget(semanticTarget.screenElement)
             if case .failed = inflation {
@@ -705,15 +824,25 @@ extension Navigation {
             guard let liveTarget = liveResolution.resolved else {
                 let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
                 return .failed(.elementNotFound(
-                    "ensure_on_screen failed: target was not visible after inflation\(suffix)"
+                    normalizedTarget.diagnostics(
+                        "ensure_on_screen failed: target was not visible after inflation\(suffix)"
+                    )
                 ))
             }
             let ensureResult = await ensureVisibleResolvedTarget(liveTarget)
             guard ensureResult.succeeded else { return ensureResult }
             return inflation.didScroll ? .recoveredKnownOffscreen : ensureResult
         case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
-            return .failed(.elementNotFound(diagnostics))
+            return .failed(.elementNotFound(normalizedTarget.diagnostics(diagnostics)))
         }
+    }
+
+    private func resolvePositioningTarget(_ normalizedTarget: TheStash.NormalizedTarget) -> TheStash.TargetResolution {
+        let currentResolution = stash.resolveTarget(normalizedTarget.executableTarget)
+        guard case .notFound = currentResolution, normalizedTarget.didNormalizeHeistId else {
+            return currentResolution
+        }
+        return stash.resolveTarget(normalizedTarget.executableTarget, in: normalizedTarget.sourceScreen)
     }
 
     func ensureFirstResponderOnScreen() async {
