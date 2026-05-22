@@ -129,6 +129,7 @@
 		5579466D90EA049E32DAFA53 /* ServerTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4221380A912B191A3EA490D /* ServerTransport.swift */; };
 		57827CF243972B2F55DBB7E4 /* ConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9714B85F0616DE73C7A879C6 /* ConstantsTests.swift */; };
 		5913C08A5A8A03629E89DEA2 /* TheFence+FailureTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED6FC56D4BA84A1AD8C68757 /* TheFence+FailureTypes.swift */; };
+		5B67B3FD139AF1170E1A0FCE /* TheFence+BatchCommandParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABD33D63F80F0581735FADA /* TheFence+BatchCommandParser.swift */; };
 		5C10AA210BA5D0946BA372D7 /* CryptoBoringWrapper.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DD7151EFF18580CDD890101B /* CryptoBoringWrapper.framework */; };
 		5D4CE556246DE2196E626C24 /* TheFence+FailureTaxonomy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 762A9678A59A16CFF629FB3E /* TheFence+FailureTaxonomy.swift */; };
 		5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */; };
@@ -211,6 +212,7 @@
 		A329FC0BCEC3647B2BFF1D51 /* PingFastPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC77EDAB1D48630043C140D /* PingFastPath.swift */; };
 		A339D30D4BB6B82C2D3A9BA3 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286300664EC22C2386C8F58E /* Exports.swift */; };
 		A3C01AF95DA5F2B88C93AD73 /* TripwireIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 802556A6984BBC74DD6AFE1D /* TripwireIntegrationTests.swift */; };
+		A4D84B3E4B52BAD473C5F357 /* TheFence+BatchStepConstructor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591D779918A4CB5580E489FE /* TheFence+BatchStepConstructor.swift */; };
 		A5923A680CE4D3E5AE337D19 /* ActionExpectationValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B398A7FAB3ECAE8AD227D3C /* ActionExpectationValidationTests.swift */; };
 		A6405899D9E72AAB0A4AAC95 /* ActionCapabilityDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB73FEEE9E9722037B924026 /* ActionCapabilityDiagnostic.swift */; };
 		A65BD0AA33C822B456716447 /* AccessibilityElementDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46B60C3CBA7FEE19B6FCFB08 /* AccessibilityElementDataTests.swift */; };
@@ -537,6 +539,7 @@
 		575B313FA1A35CFD461B9B83 /* BHDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BHDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		576DC1131A4B4E3E1404CE61 /* WireConversionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireConversionTests.swift; sourceTree = "<group>"; };
 		58E7E75DF4223ED8E9EB7ABB /* InterfaceComputedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceComputedTests.swift; sourceTree = "<group>"; };
+		591D779918A4CB5580E489FE /* TheFence+BatchStepConstructor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+BatchStepConstructor.swift"; sourceTree = "<group>"; };
 		594A7F8340C7B335C8033319 /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
 		5B12846943603FCF34BBBFCA /* Mocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mocks.swift; sourceTree = "<group>"; };
 		5B14C4160E5DFB62BCCF0A84 /* Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Actions.swift; sourceTree = "<group>"; };
@@ -664,6 +667,7 @@
 		C9B27B010C96457A4C73BC2A /* TheFence+BackgroundAccessibilityState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+BackgroundAccessibilityState.swift"; sourceTree = "<group>"; };
 		C9D1CD4282C3885E93C6D8CA /* DeviceConnectionReceiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionReceiveTests.swift; sourceTree = "<group>"; };
 		CA752E01A8136738F8789715 /* TheFence+PendingRequestTrackers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+PendingRequestTrackers.swift"; sourceTree = "<group>"; };
+		CABD33D63F80F0581735FADA /* TheFence+BatchCommandParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+BatchCommandParser.swift"; sourceTree = "<group>"; };
 		CCEE06A9E4663B82413E6729 /* TheFence+CommandPresentation+Interaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandPresentation+Interaction.swift"; sourceTree = "<group>"; };
 		CD0A3871C3745F11C77A5980 /* FenceInsideJobBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FenceInsideJobBoundaryTests.swift; sourceTree = "<group>"; };
 		CD54BF184FD9589D4A4A9804 /* Screen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screen.swift; sourceTree = "<group>"; };
@@ -871,7 +875,9 @@
 				2B92FA5985EAF1A5C7360207 /* TheFence.swift */,
 				C9B27B010C96457A4C73BC2A /* TheFence+BackgroundAccessibilityState.swift */,
 				22FE61852546E4B6F51E7605 /* TheFence+Batch.swift */,
+				CABD33D63F80F0581735FADA /* TheFence+BatchCommandParser.swift */,
 				E983E50C28A8FFE0B642D46F /* TheFence+BatchPlanning.swift */,
+				591D779918A4CB5580E489FE /* TheFence+BatchStepConstructor.swift */,
 				71251320324067B05B606FAA /* TheFence+BookKeeperLogging.swift */,
 				FEEFEEE99B850E0AD80B6397 /* TheFence+CommandCatalog.swift */,
 				E2AF1DB1AFE33B9BE284CC9E /* TheFence+CommandPresentation.swift */,
@@ -1758,7 +1764,9 @@
 				1E800F3E60921774EFC6A9EB /* FenceRecordingLifecycle.swift in Sources */,
 				F24BA35CA63D6702014E2547 /* TheFence+BackgroundAccessibilityState.swift in Sources */,
 				BFA7A094D0F9A4F606474AC6 /* TheFence+Batch.swift in Sources */,
+				5B67B3FD139AF1170E1A0FCE /* TheFence+BatchCommandParser.swift in Sources */,
 				2B94BF8D6F44EA71FD278A0E /* TheFence+BatchPlanning.swift in Sources */,
+				A4D84B3E4B52BAD473C5F357 /* TheFence+BatchStepConstructor.swift in Sources */,
 				426FC537EAF1DAACB13285DC /* TheFence+BookKeeperLogging.swift in Sources */,
 				D1866FC1E2D5639B2DCA6A27 /* TheFence+CommandCatalog.swift in Sources */,
 				DAD1A2A9AAFD844F75DBDF7F /* TheFence+CommandPresentation+Interaction.swift in Sources */,
