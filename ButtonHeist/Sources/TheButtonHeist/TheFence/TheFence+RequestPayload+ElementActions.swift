@@ -61,6 +61,10 @@ extension TheFence {
         try ElementActionRequestInput(dictionary).matcher(in: self)
     }
 
+    func decodedBatchExecutionTarget(_ request: [String: Any]) throws -> BatchExecutionTarget? {
+        try ElementActionRequestInput(request).batchExecutionTarget(in: self)
+    }
+
     /// Parse an array of trait name strings into typed `HeistTrait` values.
     /// Throws `FenceError.invalidRequest` with the list of valid names when an
     /// unknown name is encountered. Returns `nil` when `names` is `nil` so
@@ -95,6 +99,15 @@ private extension TheFence {
                 matcher: try matcher(in: fence),
                 ordinal: try ordinal()
             )
+        }
+
+        @ButtonHeistActor
+        func batchExecutionTarget(in fence: TheFence) throws -> BatchExecutionTarget? {
+            let sourceHeistId = try string("heistId")
+            let ordinal = try ordinal()
+            let matcher = try matcher(in: fence)
+            guard sourceHeistId != nil || matcher.hasPredicates || ordinal != nil else { return nil }
+            return BatchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
         }
 
         @ButtonHeistActor

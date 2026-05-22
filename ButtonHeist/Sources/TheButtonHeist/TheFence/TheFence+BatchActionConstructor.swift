@@ -22,7 +22,7 @@ extension TheFence {
                 return try accessibilityAction(payload, context: context)
             case .rotor(let target):
                 return try BatchStepActionPlan(action: .rotor(BatchRotorTarget(
-                    target: targetResolver.requiredTarget(from: context.operation, fallback: target.elementTarget),
+                    target: targetResolver.requiredTarget(from: context.request, fallback: target.elementTarget),
                     rotor: target.rotor,
                     rotorIndex: target.rotorIndex,
                     direction: target.direction,
@@ -32,7 +32,7 @@ extension TheFence {
             case .typeText(let target):
                 return try BatchStepActionPlan(action: .typeText(BatchTypeTextTarget(
                     text: target.text,
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: target.elementTarget)
+                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget)
                 )))
             case .editAction(let target):
                 return BatchStepActionPlan(action: .editAction(target))
@@ -63,20 +63,20 @@ extension TheFence {
             switch payload {
             case .oneFingerTap(let payload):
                 return try BatchStepActionPlan(action: .touchTap(BatchTouchTapTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: payload.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
                     pointX: payload.pointX,
                     pointY: payload.pointY
                 )))
             case .longPress(let payload):
                 return try BatchStepActionPlan(action: .touchLongPress(BatchLongPressTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: payload.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
                     pointX: payload.pointX,
                     pointY: payload.pointY,
                     duration: payload.duration
                 )))
             case .swipe(let payload):
                 return try BatchStepActionPlan(action: .touchSwipe(BatchSwipeTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: payload.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
                     startX: payload.startX,
                     startY: payload.startY,
                     endX: payload.endX,
@@ -88,7 +88,7 @@ extension TheFence {
                 )))
             case .drag(let payload):
                 return try BatchStepActionPlan(action: .touchDrag(BatchDragTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: payload.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
                     startX: payload.startX,
                     startY: payload.startY,
                     endX: payload.endX,
@@ -97,7 +97,7 @@ extension TheFence {
                 )))
             case .pinch(let payload):
                 return try BatchStepActionPlan(action: .touchPinch(BatchPinchTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: payload.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
                     centerX: payload.centerX,
                     centerY: payload.centerY,
                     scale: payload.scale,
@@ -106,7 +106,7 @@ extension TheFence {
                 )))
             case .rotate(let payload):
                 return try BatchStepActionPlan(action: .touchRotate(BatchRotateTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: payload.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
                     centerX: payload.centerX,
                     centerY: payload.centerY,
                     angle: payload.angle,
@@ -115,7 +115,7 @@ extension TheFence {
                 )))
             case .twoFingerTap(let payload):
                 return try BatchStepActionPlan(action: .touchTwoFingerTap(BatchTwoFingerTapTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: payload.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
                     centerX: payload.centerX,
                     centerY: payload.centerY,
                     spread: payload.spread
@@ -138,16 +138,16 @@ extension TheFence {
                     command: context.request.command
                 )
                 return try BatchStepActionPlan(action: .scroll(BatchScrollTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: target.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget),
                     direction: target.direction
                 )))
             case .scrollToVisible(let target):
                 return try BatchStepActionPlan(action: .scrollToVisible(BatchScrollToVisibleTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: target.elementTarget)
+                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget)
                 )))
             case .elementSearch(let target):
                 return try BatchStepActionPlan(action: .elementSearch(BatchElementSearchTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: target.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget),
                     direction: target.direction
                 )))
             case .scrollToEdge(let target):
@@ -156,7 +156,7 @@ extension TheFence {
                     command: context.request.command
                 )
                 return try BatchStepActionPlan(action: .scrollToEdge(BatchScrollToEdgeTarget(
-                    target: targetResolver.optionalTarget(from: context.operation, fallback: target.elementTarget),
+                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget),
                     edge: target.edge
                 )))
             }
@@ -172,17 +172,17 @@ extension TheFence {
                     actionName: actionName,
                     count: count,
                     command: context.request.command
-                ).action(target: targetResolver.requiredTarget(from: context.operation, fallback: target)))
+                ).action(target: targetResolver.requiredTarget(from: context.request, fallback: target)))
             case .increment(let target, let count):
                 try BatchShapeValidator.rejectRepeatedCount(count, command: context.request.command)
                 return try BatchStepActionPlan(action: .increment(targetResolver.requiredTarget(
-                    from: context.operation,
+                    from: context.request,
                     fallback: target
                 )))
             case .decrement(let target, let count):
                 try BatchShapeValidator.rejectRepeatedCount(count, command: context.request.command)
                 return try BatchStepActionPlan(action: .decrement(targetResolver.requiredTarget(
-                    from: context.operation,
+                    from: context.request,
                     fallback: target
                 )))
             case .performCustomAction(let target, let count):
@@ -197,7 +197,7 @@ extension TheFence {
         ) throws -> TheScore.Action {
             if let elementTarget = target.elementTarget {
                 return try .performCustomAction(BatchCustomActionTarget(
-                    target: targetResolver.requiredTarget(from: context.operation, fallback: elementTarget),
+                    target: targetResolver.requiredTarget(from: context.request, fallback: elementTarget),
                     actionName: target.actionName
                 ))
             }
@@ -215,7 +215,7 @@ extension TheFence {
             _ target: WaitForTarget,
             context: BatchStepPlanningContext
         ) throws -> BatchStepActionPlan {
-            let semanticTarget = targetResolver.executionTarget(from: context.operation, fallback: target.elementTarget)
+            let semanticTarget = targetResolver.executionTarget(from: context.request, fallback: target.elementTarget)
             let resolvedTimeout = target.timeout ?? context.timeout
             let waitAction = TheScore.Action.waitForElement(BatchWaitForTarget(
                 target: try targetResolver.requiredExecutionTarget(semanticTarget),

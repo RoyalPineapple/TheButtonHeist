@@ -22,14 +22,12 @@ extension TheFence {
 
     struct BatchStepPlanningContext {
         let originalIndex: Int
-        let operation: NormalizedOperation
         let request: ParsedRequest
         let expectation: ActionExpectation?
         let timeout: Double?
 
-        init(originalIndex: Int, operation: NormalizedOperation, request: ParsedRequest) {
+        init(originalIndex: Int, request: ParsedRequest) {
             self.originalIndex = originalIndex
-            self.operation = operation
             self.request = request
             expectation = request.expectationPayload.expectation
             timeout = request.expectationPayload.timeout
