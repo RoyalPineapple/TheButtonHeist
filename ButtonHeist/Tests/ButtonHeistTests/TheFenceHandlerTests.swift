@@ -3825,8 +3825,8 @@ final class TheFenceHandlerTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
         let (fence, _) = makeConnectedFence()
-        fence.playbackPhase = .playing(startedAt: Date())
-        defer { fence.playbackPhase = .idle }
+        try fence.playback.begin()
+        defer { fence.playback.end() }
 
         do {
             _ = try await fence.execute(request: [
@@ -3838,6 +3838,24 @@ final class TheFenceHandlerTests: XCTestCase {
         } catch {
             XCTFail("Expected invalidRequest, got \(error)")
         }
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistInvalidInputResetsPlaybackLifecycle() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        do {
+            _ = try await fence.execute(request: [
+                "command": "play_heist", "input": "../bad.heist",
+            ])
+            XCTFail("Expected invalid input to fail")
+        } catch FenceError.invalidRequest(let message) {
+            XCTAssertEqual(message, "Invalid input path: must not be empty or contain '..' components")
+        } catch {
+            XCTFail("Expected invalidRequest, got \(error)")
+        }
+
+        XCTAssertTrue(fence.playback.isIdle)
     }
 
     @ButtonHeistActor

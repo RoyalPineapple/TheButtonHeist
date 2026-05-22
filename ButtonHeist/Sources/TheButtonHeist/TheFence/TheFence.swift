@@ -90,14 +90,7 @@ public final class TheFence {
         )
     }
     let bookKeeper: TheBookKeeper
-    /// Heist playback re-entrancy state. `.playing` carries the wall-clock
-    /// timestamp playback started so callers can reason about how long the
-    /// current playback has been running.
-    enum PlaybackPhase {
-        case idle
-        case playing(startedAt: Date)
-    }
-    var playbackPhase: PlaybackPhase = .idle
+    let playback = FencePlaybackLifecycle()
 
     /// Fence-owned accessibility capture history. Captures are the retained
     /// source of truth; pending trace and lookup views are derived locally from

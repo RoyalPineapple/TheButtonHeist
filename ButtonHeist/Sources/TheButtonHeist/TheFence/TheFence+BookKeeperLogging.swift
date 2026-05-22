@@ -83,7 +83,7 @@ extension TheFence {
         validatedResponse: FenceResponse,
         lookupCaptureRef: AccessibilityTrace.CaptureRef?
     ) {
-        guard case .idle = playbackPhase else { return }
+        guard playback.isIdle else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
         let targetCapture = dispatchedResponse.actionResult?.accessibilityTrace?.captures.first
             ?? lookupCaptureRef.flatMap { backgroundAccessibilityState.capture(ref: $0) }

@@ -576,9 +576,9 @@ extension TheFence {
     }
 
     func handlePlayHeist(_ request: PlayHeistRequest) async throws -> FenceResponse {
-        guard case .idle = playbackPhase else {
-            throw FenceError.invalidRequest("Cannot nest play_heist inside an active playback")
-        }
+        try playback.begin()
+        defer { playback.end() }
+
         guard let resolvedURL = bookKeeper.validateOutputPath(request.inputPath) else {
             throw FenceError.invalidRequest("Invalid input path: must not be empty or contain '..' components")
         }
@@ -599,9 +599,6 @@ extension TheFence {
         var failedIndex: Int?
         var failure: PlaybackFailure?
         var stepResults: [HeistPlaybackReport.StepResult] = []
-
-        playbackPhase = .playing(startedAt: Date())
-        defer { playbackPhase = .idle }
 
         // Prime current element data before playback.
         try await primePlaybackInterface()
