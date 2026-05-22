@@ -725,20 +725,32 @@ private extension ClientMessage {
         case .activate,
              .increment,
              .decrement,
-             .rotor,
-             .touchTap,
-             .touchLongPress,
-             .touchSwipe,
-             .touchDrag,
-             .touchPinch,
-             .touchRotate,
-             .touchTwoFingerTap,
-             .typeText,
-             .scroll,
-             .scrollToVisible,
-             .elementSearch,
-             .scrollToEdge:
-            return actionTarget != nil
+             .rotor:
+            return true
+        case .touchTap(let target):
+            return target.elementTarget != nil
+        case .touchLongPress(let target):
+            return target.elementTarget != nil
+        case .touchSwipe(let target):
+            return target.elementTarget != nil
+        case .touchDrag(let target):
+            return target.elementTarget != nil
+        case .touchPinch(let target):
+            return target.elementTarget != nil
+        case .touchRotate(let target):
+            return target.elementTarget != nil
+        case .touchTwoFingerTap(let target):
+            return target.elementTarget != nil
+        case .typeText(let target):
+            return target.elementTarget != nil
+        case .scroll(let target):
+            return target.elementTarget != nil
+        case .scrollToVisible(let target):
+            return target.elementTarget != nil
+        case .elementSearch(let target):
+            return target.elementTarget != nil
+        case .scrollToEdge(let target):
+            return target.elementTarget != nil
         case .performCustomAction(let target):
             return target.elementTarget != nil || target.containerTarget != nil
         case .clientHello,

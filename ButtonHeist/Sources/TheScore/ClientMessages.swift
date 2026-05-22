@@ -199,58 +199,6 @@ public enum ClientMessage: Codable, Sendable {
         }
     }
 
-    /// Extract the element target from any action command, if present.
-    ///
-    /// Returns `nil` for commands that don't carry one directly — either because
-    /// the command targets coordinates instead (`.oneFingerTap` with pointX/pointY),
-    /// has no target at all (`.getInterface`, `.getScreen`), or wraps a multi-target
-    /// payload (`.drag`, `.pinch`, `.drawPath`).
-    public var actionTarget: ElementTarget? {
-        switch self {
-        case .activate(let t), .increment(let t), .decrement(let t):
-            return t
-        case .scrollToVisible(let t):
-            return t.elementTarget
-        case .elementSearch(let t):
-            return t.elementTarget
-        case .performCustomAction(let t):
-            return t.elementTarget
-        case .rotor(let t):
-            return t.elementTarget
-        case .editAction:
-            return nil
-        case .touchTap(let t):
-            return t.elementTarget
-        case .touchLongPress(let t):
-            return t.elementTarget
-        case .touchSwipe(let t):
-            return t.elementTarget
-        case .touchDrag(let t):
-            return t.elementTarget
-        case .touchPinch(let t):
-            return t.elementTarget
-        case .touchRotate(let t):
-            return t.elementTarget
-        case .touchTwoFingerTap(let t):
-            return t.elementTarget
-        case .touchDrawPath:
-            return nil
-        case .touchDrawBezier:
-            return nil
-        case .typeText(let t):
-            return t.elementTarget
-        case .scroll(let t):
-            return t.elementTarget
-        case .scrollToEdge(let t):
-            return t.elementTarget
-        case .waitFor(let t):
-            return t.elementTarget
-        case .batchExecutionPlan:
-            return nil
-        default:
-            return nil
-        }
-    }
 }
 
 extension ClientMessage: CustomStringConvertible {
@@ -381,15 +329,6 @@ extension ElementTarget: Codable {
             .heistId, .label, .identifier, .value, .traits, .excludeTraits, .ordinal,
         ]
     }
-
-    /// Wire keys whose presence (anywhere on a JSON object) indicates an
-    /// `ElementTarget` is encoded inline at that level. Used by wrapper
-    /// targets (`WaitForTarget`, `ScrollToVisibleTarget`,
-    /// `ElementSearchTarget`) that flatten an `ElementTarget` alongside their
-    /// own fields.
-    public static let inlineWireKeys: [String] = [
-        "heistId", "label", "identifier", "value", "traits", "excludeTraits", "ordinal",
-    ]
 
     /// Decode an optional `ElementTarget` flattened into the same JSON object
     /// the decoder is currently reading. Returns `nil` when none of the
@@ -562,10 +501,6 @@ public enum RotorDirection: String, Codable, Sendable, CaseIterable {
     case previous
 }
 
-extension RotorDirection: CustomStringConvertible {
-    public var description: String { rawValue }
-}
-
 /// Text-range cursor for continuing through rotor results inside one text input.
 public struct TextRangeReference: Codable, Equatable, Hashable, Sendable {
     public let startOffset: Int
@@ -734,10 +669,6 @@ extension TypeTextTarget: CustomStringConvertible {
 /// Standard edit actions that can be dispatched via the responder chain.
 public enum EditAction: String, Codable, Sendable, CaseIterable {
     case copy, paste, cut, select, selectAll, delete
-}
-
-extension EditAction: CustomStringConvertible {
-    public var description: String { rawValue }
 }
 
 /// Target for writing text to the general pasteboard.
@@ -986,17 +917,9 @@ public enum SwipeDirection: String, Codable, Sendable, CaseIterable {
     }
 }
 
-extension SwipeDirection: CustomStringConvertible {
-    public var description: String { rawValue }
-}
-
 /// Direction for scroll actions
 public enum ScrollDirection: String, Codable, Sendable, CaseIterable {
     case up, down, left, right, next, previous
-}
-
-extension ScrollDirection: CustomStringConvertible {
-    public var description: String { rawValue }
 }
 
 /// Target for container-moving scroll commands.
@@ -1077,10 +1000,6 @@ public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
     case down, up, left, right
 }
 
-extension ScrollSearchDirection: CustomStringConvertible {
-    public var description: String { rawValue }
-}
-
 /// Target for one-shot scroll-to-visible.
 /// The element must be known (in the registry with a content-space position).
 /// Jumps directly to the element's position — no iterative search.
@@ -1158,10 +1077,6 @@ extension ElementSearchTarget: Codable {
 /// Edge for scroll-to-edge commands
 public enum ScrollEdge: String, Codable, Sendable, CaseIterable {
     case top, bottom, left, right
-}
-
-extension ScrollEdge: CustomStringConvertible {
-    public var description: String { rawValue }
 }
 
 /// Target for scroll-to-edge command

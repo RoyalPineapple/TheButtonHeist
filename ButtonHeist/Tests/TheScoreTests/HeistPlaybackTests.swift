@@ -375,30 +375,6 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(step.description, expected)
     }
 
-    func testRecordedEvidenceDescriptionsCompose() {
-        let cap = RecordedInputCap(
-            name: "duration",
-            requested: .double(120),
-            applied: .double(60),
-            maximum: .double(60),
-            reason: "maximum duration"
-        )
-        let unsupported = RecordedUnsupportedInput(
-            name: "metadata",
-            valueType: "Data",
-            reason: "not JSON-compatible"
-        )
-
-        XCTAssertEqual(
-            cap.description,
-            #"cap(name="duration" requested=120 applied=60 maximum=60 reason="maximum duration")"#
-        )
-        XCTAssertEqual(
-            unsupported.description,
-            #"unsupportedInput(name="metadata" valueType="Data" reason="not JSON-compatible")"#
-        )
-    }
-
     // MARK: - Full Heist JSON Shape
 
     func testFullScriptJsonShape() throws {

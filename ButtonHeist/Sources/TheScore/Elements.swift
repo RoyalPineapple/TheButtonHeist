@@ -30,7 +30,7 @@ enum ScoreDescription {
         value.map { "\(name)=\($0)" }
     }
 
-    static func listField<T: CustomStringConvertible>(_ name: String, _ values: [T]?) -> String? {
+    static func listField<T>(_ name: String, _ values: [T]?) -> String? {
         guard let values, !values.isEmpty else { return nil }
         return "\(name)=\(list(values))"
     }
@@ -40,8 +40,8 @@ enum ScoreDescription {
         return "\(name)=\(quotedList(values))"
     }
 
-    static func list<T: CustomStringConvertible>(_ values: [T]) -> String {
-        "[\(values.map(\.description).joined(separator: ", "))]"
+    static func list<T>(_ values: [T]) -> String {
+        "[\(values.map { String(describing: $0) }.joined(separator: ", "))]"
     }
 
     static func quotedList(_ values: [String]) -> String {
@@ -614,15 +614,6 @@ public func isStableIdentifier(_ identifier: String) -> Bool {
 // MARK: - Parser Hierarchy Algebra
 
 public extension AccessibilityHierarchy {
-    var indexedElements: [(element: AccessibilityElement, traversalIndex: Int)] {
-        switch self {
-        case .element(let element, let traversalIndex):
-            return [(element, traversalIndex)]
-        case .container(_, let children):
-            return children.flatMap(\.indexedElements)
-        }
-    }
-
     func pathIndexedElements(path: TreePath = .root) -> [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
         switch self {
         case .element(let element, let traversalIndex):
@@ -665,16 +656,9 @@ public extension AccessibilityHierarchy {
         return results
     }
 
-    func subtrees(where predicate: (AccessibilityHierarchy, TreePath) -> Bool) -> [AccessibilityHierarchy] {
-        compactMapSubtrees { node, path in predicate(node, path) ? node : nil }
-    }
 }
 
 public extension Array where Element == AccessibilityHierarchy {
-    var indexedElements: [(element: AccessibilityElement, traversalIndex: Int)] {
-        flatMap(\.indexedElements).sorted { $0.traversalIndex < $1.traversalIndex }
-    }
-
     var pathIndexedElements: [(element: AccessibilityElement, path: TreePath, traversalIndex: Int)] {
         enumerated()
             .flatMap { index, root in root.pathIndexedElements(path: TreePath([index])) }
@@ -692,16 +676,6 @@ public extension Array where Element == AccessibilityHierarchy {
         enumerated().flatMap { index, root in
             root.compactMapSubtrees(path: TreePath([index]), transform)
         }
-    }
-
-    func subtrees(where predicate: (AccessibilityHierarchy, TreePath) -> Bool) -> [AccessibilityHierarchy] {
-        var results: [AccessibilityHierarchy] = []
-        for (index, root) in enumerated() {
-            results.append(contentsOf: root.subtrees { node, path in
-                predicate(node, TreePath([index] + path.indices))
-            })
-        }
-        return results
     }
 }
 
@@ -829,10 +803,6 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
         stableId?.isEmpty == false || type != nil || label?.isEmpty == false ||
             value?.isEmpty == false || identifier?.isEmpty == false || isModalBoundary != nil
     }
-}
-
-extension ContainerTypeName: CustomStringConvertible {
-    public var description: String { rawValue }
 }
 
 extension ContainerMatcher: CustomStringConvertible {
