@@ -14,6 +14,26 @@ extension DeviceConnection {
     }
 }
 
+@ButtonHeistActor
+func assertDeviceConnectionConnected(
+    _ connection: DeviceConnection,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    if case .connected = connection.connectionState { return }
+    XCTFail("Expected device connection to be connected, got \(connection.connectionState)", file: file, line: line)
+}
+
+@ButtonHeistActor
+func assertDeviceConnectionDisconnected(
+    _ connection: DeviceConnection,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    if case .disconnected = connection.connectionState { return }
+    XCTFail("Expected device connection to be disconnected, got \(connection.connectionState)", file: file, line: line)
+}
+
 /// Pattern-match helpers for `TheHandoff.ConnectionPhase`. Replaces the
 /// dropped `Equatable` conformance — production code never compared phases
 /// for equality.

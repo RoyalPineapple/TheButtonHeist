@@ -2,6 +2,27 @@ import XCTest
 import Network
 @testable import ButtonHeist
 
+/// `@unchecked Sendable` justification: all mutable storage is protected by `lock`.
+private final class SendContentRecorder: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private let lock = NSLock()
+    private var messagesStorage: [ClientMessage] = []
+
+    var messages: [ClientMessage] {
+        lock.withLock { messagesStorage }
+    }
+
+    func capture(content: Data, completion: NWConnection.SendCompletion) {
+        if case .contentProcessed(let handler) = completion {
+            handler(nil)
+        }
+        let envelope = try? JSONDecoder().decode(RequestEnvelope.self, from: Data(content.dropLast()))
+        guard let message = envelope?.message else { return }
+        lock.withLock {
+            messagesStorage.append(message)
+        }
+    }
+}
+
 /// Tests for the auth flow using direct message injection.
 /// Exercises the auth paths without real TCP connections.
 final class AuthFlowTests: XCTestCase {
@@ -158,7 +179,7 @@ final class AuthFlowTests: XCTestCase {
         ))
 
         XCTAssertEqual(authFailedReason, "Connection denied by user")
-        XCTAssertFalse(conn.isConnected)
+        assertDeviceConnectionDisconnected(conn)
         if case .authFailed(let reason) = disconnectReason {
             XCTAssertEqual(reason, "Connection denied by user")
         } else {
@@ -188,7 +209,7 @@ final class AuthFlowTests: XCTestCase {
         try conn.handleMessage(encode(.authApprovalPending(payload)))
 
         XCTAssertEqual(pendingPayload, payload)
-        XCTAssertTrue(conn.isConnected)
+        assertDeviceConnectionConnected(conn)
         XCTAssertFalse(disconnected)
     }
 
@@ -216,7 +237,7 @@ final class AuthFlowTests: XCTestCase {
         ))))
 
         XCTAssertEqual(serverError?.kind, .authApprovalPending)
-        XCTAssertFalse(conn.isConnected)
+        assertDeviceConnectionDisconnected(conn)
         XCTAssertEqual(
             disconnectReason,
             .authApprovalPending("Approval timed out — user did not respond to the approval prompt on the device.")
@@ -227,18 +248,18 @@ final class AuthFlowTests: XCTestCase {
     func testAuthRequiredOnlyUsesAuthenticate() async throws {
         let conn = DeviceConnection(device: makeDummyDevice(), token: "my-token")
         conn.simulateConnected()
-        var sentMessages: [ClientMessage] = []
-        conn.onSend = { message, _ in
-            sentMessages.append(message)
+        let sentMessages = SendContentRecorder()
+        conn.sendContent = { _, content, completion in
+            sentMessages.capture(content: content, completion: completion)
         }
 
         try conn.handleMessage(encode(.authRequired))
 
-        guard case .authenticate(let payload) = sentMessages.first else {
+        guard case .authenticate(let payload) = sentMessages.messages.first else {
             return XCTFail("Expected authRequired to send authenticate")
         }
         XCTAssertEqual(payload.token, "my-token")
-        XCTAssertEqual(sentMessages.count, 1)
+        XCTAssertEqual(sentMessages.messages.count, 1)
     }
 
     @ButtonHeistActor
@@ -248,19 +269,19 @@ final class AuthFlowTests: XCTestCase {
         conn.autoRespondToAuthRequired = false
 
         var receivedAuthRequired = false
-        var sentMessages: [ClientMessage] = []
+        let sentMessages = SendContentRecorder()
         conn.onEvent = { event in
             if case .message(.authRequired, _, _) = event {
                 receivedAuthRequired = true
             }
         }
-        conn.onSend = { message, _ in
-            sentMessages.append(message)
+        conn.sendContent = { _, content, completion in
+            sentMessages.capture(content: content, completion: completion)
         }
 
         try conn.handleMessage(encode(.authRequired))
 
         XCTAssertTrue(receivedAuthRequired)
-        XCTAssertTrue(sentMessages.isEmpty, "Passive probes must not send auth replies")
+        XCTAssertTrue(sentMessages.messages.isEmpty, "Passive probes must not send auth replies")
     }
 }

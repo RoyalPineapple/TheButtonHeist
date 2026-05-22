@@ -37,7 +37,7 @@ final class SessionLockTests: XCTestCase {
         )
         try conn.handleMessage(encode(.sessionLocked(payload)))
 
-        XCTAssertFalse(conn.isConnected)
+        assertDeviceConnectionDisconnected(conn)
         if case .sessionLocked(let msg) = disconnectReason {
             XCTAssertEqual(msg, payload.message)
         } else {
