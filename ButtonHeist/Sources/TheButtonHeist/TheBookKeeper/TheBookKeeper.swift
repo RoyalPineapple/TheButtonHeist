@@ -227,7 +227,10 @@ final class TheBookKeeper {
         try Self.createPrivateFile(at: logPath)
         let logHandle = try FileHandle(forWritingTo: logPath)
 
-        try appendLogLine(buildHeaderLogEntry(sessionId: sessionId), to: logHandle)
+        try appendLogLine(HeaderLogEntry(
+            formatVersion: SessionFormatVersion.current,
+            sessionId: sessionId
+        ), to: logHandle)
 
         let startTime = Date()
         let manifest = SessionManifest(sessionId: sessionId, startTime: startTime)
@@ -371,8 +374,15 @@ final class TheBookKeeper {
 
     func logCommand(_ projection: TheFence.CommandLogProjection) throws {
         guard case .active(let session) = phase else { return }
-        let entry = buildCommandLogEntry(projection)
-        try appendLogLine(entry, to: session.logHandle)
+        try appendLogLine(CommandLogEntry(
+            t: iso8601Now(),
+            requestId: projection.requestId,
+            command: projection.command.rawValue,
+            args: CommandLogArguments(
+                projection.arguments,
+                maxStringLength: Self.maxLoggedStringLength
+            )
+        ), to: session.logHandle)
     }
 
     func logResponse(
@@ -383,14 +393,14 @@ final class TheBookKeeper {
         error: String? = nil
     ) throws {
         guard case .active(let session) = phase else { return }
-        let entry = buildResponseLogEntry(
+        try appendLogLine(ResponseLogEntry(
+            t: iso8601Now(),
             requestId: requestId,
             status: status,
             durationMilliseconds: durationMilliseconds,
             artifact: artifact,
             error: error
-        )
-        try appendLogLine(entry, to: session.logHandle)
+        ), to: session.logHandle)
     }
 
     // MARK: - Artifact Storage
@@ -425,7 +435,15 @@ final class TheBookKeeper {
             command: command.rawValue,
             metadata: ["width": metadata.width, "height": metadata.height]
         )
-        try appendLogLine(buildArtifactLogEntry(entry), to: session.logHandle)
+        try appendLogLine(ArtifactLogEntry(
+            t: iso8601String(from: entry.timestamp),
+            artifactType: entry.type,
+            path: entry.path,
+            size: entry.size,
+            requestId: entry.requestId,
+            command: entry.command,
+            metadata: entry.metadata.isEmpty ? nil : entry.metadata
+        ), to: session.logHandle)
         phase = .active(session)
 
         return fileURL
@@ -467,7 +485,15 @@ final class TheBookKeeper {
                 "frameCount": Double(metadata.frameCount),
             ]
         )
-        try appendLogLine(buildArtifactLogEntry(entry), to: session.logHandle)
+        try appendLogLine(ArtifactLogEntry(
+            t: iso8601String(from: entry.timestamp),
+            artifactType: entry.type,
+            path: entry.path,
+            size: entry.size,
+            requestId: entry.requestId,
+            command: entry.command,
+            metadata: entry.metadata.isEmpty ? nil : entry.metadata
+        ), to: session.logHandle)
         phase = .active(session)
 
         return fileURL

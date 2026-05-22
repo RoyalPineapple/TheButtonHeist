@@ -789,26 +789,6 @@ private extension TheFence.RunBatchStep {
     }
 }
 
-enum SessionLogEntry: Encodable {
-    case header(HeaderLogEntry)
-    case command(CommandLogEntry)
-    case response(ResponseLogEntry)
-    case artifact(ArtifactLogEntry)
-
-    func encode(to encoder: Encoder) throws {
-        switch self {
-        case .header(let entry):
-            try entry.encode(to: encoder)
-        case .command(let entry):
-            try entry.encode(to: encoder)
-        case .response(let entry):
-            try entry.encode(to: encoder)
-        case .artifact(let entry):
-            try entry.encode(to: encoder)
-        }
-    }
-}
-
 struct HeaderLogEntry: Encodable {
     let type = "header"
     let formatVersion: String
@@ -870,64 +850,53 @@ struct ArtifactLogEntry: Encodable {
     let metadata: [String: Double]?
 }
 
+private struct SessionLogProjectionLine: Decodable {
+    let type: String?
+    let t: String?
+    let status: String?
+    let artifactType: String?
+    let path: String?
+    let size: Int?
+    let requestId: String?
+    let command: String?
+    let metadata: [String: Double]?
+
+    var artifact: ArtifactEntry? {
+        guard type == "artifact",
+              let artifactType,
+              let type = ArtifactType(rawValue: artifactType),
+              let path,
+              let size,
+              let t,
+              let timestamp = Self.date(from: t),
+              let requestId,
+              let command else {
+            return nil
+        }
+
+        return ArtifactEntry(
+            type: type,
+            path: path,
+            size: size,
+            timestamp: timestamp,
+            requestId: requestId,
+            command: command,
+            metadata: metadata ?? [:]
+        )
+    }
+
+    private static func date(from string: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractionalFormatter.date(from: string) ?? ISO8601DateFormatter().date(from: string)
+    }
+}
+
 extension TheBookKeeper {
 
     // MARK: - Session Log Construction
 
-    private static let maxLoggedStringLength = 1000
-
-    /// Build the header entry that identifies a session log stream.
-    func buildHeaderLogEntry(sessionId: String) -> SessionLogEntry {
-        .header(HeaderLogEntry(
-            formatVersion: SessionFormatVersion.current,
-            sessionId: sessionId
-        ))
-    }
-
-    /// Build a sanitized log entry for an incoming command.
-    func buildCommandLogEntry(_ projection: TheFence.CommandLogProjection) -> SessionLogEntry {
-        return .command(CommandLogEntry(
-            t: iso8601Now(),
-            requestId: projection.requestId,
-            command: projection.command.rawValue,
-            args: CommandLogArguments(
-                projection.arguments,
-                maxStringLength: Self.maxLoggedStringLength
-            )
-        ))
-    }
-
-    /// Build a sanitized log entry for a command response.
-    func buildResponseLogEntry(
-        requestId: String,
-        status: ResponseStatus,
-        durationMilliseconds: Int,
-        artifact: String?,
-        error: String?
-    ) -> SessionLogEntry {
-        .response(ResponseLogEntry(
-            t: iso8601Now(),
-            requestId: requestId,
-            status: status,
-            durationMilliseconds: durationMilliseconds,
-            artifact: artifact,
-            error: error
-        ))
-    }
-
-    /// Build an artifact event. This is the durable artifact index source;
-    /// session responses derive artifact summaries from these append-only events.
-    func buildArtifactLogEntry(_ artifact: ArtifactEntry) -> SessionLogEntry {
-        .artifact(ArtifactLogEntry(
-            t: iso8601String(from: artifact.timestamp),
-            artifactType: artifact.type,
-            path: artifact.path,
-            size: artifact.size,
-            requestId: artifact.requestId,
-            command: artifact.command,
-            metadata: artifact.metadata.isEmpty ? nil : artifact.metadata
-        ))
-    }
+    static let maxLoggedStringLength = 1000
 
     /// Serialize a log entry as JSON and append it to the session log file.
     private static let sessionLogEncoder: JSONEncoder = {
@@ -936,7 +905,7 @@ extension TheBookKeeper {
         return encoder
     }()
 
-    func appendLogLine(_ entry: SessionLogEntry, to handle: FileHandle) throws {
+    func appendLogLine<Entry: Encodable>(_ entry: Entry, to handle: FileHandle) throws {
         let jsonData = try Self.sessionLogEncoder.encode(entry)
         var lineData = jsonData
         lineData.append(contentsOf: [0x0A]) // newline
@@ -1005,19 +974,9 @@ extension TheBookKeeper {
                 continue
             }
 
-            let entry: [String: Any]
+            let entry: SessionLogProjectionLine
             do {
-                guard let parsedEntry = try JSONSerialization.jsonObject(with: Data(line)) as? [String: Any] else {
-                    recordMalformedLine(
-                        lineNumber: lineNumber,
-                        cause: "expected JSON object",
-                        malformedLineCount: &malformedLineCount,
-                        firstMalformedLineNumber: &firstMalformedLineNumber,
-                        firstMalformedLineCause: &firstMalformedLineCause
-                    )
-                    continue
-                }
-                entry = parsedEntry
+                entry = try JSONDecoder().decode(SessionLogProjectionLine.self, from: Data(line))
             } catch {
                 recordMalformedLine(
                     lineNumber: lineNumber,
@@ -1029,7 +988,7 @@ extension TheBookKeeper {
                 continue
             }
 
-            guard let type = entry["type"] as? String else {
+            guard let type = entry.type else {
                 recordMalformedLine(
                     lineNumber: lineNumber,
                     cause: "missing type",
@@ -1043,10 +1002,10 @@ extension TheBookKeeper {
             switch type {
             case "command":
                 commandCount += 1
-            case "response" where entry["status"] as? String == ResponseStatus.error.rawValue:
+            case "response" where entry.status == ResponseStatus.error.rawValue:
                 errorCount += 1
             case "artifact":
-                if let artifact = artifactEntry(from: entry) {
+                if let artifact = entry.artifact {
                     artifacts.append(artifact)
                 } else {
                     malformedArtifactCount += 1
@@ -1077,37 +1036,6 @@ extension TheBookKeeper {
         guard firstMalformedLineNumber == nil else { return }
         firstMalformedLineNumber = lineNumber
         firstMalformedLineCause = cause
-    }
-
-    private static func artifactEntry(from entry: [String: Any]) -> ArtifactEntry? {
-        guard let artifactType = entry["artifactType"] as? String,
-              let type = ArtifactType(rawValue: artifactType),
-              let path = entry["path"] as? String,
-              let size = entry["size"] as? Int,
-              let timestampString = entry["t"] as? String,
-              let timestamp = date(from: timestampString),
-              let requestId = entry["requestId"] as? String,
-              let command = entry["command"] as? String else {
-            return nil
-        }
-
-        let metadata = (entry["metadata"] as? [String: Any])?.reduce(into: [String: Double]()) { result, pair in
-            if let value = pair.value as? Double {
-                result[pair.key] = value
-            } else if let value = pair.value as? Int {
-                result[pair.key] = Double(value)
-            }
-        } ?? [:]
-
-        return ArtifactEntry(
-            type: type,
-            path: path,
-            size: size,
-            timestamp: timestamp,
-            requestId: requestId,
-            command: command,
-            metadata: metadata
-        )
     }
 
     private static func gunzippedData(at path: URL) throws -> Data {
@@ -1199,16 +1127,12 @@ extension TheBookKeeper {
         return output
     }
 
-    private func iso8601Now() -> String {
+    func iso8601Now() -> String {
         iso8601String(from: Date())
     }
 
-    private func iso8601String(from date: Date) -> String {
+    func iso8601String(from date: Date) -> String {
         Self.iso8601Formatter().string(from: date)
-    }
-
-    private static func date(from string: String) -> Date? {
-        iso8601Formatter().date(from: string) ?? ISO8601DateFormatter().date(from: string)
     }
 
     private static func iso8601Formatter() -> ISO8601DateFormatter {
