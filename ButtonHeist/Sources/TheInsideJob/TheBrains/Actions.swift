@@ -12,6 +12,83 @@ import AccessibilitySnapshotParser
 // and point interactions. Each executeXxx method is a thin wrapper that feeds
 // the pipeline a closure for the actual gesture or accessibility action.
 
+protocol CustomActionExecutionInput {
+    var actionElementTarget: ElementTarget? { get }
+    var actionContainerTarget: ContainerMatcher? { get }
+    var actionContainerOrdinal: Int? { get }
+    var actionName: String { get }
+}
+
+protocol RotorExecutionInput {
+    var rotorElementTarget: ElementTarget { get }
+    var rotor: String? { get }
+    var rotorIndex: Int? { get }
+    var direction: RotorDirection? { get }
+    var currentHeistId: HeistId? { get }
+    var currentTextRange: TextRangeReference? { get }
+}
+
+protocol TapExecutionInput {
+    var tapElementTarget: ElementTarget? { get }
+    var pointX: Double? { get }
+    var pointY: Double? { get }
+}
+
+protocol LongPressExecutionInput: TapExecutionInput {
+    var duration: Double { get }
+}
+
+protocol SwipeExecutionInput {
+    var swipeElementTarget: ElementTarget? { get }
+    var startX: Double? { get }
+    var startY: Double? { get }
+    var endX: Double? { get }
+    var endY: Double? { get }
+    var direction: SwipeDirection? { get }
+    var duration: Double? { get }
+    var start: UnitPoint? { get }
+    var end: UnitPoint? { get }
+}
+
+protocol DragExecutionInput {
+    var dragElementTarget: ElementTarget? { get }
+    var startX: Double? { get }
+    var startY: Double? { get }
+    var endX: Double { get }
+    var endY: Double { get }
+    var duration: Double? { get }
+}
+
+protocol PinchExecutionInput {
+    var pinchElementTarget: ElementTarget? { get }
+    var centerX: Double? { get }
+    var centerY: Double? { get }
+    var scale: Double { get }
+    var spread: Double? { get }
+    var duration: Double? { get }
+}
+
+protocol RotateExecutionInput {
+    var rotateElementTarget: ElementTarget? { get }
+    var centerX: Double? { get }
+    var centerY: Double? { get }
+    var angle: Double { get }
+    var radius: Double? { get }
+    var duration: Double? { get }
+}
+
+protocol TwoFingerTapExecutionInput {
+    var twoFingerTapElementTarget: ElementTarget? { get }
+    var centerX: Double? { get }
+    var centerY: Double? { get }
+    var spread: Double? { get }
+}
+
+protocol TypeTextExecutionInput {
+    var text: String { get }
+    var typeTextElementTarget: ElementTarget? { get }
+}
+
 /// Actions — element and point action execution.
 ///
 /// Internal component of TheBrains. Calls into Navigation for
@@ -527,17 +604,17 @@ final class Actions {
     }
 
     func executeCustomAction(
-        _ target: CustomActionTarget,
+        _ target: some CustomActionExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        if let containerTarget = target.containerTarget {
+        if let containerTarget = target.actionContainerTarget {
             return executeContainerCustomAction(
                 containerTarget,
-                ordinal: target.containerOrdinal,
+                ordinal: target.actionContainerOrdinal,
                 actionName: target.actionName
             )
         }
-        guard let elementTarget = target.elementTarget else {
+        guard let elementTarget = target.actionElementTarget else {
             return .failure(.customAction, message: "custom action failed: missing element or container target")
         }
         return await performElementAction(
@@ -609,19 +686,30 @@ final class Actions {
         }
     }
 
-    func executeRotor(_ target: RotorTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        let direction = target.resolvedDirection
+    func executeRotor(
+        _ target: some RotorExecutionInput,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
+        let direction = target.direction ?? .next
         let method: ActionMethod = .rotor
         return await performElementAction(
-            target: target.elementTarget,
+            target: target.rotorElementTarget,
             method: method,
             recordedScreen: recordedScreen,
             requireInteractive: false
         ) { context in
-            let outcome = self.stash.performRotor(target, direction: direction, on: context.liveTarget)
+            let outcome = self.stash.performRotor(
+                rotor: target.rotor,
+                rotorIndex: target.rotorIndex,
+                currentHeistId: target.currentHeistId,
+                currentTextRange: target.currentTextRange,
+                direction: direction,
+                on: context.liveTarget
+            )
             return Self.rotorInteractionResult(
                 outcome: outcome,
-                target: target,
+                rotor: target.rotor,
+                rotorIndex: target.rotorIndex,
                 direction: direction,
                 liveTarget: context.liveTarget
             )
@@ -674,11 +762,11 @@ final class Actions {
     // MARK: - Touch Gestures
 
     func executeTap(
-        _ target: TouchTapTarget,
+        _ target: some TapExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         await performPointAction(
-            elementTarget: target.elementTarget, pointX: target.pointX, pointY: target.pointY,
+            elementTarget: target.tapElementTarget, pointX: target.pointX, pointY: target.pointY,
             method: .syntheticTap,
             recordedScreen: recordedScreen
         ) { point in
@@ -687,12 +775,12 @@ final class Actions {
     }
 
     func executeLongPress(
-        _ target: LongPressTarget,
+        _ target: some LongPressExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         let duration = clampDuration(target.duration)
         return await performPointAction(
-            elementTarget: target.elementTarget, pointX: target.pointX, pointY: target.pointY,
+            elementTarget: target.tapElementTarget, pointX: target.pointX, pointY: target.pointY,
             method: .syntheticLongPress,
             recordedScreen: recordedScreen
         ) { point in
@@ -701,12 +789,17 @@ final class Actions {
     }
 
     func executeSwipe(
-        _ target: SwipeTarget,
+        _ target: some SwipeExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         // Unit-point swipe: resolve element frame, compute start/end from unit coordinates
-        if let unitPoints = unitSwipePoints(for: target) {
-            guard let elementTarget = target.elementTarget else {
+        if let unitPoints = unitSwipePoints(
+            elementTarget: target.swipeElementTarget,
+            direction: target.direction,
+            start: target.start,
+            end: target.end
+        ) {
+            guard let elementTarget = target.swipeElementTarget else {
                 return .failure(
                     .syntheticSwipe,
                     message: "synthetic swipe failed: observed unit start/end points without elementTarget; "
@@ -749,7 +842,7 @@ final class Actions {
         }
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
-        let normalizedTarget = target.elementTarget.map {
+        let normalizedTarget = target.swipeElementTarget.map {
             stash.normalizeTarget($0, in: recordedScreen ?? stash.currentScreen)
         }
         if let normalizedTarget {
@@ -801,41 +894,47 @@ final class Actions {
         }
     }
 
-    private func unitSwipePoints(for target: SwipeTarget) -> (start: UnitPoint, end: UnitPoint)? {
-        if let start = target.start, let end = target.end {
+    private func unitSwipePoints(
+        elementTarget: ElementTarget?,
+        direction: SwipeDirection?,
+        start: UnitPoint?,
+        end: UnitPoint?
+    ) -> (start: UnitPoint, end: UnitPoint)? {
+        if let start, let end {
             return (start, end)
         }
-        guard let direction = target.direction, target.elementTarget != nil else {
+        guard let direction, elementTarget != nil else {
             return nil
         }
         return (direction.defaultStart, direction.defaultEnd)
     }
 
     func executeDrag(
-        _ target: DragTarget,
+        _ target: some DragExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: target.endPoint) {
+        let endPoint = CGPoint(x: target.endX, y: target.endY)
+        if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }
         let duration = clampDuration(target.duration ?? 0.5)
         return await performPointAction(
-            elementTarget: target.elementTarget, pointX: target.startX, pointY: target.startY,
+            elementTarget: target.dragElementTarget, pointX: target.startX, pointY: target.startY,
             method: .syntheticDrag,
             recordedScreen: recordedScreen
         ) { startPoint in
-            await self.safecracker.drag(from: startPoint, to: target.endPoint, duration: duration)
+            await self.safecracker.drag(from: startPoint, to: endPoint, duration: duration)
         }
     }
 
     func executePinch(
-        _ target: PinchTarget,
+        _ target: some PinchExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         let spread = target.spread ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
         return await performPointAction(
-            elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
+            elementTarget: target.pinchElementTarget, pointX: target.centerX, pointY: target.centerY,
             method: .syntheticPinch,
             recordedScreen: recordedScreen
         ) { center in
@@ -847,13 +946,13 @@ final class Actions {
     }
 
     func executeRotate(
-        _ target: RotateTarget,
+        _ target: some RotateExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         let radius = target.radius ?? 100.0
         let duration = clampDuration(target.duration ?? 0.5)
         return await performPointAction(
-            elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
+            elementTarget: target.rotateElementTarget, pointX: target.centerX, pointY: target.centerY,
             method: .syntheticRotate,
             recordedScreen: recordedScreen
         ) { center in
@@ -865,12 +964,12 @@ final class Actions {
     }
 
     func executeTwoFingerTap(
-        _ target: TwoFingerTapTarget,
+        _ target: some TwoFingerTapExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         let spread = target.spread ?? 40.0
         return await performPointAction(
-            elementTarget: target.elementTarget, pointX: target.centerX, pointY: target.centerY,
+            elementTarget: target.twoFingerTapElementTarget, pointX: target.centerX, pointY: target.centerY,
             method: .syntheticTwoFingerTap,
             recordedScreen: recordedScreen
         ) { center in
@@ -936,13 +1035,13 @@ final class Actions {
     // MARK: - Text Entry
 
     func executeTypeText(
-        _ target: TypeTextTarget,
+        _ target: some TypeTextExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         guard !target.text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
-        let normalizedTarget = target.elementTarget.map {
+        let normalizedTarget = target.typeTextElementTarget.map {
             stash.normalizeTarget($0, in: recordedScreen ?? stash.currentScreen)
         }
         if let failure = await focusTextInput(normalizedTarget) { return failure }
@@ -1054,7 +1153,8 @@ final class Actions {
 
     private static func rotorInteractionResult(
         outcome: TheStash.RotorOutcome,
-        target: RotorTarget,
+        rotor: String?,
+        rotorIndex: Int?,
         direction: RotorDirection,
         liveTarget: TheStash.LiveActionTarget
     ) -> TheSafecracker.InteractionResult {
@@ -1067,45 +1167,53 @@ final class Actions {
             return rotorFailure(
                 .elementDeallocated,
                 observed: "liveObject=deallocated before rotor step",
-                target: target,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
                 element: element,
                 liveObject: liveObject,
                 suggestion: "refresh with get_interface and retarget the refreshed element"
             )
         case .noRotors:
-            return rotorFailure(.rotor, observed: "customRotors=[]", target: target, element: element,
-                                liveObject: liveObject,
+            return rotorFailure(.rotor, observed: "customRotors=[]",
+                                rotor: rotor, rotorIndex: rotorIndex, direction: direction,
+                                element: element, liveObject: liveObject,
                                 suggestion: "target an element exposing custom rotors")
         case .noSuchRotor(let available):
-            return rotorFailure(.rotor, observed: "requestedRotor=\(ActionCapabilityDiagnostic.quote(target.rotor ?? "")) "
+            return rotorFailure(.rotor, observed: "requestedRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
                                 + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
-                                target: target, element: element,
-                                liveObject: liveObject,
+                                rotor: rotor, rotorIndex: rotorIndex, direction: direction,
+                                element: element, liveObject: liveObject,
                                 suggestion: "use one of available rotors \(ActionCapabilityDiagnostic.formatQuotedList(available))")
         case .ambiguousRotor(let available):
-            return rotorFailure(.rotor, observed: "ambiguousRotor=\(ActionCapabilityDiagnostic.quote(target.rotor ?? "")) "
+            return rotorFailure(.rotor, observed: "ambiguousRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
                                 + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
-                                target: target, element: element,
-                                liveObject: liveObject,
+                                rotor: rotor, rotorIndex: rotorIndex, direction: direction,
+                                element: element, liveObject: liveObject,
                                 suggestion: "specify rotorIndex or an exact rotor name")
         case .currentItemUnavailable(let heistId):
             return rotorFailure(
                 .elementNotFound,
                 observed: "currentHeistId=\(ActionCapabilityDiagnostic.quote(heistId)) is not available",
-                target: target,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
                 element: element,
                 liveObject: liveObject,
                 suggestion: "use the heistId returned by the previous rotor result after refetching"
             )
         case .currentTextRangeUnavailable:
-            return rotorFailure(.rotor, observed: "currentTextRange is not available", target: target, element: element,
-                                liveObject: liveObject,
+            return rotorFailure(.rotor, observed: "currentTextRange is not available",
+                                rotor: rotor, rotorIndex: rotorIndex, direction: direction,
+                                element: element, liveObject: liveObject,
                                 suggestion: "use the text range returned by the previous rotor result after refetching")
         case .noResult(let rotorName):
             return rotorFailure(
                 .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned no \(direction.rawValue) result",
-                target: target,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
                 element: element,
                 liveObject: liveObject,
                 suggestion: "try the opposite rotor direction or stop at the current item"
@@ -1114,7 +1222,9 @@ final class Actions {
             return rotorFailure(
                 .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a result without an accessibility target",
-                target: target,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
                 element: element,
                 liveObject: liveObject,
                 suggestion: "refetch with get_interface and retry the rotor from a visible target"
@@ -1123,7 +1233,9 @@ final class Actions {
             return rotorFailure(
                 .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a target outside the parsed hierarchy",
-                target: target,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
                 element: element,
                 liveObject: liveObject,
                 suggestion: "refetch with get_interface before acting on the rotor result"
@@ -1158,7 +1270,9 @@ final class Actions {
     private static func rotorFailure(
         _ method: ActionMethod,
         observed: String,
-        target: RotorTarget,
+        rotor: String?,
+        rotorIndex: Int?,
+        direction: RotorDirection,
         element: TheStash.ScreenElement,
         liveObject: NSObject,
         suggestion: String
@@ -1167,7 +1281,9 @@ final class Actions {
             method,
             message: rotorDiagnostic(
                 observed: observed,
-                target: target,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
+                direction: direction,
                 element: element,
                 liveObject: liveObject,
                 suggestion: suggestion
@@ -1177,21 +1293,23 @@ final class Actions {
 
     private static func rotorDiagnostic(
         observed: String,
-        target: RotorTarget,
+        rotor: String?,
+        rotorIndex: Int?,
+        direction: RotorDirection,
         element: TheStash.ScreenElement,
         liveObject: NSObject,
         suggestion: String
     ) -> String {
         var attempted: [String] = []
-        if let rotor = target.rotor {
+        if let rotor {
             attempted.append("rotor=\(ActionCapabilityDiagnostic.quote(rotor))")
         } else {
             attempted.append("rotor")
         }
-        if let rotorIndex = target.rotorIndex {
+        if let rotorIndex {
             attempted.append("rotorIndex=\(rotorIndex)")
         }
-        attempted.append("direction=\(target.resolvedDirection.rawValue)")
+        attempted.append("direction=\(direction.rawValue)")
 
         let availableRotors = ActionCapabilityDiagnostic.availableRotors(for: element, liveObject: liveObject)
         return "rotor failed: attempted \(attempted.joined(separator: " ")) "
@@ -1236,6 +1354,91 @@ final class Actions {
         }
         return clampDuration(result)
     }
+}
+
+extension CustomActionTarget: CustomActionExecutionInput {
+    var actionElementTarget: ElementTarget? { elementTarget }
+    var actionContainerTarget: ContainerMatcher? { containerTarget }
+    var actionContainerOrdinal: Int? { containerOrdinal }
+}
+
+extension BatchCustomActionTarget: CustomActionExecutionInput {
+    var actionElementTarget: ElementTarget? { target?.executableTarget }
+    var actionContainerTarget: ContainerMatcher? { containerTarget }
+    var actionContainerOrdinal: Int? { containerOrdinal }
+}
+
+extension RotorTarget: RotorExecutionInput {
+    var rotorElementTarget: ElementTarget { elementTarget }
+}
+
+extension BatchRotorTarget: RotorExecutionInput {
+    var rotorElementTarget: ElementTarget { target.executableTarget }
+    var currentHeistId: HeistId? { currentSourceHeistId }
+}
+
+extension TouchTapTarget: TapExecutionInput {
+    var tapElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchTouchTapTarget: TapExecutionInput {
+    var tapElementTarget: ElementTarget? { target?.executableTarget }
+}
+
+extension LongPressTarget: LongPressExecutionInput {
+    var tapElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchLongPressTarget: LongPressExecutionInput {
+    var tapElementTarget: ElementTarget? { target?.executableTarget }
+}
+
+extension SwipeTarget: SwipeExecutionInput {
+    var swipeElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchSwipeTarget: SwipeExecutionInput {
+    var swipeElementTarget: ElementTarget? { target?.executableTarget }
+}
+
+extension DragTarget: DragExecutionInput {
+    var dragElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchDragTarget: DragExecutionInput {
+    var dragElementTarget: ElementTarget? { target?.executableTarget }
+}
+
+extension PinchTarget: PinchExecutionInput {
+    var pinchElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchPinchTarget: PinchExecutionInput {
+    var pinchElementTarget: ElementTarget? { target?.executableTarget }
+}
+
+extension RotateTarget: RotateExecutionInput {
+    var rotateElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchRotateTarget: RotateExecutionInput {
+    var rotateElementTarget: ElementTarget? { target?.executableTarget }
+}
+
+extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
+    var twoFingerTapElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchTwoFingerTapTarget: TwoFingerTapExecutionInput {
+    var twoFingerTapElementTarget: ElementTarget? { target?.executableTarget }
+}
+
+extension TypeTextTarget: TypeTextExecutionInput {
+    var typeTextElementTarget: ElementTarget? { elementTarget }
+}
+
+extension BatchTypeTextTarget: TypeTextExecutionInput {
+    var typeTextElementTarget: ElementTarget? { target?.executableTarget }
 }
 
 #endif // DEBUG

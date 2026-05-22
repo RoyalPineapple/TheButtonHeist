@@ -249,15 +249,27 @@ extension Navigation {
     // MARK: - Scroll Command Execution
 
     func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult {
-        let axis = Self.requiredAxis(for: target.direction)
-        switch resolveContainerScrollTarget(
-            containerTarget: target.containerTarget,
+        await executeScroll(
             elementTarget: target.elementTarget,
+            containerTarget: target.containerTarget,
+            direction: target.direction
+        )
+    }
+
+    func executeScroll(
+        elementTarget: ElementTarget?,
+        containerTarget: ScrollContainerTarget? = nil,
+        direction: ScrollDirection
+    ) async -> TheSafecracker.InteractionResult {
+        let axis = Self.requiredAxis(for: direction)
+        switch resolveContainerScrollTarget(
+            containerTarget: containerTarget,
+            elementTarget: elementTarget,
             axis: axis,
             commandName: ScrollMode.page.canonicalCommand
         ) {
         case .resolved(let scrollTarget):
-            let uiDirection = Self.uiScrollDirection(for: target.direction)
+            let uiDirection = Self.uiScrollDirection(for: direction)
             let proof = await scrollOnePageAndSettle(
                 scrollTarget, direction: uiDirection
             )
@@ -270,10 +282,22 @@ extension Navigation {
     }
 
     func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
-        let axis = Self.requiredAxis(for: target.edge)
-        switch resolveContainerScrollTarget(
-            containerTarget: target.containerTarget,
+        await executeScrollToEdge(
             elementTarget: target.elementTarget,
+            containerTarget: target.containerTarget,
+            edge: target.edge
+        )
+    }
+
+    func executeScrollToEdge(
+        elementTarget: ElementTarget?,
+        containerTarget: ScrollContainerTarget? = nil,
+        edge: ScrollEdge
+    ) async -> TheSafecracker.InteractionResult {
+        let axis = Self.requiredAxis(for: edge)
+        switch resolveContainerScrollTarget(
+            containerTarget: containerTarget,
+            elementTarget: elementTarget,
             axis: axis,
             commandName: ScrollMode.toEdge.canonicalCommand
         ) {
@@ -281,7 +305,7 @@ extension Navigation {
             guard case .uiScrollView(let scrollView) = scrollTarget else {
                 return .failure(.scrollToEdge, message: "\(ScrollMode.toEdge.canonicalCommand) failed: selected container has no live UIScrollView")
             }
-            let moved = safecracker.scrollToEdge(scrollView, edge: target.edge)
+            let moved = safecracker.scrollToEdge(scrollView, edge: edge)
 
             return moved
                 ? .success(method: .scrollToEdge)
@@ -312,7 +336,17 @@ extension Navigation {
         _ target: ScrollToVisibleTarget,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        guard let elementTarget = target.elementTarget else {
+        await executeScrollToVisible(
+            elementTarget: target.elementTarget,
+            recordedScreen: recordedScreen
+        )
+    }
+
+    func executeScrollToVisible(
+        elementTarget: ElementTarget?,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
+        guard let elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for \(ScrollMode.toVisible.canonicalCommand)")
         }
 
@@ -357,10 +391,17 @@ extension Navigation {
     /// Iterative search: page through scroll content looking for an element.
     /// Used when the element has never been seen (not in the current screen).
     func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
-        guard let searchTarget = target.elementTarget else {
+        await executeElementSearch(elementTarget: target.elementTarget, direction: target.direction)
+    }
+
+    func executeElementSearch(
+        elementTarget: ElementTarget?,
+        direction: ScrollSearchDirection?
+    ) async -> TheSafecracker.InteractionResult {
+        guard let searchTarget = elementTarget else {
             return .failure(.elementSearch, message: "Element target required for \(ScrollMode.search.canonicalCommand)")
         }
-        let searchDirection = target.resolvedDirection
+        let searchDirection = direction ?? .down
 
         let requestedAxis = Self.requiredAxis(for: searchDirection)
         let knownScreen = stash.currentScreen
