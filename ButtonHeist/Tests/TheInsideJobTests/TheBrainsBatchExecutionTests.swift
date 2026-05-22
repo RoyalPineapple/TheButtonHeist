@@ -23,8 +23,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                let actionName = BatchActionClientMessageBridge.actionName(for: action)
-                events.append("action:\(actionName)")
+                events.append("action:\(action.batchExecutionActionName)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
@@ -86,7 +85,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(BatchActionClientMessageBridge.actionName(for: action))")
+                events.append("action:\(action.batchExecutionActionName)")
                 return ActionResult(
                     success: false,
                     method: .setPasteboard,
@@ -140,7 +139,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         ]
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(BatchActionClientMessageBridge.actionName(for: action))")
+                events.append("action:\(action.batchExecutionActionName)")
                 return results.removeFirst()
             },
             waitForExpectation: { _, _ in
@@ -178,7 +177,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(BatchActionClientMessageBridge.actionName(for: action))")
+                events.append("action:\(action.batchExecutionActionName)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,

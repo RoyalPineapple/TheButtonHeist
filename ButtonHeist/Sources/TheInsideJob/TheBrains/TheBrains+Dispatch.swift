@@ -126,7 +126,7 @@ extension TheBrains {
         command: ClientMessage,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        await performInteraction(command: command) { _ in
+        await performInteraction(method: Self.diagnosticMethod(for: command)) { _ in
             await interaction()
         }
     }
@@ -139,9 +139,25 @@ extension TheBrains {
         command: ClientMessage,
         interaction: (Screen?) async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
+        await performInteraction(method: Self.diagnosticMethod(for: command), interaction: interaction)
+    }
+
+    func performInteraction(
+        method: ActionMethod,
+        interaction: () async -> TheSafecracker.InteractionResult
+    ) async -> ActionResult {
+        await performInteraction(method: method) { _ in
+            await interaction()
+        }
+    }
+
+    func performInteraction(
+        method: ActionMethod,
+        interaction: (Screen?) async -> TheSafecracker.InteractionResult
+    ) async -> ActionResult {
         let screenBeforeRefresh = stash.currentScreen
         guard refresh() != nil else {
-            return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
+            return treeUnavailableResult(method: method)
         }
         let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
@@ -162,8 +178,15 @@ extension TheBrains {
         target: ElementSearchTarget,
         command: ClientMessage
     ) async -> ActionResult {
+        await performElementSearch(target: target, method: Self.diagnosticMethod(for: command))
+    }
+
+    func performElementSearch(
+        target: ElementSearchTarget,
+        method: ActionMethod
+    ) async -> ActionResult {
         guard refresh() != nil else {
-            return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
+            return treeUnavailableResult(method: method)
         }
         let before = captureBeforeState()
         let result = await navigation.executeElementSearch(target)
