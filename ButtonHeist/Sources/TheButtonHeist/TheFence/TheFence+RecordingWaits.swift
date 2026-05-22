@@ -13,7 +13,7 @@ extension TheFence {
 
     func stopRecordingAndWait(timeout: TimeInterval = 120.0) async throws -> RecordingPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
-        return try await waitForRecording(timeout: timeout) {
+        return try await recording.waitForCompletion(timeout: timeout) {
             let outcome = self.handoff.send(.stopRecording, requestId: nil)
             if case .failed(let failure) = outcome {
                 self.recording.resolveActiveCompletion(.failure(FenceError(failure)))
@@ -23,21 +23,16 @@ extension TheFence {
 
     func startRecordingAndWait(config: RecordingConfig, timeout: TimeInterval = Timeouts.actionSeconds) async throws {
         guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !isRecording else {
-            throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
-        }
-        let wait = try recording.beginStartWait()
-        defer { recording.finishStartWait(wait) }
 
         var didSendStart = false
         do {
-            try await wait.wait(timeout: timeout) {
+            try await recording.waitForStartAcknowledgement(timeout: timeout) {
                 let outcome = self.handoff.send(.startRecording(config), requestId: nil)
                 switch outcome {
                 case .enqueued:
                     didSendStart = true
                 case .failed(let failure):
-                    wait.resolve(.failure(FenceError(failure)))
+                    self.recording.resolveActiveStart(.failure(FenceError(failure)))
                 }
             }
         } catch {
@@ -60,9 +55,6 @@ extension TheFence {
         timeout: TimeInterval
     ) async throws -> RecordingPayload {
         guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !isRecording else {
-            throw FenceError.invalidRequest("Recording already in progress — use stop_recording first")
-        }
 
         // Cancellation that arrived before we could send the start request: do
         // nothing to clean up server-side, since nothing was started.
@@ -101,8 +93,6 @@ extension TheFence {
         timeout: TimeInterval,
         afterRegister: (() -> Void)?
     ) async throws -> RecordingPayload {
-        let wait = try recording.beginCompletionWait()
-        defer { recording.finishCompletionWait(wait) }
-        return try await wait.wait(timeout: timeout, afterRegister: afterRegister)
+        try await recording.waitForCompletion(timeout: timeout, afterRegister: afterRegister)
     }
 }

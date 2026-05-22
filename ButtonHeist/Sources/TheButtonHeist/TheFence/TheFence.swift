@@ -9,11 +9,6 @@ struct SessionConnectionSnapshot {
     let lastFailure: SessionFailurePayload?
 }
 
-struct RecordingSnapshot {
-    let isRecording: Bool
-    let isWaitingForCompletion: Bool
-}
-
 /// Named timeout constants for TheFence operations.
 enum Timeouts {
     /// Standard action timeout (15 seconds)
@@ -111,7 +106,7 @@ public final class TheFence {
 
     let pendingRequests = PendingRequestTrackers()
 
-    var recording = RecordingCoordinator()
+    let recording = FenceRecordingLifecycle()
     var recordingSnapshot: RecordingSnapshot {
         recording.snapshot
     }
