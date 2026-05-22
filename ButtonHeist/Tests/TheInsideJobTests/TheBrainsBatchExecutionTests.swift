@@ -23,10 +23,11 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(action.name)")
+                let actionName = BatchActionClientMessageBridge.actionName(for: action)
+                events.append("action:\(actionName)")
                 return ActionResult(
                     success: true,
-                    method: action.name == "checkpoint:loaded" ? .waitForChange : .setPasteboard,
+                    method: actionName == "checkpoint:loaded" ? .waitForChange : .setPasteboard,
                     message: "delivered"
                 )
             },
@@ -85,7 +86,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(action.name)")
+                events.append("action:\(BatchActionClientMessageBridge.actionName(for: action))")
                 return ActionResult(
                     success: false,
                     method: .setPasteboard,
@@ -135,7 +136,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(action.name)")
+                events.append("action:\(BatchActionClientMessageBridge.actionName(for: action))")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
@@ -179,6 +180,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertNotEqual(result.errorKind, .unsupported)
         XCTAssertNotNil(result.batchExecutionPayload)
     }
+
 }
 
 private extension TheScore.ActionResult {
