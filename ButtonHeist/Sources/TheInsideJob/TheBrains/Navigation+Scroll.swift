@@ -20,40 +20,11 @@ extension Navigation {
     @MainActor struct ScrollPlan { // swiftlint:disable:this agent_main_actor_value_type
         let target: ScrollableTarget
         let container: AccessibilityContainer
-        let axis: ScrollAxis
-
-        init(target: ScrollableTarget, container: AccessibilityContainer) {
-            self.target = target
-            self.container = container
-            self.axis = Navigation.scrollableAxis(of: container)
-        }
-
-        func supports(_ requiredAxis: ScrollAxis) -> Bool {
-            axis.contains(requiredAxis)
-        }
-
-        func movement(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection? {
-            guard supports(Navigation.requiredAxis(for: direction)) else { return nil }
-            return Navigation.uiScrollDirection(for: direction)
-        }
     }
 
-    struct ScrollProof: Equatable {
+    struct ScrollProof {
         let moved: Bool
         let previousVisibleIds: Set<HeistId>
-
-        var atEdge: Bool {
-            !moved
-        }
-
-        func visibleStateUnchanged(after visibleIds: Set<HeistId>) -> Bool {
-            visibleIds == previousVisibleIds
-        }
-    }
-
-    enum ScrollTargetResolution {
-        case resolved(UIScrollView)
-        case failed(ScrollTargetDiagnostic)
     }
 
     @MainActor enum ContainerScrollResolution { // swiftlint:disable:this agent_main_actor_value_type
@@ -61,42 +32,7 @@ extension Navigation {
         case failed(String)
     }
 
-    enum ScrollTargetDiagnosticReason: Equatable {
-        case noScrollView
-        case unsafeProgrammaticScroll
-        case axisMismatch(required: ScrollAxis, available: ScrollAxis)
-    }
-
-    struct ScrollTargetDiagnostic: Equatable {
-        let reason: ScrollTargetDiagnosticReason
-
-        func message(for screenElement: TheStash.ScreenElement) -> String {
-            let element = Navigation.describeScrollTarget(screenElement)
-            switch reason {
-            case .noScrollView:
-                return "scroll target failed: observed \(element) with no live scrollable ancestor; "
-                    + "try \(ScrollMode.search.canonicalCommand) or target an element inside a scroll container"
-            case .unsafeProgrammaticScroll:
-                return "scroll target failed: observed \(element) inside a scroll view that is unsafe "
-                    + "for programmatic scrolling; try \(ScrollMode.search.canonicalCommand) to use semantic search"
-            case .axisMismatch(let required, let available):
-                return "scroll target failed: observed \(element) inside a scroll view that supports "
-                    + "\(Navigation.axisDescription(available)); expected \(Navigation.axisDescription(required)); "
-                    + "try a matching scroll direction or target an element inside a matching scroll container"
-            }
-        }
-    }
-
-    private enum ScrollAxisSelection {
-        case any
-        case required(ScrollAxis)
-    }
-
     // MARK: - Scroll Axis Detection
-
-    static func scrollableAxis(of target: ScrollableTarget) -> ScrollAxis {
-        scrollableAxis(contentSize: target.contentSize, frame: target.frame)
-    }
 
     static func scrollableAxis(of container: AccessibilityContainer) -> ScrollAxis {
         guard case .scrollable(let contentSize) = container.type else { return [] }
@@ -318,7 +254,6 @@ extension Navigation {
             containerTarget: target.containerTarget,
             elementTarget: target.elementTarget,
             axis: axis,
-            method: .scroll,
             commandName: ScrollMode.page.canonicalCommand
         ) {
         case .resolved(let scrollTarget):
@@ -340,7 +275,6 @@ extension Navigation {
             containerTarget: target.containerTarget,
             elementTarget: target.elementTarget,
             axis: axis,
-            method: .scrollToEdge,
             commandName: ScrollMode.toEdge.canonicalCommand
         ) {
         case .resolved(let scrollTarget):
@@ -499,12 +433,11 @@ extension Navigation {
                 !progress.exhaustedContainers.contains($0.container)
             }) else { break }
 
-            guard let direction = plan.movement(for: searchDirection) else {
-                progress.markContainerExhausted(plan.container)
-                continue
-            }
             progress.markContainerSearched(plan.container)
-            let proof = await scrollOnePageAndSettle(plan.target, direction: direction)
+            let proof = await scrollOnePageAndSettle(
+                plan.target,
+                direction: Self.uiScrollDirection(for: searchDirection)
+            )
 
             if !proof.moved {
                 progress.markContainerExhausted(plan.container)
@@ -530,7 +463,7 @@ extension Navigation {
                 )
             }
 
-            if proof.visibleStateUnchanged(after: stash.visibleIds) {
+            if stash.visibleIds == proof.previousVisibleIds {
                 progress.markContainerExhausted(plan.container)
             }
         }
@@ -560,7 +493,6 @@ extension Navigation {
         containerTarget: ScrollContainerTarget?,
         elementTarget: ElementTarget?,
         axis: ScrollAxis,
-        method: ActionMethod,
         commandName: String
     ) -> ContainerScrollResolution {
         if let containerTarget {
@@ -572,14 +504,30 @@ extension Navigation {
 
         if let elementTarget {
             guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-                return .failed(liveScrollElementFailure(elementTarget, method: method, commandName: commandName).message ?? "Element target not visible")
+                return .failed(liveScrollElementFailureMessage(elementTarget, commandName: commandName))
             }
-            switch resolveScrollTargetResult(screenElement: resolved.screenElement, axis: axis) {
-            case .resolved(let scrollView):
-                return .resolved(.uiScrollView(scrollView))
-            case .failed(let diagnostic):
-                return .failed(diagnostic.message(for: resolved.screenElement))
+            let targetDescription = Self.describeScrollTarget(resolved.screenElement)
+            guard let scrollView = stash.liveScrollView(for: resolved.screenElement) else {
+                return .failed(
+                    "scroll target failed: observed \(targetDescription) with no live scrollable ancestor; "
+                        + "try \(ScrollMode.search.canonicalCommand) or target an element inside a scroll container"
+                )
             }
+            guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
+                return .failed(
+                    "scroll target failed: observed \(targetDescription) inside a scroll view that is unsafe "
+                        + "for programmatic scrolling; try \(ScrollMode.search.canonicalCommand) to use semantic search"
+                )
+            }
+            let availableAxis = Self.scrollableAxis(contentSize: scrollView.contentSize, frame: scrollView.frame)
+            guard availableAxis.contains(axis) else {
+                return .failed(
+                    "scroll target failed: observed \(targetDescription) inside a scroll view that supports "
+                        + "\(Self.axisDescription(availableAxis)); expected \(Self.axisDescription(axis)); "
+                        + "try a matching scroll direction or target an element inside a matching scroll container"
+                )
+            }
+            return .resolved(.uiScrollView(scrollView))
         }
 
         let candidates = scrollSearchCandidates(requiredAxis: axis)
@@ -624,42 +572,10 @@ extension Navigation {
     func scrollSearchCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
-        scrollCandidates(selecting: axis.map(ScrollAxisSelection.required) ?? .any)
-    }
-
-    private func refreshScrollSearchCandidates(
-        requiredAxis axis: ScrollAxis?,
-        candidates: inout [ScrollPlan],
-        progress: inout ScrollSearchProgress
-    ) {
-        candidates = mergeScrollSearchCandidates(candidates, with: scrollSearchCandidates(requiredAxis: axis))
-        progress.recordKnownContainers(candidates.map(\.container))
-    }
-
-    private func mergeScrollSearchCandidates(
-        _ existing: [ScrollPlan],
-        with discovered: [ScrollPlan]
-    ) -> [ScrollPlan] {
-        discovered.reduce(into: existing) { merged, candidate in
-            if let index = merged.firstIndex(where: { $0.container == candidate.container }) {
-                merged[index] = candidate
-            } else {
-                merged.append(candidate)
-            }
-        }
-    }
-
-    private func scrollCandidates(
-        selecting axisSelection: ScrollAxisSelection,
-        excluding exhausted: Set<AccessibilityContainer> = []
-    ) -> [ScrollPlan] {
         stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
-            guard !exhausted.contains(container),
-                  case .scrollable(let contentSize) = container.type else { return nil }
+            guard case .scrollable(let contentSize) = container.type else { return nil }
 
-            let axis = Self.scrollableAxis(of: container)
-            if case .required(let requiredAxis) = axisSelection,
-               !axis.contains(requiredAxis) {
+            if let axis, !Self.scrollableAxis(of: container).contains(axis) {
                 return nil
             }
 
@@ -673,6 +589,21 @@ extension Navigation {
             }
             return ScrollPlan(target: target, container: container)
         }
+    }
+
+    private func refreshScrollSearchCandidates(
+        requiredAxis axis: ScrollAxis?,
+        candidates: inout [ScrollPlan],
+        progress: inout ScrollSearchProgress
+    ) {
+        candidates = scrollSearchCandidates(requiredAxis: axis).reduce(into: candidates) { merged, candidate in
+            if let index = merged.firstIndex(where: { $0.container == candidate.container }) {
+                merged[index] = candidate
+            } else {
+                merged.append(candidate)
+            }
+        }
+        progress.recordKnownContainers(candidates.map(\.container))
     }
 
     /// Build a ScrollableTarget for a container, preferring the live UIView when attached
@@ -895,27 +826,20 @@ extension Navigation {
     }
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
-    private func liveScrollElementFailure(
+    private func liveScrollElementFailureMessage(
         _ target: ElementTarget,
-        method: ActionMethod,
         commandName: String
-    ) -> TheSafecracker.InteractionResult {
+    ) -> String {
         switch stash.resolveTarget(target) {
         case .resolved:
-            return .failure(
-                method,
-                message: "\(commandName) failed: target is known but not currently visible; "
-                    + "use \(ScrollMode.toVisible.canonicalCommand) to reveal it, then retry \(commandName)."
-            )
+            return "\(commandName) failed: target is known but not currently visible; "
+                + "use \(ScrollMode.toVisible.canonicalCommand) to reveal it, then retry \(commandName)."
         case .ambiguous(_, let diagnostics):
-            return .failure(
-                method,
-                message: "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
-                    + "\(diagnostics)\nNext: use \(ScrollMode.toVisible.canonicalCommand) with a heistId for a known off-screen "
-                    + "target, or retarget from get_screen's visible interface."
-            )
+            return "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
+                + "\(diagnostics)\nNext: use \(ScrollMode.toVisible.canonicalCommand) with a heistId for a known off-screen "
+                + "target, or retarget from get_screen's visible interface."
         case .notFound(let diagnostics):
-            return .failure(.elementNotFound, message: diagnostics)
+            return diagnostics
         }
     }
 
@@ -927,32 +851,6 @@ extension Navigation {
             return "identifier \"\(identifier)\" (heistId: \(screenElement.heistId))"
         }
         return "heistId \(screenElement.heistId)"
-    }
-
-    // MARK: - Scroll Target Resolution
-
-    func resolveScrollTargetResult(
-        screenElement: TheStash.ScreenElement,
-        axis: ScrollAxis? = nil
-    ) -> ScrollTargetResolution {
-        guard let scrollView = stash.liveScrollView(for: screenElement) else {
-            return .failed(ScrollTargetDiagnostic(reason: .noScrollView))
-        }
-
-        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
-            return .failed(ScrollTargetDiagnostic(reason: .unsafeProgrammaticScroll))
-        }
-
-        guard let axis else { return .resolved(scrollView) }
-        let availableAxis = Self.scrollableAxis(of: .uiScrollView(scrollView))
-        guard availableAxis.contains(axis) else {
-            return .failed(
-                ScrollTargetDiagnostic(
-                    reason: .axisMismatch(required: axis, available: availableAxis)
-                )
-            )
-        }
-        return .resolved(scrollView)
     }
 
     // MARK: - Direction Mapping

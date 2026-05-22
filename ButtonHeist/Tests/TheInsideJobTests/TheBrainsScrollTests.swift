@@ -190,55 +190,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.previous), .previous)
     }
 
-    // MARK: - ScrollPlan Axis Matching
-
-    func testScrollPlanMovementReturnsNilForCrossAxisMismatch() {
-        let horizontalContainer = makeScrollableContainer(
-            contentSize: CGSize(width: 1_200, height: 200),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
-        )
-        let horizontalTarget = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
-            contentSize: CGSize(width: 1_200, height: 200)
-        )
-        let plan = Navigation.ScrollPlan(target: horizontalTarget, container: horizontalContainer)
-
-        XCTAssertNil(plan.movement(for: .down))
-        XCTAssertEqual(plan.movement(for: .right), .right)
-    }
-
-    func testScrollPlanMovementReturnsRequestedDirectionForMatchingAxis() {
-        let verticalContainer = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 1_200),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
-        )
-        let verticalTarget = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
-            contentSize: CGSize(width: 320, height: 1_200)
-        )
-        let plan = Navigation.ScrollPlan(target: verticalTarget, container: verticalContainer)
-
-        XCTAssertEqual(plan.movement(for: .down), .down)
-        XCTAssertEqual(plan.movement(for: .up), .up)
-    }
-
-    func testScrollPlanMovementSupportsBothAxes() {
-        let biaxialContainer = makeScrollableContainer(
-            contentSize: CGSize(width: 1_200, height: 1_200),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
-        )
-        let biaxialTarget = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
-            contentSize: CGSize(width: 1_200, height: 1_200)
-        )
-        let plan = Navigation.ScrollPlan(target: biaxialTarget, container: biaxialContainer)
-
-        XCTAssertEqual(plan.movement(for: .down), .down)
-        XCTAssertEqual(plan.movement(for: .right), .right)
-        XCTAssertEqual(plan.movement(for: .up), .up)
-        XCTAssertEqual(plan.movement(for: .left), .left)
-    }
-
     // MARK: - Scroll Search Target Selection
 
     func testScrollSearchCandidatesFilterToRequiredAxis() {
@@ -275,21 +226,6 @@ final class TheBrainsScrollTests: XCTestCase {
         let candidates = brains.navigation.scrollSearchCandidates(requiredAxis: .vertical)
 
         XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo])
-    }
-
-    func testScrollPlanMovementUsesContainerAxisToRejectMismatch() {
-        let horizontalContainer = makeScrollableContainer(
-            contentSize: CGSize(width: 1_200, height: 200),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200)
-        )
-        let verticalTarget = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 320, height: 200),
-            contentSize: CGSize(width: 320, height: 1_200)
-        )
-        let plan = Navigation.ScrollPlan(target: verticalTarget, container: horizontalContainer)
-
-        XCTAssertNil(plan.movement(for: .down))
-        XCTAssertEqual(plan.movement(for: .right), .right)
     }
 
     // MARK: - Scroll Search Progress
@@ -362,82 +298,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(progress.containersSearched, 0)
         XCTAssertFalse(progress.didHitScrollCap)
         XCTAssertFalse(progress.exhaustive)
-    }
-
-    // MARK: - Scroll Proof
-
-    func testScrollProofReportsEdgeAndVisibleState() {
-        let edgeProof = Navigation.ScrollProof(
-            moved: false,
-            previousVisibleIds: ["visible"]
-        )
-        XCTAssertTrue(edgeProof.atEdge)
-        XCTAssertTrue(edgeProof.visibleStateUnchanged(after: ["visible"]))
-
-        let movedProof = Navigation.ScrollProof(
-            moved: true,
-            previousVisibleIds: ["visible"]
-        )
-        XCTAssertFalse(movedProof.atEdge)
-        XCTAssertFalse(movedProof.visibleStateUnchanged(after: ["visible", "new"]))
-    }
-
-    // MARK: - ScrollableTarget Properties
-
-    func testScrollableTargetFrameForUIScrollView() {
-        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
-        let scrollView = UIScrollView(frame: frame)
-        let target = Navigation.ScrollableTarget.uiScrollView(scrollView)
-
-        XCTAssertEqual(target.frame, frame)
-    }
-
-    func testScrollableTargetFrameForSwipeable() {
-        let frame = CGRect(x: 10, y: 20, width: 300, height: 400)
-        let contentSize = CGSize(width: 600, height: 800)
-        let target = Navigation.ScrollableTarget.swipeable(frame: frame, contentSize: contentSize)
-
-        XCTAssertEqual(target.frame, frame)
-        XCTAssertEqual(target.contentSize, contentSize)
-    }
-
-    func testScrollableTargetContentSizeForUIScrollView() {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
-        scrollView.contentSize = CGSize(width: 375, height: 5000)
-        let target = Navigation.ScrollableTarget.uiScrollView(scrollView)
-
-        XCTAssertEqual(target.contentSize, CGSize(width: 375, height: 5000))
-    }
-
-    // MARK: - Scroll Axis Detection (Swipeable variant)
-
-    func testScrollableAxisSwipeableHorizontalOnly() {
-        let target = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 2000, height: 200)
-        )
-        let axis = Navigation.scrollableAxis(of: target)
-        XCTAssertTrue(axis.contains(.horizontal))
-        XCTAssertFalse(axis.contains(.vertical))
-    }
-
-    func testScrollableAxisSwipeableVerticalOnly() {
-        let target = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 400, height: 2000)
-        )
-        let axis = Navigation.scrollableAxis(of: target)
-        XCTAssertFalse(axis.contains(.horizontal))
-        XCTAssertTrue(axis.contains(.vertical))
-    }
-
-    func testScrollableAxisSwipeableNoOverflow() {
-        let target = Navigation.ScrollableTarget.swipeable(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 200),
-            contentSize: CGSize(width: 400, height: 200)
-        )
-        let axis = Navigation.scrollableAxis(of: target)
-        XCTAssertTrue(axis.isEmpty)
     }
 
     // MARK: - Known Offscreen Entry
@@ -977,28 +837,36 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    // MARK: - resolveScrollTarget
+    // MARK: - Element Scroll Target Resolution
 
-    func testResolveScrollTargetReturnsNilWhenNoScrollView() {
+    func testScrollWithVisibleElementReportsMissingScrollableAncestor() async {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
             element: makeElement(label: "Item")
         )
+        brains.stash.currentScreen = Screen(
+            elements: [screenElement.heistId: screenElement],
+            hierarchy: [.element(screenElement.element, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [screenElement.element: screenElement.heistId],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
 
-        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
-            screenElement: screenElement
-        ) else {
-            return XCTFail("Expected missing scroll target diagnostic")
-        }
+        let result = await brains.navigation.executeScroll(
+            ScrollTarget(elementTarget: .heistId("item"), direction: .down)
+        )
+
+        XCTAssertFalse(result.success)
         XCTAssertEqual(
-            diagnostic.message(for: screenElement),
+            result.message,
             "scroll target failed: observed \"Item\" (heistId: item) with no live scrollable ancestor; "
                 + "try element_search or target an element inside a scroll container"
         )
     }
 
-    func testResolveScrollTargetReturnsNilWhenNearestScrollViewCannotScrollRequestedAxis() {
+    func testScrollWithVisibleElementReportsAxisMismatch() async {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 200)
 
@@ -1009,56 +877,20 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "axis_scroll")
 
-        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
-            screenElement: screenElement,
-            axis: .vertical
-        ) else {
-            return XCTFail("Expected axis mismatch diagnostic")
-        }
+        let result = await brains.navigation.executeScroll(
+            ScrollTarget(elementTarget: .heistId("item"), direction: .down)
+        )
+
+        XCTAssertFalse(result.success)
         XCTAssertEqual(
-            diagnostic.message(for: screenElement),
+            result.message,
             "scroll target failed: observed heistId item inside a scroll view that supports no scrolling; "
                 + "expected vertical scrolling; try a matching scroll direction or target an element "
                 + "inside a matching scroll container"
         )
     }
 
-    func testResolveScrollTargetDoesNotFallbackToUnrelatedAxisContainer() {
-        let unrelatedVerticalContainer = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 2000),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
-        )
-        installScrollableContainers([unrelatedVerticalContainer])
-
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
-        scrollView.contentSize = CGSize(width: 1200, height: 200)
-
-        let screenElement = TheStash.ScreenElement(
-            heistId: "item",
-            contentSpaceOrigin: nil,
-            element: makeElement()
-        )
-        installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "horizontal_scroll")
-
-        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
-            screenElement: screenElement,
-            axis: .vertical
-        ) else {
-            return XCTFail("Expected unrelated container to stay ignored")
-        }
-        XCTAssertEqual(
-            diagnostic.reason,
-            .axisMismatch(required: .vertical, available: .horizontal)
-        )
-    }
-
-    func testResolveScrollTargetReturnsNearestScrollViewWhenAxisMatches() {
-        let unrelatedHorizontalContainer = makeScrollableContainer(
-            contentSize: CGSize(width: 2000, height: 320),
-            frame: CGRect(x: 0, y: 0, width: 400, height: 320)
-        )
-        installScrollableContainers([unrelatedHorizontalContainer])
-
+    func testScrollWithVisibleElementUsesElementScrollViewWhenAxisMatches() async {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 200))
         scrollView.contentSize = CGSize(width: 400, height: 1200)
 
@@ -1069,15 +901,12 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "vertical_scroll")
 
-        guard case .resolved(let target) = brains.navigation.resolveScrollTargetResult(
-            screenElement: screenElement, axis: .vertical
-        ) else {
-            return XCTFail("Expected matching scroll target")
-        }
-        XCTAssertTrue(
-            target === scrollView,
-            "Should return the element's stored scroll view"
+        let result = await brains.navigation.executeScroll(
+            ScrollTarget(elementTarget: .heistId("item"), direction: .down)
         )
+
+        XCTAssertTrue(result.success, "Expected element scroll to succeed: \(String(describing: result.message))")
+        XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
     }
 
     // MARK: - SettleSwipeLoopState (Pure Decision Logic)

@@ -181,20 +181,6 @@ final class Navigation {
     @MainActor enum ScrollableTarget { // swiftlint:disable:this agent_main_actor_value_type
         case uiScrollView(UIScrollView)
         case swipeable(frame: CGRect, contentSize: CGSize)
-
-        var frame: CGRect {
-            switch self {
-            case .uiScrollView(let sv): return sv.frame
-            case .swipeable(let frame, _): return frame
-            }
-        }
-
-        var contentSize: CGSize {
-            switch self {
-            case .uiScrollView(let sv): return sv.contentSize
-            case .swipeable(_, let cs): return cs
-            }
-        }
     }
 
     struct ScrollAxis: OptionSet, Sendable {
