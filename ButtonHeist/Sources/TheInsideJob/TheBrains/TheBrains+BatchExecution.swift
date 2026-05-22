@@ -121,37 +121,25 @@ extension TheBrains {
 
     private func expectationReceipt(
         for step: TheScore.BatchStep,
-        actionResult: ActionResult?,
+        actionResult: ActionResult,
         runtime: BatchExecutionRuntime
     ) async -> BatchExpectationReceipt? {
-        if let actionResult, !actionResult.success { return nil }
+        guard actionResult.success else { return nil }
         let expectation = step.expectation
-        if let actionResult {
-            let immediateExpectation = expectation.validate(against: actionResult)
-            if immediateExpectation.met {
-                return BatchExpectationReceipt(
-                    actionResult: actionResult,
-                    expectation: immediateExpectation
-                )
-            }
-            if expectation == .delivery {
-                return BatchExpectationReceipt(
-                    actionResult: actionResult,
-                    expectation: immediateExpectation
-                )
-            }
+        let immediateExpectation = expectation.validate(against: actionResult)
+        if immediateExpectation.met || expectation == .delivery {
+            return BatchExpectationReceipt(
+                actionResult: actionResult,
+                expectation: immediateExpectation
+            )
         }
         if BatchActionClientMessageBridge.fulfillsOwnExpectation(step.action) {
             return BatchExpectationReceipt(
-                actionResult: actionResult ?? ActionResult(
-                    success: true,
-                    method: .waitForChange,
-                    message: BatchActionClientMessageBridge.actionName(for: step.action)
-                ),
+                actionResult: actionResult,
                 expectation: ExpectationResult(
-                    met: actionResult?.success ?? true,
+                    met: true,
                     expectation: expectation,
-                    actual: actionResult?.message ?? actionResult?.accessibilityDelta?.kindRawValue
+                    actual: actionResult.message ?? actionResult.accessibilityDelta?.kindRawValue
                 )
             )
         }
