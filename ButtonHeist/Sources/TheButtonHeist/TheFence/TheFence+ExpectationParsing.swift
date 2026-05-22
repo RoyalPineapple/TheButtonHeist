@@ -8,8 +8,25 @@ extension TheFence {
         let expectation: ActionExpectation?
         let timeout: Double?
 
+        init(expectation: ActionExpectation?, timeout: Double?) {
+            self.expectation = expectation
+            self.timeout = timeout
+        }
+
+        init(arguments: [String: Any]) throws {
+            self.init(
+                expectation: try Self.parseExpectation(arguments["expect"]),
+                timeout: try arguments.schemaNumber("timeout")
+            )
+        }
+
         var postActionValidationTimeout: Double? {
             expectation == nil ? nil : timeout
+        }
+
+        static func parseExpectation(_ value: Any?) throws -> ActionExpectation? {
+            guard let value else { return nil }
+            return try FenceExpectationParser.decode(value)
         }
     }
 
@@ -21,15 +38,11 @@ extension TheFence {
     /// wire encoding: `{"type": "...", …}`. Compound expectations use object
     /// sub-expectations with `{"type": "compound", "expectations": [...]}`.
     func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
-        guard let expect = dictionary["expect"] else { return nil }
-        return try FenceExpectationParser.decode(expect)
+        try ExpectationPayload.parseExpectation(dictionary["expect"])
     }
 
     func parseExpectationPayload(_ dictionary: [String: Any]) throws -> ExpectationPayload {
-        ExpectationPayload(
-            expectation: try parseExpectation(dictionary),
-            timeout: try dictionary.schemaNumber("timeout")
-        )
+        try ExpectationPayload(arguments: dictionary)
     }
 }
 

@@ -18,12 +18,22 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
 public struct NormalizedOperation {
     public let command: TheFence.Command
     public let arguments: [String: Any]
+    let expectationPayload: TheFence.ExpectationPayload?
 
     public init(command: TheFence.Command, arguments: [String: Any]) {
+        self.init(command: command, arguments: arguments, expectationPayload: nil)
+    }
+
+    init(
+        command: TheFence.Command,
+        arguments: [String: Any],
+        expectationPayload: TheFence.ExpectationPayload?
+    ) {
         var sanitizedArguments = arguments
         sanitizedArguments.removeValue(forKey: "command")
         self.command = command
         self.arguments = sanitizedArguments
+        self.expectationPayload = expectationPayload
     }
 }
 
@@ -44,7 +54,7 @@ public enum FenceOperationCatalog {
         guard let command = contract.commands.first, contract.commands.count == 1 else {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
-        return .success(NormalizedOperation(command: command, arguments: arguments))
+        return normalizeToolOperation(command: command, arguments: arguments)
     }
 
     public static func normalizeBatchStep(
@@ -154,7 +164,7 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
 
-        return .success(NormalizedOperation(command: command, arguments: arguments))
+        return normalizeToolOperation(command: command, arguments: arguments)
     }
 
     private static func groupedToolRoutingMessage(for command: TheFence.Command) -> String? {
@@ -255,7 +265,47 @@ public enum FenceOperationCatalog {
         if selector.consumesValue(rawValue) {
             operationArguments.removeValue(forKey: selector.parameter.key)
         }
-        return .success(NormalizedOperation(command: command, arguments: operationArguments))
+        return normalizeToolOperation(command: command, arguments: operationArguments)
+    }
+
+    private static func normalizeToolOperation(
+        command: TheFence.Command,
+        arguments: [String: Any]
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        var operationArguments = arguments
+        let expectationPayload: TheFence.ExpectationPayload?
+        do {
+            expectationPayload = try parsedExpectationPayload(
+                for: command,
+                arguments: &operationArguments
+            )
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch let error as FenceError {
+            return .failure(FenceOperationRoutingError(message: error.coreMessage))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
+        }
+
+        return .success(NormalizedOperation(
+            command: command,
+            arguments: operationArguments,
+            expectationPayload: expectationPayload
+        ))
+    }
+
+    private static func parsedExpectationPayload(
+        for command: TheFence.Command,
+        arguments: inout [String: Any]
+    ) throws -> TheFence.ExpectationPayload? {
+        guard command.acceptsExpectationPayload,
+              arguments["expect"] != nil || arguments["timeout"] != nil else {
+            return nil
+        }
+
+        let payload = try TheFence.ExpectationPayload(arguments: arguments)
+        arguments.removeValue(forKey: "expect")
+        return payload
     }
 
     private static func selectorValue(
@@ -285,5 +335,11 @@ public enum FenceOperationCatalog {
             )
         }
         return selector.defaultValue
+    }
+}
+
+private extension TheFence.Command {
+    var acceptsExpectationPayload: Bool {
+        parameters.contains { $0.key == FenceParameterKey.expect.rawValue }
     }
 }

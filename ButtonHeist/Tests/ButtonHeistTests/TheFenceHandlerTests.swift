@@ -1968,6 +1968,74 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(result, .screenChanged)
     }
 
+    func testNormalizeToolCallParsesExpectationPayloadAtCatalogEdge() throws {
+        let result = FenceOperationCatalog.normalizeToolCall(
+            name: "activate",
+            arguments: [
+                "identifier": "submit",
+                "expect": ["type": "screen_changed"],
+                "timeout": 0.25,
+            ] as [String: Any]
+        )
+
+        guard case .success(let operation) = result else {
+            return XCTFail("Expected successful operation, got \(result)")
+        }
+
+        XCTAssertEqual(operation.command, .activate)
+        XCTAssertEqual(operation.arguments["identifier"] as? String, "submit")
+        XCTAssertNil(operation.arguments["expect"])
+        XCTAssertEqual(operation.arguments["timeout"] as? Double, 0.25)
+        XCTAssertEqual(operation.expectationPayload?.expectation, .screenChanged)
+        XCTAssertEqual(operation.expectationPayload?.timeout, 0.25)
+    }
+
+    @ButtonHeistActor
+    func testNormalizedToolOperationUsesTypedExpectationPayload() async throws {
+        let (fence, _) = makeConnectedFence()
+        let result = FenceOperationCatalog.normalizeToolCall(
+            name: "wait_for_change",
+            arguments: ["expect": ["type": "elements_changed"]] as [String: Any]
+        )
+
+        guard case .success(let operation) = result else {
+            return XCTFail("Expected successful operation, got \(result)")
+        }
+
+        XCTAssertNil(operation.arguments["expect"])
+        let parsed = try fence.parseRequest(operation: operation)
+        XCTAssertEqual(parsed.expectationPayload.expectation, .elementsChanged)
+        guard case .waitForChange(let payload) = parsed.payload else {
+            return XCTFail("Expected wait_for_change payload, got \(parsed.payload)")
+        }
+        XCTAssertEqual(payload.expectation, .elementsChanged)
+    }
+
+    func testNormalizeToolCallReportsExpectationParseFailure() {
+        let result = FenceOperationCatalog.normalizeToolCall(
+            name: "activate",
+            arguments: ["expect": "screen_changed"]
+        )
+
+        guard case .failure(let error) = result else {
+            return XCTFail("Expected routing failure, got \(result)")
+        }
+        XCTAssertEqual(error.message, "Invalid expectation type: expected object with a \"type\" discriminator")
+    }
+
+    func testNormalizeToolCallLeavesUnsupportedExpectationForRequestValidation() throws {
+        let result = FenceOperationCatalog.normalizeToolCall(
+            name: "get_screen",
+            arguments: ["expect": "screen_changed"]
+        )
+
+        guard case .success(let operation) = result else {
+            return XCTFail("Expected successful operation, got \(result)")
+        }
+        XCTAssertEqual(operation.arguments["expect"] as? String, "screen_changed")
+        XCTAssertNil(operation.expectationPayload)
+    }
+
     @ButtonHeistActor
     func testParseExpectationStringValuesThrowObjectRequired() async {
         let (fence, _) = makeConnectedFence()
