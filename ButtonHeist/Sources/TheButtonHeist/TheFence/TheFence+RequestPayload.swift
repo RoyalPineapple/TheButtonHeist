@@ -359,6 +359,14 @@ extension TheFence {
     }
 
     func parseRequest(command: Command, arguments: [String: Any]) throws -> ParsedRequest {
+        try parseRequest(command: command, arguments: arguments, expectationPayload: nil)
+    }
+
+    private func parseRequest(
+        command: Command,
+        arguments: [String: Any],
+        expectationPayload typedExpectationPayload: ExpectationPayload?
+    ) throws -> ParsedRequest {
         try validateRequestKeys(command: command, arguments: arguments)
         if let immediate = handleImmediateCommand(command) {
             return ParsedRequest(
@@ -370,7 +378,7 @@ extension TheFence {
             )
         }
         let requestId = (arguments["requestId"] as? String) ?? UUID().uuidString
-        let expectationPayload = try parseExpectationPayload(arguments)
+        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
         let payload: RequestPayload = if command == .waitForChange {
             .waitForChange(expectationPayload)
         } else {
@@ -387,7 +395,11 @@ extension TheFence {
     }
 
     func parseRequest(operation: NormalizedOperation) throws -> ParsedRequest {
-        try parseRequest(command: operation.command, arguments: operation.arguments)
+        try parseRequest(
+            command: operation.command,
+            arguments: operation.arguments,
+            expectationPayload: operation.expectationPayload
+        )
     }
 
     private func validateRequestKeys(command: Command, arguments: [String: Any]) throws {
