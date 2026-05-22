@@ -27,7 +27,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 events.append("action:\(actionName)")
                 return ActionResult(
                     success: true,
-                    method: actionName == "checkpoint:loaded" ? .waitForChange : .setPasteboard,
+                    method: .setPasteboard,
                     message: "delivered"
                 )
             },
@@ -63,7 +63,6 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             "action:set_pasteboard",
             "expectation:elements_changed",
             "baseline",
-            "action:checkpoint:loaded",
             "expectation:screen_changed",
             "baseline",
         ])
@@ -79,6 +78,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let second = batch.steps[1]
         XCTAssertEqual(second.actionName, "checkpoint:loaded")
         XCTAssertEqual(second.expectationName, "screen_changed")
+        XCTAssertNil(second.actionResult)
         XCTAssertEqual(second.expectation?.met, true)
     }
 
@@ -130,6 +130,48 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertEqual(third.expectationName, "delivery")
         XCTAssertEqual(second.skipped?.afterFailedIndex, 0)
         XCTAssertEqual(third.skipped?.afterFailedIndex, 0)
+    }
+
+    func testBatchExecutionContinuesAfterFailedStepUnderContinueOnError() async throws {
+        var events: [String] = []
+        var results = [
+            ActionResult(success: false, method: .setPasteboard, message: "first failed", errorKind: .actionFailed),
+            ActionResult(success: true, method: .setPasteboard, message: "second ran"),
+        ]
+        let runtime = TheBrains.BatchExecutionRuntime(
+            execute: { action in
+                events.append("action:\(BatchActionClientMessageBridge.actionName(for: action))")
+                return results.removeFirst()
+            },
+            waitForExpectation: { _, _ in
+                XCTFail("Delivery expectation should not wait")
+                return ActionResult(success: true, method: .waitForChange)
+            },
+            settleRefreshRecordBaseline: {
+                events.append("baseline")
+            }
+        )
+        let plan = TheScore.BatchPlan(
+            steps: [
+                .action(.setPasteboard(SetPasteboardTarget(text: "first"))),
+                .action(.setPasteboard(SetPasteboardTarget(text: "second"))),
+            ],
+            policy: .continueOnError
+        )
+
+        let result = await brains.executeBatchExecutionPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(events, [
+            "action:set_pasteboard",
+            "baseline",
+            "action:set_pasteboard",
+            "baseline",
+        ])
+        let batch = try XCTUnwrap(result.batchExecutionPayload)
+        XCTAssertNil(batch.failedIndex)
+        XCTAssertEqual(batch.steps.count, 2)
+        XCTAssertEqual(batch.steps.map(\.actionResult?.success), [false, true])
     }
 
     func testBatchExecutionDoesNotWaitWhenActionAlreadySatisfiesExpectation() async throws {

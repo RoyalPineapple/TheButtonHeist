@@ -1649,7 +1649,7 @@ echo '{"command":"get_interface"}' | buttonheist session --format json
 echo '{"command":"get_session_state"}' | buttonheist session --format json
 
 # Execute multiple commands in one request
-echo '{"command":"run_batch","steps":[{"command":"get_interface"},{"command":"wait_for_change","timeout":2}]}' | buttonheist session --format json
+echo '{"command":"run_batch","steps":[{"command":"activate","identifier":"loginButton"},{"command":"wait_for_change","timeout":2}]}' | buttonheist session --format json
 
 # Start a session with a 5-minute idle timeout (for agent use)
 buttonheist session --format json --session-timeout 300

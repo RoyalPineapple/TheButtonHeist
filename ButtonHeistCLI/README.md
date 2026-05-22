@@ -179,7 +179,7 @@ buttonheist session
 buttonheist session --format json
 echo '{"command":"get_interface"}' | buttonheist session --format json
 echo '{"command":"get_session_state"}' | buttonheist session --format json
-echo '{"command":"run_batch","steps":[{"command":"get_interface"},{"command":"wait_for_change","timeout":2}]}' | buttonheist session --format json
+echo '{"command":"run_batch","steps":[{"command":"activate","identifier":"loginButton"},{"command":"wait_for_change","timeout":2}]}' | buttonheist session --format json
 ```
 
 Flags: `--device`, `--token`, `-t/--timeout` (default 30s), `-f/--format`, `--session-timeout` (default 60s).

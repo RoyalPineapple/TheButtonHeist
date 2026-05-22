@@ -4,105 +4,54 @@ import TheScore
 
 final class OperationPrimitiveTests: XCTestCase {
 
-    func testNonReadOperationRequiresActionExpectationAndDeadline() {
-        let step = makeStep(
-            action: makeAction(),
-            expectation: .screenChanged,
-            deadline: TheFence.Deadline(timeout: 2.0)
+    func testBatchStepAlwaysCarriesOperationExpectationAndDeadline() {
+        let step = BatchStep.action(
+            .setPasteboard(SetPasteboardTarget(text: "value")),
+            expect: .screenChanged,
+            deadline: Deadline(timeout: 2.0)
         )
 
-        XCTAssertNotNil(step.action)
+        guard case .action(let action) = step.operation,
+              case .setPasteboard(let target) = action
+        else {
+            return XCTFail("Expected set_pasteboard action operation")
+        }
+        XCTAssertEqual(target.text, "value")
         XCTAssertEqual(step.expectation, .screenChanged)
-        XCTAssertEqual(step.deadline, TheFence.Deadline(timeout: 2.0))
-        XCTAssertTrue(step.isCompleteOperation)
+        XCTAssertEqual(step.deadline, Deadline(timeout: 2.0))
     }
 
-    func testActionWithoutExpectationIsNotACompleteOperation() {
-        let step = makeStep(
-            action: makeAction(),
-            expectation: nil,
-            deadline: TheFence.Deadline(timeout: 1.0)
-        )
+    func testCheckpointStepIsNotAUserAction() {
+        let step = BatchStep.checkpoint(BatchExecutionCheckpoint(
+            name: "loaded",
+            expect: .screenChanged,
+            timeout: 1.5
+        ))
 
-        XCTAssertNil(step.action)
-        XCTAssertNil(step.expectation)
-        XCTAssertNil(step.deadline)
-        XCTAssertFalse(step.isCompleteOperation)
+        guard case .checkpoint(let checkpoint) = step.operation else {
+            return XCTFail("Expected checkpoint operation")
+        }
+        XCTAssertEqual(checkpoint.name, "loaded")
+        guard case .checkpoint = step.action else {
+            return XCTFail("Expected legacy checkpoint action projection")
+        }
+        XCTAssertEqual(step.expectation, .screenChanged)
+        XCTAssertEqual(step.deadline, Deadline(timeout: 1.5))
     }
 
-    func testExpectationWithoutActionIsNotACompleteOperation() {
-        let step = makeStep(
-            action: nil,
-            expectation: .screenChanged,
-            deadline: TheFence.Deadline(timeout: 3.0)
-        )
+    @ButtonHeistActor
+    func testReadObservationEntryStaysOutsideOperationPipeline() async throws {
+        let fence = TheFence(configuration: .init())
+        let request = try fence.decodeRunBatchRequest([
+            "steps": [
+                ["command": "get_screen"],
+            ],
+        ])
 
-        XCTAssertNil(step.action)
-        XCTAssertNil(step.expectation)
-        XCTAssertNil(step.deadline)
-        XCTAssertFalse(step.isCompleteOperation)
-    }
-
-    func testOperationWithoutDeadlineIsNotComplete() {
-        let step = makeStep(
-            action: makeAction(),
-            expectation: .screenChanged,
-            deadline: nil
-        )
-
-        XCTAssertNil(step.action)
-        XCTAssertNil(step.expectation)
-        XCTAssertNil(step.deadline)
-        XCTAssertFalse(step.isCompleteOperation)
-    }
-
-    func testReadObservationEntryStaysOutsideOperationPipeline() {
-        let step = makeStep(
-            action: nil,
-            expectation: nil,
-            deadline: nil,
-            command: .getScreen,
-            operation: NormalizedOperation(command: .getScreen, arguments: [:]),
-            payload: .screen(TheFence.ScreenRequest(
-                outputPath: nil,
-                requestId: "read-test",
-                inlineData: false,
-                includeInterface: false
-            ))
-        )
-
-        XCTAssertNil(step.action)
-        XCTAssertNil(step.expectation)
-        XCTAssertNil(step.deadline)
-        XCTAssertFalse(step.isCompleteOperation)
-    }
-
-    private func makeAction() -> TheFence.Action {
-        .setPasteboard(SetPasteboardTarget(text: "value"))
-    }
-
-    private func makeStep(
-        action: TheFence.Action?,
-        expectation: ActionExpectation?,
-        deadline: TheFence.Deadline?,
-        command: TheFence.Command = .setPasteboard,
-        operation: NormalizedOperation = NormalizedOperation(command: .setPasteboard, arguments: [:]),
-        payload: TheFence.RequestPayload = .setPasteboard(SetPasteboardTarget(text: "value"))
-    ) -> TheFence.BatchStep {
-        let request = TheFence.ParsedRequest(
-            command: command,
-            requestId: "operation-test",
-            payload: payload,
-            expectationPayload: TheFence.ExpectationPayload(expectation: expectation, timeout: deadline?.timeout),
-            immediateResponse: nil
-        )
-        return TheFence.BatchStep(
-            command: command,
-            operation: operation,
-            adapterRequest: request,
-            action: action,
-            expectation: expectation,
-            deadline: deadline
-        )
+        guard case .invalid(let commandName, let failure)? = request.steps.first else {
+            return XCTFail("Expected read command to stay outside batch operation pipeline")
+        }
+        XCTAssertEqual(commandName, "get_screen")
+        XCTAssertTrue(failure.message.contains("not batch-executable"))
     }
 }

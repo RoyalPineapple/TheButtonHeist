@@ -6,6 +6,24 @@ import TheScore
 /// surface. This is an adapter boundary only: batch execution still runs
 /// through the same command behavior as single actions.
 enum BatchActionClientMessageBridge {
+    static func operationName(for operation: TheScore.BatchOperation) -> String {
+        switch operation {
+        case .action(let action):
+            return actionName(for: action)
+        case .checkpoint(let checkpoint):
+            return checkpoint.name.map { "checkpoint:\($0)" } ?? "checkpoint"
+        }
+    }
+
+    static func fulfillsOwnExpectation(_ operation: TheScore.BatchOperation) -> Bool {
+        switch operation {
+        case .action(let action):
+            return fulfillsOwnExpectation(action)
+        case .checkpoint:
+            return false
+        }
+    }
+
     static func actionName(for action: TheScore.Action) -> String {
         switch action {
         case .waitForIdle:
@@ -14,8 +32,6 @@ enum BatchActionClientMessageBridge {
             return "wait_for"
         case .waitForChange:
             return "wait_for_change"
-        case .checkpoint(let target):
-            return target.name.map { "checkpoint:\($0)" } ?? "checkpoint"
         default:
             return clientMessage(for: action)?.canonicalName ?? action.description
         }

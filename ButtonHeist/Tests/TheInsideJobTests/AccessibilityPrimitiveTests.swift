@@ -43,15 +43,15 @@ final class AccessibilityPrimitiveTests: XCTestCase {
         XCTAssertEqual(rect.cgRect, CGRect(x: 1, y: 2, width: 3, height: 4))
     }
 
-    func testCustomActionEncodesAsActionName() throws {
-        let action = AccessibilityElement.CustomAction("Share")
+    func testCustomActionCodablePreservesName() throws {
+        let action = AccessibilityElement.CustomAction(name: "Share")
 
         let encoded = try JSONEncoder().encode(action)
-        let value = try JSONDecoder().decode(String.self, from: encoded)
+        let value = try JSONDecoder().decode([String: String].self, from: encoded)
 
-        XCTAssertEqual(value, "Share")
+        XCTAssertEqual(value["name"], "Share")
         let decoded = try JSONDecoder().decode(AccessibilityElement.CustomAction.self, from: encoded)
-        XCTAssertEqual(decoded, "Share")
+        XCTAssertEqual(decoded, action)
     }
 }
 

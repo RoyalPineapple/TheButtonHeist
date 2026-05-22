@@ -742,11 +742,15 @@ private extension TheFence.RunBatchRequest {
 extension TheFence.RunBatchStep {
     var batchStepLogProjection: TheFence.BatchStepLogProjection {
         switch self {
-        case .planned(let request):
-            let projection = request.commandLogProjection
+        case .planned(let step):
             return TheFence.BatchStepLogProjection(
-                commandName: projection.command.rawValue,
-                arguments: projection.arguments
+                commandName: step.commandName,
+                arguments: [
+                    "index": .int(step.originalIndex),
+                    "operation": HeistValue.encoded(step.operation),
+                    "expect": HeistValue.encoded(step.expectation),
+                    "deadline": HeistValue.encoded(step.deadline),
+                ]
             )
         case .invalid(let commandName, let failure):
             return TheFence.BatchStepLogProjection(

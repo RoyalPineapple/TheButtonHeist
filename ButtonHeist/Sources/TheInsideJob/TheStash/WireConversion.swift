@@ -87,7 +87,10 @@ extension TheStash {
         let adjustable: [ElementAction] = (isInteractive && element.traits.contains(.adjustable))
             ? [.increment, .decrement]
             : []
-        let custom = element.customActions.map(ElementAction.custom)
+        let custom = element.customActions
+            .map(\.name)
+            .filter { !$0.isEmpty }
+            .map(ElementAction.custom)
         return activate + adjustable + custom
     }
 

@@ -148,8 +148,8 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         XCTAssertEqual(waitTarget.timeout, 0.25)
         XCTAssertEqual(plan.steps[0].expectation, .delivery)
         XCTAssertEqual(plan.steps[0].deadline, Deadline(timeout: 0.25))
-        guard case .checkpoint(let checkpoint) = plan.steps[1].action else {
-            return XCTFail("Expected legacy checkpoint step to lower to checkpoint action")
+        guard case .checkpoint(let checkpoint) = plan.steps[1].operation else {
+            return XCTFail("Expected legacy checkpoint step to lower to checkpoint operation")
         }
         XCTAssertEqual(checkpoint.name, "loaded")
         XCTAssertEqual(plan.steps[1].expectation, .screenChanged)

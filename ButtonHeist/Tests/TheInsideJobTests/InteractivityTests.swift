@@ -18,13 +18,13 @@ final class InteractivityTests: XCTestCase {
     private func makeElement(
         label: String? = nil,
         traits: UIAccessibilityTraits = [],
-        customActions: [AccessibilityElement.CustomAction] = [],
+        customActions: [String] = [],
         respondsToUserInteraction: Bool = false
     ) -> AccessibilityElement {
         .make(
             label: label,
             traits: traits,
-            customActions: customActions,
+            customActions: customActions.map(AccessibilityElement.CustomAction.init(name:)),
             respondsToUserInteraction: respondsToUserInteraction
         )
     }

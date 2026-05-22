@@ -153,6 +153,28 @@ final class TheFenceHandlerTests: XCTestCase {
         return batch
     }
 
+    private func plannedBatchSteps(
+        from batch: TheFence.RunBatchRequest
+    ) -> [TheFence.RunBatchPreparedStep] {
+        batch.steps.compactMap { step in
+            if case .planned(let plannedStep) = step {
+                return plannedStep
+            }
+            return nil
+        }
+    }
+
+    private func unsupportedBatchCommandNames(
+        from batch: TheFence.RunBatchRequest
+    ) -> [String] {
+        batch.steps.compactMap { step in
+            if case .invalid(let commandName, _) = step {
+                return commandName
+            }
+            return nil
+        }
+    }
+
     private func testElement(
         _ heistId: HeistId,
         label: String,
@@ -2272,12 +2294,13 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .planned(let step) = batch.steps.first else {
             return XCTFail("Expected planned batch step")
         }
-        XCTAssertEqual(step.operation.command, .activate)
-        XCTAssertEqual(step.operation.requestDictionary["command"] as? String, "activate")
-        XCTAssertEqual(step.command, .activate)
+        XCTAssertEqual(step.originalIndex, 0)
+        XCTAssertEqual(step.commandName, "activate")
         XCTAssertEqual(step.expectation, .elementsChanged)
 
-        let action = try XCTUnwrap(step.action)
+        guard case .action(let action) = step.operation else {
+            return XCTFail("Expected action operation, got \(step.operation)")
+        }
         guard case .activate(let actionTarget) = action else {
             return XCTFail("Expected activate action, got \(action)")
         }
@@ -2301,12 +2324,10 @@ final class TheFenceHandlerTests: XCTestCase {
             ] as [[String: Any]]
         )
 
-        let preparation = batch.executionPreparation
-        XCTAssertEqual(preparation.steps.map { $0.action != nil }, [true, true, true])
-        XCTAssertEqual(preparation.steps.map { $0.expectation != nil }, [true, true, true])
-        XCTAssertEqual(preparation.steps.map(\.command), [.activate, .waitFor, .waitForChange])
-        XCTAssertEqual(preparation.unsupportedCommandNames, ["get_screen", "get_pasteboard"])
-        XCTAssertFalse(preparation.isCompletePlanCandidate)
+        let plannedSteps = plannedBatchSteps(from: batch)
+        XCTAssertEqual(plannedSteps.map(\.commandName), ["activate", "wait_for", "wait_for_change"])
+        XCTAssertEqual(plannedSteps.map(\.originalIndex), [0, 1, 2])
+        XCTAssertEqual(unsupportedBatchCommandNames(from: batch), ["get_screen", "get_pasteboard"])
     }
 
     @ButtonHeistActor
@@ -2322,12 +2343,11 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         XCTAssertTrue(mockConn.sent.isEmpty, "Batch normalization must not perform raw heistId lookup")
-        let steps = batch.batchPlan.steps
-        XCTAssertEqual(steps.map { $0.action != nil }, [true, true])
-        XCTAssertEqual(steps.map { $0.expectation != nil }, [true, true])
+        let steps = plannedBatchSteps(from: batch)
+        XCTAssertEqual(steps.map(\.commandName), ["activate", "wait_for"])
 
-        guard let action = steps[0].action,
-              case .activate(let actionTarget) = action
+        guard case .action(let firstAction) = steps[0].operation,
+              case .activate(let actionTarget) = firstAction
         else {
             return XCTFail("Expected activate action with source heistId plus matcher target")
         }
@@ -2548,6 +2568,13 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(batch.results.count, 1, "Batch should stop after the error step")
         XCTAssertEqual(batch.failedIndex, 0, "Failed index should be the error step")
+        XCTAssertFalse(
+            mockConn.sent.contains { sent in
+                if case .batchExecutionPlan = sent.0 { return true }
+                return false
+            },
+            "Pre-dispatch stop_on_error should not send later valid steps to InsideJob"
+        )
     }
 
     @ButtonHeistActor

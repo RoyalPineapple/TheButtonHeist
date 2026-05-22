@@ -6,43 +6,18 @@ extension TheFence {
 
     // MARK: - Batch Execution and Session State
 
-    public enum BatchPolicy: String, CaseIterable, Sendable {
-        case stopOnError = "stop_on_error"
-        case continueOnError = "continue_on_error"
-    }
-
-    private struct PlannedDispatchStep {
-        let originalIndex: Int
-        let plan: RunBatchPreparedStep
-        let step: TheScore.BatchStep
-    }
+    public typealias BatchPolicy = TheScore.BatchExecutionPolicy
 
     func handleRunBatch(_ request: RunBatchRequest) async throws -> FenceResponse {
         let batchStart = CFAbsoluteTimeGetCurrent()
         var outcomesByIndex: [Int: BatchStepOutcome] = [:]
-        var plannedSteps: [PlannedDispatchStep] = []
+        var plannedSteps: [RunBatchPreparedStep] = []
         var preDispatchStopIndex: Int?
 
-        for (index, step) in request.steps.enumerated() {
+        stepLoop: for (index, step) in request.steps.enumerated() {
             switch step {
             case .planned(let stepPlan):
-                guard let typedStep = stepPlan.typedStep else {
-                    outcomesByIndex[index] = BatchStepOutcome(
-                        command: step.commandName,
-                        response: .error("run_batch step command \"\(step.commandName)\" is not a complete batch operation"),
-                        stopsBatch: request.policy == .stopOnError
-                    )
-                    if request.policy == .stopOnError {
-                        preDispatchStopIndex = index
-                        break
-                    }
-                    continue
-                }
-                plannedSteps.append(PlannedDispatchStep(
-                    originalIndex: index,
-                    plan: stepPlan,
-                    step: typedStep
-                ))
+                plannedSteps.append(stepPlan)
 
             case .invalid(let commandName, let failure):
                 outcomesByIndex[index] = BatchStepOutcome(
@@ -53,15 +28,15 @@ extension TheFence {
                 )
                 if request.policy == .stopOnError {
                     preDispatchStopIndex = index
-                    break
+                    break stepLoop
                 }
             }
         }
 
         if !plannedSteps.isEmpty {
             let plan = TheScore.BatchPlan(
-                steps: plannedSteps.map(\.step),
-                policy: request.policy.batchExecutionPolicy
+                steps: plannedSteps.map(\.typedStep),
+                policy: request.policy
             )
             let result = try await sendAndAwaitBatchExecution(plan, timeout: Timeouts.longActionSeconds)
             mergeBatchExecutionResult(
@@ -97,7 +72,7 @@ extension TheFence {
 
     private func mergeBatchExecutionResult(
         _ result: BatchExecutionResult,
-        plannedSteps: [PlannedDispatchStep],
+        plannedSteps: [RunBatchPreparedStep],
         outcomesByIndex: inout [Int: BatchStepOutcome]
     ) {
         for stepResult in result.steps {
@@ -114,15 +89,15 @@ extension TheFence {
 
     private func batchStepOutcome(
         from stepResult: BatchExecutionStepResult,
-        plannedStep: PlannedDispatchStep,
-        plannedSteps: [PlannedDispatchStep]
+        plannedStep: RunBatchPreparedStep,
+        plannedSteps: [RunBatchPreparedStep]
     ) -> BatchStepOutcome {
         if let skipped = stepResult.skipped {
             let afterFailedIndex = plannedSteps.indices.contains(skipped.afterFailedIndex)
                 ? plannedSteps[skipped.afterFailedIndex].originalIndex
                 : skipped.afterFailedIndex
             return BatchStepOutcome.skipped(
-                command: skipped.actionName ?? skipped.expectationName ?? plannedStep.plan.commandName,
+                command: skipped.actionName ?? skipped.expectationName ?? plannedStep.commandName,
                 afterFailedIndex: afterFailedIndex
             )
         }
@@ -131,11 +106,11 @@ extension TheFence {
             let finalResult = stepResult.expectationActionResult ?? actionResult
             recordCompletedAction(finalResult)
             return BatchStepOutcome(
-                command: plannedStep.plan.commandName,
+                command: plannedStep.commandName,
                 response: .action(
                     result: finalResult,
                     expectation: stepResult.expectation ?? validatedExpectation(
-                        for: plannedStep.step,
+                        for: plannedStep.typedStep,
                         result: finalResult
                     )
                 ),
@@ -144,7 +119,7 @@ extension TheFence {
         }
 
         return BatchStepOutcome(
-            command: plannedStep.plan.commandName,
+            command: plannedStep.commandName,
             response: .error("typed batch step produced no action result"),
             stopsBatch: stepResult.stopsBatch
         )
@@ -188,14 +163,6 @@ extension TheFence {
         return AccessibilityTrace.captureEndpointTrace(from: stepAccessibilityTraces)
     }
 
-    private func skippedStepOutcomes(
-        steps: [RunBatchStep], afterFailedIndex failedIndex: Int
-    ) -> [BatchStepOutcome] {
-        steps.dropFirst(failedIndex + 1).map { step in
-            BatchStepOutcome.skipped(command: step.commandName, afterFailedIndex: failedIndex)
-        }
-    }
-
     // MARK: - Session State
 
     func currentSessionState() -> SessionStatePayload {
@@ -211,16 +178,5 @@ extension TheFence {
             lastFailure: connection.lastFailure,
             lastAction: commandExecutionState.lastAction.sessionPayload
         )
-    }
-}
-
-extension TheFence.BatchPolicy {
-    var batchExecutionPolicy: BatchExecutionPolicy {
-        switch self {
-        case .stopOnError:
-            return .stopOnError
-        case .continueOnError:
-            return .continueOnError
-        }
     }
 }
