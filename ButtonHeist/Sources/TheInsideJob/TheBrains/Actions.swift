@@ -89,6 +89,24 @@ final class Actions {
         case retryableFailure(TheSafecracker.InteractionResult)
     }
 
+    private func resolveActivateTarget(
+        _ target: ElementTarget,
+        recordedScreen: Screen?
+    ) async -> LiveElementActionContextResolution {
+        let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
+        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
+        if let failure = positioning.failure {
+            return .failure(.failure(failure.method ?? .activate, message: failure.message))
+        }
+        return await resolveLiveElementActionContext(
+            normalizedTarget: normalizedTarget,
+            method: .activate,
+            requireInteractive: true,
+            deallocatedBoundary: "element action",
+            preflight: nil
+        )
+    }
+
     private func resolveLiveElementActionContext(
         normalizedTarget: TheStash.NormalizedTarget,
         method: ActionMethod,
@@ -384,86 +402,73 @@ final class Actions {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        return await performElementAction(target: target, method: .activate, recordedScreen: recordedScreen) { context in
-            let liveTarget = context.liveTarget
-            // First attempt — accessibilityActivate on the live UIKit object.
-            let firstOutcome = self.stash.activate(liveTarget)
-            if firstOutcome == .success {
-                self.safecracker.showFingerprint(at: liveTarget.activationPoint)
-                return .success(method: .activate)
-            }
+        switch await resolveActivateTarget(target, recordedScreen: recordedScreen) {
+        case .success(let context):
+            return await ActivationPolicy(
+                activate: stash.activate,
+                refreshAndResolve: { await self.refreshAndResolveActivationTarget(context.normalizedTarget) },
+                syntheticTap: safecracker.tap,
+                showFingerprint: safecracker.showFingerprint,
+                tapReceiverDiagnostic: safecracker.tapReceiverDiagnostic,
+                screenBounds: { ScreenMetrics.current.bounds }
+            ).apply(to: context.liveTarget)
+        case .failure(let result), .retryableFailure(let result):
+            return result
+        }
+    }
 
-            // Retry once after a refresh + ensureOnScreen cycle. Cell reuse during
-            // a scroll can deallocate the weak object ref between resolution and
-            // dispatch. Re-resolving the semantic target and live geometry keeps
-            // heistId useful for matching without treating it as fresh geometry.
-            self.navigation.refresh()
-            let retryPositioning = await self.navigation.ensureOnScreen(for: context.normalizedTarget)
-            if let failure = retryPositioning.failure {
-                return .failure(failure.method ?? .activate, message: failure.message)
-            }
-            let retryResolution = self.stash.resolveTarget(context.normalizedTarget.executableTarget)
-            guard let retryResolved = retryResolution.resolved else {
-                return .failure(
-                    .elementNotFound,
-                    message: context.normalizedTarget.diagnostics(retryResolution.diagnostics)
-                )
-            }
-            let retryLiveTargetResolution = self.stash.resolveLiveActionTarget(for: retryResolved)
-            guard case .resolved(let retryLiveTarget) = retryLiveTargetResolution else {
-                switch retryLiveTargetResolution {
-                case .objectUnavailable:
-                    let traitNames = ActionCapabilityDiagnostic.traitNames(retryResolved.element.traits)
-                    let message = ActivateFailureDiagnostic.build(
-                        element: retryResolved.element,
-                        traitNames: traitNames,
-                        activateOutcome: .objectDeallocated,
-                        tapAttempted: false,
-                        tapReceiver: nil,
-                        screenBounds: ScreenMetrics.current.bounds
-                    )
-                    return .failure(.activate, message: message)
-                case .geometryUnavailable:
-                    return .failure(
-                        .activate,
-                        message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                            method: .activate,
-                            element: retryResolved.screenElement,
-                            isVisible: self.stash.visibleIds.contains(retryResolved.screenElement.heistId)
-                        )
-                    )
-                case .resolved:
-                    return .failure(.activate, message: "activate failed")
-                }
-            }
-            let retryOutcome = self.stash.activate(retryLiveTarget)
-            if retryOutcome == .success {
-                self.safecracker.showFingerprint(at: retryLiveTarget.activationPoint)
-                return .success(method: .activate)
-            }
+    private func refreshAndResolveActivationTarget(
+        _ normalizedTarget: TheStash.NormalizedTarget
+    ) async -> ActivationPolicy.RefreshResult {
+        navigation.refresh()
+        let retryPositioning = await navigation.ensureOnScreen(for: normalizedTarget)
+        if let failure = retryPositioning.failure {
+            return .failure(.failure(failure.method ?? .activate, message: failure.message))
+        }
+        let retryResolution = stash.resolveTarget(normalizedTarget.executableTarget)
+        guard let retryResolved = retryResolution.resolved else {
+            return .failure(.failure(
+                .elementNotFound,
+                message: normalizedTarget.diagnostics(retryResolution.diagnostics)
+            ))
+        }
+        let retryLiveTargetResolution = stash.resolveLiveActionTarget(for: retryResolved)
+        guard case .resolved(let retryLiveTarget) = retryLiveTargetResolution else {
+            return activationRefreshFailure(
+                for: retryLiveTargetResolution,
+                resolved: retryResolved
+            )
+        }
+        return .resolved(resolvedTarget: retryResolved, liveTarget: retryLiveTarget)
+    }
 
-            // Synthetic tap fallback at the post-retry activation point.
-            let tapPoint = retryLiveTarget.activationPoint
-            if await self.safecracker.tap(at: tapPoint) {
-                self.safecracker.showFingerprint(at: tapPoint)
-                return .success(method: .syntheticTap)
-            }
-
-            // All paths exhausted — build a fact-only diagnostic from what we
-            // observed. The tap receiver is captured by re-running the same
-            // hit-test the (failed) tap would have used; the result is
-            // observation-only and does not claim element-level obstruction.
-            let receiver = self.safecracker.tapReceiverDiagnostic(at: tapPoint)
-            let traitNames = ActionCapabilityDiagnostic.traitNames(retryResolved.element.traits)
+    private func activationRefreshFailure(
+        for resolution: TheStash.LiveActionTargetResolution,
+        resolved: TheStash.ResolvedTarget
+    ) -> ActivationPolicy.RefreshResult {
+        switch resolution {
+        case .objectUnavailable:
+            let traitNames = ActionCapabilityDiagnostic.traitNames(resolved.element.traits)
             let message = ActivateFailureDiagnostic.build(
-                element: retryResolved.element,
+                element: resolved.element,
                 traitNames: traitNames,
-                activateOutcome: retryOutcome,
-                tapAttempted: true,
-                tapReceiver: receiver,
+                activateOutcome: .objectDeallocated,
+                tapAttempted: false,
+                tapReceiver: nil,
                 screenBounds: ScreenMetrics.current.bounds
             )
-            return .failure(.activate, message: message)
+            return .failure(.failure(.activate, message: message))
+        case .geometryUnavailable:
+            return .failure(.failure(
+                .activate,
+                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: .activate,
+                    element: resolved.screenElement,
+                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                )
+            ))
+        case .resolved:
+            return .failure(.failure(.activate, message: "activate failed"))
         }
     }
 
