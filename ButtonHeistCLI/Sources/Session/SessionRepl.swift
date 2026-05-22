@@ -99,16 +99,13 @@ final class ReplSession {
         let isMachineInput = line.hasPrefix("{")
         let parsedRequest: CLIParsedRequest
         do {
-            if isMachineInput {
-                parsedRequest = try CLIRequestBuilder.parseMachineRequest(line)
-            } else {
-                parsedRequest = CLIRequestBuilder.parseHumanTokens(CLIRequestBuilder.tokenize(line))
-            }
+            parsedRequest = try CLIRequestBuilder.parsedRequest(from: line)
         } catch {
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
             if isMachineInput {
-                return (.error("Invalid JSON: \(error.localizedDescription)"), nil)
+                return (.error("Invalid JSON: \(message)"), nil)
             }
-            return (.error(error.localizedDescription), nil)
+            return (.error(message), nil)
         }
 
         let request = parsedRequest.request

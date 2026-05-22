@@ -40,30 +40,30 @@ enum CLIRequestBuilder {
             return try parseMachineRequest(line)
         }
 
-        return parseHumanTokens(tokenize(line))
+        return try parseHumanTokens(tokenize(line))
     }
 
     static func parseHumanInput(_ line: String) -> [String: Any] {
-        parseHumanTokens(tokenize(line)).request
+        (try? parseHumanTokens(tokenize(line)).request) ?? [:]
     }
 
-    static func parseHumanTokens(_ tokens: [String]) -> CLIParsedRequest {
+    static func parseHumanTokens(_ tokens: [String]) throws -> CLIParsedRequest {
         guard let first = tokens.first else {
-            return CLIParsedRequest(request: [:], mode: .human)
+            throw ValidationError("Unknown command. Type 'help' for available commands.")
         }
 
         let rawCommand = first.lowercased()
         let args = Array(tokens.dropFirst())
-        var draft = requestDraft(for: rawCommand)
+        var draft = try requestDraft(for: rawCommand)
 
         var positional: [String] = []
         for arg in args {
             if let eqIndex = arg.firstIndex(of: "="), eqIndex != arg.startIndex {
                 let key = String(arg[arg.startIndex..<eqIndex])
                 let value = String(arg[arg.index(after: eqIndex)...])
-                draft.setParameter(
+                try draft.setParameter(
                     named: key,
-                    value: parseHumanValue(value, forParameterNamed: key, command: draft.command)
+                    value: try parseHumanValue(value, forParameterNamed: key, command: draft.command)
                 )
             } else {
                 positional.append(arg)
@@ -116,7 +116,12 @@ enum CLIRequestBuilder {
         return CLIParsedRequest(request: object.mapValues { $0.toAny() }, mode: .machine)
     }
 
-    private static func requestDraft(for rawCommand: String) -> RequestDraft {
+    static func diagnosticMessage(for error: Error) -> String {
+        let description = String(describing: error)
+        return description.isEmpty ? error.localizedDescription : description
+    }
+
+    private static func requestDraft(for rawCommand: String) throws -> RequestDraft {
         if let alias = TheFence.Command.humanAlias(named: rawCommand) {
             return RequestDraft(alias: alias)
         }
@@ -125,16 +130,16 @@ enum CLIRequestBuilder {
             return RequestDraft(command: descriptor.command)
         }
 
-        return RequestDraft(rawCommand: rawCommand)
+        throw ValidationError("Unknown command '\(rawCommand)'. Type 'help' for available commands.")
     }
 
     private static func parseHumanValue(
         _ value: String,
         forParameterNamed parameterName: String,
-        command: TheFence.Command?
-    ) -> HeistValue {
-        guard let spec = command?.parameters.first(where: { $0.key == parameterName }) else {
-            return parseHumanValue(value)
+        command: TheFence.Command
+    ) throws -> HeistValue {
+        guard let spec = command.parameters.first(where: { $0.key == parameterName }) else {
+            throw ValidationError("Unknown parameter '\(parameterName)' for \(command.rawValue)")
         }
 
         switch spec.type {
@@ -145,36 +150,19 @@ enum CLIRequestBuilder {
             case "false":
                 return .bool(false)
             default:
-                return .string(value)
+                throw ValidationError("Invalid value '\(value)' for \(parameterName); expected true or false")
             }
         case .integer:
             if let intValue = Int(value) {
                 return .int(intValue)
             }
-            return .string(value)
+            throw ValidationError("Invalid value '\(value)' for \(parameterName); expected integer")
         case .number:
             if let doubleValue = Double(value) {
                 return .double(doubleValue)
             }
-            return .string(value)
+            throw ValidationError("Invalid value '\(value)' for \(parameterName); expected number")
         case .string, .stringArray, .object, .array:
-            return .string(value)
-        }
-    }
-
-    private static func parseHumanValue(_ value: String) -> HeistValue {
-        switch value.lowercased() {
-        case "true":
-            return .bool(true)
-        case "false":
-            return .bool(false)
-        default:
-            if let intValue = Int(value) {
-                return .int(intValue)
-            }
-            if let doubleValue = Double(value) {
-                return .double(doubleValue)
-            }
             return .string(value)
         }
     }
@@ -193,7 +181,7 @@ enum CLIRequestBuilder {
     ) {
         guard !positional.isEmpty else { return }
 
-        switch draft.command?.humanPositionalSyntax ?? .target {
+        switch draft.command.humanPositionalSyntax {
         case .joinedText(let parameter):
             if draft[parameter] == nil {
                 draft[parameter] = .string(positional.joined(separator: " "))
@@ -262,27 +250,16 @@ private extension TheFence.Command {
 }
 
 private struct RequestDraft {
-    let command: TheFence.Command?
-    let rawCommand: String
+    let command: TheFence.Command
     private var typedParameters: CLIRequestParameters
-    private var extraParameters: [(name: String, value: HeistValue)]
 
     init(command: TheFence.Command, parameters: CLIRequestParameters = [:]) {
         self.command = command
-        self.rawCommand = command.rawValue
         self.typedParameters = parameters
-        self.extraParameters = []
     }
 
     init(alias: FenceCommandAlias) {
         self.init(command: alias.command, parameters: alias.parameters)
-    }
-
-    init(rawCommand: String) {
-        self.command = nil
-        self.rawCommand = rawCommand
-        self.typedParameters = [:]
-        self.extraParameters = []
     }
 
     subscript(_ key: FenceParameterKey) -> HeistValue? {
@@ -290,25 +267,14 @@ private struct RequestDraft {
         set { typedParameters[key] = newValue }
     }
 
-    mutating func setParameter(named name: String, value: HeistValue) {
-        if let key = FenceParameterKey(rawValue: name) {
-            self[key] = value
-        } else {
-            extraParameters.append((name, value))
+    mutating func setParameter(named name: String, value: HeistValue) throws {
+        guard let key = FenceParameterKey(rawValue: name) else {
+            throw ValidationError("Parameter '\(name)' is not supported by CLI request rendering")
         }
+        self[key] = value
     }
 
     func fenceRequest() -> [String: Any] {
-        var request: [String: Any]
-        if let command {
-            request = CLIRequestBuilder.request(command: command, parameters: typedParameters)
-        } else {
-            request = FenceParameterKey.rawDictionary(typedParameters)
-            request[.command] = rawCommand
-        }
-        for parameter in extraParameters {
-            request[parameter.name] = parameter.value.toAny()
-        }
-        return request
+        return CLIRequestBuilder.request(command: command, parameters: typedParameters)
     }
 }
