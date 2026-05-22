@@ -191,7 +191,6 @@ final class TheHandoff {
     private(set) var connectionPhase: ConnectionPhase = .disconnected
     private(set) var reconnectPolicy: ReconnectPolicy = .disabled
     private var connectionAttemptFailure: ConnectionError?
-    private var terminalConnectionAttemptID: UUID?
     private var discoverySessionID: UUID?
 
     /// Continuations awaiting a terminal connection-phase transition. Each
@@ -222,16 +221,9 @@ final class TheHandoff {
         activeConnectionAttemptID == attemptID
     }
 
-    private func isCurrentOrTerminalConnectionAttempt(_ attemptID: UUID) -> Bool {
-        if isActiveConnectionAttempt(attemptID) { return true }
-        if terminalConnectionAttemptID == attemptID { return true }
-        return false
-    }
-
     private func transitionToConnecting(device: DiscoveredDevice) -> UUID {
         let attempt = ConnectionAttempt(id: UUID(), device: device)
         connectionAttemptFailure = nil
-        terminalConnectionAttemptID = nil
         setConnectionPhase(.connecting(attempt))
         return attempt.id
     }
@@ -240,7 +232,6 @@ final class TheHandoff {
         guard case .connecting(let attempt) = connectionPhase, attempt.id == attemptID else { return }
         let keepaliveTask = makeKeepaliveTask()
         connectionAttemptFailure = nil
-        terminalConnectionAttemptID = nil
         setConnectionPhase(.connected(ConnectedSession(attemptID: attemptID, device: device, keepaliveTask: keepaliveTask)))
         resumePhaseAwaiters(for: attemptID, with: .success(()))
     }
@@ -258,7 +249,6 @@ final class TheHandoff {
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
-        terminalConnectionAttemptID = attemptID
         setConnectionPhase(.failed(failure))
         if wasActive, let attemptID {
             resumePhaseAwaiters(for: attemptID, with: .failure(failure))
@@ -280,7 +270,6 @@ final class TheHandoff {
         if case .connected(let session) = connectionPhase {
             session.keepaliveTask.cancel()
         }
-        terminalConnectionAttemptID = attemptID
         if wasActive {
             if let reason {
                 let failure = ConnectionError.disconnected(reason)
@@ -322,7 +311,6 @@ final class TheHandoff {
         }
         connection?.disconnect()
         connection = nil
-        terminalConnectionAttemptID = attemptID
         setConnectionPhase(.disconnected)
         resumePhaseAwaiters(for: attemptID, with: .failure(failure))
     }
@@ -652,7 +640,7 @@ final class TheHandoff {
                 guard self.isActiveConnectionAttempt(attemptID) else { return }
                 self.transitionToConnected(attemptID: attemptID, device: device)
             case .disconnected(let reason):
-                guard self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
+                guard self.isActiveConnectionAttempt(attemptID) else { return }
                 if case .failed = self.connectionPhase {
                     return
                 }
@@ -661,36 +649,20 @@ final class TheHandoff {
                     self.scheduleAutoReconnectIfNeeded(disconnectedDevice: device)
                 }
             case .sendFailed(let failure, let requestId):
-                guard self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
+                guard self.isActiveConnectionAttempt(attemptID) else { return }
                 self.onSendFailure?(failure, requestId)
             case .message(let message, let requestId, let accessibilityTrace):
-                if self.isActiveConnectionAttempt(attemptID) {
-                    self.handleServerMessage(
-                        message,
-                        requestId: requestId,
-                        accessibilityTrace: accessibilityTrace
-                    )
-                    return
-                }
-                guard let requestId, self.isCurrentOrTerminalConnectionAttempt(attemptID) else { return }
-                self.handleTerminalRequestMessage(message, requestId: requestId)
+                guard self.isActiveConnectionAttempt(attemptID) else { return }
+                self.handleServerMessage(
+                    message,
+                    requestId: requestId,
+                    accessibilityTrace: accessibilityTrace
+                )
             }
         }
 
         connection?.connect()
         return attemptID
-    }
-
-    private func handleTerminalRequestMessage(_ message: ServerMessage, requestId: String) {
-        switch message {
-        case .interface, .actionResult, .screen, .pong, .error:
-            forwardServerMessage(message, requestId: requestId)
-        // Terminal request recovery only completes request-scoped trackers; state-mutating messages are consumed while active.
-        // swiftlint:disable:next agent_wire_message_arm_no_op_break
-        case .info, .recordingStarted, .recording, .authApproved, .authApprovalPending, .sessionLocked, .status,
-             .protocolMismatch, .recordingStopped, .serverHello, .authRequired, .interaction:
-            break
-        }
     }
 
     func handleServerMessage(
