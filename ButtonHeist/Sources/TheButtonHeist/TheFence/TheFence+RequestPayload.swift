@@ -312,8 +312,26 @@ extension TheFence {
         let requestId: String
         let payload: RequestPayload
         let expectationPayload: ExpectationPayload
+        /// Element target metadata decoded at the public request edge for batch lowering.
+        let routedBatchTarget: BatchExecutionTarget?
         /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
         let immediateResponse: FenceResponse?
+
+        init(
+            command: Command,
+            requestId: String,
+            payload: RequestPayload,
+            expectationPayload: ExpectationPayload,
+            routedBatchTarget: BatchExecutionTarget? = nil,
+            immediateResponse: FenceResponse?
+        ) {
+            self.command = command
+            self.requestId = requestId
+            self.payload = payload
+            self.expectationPayload = expectationPayload
+            self.routedBatchTarget = routedBatchTarget
+            self.immediateResponse = immediateResponse
+        }
     }
 
     struct ArchiveSessionRequest {
@@ -365,7 +383,8 @@ extension TheFence {
     private func parseRequest(
         command: Command,
         arguments: [String: Any],
-        expectationPayload typedExpectationPayload: ExpectationPayload?
+        expectationPayload typedExpectationPayload: ExpectationPayload?,
+        routedBatchTarget: BatchExecutionTarget? = nil
     ) throws -> ParsedRequest {
         try validateRequestKeys(command: command, arguments: arguments)
         if let immediate = handleImmediateCommand(command) {
@@ -390,6 +409,7 @@ extension TheFence {
             requestId: requestId,
             payload: payload,
             expectationPayload: expectationPayload,
+            routedBatchTarget: routedBatchTarget,
             immediateResponse: nil
         )
     }
@@ -398,7 +418,8 @@ extension TheFence {
         try parseRequest(
             command: operation.command,
             arguments: operation.arguments,
-            expectationPayload: operation.expectationPayload
+            expectationPayload: operation.expectationPayload,
+            routedBatchTarget: try decodedBatchExecutionTarget(operation.arguments)
         )
     }
 

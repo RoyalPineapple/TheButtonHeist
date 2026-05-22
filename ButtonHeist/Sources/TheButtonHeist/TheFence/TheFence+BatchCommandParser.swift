@@ -32,9 +32,8 @@ extension TheFence {
         private func decode(operation: NormalizedOperation, index: Int) -> RunBatchStep {
             do {
                 let request = try fence.parseRequest(operation: operation)
-                return .planned(try BatchStepConstructor(fence: fence).plan(
+                return .planned(try BatchStepConstructor().plan(
                     index: index,
-                    operation: operation,
                     request: request
                 ))
             } catch let error as SchemaValidationError {
