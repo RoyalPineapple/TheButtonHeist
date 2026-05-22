@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Bump the AccessibilitySnapshotBH dependency.
 #
-# Tags the current submodule commit on the AccessibilitySnapshotBH repo
-# with the next minor version, then bumps the exact Package.swift pin to match.
+# Reuses an existing semver tag on the current AccessibilitySnapshotBH
+# submodule commit, or tags the current parser main commit with the next
+# minor version and bumps the exact Package.swift pin to match.
 #
 # Usage: ./scripts/bump-parser.sh [--dry-run]
 
@@ -12,8 +13,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
+SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
+
 DRY_RUN=false
-[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true; shift ;;
+        *) echo "Error: unknown flag '$1'"; exit 1 ;;
+    esac
+done
 
 SUBMODULE_DIR="submodules/AccessibilitySnapshotBH"
 PACKAGE_FILE="Package.swift"
@@ -33,35 +41,55 @@ if [[ -z "$CURRENT_PIN" ]]; then
     exit 1
 fi
 
-LATEST_TAG=$(git -C "$SUBMODULE_DIR" tag -l --sort=-v:refname | head -1)
-if [[ -z "$LATEST_TAG" ]]; then
-    echo "Error: no tags found on AccessibilitySnapshotBH"
-    exit 1
-fi
-echo "Latest tag: $LATEST_TAG"
+git -C "$SUBMODULE_DIR" fetch origin main --tags --quiet
 
-TAGGED_SHA=$(git -C "$SUBMODULE_DIR" rev-parse "$LATEST_TAG^{}")
-if [[ "$SUBMODULE_SHA" == "$TAGGED_SHA" ]]; then
-    if [[ "$CURRENT_PIN" == "$LATEST_TAG" ]]; then
-        echo "Submodule and Package.swift are already at $LATEST_TAG — nothing to bump."
+CURRENT_COMMIT_TAG=$(git -C "$SUBMODULE_DIR" tag -l --points-at "$SUBMODULE_SHA" --sort=-v:refname \
+    | grep -E "$SEMVER_REGEX" \
+    | head -1 || true)
+
+if [[ -n "$CURRENT_COMMIT_TAG" ]]; then
+    if [[ "$CURRENT_PIN" == "$CURRENT_COMMIT_TAG" ]]; then
+        echo "Submodule and Package.swift are already at $CURRENT_COMMIT_TAG — nothing to bump."
         exit 0
     fi
 
-    echo "Submodule is already at $LATEST_TAG; Package.swift pin is $CURRENT_PIN."
-    echo "Package.swift pin: $CURRENT_PIN → $LATEST_TAG"
+    echo "Submodule is already tagged $CURRENT_COMMIT_TAG; Package.swift pin is $CURRENT_PIN."
+    echo "Package.swift pin: $CURRENT_PIN → $CURRENT_COMMIT_TAG"
     if [[ "$DRY_RUN" == true ]]; then
         echo ""
         echo "(dry run — no changes made)"
         exit 0
     fi
 
-    sed -i '' "s|exact: \"$CURRENT_PIN\"|exact: \"$LATEST_TAG\"|" "$PACKAGE_FILE"
+    sed -i '' "s|exact: \"$CURRENT_PIN\"|exact: \"$CURRENT_COMMIT_TAG\"|" "$PACKAGE_FILE"
     git add "$PACKAGE_FILE"
-    git commit -m "Bump AccessibilitySnapshotBH $CURRENT_PIN → $LATEST_TAG"
+    git commit -m "Bump AccessibilitySnapshotBH $CURRENT_PIN → $CURRENT_COMMIT_TAG"
     echo "✓ Bumped Package.swift"
     echo "✓ Committed"
     exit 0
 fi
+
+BRANCH_TIP=$(git -C "$SUBMODULE_DIR" rev-parse origin/main)
+if [[ "$SUBMODULE_SHA" != "$BRANCH_TIP" ]]; then
+    cat >&2 <<EOF
+Error: AccessibilitySnapshotBH submodule commit ${SUBMODULE_SHA:0:8} has no semver tag
+and is not parser origin/main (${BRANCH_TIP:0:8}).
+
+Refusing to mint a newer parser release tag on an older or detached commit.
+Update the submodule to parser main, or pin Package.swift to an existing tag on
+the current submodule commit.
+EOF
+    exit 1
+fi
+
+LATEST_TAG=$(git -C "$SUBMODULE_DIR" tag -l --sort=-v:refname \
+    | grep -E "$SEMVER_REGEX" \
+    | head -1)
+if [[ -z "$LATEST_TAG" ]]; then
+    echo "Error: no tags found on AccessibilitySnapshotBH"
+    exit 1
+fi
+echo "Latest tag: $LATEST_TAG"
 
 IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_TAG"
 NEW_TAG="${MAJOR}.$((MINOR + 1)).0"

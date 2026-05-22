@@ -141,9 +141,17 @@ SUBMODULE_DIR="submodules/AccessibilitySnapshotBH"
 if [[ -d "$SUBMODULE_DIR" ]]; then
     git submodule update --init --recursive "$SUBMODULE_DIR"
     BEFORE_PARSER_BUMP=$(git rev-parse HEAD)
-    "$SCRIPT_DIR/bump-parser.sh"
+    BUMP_PARSER_ARGS=()
+    if [[ "$DRY_RUN" == true ]]; then
+        BUMP_PARSER_ARGS+=(--dry-run)
+    fi
+    "$SCRIPT_DIR/bump-parser.sh" "${BUMP_PARSER_ARGS[@]}"
     AFTER_PARSER_BUMP=$(git rev-parse HEAD)
     if [[ "$BEFORE_PARSER_BUMP" != "$AFTER_PARSER_BUMP" ]]; then
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "Error: parser dry-run changed HEAD from $BEFORE_PARSER_BUMP to $AFTER_PARSER_BUMP"
+            exit 1
+        fi
         git push origin main
         LOCAL_SHA="$AFTER_PARSER_BUMP"
         echo "  ✓ Parser dependency bumped, new HEAD: $(echo "$LOCAL_SHA" | cut -c1-8)"
