@@ -8,6 +8,28 @@ final class DeviceConnectionReceiveTests: XCTestCase {
     // The NWConnections here are intentionally never started. handleReceive
     // only uses them for identity comparison (`===`), so no real I/O is needed.
 
+    @ButtonHeistActor
+    func testReadyStateEmitsTransportHookWithoutLifecycleConnected() async {
+        let activeConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
+        let connection = DeviceConnection(device: makeDummyDevice())
+        connection.connectionState = .connecting(connection: activeConnection)
+        var transportReady = false
+        var connectedEventFired = false
+        connection.onTransportReady = {
+            transportReady = true
+        }
+        connection.onEvent = { event in
+            if case .connected = event {
+                connectedEventFired = true
+            }
+        }
+
+        connection.handleStateChange(.ready, connection: activeConnection)
+
+        XCTAssertTrue(transportReady)
+        XCTAssertFalse(connectedEventFired)
+    }
+
     func testDeviceEventStreamDropsNewestWhenBufferLimitIsReached() {
         let eventConnection = NWConnection(host: "127.0.0.1", port: 1111, using: .tcp)
         let (stream, continuation) = DeviceConnection.makeEventStream()

@@ -224,7 +224,7 @@ enum DeviceConnectionEvent: Sendable {
 
 /// Connection client using Network framework.
 @ButtonHeistActor
-final class DeviceConnection: DeviceConnecting {
+final class DeviceConnection: TransportReachabilityConnecting {
 
     private static let maxBufferSize = 64 * 1024 * 1024
     nonisolated static let eventStreamBufferLimit = 512
@@ -246,6 +246,7 @@ final class DeviceConnection: DeviceConnecting {
     private(set) var token: String?
 
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
+    var onTransportReady: (@ButtonHeistActor () -> Void)?
     var autoRespondToAuthRequired = true
     var sendContent: (
         @Sendable (
@@ -417,7 +418,7 @@ final class DeviceConnection: DeviceConnecting {
             guard case .connecting(let conn) = connectionState else { return }
             logger.info("Connected")
             connectionState = .connected(ActiveConnection(connection: conn))
-            onEvent?(.transportReady)
+            onTransportReady?()
             startReceiving()
         case .failed(let error):
             logger.error("Connection failed: \(error)")
