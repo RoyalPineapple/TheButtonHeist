@@ -426,8 +426,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(command.requestId, "req-1")
         XCTAssertEqual(command.command, "activate")
         XCTAssertFalse(command.t.isEmpty)
-        XCTAssertNil(command.args?["command"])
-        XCTAssertEqual(command.args?["identifier"], .string("loginButton"))
+        XCTAssertNil(command.args)
     }
 
     @ButtonHeistActor
@@ -503,7 +502,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testLogCommandUsesTypedFenceRequestArguments() async throws {
+    func testLogCommandOmitsRequestArguments() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-typed-args")
         try logCommand(bookKeeper,
@@ -517,29 +516,14 @@ final class TheBookKeeperTests: XCTestCase {
         let lines = try sessionLogLines(for: session)
         let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
-        XCTAssertEqual(command.args?["output"], .string("screen.png"))
-        XCTAssertNil(command.args?["command"])
+        XCTAssertEqual(command.command, "get_screen")
+        XCTAssertNil(command.args)
     }
 
     @ButtonHeistActor
-    func testParsedRequestBuildsTypedLogProjections() async throws {
-        let connect = try parsedRequest(
-            requestId: "r1",
-            command: .connect,
-            arguments: [
-                "device": "127.0.0.1:1455",
-                "token": "user-specified-token",
-            ]
-        )
-        let commandProjection = connect.commandLogProjection
-
-        XCTAssertEqual(commandProjection.requestId, "r1")
-        XCTAssertEqual(commandProjection.command, .connect)
-        XCTAssertEqual(commandProjection.arguments["device"], .string("127.0.0.1:1455"))
-        XCTAssertEqual(commandProjection.arguments["token"], .string("<redacted>"))
-
+    func testParsedRequestBuildsHeistEvidenceProjection() async throws {
         let activate = try parsedRequest(
-            requestId: "r2",
+            requestId: "r1",
             command: .activate,
             arguments: ["heistId": "login_button"]
         )
@@ -548,110 +532,6 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(heistProjection.command, .activate)
         XCTAssertEqual(heistProjection.elementTarget, .heistId("login_button"))
         XCTAssertNil(heistProjection.arguments["heistId"])
-    }
-
-    @ButtonHeistActor
-    func testBatchStepLogProjectionKeepsPreparedArgumentsTyped() async throws {
-        let fence = TheFence(configuration: .init())
-        let batch = try fence.decodeRunBatchRequest([
-            "steps": [
-                [
-                    "command": "type_text",
-                    "identifier": "email",
-                    "text": "hello",
-                ],
-            ],
-        ])
-
-        let batchStep = try XCTUnwrap(batch.steps.first)
-        let projection = batchStep.batchStepLogProjection
-
-        guard case .planned = batchStep else {
-            return XCTFail("Expected planned batch step")
-        }
-
-        XCTAssertEqual(projection.commandName, "type_text")
-        XCTAssertEqual(projection.arguments["index"], HeistValue.int(0))
-        guard case .object(let action)? = projection.arguments["action"],
-              action["type"] == .string("type_text") else {
-            return XCTFail("Expected typed batch action log")
-        }
-        XCTAssertEqual(action["text"], HeistValue.string("hello"))
-        XCTAssertNil(projection.arguments["command"])
-        XCTAssertEqual(projection.stepArguments["command"], HeistValue.string("type_text"))
-    }
-
-    @ButtonHeistActor
-    func testBatchStepLogProjectionDropsInvalidStepRawArguments() async throws {
-        let fence = TheFence(configuration: .init())
-        let batch = try fence.decodeRunBatchRequest([
-            "steps": [
-                [
-                    "command": "connect",
-                    "device": "127.0.0.1:1455",
-                    "token": "nested-user-token",
-                ],
-            ],
-        ])
-
-        guard let step = batch.steps.first else {
-            return XCTFail("Expected decoded batch step")
-        }
-        let projection = step.batchStepLogProjection
-
-        XCTAssertEqual(projection.commandName, "connect")
-        XCTAssertNil(projection.arguments["device"])
-        XCTAssertNil(projection.arguments["token"])
-        XCTAssertEqual(projection.stepArguments["command"], HeistValue.string("connect"))
-        guard case .string(let message)? = projection.arguments["decodeError"] else {
-            return XCTFail("Expected decodeError message")
-        }
-        XCTAssertTrue(message.contains("connect"))
-    }
-
-    @ButtonHeistActor
-    func testBookKeeperLogsTypedCommandProjection() async throws {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        try bookKeeper.beginSession(identifier: "test-log-projection")
-
-        try bookKeeper.logCommand(TheFence.CommandLogProjection(
-            requestId: "r1",
-            command: .typeText,
-            arguments: ["text": .string("hello")]
-        ))
-
-        guard case .active(let session) = bookKeeper.phase else {
-            return XCTFail("Expected active phase")
-        }
-        let lines = try sessionLogLines(for: session)
-        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
-
-        XCTAssertEqual(command.requestId, "r1")
-        XCTAssertEqual(command.command, "type_text")
-        XCTAssertEqual(command.args?["text"], .string("hello"))
-    }
-
-    @ButtonHeistActor
-    func testLongStringIsTruncatedInLog() async throws {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        try bookKeeper.beginSession(identifier: "test-truncate")
-        let longString = String(repeating: "x", count: 1500)
-
-        try logCommand(bookKeeper,
-            requestId: "r1",
-            command: .typeText,
-            arguments: [
-                "text": longString,
-            ]
-        )
-
-        guard case .active(let session) = bookKeeper.phase else {
-            return XCTFail("Expected active phase")
-        }
-        let lines = try sessionLogLines(for: session)
-        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
-
-        XCTAssertEqual(command.args?["text"], .string("<1500 chars>"))
     }
 
     @ButtonHeistActor
@@ -675,7 +555,7 @@ final class TheBookKeeperTests: XCTestCase {
         let lines = content.split(separator: "\n")
         let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
-        XCTAssertEqual(command.args?["token"], .string("<redacted>"))
+        XCTAssertNil(command.args)
         XCTAssertFalse(content.contains("user-specified-token"))
     }
 
@@ -704,14 +584,8 @@ final class TheBookKeeperTests: XCTestCase {
         let content = try sessionLogContent(for: session)
         let lines = content.split(separator: "\n")
         let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
-        let steps = try XCTUnwrap(command.args?["steps"])
-        guard case .array(let stepValues) = steps,
-              let firstStep = stepValues.first,
-              case .object(let step) = firstStep else {
-            return XCTFail("Expected typed batch step values")
-        }
 
-        XCTAssertNil(step["token"], "Invalid/non-executable batch steps should not retain token fields")
+        XCTAssertNil(command.args)
         XCTAssertFalse(content.contains("nested-user-token"))
     }
 
@@ -732,12 +606,8 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testNestedTypedValuesRemainStructuredInLog() async throws {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        try bookKeeper.beginSession(identifier: "test-nested-values")
-
-        try logCommand(
-            bookKeeper,
+    func testNestedTypedValuesRemainStructuredInHeistEvidenceProjection() async throws {
+        let request = try parsedRequest(
             requestId: "r1",
             command: .waitForChange,
             arguments: [
@@ -753,20 +623,16 @@ final class TheBookKeeperTests: XCTestCase {
             ]
         )
 
-        guard case .active(let session) = bookKeeper.phase else {
-            return XCTFail("Expected active phase")
-        }
-        let lines = try sessionLogLines(for: session)
-        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
+        let projection = request.heistEvidenceProjection
 
-        XCTAssertEqual(command.args?["expect"], .object([
+        XCTAssertEqual(projection.arguments["expect"], .object([
             "type": .string("element_appeared"),
             "matcher": .object([
                 "label": .string("Submit"),
                 "traits": .array([.string("button")]),
             ]),
         ]))
-        XCTAssertEqual(command.args?["timeout"], .double(2.5))
+        XCTAssertEqual(projection.arguments["timeout"], .double(2.5))
     }
 
     @ButtonHeistActor

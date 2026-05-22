@@ -369,19 +369,11 @@ final class TheBookKeeper {
     // MARK: - Logging
 
     func logCommand(_ request: TheFence.ParsedRequest) throws {
-        try logCommand(request.commandLogProjection)
-    }
-
-    func logCommand(_ projection: TheFence.CommandLogProjection) throws {
         guard case .active(let session) = phase else { return }
         try appendLogLine(CommandLogEntry(
             t: iso8601Now(),
-            requestId: projection.requestId,
-            command: projection.command.rawValue,
-            args: CommandLogArguments(
-                projection.arguments,
-                maxStringLength: Self.maxLoggedStringLength
-            )
+            requestId: request.requestId,
+            command: request.command.rawValue
         ), to: session.logHandle)
     }
 
