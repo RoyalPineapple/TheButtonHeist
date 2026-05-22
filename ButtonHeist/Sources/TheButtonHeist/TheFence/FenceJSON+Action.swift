@@ -101,7 +101,7 @@ struct PublicExploreResult: Encodable {
     let explorationTime: String
 
     init(result: ExploreResult) {
-        self.elementCount = result.elementCount
+        self.elementCount = result.elements.count
         self.scrollCount = result.scrollCount
         self.containersExplored = result.containersExplored
         self.explorationTime = String(format: "%.2f", result.explorationTime)

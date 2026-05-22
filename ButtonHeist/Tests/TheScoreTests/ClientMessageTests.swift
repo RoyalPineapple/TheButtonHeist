@@ -470,7 +470,6 @@ final class ClientMessageTests: XCTestCase {
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ExploreResult.self, from: data)
-        XCTAssertEqual(decoded.elementCount, 3)
         XCTAssertEqual(decoded.elements.count, 3)
         XCTAssertEqual(decoded.elements[0].heistId, "el_0")
         XCTAssertEqual(decoded.scrollCount, 6)
@@ -499,7 +498,7 @@ final class ClientMessageTests: XCTestCase {
             XCTFail("Expected .explore payload, got \(String(describing: decoded.payload))")
             return
         }
-        XCTAssertEqual(explore.elementCount, 100)
+        XCTAssertEqual(explore.elements.count, 100)
         XCTAssertEqual(explore.scrollCount, 12)
         XCTAssertEqual(explore.containersExplored, 2)
         XCTAssertEqual(explore.explorationTime, 3.5)
