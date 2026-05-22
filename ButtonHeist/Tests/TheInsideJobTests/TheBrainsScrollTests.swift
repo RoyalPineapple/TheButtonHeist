@@ -241,34 +241,6 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - Scroll Search Target Selection
 
-    func testFindScrollTargetReturnsRequestedAxis() {
-        let vertical = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 2000),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
-        )
-        let horizontal = makeScrollableContainer(
-            contentSize: CGSize(width: 1200, height: 200),
-            frame: CGRect(x: 0, y: 420, width: 320, height: 200)
-        )
-        installScrollableContainers([vertical, horizontal])
-
-        let result = brains.navigation.findScrollTarget(requiredAxis: .horizontal)
-
-        XCTAssertEqual(result?.container, horizontal)
-    }
-
-    func testFindScrollTargetReturnsNilWhenRequestedAxisIsUnavailable() {
-        let vertical = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 2000),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
-        )
-        installScrollableContainers([vertical])
-
-        let result = brains.navigation.findScrollTarget(requiredAxis: .horizontal)
-
-        XCTAssertNil(result)
-    }
-
     func testScrollSearchCandidatesFilterToRequiredAxis() {
         let vertical = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
@@ -318,25 +290,6 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertNil(plan.movement(for: .down))
         XCTAssertEqual(plan.movement(for: .right), .right)
-    }
-
-    func testFindScrollTargetUsesKnownSiblingAfterFirstContainerExhausted() {
-        let first = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 2000),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
-        )
-        let sibling = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 1600),
-            frame: CGRect(x: 0, y: 420, width: 320, height: 400)
-        )
-        installScrollableContainers([first, sibling])
-
-        let result = brains.navigation.findScrollTarget(
-            requiredAxis: .vertical,
-            excluding: [first]
-        )
-
-        XCTAssertEqual(result?.container, sibling)
     }
 
     // MARK: - Scroll Search Progress
@@ -548,64 +501,6 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testKnownOffscreenEntryByHeistIdReturnsWhenOffScreen() {
-        let other = makeElement(label: "Other")
-        let element = makeElement(label: "Item")
-        installScreenWithOffViewportEntry(
-            liveHierarchy: [(other, "other_element")],
-            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
-        )
-
-        let entry = brains.navigation.knownOffscreenEntry(for: .heistId("button_item"))
-        XCTAssertNotNil(entry, "Should return entry when heistId is not in live viewport")
-        XCTAssertEqual(entry?.heistId, "button_item")
-    }
-
-    func testKnownOffscreenEntryByHeistIdUsesRecordedScreenAfterVisibleRefresh() {
-        let visible = makeElement(label: "Visible")
-        let element = makeElement(label: "Item")
-        let recordedScreen = makeScreenWithOffViewportEntry(
-            liveHierarchy: [(visible, "visible_element")],
-            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
-        )
-        brains.stash.currentScreen = .makeForTests(
-            elements: [(visible, "visible_element")]
-        )
-
-        let entry = brains.navigation.knownOffscreenEntry(
-            for: .heistId("button_item"),
-            in: recordedScreen
-        )
-
-        XCTAssertEqual(entry?.heistId, "button_item")
-    }
-
-    func testKnownOffscreenEntryByHeistIdReturnsNilWhenOnScreen() {
-        let element = makeElement(label: "Item")
-        installScreenWithOffViewportEntry(
-            liveHierarchy: [(element, "button_item")],
-            offViewport: []
-        )
-
-        let entry = brains.navigation.knownOffscreenEntry(for: .heistId("button_item"))
-        XCTAssertNil(entry, "Should return nil when heistId is in live viewport")
-    }
-
-    func testKnownOffscreenEntryByMatcherReturnsKnownEntryOutsideLiveHierarchy() {
-        let other = makeElement(label: "Other")
-        let element = makeElement(label: "Item")
-        installScreenWithOffViewportEntry(
-            liveHierarchy: [(other, "other_element")],
-            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
-        )
-
-        let entry = brains.navigation.knownOffscreenEntry(
-            for: .matcher(ElementMatcher(label: "Item"))
-        )
-        XCTAssertNotNil(entry, "Should return known matcher hit when it is not in the live viewport")
-        XCTAssertEqual(entry?.heistId, "button_item")
-    }
-
     func testTargetInflationNoOpsWhenAlreadyInflated() {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -637,7 +532,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let entry = try XCTUnwrap(
-            brains.navigation.knownOffscreenEntry(for: .matcher(ElementMatcher(label: "Settings")))
+            brains.stash.currentScreen.findElement(heistId: "settings_button")
         )
         let result = brains.stash.inflateTarget(entry)
 
@@ -651,61 +546,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
     }
 
-    func testKnownOffscreenEntryByMatcherUsesRecordedScreenAfterVisibleRefresh() {
-        let visible = makeElement(label: "Visible")
-        let element = makeElement(label: "Item")
-        let recordedScreen = makeScreenWithOffViewportEntry(
-            liveHierarchy: [(visible, "visible_element")],
-            offViewport: [(element, "button_item", CGPoint(x: 0, y: 2000))]
-        )
-        brains.stash.currentScreen = .makeForTests(
-            elements: [(visible, "visible_element")]
-        )
-
-        let entry = brains.navigation.knownOffscreenEntry(
-            for: .matcher(ElementMatcher(label: "Item")),
-            in: recordedScreen
-        )
-
-        XCTAssertEqual(entry?.heistId, "button_item")
-    }
-
-    func testKnownOffscreenEntryByMatcherReturnsNilWhenMatchIsLive() {
-        let element = makeElement(label: "Item")
-        installScreenWithOffViewportEntry(
-            liveHierarchy: [(element, "button_item")],
-            offViewport: []
-        )
-
-        let entry = brains.navigation.knownOffscreenEntry(
-            for: .matcher(ElementMatcher(label: "Item"))
-        )
-        XCTAssertNil(entry, "Should return nil when matcher hit is already in the live viewport")
-    }
-
-    func testKnownOffscreenEntryKeepsFreshVisibleGeometryAuthoritative() {
-        let visibleElement = makeElement(label: "Item")
-        let recordedElement = makeElement(label: "Item")
-        let recordedScreen = makeScreenWithOffViewportEntry(
-            liveHierarchy: [],
-            offViewport: [(recordedElement, "button_item", CGPoint(x: 0, y: 2000))]
-        )
-        brains.stash.currentScreen = .makeForTests(
-            elements: [(visibleElement, "button_item")]
-        )
-
-        let entry = brains.navigation.knownOffscreenEntry(
-            for: .matcher(ElementMatcher(label: "Item")),
-            in: recordedScreen
-        )
-
-        XCTAssertNil(
-            entry,
-            "Once the target is in the fresh visible parse, scroll_to_visible should use live geometry"
-        )
-    }
-
-    func testScrollToVisibleUnknownTargetUsesRecordedScreenDiagnostics() {
+    func testScrollToVisibleUnknownTargetUsesRecordedScreenDiagnostics() async {
         let visible = makeElement(label: "Visible")
         let recordedScreen = makeScreenWithOffViewportEntry(
             liveHierarchy: [(visible, "visible_element")],
@@ -715,15 +556,17 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [(visible, "visible_element")]
         )
 
-        let message = brains.navigation.scrollToVisibleFailureMessage(
-            for: .heistId("missing_button"),
-            in: recordedScreen
+        let result = await brains.navigation.executeScrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .heistId("missing_button")),
+            recordedScreen: recordedScreen
         )
 
-        XCTAssertTrue(message.contains("Element not found"))
-        XCTAssertTrue(message.contains("missing_button"))
-        XCTAssertTrue(message.contains("1 known element"))
-        XCTAssertTrue(message.contains("get_interface"))
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scrollToVisible)
+        XCTAssertTrue(result.message?.contains("Element not found") == true)
+        XCTAssertTrue(result.message?.contains("missing_button") == true)
+        XCTAssertTrue(result.message?.contains("1 known element") == true)
+        XCTAssertTrue(result.message?.contains("get_interface") == true)
     }
 
     func testEnsureOnScreenNamesKnownOffscreenInflationFailure() async {
@@ -744,20 +587,24 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(failure.message.contains("has no content-space position"))
     }
 
-    func testKnownOffscreenTargetWithoutLiveScrollParentFailsInflation() {
+    func testKnownOffscreenTargetWithoutLiveScrollParentFailsInflation() async {
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
         installScreenWithOffViewportEntry(
             liveHierarchy: [(visible, "visible_element")],
             offViewport: [(offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200))]
         )
+        let recordedScreen = brains.stash.currentScreen
 
-        let message = brains.navigation.scrollToVisibleFailureMessage(
-            for: .heistId("offscreen_button")
+        let result = await brains.navigation.executeScrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button")),
+            recordedScreen: recordedScreen
         )
 
-        XCTAssertTrue(message.contains("not inflated"))
-        XCTAssertTrue(message.contains("no live scrollable ancestor"))
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scrollToVisible)
+        XCTAssertTrue(result.message?.contains("not inflated") == true)
+        XCTAssertTrue(result.message?.contains("no live scrollable ancestor") == true)
     }
 
     func testElementActionsConsumeEnsureOnScreenFailureBeforeDispatch() async {
@@ -815,7 +662,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testKnownInflationIgnoresStaleSemanticScrollView() {
+    func testKnownInflationIgnoresStaleSemanticScrollView() async {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -842,13 +689,15 @@ final class TheBrainsScrollTests: XCTestCase {
             elements: [(visible, "visible_element")]
         )
 
-        let message = brains.navigation.scrollToVisibleFailureMessage(
-            for: .heistId("offscreen_button"),
-            in: staleScreen
+        let result = await brains.navigation.executeScrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button")),
+            recordedScreen: staleScreen
         )
 
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .scrollToVisible)
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
-        XCTAssertTrue(message.contains("no live scrollable ancestor"))
+        XCTAssertTrue(result.message?.contains("no live scrollable ancestor") == true)
     }
 
     func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {
@@ -1137,9 +986,6 @@ final class TheBrainsScrollTests: XCTestCase {
             element: makeElement(label: "Item")
         )
 
-        let target = brains.navigation.resolveScrollTarget(screenElement: screenElement)
-        XCTAssertNil(target)
-
         guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
             screenElement: screenElement
         ) else {
@@ -1162,11 +1008,6 @@ final class TheBrainsScrollTests: XCTestCase {
             element: makeElement()
         )
         installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "axis_scroll")
-
-        let target = brains.navigation.resolveScrollTarget(
-            screenElement: screenElement, axis: .vertical
-        )
-        XCTAssertNil(target)
 
         guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
             screenElement: screenElement,
@@ -1199,10 +1040,16 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "horizontal_scroll")
 
-        let target = brains.navigation.resolveScrollTarget(
-            screenElement: screenElement, axis: .vertical
+        guard case .failed(let diagnostic) = brains.navigation.resolveScrollTargetResult(
+            screenElement: screenElement,
+            axis: .vertical
+        ) else {
+            return XCTFail("Expected unrelated container to stay ignored")
+        }
+        XCTAssertEqual(
+            diagnostic.reason,
+            .axisMismatch(required: .vertical, available: .horizontal)
         )
-        XCTAssertNil(target)
     }
 
     func testResolveScrollTargetReturnsNearestScrollViewWhenAxisMatches() {
@@ -1222,9 +1069,11 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "vertical_scroll")
 
-        let target = brains.navigation.resolveScrollTarget(
+        guard case .resolved(let target) = brains.navigation.resolveScrollTargetResult(
             screenElement: screenElement, axis: .vertical
-        )
+        ) else {
+            return XCTFail("Expected matching scroll target")
+        }
         XCTAssertTrue(
             target === scrollView,
             "Should return the element's stored scroll view"

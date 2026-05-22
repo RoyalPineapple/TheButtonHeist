@@ -81,17 +81,8 @@ extension Navigation {
                     + "for programmatic scrolling; try \(ScrollMode.search.canonicalCommand) to use semantic search"
             case .axisMismatch(let required, let available):
                 return "scroll target failed: observed \(element) inside a scroll view that supports "
-                    + "\(Self.axisDescription(available)); expected \(Self.axisDescription(required)); "
+                    + "\(Navigation.axisDescription(available)); expected \(Navigation.axisDescription(required)); "
                     + "try a matching scroll direction or target an element inside a matching scroll container"
-            }
-        }
-
-        private static func axisDescription(_ axis: ScrollAxis) -> String {
-            switch (axis.contains(.horizontal), axis.contains(.vertical)) {
-            case (true, true): return "horizontal and vertical scrolling"
-            case (true, false): return "horizontal scrolling"
-            case (false, true): return "vertical scrolling"
-            case (false, false): return "no scrolling"
             }
         }
     }
@@ -140,7 +131,7 @@ extension Navigation {
         }
     }
 
-    private static func axisDescription(_ axis: ScrollAxis) -> String {
+    nonisolated private static func axisDescription(_ axis: ScrollAxis) -> String {
         switch (axis.contains(.horizontal), axis.contains(.vertical)) {
         case (true, true): return "horizontal and vertical scrolling"
         case (true, false): return "horizontal scrolling"
@@ -565,17 +556,6 @@ extension Navigation {
         )
     }
 
-    func findScrollTarget(
-        requiredAxis axis: ScrollAxis?,
-        excluding exhausted: Set<AccessibilityContainer> = []
-    ) -> ScrollPlan? {
-        scrollCandidates(
-            selecting: axis.map(ScrollAxisSelection.required) ?? .any,
-            excluding: exhausted
-        )
-        .first
-    }
-
     private func resolveContainerScrollTarget(
         containerTarget: ScrollContainerTarget?,
         elementTarget: ElementTarget?,
@@ -892,36 +872,6 @@ extension Navigation {
         return .adjustedVisibleTarget
     }
 
-    // MARK: - Known Offscreen Lookup
-
-    /// Find a known element that matches `target` but is NOT in the live
-    /// viewport. This is a semantic lookup helper; runtime positioning goes
-    /// through `inflateTarget` so visible targets no-op and off-screen targets
-    /// use the same inflation path.
-    ///
-    /// Returns nil if the element is already on-screen or unknown. Callers that
-    /// preserve a known semantic screen across a visible refresh pass it in
-    /// directly so the refresh does not erase the offscreen target before the
-    /// scroll decision.
-    func knownOffscreenEntry(for target: ElementTarget, in screen: Screen? = nil) -> Screen.ScreenElement? {
-        let screen = screen ?? stash.currentScreen
-        let visible = stash.visibleIds
-        guard let resolved = stash.resolveTarget(target, in: screen).resolved,
-              !visible.contains(resolved.screenElement.heistId)
-        else { return nil }
-        return resolved.screenElement
-    }
-
-    func scrollToVisibleFailureMessage(for target: ElementTarget, in screen: Screen? = nil) -> String {
-        let screen = screen ?? stash.currentScreen
-        switch stash.resolveTarget(target, in: screen) {
-        case .resolved(let resolved):
-            return scrollToVisibleKnownTargetFailureMessage(resolved.screenElement)
-        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
-            return diagnostics
-        }
-    }
-
     private func scrollToVisibleKnownTargetFailureMessage(_ entry: Screen.ScreenElement) -> String {
         let description = Self.describeScrollTarget(entry)
         switch stash.resolveInflationScrollView(for: entry) {
@@ -980,17 +930,6 @@ extension Navigation {
     }
 
     // MARK: - Scroll Target Resolution
-
-    func resolveScrollTarget(
-        screenElement: TheStash.ScreenElement,
-        axis: ScrollAxis? = nil
-    ) -> UIScrollView? {
-        guard case .resolved(let scrollView) = resolveScrollTargetResult(
-            screenElement: screenElement,
-            axis: axis
-        ) else { return nil }
-        return scrollView
-    }
 
     func resolveScrollTargetResult(
         screenElement: TheStash.ScreenElement,
