@@ -50,35 +50,19 @@ extension TheFence {
 
     func logResponse(requestId: String, response: FenceResponse, durationMs: Int) {
         let responseStatus: ResponseStatus
-        let artifactPath: String?
         let errorMessage: String?
         switch response {
         case .error(let message, _):
             responseStatus = .error
-            artifactPath = nil
             errorMessage = message
-        case .screenshot(let path, _, _):
+        case .screenshot, .recording, .recordingExpanded, .archiveResult:
             responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .recording(let path, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .recordingExpanded(let path, _, _):
-            responseStatus = .ok
-            artifactPath = path
-            errorMessage = nil
-        case .archiveResult(let path, _):
-            responseStatus = .ok
-            artifactPath = path
             errorMessage = nil
         case .ok, .help, .status, .pong, .devices, .interface, .action,
              .screenshotData, .recordingData, .batch, .sessionState,
              .targets, .sessionLog, .heistStarted, .heistStopped,
              .heistPlayback:
             responseStatus = .ok
-            artifactPath = nil
             errorMessage = nil
         }
         do {
@@ -86,7 +70,6 @@ extension TheFence {
                 requestId: requestId,
                 status: responseStatus,
                 durationMilliseconds: durationMs,
-                artifact: artifactPath,
                 error: errorMessage
             )
         } catch {
