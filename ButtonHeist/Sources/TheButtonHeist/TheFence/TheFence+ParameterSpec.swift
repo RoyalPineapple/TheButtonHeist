@@ -22,20 +22,11 @@ public struct FenceParameterSpec: Sendable, Equatable {
         case array        // generic array (points, segments, steps)
     }
 
-    /// Why a non-required parameter belongs in the public command contract.
-    public enum OptionalRole: String, Sendable, Equatable {
-        case matcher
-        case payload
-        case behaviorSwitch
-    }
-
     // MARK: - Properties
 
     public let key: String
     public let type: ParamType
     public let required: Bool
-    public let optionalRole: OptionalRole?
-    public let description: String?
     public let enumValues: [String]?
     public let minimum: Double?
     public let maximum: Double?
@@ -54,8 +45,6 @@ public struct FenceParameterSpec: Sendable, Equatable {
         key: String,
         type: ParamType,
         required: Bool = false,
-        optionalRole: OptionalRole? = nil,
-        description: String? = nil,
         enumValues: [String]? = nil,
         minimum: Double? = nil,
         maximum: Double? = nil,
@@ -71,8 +60,6 @@ public struct FenceParameterSpec: Sendable, Equatable {
         self.key = key
         self.type = type
         self.required = required
-        self.optionalRole = optionalRole
-        self.description = description
         self.enumValues = enumValues
         self.minimum = minimum
         self.maximum = maximum
@@ -190,7 +177,6 @@ public extension FenceParameterSpec {
         key: FenceParameterKey,
         type: ParamType,
         required: Bool = false,
-        description: String? = nil,
         enumValues: [String]? = nil,
         minimum: Double? = nil,
         maximum: Double? = nil,
@@ -205,7 +191,6 @@ public extension FenceParameterSpec {
             key: key.rawValue,
             type: type,
             required: required,
-            description: description,
             enumValues: enumValues,
             minimum: minimum,
             maximum: maximum,
@@ -221,6 +206,40 @@ public extension FenceParameterSpec {
 
 func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawRepresentable, E.RawValue == String {
     type.allCases.map(\.rawValue)
+}
+
+func param(
+    _ key: FenceParameterKey,
+    _ type: FenceParameterSpec.ParamType,
+    required: Bool = false,
+    enumValues: [String]? = nil,
+    minimum: Double? = nil,
+    maximum: Double? = nil,
+    minLength: Int? = nil,
+    minItems: Int? = nil,
+    maxItems: Int? = nil,
+    objectProperties: [FenceParameterSpec] = [],
+    objectAdditionalProperties: Bool = false,
+    arrayItemType: FenceParameterSpec.ParamType? = nil,
+    arrayItemProperties: [FenceParameterSpec] = [],
+    arrayItemAdditionalProperties: Bool = false
+) -> FenceParameterSpec {
+    FenceParameterSpec(
+        key: key.rawValue,
+        type: type,
+        required: required,
+        enumValues: enumValues,
+        minimum: minimum,
+        maximum: maximum,
+        minLength: minLength,
+        minItems: minItems,
+        maxItems: maxItems,
+        objectProperties: objectProperties,
+        objectAdditionalProperties: objectAdditionalProperties,
+        arrayItemType: arrayItemType,
+        arrayItemProperties: arrayItemProperties,
+        arrayItemAdditionalProperties: arrayItemAdditionalProperties
+    )
 }
 
 // MARK: - MCP Exposure
@@ -428,7 +447,6 @@ public extension FenceParameterSpec {
 
     static func jsonSchemaProperty(for spec: FenceParameterSpec) -> FenceJSONSchemaValue {
         var schema: [String: FenceJSONSchemaValue] = ["type": .string(spec.type.jsonSchemaType)]
-        if let description = spec.description { schema["description"] = .string(description) }
         if let enumValues = spec.enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
         if let minimum = spec.minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
         if let maximum = spec.maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
@@ -495,191 +513,101 @@ public enum CLIExposure: Sendable, Equatable {
 /// Reusable parameter groups shared across command specs.
 /// At module scope so they're not actor-isolated.
 enum FenceParameterBlocks: Sendable {
-
-    /// Element targeting: heistId, label, value, traits, excludeTraits, identifier, ordinal.
-    /// Used by action/gesture/scroll commands that call `elementTarget(args)`.
     static let elementTarget: [FenceParameterSpec] = [
-        .init(
-            key: "heistId", type: .string, optionalRole: .matcher,
-            description: """
-                Current-hierarchy heistId handle returned by get_interface or an action delta. \
-                Recordings persist minimum matchers for durable replay.
-                """
-        ),
-        .init(key: "label", type: .string, optionalRole: .matcher, description: "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"),
-        .init(key: "value", type: .string, optionalRole: .matcher, description: "Accessibility value — current state or placeholder (e.g. \"50%\")"),
-        .init(
-            key: "traits", type: .stringArray, optionalRole: .matcher,
-            description: "Required traits (role qualifiers like button, header, selected). All must match."
-        ),
-        .init(key: "excludeTraits", type: .stringArray, optionalRole: .matcher, description: "Traits that must NOT be present"),
-        .init(
-            key: "identifier", type: .string, optionalRole: .matcher,
-            description: "accessibilityIdentifier; preferred when developer-assigned and stable"
-        ),
-        .init(
-            key: "ordinal", type: .integer, optionalRole: .matcher,
-            description: """
-                0-based index to disambiguate when multiple elements match, or as \
-                the fallback target when no matcher predicates exist. 0 = first \
-                match, 1 = second, etc. in the returned hierarchy order. Omit to \
-                require a unique match — ambiguity errors show the valid range.
-                """
-        ),
+        param(.heistId, .string), param(.label, .string), param(.value, .string),
+        param(.traits, .stringArray), param(.excludeTraits, .stringArray),
+        param(.identifier, .string), param(.ordinal, .integer),
     ]
 
-    /// Element filtering: label, value, traits, excludeTraits, identifier (no heistId/ordinal).
-    /// Used by get_interface when filtering returned interface elements.
     static var elementFilter: [FenceParameterSpec] {
         elementTarget.filter {
             $0.key != FenceParameterKey.heistId.rawValue && $0.key != FenceParameterKey.ordinal.rawValue
         }
     }
 
-    /// Scroll-container targeting for commands that move a container directly.
-    static let scrollContainerTarget: [FenceParameterSpec] = [
-        .init(
-            key: "stableId", type: .string, optionalRole: .matcher,
-            description: "Scrollable container stableId returned by get_interface. Prefer this for scroll and scroll_to_edge."
-        ),
-        .init(
-            key: "captureLocalRef", type: .string, optionalRole: .matcher,
-            description: "Capture-local scroll container reference when supplied by the client."
-        ),
-        .init(
-            key: "container", type: .object, optionalRole: .matcher,
-            description: "Explicit scroll container selector. Use stableId or captureLocalRef.",
-            objectProperties: [
-                .init(key: "stableId", type: .string, optionalRole: .matcher),
-                .init(key: "captureLocalRef", type: .string, optionalRole: .matcher),
-            ]
-        ),
+    private static let scrollContainerFields: [FenceParameterSpec] = [
+        param(.stableId, .string), param(.captureLocalRef, .string),
     ]
 
-    /// Subtree selector for get_interface. Cuts the parsed interface tree
-    /// at one matched leaf or container node.
-    static let interfaceSubtree: FenceParameterSpec = .init(
-        key: "subtree", type: .object, optionalRole: .matcher,
-        description: """
-            Subtree selector within the parsed hierarchy. Omit for the whole tree. \
-            Pass exactly one of element or container. A leaf subtree is just that leaf; \
-            a container subtree includes the container and descendants. Ambiguous matches require ordinal.
-            """,
+    static let scrollContainerTarget: [FenceParameterSpec] = scrollContainerFields + [
+        param(.container, .object, objectProperties: scrollContainerFields),
+    ]
+
+    private static let subtreeElementProperties: [FenceParameterSpec] = [
+        param(.heistId, .string), param(.label, .string), param(.value, .string),
+        param(.identifier, .string), param(.traits, .stringArray), param(.excludeTraits, .stringArray),
+    ]
+
+    private static let subtreeContainerProperties: [FenceParameterSpec] = [
+        param(.stableId, .string),
+        param(.type, .string, enumValues: fenceEnumValues(ContainerTypeName.self)),
+        param(.label, .string), param(.value, .string), param(.identifier, .string),
+        param(.isModalBoundary, .boolean),
+    ]
+
+    static let interfaceSubtree: FenceParameterSpec = param(
+        .subtree, .object,
         objectProperties: [
-            .init(
-                key: "element", type: .object, optionalRole: .matcher,
-                description: "Leaf selector using ElementMatcher fields",
-                objectProperties: [
-                    .init(
-                        key: "heistId", type: .string, optionalRole: .matcher,
-                        description: "Leaf element heistId returned by get_interface or an action delta"
-                    ),
-                    .init(key: "label", type: .string, optionalRole: .matcher, description: "Exact leaf label"),
-                    .init(key: "value", type: .string, optionalRole: .matcher, description: "Exact leaf value"),
-                    .init(key: "identifier", type: .string, optionalRole: .matcher, description: "Exact leaf accessibility identifier"),
-                    .init(
-                        key: "traits", type: .stringArray, optionalRole: .matcher,
-                        description: "Leaf traits that must all be present"
-                    ),
-                    .init(
-                        key: "excludeTraits", type: .stringArray, optionalRole: .matcher,
-                        description: "Leaf traits that must not be present"
-                    ),
-                ]
-            ),
-            .init(
-                key: "container", type: .object, optionalRole: .matcher,
-                description: "Container selector using ContainerMatcher fields",
-                objectProperties: [
-                    .init(
-                        key: "stableId", type: .string, optionalRole: .matcher,
-                        description: "Container stableId returned on container nodes"
-                    ),
-                    .init(
-                        key: "type", type: .string, optionalRole: .matcher,
-                        description: "Container type",
-                        enumValues: fenceEnumValues(ContainerTypeName.self)
-                    ),
-                    .init(key: "label", type: .string, optionalRole: .matcher, description: "Exact semantic container label"),
-                    .init(key: "value", type: .string, optionalRole: .matcher, description: "Exact semantic container value"),
-                    .init(
-                        key: "identifier", type: .string, optionalRole: .matcher,
-                        description: "Exact semantic container accessibility identifier"
-                    ),
-                    .init(
-                        key: "isModalBoundary", type: .boolean, optionalRole: .matcher,
-                        description: "Container modal-boundary flag"
-                    ),
-                ]
-            ),
-            .init(
-                key: "ordinal", type: .integer, optionalRole: .matcher,
-                description: "0-based candidate index to disambiguate multiple matching subtree candidates",
-                minimum: 0
-            ),
+            param(.element, .object, objectProperties: subtreeElementProperties),
+            param(.container, .object, objectProperties: subtreeContainerProperties),
+            param(.ordinal, .integer, minimum: 0),
         ]
     )
 
-    /// Inline expectation for action commands.
-    static let expect: FenceParameterSpec = .init(
-        key: "expect", type: .object, optionalRole: .behaviorSwitch,
-        description: """
-            Inline verification for this action. Use {"type": "screen_changed"} or \
-            {"type": "elements_changed"} for simple expectations, or object forms like \
-            {"type": "element_updated"|"element_appeared"|"element_disappeared"|"compound", ...}. \
-            See docs/MCP-AGENT-GUIDE.md for the full expectation vocabulary and recipes.
-            """,
+    private static let expectationType = param(
+        .type, .string, required: true,
+        enumValues: ActionExpectation.wireTypeValues
+    )
+
+    private static let expectationMatcherProperties: [FenceParameterSpec] = [
+        param(.label, .string), param(.identifier, .string), param(.value, .string),
+        param(.traits, .stringArray), param(.excludeTraits, .stringArray),
+    ]
+
+    static let expect: FenceParameterSpec = param(
+        .expect, .object,
         objectProperties: [
-            .init(
-                key: "type", type: .string, required: true,
-                description: "Object-form discriminator, such as screen_changed or element_updated.",
-                enumValues: ActionExpectation.wireTypeValues
-            ),
-            .init(key: "heistId", type: .string, optionalRole: .matcher, description: "element_updated: match a specific element"),
-            .init(
-                key: "property", type: .string, optionalRole: .payload,
-                description: "element_updated: match a specific property",
-                enumValues: fenceEnumValues(ElementProperty.self)
-            ),
-            .init(key: "oldValue", type: .string, optionalRole: .payload, description: "element_updated: expected previous value"),
-            .init(key: "newValue", type: .string, optionalRole: .payload, description: "element_updated: expected new value"),
-            .init(
-                key: "matcher", type: .object, optionalRole: .matcher,
-                description: "element_appeared / element_disappeared: predicate identifying the element",
-                objectProperties: [
-                    .init(key: "label", type: .string, optionalRole: .matcher),
-                    .init(key: "identifier", type: .string, optionalRole: .matcher),
-                    .init(key: "value", type: .string, optionalRole: .matcher),
-                    .init(key: "traits", type: .stringArray, optionalRole: .matcher),
-                    .init(key: "excludeTraits", type: .stringArray, optionalRole: .matcher),
-                ]
-            ),
-            .init(
-                key: "expectations", type: .array, optionalRole: .payload,
-                description: "compound: array of sub-expectation objects",
+            expectationType,
+            param(.heistId, .string),
+            param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
+            param(.oldValue, .string),
+            param(.newValue, .string),
+            param(.matcher, .object, objectProperties: expectationMatcherProperties),
+            param(
+                .expectations, .array,
                 arrayItemType: .object,
-                arrayItemProperties: [
-                    .init(
-                        key: "type", type: .string, required: true,
-                        enumValues: ActionExpectation.wireTypeValues
-                    ),
-                ],
+                arrayItemProperties: [expectationType],
                 arrayItemAdditionalProperties: true
             ),
         ]
     )
 
-    static let expectationTimeout: FenceParameterSpec = .init(
-        key: "timeout", type: .number, optionalRole: .behaviorSwitch,
-        description: "Max seconds to wait for the expectation when expect is provided (default: 10, max: 30)",
-        maximum: 30
-    )
-
+    static let expectationTimeout = param(.timeout, .number, maximum: 30)
     static let expectation: [FenceParameterSpec] = [expect, expectationTimeout]
 
     static let unitPoint: [FenceParameterSpec] = [
-        .init(key: "x", type: .number, required: true, description: "X position (0-1)"),
-        .init(key: "y", type: .number, required: true, description: "Y position (0-1)"),
+        param(.x, .number, required: true), param(.y, .number, required: true),
+    ]
+    static let coordinateXY: [FenceParameterSpec] = [param(.x, .number), param(.y, .number)]
+    static let optionalStart: [FenceParameterSpec] = [param(.startX, .number), param(.startY, .number)]
+    static let requiredStart: [FenceParameterSpec] = [
+        param(.startX, .number, required: true), param(.startY, .number, required: true),
+    ]
+    static let optionalEnd: [FenceParameterSpec] = [param(.endX, .number), param(.endY, .number)]
+    static let requiredEnd: [FenceParameterSpec] = [
+        param(.endX, .number, required: true), param(.endY, .number, required: true),
+    ]
+    static let center: [FenceParameterSpec] = [param(.centerX, .number), param(.centerY, .number)]
+    static let gestureDuration = param(
+        .duration, .number,
+        maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
+    )
+    static let incrementCount = param(.count, .integer, minimum: 1, maximum: 100)
+
+    static let bezierSegment: [FenceParameterSpec] = [
+        param(.cp1X, .number, required: true), param(.cp1Y, .number, required: true),
+        param(.cp2X, .number, required: true), param(.cp2Y, .number, required: true),
+        param(.endX, .number, required: true), param(.endY, .number, required: true),
     ]
 }
 
@@ -695,6 +623,7 @@ extension TheFence.Command {
         let filter = FenceParameterBlocks.elementFilter
         let expect = FenceParameterBlocks.expect
         let expectation = FenceParameterBlocks.expectation
+        let duration = FenceParameterBlocks.gestureDuration
 
         switch self {
 
@@ -703,7 +632,6 @@ extension TheFence.Command {
              .listTargets, .getSessionLog:
             return []
 
-        // These take no targeting parameters but accept expect
         case .dismissKeyboard:
             return expectation
 
@@ -711,225 +639,81 @@ extension TheFence.Command {
         case .getInterface:
             return filter + [
                 FenceParameterBlocks.interfaceSubtree,
-                .init(
-                    key: "detail", type: .string, optionalRole: .behaviorSwitch,
-                    description: """
-                        Level of detail. summary (default): identity fields, traits, and actions only \
-                        — no hint, customContent, frames, or activation points. full: adds VoiceOver \
-                        hint, customContent, frame, and activation point.
-                        """,
-                    enumValues: fenceEnumValues(InterfaceDetail.self)
-                ),
-                .init(
-                    key: "elements", type: .stringArray, optionalRole: .matcher,
-                    description: "Optional list of leaf heistId handles to return as subtrees. Omit for the app accessibility hierarchy."
-                ),
+                param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
+                param(.elements, .stringArray),
             ]
 
         case .getScreen:
-            return [
-                .init(
-                    key: "output", type: .string, optionalRole: .payload,
-                    description: "File path to save PNG (omit for default artifact path; cannot be combined with inlineData=true)"
-                ),
-                .init(
-                    key: "inlineData", type: .boolean, optionalRole: .behaviorSwitch,
-                    description: """
-                        Return base64 PNG data inline instead of an artifact path \
-                        (default false; capped before delivery; not allowed inside run_batch)
-                        """
-                ),
-                .init(
-                    key: "includeInterface", type: .boolean, optionalRole: .behaviorSwitch,
-                    description: "Include the fresh visible interface tree in the response (default false)"
-                ),
-            ]
+            return [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)]
 
         case .waitForChange:
-            return [
-                expect,
-                .init(
-                    key: "timeout", type: .number, optionalRole: .behaviorSwitch,
-                    description: "Maximum wait time in seconds (default: 30, max: 30)",
-                    maximum: 30
-                ),
-            ]
+            return expectation
 
         // MARK: Gestures
         case .oneFingerTap:
-            return target + [
-                .init(key: "x", type: .number, optionalRole: .payload, description: "X coordinate"),
-                .init(key: "y", type: .number, optionalRole: .payload, description: "Y coordinate"),
-            ] + expectation
+            return target + FenceParameterBlocks.coordinateXY + expectation
 
         case .longPress:
-            return target + [
-                .init(key: "x", type: .number, optionalRole: .payload, description: "X coordinate"),
-                .init(key: "y", type: .number, optionalRole: .payload, description: "Y coordinate"),
-                .init(
-                    key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (default 0.5, max 60)",
-                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
-                ),
-            ] + expectation
+            return target + FenceParameterBlocks.coordinateXY + [duration] + expectation
 
         case .swipe:
             return target + [
-                .init(
-                    key: "direction", type: .string, optionalRole: .payload,
-                    description: "Swipe direction: up, down, left, right",
-                    enumValues: fenceEnumValues(SwipeDirection.self)
-                ),
-                .init(
-                    key: "start", type: .object, optionalRole: .payload,
-                    description: "Swipe start unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
-                    objectProperties: FenceParameterBlocks.unitPoint
-                ),
-                .init(
-                    key: "end", type: .object, optionalRole: .payload,
-                    description: "Swipe end unit point relative to element frame. (0,0)=top-left, (1,1)=bottom-right",
-                    objectProperties: FenceParameterBlocks.unitPoint
-                ),
-                .init(key: "startX", type: .number, optionalRole: .payload, description: "Start X coordinate (swipe, draw_bezier)"),
-                .init(key: "startY", type: .number, optionalRole: .payload, description: "Start Y coordinate (swipe, draw_bezier)"),
-                .init(key: "endX", type: .number, optionalRole: .payload, description: "End X coordinate (swipe, drag)"),
-                .init(key: "endY", type: .number, optionalRole: .payload, description: "End Y coordinate (swipe, drag)"),
-                .init(
-                    key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (max 60)",
-                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
-                ),
-            ] + expectation
+                param(.direction, .string, enumValues: fenceEnumValues(SwipeDirection.self)),
+                param(.start, .object, objectProperties: FenceParameterBlocks.unitPoint),
+                param(.end, .object, objectProperties: FenceParameterBlocks.unitPoint),
+            ] + FenceParameterBlocks.optionalStart + FenceParameterBlocks.optionalEnd + [duration] + expectation
 
         case .drag:
-            return target + [
-                .init(key: "endX", type: .number, required: true, description: "End X coordinate (swipe, drag)"),
-                .init(key: "endY", type: .number, required: true, description: "End Y coordinate (swipe, drag)"),
-                .init(key: "startX", type: .number, optionalRole: .payload, description: "Start X coordinate (swipe, draw_bezier)"),
-                .init(key: "startY", type: .number, optionalRole: .payload, description: "Start Y coordinate (swipe, draw_bezier)"),
-                .init(
-                    key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (max 60)",
-                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
-                ),
-            ] + expectation
+            return target + FenceParameterBlocks.requiredEnd + FenceParameterBlocks.optionalStart + [duration] + expectation
 
         case .pinch:
-            return target + [
-                .init(key: "scale", type: .number, required: true, description: "Pinch scale factor (>1 zoom in, <1 zoom out)"),
-                .init(
-                    key: "centerX", type: .number, optionalRole: .payload,
-                    description: "Center X (pinch, rotate, two_finger_tap; defaults to element center)"
-                ),
-                .init(
-                    key: "centerY", type: .number, optionalRole: .payload,
-                    description: "Center Y (pinch, rotate, two_finger_tap; defaults to element center)"
-                ),
-                .init(key: "spread", type: .number, optionalRole: .payload, description: "Finger spread distance (pinch, two_finger_tap)"),
-                .init(
-                    key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (max 60)",
-                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
-                ),
+            return target + [param(.scale, .number, required: true)] + FenceParameterBlocks.center + [
+                param(.spread, .number), duration,
             ] + expectation
 
         case .rotate:
-            return target + [
-                .init(key: "angle", type: .number, required: true, description: "Rotation angle in radians"),
-                .init(
-                    key: "centerX", type: .number, optionalRole: .payload,
-                    description: "Center X (pinch, rotate, two_finger_tap; defaults to element center)"
-                ),
-                .init(
-                    key: "centerY", type: .number, optionalRole: .payload,
-                    description: "Center Y (pinch, rotate, two_finger_tap; defaults to element center)"
-                ),
-                .init(key: "radius", type: .number, optionalRole: .payload, description: "Rotation radius (rotate)"),
-                .init(
-                    key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (max 60)",
-                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
-                ),
+            return target + [param(.angle, .number, required: true)] + FenceParameterBlocks.center + [
+                param(.radius, .number), duration,
             ] + expectation
 
         case .twoFingerTap:
-            return target + [
-                .init(
-                    key: "centerX", type: .number, optionalRole: .payload,
-                    description: "Center X (pinch, rotate, two_finger_tap; defaults to element center)"
-                ),
-                .init(
-                    key: "centerY", type: .number, optionalRole: .payload,
-                    description: "Center Y (pinch, rotate, two_finger_tap; defaults to element center)"
-                ),
-                .init(key: "spread", type: .number, optionalRole: .payload, description: "Finger spread distance (pinch, two_finger_tap)"),
-            ] + expectation
+            return target + FenceParameterBlocks.center + [param(.spread, .number)] + expectation
 
         case .drawPath:
             return [
-                .init(
-                    key: "points", type: .array, required: true,
-                    description: "Array of {x, y} waypoints (draw_path), 2...10,000 points",
+                param(
+                    .points, .array, required: true,
                     minItems: 2,
                     maxItems: TheFence.DecodeLimits.maxDrawPathPoints,
                     arrayItemType: .object,
-                    arrayItemProperties: [
-                        .init(key: "x", type: .number, required: true, description: "X coordinate"),
-                        .init(key: "y", type: .number, required: true, description: "Y coordinate"),
-                    ]
+                    arrayItemProperties: FenceParameterBlocks.unitPoint
                 ),
-                .init(
-                    key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (draw_path, max 60)",
-                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
-                ),
-                .init(key: "velocity", type: .number, optionalRole: .payload, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
+                duration,
+                param(.velocity, .number),
             ] + expectation
 
         case .drawBezier:
-            return [
-                .init(key: "startX", type: .number, required: true, description: "Start X coordinate (swipe, draw_bezier)"),
-                .init(key: "startY", type: .number, required: true, description: "Start Y coordinate (swipe, draw_bezier)"),
-                .init(
-                    key: "segments", type: .array, required: true,
-                    description: "Array of bezier segments: {cp1X, cp1Y, cp2X, cp2Y, endX, endY} (draw_bezier), 1...1,000 segments",
+            return FenceParameterBlocks.requiredStart + [
+                param(
+                    .segments, .array, required: true,
                     minItems: 1,
                     maxItems: TheFence.DecodeLimits.maxDrawBezierSegments,
                     arrayItemType: .object,
-                    arrayItemProperties: [
-                        .init(key: "cp1X", type: .number, required: true, description: "First control point X coordinate"),
-                        .init(key: "cp1Y", type: .number, required: true, description: "First control point Y coordinate"),
-                        .init(key: "cp2X", type: .number, required: true, description: "Second control point X coordinate"),
-                        .init(key: "cp2Y", type: .number, required: true, description: "Second control point Y coordinate"),
-                        .init(key: "endX", type: .number, required: true, description: "Segment end X coordinate"),
-                        .init(key: "endY", type: .number, required: true, description: "Segment end Y coordinate"),
-                    ]
+                    arrayItemProperties: FenceParameterBlocks.bezierSegment
                 ),
-                .init(
-                    key: "samplesPerSegment", type: .integer, optionalRole: .payload,
-                    description: "Bezier curve sampling resolution (draw_bezier), 2...1,000; generated path max 50,000 points",
+                param(
+                    .samplesPerSegment, .integer,
                     minimum: Double(TheFence.DecodeLimits.minDrawBezierSamplesPerSegment),
                     maximum: Double(TheFence.DecodeLimits.maxDrawBezierSamplesPerSegment)
                 ),
-                .init(
-                    key: "duration", type: .number, optionalRole: .payload,
-                    description: "Duration in seconds (draw_bezier, max 60)",
-                    maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
-                ),
-                .init(key: "velocity", type: .number, optionalRole: .payload, description: "Drawing velocity in points/sec (draw_path, draw_bezier)"),
+                duration,
+                param(.velocity, .number),
             ] + expectation
 
         // MARK: Scroll
         case .scroll:
             return scrollContainerTarget + target + [
-                .init(
-                    key: "direction", type: .string, optionalRole: .payload,
-                    description: """
-                        Scroll direction. Defaults to down. next/previous are page-only directions for mode=page; \
-                        mode=search accepts only up, down, left, right and is validated server-side.
-                        """,
-                    enumValues: fenceEnumValues(ScrollDirection.self)
-                ),
+                param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self)),
             ] + expectation
 
         case .scrollToVisible:
@@ -937,219 +721,100 @@ extension TheFence.Command {
 
         case .elementSearch:
             return target + [
-                .init(
-                    key: "direction", type: .string, optionalRole: .payload,
-                    description: "Scroll search direction: down, up, left, right",
-                    enumValues: fenceEnumValues(ScrollSearchDirection.self)
-                ),
+                param(.direction, .string, enumValues: fenceEnumValues(ScrollSearchDirection.self)),
             ] + expectation
 
         case .scrollToEdge:
             return scrollContainerTarget + target + [
-                .init(
-                    key: "edge", type: .string, optionalRole: .payload,
-                    description: "Edge to scroll to. Defaults to top.",
-                    enumValues: fenceEnumValues(ScrollEdge.self)
-                ),
+                param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self)),
             ] + expectation
 
         // MARK: Accessibility actions
         case .activate:
-            return target + [
-                .init(
-                    key: "action", type: .string, optionalRole: .payload,
-                    description: "Named action (e.g. \"increment\", \"decrement\", or a custom action name)"
-                ),
-                .init(
-                    key: "count", type: .integer, optionalRole: .behaviorSwitch,
-                    description: "Repeat increment/decrement this many times. Omit for 1.",
-                    minimum: 1,
-                    maximum: 100
-                ),
-            ] + expectation
+            return target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation
 
         case .increment, .decrement:
-            return target + [
-                .init(
-                    key: "count", type: .integer, optionalRole: .behaviorSwitch,
-                    description: "Repeat increment/decrement this many times. Omit for 1.",
-                    minimum: 1,
-                    maximum: 100
-                ),
-            ] + expectation
+            return target + [FenceParameterBlocks.incrementCount] + expectation
 
         case .performCustomAction:
-            return target + [
-                .init(
-                    key: "container", type: .object, optionalRole: .matcher,
-                    description: "Container selector for custom actions exposed by a container node"
-                ),
-                .init(key: "action", type: .string, required: true, description: "Custom accessibility action name"),
-            ] + expectation
+            return target + [param(.container, .object), param(.action, .string, required: true)] + expectation
 
         case .rotor:
             return target + [
-                .init(key: "rotor", type: .string, optionalRole: .payload, description: "Rotor name from the element's rotors list"),
-                .init(
-                    key: "rotorIndex", type: .integer, optionalRole: .payload,
-                    description: "Zero-based rotor index when names are omitted or ambiguous",
-                    minimum: 0
-                ),
-                .init(
-                    key: "direction", type: .string, optionalRole: .payload,
-                    description: "Rotor movement direction. Defaults to next.",
-                    enumValues: fenceEnumValues(RotorDirection.self)
-                ),
-                .init(
-                    key: "currentHeistId", type: .string, optionalRole: .payload,
-                    description: "Optional current item heistId; pass the previous result to continue through a rotor"
-                ),
-                .init(
-                    key: "currentTextStartOffset", type: .integer, optionalRole: .payload,
-                    description: "Current text-range start offset for continuing through text-range rotor results",
-                    minimum: 0
-                ),
-                .init(
-                    key: "currentTextEndOffset", type: .integer, optionalRole: .payload,
-                    description: "Current text-range end offset for continuing through text-range rotor results",
-                    minimum: 0
-                ),
+                param(.rotor, .string),
+                param(.rotorIndex, .integer, minimum: 0),
+                param(.direction, .string, enumValues: fenceEnumValues(RotorDirection.self)),
+                param(.currentHeistId, .string),
+                param(.currentTextStartOffset, .integer, minimum: 0),
+                param(.currentTextEndOffset, .integer, minimum: 0),
             ] + expectation
 
         // MARK: Text / keyboard
         case .typeText:
-            return target + [
-                .init(key: "text", type: .string, required: true, description: "Text to type character-by-character", minLength: 1),
-            ] + expectation
+            return target + [param(.text, .string, required: true, minLength: 1)] + expectation
 
         case .editAction:
-            return [
-                .init(
-                    key: "action", type: .string, required: true,
-                    description: "Action to perform",
-                    enumValues: fenceEnumValues(EditAction.self)
-                ),
-            ] + expectation
+            return [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + expectation
 
         // MARK: Pasteboard
         case .setPasteboard:
-            return [
-                .init(key: "text", type: .string, required: true, description: "Text to write to the pasteboard"),
-            ] + expectation
+            return [param(.text, .string, required: true)] + expectation
 
         case .getPasteboard:
             return []
 
         // MARK: Wait
         case .waitFor:
-            return target + [
-                .init(key: "absent", type: .boolean, optionalRole: .behaviorSwitch, description: "Wait for element to NOT exist (default: false)"),
-                .init(
-                    key: "timeout", type: .number, optionalRole: .behaviorSwitch,
-                    description: "Max seconds to wait (default: 10, max: 30)",
-                    maximum: 30
-                ),
-                expect,
-            ]
+            return target + [param(.absent, .boolean), FenceParameterBlocks.expectationTimeout, expect]
 
         // MARK: Recording
         case .startRecording:
             return [
-                .init(key: "fps", type: .integer, optionalRole: .payload, description: "Frames per second (default: 8, range: 1-15)", minimum: 1, maximum: 15),
-                .init(
-                    key: "scale", type: .number, optionalRole: .payload,
-                    description: "Resolution scale factor (default: 1.0, range: 0.25-1.0)",
-                    minimum: 0.25,
-                    maximum: 1.0
-                ),
-                .init(key: "max_duration", type: .number, optionalRole: .payload, description: "Maximum recording duration in seconds (default: 60)"),
-                .init(
-                    key: "inactivity_timeout", type: .number, optionalRole: .behaviorSwitch,
-                    description: "Optional early-stop after N seconds of no interactions; omitted disables inactivity auto-stop"
-                ),
+                param(.fps, .integer, minimum: 1, maximum: 15),
+                param(.scale, .number, minimum: 0.25, maximum: 1.0),
+                param(.maxDuration, .number),
+                param(.inactivityTimeout, .number),
             ]
 
         case .stopRecording:
-            return [
-                .init(key: "output", type: .string, optionalRole: .payload, description: "File path to save MP4 (omit for default artifact path)"),
-                .init(
-                    key: "inlineData", type: .boolean, optionalRole: .behaviorSwitch,
-                    description: "Include base64 MP4 video data in the response (default false; capped before delivery)"
-                ),
-                .init(
-                    key: "includeInteractionLog", type: .boolean, optionalRole: .behaviorSwitch,
-                    description: "Include the full interaction log in the response (default false; capped before delivery)"
-                ),
-            ]
+            return [param(.output, .string), param(.inlineData, .boolean), param(.includeInteractionLog, .boolean)]
 
         // MARK: Batch
         case .runBatch:
             return [
-                .init(
-                    key: "steps", type: .array, required: true,
-                    description: """
-                    Ordered list of batch-executable canonical Fence command requests to execute \
-                    (max 100 steps; max request size 1 MB; max nesting depth 32)
-                    """,
+                param(
+                    .steps, .array, required: true,
                     minItems: 1,
                     maxItems: TheFence.DecodeLimits.maxRunBatchSteps,
                     arrayItemType: .object,
                     arrayItemProperties: [
-                        .init(
-                            key: "command", type: .string, required: true,
-                            description: "Canonical TheFence.Command name (e.g. activate, swipe, element_search, dismiss_keyboard). " +
-                                "Grouped MCP tool names and selector shapes are not accepted inside batches.",
+                        param(
+                            .command, .string, required: true,
                             enumValues: Self.batchExecutableCases.map(\.rawValue)
                         ),
                         expect,
                     ],
                     arrayItemAdditionalProperties: true
                 ),
-                .init(
-                    key: "policy", type: .string, optionalRole: .behaviorSwitch,
-                    description: "Batch policy: stop_on_error (default) or continue_on_error",
-                    enumValues: fenceEnumValues(TheFence.BatchPolicy.self)
-                ),
+                param(.policy, .string, enumValues: fenceEnumValues(TheFence.BatchPolicy.self)),
             ]
 
         // MARK: Connection
         case .connect:
-            return [
-                .init(key: "target", type: .string, optionalRole: .matcher, description: "Named target from .buttonheist.json config file"),
-                .init(key: "device", type: .string, optionalRole: .matcher, description: "Direct host:port address (e.g. 127.0.0.1:1455)"),
-                .init(key: "token", type: .string, optionalRole: .payload, description: "Auth token (overrides config file token if both provided)"),
-            ]
+            return [param(.target, .string), param(.device, .string), param(.token, .string)]
 
         // MARK: Session management
         case .archiveSession:
-            return [
-                .init(
-                    key: "delete_source", type: .boolean, optionalRole: .behaviorSwitch,
-                    description: "Delete the session directory after archiving (default: false)"
-                ),
-            ]
+            return [param(.deleteSource, .boolean)]
 
         case .startHeist:
-            return [
-                .init(
-                    key: "app", type: .string, optionalRole: .payload,
-                    description: "Bundle ID of the app being recorded (default: \(Defaults.demoAppBundleID))"
-                ),
-                .init(
-                    key: "identifier", type: .string, optionalRole: .payload,
-                    description: "Session name for the recording (default: heist). Used as directory name if a new session is created."
-                ),
-            ]
+            return [param(.app, .string), param(.identifier, .string)]
 
         case .stopHeist:
-            return [
-                .init(key: "output", type: .string, required: true, description: "File path to write the .heist file"),
-            ]
+            return [param(.output, .string, required: true)]
 
         case .playHeist:
-            return [
-                .init(key: "input", type: .string, required: true, description: "Path to the .heist file to play back"),
-            ]
+            return [param(.input, .string, required: true)]
         }
     }
 }

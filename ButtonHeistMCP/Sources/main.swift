@@ -66,7 +66,7 @@ struct ButtonHeistMCPServer {
 
     private static func matcherParameterKeys(for command: TheFence.Command) -> [String] {
         command.parameters
-            .filter { $0.optionalRole == .matcher }
+            .prefix { $0.key != FenceParameterKey.action.rawValue }
             .map(\.key)
     }
 
