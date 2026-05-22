@@ -857,8 +857,7 @@ final class TheBookKeeperTests: XCTestCase {
         try bookKeeper.logResponse(
             requestId: "req-42",
             status: .ok,
-            durationMilliseconds: 120,
-            artifact: "screenshots/001-get_screen.png"
+            durationMilliseconds: 120
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
@@ -873,19 +872,18 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(commandEntry.type, "command")
         XCTAssertEqual(responseEntry.requestId, "req-42")
         XCTAssertEqual(responseEntry.type, "response")
-        XCTAssertEqual(responseEntry.artifact, "screenshots/001-get_screen.png")
+        XCTAssertNil(responseEntry.artifact)
         XCTAssertEqual(responseEntry.durationMilliseconds, 120)
     }
 
     @ButtonHeistActor
-    func testLogResponseWithArtifactTracksPath() async throws {
+    func testLogResponseDoesNotTrackArtifactPath() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        try bookKeeper.beginSession(identifier: "test-artifact-log")
+        try bookKeeper.beginSession(identifier: "test-response-artifact-log")
         try bookKeeper.logResponse(
             requestId: "r1",
             status: .ok,
-            durationMilliseconds: 50,
-            artifact: "recordings/001-stop_recording.mp4"
+            durationMilliseconds: 50
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
@@ -893,7 +891,8 @@ final class TheBookKeeperTests: XCTestCase {
         let lines = try sessionLogLines(for: session)
         XCTAssertEqual(lines.count, 2) // header + response
         let response = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[1])
-        XCTAssertEqual(response.artifact, "recordings/001-stop_recording.mp4")
+        XCTAssertNil(response.artifact)
+        XCTAssertFalse(lines[1].contains("artifact"))
     }
 
     @ButtonHeistActor

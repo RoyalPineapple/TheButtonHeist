@@ -462,7 +462,6 @@ struct ResponseLogEntry: Encodable {
     let requestId: String
     let status: ResponseStatus
     let durationMilliseconds: Int
-    let artifact: String?
     let error: String?
 
     private enum CodingKeys: String, CodingKey {
@@ -471,7 +470,6 @@ struct ResponseLogEntry: Encodable {
         case requestId
         case status
         case durationMilliseconds = "duration_ms"
-        case artifact
         case error
     }
 }
