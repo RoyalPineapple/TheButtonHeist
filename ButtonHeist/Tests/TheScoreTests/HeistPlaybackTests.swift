@@ -252,42 +252,6 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testHeistValueFromAny() {
-        XCTAssertEqual(HeistValue.from("hello"), .string("hello"))
-        XCTAssertEqual(HeistValue.from(42 as Int), .int(42))
-        XCTAssertEqual(HeistValue.from(3.14), .double(3.14))
-        XCTAssertEqual(HeistValue.from(true), .bool(true))
-        XCTAssertNil(HeistValue.from(Data()))
-    }
-
-    func testHeistValueFromArrayFailsOnUnconvertibleElement() {
-        let mixedArray: [Any] = ["hello", 42, Data()]
-        XCTAssertNil(HeistValue.from(mixedArray))
-    }
-
-    func testHeistValueFromDictFailsOnUnconvertibleValue() {
-        let mixedDict: [String: Any] = ["name": "test", "data": Data()]
-        XCTAssertNil(HeistValue.from(mixedDict))
-    }
-
-    func testHeistValueFromValidArraySucceeds() {
-        let validArray: [Any] = ["hello", 42, true]
-        let expected: HeistValue = .array([.string("hello"), .int(42), .bool(true)])
-        XCTAssertEqual(HeistValue.from(validArray), expected)
-    }
-
-    func testHeistValueFromValidDictSucceeds() {
-        let validDict: [String: Any] = ["name": "test", "count": 3]
-        let result = HeistValue.from(validDict)
-        XCTAssertNotNil(result)
-        if case .object(let objectValue) = result {
-            XCTAssertEqual(objectValue["name"], .string("test"))
-            XCTAssertEqual(objectValue["count"], .int(3))
-        } else {
-            XCTFail("Expected .object case")
-        }
-    }
-
     func testHeistValueToAny() {
         XCTAssertEqual(HeistValue.string("hello").toAny() as? String, "hello")
         XCTAssertEqual(HeistValue.int(42).toAny() as? Int, 42)
@@ -311,23 +275,7 @@ final class HeistPlaybackTests: XCTestCase {
         let metadata = RecordedMetadata(
             heistId: "button_submit",
             frame: RecordedFrame(x: 10, y: 20, width: 100, height: 44),
-            coordinateOnly: false,
-            unsupportedArguments: [
-                RecordedUnsupportedInput(
-                    name: "metadata",
-                    valueType: "Data",
-                    reason: "not JSON-compatible; omitted from replay arguments"
-                ),
-            ],
-            caps: [
-                RecordedInputCap(
-                    name: "timeout",
-                    requested: .double(60.5),
-                    applied: .double(30.5),
-                    maximum: .double(30.5),
-                    reason: "timeout capped during recording"
-                ),
-            ]
+            coordinateOnly: false
         )
         let data = try JSONEncoder().encode(metadata)
         let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
@@ -336,10 +284,6 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.frame?.x, 10)
         XCTAssertEqual(decoded.frame?.height, 44)
         XCTAssertEqual(decoded.coordinateOnly, false)
-        XCTAssertEqual(decoded.unsupportedArguments?.first?.name, "metadata")
-        XCTAssertEqual(decoded.unsupportedArguments?.first?.valueType, "Data")
-        XCTAssertEqual(decoded.caps?.first?.name, "timeout")
-        XCTAssertEqual(decoded.caps?.first?.applied, .double(30.5))
     }
 
     func testRecordedMetadataCoordinateOnly() throws {

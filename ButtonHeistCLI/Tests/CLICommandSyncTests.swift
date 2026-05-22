@@ -404,9 +404,9 @@ final class CLICommandSyncTests: XCTestCase {
                 "\(aliasName) should resolve through TheFence.Command.humanCommandAliases"
             )
             for (key, value) in alias.parameters {
-                XCTAssertEqual(
-                    request[key].flatMap(HeistValue.from),
-                    value,
+                assertRequestValue(
+                    request[key],
+                    equals: value,
                     "\(aliasName) should apply canonical alias parameter \(key.rawValue)"
                 )
             }
@@ -744,6 +744,41 @@ final class CLICommandSyncTests: XCTestCase {
         let path = url.path
         guard path.hasPrefix(rootPath + "/") else { return path }
         return String(path.dropFirst(rootPath.count + 1))
+    }
+
+    private func assertRequestValue(
+        _ actual: Any?,
+        equals expected: HeistValue,
+        _ message: @autoclosure () -> String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        switch expected {
+        case .string(let expectedValue):
+            XCTAssertEqual(actual as? String, expectedValue, message(), file: file, line: line)
+        case .int(let expectedValue):
+            XCTAssertEqual(actual as? Int, expectedValue, message(), file: file, line: line)
+        case .double(let expectedValue):
+            XCTAssertEqual(actual as? Double, expectedValue, message(), file: file, line: line)
+        case .bool(let expectedValue):
+            XCTAssertEqual(actual as? Bool, expectedValue, message(), file: file, line: line)
+        case .array(let expectedValue):
+            XCTAssertEqual(
+                (actual as? [Any])?.map { String(describing: $0) },
+                expectedValue.map { String(describing: $0.toAny()) },
+                message(),
+                file: file,
+                line: line
+            )
+        case .object(let expectedValue):
+            XCTAssertEqual(
+                (actual as? [String: Any])?.mapValues { String(describing: $0) },
+                expectedValue.mapValues { String(describing: $0.toAny()) },
+                message(),
+                file: file,
+                line: line
+            )
+        }
     }
 
     private func repositoryRoot() -> URL {

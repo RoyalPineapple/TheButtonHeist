@@ -97,7 +97,7 @@ extension ClientMessage {
         }
         switch type {
         case .clientHello: return .clientHello
-        case .requestInterface: return .requestInterface(try payloadDecoder.map(InterfaceQuery.init(from:)) ?? InterfaceQuery())
+        case .requestInterface: return .requestInterface(try InterfaceQuery(from: try payload()))
         case .ping: return .ping
         case .status: return .status
         case .resignFirstResponder: return .resignFirstResponder
