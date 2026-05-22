@@ -105,6 +105,68 @@ final class ElementActionRequestPayloadTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testEditActionAndPasteboardRequestsDecodeTypedTargets() async throws {
+        let edit = try parsedPayload(.editAction, request: [
+            "command": "edit_action",
+            "action": "selectAll",
+        ])
+        guard case .editAction(let editTarget) = edit else {
+            return XCTFail("Expected edit_action payload")
+        }
+        XCTAssertEqual(editTarget.action, .selectAll)
+
+        let pasteboard = try parsedPayload(.setPasteboard, request: [
+            "command": "set_pasteboard",
+            "text": "copied value",
+        ])
+        guard case .setPasteboard(let pasteboardTarget) = pasteboard else {
+            return XCTFail("Expected set_pasteboard payload")
+        }
+        XCTAssertEqual(pasteboardTarget.text, "copied value")
+    }
+
+    @ButtonHeistActor
+    func testWaitForRequestDecodesTypedTargetOptions() async throws {
+        let payload = try parsedPayload(.waitFor, request: [
+            "command": "wait_for",
+            "label": "Ready",
+            "absent": true,
+            "timeout": 1.5,
+        ])
+
+        guard case .waitFor(let target) = payload else {
+            return XCTFail("Expected wait_for payload")
+        }
+        assertMatcherTarget(target.elementTarget, label: "Ready")
+        XCTAssertEqual(target.absent, true)
+        XCTAssertEqual(target.timeout, 1.5)
+    }
+
+    @ButtonHeistActor
+    func testScrollRequestsDecodeTypedContainerAndDefaults() async throws {
+        let scroll = try parsedPayload(.scroll, request: [
+            "command": "scroll",
+            "container": ["stableId": "scroll-root", "captureLocalRef": "container-1"],
+        ])
+        guard case .scroll(.scroll(let scrollTarget)) = scroll else {
+            return XCTFail("Expected scroll payload")
+        }
+        XCTAssertEqual(scrollTarget.direction, .down)
+        XCTAssertEqual(scrollTarget.containerTarget?.stableId, "scroll-root")
+        XCTAssertEqual(scrollTarget.containerTarget?.captureLocalRef, "container-1")
+
+        let edge = try parsedPayload(.scrollToEdge, request: [
+            "command": "scroll_to_edge",
+            "stableId": "scroll-root",
+        ])
+        guard case .scroll(.scrollToEdge(let edgeTarget)) = edge else {
+            return XCTFail("Expected scroll_to_edge payload")
+        }
+        XCTAssertEqual(edgeTarget.edge, .top)
+        XCTAssertEqual(edgeTarget.containerTarget?.stableId, "scroll-root")
+    }
+
+    @ButtonHeistActor
     func testActivateMissingTargetKeepsContractDiagnostics() async throws {
         let (fence, _) = makeConnectedFence()
         let response = try await fence.execute(request: ["command": "activate"])
