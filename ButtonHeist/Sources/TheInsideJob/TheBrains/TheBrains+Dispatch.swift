@@ -86,7 +86,9 @@ extension TheBrains {
         case .scroll(let target):
             return await performInteraction(command: message) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
-            return await performScrollToVisible(target: target, command: message)
+            return await performInteraction(command: message) { recordedScreen in
+                await self.navigation.executeScrollToVisible(target, recordedScreen: recordedScreen)
+            }
         case .elementSearch(let target):
             return await performElementSearch(target: target, command: message)
         case .scrollToEdge(let target):
@@ -144,31 +146,6 @@ extension TheBrains {
         let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
         let result = await interaction(recordedScreen)
-
-        return await actionResultWithDelta(
-            success: result.success,
-            method: result.method,
-            message: result.message,
-            payload: result.payload,
-            errorKind: Self.actionErrorKind(for: result),
-            before: before
-        )
-    }
-
-    /// Scroll-to-visible can use an off-screen entry from the most recent
-    /// exploration. Preserve that union across the dispatch refresh that
-    /// otherwise narrows `currentScreen` back to the latest parsed page.
-    func performScrollToVisible(
-        target: ScrollToVisibleTarget,
-        command: ClientMessage
-    ) async -> ActionResult {
-        let screenBeforeRefresh = stash.currentScreen
-        guard refresh() != nil else {
-            return treeUnavailableResult(method: Self.diagnosticMethod(for: command))
-        }
-        let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
-        let before = captureBeforeState()
-        let result = await navigation.executeScrollToVisible(target, recordedScreen: recordedScreen)
 
         return await actionResultWithDelta(
             success: result.success,

@@ -6,7 +6,7 @@ import XCTest
 
 /// Deterministic tests for `SettleSession` — the multi-cycle AX-tree
 /// settle loop. These do not stand up a UIKit hierarchy; they drive the
-/// loop's closure-based `parseProvider` / `topVCProvider` / `sleeper`
+/// loop's closure-based `parseProvider` / `tripwireSignalProvider` / `sleeper`
 /// seams with scripted sequences and assert the resulting `SettleOutcome`,
 /// observed `SettleEvent`s, and accumulated `elementsByKey`.
 @MainActor
@@ -47,9 +47,9 @@ final class SettleSessionTests: XCTestCase {
     /// entries feed the post-sleep parses. The last entry is repeated
     /// indefinitely if the loop runs longer than the script.
     ///
-    /// `topVCSequence` feeds the legacy top-VC Tripwire seam inside the loop —
-    /// the baseline top-VC is passed explicitly to `run(...)` so the
-    /// provider never has to answer for the pre-action snapshot.
+    /// `topVCSequence` feeds the Tripwire signal seam inside the loop.
+    /// The baseline signal is passed explicitly to `run(...)` so the provider
+    /// never has to answer for the pre-action snapshot.
     private func makeSession(
         script: [Screen?],
         cyclesRequired: Int = 3,
@@ -61,11 +61,19 @@ final class SettleSessionTests: XCTestCase {
         let topVCBox = ScriptBox(script: topVCSequence ?? [nil])
         return SettleSession(
             parseProvider: { scriptBox.next() },
-            topVCProvider: { topVCBox.next() },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: topVCBox.next()) },
             sleeper: { _ in /* no real sleep; loop runs at wall-clock pace */ },
             cyclesRequired: cyclesRequired,
             cycleIntervalMs: cycleIntervalMs,
             timeoutMs: timeoutMs
+        )
+    }
+
+    private static func tripwireSignal(topmostVC: ObjectIdentifier?) -> TheTripwire.TripwireSignal {
+        TheTripwire.TripwireSignal(
+            topmostVC: topmostVC,
+            navigation: .empty,
+            windowStack: .empty
         )
     }
 
@@ -104,7 +112,10 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 3
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .settled = outcome.outcome {
             // Expected.
@@ -123,7 +134,10 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 2
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .settled = outcome.outcome {
             // Expected: a no-change parse is valid stability proof.
@@ -149,7 +163,7 @@ final class SettleSessionTests: XCTestCase {
                     self.makeElement(label: "label-\(value)", traits: .staticText)
                 ])
             },
-            topVCProvider: { nil },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
             // Real (small) sleeps so wall clock advances; a no-op sleeper
             // would let the loop reach a finite-script end before the
             // timeout fires.
@@ -160,7 +174,10 @@ final class SettleSessionTests: XCTestCase {
             timeoutMs: 50
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .timedOut = outcome.outcome {
             // Expected.
@@ -188,7 +205,10 @@ final class SettleSessionTests: XCTestCase {
             topVCSequence: topVCSeq
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .settled = outcome.outcome {
             // Expected.
@@ -220,7 +240,10 @@ final class SettleSessionTests: XCTestCase {
             topVCSequence: [livePostTransition, livePostTransition, livePostTransition, livePostTransition]
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
         _ = liveObject // keep alive
 
         if case .settled = outcome.outcome {
@@ -257,7 +280,10 @@ final class SettleSessionTests: XCTestCase {
             topVCSequence: [baseline, livePostTransition, livePostTransition, livePostTransition, livePostTransition]
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: baseline)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: baseline)
+        )
         _ = baselineObject // keep alive
         _ = liveObject // keep alive
 
@@ -297,7 +323,10 @@ final class SettleSessionTests: XCTestCase {
             topVCSequence: [baseline, baseline, baseline, baseline]
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: baseline)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: baseline)
+        )
         _ = baselineObject // keep alive
 
         if case .settled = outcome.outcome {
@@ -324,7 +353,10 @@ final class SettleSessionTests: XCTestCase {
             topVCSequence: [livePostTransition]
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: baseline)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: baseline)
+        )
         _ = baselineObject // keep alive
         _ = liveObject // keep alive
 
@@ -342,14 +374,17 @@ final class SettleSessionTests: XCTestCase {
         let stable = makeParseResult([makeElement(label: "A")])
         let session = SettleSession(
             parseProvider: { stable },
-            topVCProvider: { nil },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ in throw CancellationError() },
             cyclesRequired: 3,
             cycleIntervalMs: 1,
             timeoutMs: 200
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .cancelled = outcome.outcome {
             // Expected.
@@ -365,14 +400,17 @@ final class SettleSessionTests: XCTestCase {
         let stable = makeParseResult([makeElement(label: "A")])
         let session = SettleSession(
             parseProvider: { stable },
-            topVCProvider: { nil },
+            tripwireSignalProvider: { Self.tripwireSignal(topmostVC: nil) },
             sleeper: { _ in throw DummyError() },
             cyclesRequired: 3,
             cycleIntervalMs: 1,
             timeoutMs: 200
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .timedOut = outcome.outcome {
             // Expected.
@@ -401,7 +439,10 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 3
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .settled = outcome.outcome {
             // Expected.
@@ -428,7 +469,10 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 3
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .settled = outcome.outcome {
             // Expected.
@@ -474,7 +518,10 @@ final class SettleSessionTests: XCTestCase {
             cyclesRequired: 2
         )
 
-        let outcome = await session.run(start: CFAbsoluteTimeGetCurrent(), baselineTopVC: nil)
+        let outcome = await session.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: Self.tripwireSignal(topmostVC: nil)
+        )
 
         if case .settled = outcome.outcome {
             // Expected.
