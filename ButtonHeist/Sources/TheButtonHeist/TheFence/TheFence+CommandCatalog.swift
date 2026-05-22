@@ -533,9 +533,8 @@ extension TheFence.Command {
         switch toolName {
         case Self.gestureMCPToolName:
             return MCPToolSelector(
-                parameter: .init(
-                    key: "type", type: .string, required: true,
-                    description: "Gesture type",
+                parameter: param(
+                    .type, .string, required: true,
                     enumValues: fenceEnumValues(GestureType.self)
                 ),
                 commandByValue: Dictionary(
@@ -548,9 +547,8 @@ extension TheFence.Command {
 
         case Self.scroll.rawValue:
             return MCPToolSelector(
-                parameter: .init(
-                    key: "mode", type: .string, optionalRole: .behaviorSwitch,
-                    description: "Scroll mode (default: page)",
+                parameter: param(
+                    .mode, .string,
                     enumValues: fenceEnumValues(ScrollMode.self)
                 ),
                 defaultValue: ScrollMode.page.rawValue,
@@ -563,9 +561,8 @@ extension TheFence.Command {
         case Self.editAction.rawValue:
             let dismissValue = "dismiss"
             return MCPToolSelector(
-                parameter: .init(
-                    key: "action", type: .string, required: true,
-                    description: "Action to perform",
+                parameter: param(
+                    .action, .string, required: true,
                     enumValues: fenceEnumValues(EditAction.self) + [dismissValue]
                 ),
                 commandByValue: Dictionary(

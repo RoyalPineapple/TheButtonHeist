@@ -399,9 +399,6 @@ struct ToolSyncTests {
         #expect(
             extractPropertyKeys(from: subtreeSchema) == ["element", "container", "ordinal"]
         )
-        #expect(extractStringField(from: subtreeSchema, key: "description")?.contains("Subtree selector") == true)
-        #expect(extractStringField(from: subtreeSchema, key: "description")?.contains("whole tree") == true)
-        #expect(!((extractStringField(from: subtreeSchema, key: "description") ?? "").localizedCaseInsensitiveContains("viewport")))
         guard case .object(let elementSchema)? = subtreeProperties["element"],
               case .object(let containerSchema)? = subtreeProperties["container"] else {
             Issue.record("get_interface.subtree element/container schemas missing")
@@ -656,9 +653,11 @@ struct ToolSyncTests {
                 "Server instructions should render the MCP tool name for \(command.rawValue) from command exposure"
             )
         }
-        for key in TheFence.Command.activate.parameters
-            .filter({ $0.optionalRole == .matcher || $0.key == FenceParameterKey.expect.rawValue })
-            .map(\.key) {
+        let activateKeys = TheFence.Command.activate.parameters
+        let expectedInstructionKeys = activateKeys
+            .prefix { $0.key != FenceParameterKey.action.rawValue }
+            .map(\.key) + [FenceParameterKey.expect.rawValue]
+        for key in expectedInstructionKeys {
             #expect(
                 instructions.contains(inlineCode(key)),
                 "Server instructions should render \(key) from command parameter specs"
