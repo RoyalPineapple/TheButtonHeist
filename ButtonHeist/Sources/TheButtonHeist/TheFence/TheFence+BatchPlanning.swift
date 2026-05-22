@@ -44,7 +44,7 @@ extension TheFence {
             }
             do {
                 let request = try parseRequest(operation: operation)
-                return .planned(try batchStepPlan(operation: operation, request: request))
+                return .planned(try batchStepPlan(index: index, operation: operation, request: request))
             } catch let error as SchemaValidationError {
                 return .invalid(
                     commandName: operation.command.rawValue,
@@ -107,12 +107,14 @@ extension TheFence {
     }
 
     private struct BatchStepPlanningContext {
+        let originalIndex: Int
         let operation: NormalizedOperation
         let request: ParsedRequest
         let expectation: ActionExpectation?
         let timeout: Double?
 
-        init(operation: NormalizedOperation, request: ParsedRequest) {
+        init(originalIndex: Int, operation: NormalizedOperation, request: ParsedRequest) {
+            self.originalIndex = originalIndex
             self.operation = operation
             self.request = request
             expectation = request.expectationPayload.expectation
@@ -126,27 +128,25 @@ extension TheFence {
         ) -> RunBatchPreparedStep {
             let stepTimeout = overrideTimeout ?? timeout
             return RunBatchPreparedStep(
-                command: request.command,
-                operation: operation,
-                adapterRequest: request,
-                typedStep: TheScore.BatchStep(
-                    action: action,
-                    expectation: overrideExpectation ?? expectation ?? action.defaultExpectation,
-                    deadline: deadline(for: action, timeout: stepTimeout)
-                )
+                originalIndex: originalIndex,
+                commandName: request.command.rawValue,
+                operation: .action(action),
+                expectation: overrideExpectation ?? expectation ?? action.defaultExpectation,
+                deadline: deadline(for: .action(action), timeout: stepTimeout)
             )
         }
 
-        private func deadline(for action: TheScore.Action, timeout: Double?) -> Deadline {
-            timeout.map(TheScore.Deadline.init(timeout:)) ?? action.defaultDeadline
+        private func deadline(for operation: TheScore.BatchOperation, timeout: Double?) -> TheScore.Deadline {
+            timeout.map(TheScore.Deadline.init(timeout:)) ?? operation.defaultDeadline
         }
     }
 
     func batchStepPlan(
+        index: Int,
         operation: NormalizedOperation,
         request: ParsedRequest
     ) throws -> RunBatchPreparedStep {
-        let context = BatchStepPlanningContext(operation: operation, request: request)
+        let context = BatchStepPlanningContext(originalIndex: index, operation: operation, request: request)
         switch request.payload {
         case .gesture(let payload):
             return try batchGestureStep(payload, context: context)
@@ -351,15 +351,10 @@ extension TheFence {
             absent: target.absent,
             timeout: resolvedTimeout
         ))
-        return RunBatchPreparedStep(
-            command: context.request.command,
-            operation: context.operation,
-            adapterRequest: context.request,
-            typedStep: TheScore.BatchStep(
-                action: waitAction,
-                expectation: try waitExpectation(target: semanticTarget, absent: target.absent),
-                deadline: resolvedTimeout.map(TheScore.Deadline.init(timeout:)) ?? waitAction.defaultDeadline
-            )
+        return try context.plan(
+            action: waitAction,
+            expectation: waitExpectation(target: semanticTarget, absent: target.absent),
+            timeout: resolvedTimeout
         )
     }
 
@@ -393,7 +388,7 @@ extension TheFence {
     }
 
     private func waitExpectation(
-        target: BatchSemanticTarget?,
+        target: BatchExecutionTarget?,
         absent: Bool?
     ) throws -> ActionExpectation {
         let matcher = try expectationMatcher(target)
@@ -403,60 +398,47 @@ extension TheFence {
         return .elementAppeared(matcher)
     }
 
-    private func expectationMatcher(_ target: BatchSemanticTarget?) throws -> ElementMatcher {
+    private func expectationMatcher(_ target: BatchExecutionTarget?) throws -> ElementMatcher {
         guard let target else {
             throw BatchStepPlanBuildError(message: "typed batch expectation requires matcher predicates")
         }
-        switch target {
-        case .matcher(let matcher, _),
-             .sourceHeistIdWithMatcher(_, let matcher, _):
-            guard matcher.hasPredicates else {
-                throw BatchStepPlanBuildError(message: "typed batch expectation requires matcher predicates")
+        guard target.matcher.hasPredicates else {
+            if let sourceHeistId = target.sourceHeistId {
+                throw BatchStepPlanBuildError(
+                    message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates for typed batch expectation; heistId is source metadata only"
+                )
             }
-            return matcher
-        case .sourceHeistId(let sourceHeistId):
             throw BatchStepPlanBuildError(
-                message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates for typed batch expectation; heistId is source metadata only"
+                message: "typed batch expectation requires matcher predicates"
             )
         }
+        return target.matcher
     }
 
-    private func optionalExecutionTarget(_ target: BatchSemanticTarget?) throws -> BatchExecutionTarget? {
+    private func optionalExecutionTarget(_ target: BatchExecutionTarget?) throws -> BatchExecutionTarget? {
         guard let target else { return nil }
         return try executionTarget(target)
     }
 
-    private func requiredExecutionTarget(_ target: BatchSemanticTarget?) throws -> BatchExecutionTarget {
+    private func requiredExecutionTarget(_ target: BatchExecutionTarget?) throws -> BatchExecutionTarget {
         guard let target else {
             throw BatchStepPlanBuildError(message: "typed batch target requires matcher predicates or ordinal fallback")
         }
         return try executionTarget(target)
     }
 
-    private func executionTarget(_ target: BatchSemanticTarget) throws -> BatchExecutionTarget {
-        switch target {
-        case .matcher(let matcher, let ordinal):
-            return try batchExecutionTarget(sourceHeistId: nil, matcher: matcher, ordinal: ordinal)
-        case .sourceHeistIdWithMatcher(let sourceHeistId, let matcher, let ordinal):
-            return try batchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
-        case .sourceHeistId(let sourceHeistId):
-            throw BatchStepPlanBuildError(
-                message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates or ordinal fallback; heistId is source metadata only"
-            )
-        }
-    }
-
-    private func batchExecutionTarget(
-        sourceHeistId: HeistId?,
-        matcher: ElementMatcher,
-        ordinal: Int?
-    ) throws -> BatchExecutionTarget {
-        guard matcher.hasPredicates || ordinal != nil else {
+    private func executionTarget(_ target: BatchExecutionTarget) throws -> BatchExecutionTarget {
+        guard target.matcher.hasPredicates || target.ordinal != nil else {
+            if let sourceHeistId = target.sourceHeistId {
+                throw BatchStepPlanBuildError(
+                    message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates or ordinal fallback; heistId is source metadata only"
+                )
+            }
             throw BatchStepPlanBuildError(
                 message: "typed batch target requires matcher predicates or ordinal fallback; heistId is source metadata only"
             )
         }
-        return BatchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
+        return target
     }
 
     private func rejectRepeatedBatchCount(_ count: CountArgument, command: Command) throws {
@@ -476,13 +458,13 @@ extension TheFence {
     private func semanticTarget(
         from operation: NormalizedOperation,
         fallback target: ElementTarget?
-    ) -> BatchSemanticTarget? {
+    ) -> BatchExecutionTarget? {
         let argumentTarget = semanticTarget(from: operation.arguments)
         if argumentTarget != nil { return argumentTarget }
         return semanticTarget(from: target)
     }
 
-    private func semanticTarget(from arguments: [String: Any]) -> BatchSemanticTarget? {
+    private func semanticTarget(from arguments: [String: Any]) -> BatchExecutionTarget? {
         let sourceHeistId = try? arguments.schemaString("heistId")
         let ordinal = try? arguments.schemaInteger("ordinal")
         let parsedMatcher = (try? elementMatcher(arguments)) ?? ElementMatcher()
@@ -493,29 +475,17 @@ extension TheFence {
             traits: parsedMatcher.traits,
             excludeTraits: parsedMatcher.excludeTraits
         )
-        if let sourceHeistId {
-            if matcher.hasPredicates || ordinal != nil {
-                return .sourceHeistIdWithMatcher(
-                    sourceHeistId: sourceHeistId,
-                    matcher: matcher,
-                    ordinal: ordinal
-                )
-            }
-            return .sourceHeistId(sourceHeistId)
-        }
-        if matcher.hasPredicates || ordinal != nil {
-            return .matcher(matcher, ordinal: ordinal)
-        }
-        return nil
+        guard sourceHeistId != nil || matcher.hasPredicates || ordinal != nil else { return nil }
+        return BatchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
     }
 
-    private func semanticTarget(from target: ElementTarget?) -> BatchSemanticTarget? {
+    private func semanticTarget(from target: ElementTarget?) -> BatchExecutionTarget? {
         guard let target else { return nil }
         switch target {
         case .heistId(let heistId):
-            return .sourceHeistId(heistId)
+            return BatchExecutionTarget(sourceHeistId: heistId, matcher: ElementMatcher())
         case .matcher(let matcher, let ordinal):
-            return .matcher(matcher, ordinal: ordinal)
+            return BatchExecutionTarget(matcher: matcher, ordinal: ordinal)
         }
     }
 

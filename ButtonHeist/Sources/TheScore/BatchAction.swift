@@ -20,18 +20,41 @@ extension Deadline: CustomStringConvertible {
 
 /// One executable non-read operation in a batch plan.
 public struct BatchStep: Sendable {
-    public let action: Action
+    public let operation: BatchOperation
     public let expectation: ActionExpectation
     public let deadline: Deadline
+
+    public init(
+        operation: BatchOperation,
+        expectation: ActionExpectation,
+        deadline: Deadline
+    ) {
+        self.operation = operation
+        self.expectation = expectation
+        self.deadline = deadline
+    }
 
     public init(
         action: Action,
         expectation: ActionExpectation,
         deadline: Deadline
     ) {
-        self.action = action
-        self.expectation = expectation
-        self.deadline = deadline
+        self.init(
+            operation: BatchOperation(legacyAction: action),
+            expectation: expectation,
+            deadline: deadline
+        )
+    }
+
+    /// Compatibility projection for callers that still inspect the legacy
+    /// action-shaped wire value. Runtime execution should use `operation`.
+    public var action: Action {
+        operation.legacyAction
+    }
+
+    public var userAction: Action? {
+        guard case .action(let action) = operation else { return nil }
+        return action
     }
 
     public static func action(
@@ -56,7 +79,7 @@ public struct BatchStep: Sendable {
 
     public static func checkpoint(_ checkpoint: BatchExecutionCheckpoint) -> BatchStep {
         BatchStep(
-            action: .checkpoint(CheckpointAction(name: checkpoint.name)),
+            operation: .checkpoint(CheckpointAction(name: checkpoint.name)),
             expectation: checkpoint.expect,
             deadline: Deadline(timeout: checkpoint.timeout)
         )
@@ -66,7 +89,7 @@ public struct BatchStep: Sendable {
 extension BatchStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("step", [
-            "action=\(action)",
+            "operation=\(operation)",
             "expect=\(expectation)",
             "deadline=\(deadline)",
         ])
@@ -86,12 +109,13 @@ extension BatchStep: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.action) {
             let action = try container.decode(Action.self, forKey: .action)
+            let operation = BatchOperation(legacyAction: action)
             self.init(
-                action: action,
+                operation: operation,
                 expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expect)
-                    ?? action.defaultExpectation,
+                    ?? operation.defaultExpectation,
                 deadline: try container.decodeIfPresent(Deadline.self, forKey: .deadline)
-                    ?? action.defaultDeadline
+                    ?? operation.defaultDeadline
             )
             return
         }
@@ -99,12 +123,13 @@ extension BatchStep: Codable {
         switch try container.decode(Kind.self, forKey: .kind) {
         case .action:
             let action = try container.decode(Action.self, forKey: .action)
+            let operation = BatchOperation(legacyAction: action)
             self.init(
-                action: action,
+                operation: operation,
                 expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expect)
-                    ?? action.defaultExpectation,
+                    ?? operation.defaultExpectation,
                 deadline: try container.decodeIfPresent(Deadline.self, forKey: .deadline)
-                    ?? action.defaultDeadline
+                    ?? operation.defaultDeadline
             )
         case .wait:
             self = .wait(try container.decode(BatchExecutionWait.self, forKey: .wait))
@@ -115,13 +140,95 @@ extension BatchStep: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(action, forKey: .action)
+        try container.encode(operation.legacyAction, forKey: .action)
         try container.encode(expectation, forKey: .expect)
         try container.encode(deadline, forKey: .deadline)
     }
 }
 
 public typealias BatchExecutionStep = BatchStep
+
+/// Executable operation carried by a batch step. Checkpoints are distinct from
+/// user actions so execution never has to fake a successful tap just to wait on
+/// an expectation.
+public enum BatchOperation: Sendable {
+    case action(Action)
+    case checkpoint(CheckpointAction)
+}
+
+extension BatchOperation {
+    init(legacyAction: Action) {
+        switch legacyAction {
+        case .checkpoint(let checkpoint):
+            self = .checkpoint(checkpoint)
+        default:
+            self = .action(legacyAction)
+        }
+    }
+
+    var legacyAction: Action {
+        switch self {
+        case .action(let action):
+            return action
+        case .checkpoint(let checkpoint):
+            return .checkpoint(checkpoint)
+        }
+    }
+
+    public var defaultExpectation: ActionExpectation {
+        switch self {
+        case .action(let action):
+            return action.defaultExpectation
+        case .checkpoint:
+            return .delivery
+        }
+    }
+
+    public var defaultDeadline: Deadline {
+        switch self {
+        case .action(let action):
+            return action.defaultDeadline
+        case .checkpoint:
+            return Deadline()
+        }
+    }
+}
+
+extension BatchOperation: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .action(let action):
+            return action.description
+        case .checkpoint(let checkpoint):
+            return checkpoint.description
+        }
+    }
+}
+
+extension BatchOperation: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case action, checkpoint
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.checkpoint) {
+            self = .checkpoint(try container.decode(CheckpointAction.self, forKey: .checkpoint))
+        } else {
+            self = .action(try container.decode(Action.self, forKey: .action))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .action(let action):
+            try container.encode(action, forKey: .action)
+        case .checkpoint(let checkpoint):
+            try container.encode(checkpoint, forKey: .checkpoint)
+        }
+    }
+}
 
 /// A batch-executable action primitive. Targeted variants use
 /// `BatchExecutionTarget`, so heistId can only appear as source metadata.

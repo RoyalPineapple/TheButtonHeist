@@ -571,8 +571,13 @@ final class TheBookKeeperTests: XCTestCase {
         }
 
         XCTAssertEqual(projection.commandName, "type_text")
-        XCTAssertEqual(projection.arguments["identifier"], HeistValue.string("email"))
-        XCTAssertEqual(projection.arguments["text"], HeistValue.string("hello"))
+        XCTAssertEqual(projection.arguments["index"], HeistValue.int(0))
+        guard case .object(let operation)? = projection.arguments["operation"],
+              case .object(let action)? = operation["action"],
+              action["type"] == .string("type_text") else {
+            return XCTFail("Expected typed batch operation log")
+        }
+        XCTAssertEqual(action["text"], HeistValue.string("hello"))
         XCTAssertNil(projection.arguments["command"])
         XCTAssertEqual(projection.stepArguments["command"], HeistValue.string("type_text"))
     }

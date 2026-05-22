@@ -1065,7 +1065,7 @@ final class TheBrainsActionTests: XCTestCase {
         value: String? = nil,
         identifier: String? = nil,
         traits: UIAccessibilityTraits = .none,
-        customActions: [AccessibilityElement.CustomAction] = [],
+        customActions: [String] = [],
         customRotors: [AccessibilityElement.CustomRotor] = []
     ) -> AccessibilityElement {
         let frame = CGRect(x: 20, y: 20, width: 120, height: 44)
@@ -1076,7 +1076,7 @@ final class TheBrainsActionTests: XCTestCase {
             traits: traits,
             shape: .frame(AccessibilityRect(frame)),
             activationPoint: CGPoint(x: frame.midX, y: frame.midY),
-            customActions: customActions,
+            customActions: customActions.map(AccessibilityElement.CustomAction.init(name:)),
             customRotors: customRotors,
             respondsToUserInteraction: false
         )

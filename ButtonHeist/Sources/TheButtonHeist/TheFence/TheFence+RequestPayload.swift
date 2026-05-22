@@ -248,12 +248,6 @@ extension TheFence {
     struct RunBatchRequest {
         let steps: [RunBatchStep]
         let policy: BatchPolicy
-
-        var batchPlan: RunBatchPreparedPlan {
-            RunBatchPreparedPlan(adapterSteps: steps, policy: policy)
-        }
-
-        var executionPreparation: RunBatchPreparedPlan { batchPlan }
     }
 
     enum RunBatchStep {
@@ -270,132 +264,33 @@ extension TheFence {
         }
     }
 
-    struct RunBatchPreparedPlan {
-        let steps: [RunBatchPreparedStep]
-        let policy: BatchPolicy
-        let unsupportedCommandNames: [String]
-
-        var isCompletePlanCandidate: Bool {
-            unsupportedCommandNames.isEmpty
-        }
-
-        var typedPlan: TheScore.BatchPlan {
-            TheScore.BatchPlan(
-                steps: steps.compactMap(\.typedStep),
-                policy: policy.batchExecutionPolicy
-            )
-        }
-
-        fileprivate init(adapterSteps: [RunBatchStep], policy: BatchPolicy) {
-            var plannedSteps: [RunBatchPreparedStep] = []
-            var unsupported: [String] = []
-            for adapterStep in adapterSteps {
-                switch adapterStep {
-                case .planned(let step):
-                    if step.isCompleteOperation {
-                        plannedSteps.append(step)
-                    } else {
-                        unsupported.append(step.commandName)
-                    }
-                case .invalid(let commandName, _):
-                    unsupported.append(commandName)
-                }
-            }
-            self.steps = plannedSteps
-            self.policy = policy
-            self.unsupportedCommandNames = unsupported
-        }
-    }
-
-    typealias Action = TheScore.Action
-    typealias BatchStep = RunBatchPreparedStep
-    typealias Deadline = TheScore.Deadline
-
     struct RunBatchPreparedStep {
-        let typedStep: TheScore.BatchStep?
-
-        /// Adapter metadata from the public command-shaped batch input.
-        /// Runtime batch dispatch uses `typedStep`; these fields preserve public
-        /// command logging and batch-response compatibility.
-        let command: Command
-        let operation: NormalizedOperation
-        private let adapterRequest: ParsedRequest
+        let originalIndex: Int
+        let commandName: String
+        let operation: TheScore.BatchOperation
+        let expectation: ActionExpectation
+        let deadline: TheScore.Deadline
 
         init(
-            command: Command,
-            operation: NormalizedOperation,
-            adapterRequest: ParsedRequest,
-            typedStep: TheScore.BatchStep
+            originalIndex: Int,
+            commandName: String,
+            operation: TheScore.BatchOperation,
+            expectation: ActionExpectation,
+            deadline: TheScore.Deadline
         ) {
-            self.typedStep = typedStep
-            self.command = command
             self.operation = operation
-            self.adapterRequest = adapterRequest
+            self.expectation = expectation
+            self.deadline = deadline
+            self.originalIndex = originalIndex
+            self.commandName = commandName
         }
 
-        init(
-            command: Command,
-            operation: NormalizedOperation,
-            adapterRequest: ParsedRequest,
-            action: TheScore.Action?,
-            expectation: ActionExpectation?,
-            deadline: Deadline?
-        ) {
-            if let action, let expectation, let deadline {
-                self.typedStep = TheScore.BatchStep(
-                    action: action,
-                    expectation: expectation,
-                    deadline: deadline
-                )
-            } else {
-                self.typedStep = nil
-            }
-            self.command = command
-            self.operation = operation
-            self.adapterRequest = adapterRequest
-        }
-
-        var commandName: String { command.rawValue }
-
-        var action: TheScore.Action? {
-            typedStep?.action
-        }
-
-        var expectation: ActionExpectation? {
-            typedStep?.expectation
-        }
-
-        var deadline: Deadline? {
-            typedStep?.deadline
-        }
-
-        var isCompleteOperation: Bool {
-            typedStep != nil
-        }
-
-        var commandLogProjection: CommandLogProjection {
-            adapterRequest.commandLogProjection
-        }
-    }
-
-    enum BatchSemanticTarget: Equatable {
-        case matcher(ElementMatcher, ordinal: Int?)
-        case sourceHeistId(HeistId)
-        case sourceHeistIdWithMatcher(sourceHeistId: HeistId, matcher: ElementMatcher, ordinal: Int?)
-
-        var sourceHeistId: HeistId? {
-            switch self {
-            case .matcher:
-                return nil
-            case .sourceHeistId(let heistId):
-                return heistId
-            case .sourceHeistIdWithMatcher(let heistId, _, _):
-                return heistId
-            }
-        }
-
-        var requiresMinimumMatcherLowering: Bool {
-            sourceHeistId != nil
+        var typedStep: TheScore.BatchStep {
+            TheScore.BatchStep(
+                operation: operation,
+                expectation: expectation,
+                deadline: deadline
+            )
         }
     }
 
