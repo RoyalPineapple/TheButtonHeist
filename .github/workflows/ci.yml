@@ -101,14 +101,6 @@ jobs:
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
-      - name: Cache Tuist dependencies
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
-        with:
-          path: Tuist/.build
-          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-deps-
-
       - name: Install Tuist dependencies
         timeout-minutes: 5
         run: tuist install
@@ -198,14 +190,6 @@ jobs:
 
       - name: Install Tuist
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
-
-      - name: Cache Tuist dependencies
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5
-        with:
-          path: Tuist/.build
-          key: ${{ runner.os }}-tuist-deps-${{ hashFiles('Tuist/Package.swift', 'Tuist/Package.resolved') }}
-          restore-keys: |
-            ${{ runner.os }}-tuist-deps-
 
       - name: Install Tuist dependencies
         timeout-minutes: 5

@@ -25,51 +25,162 @@ actor TheStakeout {
 
     enum StakeoutPhase {
         case idle
-        case recording(RecordingSession)
-        case finalizing(FinalizingSession)
+        case recording(ActiveRecording)
+        case finalizing(FinalizingRecording)
     }
 
-    struct RecordingSession {
+    enum ActivityTrackingSnapshot: Equatable, Sendable {
+        case notTracked
+        case tracking(timeout: TimeInterval)
+    }
+
+    enum LifecycleSnapshot: Equatable, Sendable {
+        case idle
+        case recording(
+            activity: ActivityTrackingSnapshot,
+            frameCount: Int,
+            interactionCount: Int,
+            droppedInteractionCount: Int
+        )
+        case finalizing(
+            frameCount: Int,
+            interactionCount: Int,
+            droppedInteractionCount: Int
+        )
+    }
+
+    struct ActiveRecording {
         /// Identity token for this recording. Captured by the capture timer
         /// and inactivity monitor so a Task scheduled for one recording can
         /// detect if it's woken up after a new recording has already started.
         let id: UUID
-        let assetWriter: AVAssetWriter
-        let videoInput: AVAssetWriterInput
-        let pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor
-        let outputURL: URL
-        let screenBounds: CGRect
-        let fps: Int
-        let maxDuration: TimeInterval
-        let inactivityTimeout: TimeInterval?
-        let startTime: Date
-        let requestedConfig: RecordingConfigurationEvidence
-        let appliedConfig: RecordingConfigurationEvidence
-        let caps: [RecordedInputCap]
-        var captureTimer: Task<Void, Never>
-        var inactivityCheckTask: Task<Void, Never>
-        var frameCount: Int
-        var lastFrameTime: CMTime
-        var lastActivityTime: Date
-        var interactionLog: [InteractionEvent]
-        var droppedInteractionCount: Int
-        var didLogCapWarning: Bool
+        let writer: ActiveWriterResources
+        let output: RecordingOutput
+        let timing: RecordingTiming
+        let evidence: RecordingEvidenceState
+        let startedAt: Date
+        var capture: CaptureLifecycle
+        var activity: ActivityLifecycle
+        var interactions: ActiveInteractionLog
+
+        func cancelRuntimeTasks() {
+            capture.task.cancel()
+            activity.cancel()
+        }
+
+        func finalizing() -> FinalizingRecording {
+            FinalizingRecording(
+                id: id,
+                writer: writer.file,
+                output: output,
+                startedAt: startedAt,
+                frameCount: capture.frameCount,
+                interactions: interactions.finalized(),
+                evidence: evidence
+            )
+        }
     }
 
-    struct FinalizingSession {
+    struct FinalizingRecording {
         let id: UUID
+        let writer: RecordingFile
+        let output: RecordingOutput
+        let startedAt: Date
+        let frameCount: Int
+        let interactions: FinalizedInteractionLog
+        let evidence: RecordingEvidenceState
+    }
+
+    struct RecordingFile {
         let assetWriter: AVAssetWriter
         let videoInput: AVAssetWriterInput
         let outputURL: URL
-        let startTime: Date
-        let frameCount: Int
-        let fps: Int
+    }
+
+    struct ActiveWriterResources {
+        let file: RecordingFile
+        let pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor
+    }
+
+    struct RecordingOutput {
         let screenBounds: CGRect
-        let interactionLog: [InteractionEvent]
+        let fps: Int
+    }
+
+    struct RecordingTiming {
+        let maxDuration: TimeInterval
+    }
+
+    struct RecordingEvidenceState {
         let requestedConfig: RecordingConfigurationEvidence
         let appliedConfig: RecordingConfigurationEvidence
         let caps: [RecordedInputCap]
-        let droppedInteractionCount: Int
+    }
+
+    struct CaptureLifecycle {
+        let task: Task<Void, Never>
+        var frameCount: Int
+    }
+
+    enum ActivityLifecycle {
+        case notTracked
+        case tracking(MonitoredActivity)
+
+        var snapshot: ActivityTrackingSnapshot {
+            switch self {
+            case .notTracked:
+                return .notTracked
+            case .tracking(let activity):
+                return .tracking(timeout: activity.timeout)
+            }
+        }
+
+        mutating func noteActivity(at date: Date) -> Bool {
+            guard case .tracking(var activity) = self else { return false }
+            activity.lastActivityAt = date
+            self = .tracking(activity)
+            return true
+        }
+
+        func inactivityDeadline(now: Date) -> (elapsed: TimeInterval, timeout: TimeInterval)? {
+            guard case .tracking(let activity) = self else { return nil }
+            return (now.timeIntervalSince(activity.lastActivityAt), activity.timeout)
+        }
+
+        func cancel() {
+            guard case .tracking(let activity) = self else { return }
+            activity.task.cancel()
+        }
+    }
+
+    struct MonitoredActivity {
+        let timeout: TimeInterval
+        var lastActivityAt: Date
+        let task: Task<Void, Never>
+    }
+
+    struct ActiveInteractionLog {
+        var events: [InteractionEvent] = []
+        var droppedCount = 0
+
+        mutating func append(_ event: InteractionEvent, limit: Int) -> Bool {
+            guard events.count < limit else {
+                let shouldLogCapWarning = droppedCount == 0
+                droppedCount += 1
+                return shouldLogCapWarning
+            }
+            events.append(event)
+            return false
+        }
+
+        func finalized() -> FinalizedInteractionLog {
+            FinalizedInteractionLog(events: events, droppedCount: droppedCount)
+        }
+    }
+
+    struct FinalizedInteractionLog {
+        let events: [InteractionEvent]
+        let droppedCount: Int
     }
 
     /// Screen metrics captured on MainActor and passed into the actor at startRecording.
@@ -144,15 +255,35 @@ actor TheStakeout {
     var interactionLog: [InteractionEvent] {
         switch stakeoutPhase {
         case .idle: return []
-        case .recording(let session): return session.interactionLog
-        case .finalizing(let session): return session.interactionLog
+        case .recording(let session): return session.interactions.events
+        case .finalizing(let session): return session.interactions.events
         }
     }
 
     /// Elapsed time since recording started, in seconds.
     var recordingElapsed: Double {
         guard case .recording(let session) = stakeoutPhase else { return 0 }
-        return Date().timeIntervalSince(session.startTime)
+        return Date().timeIntervalSince(session.startedAt)
+    }
+
+    var lifecycleSnapshot: LifecycleSnapshot {
+        switch stakeoutPhase {
+        case .idle:
+            return .idle
+        case .recording(let session):
+            return .recording(
+                activity: session.activity.snapshot,
+                frameCount: session.capture.frameCount,
+                interactionCount: session.interactions.events.count,
+                droppedInteractionCount: session.interactions.droppedCount
+            )
+        case .finalizing(let session):
+            return .finalizing(
+                frameCount: session.frameCount,
+                interactionCount: session.interactions.events.count,
+                droppedInteractionCount: session.interactions.droppedCount
+            )
+        }
     }
 
     private static func clampInt(
@@ -354,29 +485,29 @@ actor TheStakeout {
         }
         writer.startSession(atSourceTime: .zero)
 
+        let recordingID = UUID()
         let now = Date()
-        let session = RecordingSession(
-            id: UUID(),
-            assetWriter: writer,
-            videoInput: input,
-            pixelBufferAdaptor: adaptor,
-            outputURL: url,
-            screenBounds: setup.screenBounds,
-            fps: setup.fps,
-            maxDuration: setup.maxDuration,
+        let captureTask = makeCaptureTimer(sessionID: recordingID, fps: setup.fps)
+        let activity = makeActivityLifecycle(
+            sessionID: recordingID,
             inactivityTimeout: setup.inactivityTimeout,
-            startTime: now,
-            requestedConfig: setup.requestedConfig,
-            appliedConfig: setup.appliedConfig,
-            caps: setup.caps,
-            captureTimer: Task { },
-            inactivityCheckTask: Task { },
-            frameCount: 0,
-            lastFrameTime: .zero,
-            lastActivityTime: now,
-            interactionLog: [],
-            droppedInteractionCount: 0,
-            didLogCapWarning: false
+            startedAt: now
+        )
+        let file = RecordingFile(assetWriter: writer, videoInput: input, outputURL: url)
+        let session = ActiveRecording(
+            id: recordingID,
+            writer: ActiveWriterResources(file: file, pixelBufferAdaptor: adaptor),
+            output: RecordingOutput(screenBounds: setup.screenBounds, fps: setup.fps),
+            timing: RecordingTiming(maxDuration: setup.maxDuration),
+            evidence: RecordingEvidenceState(
+                requestedConfig: setup.requestedConfig,
+                appliedConfig: setup.appliedConfig,
+                caps: setup.caps
+            ),
+            startedAt: now,
+            capture: CaptureLifecycle(task: captureTask, frameCount: 0),
+            activity: activity,
+            interactions: ActiveInteractionLog()
         )
 
         stakeoutPhase = .recording(session)
@@ -385,35 +516,18 @@ actor TheStakeout {
             "Recording started: \(setup.evenWidth)x\(setup.evenHeight) @ \(setup.fps)fps, effectiveScale=\(setup.effectiveScale)"
         )
 
-        // Start frame capture timer and optional inactivity monitor — these mutate the session
-        // via stakeoutPhase, so they must be started after the state transition.
-        startCaptureTimer()
-        startInactivityMonitor()
+        // Capture and inactivity tasks were created with this recording ID before
+        // the state transition. Their first actor hop verifies this active session.
     }
 
     func stopRecording(reason: RecordingPayload.StopReason = .manual) async {
         guard case .recording(let session) = stakeoutPhase else { return }
 
-        logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(session.frameCount)")
+        logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(session.capture.frameCount)")
 
-        session.captureTimer.cancel()
-        session.inactivityCheckTask.cancel()
+        session.cancelRuntimeTasks()
 
-        let finalizingSession = FinalizingSession(
-            id: session.id,
-            assetWriter: session.assetWriter,
-            videoInput: session.videoInput,
-            outputURL: session.outputURL,
-            startTime: session.startTime,
-            frameCount: session.frameCount,
-            fps: session.fps,
-            screenBounds: session.screenBounds,
-            interactionLog: session.interactionLog,
-            requestedConfig: session.requestedConfig,
-            appliedConfig: session.appliedConfig,
-            caps: session.caps,
-            droppedInteractionCount: session.droppedInteractionCount
-        )
+        let finalizingSession = session.finalizing()
         stakeoutPhase = .finalizing(finalizingSession)
 
         await finalizeRecording(session: finalizingSession, reason: reason)
@@ -422,14 +536,14 @@ actor TheStakeout {
     /// Call this whenever client activity occurs (commands received, etc.)
     func noteActivity() {
         guard case .recording(var session) = stakeoutPhase else { return }
-        session.lastActivityTime = Date()
+        guard session.activity.noteActivity(at: Date()) else { return }
         stakeoutPhase = .recording(session)
     }
 
     /// Call this whenever a screen change is detected (hierarchy hash change)
     func noteScreenChange() {
         guard case .recording(var session) = stakeoutPhase else { return }
-        session.lastActivityTime = Date()
+        guard session.activity.noteActivity(at: Date()) else { return }
         stakeoutPhase = .recording(session)
     }
 
@@ -444,16 +558,10 @@ actor TheStakeout {
     /// Silently drops events beyond `maxInteractionCount` to prevent unbounded growth.
     func recordInteraction(event: InteractionEvent) {
         guard case .recording(var session) = stakeoutPhase else { return }
-        guard session.interactionLog.count < Self.maxInteractionCount else {
-            session.droppedInteractionCount += 1
-            if !session.didLogCapWarning {
-                session.didLogCapWarning = true
-                logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
-            }
-            stakeoutPhase = .recording(session)
-            return
+        let shouldLogCapWarning = session.interactions.append(event, limit: Self.maxInteractionCount)
+        if shouldLogCapWarning {
+            logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
         }
-        session.interactionLog.append(event)
         stakeoutPhase = .recording(session)
     }
 
@@ -466,18 +574,16 @@ actor TheStakeout {
     /// No-ops gracefully when the stakeout is `.idle` or `.finalizing`.
     func recordInteractionIfRecording(command: ClientMessage, result: ActionResult) {
         guard case .recording(let session) = stakeoutPhase else { return }
-        let elapsed = Date().timeIntervalSince(session.startTime)
+        let elapsed = Date().timeIntervalSince(session.startedAt)
         let event = InteractionEvent(timestamp: elapsed, command: command, result: result)
         recordInteraction(event: event)
     }
 
     // MARK: - Frame Capture
 
-    private func startCaptureTimer() {
-        guard case .recording(var session) = stakeoutPhase else { return }
-        let interval = Duration.seconds(1) / session.fps
-        let sessionID = session.id
-        session.captureTimer = Task { [weak self] in
+    private func makeCaptureTimer(sessionID: UUID, fps: Int) -> Task<Void, Never> {
+        let interval = Duration.seconds(1) / fps
+        return Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
                 guard await self.currentSessionID == sessionID else { return }
@@ -485,30 +591,29 @@ actor TheStakeout {
                 guard await Task.cancellableSleep(for: interval) else { break }
             }
         }
-        stakeoutPhase = .recording(session)
     }
 
     private func captureAndAppendFrame() async {
-        guard case .recording(var session) = stakeoutPhase,
-              session.videoInput.isReadyForMoreMediaData else {
+        guard case .recording(let startingSession) = stakeoutPhase,
+              startingSession.writer.file.videoInput.isReadyForMoreMediaData else {
             return
         }
+        let sessionID = startingSession.id
 
         // Hop to MainActor only for the UI snapshot itself.
         guard let image = await captureFrame() else { return }
 
         // After the await, the phase may have changed — re-check that we're
         // still in the same recording session before appending.
-        guard case .recording(var current) = stakeoutPhase, current.id == session.id else {
+        guard case .recording(var session) = stakeoutPhase, session.id == sessionID else {
             return
         }
-        session = current
 
         // Check file size guard (7MB raw = ~9.3MB base64, under 10MB buffer limit)
         // If we can't read the file size, skip the check and continue recording
         let fileSize: Int?
         do {
-            let attributes = try FileManager.default.attributesOfItem(atPath: session.outputURL.path)
+            let attributes = try FileManager.default.attributesOfItem(atPath: session.writer.file.outputURL.path)
             fileSize = attributes[.size] as? Int
         } catch {
             logger.warning("Could not read recording file size, skipping size check: \(error)")
@@ -521,7 +626,7 @@ actor TheStakeout {
         }
 
         // Check max duration
-        if Date().timeIntervalSince(session.startTime) >= session.maxDuration {
+        if Date().timeIntervalSince(session.startedAt) >= session.timing.maxDuration {
             logger.warning("Max duration reached")
             await stopRecording(reason: .maxDuration)
             return
@@ -530,16 +635,15 @@ actor TheStakeout {
         // Create pixel buffer from UIImage
         guard let pixelBuffer = createPixelBuffer(from: image, session: session) else { return }
 
-        let frameTime = CMTime(value: Int64(session.frameCount), timescale: Int32(session.fps))
-        if session.pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: frameTime) {
-            current.frameCount = session.frameCount + 1
-            current.lastFrameTime = frameTime
-            stakeoutPhase = .recording(current)
+        let frameTime = CMTime(value: Int64(session.capture.frameCount), timescale: Int32(session.output.fps))
+        if session.writer.pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: frameTime) {
+            session.capture.frameCount += 1
+            stakeoutPhase = .recording(session)
         }
     }
 
-    private func createPixelBuffer(from image: UIImage, session: RecordingSession) -> CVPixelBuffer? {
-        guard let pool = session.pixelBufferAdaptor.pixelBufferPool else { return nil }
+    private func createPixelBuffer(from image: UIImage, session: ActiveRecording) -> CVPixelBuffer? {
+        guard let pool = session.writer.pixelBufferAdaptor.pixelBufferPool else { return nil }
 
         var pixelBuffer: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
@@ -550,8 +654,8 @@ actor TheStakeout {
 
         guard let context = CGContext(
             data: CVPixelBufferGetBaseAddress(buffer),
-            width: Int(session.screenBounds.width),
-            height: Int(session.screenBounds.height),
+            width: Int(session.output.screenBounds.width),
+            height: Int(session.output.screenBounds.height),
             bitsPerComponent: 8,
             bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
             space: CGColorSpaceCreateDeviceRGB(),
@@ -563,14 +667,14 @@ actor TheStakeout {
         // Draw the image scaled into the pixel buffer.
         // Fingerprint indicators are rendered by TheFingerprints (on-screen UIView overlay)
         // and captured naturally via drawHierarchy — no CGContext compositing needed.
-        context.draw(cgImage, in: session.screenBounds)
+        context.draw(cgImage, in: session.output.screenBounds)
 
         return buffer
     }
 
     // MARK: - Inactivity Detection
     //
-    // Inactivity is tracked via `lastActivityTime`, updated by:
+    // Inactivity is tracked only when explicitly configured, updated by:
     //   - `noteActivity()` — called on each incoming client command
     //   - `noteScreenChange()` — called by TheGetaway after a settled hierarchy change
     //
@@ -579,51 +683,47 @@ actor TheStakeout {
     // so they won't prevent inactivity timeout. This is intentional — we only extend
     // recording when meaningful UI content changes.
 
-    private func startInactivityMonitor() {
-        guard case .recording(var session) = stakeoutPhase else { return }
-        guard session.inactivityTimeout != nil else { return }
-        let sessionID = session.id
-        session.inactivityCheckTask = Task { [weak self] in
+    private func makeActivityLifecycle(
+        sessionID: UUID,
+        inactivityTimeout: TimeInterval?,
+        startedAt: Date
+    ) -> ActivityLifecycle {
+        guard let inactivityTimeout else { return .notTracked }
+        let monitorTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard await Task.cancellableSleep(for: .seconds(1)) else { break } // Check every second
                 guard let self else { return }
-                guard let elapsed = await self.elapsedSinceLastActivity(sessionID: sessionID) else {
+                guard let deadline = await self.inactivityDeadline(sessionID: sessionID) else {
                     return
                 }
-                guard let timeout = await self.inactivityTimeoutFor(sessionID: sessionID) else {
-                    return
-                }
-                if elapsed >= timeout {
-                    logger.info("Inactivity timeout: \(elapsed)s since last activity")
+                if deadline.elapsed >= deadline.timeout {
+                    logger.info("Inactivity timeout: \(deadline.elapsed)s since last activity")
                     await self.stopRecording(reason: .inactivity)
                     return
                 }
             }
         }
-        stakeoutPhase = .recording(session)
+        return .tracking(MonitoredActivity(
+            timeout: inactivityTimeout,
+            lastActivityAt: startedAt,
+            task: monitorTask
+        ))
     }
 
-    private func elapsedSinceLastActivity(sessionID: UUID) -> Double? {
+    private func inactivityDeadline(sessionID: UUID) -> (elapsed: TimeInterval, timeout: TimeInterval)? {
         guard case .recording(let session) = stakeoutPhase, session.id == sessionID else {
             return nil
         }
-        return Date().timeIntervalSince(session.lastActivityTime)
-    }
-
-    private func inactivityTimeoutFor(sessionID: UUID) -> TimeInterval? {
-        guard case .recording(let session) = stakeoutPhase, session.id == sessionID else {
-            return nil
-        }
-        return session.inactivityTimeout
+        return session.activity.inactivityDeadline(now: Date())
     }
 
     // MARK: - Finalization
 
-    private func finalizeRecording(session: FinalizingSession, reason: RecordingPayload.StopReason) async {
-        let writer = session.assetWriter
+    private func finalizeRecording(session: FinalizingRecording, reason: RecordingPayload.StopReason) async {
+        let writer = session.writer.assetWriter
         let sessionID = session.id
 
-        session.videoInput.markAsFinished()
+        session.writer.videoInput.markAsFinished()
 
         // `finishWriting` runs on AVFoundation's internal queue. We bridge
         // back into the actor with `Task { await self.handleFinalize(...) }`,
@@ -650,15 +750,12 @@ actor TheStakeout {
         // than acting on a foreign writer. (In practice this can't happen
         // because `startRecording` requires `.idle` and we hold `.finalizing`
         // until cleanup, but the check makes the invariant explicit.)
-        guard case .finalizing(let session) = stakeoutPhase, session.id == sessionID else {
-            await deliverError(.finalizationFailed("Finalization for stale session"))
-            return
-        }
+        guard case .finalizing(let session) = stakeoutPhase, session.id == sessionID else { return }
 
-        defer { cleanup(outputURL: session.outputURL) }
+        defer { cleanup(outputURL: session.writer.outputURL) }
 
-        let writerStatus = session.assetWriter.status
-        let writerError = session.assetWriter.error
+        let writerStatus = session.writer.assetWriter.status
+        let writerError = session.writer.assetWriter.error
         if writerStatus == .failed {
             await deliverError(.finalizationFailed(writerError?.localizedDescription ?? "Unknown"))
             return
@@ -666,32 +763,32 @@ actor TheStakeout {
 
         let videoData: Data
         do {
-            videoData = try Data(contentsOf: session.outputURL)
+            videoData = try Data(contentsOf: session.writer.outputURL)
         } catch {
             await deliverError(.finalizationFailed("Could not read output file: \(error.localizedDescription)"))
             return
         }
 
         let endTime = Date()
-        let duration = endTime.timeIntervalSince(session.startTime)
+        let duration = endTime.timeIntervalSince(session.startedAt)
 
         let payload = RecordingPayload(
             videoData: videoData.base64EncodedString(),
-            width: Int(session.screenBounds.width),
-            height: Int(session.screenBounds.height),
+            width: Int(session.output.screenBounds.width),
+            height: Int(session.output.screenBounds.height),
             duration: duration,
             frameCount: session.frameCount,
-            fps: session.fps,
-            startTime: session.startTime,
+            fps: session.output.fps,
+            startTime: session.startedAt,
             endTime: endTime,
             stopReason: reason,
-            interactionLog: session.interactionLog.isEmpty ? nil : session.interactionLog,
+            interactionLog: session.interactions.events.isEmpty ? nil : session.interactions.events,
             evidence: RecordingPayloadEvidence(
-                requestedConfig: session.requestedConfig,
-                appliedConfig: session.appliedConfig,
-                caps: session.caps,
+                requestedConfig: session.evidence.requestedConfig,
+                appliedConfig: session.evidence.appliedConfig,
+                caps: session.evidence.caps,
                 interactionLogLimit: Self.maxInteractionCount,
-                droppedInteractionCount: session.droppedInteractionCount == 0 ? nil : session.droppedInteractionCount,
+                droppedInteractionCount: session.interactions.droppedCount == 0 ? nil : session.interactions.droppedCount,
                 fileSizeLimitBytes: Self.maxVideoDataBytes
             )
         )

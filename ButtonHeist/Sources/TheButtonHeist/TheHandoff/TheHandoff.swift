@@ -700,12 +700,12 @@ final class TheHandoff {
 
     private func handleTerminalRequestMessage(_ message: ServerMessage, requestId: String) {
         switch message {
-        case .interface, .actionResult, .screen, .error:
+        case .interface, .actionResult, .screen, .pong, .error:
             forwardServerMessage(message, requestId: requestId)
         // Terminal request recovery only completes request-scoped trackers; state-mutating messages are consumed while active.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .info, .recordingStarted, .recording, .authApproved, .authApprovalPending, .sessionLocked, .status,
-             .protocolMismatch, .pong, .recordingStopped, .serverHello, .authRequired, .interaction:
+             .protocolMismatch, .recordingStopped, .serverHello, .authRequired, .interaction:
             break
         }
     }
@@ -757,6 +757,9 @@ final class TheHandoff {
             )))
         case .pong:
             mutateConnectedSession { $0.missedPongCount = 0 }
+            if let requestId {
+                forwardServerMessage(message, requestId: requestId)
+            }
         case .recordingStopped:
             emitRecordingEvent(.stopped)
         // Handshake messages are consumed inside DeviceConnection before bubbling here; no caller-visible side effect needed at this layer.

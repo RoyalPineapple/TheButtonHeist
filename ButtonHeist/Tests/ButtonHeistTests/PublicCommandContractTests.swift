@@ -33,7 +33,7 @@ final class PublicCommandContractTests: XCTestCase {
     func testPublicCommandCatalogCountIsExplicit() {
         XCTAssertEqual(
             TheFence.Command.allCases.count,
-            43,
+            44,
             "Public command catalog count changed - update samples, adapter projections, and contract guardrails"
         )
     }
@@ -51,6 +51,25 @@ final class PublicCommandContractTests: XCTestCase {
                 descriptor.command.canonicalName,
                 descriptor.canonicalName,
                 "\(descriptor.command.rawValue) should expose its public name through FenceCommandDescriptor"
+            )
+        }
+    }
+
+    func testCommandDescriptorPresentationMatchesRenderedToolContracts() {
+        for command in TheFence.Command.allCases {
+            let descriptor = command.descriptor
+            XCTAssertEqual(
+                descriptor.description,
+                TheFence.Command.presentationDescription(for: descriptor.canonicalName),
+                "\(command.rawValue) descriptor description should be projected from command presentation"
+            )
+        }
+
+        for contract in TheFence.Command.mcpToolContracts {
+            XCTAssertEqual(
+                contract.description,
+                TheFence.Command.presentationDescription(for: contract.name),
+                "\(contract.name) MCP contract description should be projected from command presentation"
             )
         }
     }
@@ -120,6 +139,7 @@ final class PublicCommandContractTests: XCTestCase {
         [
             .sample(.help),
             .sample(.status),
+            .sample(.ping),
             .sample(.quit),
             .sample(.exit),
             .sample(.listDevices),

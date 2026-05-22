@@ -84,6 +84,27 @@ struct PublicStatusResponse: FencePublicJSONResponse {
     let device: String?
 }
 
+struct PublicPongResponse: FencePublicJSONResponse {
+    let status = PublicStatus.ok
+    let buttonHeistVersion: String
+    let appName: String
+    let bundleIdentifier: String
+    let appVersion: String?
+    let appBuild: String?
+    let serverInstanceIdentifier: String?
+    let serverTimestampMs: Int64?
+
+    init(payload: PongPayload) {
+        self.buttonHeistVersion = payload.buttonHeistVersion
+        self.appName = payload.appName
+        self.bundleIdentifier = payload.bundleIdentifier
+        self.appVersion = payload.appVersion
+        self.appBuild = payload.appBuild
+        self.serverInstanceIdentifier = payload.serverInstanceIdentifier
+        self.serverTimestampMs = payload.serverTimestampMs
+    }
+}
+
 struct PublicDevicesResponse: FencePublicJSONResponse {
     let status = PublicStatus.ok
     let devices: [PublicDiscoveredDevice]

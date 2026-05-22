@@ -99,14 +99,49 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testPongEncodeDecode() throws {
-        let message = ServerMessage.pong
+        let payload = PongPayload(
+            buttonHeistVersion: "2026.05.22",
+            appName: "TestApp",
+            bundleIdentifier: "com.test.app",
+            appVersion: "1.2.3",
+            appBuild: "456",
+            serverInstanceIdentifier: "server-1",
+            serverTimestampMs: 1_700_000_000_000
+        )
+        let message = ServerMessage.pong(payload)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
 
-        if case .pong = decoded {
+        if case .pong(let decodedPayload) = decoded {
+            XCTAssertEqual(decodedPayload, payload)
         } else {
             XCTFail("Expected pong, got \(decoded)")
         }
+    }
+
+    func testPongDecodesLegacyEmptyPayload() throws {
+        let data = Data(#"{"type":"pong"}"#.utf8)
+        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
+
+        guard case .pong(let payload) = decoded else {
+            return XCTFail("Expected pong, got \(decoded)")
+        }
+        XCTAssertEqual(payload.buttonHeistVersion, TheScore.buttonHeistVersion)
+        XCTAssertNil(payload.serverTimestampMs)
+    }
+
+    func testResponseEnvelopeDecodesLegacyEmptyPongPayload() throws {
+        let data = Data("""
+        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","requestId":"ping-1","type":"pong"}
+        """.utf8)
+        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+
+        XCTAssertEqual(decoded.requestId, "ping-1")
+        guard case .pong(let payload) = decoded.message else {
+            return XCTFail("Expected pong, got \(decoded.message)")
+        }
+        XCTAssertEqual(payload.buttonHeistVersion, TheScore.buttonHeistVersion)
+        XCTAssertNil(payload.serverTimestampMs)
     }
 
     func testErrorEncodeDecode() throws {
@@ -617,7 +652,7 @@ final class ServerMessageTests: XCTestCase {
     // MARK: - ResponseEnvelope Background Accessibility Trace
 
     func testResponseEnvelopeWithoutBackgroundAccessibilityTrace() throws {
-        let envelope = ResponseEnvelope(requestId: "r-1", message: .pong)
+        let envelope = ResponseEnvelope(requestId: "r-1", message: .pong())
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
 
@@ -656,7 +691,7 @@ final class ServerMessageTests: XCTestCase {
         let trace = AccessibilityTrace(captures: [first, last])
         let envelope = ResponseEnvelope(
             requestId: "capture-1",
-            message: .pong,
+            message: .pong(),
             accessibilityTrace: trace
         )
         let data = try JSONEncoder().encode(envelope)
@@ -702,7 +737,7 @@ final class ServerMessageTests: XCTestCase {
     func testResponseEnvelopeAccessibilityTraceOnlyShapeRoundTrips() throws {
         let envelope = ResponseEnvelope(
             requestId: "trace-only",
-            message: .pong,
+            message: .pong(),
             accessibilityTrace: AccessibilityTrace(interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
         )
         let data = try JSONEncoder().encode(envelope)

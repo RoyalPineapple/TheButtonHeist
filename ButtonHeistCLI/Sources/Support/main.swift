@@ -21,6 +21,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
         subcommands: [
             // Primary — what you need 90% of the time
             ListCommand.self,
+            PingCommand.self,
             GetInterfaceCommand.self,
             ActivateCommand.self,
             RotorCommand.self,

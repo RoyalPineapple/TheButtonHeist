@@ -55,7 +55,7 @@ extension ServerMessage {
         case .serverHello: return (.serverHello, nil)
         case .authRequired: return (.authRequired, nil)
         case .authApprovalPending(let payload): return (.authApprovalPending, payload)
-        case .pong: return (.pong, nil)
+        case .pong(let payload): return (.pong, payload)
         case .recordingStarted: return (.recordingStarted, nil)
         case .recordingStopped: return (.recordingStopped, nil)
         case .protocolMismatch(let payload): return (.protocolMismatch, payload)
@@ -83,7 +83,9 @@ extension ServerMessage {
         case .serverHello: return .serverHello
         case .authRequired: return .authRequired
         case .authApprovalPending: return .authApprovalPending(try AuthApprovalPendingPayload(from: try payload()))
-        case .pong: return .pong
+        case .pong:
+            guard let payloadDecoder else { return .pong() }
+            return .pong(try PongPayload(from: payloadDecoder))
         case .recordingStarted: return .recordingStarted
         case .recordingStopped: return .recordingStopped
         case .protocolMismatch: return .protocolMismatch(try ProtocolMismatchPayload(from: try payload()))

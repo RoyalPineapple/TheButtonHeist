@@ -127,6 +127,47 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("button_ok"), "Should suggest similar heistId")
     }
 
+    func testNormalizeHeistIdBuildsMatcherFromSourceElement() {
+        let sourceElement = element(
+            label: "Quantity",
+            value: "0",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+        let currentElement = element(
+            label: "Quantity",
+            value: "1",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
+
+        let normalized = bagman.normalizeTarget(.heistId("quantity_0"), in: sourceScreen)
+
+        guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {
+            XCTFail("Expected heistId to normalize to matcher, got \(normalized.executableTarget)")
+            return
+        }
+        XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
+        XCTAssertNil(matcher.heistId)
+        XCTAssertEqual(matcher.identifier, "quantity_stepper")
+        XCTAssertNil(ordinal)
+        XCTAssertEqual(
+            bagman.resolveTarget(normalized.executableTarget).resolved?.screenElement.heistId,
+            "quantity_1"
+        )
+    }
+
+    func testNormalizeHeistIdFallsBackToOriginalHandleWhenSourceElementIsMissing() {
+        let screen = Screen.makeForTests()
+
+        let normalized = bagman.normalizeTarget(.heistId("missing_button"), in: screen)
+
+        XCTAssertEqual(normalized.executableTarget, .heistId("missing_button"))
+        XCTAssertEqual(normalized.sourceHeistId, "missing_button")
+    }
+
     // MARK: - Matcher Resolution
 
     func testMatcherResolvesUniqueElement() {

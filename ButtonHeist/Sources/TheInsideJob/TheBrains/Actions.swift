@@ -43,6 +43,7 @@ final class Actions {
     // MARK: - Element Action Pipeline
 
     struct LiveElementActionContext {
+        let normalizedTarget: TheStash.NormalizedTarget
         let resolvedTarget: TheStash.ResolvedTarget
         let liveTarget: TheStash.LiveActionTarget
 
@@ -61,14 +62,14 @@ final class Actions {
         preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult?
     ) async -> TheSafecracker.InteractionResult {
-        let positioning = await navigation.ensureOnScreen(for: target, recordedScreen: recordedScreen)
+        let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
+        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
         if let failure = positioning.failure {
             return .failure(failure.method ?? method, message: failure.message)
         }
         switch await resolveLiveElementActionContext(
-            target: target,
+            normalizedTarget: normalizedTarget,
             method: method,
-            recordedScreen: recordedScreen,
             requireInteractive: requireInteractive,
             deallocatedBoundary: deallocatedBoundary,
             preflight: preflight
@@ -89,18 +90,22 @@ final class Actions {
     }
 
     private func resolveLiveElementActionContext(
-        target: ElementTarget,
+        normalizedTarget: TheStash.NormalizedTarget,
         method: ActionMethod,
-        recordedScreen: Screen?,
         requireInteractive: Bool,
         deallocatedBoundary: String,
         preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)?
     ) async -> LiveElementActionContextResolution {
+        let target = normalizedTarget.executableTarget
         let firstResolution = stash.resolveTarget(target)
         guard let firstResolved = firstResolution.resolved else {
-            return .failure(.failure(.elementNotFound, message: firstResolution.diagnostics))
+            return .failure(.failure(
+                .elementNotFound,
+                message: normalizedTarget.diagnostics(firstResolution.diagnostics)
+            ))
         }
         switch makeLiveElementActionContext(
+            normalizedTarget: normalizedTarget,
             resolved: firstResolved,
             method: method,
             requireInteractive: requireInteractive,
@@ -113,21 +118,19 @@ final class Actions {
             return .failure(result)
         case .retryableFailure(let initialFailure):
             // Re-parse once to recover from cell reuse or a stale live ref, but
-            // preserve the first-class live-target diagnostic if the semantic
-            // target disappears during the retry.
+            // preserve the first-class live-target diagnostic if retry
+            // positioning cannot recover the target.
             navigation.refresh()
-            let retryPositioning = await navigation.ensureOnScreen(for: target, recordedScreen: recordedScreen)
-            if let failure = retryPositioning.failure {
-                if failure.method == .elementNotFound {
-                    return .failure(initialFailure)
-                }
-                return .failure(.failure(failure.method ?? method, message: failure.message))
+            let retryPositioning = await navigation.ensureOnScreen(for: normalizedTarget)
+            if retryPositioning.failure != nil {
+                return .failure(initialFailure)
             }
             let retryResolution = stash.resolveTarget(target)
             guard let retryResolved = retryResolution.resolved else {
                 return .failure(initialFailure)
             }
             return makeLiveElementActionContext(
+                normalizedTarget: normalizedTarget,
                 resolved: retryResolved,
                 method: method,
                 requireInteractive: requireInteractive,
@@ -138,6 +141,7 @@ final class Actions {
     }
 
     private func makeLiveElementActionContext(
+        normalizedTarget: TheStash.NormalizedTarget,
         resolved: TheStash.ResolvedTarget,
         method: ActionMethod,
         requireInteractive: Bool,
@@ -152,7 +156,7 @@ final class Actions {
         switch liveTargetResolution {
         case .resolved(let resolvedLiveTarget):
             liveTarget = resolvedLiveTarget
-        case .objectUnavailable, .geometryUnavailable:
+        case .objectUnavailable:
             guard let failure = liveActionTargetFailure(
                 for: liveTargetResolution,
                 method: method,
@@ -161,7 +165,17 @@ final class Actions {
             ) else {
                 return .failure(.failure(method, message: "\(method.rawValue) failed"))
             }
-            return .retryableFailure(failure)
+            return .retryableFailure(annotateFailure(failure, with: normalizedTarget))
+        case .geometryUnavailable:
+            guard let failure = liveActionTargetFailure(
+                for: liveTargetResolution,
+                method: method,
+                resolved: resolved,
+                deallocatedBoundary: deallocatedBoundary
+            ) else {
+                return .failure(.failure(method, message: "\(method.rawValue) failed"))
+            }
+            return .failure(annotateFailure(failure, with: normalizedTarget))
         }
         if requireInteractive {
             switch TheStash.Interactivity.checkInteractivity(resolved.element, object: liveTarget.object) {
@@ -177,7 +191,11 @@ final class Actions {
                 ))
             }
         }
-        return .success(LiveElementActionContext(resolvedTarget: resolved, liveTarget: liveTarget))
+        return .success(LiveElementActionContext(
+            normalizedTarget: normalizedTarget,
+            resolvedTarget: resolved,
+            liveTarget: liveTarget
+        ))
     }
 
     /// Unified pipeline for gestures that target a screen point:
@@ -190,13 +208,16 @@ final class Actions {
         recordedScreen: Screen? = nil,
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
-        if let elementTarget {
-            let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+        let normalizedTarget = elementTarget.map {
+            stash.normalizeTarget($0, in: recordedScreen ?? stash.currentScreen)
+        }
+        if let normalizedTarget {
+            let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
             if let failure = positioning.failure {
                 return .failure(failure.method ?? method, message: failure.message)
             }
         }
-        switch resolveGesturePoint(from: elementTarget, pointX: pointX, pointY: pointY, method: method) {
+        switch resolveGesturePoint(from: normalizedTarget, pointX: pointX, pointY: pointY, method: method) {
         case .failure(let result):
             return result
         case .success(let point):
@@ -217,12 +238,12 @@ final class Actions {
     }
 
     private func resolveGesturePoint(
-        from elementTarget: ElementTarget?,
+        from normalizedTarget: TheStash.NormalizedTarget?,
         pointX: Double?,
         pointY: Double?,
         method: ActionMethod
     ) -> PointResolution {
-        guard let elementTarget else {
+        guard let normalizedTarget else {
             guard let xCoord = pointX, let yCoord = pointY else {
                 return .failure(.failure(.elementNotFound, message: "No target specified"))
             }
@@ -232,17 +253,19 @@ final class Actions {
             }
             return .success(point)
         }
-        let resolution = stash.resolveTarget(elementTarget)
+        let resolution = stash.resolveTarget(normalizedTarget.executableTarget)
         guard let resolved = resolution.resolved else {
-            return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
+            return .failure(.failure(.elementNotFound, message: normalizedTarget.diagnostics(resolution.diagnostics)))
         }
         guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: resolved) else {
             return .failure(.failure(
                 method,
-                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: method,
-                    element: resolved.screenElement,
-                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                message: normalizedTarget.diagnostics(
+                    ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                        method: method,
+                        element: resolved.screenElement,
+                        isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                    )
                 )
             ))
         }
@@ -259,20 +282,22 @@ final class Actions {
     }
 
     private func resolveGestureFrame(
-        for elementTarget: ElementTarget,
+        for normalizedTarget: TheStash.NormalizedTarget,
         method: ActionMethod
     ) -> GestureFrameResolution {
-        let resolution = stash.resolveTarget(elementTarget)
+        let resolution = stash.resolveTarget(normalizedTarget.executableTarget)
         guard let resolved = resolution.resolved else {
-            return .failure(.failure(.elementNotFound, message: resolution.diagnostics))
+            return .failure(.failure(.elementNotFound, message: normalizedTarget.diagnostics(resolution.diagnostics)))
         }
         guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: resolved) else {
             return .failure(.failure(
                 method,
-                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: method,
-                    element: resolved.screenElement,
-                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                message: normalizedTarget.diagnostics(
+                    ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                        method: method,
+                        element: resolved.screenElement,
+                        isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                    )
                 )
             ))
         }
@@ -330,6 +355,19 @@ final class Actions {
         }
     }
 
+    private func annotateFailure(
+        _ result: TheSafecracker.InteractionResult,
+        with normalizedTarget: TheStash.NormalizedTarget
+    ) -> TheSafecracker.InteractionResult {
+        guard let message = result.message else { return result }
+        return .failure(
+            result.method,
+            message: normalizedTarget.diagnostics(message),
+            payload: result.payload,
+            failureKind: result.failureKind
+        )
+    }
+
     private func geometryFailure(
         method: ActionMethod,
         field: String,
@@ -360,13 +398,16 @@ final class Actions {
             // dispatch. Re-resolving the semantic target and live geometry keeps
             // heistId useful for matching without treating it as fresh geometry.
             self.navigation.refresh()
-            let retryPositioning = await self.navigation.ensureOnScreen(for: target, recordedScreen: recordedScreen)
+            let retryPositioning = await self.navigation.ensureOnScreen(for: context.normalizedTarget)
             if let failure = retryPositioning.failure {
                 return .failure(failure.method ?? .activate, message: failure.message)
             }
-            let retryResolution = self.stash.resolveTarget(target)
+            let retryResolution = self.stash.resolveTarget(context.normalizedTarget.executableTarget)
             guard let retryResolved = retryResolution.resolved else {
-                return .failure(.elementNotFound, message: retryResolution.diagnostics)
+                return .failure(
+                    .elementNotFound,
+                    message: context.normalizedTarget.diagnostics(retryResolution.diagnostics)
+                )
             }
             let retryLiveTargetResolution = self.stash.resolveLiveActionTarget(for: retryResolved)
             guard case .resolved(let retryLiveTarget) = retryLiveTargetResolution else {
@@ -613,20 +654,7 @@ final class Actions {
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         // Unit-point swipe: resolve element frame, compute start/end from unit coordinates
-        let unitStart: UnitPoint?
-        let unitEnd: UnitPoint?
-        if let start = target.start, let end = target.end {
-            unitStart = start
-            unitEnd = end
-        } else if let direction = target.direction, target.elementTarget != nil {
-            unitStart = direction.defaultStart
-            unitEnd = direction.defaultEnd
-        } else {
-            unitStart = nil
-            unitEnd = nil
-        }
-
-        if let unitStart, let unitEnd {
+        if let unitPoints = unitSwipePoints(for: target) {
             guard let elementTarget = target.elementTarget else {
                 return .failure(
                     .syntheticSwipe,
@@ -634,24 +662,25 @@ final class Actions {
                         + "try providing elementTarget or use absolute startX/startY/endX/endY."
                 )
             }
-            let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+            let normalizedTarget = stash.normalizeTarget(elementTarget, in: recordedScreen ?? stash.currentScreen)
+            let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
             if let failure = positioning.failure {
                 return .failure(failure.method ?? .syntheticSwipe, message: failure.message)
             }
             let frame: CGRect
-            switch resolveGestureFrame(for: elementTarget, method: .syntheticSwipe) {
+            switch resolveGestureFrame(for: normalizedTarget, method: .syntheticSwipe) {
             case .success(let liveFrame):
                 frame = liveFrame
             case .failure(let result):
                 return result
             }
             let startPoint = CGPoint(
-                x: frame.origin.x + unitStart.x * frame.width,
-                y: frame.origin.y + unitStart.y * frame.height
+                x: frame.origin.x + unitPoints.start.x * frame.width,
+                y: frame.origin.y + unitPoints.start.y * frame.height
             )
             let endPoint = CGPoint(
-                x: frame.origin.x + unitEnd.x * frame.width,
-                y: frame.origin.y + unitEnd.y * frame.height
+                x: frame.origin.x + unitPoints.end.x * frame.width,
+                y: frame.origin.y + unitPoints.end.y * frame.height
             )
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
@@ -669,14 +698,17 @@ final class Actions {
         }
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
-        if let elementTarget = target.elementTarget {
-            let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+        let normalizedTarget = target.elementTarget.map {
+            stash.normalizeTarget($0, in: recordedScreen ?? stash.currentScreen)
+        }
+        if let normalizedTarget {
+            let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
             if let failure = positioning.failure {
                 return .failure(failure.method ?? .syntheticSwipe, message: failure.message)
             }
         }
         switch resolveGesturePoint(
-            from: target.elementTarget,
+            from: normalizedTarget,
             pointX: target.startX,
             pointY: target.startY,
             method: .syntheticSwipe
@@ -716,6 +748,16 @@ final class Actions {
                 ? .success(method: .syntheticSwipe)
                 : .failure(.syntheticSwipe, message: message ?? "synthetic swipe failed")
         }
+    }
+
+    private func unitSwipePoints(for target: SwipeTarget) -> (start: UnitPoint, end: UnitPoint)? {
+        if let start = target.start, let end = target.end {
+            return (start, end)
+        }
+        guard let direction = target.direction, target.elementTarget != nil else {
+            return nil
+        }
+        return (direction.defaultStart, direction.defaultEnd)
     }
 
     func executeDrag(
@@ -849,7 +891,10 @@ final class Actions {
         guard !target.text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
-        if let failure = await focusTextInput(target.elementTarget, recordedScreen: recordedScreen) { return failure }
+        let normalizedTarget = target.elementTarget.map {
+            stash.normalizeTarget($0, in: recordedScreen ?? stash.currentScreen)
+        }
+        if let failure = await focusTextInput(normalizedTarget) { return failure }
 
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
         let typingResult = await safecracker.typeText(target.text, interKeyDelay: interKeyDelay)
@@ -861,8 +906,8 @@ final class Actions {
         stash.refresh()
 
         var fieldValue: String?
-        if let elementTarget = target.elementTarget {
-            if let resolved = stash.resolveTarget(elementTarget).resolved {
+        if let normalizedTarget {
+            if let resolved = stash.resolveTarget(normalizedTarget.executableTarget).resolved {
                 fieldValue = resolved.element.value
             }
         }
@@ -881,10 +926,9 @@ final class Actions {
     }
 
     private func focusTextInput(
-        _ elementTarget: ElementTarget?,
-        recordedScreen: Screen?
+        _ normalizedTarget: TheStash.NormalizedTarget?
     ) async -> TheSafecracker.InteractionResult? {
-        guard let elementTarget else {
+        guard let normalizedTarget else {
             guard safecracker.hasActiveTextInput() else {
                 return .failure(
                     .typeText,
@@ -899,22 +943,24 @@ final class Actions {
             return nil
         }
 
-        let positioning = await navigation.ensureOnScreen(for: elementTarget, recordedScreen: recordedScreen)
+        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
         if let failure = positioning.failure {
             return .failure(failure.method ?? .typeText, message: failure.message)
         }
-        let resolution = stash.resolveTarget(elementTarget)
+        let resolution = stash.resolveTarget(normalizedTarget.executableTarget)
         guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: resolution.diagnostics)
+            return .failure(.elementNotFound, message: normalizedTarget.diagnostics(resolution.diagnostics))
         }
 
         guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: resolved) else {
             return .failure(
                 .typeText,
-                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: .syntheticTap,
-                    element: resolved.screenElement,
-                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                message: normalizedTarget.diagnostics(
+                    ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                        method: .syntheticTap,
+                        element: resolved.screenElement,
+                        isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                    )
                 )
             )
         }

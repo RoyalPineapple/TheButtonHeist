@@ -23,6 +23,11 @@ extension TheFence {
 
     // MARK: - Handler: Interface
 
+    func handlePing() async throws -> FenceResponse {
+        let payload = try await sendAndAwaitPong(timeout: Timeouts.healthSeconds)
+        return .pong(payload)
+    }
+
     func handleGetInterface(_ request: GetInterfaceRequest) async throws -> FenceResponse {
         let interface = try await sendAndAwaitInterface(
             .requestInterface(request.query),
@@ -254,7 +259,8 @@ extension TheFence {
     }
 
     func handleGetPasteboard() async throws -> FenceResponse {
-        return try await sendAction(.getPasteboard)
+        let result = try await sendAndAwaitAction(.getPasteboard, timeout: Timeouts.healthSeconds)
+        return .action(result: result)
     }
 
     // MARK: - Handler: Wait For

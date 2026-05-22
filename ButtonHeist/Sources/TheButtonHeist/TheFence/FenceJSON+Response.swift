@@ -44,6 +44,8 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicHelpResponse(commands: commands).encode(to: encoder)
         case .status(let connected, let deviceName):
             try PublicStatusResponse(connected: connected, device: deviceName).encode(to: encoder)
+        case .pong(let payload):
+            try PublicPongResponse(payload: payload).encode(to: encoder)
         case .devices(let devices):
             try PublicDevicesResponse(devices: devices).encode(to: encoder)
         case .interface(let interface, let detail):

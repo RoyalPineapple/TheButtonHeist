@@ -98,7 +98,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
         let connection = DeviceConnection(device: makeDummyDevice())
         connection.connectionState = .connected(.init(connection: activeConnection))
 
-        var envelope = try ResponseEnvelope(requestId: nil, message: .pong).encoded()
+        var envelope = try ResponseEnvelope(requestId: nil, message: .pong()).encoded()
         envelope.append(0x0A)
 
         var receivedPong = false

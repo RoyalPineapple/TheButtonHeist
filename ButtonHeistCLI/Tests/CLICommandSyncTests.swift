@@ -1,4 +1,5 @@
 import XCTest
+import ArgumentParser
 import ButtonHeist
 import Foundation
 import TheScore
@@ -96,7 +97,7 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(
             directCount,
-            36,
+            37,
             "CLI direct command count changed - update ButtonHeistApp and CLI sync guardrails"
         )
     }
@@ -412,6 +413,64 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testSharedRequestBuilderPreservesMachineJSONPassthrough() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"command":"tap","id":7,"text":false}"#
+        )
+
+        XCTAssertEqual(parsed.mode, .machine)
+        XCTAssertEqual(parsed.request[.command] as? String, "tap")
+        XCTAssertEqual(parsed.request["id"] as? Int, 7)
+        XCTAssertEqual(parsed.request[.text] as? Bool, false)
+    }
+
+    func testCLIAndREPLShareCanonicalRequestBuilding() {
+        let parameters: CLIRequestParameters = [
+            .heistId: .string("button_save"),
+            .timeout: .double(2),
+        ]
+        let cliRequest = ActivateCommand.fenceRequest(parameters)
+        let builderRequest = CLIRequestBuilder.request(
+            command: TheFence.Command.activate,
+            parameters: parameters
+        )
+
+        XCTAssertEqual(cliRequest[.command] as? String, builderRequest[.command] as? String)
+        XCTAssertEqual(cliRequest[.heistId] as? String, builderRequest[.heistId] as? String)
+        XCTAssertEqual(cliRequest[.timeout] as? Double, builderRequest[.timeout] as? Double)
+    }
+
+    func testREPLCanonicalCommandMatchesSharedCLIRequestShape() {
+        let cliRequest = TheFence.Command.activate.cliRequest([.heistId: .string("button_save")])
+        let replRequest = ReplSession.parseHumanInput("activate button_save")
+
+        XCTAssertEqual(replRequest[.command] as? String, cliRequest[.command] as? String)
+        XCTAssertEqual(replRequest[.heistId] as? String, cliRequest[.heistId] as? String)
+    }
+
+    func testREPLAliasCommandMatchesSharedCLIRequestShape() {
+        let cliRequest = CLIRequestBuilder.request(
+            command: TheFence.Command.oneFingerTap,
+            parameters: [.x: .double(100), .y: .double(200)]
+        )
+        let replRequest = ReplSession.parseHumanInput("tap 100 200")
+
+        XCTAssertEqual(replRequest[.command] as? String, cliRequest[.command] as? String)
+        XCTAssertEqual(replRequest[.x] as? Double, cliRequest[.x] as? Double)
+        XCTAssertEqual(replRequest[.y] as? Double, cliRequest[.y] as? Double)
+    }
+
+    func testSessionReplDelegatesHumanParsingToSharedRequestBuilder() {
+        let line = "swipe up checkout_list timeout=2"
+        let replRequest = ReplSession.parseHumanInput(line)
+        let builderRequest = CLIRequestBuilder.parseHumanInput(line)
+
+        XCTAssertEqual(replRequest[.command] as? String, builderRequest[.command] as? String)
+        XCTAssertEqual(replRequest[.direction] as? String, builderRequest[.direction] as? String)
+        XCTAssertEqual(replRequest[.heistId] as? String, builderRequest[.heistId] as? String)
+        XCTAssertEqual(replRequest[.timeout] as? Double, builderRequest[.timeout] as? Double)
+    }
+
     func testSessionReplDoesNotDeclareCommandAliasTables() throws {
         let source = try String(
             contentsOf: repositoryRoot()
@@ -433,6 +492,19 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(source.contains("directionWords"), "REPL direction metadata should live in TheFence.Command.humanPositionalSyntax")
         XCTAssertFalse(source.contains("edgeWords"), "REPL edge metadata should live in TheFence.Command.humanPositionalSyntax")
         XCTAssertFalse(source.contains("directionCommands"), "REPL command-role metadata should live in TheFence.Command.humanPositionalSyntax")
+    }
+
+    func testSessionReplDoesNotOwnHumanRequestBuilder() throws {
+        let source = try String(
+            contentsOf: repositoryRoot()
+                .appendingPathComponent("ButtonHeistCLI/Sources/Session/SessionRepl.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertFalse(source.contains("HumanCommandRequest"), "REPL should delegate request construction to CLIRequestBuilder")
+        XCTAssertFalse(source.contains("parseHumanValue"), "REPL should delegate parameter conversion to CLIRequestBuilder")
+        XCTAssertFalse(source.contains("interpretPositionalArgs"), "REPL should delegate positional parsing to CLIRequestBuilder")
+        XCTAssertFalse(source.contains("humanCommandDescriptor"), "REPL should resolve command identity through CLIRequestBuilder")
     }
 
     func testHumanParserResolvesCanonicalCommandsThroughDescriptors() {
@@ -507,6 +579,29 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(request[.command] as? String, TheFence.Command.performCustomAction.rawValue)
         XCTAssertEqual(request[.heistId] as? String, "checkout_button")
         XCTAssertEqual(request[.action] as? String, "Magic Tap")
+    }
+
+    func testScrollCLIAllowsNoElementTarget() throws {
+        let command = try ScrollCommand.parse([])
+
+        XCTAssertNil(command.element.target)
+        XCTAssertNil(command.stableId)
+        XCTAssertEqual(command.direction, "down")
+    }
+
+    func testScrollCLIParsesContainerStableId() throws {
+        let command = try ScrollCommand.parse(["--stable-id", "main_scroll", "--direction", "up"])
+
+        XCTAssertEqual(command.stableId, "main_scroll")
+        XCTAssertEqual(command.direction, "up")
+    }
+
+    func testScrollToEdgeCLIAllowsNoElementTargetAndDefaultsTop() throws {
+        let command = try ScrollToEdgeCommand.parse([])
+
+        XCTAssertNil(command.element.target)
+        XCTAssertNil(command.stableId)
+        XCTAssertEqual(command.edge, "top")
     }
 
     func testHumanParserMapsCoordinateTapAlias() {

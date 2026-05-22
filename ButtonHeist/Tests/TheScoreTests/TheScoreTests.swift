@@ -93,7 +93,7 @@ final class MessageIntegrationTests: XCTestCase {
                 deviceName: "Device", systemVersion: "17.0", screenWidth: 390, screenHeight: 844
             )),
             .interface(Interface(timestamp: Date(), tree: [])),
-            .pong,
+            .pong(),
             .status(StatusPayload(
                 identity: StatusIdentity(
                     appName: "Test",
@@ -129,7 +129,7 @@ final class MessageIntegrationTests: XCTestCase {
 
         if case .ping = decodedPing {
             // Server responds with pong
-            let pongMsg = ServerMessage.pong
+            let pongMsg = ServerMessage.pong()
             let pongData = try JSONEncoder().encode(pongMsg)
             let decodedPong = try JSONDecoder().decode(ServerMessage.self, from: pongData)
 

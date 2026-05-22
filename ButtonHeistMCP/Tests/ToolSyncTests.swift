@@ -133,7 +133,7 @@ struct ToolSyncTests {
     @Test("MCP tool contract count is explicit")
     func mcpToolContractCountIsExplicit() {
         #expect(
-            TheFence.Command.mcpToolContracts.count == 24,
+            TheFence.Command.mcpToolContracts.count == 25,
             "MCP tool contract count changed - update ToolDefinitions and schema guardrails"
         )
     }

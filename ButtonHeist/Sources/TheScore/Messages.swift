@@ -66,6 +66,7 @@ public enum WireMessageType: String, Codable, CaseIterable, Sendable {
     case recording
     case waitFor
     case waitForChange
+    case batchExecutionPlan
     case interaction
 }
 

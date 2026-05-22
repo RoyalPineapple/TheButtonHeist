@@ -73,7 +73,7 @@ extension TheFence {
             responseStatus = .ok
             artifactPath = path
             errorMessage = nil
-        case .ok, .help, .status, .devices, .interface, .action,
+        case .ok, .help, .status, .pong, .devices, .interface, .action,
              .screenshotData, .recordingData, .batch, .sessionState,
              .targets, .sessionLog, .heistStarted, .heistStopped,
              .heistPlayback:

@@ -485,6 +485,76 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
+    func testElementActionNormalizesSourceHeistIdBeforeLiveResolution() async {
+        let sourceElement = makeElement(
+            label: "Quantity",
+            value: "0",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+        let currentElement = makeElement(
+            label: "Quantity",
+            value: "1",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        let liveObject = AdjustableGeometryView(
+            frame: CGRect(x: 80, y: 180, width: 180, height: 44),
+            activationPoint: CGPoint(x: 170, y: 202)
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(currentElement, "quantity_1")],
+            objects: ["quantity_1": liveObject]
+        )
+
+        let result = await brains.actions.executeIncrement(
+            .heistId("quantity_0"),
+            recordedScreen: sourceScreen
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "increment failed")
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(liveObject.incrementCount, 1)
+    }
+
+    func testElementActionNormalizedHeistIdFailsCleanlyWhenLiveGeometryIsMissing() async {
+        let sourceElement = makeElement(
+            label: "Quantity",
+            value: "0",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+        let currentElement = makeElement(
+            label: "Quantity",
+            value: "1",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 170, y: 202))
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(currentElement, "quantity_1")],
+            objects: ["quantity_1": liveObject]
+        )
+
+        let result = await brains.actions.executeIncrement(
+            .heistId("quantity_0"),
+            recordedScreen: sourceScreen
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(liveObject.incrementCount, 0)
+        XCTAssertDiagnostic(result.message, contains: [
+            "gesture target unavailable",
+            "method=increment",
+            "heistId=\"quantity_1\"",
+            "visible=true",
+            "Source heistId: quantity_0",
+        ])
+    }
+
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
         let heistId = "geometry_missing_slider"
         let element = AccessibilityElement.make(
@@ -992,6 +1062,8 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func makeElement(
         label: String? = nil,
+        value: String? = nil,
+        identifier: String? = nil,
         traits: UIAccessibilityTraits = .none,
         customActions: [AccessibilityElement.CustomAction] = [],
         customRotors: [AccessibilityElement.CustomRotor] = []
@@ -999,6 +1071,8 @@ final class TheBrainsActionTests: XCTestCase {
         let frame = CGRect(x: 20, y: 20, width: 120, height: 44)
         return .make(
             label: label,
+            value: value,
+            identifier: identifier,
             traits: traits,
             shape: .frame(AccessibilityRect(frame)),
             activationPoint: CGPoint(x: frame.midX, y: frame.midY),

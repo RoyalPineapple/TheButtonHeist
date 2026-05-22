@@ -136,7 +136,7 @@ final class MockConnection: DeviceConnecting {
             }
         }
         if let handler = autoResponse {
-            let response = handler(message)
+            let response = batchExecutionResponse(for: message, handler: handler) ?? handler(message)
             Task { @ButtonHeistActor [self] in
                 self.onEvent?(.message(response, requestId: requestId, accessibilityTrace: nil))
             }
@@ -145,6 +145,258 @@ final class MockConnection: DeviceConnecting {
     }
 
     var autoResponse: ((ClientMessage) -> ServerMessage)?
+
+    private func batchExecutionResponse(
+        for message: ClientMessage,
+        handler: (ClientMessage) -> ServerMessage
+    ) -> ServerMessage? {
+        guard case .batchExecutionPlan(let plan) = message else { return nil }
+
+        var stepResults: [BatchExecutionStepResult] = []
+        var failedIndex: Int?
+        for (index, step) in plan.steps.enumerated() {
+            if let failedIndex {
+                let skipped = BatchExecutionSkippedStepResult(
+                    index: index,
+                    actionName: step.action.testCommandName,
+                    expectationName: step.expectation.summaryDescription,
+                    reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
+                    afterFailedIndex: failedIndex
+                )
+                stepResults.append(BatchExecutionStepResult(
+                    index: index,
+                    actionName: step.action.testCommandName,
+                    expectationName: step.expectation.summaryDescription,
+                    durationMs: 0,
+                    skipped: skipped
+                ))
+                continue
+            }
+
+            let actionResult = actionResult(for: step.action, handler: handler)
+            let expectation = actionResult.success ? step.expectation.validate(against: actionResult) : nil
+            let shouldStop = plan.policy == .stopOnError
+                && (actionResult.success == false || expectation?.met == false)
+            stepResults.append(BatchExecutionStepResult(
+                index: index,
+                actionName: step.action.testCommandName,
+                expectationName: step.expectation.summaryDescription,
+                actionResult: actionResult,
+                expectation: expectation,
+                durationMs: 0,
+                stopsBatch: shouldStop
+            ))
+            if shouldStop {
+                failedIndex = index
+            }
+        }
+
+        let result = BatchExecutionResult(
+            policy: plan.policy,
+            steps: stepResults,
+            totalTimingMs: 0,
+            failedIndex: failedIndex
+        )
+        return .actionResult(ActionResult(
+            success: failedIndex == nil,
+            method: .batchExecutionPlan,
+            errorKind: failedIndex == nil ? nil : .actionFailed,
+            payload: .batchExecution(result)
+        ))
+    }
+
+    private func actionResult(
+        for action: TheScore.Action,
+        handler: (ClientMessage) -> ServerMessage
+    ) -> ActionResult {
+        guard let message = action.testClientMessage else {
+            return ActionResult(
+                success: true,
+                method: .waitForChange,
+                message: action.testCommandName
+            )
+        }
+        switch handler(message) {
+        case .actionResult(let result):
+            return result
+        case .error(let error):
+            return ActionResult(
+                success: false,
+                method: .unsupportedCommand,
+                message: error.message,
+                errorKind: .general
+            )
+        default:
+            return ActionResult(success: true, method: .activate)
+        }
+    }
+}
+
+private extension TheScore.Action {
+    var testCommandName: String {
+        switch self {
+        case .activate: return "activate"
+        case .increment: return "increment"
+        case .decrement: return "decrement"
+        case .performCustomAction: return "perform_custom_action"
+        case .rotor: return "rotor"
+        case .touchTap: return "tap"
+        case .touchLongPress: return "long_press"
+        case .touchSwipe: return "swipe"
+        case .touchDrag: return "drag"
+        case .touchPinch: return "pinch"
+        case .touchRotate: return "rotate"
+        case .touchTwoFingerTap: return "two_finger_tap"
+        case .touchDrawPath: return "draw_path"
+        case .touchDrawBezier: return "draw_bezier"
+        case .typeText: return "type_text"
+        case .editAction: return "edit_action"
+        case .setPasteboard: return "set_pasteboard"
+        case .scroll: return "scroll"
+        case .scrollToVisible: return "scroll_to_visible"
+        case .elementSearch: return "element_search"
+        case .scrollToEdge: return "scroll_to_edge"
+        case .waitForIdle: return "wait_for_idle"
+        case .waitForElement: return "wait_for"
+        case .waitForChange: return "wait_for_change"
+        case .checkpoint(let checkpoint):
+            return checkpoint.name.map { "checkpoint:\($0)" } ?? "checkpoint"
+        case .explore: return "explore"
+        case .resignFirstResponder: return "dismiss_keyboard"
+        }
+    }
+
+    var testClientMessage: ClientMessage? {
+        switch self {
+        case .activate(let target):
+            return .activate(target.executableTarget)
+        case .increment(let target):
+            return .increment(target.executableTarget)
+        case .decrement(let target):
+            return .decrement(target.executableTarget)
+        case .performCustomAction(let target):
+            return .performCustomAction(CustomActionTarget(
+                elementTarget: target.target.executableTarget,
+                actionName: target.actionName
+            ))
+        case .rotor(let target):
+            return .rotor(RotorTarget(
+                elementTarget: target.target.executableTarget,
+                rotor: target.rotor,
+                rotorIndex: target.rotorIndex,
+                direction: target.direction,
+                currentHeistId: target.currentSourceHeistId,
+                currentTextRange: target.currentTextRange
+            ))
+        case .touchTap(let target):
+            return .touchTap(TouchTapTarget(
+                elementTarget: target.target?.executableTarget,
+                pointX: target.pointX,
+                pointY: target.pointY
+            ))
+        case .touchLongPress(let target):
+            return .touchLongPress(LongPressTarget(
+                elementTarget: target.target?.executableTarget,
+                pointX: target.pointX,
+                pointY: target.pointY,
+                duration: target.duration
+            ))
+        case .touchSwipe(let target):
+            return .touchSwipe(SwipeTarget(
+                elementTarget: target.target?.executableTarget,
+                startX: target.startX,
+                startY: target.startY,
+                endX: target.endX,
+                endY: target.endY,
+                direction: target.direction,
+                duration: target.duration,
+                start: target.start,
+                end: target.end
+            ))
+        case .touchDrag(let target):
+            return .touchDrag(DragTarget(
+                elementTarget: target.target?.executableTarget,
+                startX: target.startX,
+                startY: target.startY,
+                endX: target.endX,
+                endY: target.endY,
+                duration: target.duration
+            ))
+        case .touchPinch(let target):
+            return .touchPinch(PinchTarget(
+                elementTarget: target.target?.executableTarget,
+                centerX: target.centerX,
+                centerY: target.centerY,
+                scale: target.scale,
+                spread: target.spread,
+                duration: target.duration
+            ))
+        case .touchRotate(let target):
+            return .touchRotate(RotateTarget(
+                elementTarget: target.target?.executableTarget,
+                centerX: target.centerX,
+                centerY: target.centerY,
+                angle: target.angle,
+                radius: target.radius,
+                duration: target.duration
+            ))
+        case .touchTwoFingerTap(let target):
+            return .touchTwoFingerTap(TwoFingerTapTarget(
+                elementTarget: target.target?.executableTarget,
+                centerX: target.centerX,
+                centerY: target.centerY,
+                spread: target.spread
+            ))
+        case .touchDrawPath(let target):
+            return .touchDrawPath(target)
+        case .touchDrawBezier(let target):
+            return .touchDrawBezier(target)
+        case .typeText(let target):
+            return .typeText(TypeTextTarget(
+                text: target.text,
+                elementTarget: target.target?.executableTarget
+            ))
+        case .editAction(let target):
+            return .editAction(target)
+        case .setPasteboard(let target):
+            return .setPasteboard(target)
+        case .scroll(let target):
+            return .scroll(ScrollTarget(
+                elementTarget: target.target?.executableTarget,
+                direction: target.direction
+            ))
+        case .scrollToVisible(let target):
+            return .scrollToVisible(ScrollToVisibleTarget(
+                elementTarget: target.target?.executableTarget
+            ))
+        case .elementSearch(let target):
+            return .elementSearch(ElementSearchTarget(
+                elementTarget: target.target?.executableTarget,
+                direction: target.direction
+            ))
+        case .scrollToEdge(let target):
+            return .scrollToEdge(ScrollToEdgeTarget(
+                elementTarget: target.target?.executableTarget,
+                edge: target.edge
+            ))
+        case .waitForIdle(let target):
+            return .waitForIdle(target)
+        case .waitForElement(let target):
+            return .waitFor(WaitForTarget(
+                elementTarget: target.target.executableTarget,
+                absent: target.absent,
+                timeout: target.timeout
+            ))
+        case .waitForChange(let target):
+            return .waitForChange(target)
+        case .explore:
+            return .explore
+        case .resignFirstResponder:
+            return .resignFirstResponder
+        case .checkpoint:
+            return nil
+        }
+    }
 }
 
 @ButtonHeistActor

@@ -13,7 +13,7 @@ struct PublicContractGoldenTests {
         let expected = #"{"selectedToolNames":["activate","get_screen","start_recording"],"tools":["# +
             #"{"inputSchema":{"additionalProperties":false,"properties":{"action":{"type":"string"},"# +
             #""count":{"maximum":100,"minimum":1,"type":"integer"},"# +
-            #""expect":{"properties":{"type":{"enum":["screen_changed","elements_changed","element_updated","# +
+            #""expect":{"properties":{"type":{"enum":["delivery","screen_changed","elements_changed","element_updated","# +
             #""element_appeared","element_disappeared","compound"],"type":"string"}},"type":"object"},"# +
             #""heistId":{"type":"string"},"label":{"type":"string"}},"required":[],"type":"object"},"name":"activate"},"# +
             #"{"inputSchema":{"additionalProperties":false,"properties":{"includeInterface":{"type":"boolean"},"# +
@@ -59,19 +59,19 @@ struct PublicContractGoldenTests {
             "mcpToolContracts": TheFence.Command.mcpToolContracts.count,
         ]
         let expected: [String: Int] = [
-            "totalCommands": 43,
-            "batchEligible": 38,
+            "totalCommands": 44,
+            "batchEligible": 24,
             "playbackEligible": 24,
             "heistRecordable": 24,
-            "requiresConnection": 35,
+            "requiresConnection": 34,
             "humanAliases": 18,
-            "cliDirectCommands": 36,
+            "cliDirectCommands": 37,
             "cliGroupedCommands": 3,
             "cliSessionOnly": 4,
-            "mcpDirectTools": 23,
+            "mcpDirectTools": 24,
             "mcpGroupedCommands": 13,
             "mcpNotExposed": 7,
-            "mcpToolContracts": 24,
+            "mcpToolContracts": 25,
         ]
 
         #expect(

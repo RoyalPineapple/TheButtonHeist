@@ -63,7 +63,7 @@ final class PublicContractGoldenTests: XCTestCase {
             (
                 "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Session.swift",
                 260,
-                ["PublicSessionStateResponse", "PublicOKResponse", "PublicHelpResponse"]
+                ["PublicSessionStateResponse", "PublicPongResponse", "PublicOKResponse", "PublicHelpResponse"]
             ),
             (
                 "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceJSON+Playback.swift",
@@ -103,6 +103,58 @@ final class PublicContractGoldenTests: XCTestCase {
         }
     }
 
+    func testCommandCatalogPresentationStaysSplitByDomain() throws {
+        let catalog = try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift")
+
+        XCTAssertLessThanOrEqual(
+            lineCount(catalog),
+            680,
+            "The command catalog should keep command facts central without growing long presentation prose."
+        )
+        XCTAssertTrue(
+            catalog.contains("presentationDescription(for:"),
+            "Descriptors and MCP contracts should project help text from command presentation files."
+        )
+
+        let presentationFamilies: [(path: String, maximumLines: Int, requiredText: [String])] = [
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Observation.swift",
+                80,
+                ["Check Button Heist connection health", "Read the app accessibility hierarchy"]
+            ),
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Interaction.swift",
+                100,
+                ["Activate a UI element", "Perform a touch gesture"]
+            ),
+            (
+                "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Session.swift",
+                110,
+                ["Execute multiple commands in one call", "Play back a .heist file"]
+            ),
+        ]
+
+        for family in presentationFamilies {
+            let source = try sourceFile(family.path)
+            XCTAssertLessThanOrEqual(
+                lineCount(source),
+                family.maximumLines,
+                "\(family.path) should stay focused on one command presentation family."
+            )
+
+            for text in family.requiredText {
+                XCTAssertTrue(
+                    source.contains(text),
+                    "\(text) should live in \(family.path), not the command fact catalog."
+                )
+                XCTAssertFalse(
+                    catalog.contains(text),
+                    "\(text) should not live in the command fact catalog."
+                )
+            }
+        }
+    }
+
     func testGetInterfacePublicJSONGolden() throws {
         let interface = makeReceiptTestInterface([
             makeReceiptTestElement(heistId: "pay_button", label: "Pay", traits: [.button]),
@@ -131,6 +183,27 @@ final class PublicContractGoldenTests: XCTestCase {
         XCTAssertEqual(
             try jsonString(FenceResponse.action(result: result)),
             #"{"method":"getPasteboard","screenId":"receipt","screenName":"Receipt","status":"ok","value":"copied"}"#
+        )
+    }
+
+    func testPongPublicJSONGolden() throws {
+        let payload = PongPayload(
+            buttonHeistVersion: "2026.05.22",
+            appName: "MockApp",
+            bundleIdentifier: "com.test.mock",
+            appVersion: "1.0",
+            appBuild: "42",
+            serverInstanceIdentifier: "server-1",
+            serverTimestampMs: 1_700_000_000_000
+        )
+
+        XCTAssertEqual(
+            try jsonString(FenceResponse.pong(payload)),
+            golden(
+                #"{"appBuild":"42","appName":"MockApp","appVersion":"1.0","#,
+                #""bundleIdentifier":"com.test.mock","buttonHeistVersion":"2026.05.22","#,
+                #""serverInstanceIdentifier":"server-1","serverTimestampMs":1700000000000,"status":"ok"}"#
+            )
         )
     }
 

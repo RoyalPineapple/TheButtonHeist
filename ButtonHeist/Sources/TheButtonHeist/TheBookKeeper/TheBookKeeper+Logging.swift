@@ -728,10 +728,10 @@ private extension TheFence.RunBatchRequest {
     }
 }
 
-private extension TheFence.RunBatchStepRequest {
+private extension TheFence.RunBatchStep {
     var bookKeeperValue: HeistValue {
         switch self {
-        case .decoded(let request):
+        case .planned(let request):
             var values = request.commandLogProjection.arguments
             values[.command] = .string(request.command.rawValue)
             return .object(values)

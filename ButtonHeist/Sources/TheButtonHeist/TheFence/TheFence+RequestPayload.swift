@@ -246,25 +246,160 @@ extension TheFence {
     }
 
     struct RunBatchRequest {
-        let steps: [RunBatchStepRequest]
+        let steps: [RunBatchStep]
         let policy: BatchPolicy
+
+        var batchPlan: RunBatchPreparedPlan {
+            RunBatchPreparedPlan(adapterSteps: steps, policy: policy)
+        }
+
+        var executionPreparation: RunBatchPreparedPlan { batchPlan }
     }
 
-    enum RunBatchStepRequest {
-        case decoded(ParsedRequest)
-        case invalid(commandName: String, failure: BatchStepDecodeFailure)
+    enum RunBatchStep {
+        case planned(RunBatchPreparedStep)
+        case invalid(commandName: String, failure: BatchStepFailure)
 
         var commandName: String {
             switch self {
-            case .decoded(let request):
-                return request.command.rawValue
+            case .planned(let step):
+                return step.commandName
             case .invalid(let commandName, _):
                 return commandName
             }
         }
     }
 
-    struct BatchStepDecodeFailure {
+    struct RunBatchPreparedPlan {
+        let steps: [RunBatchPreparedStep]
+        let policy: BatchPolicy
+        let unsupportedCommandNames: [String]
+
+        var isCompletePlanCandidate: Bool {
+            unsupportedCommandNames.isEmpty
+        }
+
+        var typedPlan: TheScore.BatchPlan {
+            TheScore.BatchPlan(
+                steps: steps.compactMap(\.typedStep),
+                policy: policy.batchExecutionPolicy
+            )
+        }
+
+        fileprivate init(adapterSteps: [RunBatchStep], policy: BatchPolicy) {
+            var plannedSteps: [RunBatchPreparedStep] = []
+            var unsupported: [String] = []
+            for adapterStep in adapterSteps {
+                switch adapterStep {
+                case .planned(let step):
+                    if step.isCompleteOperation {
+                        plannedSteps.append(step)
+                    } else {
+                        unsupported.append(step.commandName)
+                    }
+                case .invalid(let commandName, _):
+                    unsupported.append(commandName)
+                }
+            }
+            self.steps = plannedSteps
+            self.policy = policy
+            self.unsupportedCommandNames = unsupported
+        }
+    }
+
+    typealias Action = TheScore.Action
+    typealias BatchStep = RunBatchPreparedStep
+    typealias Deadline = TheScore.Deadline
+
+    struct RunBatchPreparedStep {
+        let typedStep: TheScore.BatchStep?
+
+        /// Adapter metadata from the public command-shaped batch input.
+        /// Runtime batch dispatch uses `typedStep`; these fields preserve public
+        /// command logging and batch-response compatibility.
+        let command: Command
+        let operation: NormalizedOperation
+        private let adapterRequest: ParsedRequest
+
+        init(
+            command: Command,
+            operation: NormalizedOperation,
+            adapterRequest: ParsedRequest,
+            typedStep: TheScore.BatchStep
+        ) {
+            self.typedStep = typedStep
+            self.command = command
+            self.operation = operation
+            self.adapterRequest = adapterRequest
+        }
+
+        init(
+            command: Command,
+            operation: NormalizedOperation,
+            adapterRequest: ParsedRequest,
+            action: TheScore.Action?,
+            expectation: ActionExpectation?,
+            deadline: Deadline?
+        ) {
+            if let action, let expectation, let deadline {
+                self.typedStep = TheScore.BatchStep(
+                    action: action,
+                    expectation: expectation,
+                    deadline: deadline
+                )
+            } else {
+                self.typedStep = nil
+            }
+            self.command = command
+            self.operation = operation
+            self.adapterRequest = adapterRequest
+        }
+
+        var commandName: String { command.rawValue }
+
+        var action: TheScore.Action? {
+            typedStep?.action
+        }
+
+        var expectation: ActionExpectation? {
+            typedStep?.expectation
+        }
+
+        var deadline: Deadline? {
+            typedStep?.deadline
+        }
+
+        var isCompleteOperation: Bool {
+            typedStep != nil
+        }
+
+        var commandLogProjection: CommandLogProjection {
+            adapterRequest.commandLogProjection
+        }
+    }
+
+    enum BatchSemanticTarget: Equatable {
+        case matcher(ElementMatcher, ordinal: Int?)
+        case sourceHeistId(HeistId)
+        case sourceHeistIdWithMatcher(sourceHeistId: HeistId, matcher: ElementMatcher, ordinal: Int?)
+
+        var sourceHeistId: HeistId? {
+            switch self {
+            case .matcher:
+                return nil
+            case .sourceHeistId(let heistId):
+                return heistId
+            case .sourceHeistIdWithMatcher(let heistId, _, _):
+                return heistId
+            }
+        }
+
+        var requiresMinimumMatcherLowering: Bool {
+            sourceHeistId != nil
+        }
+    }
+
+    struct BatchStepFailure {
         let message: String
         let details: FailureDetails?
         let includeDetailsInResult: Bool
@@ -384,7 +519,7 @@ extension TheFence {
         requestId: String
     ) throws -> RequestPayload {
         switch command {
-        case .help, .status, .quit, .exit, .listDevices, .getPasteboard,
+        case .help, .status, .ping, .quit, .exit, .listDevices, .getPasteboard,
              .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
             return .none
         case .getInterface, .getScreen, .stopRecording:

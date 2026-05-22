@@ -32,6 +32,26 @@ extension TheFence {
         }
     }
 
+    func sendAndAwaitPong(timeout: TimeInterval) async throws -> PongPayload {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        let requestId = UUID().uuidString
+        do {
+            return try await pendingRequests.waitForPong(requestId: requestId, timeout: timeout) {
+                let outcome = self.handoff.send(.ping, requestId: requestId)
+                if case .failed(let failure) = outcome {
+                    self.pendingRequests.resolvePong(
+                        requestId: requestId,
+                        result: Result<PongPayload, Error>.failure(FenceError(failure))
+                    )
+                }
+            }
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            throw mapCaughtError(error)
+        }
+    }
+
     func sendAndAwaitInterface(_ message: ClientMessage, timeout: TimeInterval) async throws -> Interface {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
@@ -62,6 +82,29 @@ extension TheFence {
                     self.pendingRequests.resolveScreen(
                         requestId: requestId,
                         result: Result<ScreenPayload, Error>.failure(FenceError(failure))
+                    )
+                }
+            }
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            throw mapCaughtError(error)
+        }
+    }
+
+    func sendAndAwaitBatchExecution(
+        _ plan: TheScore.BatchPlan,
+        timeout: TimeInterval
+    ) async throws -> BatchExecutionResult {
+        guard handoff.isConnected else { throw FenceError.notConnected }
+        let requestId = UUID().uuidString
+        do {
+            return try await pendingRequests.waitForBatchExecution(requestId: requestId, timeout: timeout) {
+                let outcome = self.handoff.send(.batchExecutionPlan(plan), requestId: requestId)
+                if case .failed(let failure) = outcome {
+                    self.pendingRequests.resolveBatchExecution(
+                        requestId: requestId,
+                        result: Result<BatchExecutionResult, Error>.failure(FenceError(failure))
                     )
                 }
             }

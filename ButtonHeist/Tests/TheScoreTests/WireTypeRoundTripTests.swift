@@ -329,6 +329,25 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    func testScrollTargetDefaultsDirectionDown() throws {
+        let decoded = try decoder.decode(ScrollTarget.self, from: Data("{}".utf8))
+        XCTAssertEqual(decoded.direction, .down)
+        XCTAssertNil(decoded.elementTarget)
+        XCTAssertNil(decoded.containerTarget)
+    }
+
+    func testScrollTargetContainerRoundTrip() throws {
+        let target = ScrollTarget(
+            containerTarget: ScrollContainerTarget(stableId: "main_scroll"),
+            direction: .up
+        )
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(ScrollTarget.self, from: data)
+        XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
+        XCTAssertNil(decoded.elementTarget)
+        XCTAssertEqual(decoded.direction, .up)
+    }
+
     // MARK: - ScrollToEdgeTarget
 
     func testScrollToEdgeTargetAllEdges() throws {
@@ -342,6 +361,25 @@ final class WireTypeRoundTripTests: XCTestCase {
             XCTAssertEqual(decoded.edge, edge)
             XCTAssertEqual(decoded.elementTarget, .heistId("scroll_view"))
         }
+    }
+
+    func testScrollToEdgeTargetDefaultsEdgeTop() throws {
+        let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: Data("{}".utf8))
+        XCTAssertEqual(decoded.edge, .top)
+        XCTAssertNil(decoded.elementTarget)
+        XCTAssertNil(decoded.containerTarget)
+    }
+
+    func testScrollToEdgeTargetContainerRoundTrip() throws {
+        let target = ScrollToEdgeTarget(
+            containerTarget: ScrollContainerTarget(stableId: "main_scroll"),
+            edge: .bottom
+        )
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
+        XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
+        XCTAssertNil(decoded.elementTarget)
+        XCTAssertEqual(decoded.edge, .bottom)
     }
 
     // MARK: - ProtocolMismatchPayload
@@ -557,6 +595,19 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertNil(decoded.scale)
         XCTAssertNil(decoded.inactivityTimeout)
         XCTAssertNil(decoded.maxDuration)
+    }
+
+    // MARK: - Action
+
+    func testActionRejectsPasteboardRead() {
+        let json = #"{"type":"get_pasteboard"}"#
+        XCTAssertThrowsError(
+            try decoder.decode(Action.self, from: Data(json.utf8))
+        ) { error in
+            XCTAssertTrue(
+                String(describing: error).contains("get_pasteboard is a read operation and is not a batch Action")
+            )
+        }
     }
 
     // MARK: - HeistCustomContent

@@ -119,6 +119,7 @@ final class TheGetaway {
     }
 
     var identity: ServerIdentity
+    let pongPayload: PongPayload
 
     // MARK: - State
 
@@ -199,6 +200,7 @@ final class TheGetaway {
         self.brains = brains
         self.tripwire = tripwire
         self.identity = identity
+        self.pongPayload = Self.makePongPayload(identity: identity)
     }
 
     // MARK: - Transport Wiring
@@ -278,8 +280,9 @@ final class TheGetaway {
         // the network queue before the message ever enters the event stream;
         // a `.fastPathHandled` event is yielded so we can still note client
         // activity in order with everything else.
+        let pongPayload = self.pongPayload
         transport.setSyncDataInterceptor { _, data in
-            PingFastPath.encodedPong(for: data)
+            PingFastPath.encodedPong(for: data, payload: pongPayload)
         }
 
         // `wireTransport` is idempotent: re-wiring cancels any prior
@@ -381,11 +384,14 @@ final class TheGetaway {
             await sendInterface(query: query, requestId: requestId, respond: respond)
         case .ping:
             await muscle.noteClientActivity(clientId)
-            sendMessage(.pong, requestId: requestId, respond: respond)
+            sendMessage(.pong(pongPayload.withServerTimestamp()), requestId: requestId, respond: respond)
         case .status:
             sendMessage(.status(await makeStatusPayload()), requestId: requestId, respond: respond)
 
         // Observation
+        case .getPasteboard:
+            let result = brains.executePasteboardRead()
+            sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
             brains.clearPendingRotorResult()
             handleScreen(requestId: requestId, respond: respond)
@@ -592,6 +598,21 @@ final class TheGetaway {
         return StatusPayload(identity: identity, session: session)
     }
 
+    private static func makePongPayload(identity: ServerIdentity) -> PongPayload {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let appName = (info["CFBundleDisplayName"] as? String)
+            ?? (info["CFBundleName"] as? String)
+            ?? ProcessInfo.processInfo.processName
+        return PongPayload(
+            buttonHeistVersion: buttonHeistVersion,
+            appName: appName,
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
+            appVersion: info["CFBundleShortVersionString"] as? String,
+            appBuild: info["CFBundleVersion"] as? String,
+            serverInstanceIdentifier: identity.effectiveInstanceId
+        )
+    }
+
     private func recordAndRespond(
         command: ClientMessage,
         actionResult: ActionResult,
@@ -733,6 +754,7 @@ private extension ClientMessage {
              .waitForIdle,
              .waitFor,
              .waitForChange,
+             .batchExecutionPlan,
              .requestScreen,
              .explore,
              .startRecording,

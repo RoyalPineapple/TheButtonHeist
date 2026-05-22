@@ -137,7 +137,8 @@ extension BatchStepOutcome {
 
     var expectationCounted: Bool {
         guard case .action(_, let expectation) = response else { return false }
-        return expectation?.expectation != nil
+        guard let checked = expectation?.expectation else { return false }
+        return checked != .delivery
     }
 
     var expectationMet: Bool? {
@@ -346,6 +347,7 @@ public enum FenceResponse {
     case error(String, details: FailureDetails? = nil)
     case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
+    case pong(PongPayload)
     case devices([DiscoveredDevice])
     case interface(Interface, detail: InterfaceDetail = .summary)
     case action(result: ActionResult, expectation: ExpectationResult? = nil)
@@ -440,6 +442,8 @@ public enum FenceResponse {
                 return "Connected to \(name)"
             }
             return "Not connected"
+        case .pong(let payload):
+            return Self.formatPongHuman(payload)
         case .devices(let devices):
             return formatDeviceList(devices)
         case .interface(let interface, _):
@@ -518,6 +522,27 @@ public enum FenceResponse {
             }
             return "Session: not connected"
         }
+    }
+
+    private static func formatPongHuman(_ payload: PongPayload) -> String {
+        var parts = [
+            payload.appName.isEmpty ? "App" : payload.appName,
+            "bundle: \(payload.bundleIdentifier.isEmpty ? "unknown" : payload.bundleIdentifier)",
+            "ButtonHeist: \(payload.buttonHeistVersion)",
+        ]
+        if let version = payload.appVersion, !version.isEmpty {
+            parts.append("version: \(version)")
+        }
+        if let build = payload.appBuild, !build.isEmpty {
+            parts.append("build: \(build)")
+        }
+        if let identifier = payload.serverInstanceIdentifier, !identifier.isEmpty {
+            parts.append("server: \(identifier)")
+        }
+        if let timestamp = payload.serverTimestampMs {
+            parts.append("serverTimestampMs: \(timestamp)")
+        }
+        return "Pong: " + parts.joined(separator: ", ")
     }
 
     private static func sessionStateFailureSummary(_ failure: SessionFailurePayload?) -> String? {

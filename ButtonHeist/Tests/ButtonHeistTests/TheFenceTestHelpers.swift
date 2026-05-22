@@ -31,6 +31,16 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
     mockConn.serverInfo = TheFenceFixtures.testServerInfo
     mockConn.autoResponse = { message in
         switch message {
+        case .ping:
+            return .pong(PongPayload(
+                buttonHeistVersion: "0.0.1",
+                appName: "MockApp",
+                bundleIdentifier: "com.test.mock",
+                appVersion: "1.0",
+                appBuild: "1",
+                serverInstanceIdentifier: "mock-server",
+                serverTimestampMs: 1_700_000_000_000
+            ))
         case .requestInterface:
             return .interface(Interface(timestamp: Date(), tree: []))
         case .requestScreen:

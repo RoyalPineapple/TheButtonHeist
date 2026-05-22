@@ -29,6 +29,15 @@ final class TheStakeoutTests: XCTestCase {
         TheStakeout(captureFrame: captureFrame)
     }
 
+    @MainActor
+    private static func makeFrameImage() -> UIImage {
+        let bounds = CGRect(x: 0, y: 0, width: 100, height: 100)
+        return UIGraphicsImageRenderer(size: bounds.size).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(bounds)
+        }
+    }
+
     // MARK: - Initial State
 
     func testInitialStateIsIdle() async {
@@ -36,9 +45,11 @@ final class TheStakeoutTests: XCTestCase {
         let isIdle = await stakeout.isIdle
         let interactionLog = await stakeout.interactionLog
         let elapsed = await stakeout.recordingElapsed
+        let lifecycleSnapshot = await stakeout.lifecycleSnapshot
         XCTAssertTrue(isIdle)
         XCTAssertTrue(interactionLog.isEmpty)
         XCTAssertEqual(elapsed, 0)
+        XCTAssertEqual(lifecycleSnapshot, .idle)
     }
 
     // MARK: - startRecording
@@ -52,6 +63,47 @@ final class TheStakeoutTests: XCTestCase {
         let elapsed = await stakeout.recordingElapsed
         XCTAssertTrue(isRecording)
         XCTAssertGreaterThan(elapsed, 0)
+    }
+
+    func testStartRecordingUsesUntrackedActivityWhenInactivityTimeoutIsOmitted() async throws {
+        let stakeout = makeStakeout()
+
+        try await stakeout.startRecording(config: RecordingConfig(maxDuration: 60.0), screen: Self.testScreen)
+
+        let lifecycleSnapshot = await stakeout.lifecycleSnapshot
+        XCTAssertEqual(
+            lifecycleSnapshot,
+            .recording(
+                activity: .notTracked,
+                frameCount: 0,
+                interactionCount: 0,
+                droppedInteractionCount: 0
+            )
+        )
+
+        await stakeout.stopRecording(reason: .manual)
+    }
+
+    func testStartRecordingTracksActivityWhenInactivityTimeoutIsConfigured() async throws {
+        let stakeout = makeStakeout()
+
+        try await stakeout.startRecording(
+            config: RecordingConfig(inactivityTimeout: 3.0, maxDuration: 60.0),
+            screen: Self.testScreen
+        )
+
+        let lifecycleSnapshot = await stakeout.lifecycleSnapshot
+        XCTAssertEqual(
+            lifecycleSnapshot,
+            .recording(
+                activity: .tracking(timeout: 3.0),
+                frameCount: 0,
+                interactionCount: 0,
+                droppedInteractionCount: 0
+            )
+        )
+
+        await stakeout.stopRecording(reason: .manual)
     }
 
     func testStartRecordingWhileRecordingThrows() async throws {
@@ -316,6 +368,65 @@ final class TheStakeoutTests: XCTestCase {
         XCTAssertFalse(frameCaptured.value)
     }
 
+    func testStaleCaptureCallbackAfterRestartDoesNotAppendToNewRecording() async throws {
+        let initialTimerCapture = XCTestExpectation(description: "Initial timer capture ran")
+        let actionCaptureEntered = XCTestExpectation(description: "Action capture entered")
+        let releaseActionCapture = Box<CheckedContinuation<Void, Never>?>(nil)
+        let captureCallCount = Box(0)
+        let stakeout = makeStakeout {
+            captureCallCount.value += 1
+            switch captureCallCount.value {
+            case 1:
+                initialTimerCapture.fulfill()
+                return nil
+            case 2:
+                actionCaptureEntered.fulfill()
+                await withCheckedContinuation { continuation in
+                    releaseActionCapture.value = continuation
+                }
+                return Self.makeFrameImage()
+            default:
+                return nil
+            }
+        }
+
+        try await stakeout.startRecording(
+            config: RecordingConfig(fps: 1, maxDuration: 60.0),
+            screen: Self.testScreen
+        )
+        await fulfillment(of: [initialTimerCapture], timeout: 2.0)
+
+        let actionCaptureTask = Task {
+            await stakeout.captureActionFrame()
+        }
+        await fulfillment(of: [actionCaptureEntered], timeout: 2.0)
+
+        await stakeout.stopRecording(reason: .manual)
+        try await stakeout.startRecording(
+            config: RecordingConfig(fps: 1, maxDuration: 60.0),
+            screen: Self.testScreen
+        )
+
+        guard let continuation = releaseActionCapture.value else {
+            return XCTFail("Action capture did not park")
+        }
+        continuation.resume()
+        await actionCaptureTask.value
+
+        let lifecycleSnapshot = await stakeout.lifecycleSnapshot
+        XCTAssertEqual(
+            lifecycleSnapshot,
+            .recording(
+                activity: .notTracked,
+                frameCount: 0,
+                interactionCount: 0,
+                droppedInteractionCount: 0
+            )
+        )
+
+        await stakeout.stopRecording(reason: .manual)
+    }
+
     // MARK: - Inactivity timeout auto-stop
 
     func testInactivityTimeoutStopsRecording() async throws {
@@ -491,7 +602,9 @@ final class TheStakeoutTests: XCTestCase {
         }
 
         let isIdle = await stakeout.isIdle
+        let idleSnapshot = await stakeout.lifecycleSnapshot
         XCTAssertTrue(isIdle)
+        XCTAssertEqual(idleSnapshot, .idle)
 
         try await stakeout.startRecording(
             config: RecordingConfig(
@@ -501,13 +614,25 @@ final class TheStakeoutTests: XCTestCase {
             screen: Self.testScreen
         )
         let isRecording = await stakeout.isRecording
+        let recordingSnapshot = await stakeout.lifecycleSnapshot
         XCTAssertTrue(isRecording)
+        XCTAssertEqual(
+            recordingSnapshot,
+            .recording(
+                activity: .tracking(timeout: 60.0),
+                frameCount: 0,
+                interactionCount: 0,
+                droppedInteractionCount: 0
+            )
+        )
 
         await stakeout.stopRecording(reason: .manual)
 
         await fulfillment(of: [completionExpectation], timeout: 5.0)
         let isIdleAgain = await stakeout.isIdle
+        let idleAgainSnapshot = await stakeout.lifecycleSnapshot
         XCTAssertTrue(isIdleAgain)
+        XCTAssertEqual(idleAgainSnapshot, .idle)
 
         // Can start a new recording after full cycle
         try await stakeout.startRecording(config: RecordingConfig(), screen: Self.testScreen)

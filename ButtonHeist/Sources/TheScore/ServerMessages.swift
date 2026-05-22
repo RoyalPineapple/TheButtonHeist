@@ -61,8 +61,8 @@ public enum ServerMessage: Codable, Sendable {
     /// Interface (UI element hierarchy) response/update
     case interface(Interface)
 
-    /// Pong response
-    case pong
+    /// Pong response with cheap static app/server health facts.
+    case pong(PongPayload = PongPayload())
 
     /// Server-side error broadcast. `ServerError.kind` tags the category
     /// (auth failure, recording, general) so clients can route without
@@ -97,6 +97,74 @@ public enum ServerMessage: Codable, Sendable {
     /// Lightweight server health + identity snapshot.
     /// Returned in response to ClientMessage.status without acquiring a session.
     case status(StatusPayload)
+}
+
+/// Cheap health payload returned by ping.
+///
+/// This intentionally excludes dynamic UI/accessibility state, latency, and
+/// discovery scans so ping can be answered cheaply.
+public struct PongPayload: Codable, Sendable, Equatable {
+    public let buttonHeistVersion: String
+    public let appName: String
+    public let bundleIdentifier: String
+    public let appVersion: String?
+    public let appBuild: String?
+    public let serverInstanceIdentifier: String?
+    public let serverTimestampMs: Int64?
+
+    public init(
+        buttonHeistVersion: String = TheScore.buttonHeistVersion,
+        appName: String = "",
+        bundleIdentifier: String = "",
+        appVersion: String? = nil,
+        appBuild: String? = nil,
+        serverInstanceIdentifier: String? = nil,
+        serverTimestampMs: Int64? = nil
+    ) {
+        self.buttonHeistVersion = buttonHeistVersion
+        self.appName = appName
+        self.bundleIdentifier = bundleIdentifier
+        self.appVersion = appVersion
+        self.appBuild = appBuild
+        self.serverInstanceIdentifier = serverInstanceIdentifier
+        self.serverTimestampMs = serverTimestampMs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case buttonHeistVersion
+        case appName
+        case bundleIdentifier
+        case appVersion
+        case appBuild
+        case serverInstanceIdentifier
+        case serverTimestampMs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            buttonHeistVersion: try container.decodeIfPresent(String.self, forKey: .buttonHeistVersion)
+                ?? TheScore.buttonHeistVersion,
+            appName: try container.decodeIfPresent(String.self, forKey: .appName) ?? "",
+            bundleIdentifier: try container.decodeIfPresent(String.self, forKey: .bundleIdentifier) ?? "",
+            appVersion: try container.decodeIfPresent(String.self, forKey: .appVersion),
+            appBuild: try container.decodeIfPresent(String.self, forKey: .appBuild),
+            serverInstanceIdentifier: try container.decodeIfPresent(String.self, forKey: .serverInstanceIdentifier),
+            serverTimestampMs: try container.decodeIfPresent(Int64.self, forKey: .serverTimestampMs)
+        )
+    }
+
+    public func withServerTimestamp(_ date: Date = Date()) -> PongPayload {
+        PongPayload(
+            buttonHeistVersion: buttonHeistVersion,
+            appName: appName,
+            bundleIdentifier: bundleIdentifier,
+            appVersion: appVersion,
+            appBuild: appBuild,
+            serverInstanceIdentifier: serverInstanceIdentifier,
+            serverTimestampMs: Int64(date.timeIntervalSince1970 * 1000)
+        )
+    }
 }
 
 /// Sent when the client's `buttonHeistVersion` does not exactly match the server's.
@@ -232,12 +300,14 @@ public enum ResultPayload: Codable, Sendable {
     case scrollSearch(ScrollSearchResult)
     case explore(ExploreResult)
     case rotor(RotorResult)
+    case batchExecution(BatchExecutionResult)
 
     private enum Kind: String, Codable {
         case value
         case scrollSearch
         case explore
         case rotor
+        case batchExecution
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -257,6 +327,8 @@ public enum ResultPayload: Codable, Sendable {
             self = .explore(try container.decode(ExploreResult.self, forKey: .data))
         case .rotor:
             self = .rotor(try container.decode(RotorResult.self, forKey: .data))
+        case .batchExecution:
+            self = .batchExecution(try container.decode(BatchExecutionResult.self, forKey: .data))
         }
     }
 
@@ -275,7 +347,113 @@ public enum ResultPayload: Codable, Sendable {
         case .rotor(let rotor):
             try container.encode(Kind.rotor, forKey: .kind)
             try container.encode(rotor, forKey: .data)
+        case .batchExecution(let result):
+            try container.encode(Kind.batchExecution, forKey: .kind)
+            try container.encode(result, forKey: .data)
         }
+    }
+}
+
+// MARK: - Batch Execution Results
+
+/// Typed result for an InsideJob-owned batch execution plan.
+public struct BatchExecutionResult: Codable, Sendable {
+    public let policy: BatchExecutionPolicy
+    public let steps: [BatchExecutionStepResult]
+    public let totalTimingMs: Int
+    public let failedIndex: Int?
+
+    public init(
+        policy: BatchExecutionPolicy,
+        steps: [BatchExecutionStepResult],
+        totalTimingMs: Int,
+        failedIndex: Int? = nil
+    ) {
+        self.policy = policy
+        self.steps = steps
+        self.totalTimingMs = totalTimingMs
+        self.failedIndex = failedIndex
+    }
+}
+
+/// One typed step result from a batch execution plan.
+///
+/// A step is normalized by InsideJob as `Action + ActionExpectation? +
+/// Deadline?`. Optional fields here preserve wire compatibility for skipped
+/// rows and for current adapter syntax that cannot express an expectation.
+public struct BatchExecutionStepResult: Codable, Sendable {
+    public let index: Int
+    public let actionName: String?
+    public let expectationName: String?
+    public let actionResult: ActionResult?
+    public let expectationActionResult: ActionResult?
+    public let expectation: ExpectationResult?
+    public let durationMs: Int
+    public let stopsBatch: Bool
+    public let skipped: BatchExecutionSkippedStepResult?
+
+    public init(
+        index: Int,
+        actionName: String? = nil,
+        expectationName: String? = nil,
+        actionResult: ActionResult? = nil,
+        expectationActionResult: ActionResult? = nil,
+        expectation: ExpectationResult? = nil,
+        durationMs: Int,
+        stopsBatch: Bool = false,
+        skipped: BatchExecutionSkippedStepResult? = nil
+    ) {
+        self.index = index
+        self.actionName = actionName
+        self.expectationName = expectationName
+        self.actionResult = actionResult
+        self.expectationActionResult = expectationActionResult
+        self.expectation = expectation
+        self.durationMs = durationMs
+        self.stopsBatch = stopsBatch
+        self.skipped = skipped
+    }
+
+    public var isSkipped: Bool {
+        skipped != nil
+    }
+
+    public var isFailure: Bool {
+        guard skipped == nil else { return false }
+        if actionResult?.success == false { return true }
+        if expectationActionResult?.success == false { return true }
+        if expectation?.met == false { return true }
+        if actionName == nil, expectationName == nil { return true }
+        return false
+    }
+
+    public var displayName: String {
+        if let actionName, let expectationName {
+            return "\(actionName)+\(expectationName)"
+        }
+        return actionName ?? expectationName ?? "invalid"
+    }
+}
+
+public struct BatchExecutionSkippedStepResult: Codable, Sendable {
+    public let index: Int
+    public let actionName: String?
+    public let expectationName: String?
+    public let reason: String
+    public let afterFailedIndex: Int
+
+    public init(
+        index: Int,
+        actionName: String? = nil,
+        expectationName: String? = nil,
+        reason: String,
+        afterFailedIndex: Int
+    ) {
+        self.index = index
+        self.actionName = actionName
+        self.expectationName = expectationName
+        self.reason = reason
+        self.afterFailedIndex = afterFailedIndex
     }
 }
 
@@ -917,6 +1095,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case rotor
     case waitForIdle
     case waitForChange
+    case batchExecutionPlan
     case scroll
     case scrollToVisible
     case elementSearch

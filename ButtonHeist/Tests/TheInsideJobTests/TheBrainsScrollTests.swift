@@ -900,6 +900,125 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("scroll_to_visible") == true)
     }
 
+    func testScrollWithoutElementUsesSingleVisibleContainerAndDefaultsDown() async {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerStableIds: [container: "main_scroll"],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [container: .init(view: scrollView)]
+        )
+
+        let result = await brains.navigation.executeScroll(ScrollTarget())
+
+        XCTAssertTrue(result.success, "Expected default scroll to pick the only visible container: \(String(describing: result.message))")
+        XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
+    }
+
+    func testScrollToEdgeWithoutElementDefaultsTop() async {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        scrollView.contentOffset.y = 600
+        let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerStableIds: [container: "main_scroll"],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [container: .init(view: scrollView)]
+        )
+
+        let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget())
+
+        XCTAssertTrue(result.success, "Expected default edge scroll to pick the only visible container: \(String(describing: result.message))")
+        XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
+    }
+
+    func testScrollUsesExplicitContainerStableId() async {
+        let first = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        first.contentSize = CGSize(width: 320, height: 1_600)
+        let second = UIScrollView(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
+        second.contentSize = CGSize(width: 320, height: 1_600)
+        let firstContainer = makeScrollableContainer(contentSize: first.contentSize, frame: first.frame)
+        let secondContainer = makeScrollableContainer(contentSize: second.contentSize, frame: second.frame)
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [
+                .container(firstContainer, children: []),
+                .container(secondContainer, children: []),
+            ],
+            containerStableIds: [
+                firstContainer: "first_scroll",
+                secondContainer: "second_scroll",
+            ],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [
+                firstContainer: .init(view: first),
+                secondContainer: .init(view: second),
+            ]
+        )
+
+        let result = await brains.navigation.executeScroll(
+            ScrollTarget(containerTarget: ScrollContainerTarget(stableId: "second_scroll"))
+        )
+
+        XCTAssertTrue(result.success, "Expected explicit container scroll to succeed: \(String(describing: result.message))")
+        XCTAssertEqual(first.contentOffset.y, 0, accuracy: 0.01)
+        XCTAssertGreaterThan(second.contentOffset.y, 0)
+    }
+
+    func testScrollWithoutElementReportsAmbiguousContainers() async {
+        let firstContainer = makeScrollableContainer()
+        let secondContainer = makeScrollableContainer(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
+        installScrollableContainers([firstContainer, secondContainer])
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [
+                .container(firstContainer, children: []),
+                .container(secondContainer, children: []),
+            ],
+            containerStableIds: [
+                firstContainer: "first_scroll",
+                secondContainer: "second_scroll",
+            ],
+            heistIdByElement: [:],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let result = await brains.navigation.executeScroll(ScrollTarget())
+
+        XCTAssertFalse(result.success)
+        XCTAssertTrue(result.message?.contains("ambiguous") == true)
+        XCTAssertTrue(result.message?.contains("first_scroll") == true)
+        XCTAssertTrue(result.message?.contains("second_scroll") == true)
+    }
+
+    func testElementSearchKnownTargetRoutesThroughScrollToVisible() async {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Settings")
+        installScreenWithKnownOffscreen(
+            visible: (visible, "visible_element"),
+            offscreen: (offscreen, "settings_button", CGPoint(x: 0, y: 1_200), scrollView)
+        )
+
+        let result = await brains.navigation.executeElementSearch(
+            ElementSearchTarget(elementTarget: .heistId("settings_button"))
+        )
+
+        XCTAssertTrue(result.success, "Expected known element_search target to use direct visibility: \(String(describing: result.message))")
+        XCTAssertEqual(result.method, .elementSearch)
+        XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
+    }
+
     func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white

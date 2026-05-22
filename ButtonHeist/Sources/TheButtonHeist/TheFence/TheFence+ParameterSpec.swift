@@ -123,6 +123,7 @@ public enum FenceParameterKey: String, CaseIterable, Sendable {
     case cp1Y
     case cp2X
     case cp2Y
+    case captureLocalRef
     case currentHeistId
     case currentTextEndOffset
     case currentTextStartOffset
@@ -544,6 +545,26 @@ enum FenceParameterBlocks: Sendable {
         ),
     ]
 
+    /// Scroll-container targeting for commands that move a container directly.
+    static let scrollContainerTarget: [FenceParameterSpec] = [
+        .init(
+            key: "stableId", type: .string, optionalRole: .matcher,
+            description: "Scrollable container stableId returned by get_interface. Prefer this for scroll and scroll_to_edge."
+        ),
+        .init(
+            key: "captureLocalRef", type: .string, optionalRole: .matcher,
+            description: "Capture-local scroll container reference when supplied by the client."
+        ),
+        .init(
+            key: "container", type: .object, optionalRole: .matcher,
+            description: "Explicit scroll container selector. Use stableId or captureLocalRef.",
+            objectProperties: [
+                .init(key: "stableId", type: .string, optionalRole: .matcher),
+                .init(key: "captureLocalRef", type: .string, optionalRole: .matcher),
+            ]
+        ),
+    ]
+
     /// Subtree selector for get_interface. Cuts the parsed interface tree
     /// at one matched leaf or container node.
     static let interfaceSubtree: FenceParameterSpec = .init(
@@ -679,6 +700,7 @@ extension TheFence.Command {
     /// Does not include the "command" key itself or internal keys like "_requestId".
     var catalogParameters: [FenceParameterSpec] {
         let target = FenceParameterBlocks.elementTarget
+        let scrollContainerTarget = FenceParameterBlocks.scrollContainerTarget
         let filter = FenceParameterBlocks.elementFilter
         let expect = FenceParameterBlocks.expect
         let expectation = FenceParameterBlocks.expectation
@@ -686,7 +708,7 @@ extension TheFence.Command {
         switch self {
 
         // MARK: No parameters (meta / read-only)
-        case .help, .quit, .exit, .status, .listDevices, .getSessionState,
+        case .help, .quit, .exit, .status, .ping, .listDevices, .getSessionState,
              .listTargets, .getSessionLog:
             return []
 
@@ -908,11 +930,11 @@ extension TheFence.Command {
 
         // MARK: Scroll
         case .scroll:
-            return target + [
+            return scrollContainerTarget + target + [
                 .init(
-                    key: "direction", type: .string, required: true,
+                    key: "direction", type: .string, optionalRole: .payload,
                     description: """
-                        Scroll direction. next/previous are page-only directions for mode=page; \
+                        Scroll direction. Defaults to down. next/previous are page-only directions for mode=page; \
                         mode=search accepts only up, down, left, right and is validated server-side.
                         """,
                     enumValues: fenceEnumValues(ScrollDirection.self)
@@ -932,10 +954,10 @@ extension TheFence.Command {
             ] + expectation
 
         case .scrollToEdge:
-            return target + [
+            return scrollContainerTarget + target + [
                 .init(
-                    key: "edge", type: .string, required: true,
-                    description: "Edge to scroll to (required for mode to_edge)",
+                    key: "edge", type: .string, optionalRole: .payload,
+                    description: "Edge to scroll to. Defaults to top.",
                     enumValues: fenceEnumValues(ScrollEdge.self)
                 ),
             ] + expectation
@@ -1021,7 +1043,7 @@ extension TheFence.Command {
             ] + expectation
 
         case .getPasteboard:
-            return expectation
+            return []
 
         // MARK: Wait
         case .waitFor:
