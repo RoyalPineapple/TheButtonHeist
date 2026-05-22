@@ -78,14 +78,8 @@ extension TheFence {
             command.rawValue
         }
 
-        /// Bridge typed playback data into the flat handler argument shape.
-        ///
-        /// Playback never uses this for command selection: command routing is
-        /// already bound to `TheFence.Command`. This is the single execution
-        /// edge where existing handlers still consume schema-checked
-        /// `[String: Any]` arguments.
         func requestArguments() -> [String: Any] {
-            var arguments = payload.dispatchBridgeArguments()
+            var arguments = payload.values.mapValues { $0.toAny() }
 
             if let target {
                 if let label = target.label { arguments["label"] = label }
@@ -102,14 +96,6 @@ extension TheFence {
         func normalizedOperation() -> NormalizedOperation {
             NormalizedOperation(command: command, arguments: requestArguments())
         }
-
-        /// Compatibility bridge for tests/callers that still inspect playback
-        /// as the historical flat request dictionary.
-        func dispatchBridgeArguments() -> [String: Any] {
-            var arguments = requestArguments()
-            arguments["command"] = command.rawValue
-            return arguments
-        }
     }
 
     struct PlaybackPayload: Sendable, Equatable {
@@ -123,8 +109,5 @@ extension TheFence {
             values[key]
         }
 
-        func dispatchBridgeArguments() -> [String: Any] {
-            values.mapValues { $0.toAny() }
-        }
     }
 }

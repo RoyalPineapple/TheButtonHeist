@@ -60,11 +60,10 @@ public enum FenceOperationCatalog {
 
     public static func normalizePlaybackStep(
         commandName: String,
-        arguments: [String: HeistValue]
+        arguments _: [String: HeistValue]
     ) -> Result<TheFence.Command, FenceOperationRoutingError> {
         normalizeTypedPlaybackStep(
             commandName: commandName,
-            arguments: arguments,
             context: "heist step"
         )
     }
@@ -124,7 +123,6 @@ public enum FenceOperationCatalog {
 
     private static func normalizeTypedPlaybackStep(
         commandName: String,
-        arguments: [String: HeistValue],
         context: String
     ) -> Result<TheFence.Command, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: commandName) else {
@@ -137,10 +135,6 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command \"\(command.rawValue)\" is not playback-executable"
             ))
-        }
-
-        if let error = typedPlaybackShapeError(for: command, arguments: arguments, context: context) {
-            return .failure(error)
         }
 
         return .success(command)
@@ -213,39 +207,6 @@ public enum FenceOperationCatalog {
         }
 
         guard let selectorValue = arguments[selectorKey] as? String,
-              selector.consumesValue(selectorValue),
-              let selectedCommand = selector.command(for: selectorValue),
-              selectedCommand != command else {
-            return nil
-        }
-        return .init(
-            message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorValue) selector; " +
-                "use canonical Fence command \(selectedCommand.rawValue)."
-        )
-    }
-
-    private static func typedPlaybackShapeError(
-        for command: TheFence.Command,
-        arguments: [String: HeistValue],
-        context: String
-    ) -> FenceOperationRoutingError? {
-        guard let contract = TheFence.Command.mcpToolContract(named: command.rawValue),
-              let selector = contract.selector else {
-            return nil
-        }
-
-        let selectorKey = selector.parameter.key
-        guard arguments[selectorKey] != nil else { return nil }
-
-        let commandParameterKeys = Set(command.parameters.map(\.key))
-        if !commandParameterKeys.contains(selectorKey) {
-            return .init(
-                message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorKey) selector; " +
-                    "use canonical Fence commands \(rawCommandList(contract.commands))."
-            )
-        }
-
-        guard case .string(let selectorValue)? = arguments[selectorKey],
               selector.consumesValue(selectorValue),
               let selectedCommand = selector.command(for: selectorValue),
               selectedCommand != command else {

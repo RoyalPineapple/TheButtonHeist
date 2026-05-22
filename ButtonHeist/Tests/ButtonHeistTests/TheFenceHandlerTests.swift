@@ -2024,7 +2024,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationFromTypedPlaybackBridgeArguments() async throws {
+    func testParseExpectationFromTypedPlaybackRequestArguments() async throws {
         let (fence, _) = makeConnectedFence()
         let operation = try TheFence.PlaybackOperation(
             evidence: HeistEvidence(
@@ -2041,7 +2041,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        let result = try fence.parseExpectation(operation.dispatchBridgeArguments())
+        let result = try fence.parseExpectation(operation.requestArguments())
 
         XCTAssertEqual(
             result,
@@ -2060,7 +2060,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        XCTAssertThrowsError(try fence.parseExpectation(operation.dispatchBridgeArguments())) { error in
+        XCTAssertThrowsError(try fence.parseExpectation(operation.requestArguments())) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
@@ -3358,8 +3358,9 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(operation.target?.identifier, "email")
         XCTAssertEqual(operation.ordinal, 1)
 
-        let arguments = operation.dispatchBridgeArguments()
-        XCTAssertEqual(arguments["command"] as? String, "type_text")
+        let normalizedOperation = operation.normalizedOperation()
+        let arguments = normalizedOperation.arguments
+        XCTAssertEqual(normalizedOperation.command, .typeText)
         XCTAssertEqual(arguments["identifier"] as? String, "email")
         XCTAssertEqual(arguments["ordinal"] as? Int, 1)
         XCTAssertEqual(arguments["text"] as? String, "user@example.com")
@@ -3386,7 +3387,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.map(\.command), [.activate])
         XCTAssertEqual(playback.steps.first?.target?.identifier, "submit")
-        let expect = playback.steps.first?.dispatchBridgeArguments()["expect"] as? [String: Any]
+        let expect = playback.steps.first?.requestArguments()["expect"] as? [String: Any]
         XCTAssertEqual(expect?["type"] as? String, "screen_changed")
     }
 
@@ -3420,7 +3421,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        let expect = operation.dispatchBridgeArguments()["expect"] as? [String: Any]
+        let expect = operation.requestArguments()["expect"] as? [String: Any]
         XCTAssertEqual(expect?["type"] as? String, "screen_changed")
     }
 
@@ -3439,41 +3440,67 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackRejectsGroupedMCPToolShapes() async throws {
-        let cases: [(name: String, evidence: HeistEvidence, message: String)] = [
-            (
-                "gesture selector tool",
-                HeistEvidence(command: "gesture", arguments: ["type": .string(TheFence.Command.swipe.rawValue)]),
-                "heist step command must be a canonical TheFence.Command; unknown command \"gesture\""
-            ),
+    func testTypedPlaybackRejectsUnknownGroupedMCPToolName() async throws {
+        XCTAssertThrowsError(
+            try TheFence.TypedHeistPlayback(
+                wire: HeistPlayback(
+                    app: "com.test.mock",
+                    steps: [
+                        HeistEvidence(
+                            command: "gesture",
+                            arguments: ["type": .string(TheFence.Command.swipe.rawValue)]
+                        ),
+                    ]
+                )
+            )
+        ) { error in
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid heist step 0"))
+            XCTAssertTrue(
+                message.contains("heist step command must be a canonical TheFence.Command; unknown command \"gesture\""),
+                "Unexpected error: \(message)"
+            )
+        }
+    }
+
+    @ButtonHeistActor
+    func testPlaybackGroupedMCPSelectorShapesUseRequestValidation() async throws {
+        let cases: [(name: String, operation: TheFence.PlaybackOperation, message: String)] = [
             (
                 "scroll mode selector",
-                HeistEvidence(command: "scroll", arguments: ["mode": .string(ScrollMode.search.rawValue)]),
-                "heist step \"scroll\" uses the MCP mode selector; use canonical Fence commands scroll, scroll_to_visible, element_search, or scroll_to_edge."
+                try TheFence.PlaybackOperation(
+                    evidence: HeistEvidence(
+                        command: "scroll",
+                        arguments: ["mode": .string(ScrollMode.search.rawValue)]
+                    ),
+                    index: 0
+                ),
+                "schema validation failed for mode: observed string \"search\"; expected valid scroll parameter"
             ),
             (
                 "edit_action dismiss selector",
-                HeistEvidence(command: "edit_action", arguments: ["action": .string("dismiss")]),
-                "heist step \"edit_action\" uses the MCP dismiss selector; use canonical Fence command dismiss_keyboard."
+                try TheFence.PlaybackOperation(
+                    evidence: HeistEvidence(
+                        command: "edit_action",
+                        arguments: ["action": .string("dismiss")]
+                    ),
+                    index: 0
+                ),
+                "schema validation failed for action: observed string \"dismiss\"; " +
+                    "expected enum one of copy, paste, cut, select, selectAll, delete"
             ),
         ]
 
+        let (fence, _) = makeConnectedFence()
         for testCase in cases {
-            XCTAssertThrowsError(
-                try TheFence.TypedHeistPlayback(
-                    wire: HeistPlayback(app: "com.test.mock", steps: [testCase.evidence])
-                ),
-                testCase.name
-            ) { error in
-                guard case FenceError.invalidRequest(let message) = error else {
-                    return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-                }
-                XCTAssertTrue(message.contains("Invalid heist step 0"))
-                XCTAssertTrue(
-                    message.contains(testCase.message),
-                    "Expected \(testCase.name) error to contain '\(testCase.message)', got: \(message)"
-                )
+            let response = try await fence.execute(playback: testCase.operation)
+            guard case .error(let message, _) = response else {
+                XCTFail("Expected playback validation error for \(testCase.name), got \(response)")
+                continue
             }
+            XCTAssertEqual(message, testCase.message)
         }
     }
 
@@ -3583,7 +3610,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        let arguments = operation.dispatchBridgeArguments()
+        let arguments = operation.requestArguments()
         XCTAssertEqual(arguments["identifier"] as? String, "btn1")
         XCTAssertNil(arguments["heistId"])
 
