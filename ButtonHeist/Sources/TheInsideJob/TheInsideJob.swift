@@ -241,20 +241,12 @@ public final class TheInsideJob {
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0
     ) {
-        let startupConfiguration = StartupConfiguration.resolve()
         self.init(
             token: token,
-            tokenSource: token == nil ? .generated : .api,
             instanceId: instanceId,
-            instanceIdSource: instanceId == nil ? .generated : .api,
-            allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
-            allowedScopesSource: allowedScopes == nil ? startupConfiguration.allowedScopes.source : .api,
+            allowedScopes: allowedScopes,
             port: port,
-            preferredPortSource: port == 0 ? .defaultValue : .api,
-            pollingInterval: nil,
-            sessionReleaseTimeout: startupConfiguration.sessionTimeout,
-            tlsIdentityProvider: Self.defaultTLSIdentityProvider,
-            transportFactory: Self.makeDefaultTransport
+            tlsIdentityProvider: Self.defaultTLSIdentityProvider
         )
     }
 
@@ -297,8 +289,7 @@ public final class TheInsideJob {
             preferredPortSource: startupConfiguration.preferredPort.source,
             pollingInterval: startupConfiguration.pollingInterval,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout,
-            tlsIdentityProvider: Self.defaultTLSIdentityProvider,
-            transportFactory: Self.makeDefaultTransport
+            tlsIdentityProvider: Self.defaultTLSIdentityProvider
         )
     }
 
@@ -314,7 +305,9 @@ public final class TheInsideJob {
         pollingInterval: ResolvedStartupValue<TimeInterval>?,
         sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>,
         tlsIdentityProvider: @escaping @MainActor () throws -> TLSIdentity,
-        transportFactory: @escaping @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport
+        transportFactory: @escaping @MainActor (TLSIdentity, Set<ConnectionScope>) -> ServerTransport = {
+            ServerTransport(tlsIdentity: $0, allowedScopes: $1)
+        }
     ) {
         self.muscle = TheMuscle(
             explicitToken: token,
@@ -534,13 +527,6 @@ public final class TheInsideJob {
                 )
             }
         }
-    }
-
-    private static func makeDefaultTransport(
-        identity: TLSIdentity,
-        allowedScopes: Set<ConnectionScope>
-    ) -> ServerTransport {
-        ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
     }
 
     private func makeTLSIdentity(phase: String) throws -> TLSIdentity {
