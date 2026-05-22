@@ -84,10 +84,10 @@ final class TheFenceParameterSpecTests: XCTestCase {
         let descriptors = TheFence.Command.descriptors
 
         XCTAssertEqual(TheFence.Command.batchExecutableCases, descriptors.filter(\.isBatchExecutable).map(\.command))
-        XCTAssertEqual(TheFence.Command.playbackExecutableCases, descriptors.filter(\.isPlaybackExecutable).map(\.command))
+        XCTAssertEqual(TheFence.Command.playbackExecutableCases, TheFence.Command.batchExecutableCases)
         XCTAssertEqual(
             TheFence.Command.allCases.filter(\.isHeistRecordable),
-            descriptors.filter(\.isHeistRecordable).map(\.command)
+            TheFence.Command.playbackExecutableCases
         )
 
         let nonBatchCommands = TheFence.Command.allCases.filter { !$0.isBatchExecutable }
@@ -103,18 +103,6 @@ final class TheFenceParameterSpecTests: XCTestCase {
             ]
         )
 
-        let nonPlaybackCommands = TheFence.Command.allCases.filter { !$0.isPlaybackExecutable }
-        XCTAssertEqual(
-            Set(nonPlaybackCommands),
-            [
-                .help, .status, .ping, .quit, .exit,
-                .listDevices, .getInterface, .getScreen, .getPasteboard,
-                .getSessionState, .connect, .listTargets,
-                .getSessionLog, .archiveSession,
-                .startRecording, .stopRecording, .runBatch,
-                .startHeist, .stopHeist, .playHeist,
-            ]
-        )
         XCTAssertTrue(TheFence.Command.allCases.allSatisfy { !$0.isHeistRecordable || $0.isPlaybackExecutable })
     }
 
@@ -126,13 +114,13 @@ final class TheFenceParameterSpecTests: XCTestCase {
         )
         XCTAssertEqual(
             TheFence.Command.playbackExecutableCases.count,
-            24,
-            "Playback-eligible command count changed - update heist playback tests and this canary"
+            TheFence.Command.batchExecutableCases.count,
+            "Playback eligibility should derive from batch eligibility unless a separate product contract is reintroduced"
         )
         XCTAssertEqual(
             TheFence.Command.allCases.filter(\.isHeistRecordable).count,
-            24,
-            "Heist-recordable command count changed - update BookKeeper guardrails and this canary"
+            TheFence.Command.playbackExecutableCases.count,
+            "Heist-recordable commands should derive from playback eligibility unless a separate product contract is reintroduced"
         )
     }
 
@@ -263,8 +251,6 @@ final class TheFenceParameterSpecTests: XCTestCase {
                 switch spec.optionalRole {
                 case .matcher, .payload, .behaviorSwitch:
                     break
-                case .compatibility:
-                    issues.append("\(specPath) is compatibility optionality; delete the field instead")
                 case nil:
                     issues.append("\(specPath) is optional but missing optionalRole")
                 }

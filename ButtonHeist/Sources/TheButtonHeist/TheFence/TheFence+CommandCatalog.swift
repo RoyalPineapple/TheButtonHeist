@@ -76,7 +76,7 @@ public struct FenceCommandAlias: Sendable, Equatable {
 /// parameter shape, and user-facing help text.
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
-    public let canonicalName: String
+    public var canonicalName: String { command.rawValue }
     /// The server action method that unambiguously projects back to this public command.
     public let actionResultMethod: ActionMethod?
     public let humanAliases: [String: FenceCommandAlias]
@@ -84,8 +84,8 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
     public let isBatchExecutable: Bool
-    public let isPlaybackExecutable: Bool
-    public let isHeistRecordable: Bool
+    public var isPlaybackExecutable: Bool { isBatchExecutable }
+    public var isHeistRecordable: Bool { isPlaybackExecutable }
     public let requiresConnectionBeforeDispatch: Bool
     public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
@@ -99,24 +99,18 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
         isBatchExecutable: Bool,
-        isPlaybackExecutable: Bool? = nil,
-        isHeistRecordable: Bool? = nil,
         requiresConnectionBeforeDispatch: Bool = true,
         humanPositionalSyntax: FenceHumanPositionalSyntax = .target,
         parameters: [FenceParameterSpec],
         description: String
     ) {
         self.command = command
-        self.canonicalName = command.rawValue
         self.actionResultMethod = actionResultMethod
         self.humanAliases = humanAliases
         self.cliName = cliName ?? Self.defaultCLIName(for: command, exposure: cliExposure)
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
         self.isBatchExecutable = isBatchExecutable
-        let resolvedPlaybackExecutable = isPlaybackExecutable ?? isBatchExecutable
-        self.isPlaybackExecutable = resolvedPlaybackExecutable
-        self.isHeistRecordable = isHeistRecordable ?? resolvedPlaybackExecutable
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.humanPositionalSyntax = humanPositionalSyntax
         self.parameters = parameters
@@ -245,13 +239,9 @@ public extension TheFence.Command {
         descriptor.humanPositionalSyntax
     }
 
-    static let humanDirectionValues: Set<String> = [
-        "up", "down", "left", "right", "next", "previous",
-    ]
+    static let humanDirectionValues = Set(fenceEnumValues(ScrollDirection.self))
 
-    static let humanScrollEdgeValues: Set<String> = [
-        "top", "bottom", "left", "right",
-    ]
+    static let humanScrollEdgeValues = Set(fenceEnumValues(ScrollEdge.self))
 
     /// Commands that can execute as a run_batch step.
     ///
@@ -271,7 +261,7 @@ public extension TheFence.Command {
     }
 
     static var playbackExecutableCases: [Self] {
-        allCases.filter(\.catalogPlaybackExecutable)
+        batchExecutableCases
     }
 
     static func command(for scrollMode: ScrollMode) -> Self {
@@ -346,8 +336,6 @@ extension TheFence.Command {
             cliExposure: command.catalogCLIExposure,
             mcpExposure: command.catalogMCPExposure,
             isBatchExecutable: command.catalogBatchExecutable,
-            isPlaybackExecutable: command.catalogPlaybackExecutable,
-            isHeistRecordable: command.catalogHeistRecordable,
             requiresConnectionBeforeDispatch: command.catalogRequiresConnectionBeforeDispatch,
             humanPositionalSyntax: command.catalogHumanPositionalSyntax,
             parameters: command.catalogParameters,
@@ -469,24 +457,6 @@ extension TheFence.Command {
              .startHeist, .stopHeist, .playHeist:
             return false
         }
-    }
-
-    var catalogPlaybackExecutable: Bool {
-        switch self {
-        case .help, .status, .ping, .quit, .exit,
-             .listDevices, .getInterface, .getScreen, .getPasteboard,
-             .getSessionState, .connect, .listTargets,
-             .getSessionLog, .archiveSession,
-             .startRecording, .stopRecording, .runBatch,
-             .startHeist, .stopHeist, .playHeist:
-            return false
-        default:
-            return catalogBatchExecutable
-        }
-    }
-
-    var catalogHeistRecordable: Bool {
-        catalogPlaybackExecutable
     }
 
     var catalogRequiresConnectionBeforeDispatch: Bool {

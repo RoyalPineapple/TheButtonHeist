@@ -27,7 +27,6 @@ public struct FenceParameterSpec: Sendable, Equatable {
         case matcher
         case payload
         case behaviorSwitch
-        case compatibility
     }
 
     // MARK: - Properties
@@ -531,19 +530,11 @@ enum FenceParameterBlocks: Sendable {
 
     /// Element filtering: label, value, traits, excludeTraits, identifier (no heistId/ordinal).
     /// Used by get_interface when filtering returned interface elements.
-    static let elementFilter: [FenceParameterSpec] = [
-        .init(key: "label", type: .string, optionalRole: .matcher, description: "Accessibility label — the text VoiceOver reads (e.g. \"Sign In\")"),
-        .init(key: "value", type: .string, optionalRole: .matcher, description: "Accessibility value — current state or placeholder (e.g. \"50%\")"),
-        .init(
-            key: "traits", type: .stringArray, optionalRole: .matcher,
-            description: "Required traits (role qualifiers like button, header, selected). All must match."
-        ),
-        .init(key: "excludeTraits", type: .stringArray, optionalRole: .matcher, description: "Traits that must NOT be present"),
-        .init(
-            key: "identifier", type: .string, optionalRole: .matcher,
-            description: "accessibilityIdentifier; preferred when developer-assigned and stable"
-        ),
-    ]
+    static var elementFilter: [FenceParameterSpec] {
+        elementTarget.filter {
+            $0.key != FenceParameterKey.heistId.rawValue && $0.key != FenceParameterKey.ordinal.rawValue
+        }
+    }
 
     /// Scroll-container targeting for commands that move a container directly.
     static let scrollContainerTarget: [FenceParameterSpec] = [
