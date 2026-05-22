@@ -8,8 +8,6 @@ import ButtonHeist
 /// `.buttonheist.json` config file. With an explicit positional `device`, that
 /// host:port is used directly.
 struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.connect
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Connect to an iOS app with Button Heist enabled",

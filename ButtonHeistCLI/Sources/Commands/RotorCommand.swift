@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct RotorCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.rotor
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Move through an accessibility rotor",

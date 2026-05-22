@@ -2,10 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
-    static var fenceCommand: TheFence.Command {
-        TheFence.Command.activationAlias(forActionName: nil).command
-    }
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Activate a UI element (primary interaction command)",

@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct GetSessionStateCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.getSessionState
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Report the current connection + session state",

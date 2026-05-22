@@ -4,8 +4,6 @@ import Foundation
 import TheScore
 
 struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.playHeist
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Play back a recorded .heist file"

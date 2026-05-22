@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.editAction
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Perform an edit menu action on the current first responder",

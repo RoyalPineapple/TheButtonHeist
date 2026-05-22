@@ -3,8 +3,6 @@ import ButtonHeist
 import Foundation
 
 struct DrawPathCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.drawPath
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Trace a polyline gesture through JSON-specified waypoints",

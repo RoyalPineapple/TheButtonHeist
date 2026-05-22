@@ -590,6 +590,27 @@ final class CLICommandSyncTests: XCTestCase {
         )
     }
 
+    func testConventionNamedCLIAdaptersDoNotMirrorFenceCommandCases() throws {
+        for file in try swiftSourceFiles(under: "ButtonHeistCLI/Sources/Commands") {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            let conventionCommandName = file
+                .deletingPathExtension()
+                .lastPathComponent
+                .removingSuffix("Command")
+                .removingSuffix("Subcommand")
+                .lowercasingFirstLetter()
+            let assignedCases = captureGroupMatches(
+                in: source,
+                pattern: #"static\s+(?:let|var)\s+fenceCommand\s*=\s*TheFence\.Command\.([A-Za-z0-9_]+)"#
+            )
+
+            XCTAssertFalse(
+                assignedCases.contains(conventionCommandName),
+                "\(relativePath(file)) should derive convention-matching command identity through CLICommandContract"
+            )
+        }
+    }
+
     func testHumanParserUsesCatalogPositionalDirectionSyntax() {
         let request = ReplSession.parseHumanInput("swipe up checkout_list")
 
@@ -730,5 +751,17 @@ final class CLICommandSyncTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+}
+
+private extension String {
+    func removingSuffix(_ suffix: String) -> String {
+        guard hasSuffix(suffix) else { return self }
+        return String(dropLast(suffix.count))
+    }
+
+    func lowercasingFirstLetter() -> String {
+        guard let first else { return self }
+        return first.lowercased() + dropFirst()
     }
 }

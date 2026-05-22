@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct SetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.setPasteboard
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Write text to the general pasteboard",

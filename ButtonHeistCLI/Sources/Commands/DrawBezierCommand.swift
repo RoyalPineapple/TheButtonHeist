@@ -3,8 +3,6 @@ import ButtonHeist
 import Foundation
 
 struct DrawBezierCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.drawBezier
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Trace cubic bezier segments sampled to a polyline",

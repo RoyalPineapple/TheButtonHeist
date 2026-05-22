@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.scroll
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Scroll a scroll view by one page",

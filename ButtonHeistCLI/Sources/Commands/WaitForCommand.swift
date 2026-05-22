@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct WaitForCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.waitFor
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Wait for an element matching a predicate to appear or disappear",

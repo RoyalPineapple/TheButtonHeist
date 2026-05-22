@@ -12,6 +12,23 @@ protocol GestureCLICommandContract: CLICommandContract {
 }
 
 extension CLICommandContract {
+    static var fenceCommand: TheFence.Command {
+        let typeName = String(describing: Self.self)
+        let commandName = typeName
+            .removingSuffix("Command")
+            .removingSuffix("Subcommand")
+            .lowercasingFirstLetter()
+
+        guard let command = TheFence.Command.descriptors.first(where: { descriptor in
+            descriptor.cliExposure == .directCommand
+                && String(describing: descriptor.command) == commandName
+        })?.command else {
+            fatalError("No direct Fence command descriptor matching CLI adapter \(typeName)")
+        }
+
+        return command
+    }
+
     static var cliCommandName: String {
         fenceCommand.cliCommandName
     }
@@ -34,6 +51,18 @@ extension TheFence.Command {
 extension GestureCLICommandContract {
     static var fenceCommand: TheFence.Command {
         TheFence.Command.command(for: gestureType)
+    }
+}
+
+private extension String {
+    func removingSuffix(_ suffix: String) -> String {
+        guard hasSuffix(suffix) else { return self }
+        return String(dropLast(suffix.count))
+    }
+
+    func lowercasingFirstLetter() -> String {
+        guard let first else { return self }
+        return first.lowercased() + dropFirst()
     }
 }
 

@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.elementSearch
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Search for an element by scrolling",

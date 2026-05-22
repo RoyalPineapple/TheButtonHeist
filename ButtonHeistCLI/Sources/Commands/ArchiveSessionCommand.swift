@@ -3,8 +3,6 @@ import ButtonHeist
 import Foundation
 
 struct ArchiveSessionCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.archiveSession
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Close and archive the current session into a .tar.gz file"
