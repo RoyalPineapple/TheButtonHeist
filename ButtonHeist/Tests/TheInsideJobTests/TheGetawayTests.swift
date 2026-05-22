@@ -201,10 +201,7 @@ final class TheGetawayTests: XCTestCase {
     // MARK: - Stale Targeted Actions
 
     func testStaleTargetedActionAfterScreenChangeReturnsFailureWithDeltaContext() async throws {
-        let (getaway, _, _) = await makeGetaway()
-        seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
-        getaway.brains.recordSentState()
-        seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header"), ("New", .button, "button_new")])
+        let getaway = await makeGetawayWithStaleScreenChange()
 
         let result = getaway.staleTargetedActionFailure(
             for: .touchTap(.init(elementTarget: .heistId("button_old"))),
@@ -221,11 +218,108 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertTrue(unwrapped.message?.contains("retry against the current interface") == true)
     }
 
+    func testStaleScreenChangeRejectsTargetedActionFamilies() async throws {
+        let getaway = await makeGetawayWithStaleScreenChange()
+        let staleElementTarget = ElementTarget.heistId("button_old")
+        let staleContainerTarget = ScrollContainerTarget(stableId: "settings_scroll")
+        let staleContainerMatcher = ContainerMatcher(stableId: "settings_container")
+        let cases: [(name: String, message: ClientMessage, method: ActionMethod)] = [
+            ("activate", .activate(staleElementTarget), .activate),
+            (
+                "rotor",
+                .rotor(.init(elementTarget: staleElementTarget, rotor: "Links")),
+                .rotor
+            ),
+            (
+                "type_text",
+                .typeText(.init(text: "A", elementTarget: staleElementTarget)),
+                .typeText
+            ),
+            (
+                "touch_with_element",
+                .touchSwipe(.init(elementTarget: staleElementTarget, direction: .down)),
+                .syntheticSwipe
+            ),
+            (
+                "scroll_container",
+                .scroll(.init(containerTarget: staleContainerTarget, direction: .down)),
+                .scroll
+            ),
+            (
+                "scroll_to_edge_container",
+                .scrollToEdge(.init(containerTarget: staleContainerTarget, edge: .bottom)),
+                .scrollToEdge
+            ),
+            (
+                "perform_custom_action_element",
+                .performCustomAction(.init(elementTarget: staleElementTarget, actionName: "Dismiss")),
+                .customAction
+            ),
+            (
+                "perform_custom_action_container",
+                .performCustomAction(.init(containerTarget: staleContainerMatcher, actionName: "Dismiss")),
+                .customAction
+            ),
+        ]
+
+        for testCase in cases {
+            let result = try XCTUnwrap(
+                getaway.staleTargetedActionFailure(
+                    for: testCase.message,
+                    backgroundTrace: screenChangedBackgroundTrace()
+                ),
+                "\(testCase.name) should be rejected as stale"
+            )
+            XCTAssertFalse(result.success, "\(testCase.name) should fail before dispatch")
+            XCTAssertEqual(result.method, testCase.method, "\(testCase.name) should retain its diagnostic method")
+            XCTAssertEqual(result.errorKind, .actionFailed, "\(testCase.name) should use the action failure taxonomy")
+            XCTAssertTrue(
+                result.accessibilityDelta?.isScreenChanged == true,
+                "\(testCase.name) should include screen-change context"
+            )
+        }
+    }
+
+    func testStaleScreenChangeAllowsCoordinateOnlyReadAndWaitCommands() async {
+        let getaway = await makeGetawayWithStaleScreenChange()
+        let staleElementTarget = ElementTarget.heistId("button_old")
+        let cases: [(name: String, message: ClientMessage)] = [
+            ("coordinate_tap", .touchTap(.init(pointX: 10, pointY: 20))),
+            (
+                "coordinate_swipe",
+                .touchSwipe(.init(startX: 10, startY: 20, endX: 30, endY: 40))
+            ),
+            (
+                "draw_path",
+                .touchDrawPath(.init(points: [.init(x: 10, y: 20), .init(x: 30, y: 40)]))
+            ),
+            (
+                "draw_bezier",
+                .touchDrawBezier(.init(
+                    startX: 10,
+                    startY: 20,
+                    segments: [.init(cp1X: 15, cp1Y: 20, cp2X: 25, cp2Y: 40, endX: 30, endY: 40)]
+                ))
+            ),
+            ("request_interface", .requestInterface(.init())),
+            ("get_pasteboard", .getPasteboard),
+            ("request_screen", .requestScreen),
+            ("wait_for_idle", .waitForIdle(.init(timeout: 0.1))),
+            ("wait_for", .waitFor(.init(elementTarget: staleElementTarget, timeout: 0.1))),
+            ("wait_for_change", .waitForChange(.init(timeout: 0.1))),
+        ]
+
+        for testCase in cases {
+            let result = getaway.staleTargetedActionFailure(
+                for: testCase.message,
+                backgroundTrace: screenChangedBackgroundTrace()
+            )
+            XCTAssertNil(result, "\(testCase.name) should not be rejected by stale-action detection")
+        }
+    }
+
     func testStaleWaitForTargetDoesNotUseActionFailurePath() async {
-        let (getaway, _, _) = await makeGetaway()
-        seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
-        getaway.brains.recordSentState()
-        seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header")])
+        let getaway = await makeGetawayWithStaleScreenChange()
 
         let result = getaway.staleTargetedActionFailure(
             for: .waitFor(.init(elementTarget: .heistId("button_old"), timeout: 0.1)),
@@ -988,6 +1082,14 @@ final class TheGetawayTests: XCTestCase {
             return (element, entry.heistId)
         }
         brains.stash.currentScreen = .makeForTests(elements: pairs)
+    }
+
+    private func makeGetawayWithStaleScreenChange() async -> TheGetaway {
+        let (getaway, _, _) = await makeGetaway()
+        seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
+        getaway.brains.recordSentState()
+        seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header"), ("New", .button, "button_new")])
+        return getaway
     }
 
     private func installRecordingActivityWindow(title: String) throws -> (UIWindow, UIButton) {

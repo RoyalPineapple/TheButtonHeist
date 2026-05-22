@@ -744,13 +744,13 @@ private extension ClientMessage {
         case .typeText(let target):
             return target.elementTarget != nil
         case .scroll(let target):
-            return target.elementTarget != nil
+            return target.elementTarget != nil || target.containerTarget != nil
         case .scrollToVisible(let target):
             return target.elementTarget != nil
         case .elementSearch(let target):
             return target.elementTarget != nil
         case .scrollToEdge(let target):
-            return target.elementTarget != nil
+            return target.elementTarget != nil || target.containerTarget != nil
         case .performCustomAction(let target):
             return target.elementTarget != nil || target.containerTarget != nil
         case .clientHello,
