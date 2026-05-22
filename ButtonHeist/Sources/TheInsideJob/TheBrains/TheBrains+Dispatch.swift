@@ -185,11 +185,23 @@ extension TheBrains {
         target: ElementSearchTarget,
         method: ActionMethod
     ) async -> ActionResult {
+        await performElementSearch(
+            elementTarget: target.elementTarget,
+            direction: target.direction,
+            method: method
+        )
+    }
+
+    func performElementSearch(
+        elementTarget: ElementTarget?,
+        direction: ScrollSearchDirection?,
+        method: ActionMethod
+    ) async -> ActionResult {
         guard refresh() != nil else {
             return treeUnavailableResult(method: method)
         }
         let before = captureBeforeState()
-        let result = await navigation.executeElementSearch(target)
+        let result = await navigation.executeElementSearch(elementTarget: elementTarget, direction: direction)
 
         return await actionResultWithDelta(
             success: result.success,
@@ -212,11 +224,23 @@ extension TheBrains {
 
     /// Wait for an element to appear or disappear.
     func performWaitFor(target: WaitForTarget) async -> ActionResult {
+        await performWaitFor(
+            elementTarget: target.elementTarget,
+            absent: target.absent,
+            timeout: target.timeout
+        )
+    }
+
+    func performWaitFor(
+        elementTarget: ElementTarget,
+        absent: Bool?,
+        timeout: Double?
+    ) async -> ActionResult {
         guard refresh() != nil else {
             return treeUnavailableResult(method: .waitFor)
         }
         let before = captureBeforeState()
-        let result = await executeWaitFor(target)
+        let result = await executeWaitFor(elementTarget: elementTarget, absent: absent ?? false, timeout: min(timeout ?? 10, 30))
         let errorKind: ErrorKind? = {
             guard !result.success else { return nil }
             return Self.waitForErrorKind(for: result.failureKind)
@@ -233,16 +257,19 @@ extension TheBrains {
     }
 
     /// Execute the wait_for polling loop.
-    private func executeWaitFor(_ target: WaitForTarget) async -> TheSafecracker.InteractionResult {
-        let elementTarget = target.elementTarget
-        let deadline = ContinuousClock.now + .seconds(target.resolvedTimeout)
+    private func executeWaitFor(
+        elementTarget: ElementTarget,
+        absent: Bool,
+        timeout: Double
+    ) async -> TheSafecracker.InteractionResult {
+        let deadline = ContinuousClock.now + .seconds(timeout)
         let start = CFAbsoluteTimeGetCurrent()
 
         guard await refreshSemanticStateForWait(target: elementTarget) else {
             return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
         }
         var resolution = stash.resolveTarget(elementTarget)
-        if let result = waitForResult(resolution: resolution, absent: target.resolvedAbsent, elapsed: nil) {
+        if let result = waitForResult(resolution: resolution, absent: absent, elapsed: nil) {
             return result
         }
 
@@ -253,14 +280,14 @@ extension TheBrains {
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             resolution = stash.resolveTarget(elementTarget)
-            if let result = waitForResult(resolution: resolution, absent: target.resolvedAbsent, elapsed: elapsed) {
+            if let result = waitForResult(resolution: resolution, absent: absent, elapsed: elapsed) {
                 return result
             }
         }
 
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         let message = waitForTimeoutMessage(
-            absent: target.resolvedAbsent,
+            absent: absent,
             elapsed: elapsed,
             target: elementTarget,
             resolution: resolution

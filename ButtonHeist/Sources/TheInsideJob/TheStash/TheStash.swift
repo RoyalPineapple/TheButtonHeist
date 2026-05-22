@@ -491,7 +491,10 @@ final class TheStash {
     }
 
     func performRotor(
-        _ target: RotorTarget,
+        rotor: String?,
+        rotorIndex: Int?,
+        currentHeistId: HeistId?,
+        currentTextRange: TextRangeReference?,
         direction: RotorDirection,
         on liveTarget: LiveActionTarget
     ) -> RotorOutcome {
@@ -501,12 +504,12 @@ final class TheStash {
 
         let availableNames = rotors.map { $0.bhInvocableName(locale: object.accessibilityLanguage) }
         let selection: UIAccessibilityCustomRotor
-        if let rotorIndex = target.rotorIndex {
+        if let rotorIndex {
             guard rotors.indices.contains(rotorIndex) else {
                 return .noSuchRotor(available: availableNames)
             }
             selection = rotors[rotorIndex]
-        } else if let rotorName = target.rotor {
+        } else if let rotorName = rotor {
             let matches = rotors.enumerated().filter {
                 $0.element.bhInvocableName(locale: object.accessibilityLanguage) == rotorName
             }
@@ -526,13 +529,13 @@ final class TheStash {
 
         let predicate = UIAccessibilityCustomRotorSearchPredicate()
         predicate.searchDirection = direction.uiAccessibilityDirection
-        if let currentHeistId = target.currentHeistId {
+        if let currentHeistId {
             guard let current = resolveTarget(.heistId(currentHeistId)).resolved?.screenElement,
                   let currentObject = dispatchObject(for: current) else {
                 return .currentItemUnavailable(currentHeistId)
             }
             let currentRange: UITextRange?
-            if let currentTextRange = target.currentTextRange {
+            if let currentTextRange {
                 guard let input = currentObject as? UITextInput,
                       let range = textRange(from: currentTextRange, in: input) else {
                     return .currentTextRangeUnavailable
@@ -542,7 +545,7 @@ final class TheStash {
                 currentRange = nil
             }
             predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: currentRange)
-        } else if target.currentTextRange != nil {
+        } else if currentTextRange != nil {
             return .currentTextRangeUnavailable
         }
 

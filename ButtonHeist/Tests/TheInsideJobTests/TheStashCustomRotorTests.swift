@@ -96,10 +96,10 @@ final class TheStashRotorTests: XCTestCase {
         let liveHost = try XCTUnwrap(liveTarget(for: resolvedHost))
 
         let outcome = stash.performRotor(
-            RotorTarget(
-                elementTarget: .heistId(resolvedHost.heistId),
-                rotor: "Errors"
-            ),
+            rotor: "Errors",
+            rotorIndex: nil,
+            currentHeistId: nil,
+            currentTextRange: nil,
             direction: .next,
             on: liveHost
         )
@@ -165,10 +165,10 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(resolvedHost.element.customRotors.map(\.name), ["Links"])
 
         let outcome = stash.performRotor(
-            RotorTarget(
-                elementTarget: .heistId(resolvedHost.heistId),
-                rotor: "Links"
-            ),
+            rotor: "Links",
+            rotorIndex: nil,
+            currentHeistId: nil,
+            currentTextRange: nil,
             direction: .next,
             on: liveHost
         )
@@ -549,10 +549,10 @@ final class TheStashRotorTests: XCTestCase {
         let liveTextView = try XCTUnwrap(liveTarget(for: resolvedTextView))
 
         let firstOutcome = stash.performRotor(
-            RotorTarget(
-                elementTarget: .heistId(resolvedTextView.heistId),
-                rotor: "Mentions"
-            ),
+            rotor: "Mentions",
+            rotorIndex: nil,
+            currentHeistId: nil,
+            currentTextRange: nil,
             direction: .next,
             on: liveTextView
         )
@@ -569,12 +569,10 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(firstRange.rangeDescription, "[7..<13]")
 
         let secondOutcome = stash.performRotor(
-            RotorTarget(
-                elementTarget: .heistId(resolvedTextView.heistId),
-                rotor: "Mentions",
-                currentHeistId: firstHit.screenElement?.heistId,
-                currentTextRange: TextRangeReference(startOffset: firstStart, endOffset: firstEnd)
-            ),
+            rotor: "Mentions",
+            rotorIndex: nil,
+            currentHeistId: firstHit.screenElement?.heistId,
+            currentTextRange: TextRangeReference(startOffset: firstStart, endOffset: firstEnd),
             direction: .next,
             on: liveTextView
         )
@@ -617,10 +615,10 @@ final class TheStashRotorTests: XCTestCase {
         )
 
         let outcome = stash.performRotor(
-            RotorTarget(
-                elementTarget: .heistId("rotor_host"),
-                rotor: "Errors"
-            ),
+            rotor: "Errors",
+            rotorIndex: nil,
+            currentHeistId: nil,
+            currentTextRange: nil,
             direction: .next,
             on: try XCTUnwrap(liveTarget(for: screenElement))
         )
