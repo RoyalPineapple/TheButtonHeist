@@ -27,7 +27,6 @@ enum DeviceSendFailure: Error, LocalizedError, Equatable, Sendable {
 
 /// Events emitted by a device connection during its lifecycle.
 enum ConnectionEvent {
-    case transportReady
     case connected
     case disconnected(DisconnectReason)
     case sendFailed(DeviceSendFailure, requestId: String?)
@@ -70,6 +69,14 @@ extension DeviceConnecting {
     func send(_ message: ClientMessage) -> DeviceSendOutcome {
         send(message, requestId: nil)
     }
+}
+
+/// Connection surface used by passive reachability probes. Raw socket
+/// readiness is intentionally kept out of the authenticated lifecycle event
+/// stream consumed by TheHandoff.
+@ButtonHeistActor
+protocol TransportReachabilityConnecting: DeviceConnecting {
+    var onTransportReady: (@ButtonHeistActor () -> Void)? { get set }
 }
 
 /// Discovers Button Heist services on the local network via Bonjour or direct address.

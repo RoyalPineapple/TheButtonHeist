@@ -110,9 +110,10 @@ func connectMockHandoff(
 // MARK: - Mock Implementations for DeviceConnecting / DeviceDiscovering
 
 @ButtonHeistActor
-final class MockConnection: DeviceConnecting {
+final class MockConnection: TransportReachabilityConnecting {
     var isConnected = false
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
+    var onTransportReady: (@ButtonHeistActor () -> Void)?
     var sent: [(ClientMessage, String?)] = []
     var connectCount = 0
     var disconnectCount = 0
@@ -133,7 +134,7 @@ final class MockConnection: DeviceConnecting {
             return
         }
         if emitTransportReadyOnConnect {
-            onEvent?(.transportReady)
+            onTransportReady?()
         }
         onEvent?(.connected)
         if let info = serverInfo {

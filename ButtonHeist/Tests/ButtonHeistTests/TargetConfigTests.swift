@@ -446,7 +446,6 @@ final class TargetConfigTests: XCTestCase {
             connectAttempt += 1
             let failing = MockConnection()
             failing.connectEventsOverride = [
-                .transportReady,
                 .disconnected(.authFailed("denied")),
             ]
             return failing
