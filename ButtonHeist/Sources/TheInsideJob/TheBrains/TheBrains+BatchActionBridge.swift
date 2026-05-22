@@ -58,24 +58,27 @@ enum BatchActionClientMessageBridge {
                 currentHeistId: target.currentSourceHeistId,
                 currentTextRange: target.currentTextRange
             ))
-        case .touchTap, .touchLongPress, .touchSwipe, .touchDrag,
-             .touchPinch, .touchRotate, .touchTwoFingerTap,
-             .touchDrawPath, .touchDrawBezier:
-            return touchMessage(for: action)
-        case .typeText, .editAction, .setPasteboard:
-            return textEditingMessage(for: action)
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge:
-            return scrollMessage(for: action)
+        case .typeText(let target):
+            return .typeText(TypeTextTarget(
+                text: target.text,
+                elementTarget: target.target?.executableTarget
+            ))
+        case .editAction(let target):
+            return .editAction(target)
+        case .setPasteboard(let target):
+            return .setPasteboard(target)
         case .waitForIdle, .waitForElement, .waitForChange:
             return nil
         case .explore:
             return .explore
         case .resignFirstResponder:
             return .resignFirstResponder
+        default:
+            return touchClientMessage(for: action) ?? scrollClientMessage(for: action)
         }
     }
 
-    private static func touchMessage(for action: TheScore.Action) -> ClientMessage? {
+    private static func touchClientMessage(for action: TheScore.Action) -> ClientMessage? {
         switch action {
         case .touchTap(let target):
             return .touchTap(TouchTapTarget(
@@ -145,23 +148,7 @@ enum BatchActionClientMessageBridge {
         }
     }
 
-    private static func textEditingMessage(for action: TheScore.Action) -> ClientMessage? {
-        switch action {
-        case .typeText(let target):
-            return .typeText(TypeTextTarget(
-                text: target.text,
-                elementTarget: target.target?.executableTarget
-            ))
-        case .editAction(let target):
-            return .editAction(target)
-        case .setPasteboard(let target):
-            return .setPasteboard(target)
-        default:
-            return nil
-        }
-    }
-
-    private static func scrollMessage(for action: TheScore.Action) -> ClientMessage? {
+    private static func scrollClientMessage(for action: TheScore.Action) -> ClientMessage? {
         switch action {
         case .scroll(let target):
             return .scroll(ScrollTarget(

@@ -22,7 +22,7 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response s
    - **`performWaitFor`** — polls the fresh semantic hierarchy in a settle loop until found/absent or timeout.
    - **`performExplore`** — calls `navigation.exploreAndPrune()`, assembles the result inline (doesn't use `actionResultWithDelta`; needs full wire elements in `ExploreResult`).
 
-   Two private helpers `executeAccessibilityAction` and `executeTouchGesture` are second-level switches that unpack the associated value and call `performInteraction` with the specific `actions.executeXxx` closure.
+   Action and gesture cases unpack their associated values in `executeCommand` and call `performInteraction` with the specific `actions.executeXxx` closure.
 
 2. **`TheBrains.swift`** — Core class. Key types:
 
