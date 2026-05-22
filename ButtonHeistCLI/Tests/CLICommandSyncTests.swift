@@ -424,6 +424,39 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.request[.text] as? Bool, false)
     }
 
+    func testSharedRequestBuilderRejectsUnknownHumanCommand() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(from: "not_a_command label=Save")
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown command 'not_a_command'"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
+    func testSharedRequestBuilderRejectsUnknownHumanParameter() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(from: "activate bogus=Save")
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown parameter 'bogus' for activate"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
+    func testSharedRequestBuilderRejectsInvalidHumanParameterValue() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(from: "wait absent=maybe")
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Invalid value 'maybe' for absent"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
     func testCLIAndREPLShareCanonicalRequestBuilding() {
         let parameters: CLIRequestParameters = [
             .heistId: .string("button_save"),
