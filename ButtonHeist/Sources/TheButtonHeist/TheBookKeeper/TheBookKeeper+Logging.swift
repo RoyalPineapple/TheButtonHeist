@@ -144,6 +144,17 @@ extension TheFence {
         let arguments: [String: HeistValue]
     }
 
+    struct BatchStepLogProjection {
+        let commandName: String
+        let arguments: [String: HeistValue]
+
+        var stepArguments: [String: HeistValue] {
+            var values = arguments
+            values[.command] = .string(commandName)
+            return values
+        }
+    }
+
     struct HeistEvidenceProjection {
         let command: Command
         let arguments: [String: HeistValue]
@@ -728,19 +739,29 @@ private extension TheFence.RunBatchRequest {
     }
 }
 
-private extension TheFence.RunBatchStep {
-    var bookKeeperValue: HeistValue {
+extension TheFence.RunBatchStep {
+    var batchStepLogProjection: TheFence.BatchStepLogProjection {
         switch self {
         case .planned(let request):
-            var values = request.commandLogProjection.arguments
-            values[.command] = .string(request.command.rawValue)
-            return .object(values)
+            let projection = request.commandLogProjection
+            return TheFence.BatchStepLogProjection(
+                commandName: projection.command.rawValue,
+                arguments: projection.arguments
+            )
         case .invalid(let commandName, let failure):
-            return .object([
-                FenceParameterKey.command.rawValue: .string(commandName),
-                "decodeError": .string(failure.message),
-            ])
+            return TheFence.BatchStepLogProjection(
+                commandName: commandName,
+                arguments: [
+                    "decodeError": .string(failure.message),
+                ]
+            )
         }
+    }
+}
+
+private extension TheFence.RunBatchStep {
+    var bookKeeperValue: HeistValue {
+        .object(batchStepLogProjection.stepArguments)
     }
 }
 

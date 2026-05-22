@@ -551,6 +551,61 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchStepLogProjectionKeepsPreparedArgumentsTyped() async throws {
+        let fence = TheFence(configuration: .init())
+        let batch = try fence.decodeRunBatchRequest([
+            "steps": [
+                [
+                    "command": "type_text",
+                    "identifier": "email",
+                    "text": "hello",
+                ],
+            ],
+        ])
+
+        let batchStep = try XCTUnwrap(batch.steps.first)
+        let projection = batchStep.batchStepLogProjection
+
+        guard case .planned = batchStep else {
+            return XCTFail("Expected planned batch step")
+        }
+
+        XCTAssertEqual(projection.commandName, "type_text")
+        XCTAssertEqual(projection.arguments["identifier"], HeistValue.string("email"))
+        XCTAssertEqual(projection.arguments["text"], HeistValue.string("hello"))
+        XCTAssertNil(projection.arguments["command"])
+        XCTAssertEqual(projection.stepArguments["command"], HeistValue.string("type_text"))
+    }
+
+    @ButtonHeistActor
+    func testBatchStepLogProjectionDropsInvalidStepRawArguments() async throws {
+        let fence = TheFence(configuration: .init())
+        let batch = try fence.decodeRunBatchRequest([
+            "steps": [
+                [
+                    "command": "connect",
+                    "device": "127.0.0.1:1455",
+                    "token": "nested-user-token",
+                ],
+            ],
+        ])
+
+        guard let step = batch.steps.first else {
+            return XCTFail("Expected decoded batch step")
+        }
+        let projection = step.batchStepLogProjection
+
+        XCTAssertEqual(projection.commandName, "connect")
+        XCTAssertNil(projection.arguments["device"])
+        XCTAssertNil(projection.arguments["token"])
+        XCTAssertEqual(projection.stepArguments["command"], HeistValue.string("connect"))
+        guard case .string(let message)? = projection.arguments["decodeError"] else {
+            return XCTFail("Expected decodeError message")
+        }
+        XCTAssertTrue(message.contains("connect"))
+    }
+
+    @ButtonHeistActor
     func testBookKeeperLogsTypedCommandProjection() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log-projection")
