@@ -3,8 +3,6 @@ import ButtonHeist
 import Foundation
 
 struct StartHeistCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.startHeist
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Start recording a heist playback (.heist file)"

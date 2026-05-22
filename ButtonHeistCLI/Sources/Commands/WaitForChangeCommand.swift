@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct WaitForChangeCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.waitForChange
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Wait for the UI to change, optionally matching an expectation"

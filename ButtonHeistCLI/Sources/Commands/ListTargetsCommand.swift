@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct ListTargetsCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.listTargets
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "List device targets defined in .buttonheist.json",

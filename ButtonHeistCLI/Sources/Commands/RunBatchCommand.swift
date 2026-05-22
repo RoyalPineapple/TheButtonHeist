@@ -3,8 +3,6 @@ import ButtonHeist
 import Foundation
 
 struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.runBatch
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Execute a batch of Button Heist steps from a JSON payload",

@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct DismissKeyboardCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.dismissKeyboard
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Dismiss the software keyboard by resigning first responder"

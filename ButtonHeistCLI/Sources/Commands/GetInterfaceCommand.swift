@@ -3,8 +3,6 @@ import Foundation
 import ButtonHeist
 
 struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.getInterface
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Read the app accessibility hierarchy from the connected device"

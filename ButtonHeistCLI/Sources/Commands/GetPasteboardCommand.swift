@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct GetPasteboardCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.getPasteboard
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Read text from the general pasteboard",

@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.scrollToVisible
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Scroll a known element into view",

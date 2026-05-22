@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.scrollToEdge
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Scroll to the edge of a scroll view",

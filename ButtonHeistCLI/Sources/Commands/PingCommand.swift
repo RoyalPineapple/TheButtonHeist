@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct PingCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.ping
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Check Button Heist connection health",
