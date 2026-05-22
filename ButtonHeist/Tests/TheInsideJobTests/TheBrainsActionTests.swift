@@ -512,7 +512,13 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
-        let liveTarget = resolved.flatMap { brains.stash.liveActionTarget(for: $0) }
+        let liveTarget: TheStash.LiveActionTarget?
+        if let resolved,
+           case .resolved(let target) = brains.stash.resolveLiveActionTarget(for: resolved) {
+            liveTarget = target
+        } else {
+            liveTarget = nil
+        }
 
         XCTAssertEqual(liveTarget?.frame, liveFrame)
         XCTAssertEqual(liveTarget?.activationPoint, livePoint)
@@ -607,7 +613,13 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
-        let liveTarget = resolved.flatMap { brains.stash.liveActionTarget(for: $0) }
+        let liveTarget: TheStash.LiveActionTarget?
+        if let resolved,
+           case .resolved(let target) = brains.stash.resolveLiveActionTarget(for: resolved) {
+            liveTarget = target
+        } else {
+            liveTarget = nil
+        }
         let result = await brains.actions.executeIncrement(.heistId(heistId))
 
         XCTAssertNotNil(resolved)
