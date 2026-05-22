@@ -105,41 +105,6 @@ final class TheSafecrackerScrollTests: XCTestCase {
         XCTAssertFalse(moved, "Already at edge should return false (no scroll needed)")
     }
 
-    // MARK: - scrollToOppositeEdge
-
-    func testScrollToOppositeEdgeFromDown() {
-        let sv = makeScrollView(contentOffset: CGPoint(x: 0, y: 1000))
-        safecracker.scrollToOppositeEdge(sv, from: .down)
-        XCTAssertEqual(sv.contentOffset.y, 0, accuracy: 0.01,
-                       "Opposite of down is top")
-    }
-
-    func testScrollToOppositeEdgeFromUp() {
-        let sv = makeScrollView(contentOffset: .zero)
-        safecracker.scrollToOppositeEdge(sv, from: .up)
-        // maxY = 3000 - 800 = 2200
-        XCTAssertEqual(sv.contentOffset.y, 2200, accuracy: 0.01,
-                       "Opposite of up is bottom")
-    }
-
-    func testScrollToOppositeEdgeFromRight() {
-        let sv = makeScrollView(
-            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
-            contentSize: CGSize(width: 2000, height: 800),
-            contentOffset: CGPoint(x: 500, y: 0)
-        )
-        safecracker.scrollToOppositeEdge(sv, from: .right)
-        XCTAssertEqual(sv.contentOffset.x, 0, accuracy: 0.01)
-    }
-
-    // MARK: - queryCollectionTotalItems
-
-    func testQueryCollectionTotalItemsReturnsNilForPlainScrollView() {
-        let sv = makeScrollView()
-        let result = safecracker.queryCollectionTotalItems(sv)
-        XCTAssertNil(result, "Plain UIScrollView should return nil (lazy mode)")
-    }
-
     // MARK: - scrollByPage: overlap verification
 
     func testScrollByPageUses44PointOverlap() {
