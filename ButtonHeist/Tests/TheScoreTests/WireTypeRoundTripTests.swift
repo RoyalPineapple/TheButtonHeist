@@ -610,6 +610,116 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    // MARK: - BatchPlan
+
+    func testBatchPlanRoundTripPreservesTypedStepWireShape() throws {
+        let plan = BatchPlan(
+            steps: [
+                .action(
+                    .activate(BatchExecutionTarget(
+                        sourceHeistId: "settings_button_previous",
+                        matcher: ElementMatcher(label: "Settings", traits: [.button]),
+                        ordinal: 1
+                    )),
+                    expect: .screenChanged,
+                    deadline: Deadline(timeout: 2.5)
+                ),
+                .action(.setPasteboard(SetPasteboardTarget(text: "ready"))),
+            ],
+            policy: .continueOnError
+        )
+
+        let data = try encoder.encode(plan)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(payload["policy"] as? String, "continue_on_error")
+        let steps = try XCTUnwrap(payload["steps"] as? [[String: Any]])
+        XCTAssertEqual(steps.count, 2)
+        let activate = try XCTUnwrap(steps[0]["action"] as? [String: Any])
+        XCTAssertEqual(activate["type"] as? String, "activate")
+        let target = try XCTUnwrap(activate["target"] as? [String: Any])
+        XCTAssertEqual(target["sourceHeistId"] as? String, "settings_button_previous")
+        XCTAssertEqual(target["ordinal"] as? Int, 1)
+        let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
+        XCTAssertNil(matcher["heistId"])
+        XCTAssertEqual(matcher["label"] as? String, "Settings")
+        XCTAssertEqual(matcher["traits"] as? [String], ["button"])
+        XCTAssertEqual((steps[0]["expect"] as? [String: Any])?["type"] as? String, "screen_changed")
+        XCTAssertEqual((steps[0]["deadline"] as? [String: Any])?["timeout"] as? Double, 2.5)
+
+        let decoded = try decoder.decode(BatchPlan.self, from: data)
+        XCTAssertEqual(decoded.policy, .continueOnError)
+        XCTAssertEqual(decoded.steps.count, 2)
+        guard case .activate(let decodedTarget) = decoded.steps[0].action else {
+            return XCTFail("Expected activate action")
+        }
+        XCTAssertEqual(decodedTarget.sourceHeistId, "settings_button_previous")
+        XCTAssertEqual(decodedTarget.matcher, ElementMatcher(label: "Settings", traits: [.button]))
+        XCTAssertEqual(decodedTarget.ordinal, 1)
+        XCTAssertEqual(decoded.steps[0].expectation, .screenChanged)
+        XCTAssertEqual(decoded.steps[0].deadline, Deadline(timeout: 2.5))
+        guard case .setPasteboard(let pasteboardTarget) = decoded.steps[1].action else {
+            return XCTFail("Expected set_pasteboard action")
+        }
+        XCTAssertEqual(pasteboardTarget.text, "ready")
+        XCTAssertEqual(decoded.steps[1].expectation, .delivery)
+    }
+
+    func testBatchExecutionResultRoundTripPreservesFailureDiagnostics() throws {
+        let result = BatchExecutionResult(
+            policy: .stopOnError,
+            steps: [
+                BatchExecutionStepResult(
+                    index: 0,
+                    actionName: "get_pasteboard",
+                    expectationName: "delivery",
+                    actionResult: ActionResult(
+                        success: false,
+                        method: .unsupportedCommand,
+                        message: "Unsupported batch Action 'get_pasteboard': read operation is not batch executable",
+                        errorKind: .unsupported
+                    ),
+                    durationMs: 0,
+                    stopsBatch: true
+                ),
+                BatchExecutionStepResult(
+                    index: 1,
+                    actionName: "checkpoint:after-unsupported",
+                    expectationName: "screen_changed",
+                    durationMs: 0,
+                    skipped: BatchExecutionSkippedStepResult(
+                        index: 1,
+                        actionName: "checkpoint:after-unsupported",
+                        expectationName: "screen_changed",
+                        reason: "skipped: stop_on_error stopped batch after step 0",
+                        afterFailedIndex: 0
+                    )
+                ),
+            ],
+            totalTimingMs: 1,
+            failedIndex: 0
+        )
+
+        let data = try encoder.encode(result)
+        let decoded = try decoder.decode(BatchExecutionResult.self, from: data)
+
+        XCTAssertEqual(decoded.policy, .stopOnError)
+        XCTAssertEqual(decoded.failedIndex, 0)
+        XCTAssertEqual(decoded.steps.count, 2)
+        XCTAssertEqual(decoded.steps[0].actionName, "get_pasteboard")
+        XCTAssertEqual(decoded.steps[0].expectationName, "delivery")
+        XCTAssertTrue(decoded.steps[0].stopsBatch)
+        XCTAssertEqual(decoded.steps[0].actionResult?.method, .unsupportedCommand)
+        XCTAssertEqual(decoded.steps[0].actionResult?.errorKind, .unsupported)
+        XCTAssertEqual(
+            decoded.steps[0].actionResult?.message,
+            "Unsupported batch Action 'get_pasteboard': read operation is not batch executable"
+        )
+        XCTAssertTrue(decoded.steps[1].isSkipped)
+        XCTAssertEqual(decoded.steps[1].skipped?.reason, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertEqual(decoded.steps[1].skipped?.afterFailedIndex, 0)
+    }
+
     // MARK: - HeistCustomContent
 
     func testHeistCustomContentRoundTrip() throws {
