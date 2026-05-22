@@ -416,27 +416,6 @@ final class TheStash {
         ))
     }
 
-    func liveActionTarget(for resolvedTarget: ResolvedTarget) -> LiveActionTarget? {
-        guard case .resolved(let target) = resolveLiveActionTarget(for: resolvedTarget) else {
-            return nil
-        }
-        return target
-    }
-
-    func liveActivationPoint(for screenElement: ScreenElement) -> CGPoint? {
-        guard let object = dispatchObject(for: screenElement) else { return nil }
-        let point = object.accessibilityActivationPoint
-        guard Self.isUsablePoint(point) else { return nil }
-        return point
-    }
-
-    func liveFrame(for screenElement: ScreenElement) -> CGRect? {
-        guard let object = dispatchObject(for: screenElement) else { return nil }
-        let frame = object.accessibilityFrame
-        guard Self.isUsableFrame(frame) else { return nil }
-        return frame
-    }
-
     private static func isUsableFrame(_ frame: CGRect) -> Bool {
         !frame.isNull
             && !frame.isEmpty
@@ -826,18 +805,6 @@ final class TheStash {
         }
     }
 
-    /// Resolve a target using first-match semantics (no ambiguity check).
-    func resolveFirstMatch(_ target: ElementTarget) -> ResolvedTarget? {
-        let effectiveTarget: ElementTarget
-        switch target {
-        case .heistId:
-            effectiveTarget = target
-        case .matcher(let matcher, _):
-            effectiveTarget = .matcher(matcher, ordinal: 0)
-        }
-        return resolveTarget(effectiveTarget).resolved
-    }
-
     /// Resolve a target using first-match semantics against only the live hierarchy.
     func resolveFirstVisibleMatch(_ target: ElementTarget) -> ResolvedTarget? {
         let effectiveTarget: ElementTarget
@@ -861,10 +828,6 @@ final class TheStash {
         case .notFound:
             return false
         }
-    }
-
-    func checkElementInteractivity(_ screenElement: ScreenElement) -> InteractivityCheck {
-        Interactivity.checkInteractivity(screenElement.element, object: dispatchObject(for: screenElement))
     }
 
     // MARK: - Diagnostics Forwarding
