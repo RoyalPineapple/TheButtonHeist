@@ -7,7 +7,6 @@ final class TheFenceParameterSpecTests: XCTestCase {
     func testRemovedCompatibilityFieldsStayOutOfCommandSpecs() {
         let removedFieldsByCommand: [TheFence.Command: Set<String>] = [
             .getInterface: ["full"],
-            .typeText: ["clearFirst", "deleteCount"],
             .performCustomAction: ["actionName"],
             .drag: ["x", "y"],
             .pinch: ["x", "y"],

@@ -617,8 +617,6 @@ public struct TypeTextTarget: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case text
         case elementTarget
-        case deleteCount
-        case clearFirst
     }
 
     /// Text to type (each character is tapped individually).
@@ -634,12 +632,6 @@ public struct TypeTextTarget: Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        if container.contains(.deleteCount) || container.contains(.clearFirst) {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "typeText no longer accepts deleteCount or clearFirst; use editAction for destructive edits"
-            ))
-        }
         text = try container.decode(String.self, forKey: .text)
         guard !text.isEmpty else {
             throw DecodingError.dataCorrupted(.init(
