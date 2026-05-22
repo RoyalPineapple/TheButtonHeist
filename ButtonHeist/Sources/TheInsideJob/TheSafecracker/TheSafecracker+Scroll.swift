@@ -146,29 +146,6 @@ extension TheSafecracker {
         return true
     }
 
-    /// Jump to the opposite edge of the scroll view (for bidirectional search).
-    func scrollToOppositeEdge(
-        _ scrollView: UIScrollView,
-        from direction: ScrollSearchDirection
-    ) {
-        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return }
-
-        let insets = scrollView.adjustedContentInset
-
-        switch direction {
-        case .down:
-            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: -insets.top), animated: false)
-        case .up:
-            let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-            scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: maxY), animated: false)
-        case .right:
-            scrollView.setContentOffset(CGPoint(x: -insets.left, y: scrollView.contentOffset.y), animated: false)
-        case .left:
-            let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-            scrollView.setContentOffset(CGPoint(x: maxX, y: scrollView.contentOffset.y), animated: false)
-        }
-    }
-
     /// Scroll a region by one page using a synthetic swipe gesture.
     /// Used for scrollable containers that aren't UIScrollViews (e.g. SwiftUI's
     /// HostingScrollView.PlatformContainer). The swipe covers 75% of the frame
@@ -260,25 +237,6 @@ extension TheSafecracker {
                 break
             }
         }
-    }
-
-    /// Total items in a UITableView or UICollectionView (for exhaustive search).
-    func queryCollectionTotalItems(_ scrollView: UIScrollView) -> Int? {
-        if let collectionView = scrollView as? UICollectionView {
-            var total = 0
-            for section in 0..<collectionView.numberOfSections {
-                total += collectionView.numberOfItems(inSection: section)
-            }
-            return total
-        }
-        if let tableView = scrollView as? UITableView {
-            var total = 0
-            for section in 0..<tableView.numberOfSections {
-                total += tableView.numberOfRows(inSection: section)
-            }
-            return total
-        }
-        return nil
     }
 
 }
