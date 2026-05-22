@@ -101,7 +101,7 @@ extension TheBrains {
         runtime: BatchExecutionRuntime
     ) async -> BatchExecutionStepResult {
         let start = CFAbsoluteTimeGetCurrent()
-        let actionResult = await actionResult(for: step.operation, runtime: runtime)
+        let actionResult = await runtime.execute(step.action)
         let expectationReceipt = await expectationReceipt(
             for: step,
             actionResult: actionResult,
@@ -110,7 +110,7 @@ extension TheBrains {
 
         return BatchExecutionStepResult(
             index: index,
-            actionName: BatchActionClientMessageBridge.operationName(for: step.operation),
+            actionName: BatchActionClientMessageBridge.actionName(for: step.action),
             expectationName: step.expectation.summaryDescription,
             actionResult: actionResult,
             expectationActionResult: expectationReceipt?.actionResult,
@@ -141,12 +141,12 @@ extension TheBrains {
                 )
             }
         }
-        if BatchActionClientMessageBridge.fulfillsOwnExpectation(step.operation) {
+        if BatchActionClientMessageBridge.fulfillsOwnExpectation(step.action) {
             return BatchExpectationReceipt(
                 actionResult: actionResult ?? ActionResult(
                     success: true,
                     method: .waitForChange,
-                    message: BatchActionClientMessageBridge.operationName(for: step.operation)
+                    message: BatchActionClientMessageBridge.actionName(for: step.action)
                 ),
                 expectation: ExpectationResult(
                     met: actionResult?.success ?? true,
@@ -167,18 +167,6 @@ extension TheBrains {
         )
     }
 
-    private func actionResult(
-        for operation: TheScore.BatchOperation,
-        runtime: BatchExecutionRuntime
-    ) async -> ActionResult? {
-        switch operation {
-        case .action(let action):
-            return await runtime.execute(action)
-        case .checkpoint:
-            return nil
-        }
-    }
-
     private func executeBatchAction(_ action: TheScore.Action) async -> ActionResult {
         switch action {
         case .waitForIdle(let target):
@@ -195,14 +183,6 @@ extension TheBrains {
                 timeout: target.resolvedTimeout,
                 expectation: target.expect
             )
-        case .checkpoint(let target):
-            var builder = ActionResultBuilder(
-                method: .unsupportedCommand,
-                screenName: screenName,
-                screenId: screenId
-            )
-            builder.message = "Unsupported batch Action '\(target)': checkpoints are batch operations, not user actions"
-            return builder.failure(errorKind: .unsupported)
         default:
             guard let message = BatchActionClientMessageBridge.clientMessage(for: action) else {
                 var builder = ActionResultBuilder(
@@ -227,14 +207,14 @@ extension TheBrains {
             let index = failedIndex + 1 + offset
             let skipped = BatchExecutionSkippedStepResult(
                 index: index,
-                actionName: BatchActionClientMessageBridge.operationName(for: step.operation),
+                actionName: BatchActionClientMessageBridge.actionName(for: step.action),
                 expectationName: step.expectation.summaryDescription,
                 reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                 afterFailedIndex: failedIndex
             )
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: BatchActionClientMessageBridge.operationName(for: step.operation),
+                actionName: BatchActionClientMessageBridge.actionName(for: step.action),
                 expectationName: step.expectation.summaryDescription,
                 durationMs: 0,
                 skipped: skipped

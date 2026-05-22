@@ -370,19 +370,6 @@ final class TheHandoff {
         return false
     }
 
-    var connectionPhaseName: String {
-        switch connectionPhase {
-        case .disconnected:
-            return "disconnected"
-        case .connecting:
-            return "connecting"
-        case .connected:
-            return "connected"
-        case .failed:
-            return "failed"
-        }
-    }
-
     var connectionDiagnosticFailure: ConnectionError? {
         switch connectionPhase {
         case .failed(let failure):

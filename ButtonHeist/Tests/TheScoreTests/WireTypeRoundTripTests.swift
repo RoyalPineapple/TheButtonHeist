@@ -639,19 +639,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertNil(decoded.maxDuration)
     }
 
-    // MARK: - Action
-
-    func testActionRejectsPasteboardRead() {
-        let json = #"{"type":"get_pasteboard"}"#
-        XCTAssertThrowsError(
-            try decoder.decode(Action.self, from: Data(json.utf8))
-        ) { error in
-            XCTAssertTrue(
-                String(describing: error).contains("get_pasteboard is a read operation and is not a batch Action")
-            )
-        }
-    }
-
     // MARK: - BatchPlan
 
     func testBatchPlanRoundTripPreservesTypedStepWireShape() throws {
@@ -726,12 +713,12 @@ final class WireTypeRoundTripTests: XCTestCase {
                 ),
                 BatchExecutionStepResult(
                     index: 1,
-                    actionName: "checkpoint:after-unsupported",
+                    actionName: "wait_for_change",
                     expectationName: "screen_changed",
                     durationMs: 0,
                     skipped: BatchExecutionSkippedStepResult(
                         index: 1,
-                        actionName: "checkpoint:after-unsupported",
+                        actionName: "wait_for_change",
                         expectationName: "screen_changed",
                         reason: "skipped: stop_on_error stopped batch after step 0",
                         afterFailedIndex: 0

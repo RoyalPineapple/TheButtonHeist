@@ -61,12 +61,12 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
                     expect: .screenChanged,
                     deadline: Deadline(timeout: 2.5)
                 ),
-                .wait(.idle(WaitForIdleTarget(timeout: 0.25))),
-                .checkpoint(BatchExecutionCheckpoint(
-                    name: "loaded",
+                .action(.waitForIdle(WaitForIdleTarget(timeout: 0.25))),
+                .action(
+                    .waitForChange(WaitForChangeTarget(expect: .elementsChanged, timeout: 1.5)),
                     expect: .elementsChanged,
-                    timeout: 1.5
-                )),
+                    deadline: Deadline(timeout: 1.5)
+                ),
             ],
             policy: .continueOnError
         )
@@ -99,9 +99,8 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         XCTAssertEqual(((waitAction["target"] as? [String: Any])?["timeout"] as? Double), 0.25)
         XCTAssertEqual((steps[1]["expect"] as? [String: Any])?["type"] as? String, "delivery")
 
-        let checkpointAction = try XCTUnwrap(steps[2]["action"] as? [String: Any])
-        XCTAssertEqual(checkpointAction["type"] as? String, "checkpoint")
-        XCTAssertEqual(checkpointAction["name"] as? String, "loaded")
+        let waitChangeAction = try XCTUnwrap(steps[2]["action"] as? [String: Any])
+        XCTAssertEqual(waitChangeAction["type"] as? String, "wait_for_change")
         XCTAssertEqual((steps[2]["expect"] as? [String: Any])?["type"] as? String, "elements_changed")
         XCTAssertEqual((steps[2]["deadline"] as? [String: Any])?["timeout"] as? Double, 1.5)
 
@@ -112,61 +111,6 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         XCTAssertEqual(decodedPlan.steps.count, 3)
         XCTAssertEqual(decodedPlan.steps[0].expectation, .screenChanged)
         XCTAssertEqual(decodedPlan.steps[0].deadline, Deadline(timeout: 2.5))
-    }
-
-    func testBatchPlanStillDecodesLegacyWaitAndCheckpointStepShapes() throws {
-        let json = """
-        {
-          "steps": [
-            {
-              "kind": "wait",
-              "wait": {
-                "type": "wait_for_idle",
-                "target": { "timeout": 0.25 }
-              }
-            },
-            {
-              "kind": "checkpoint",
-              "checkpoint": {
-                "name": "loaded",
-                "expect": { "type": "screen_changed" },
-                "timeout": 1.5
-              }
-            }
-          ],
-          "policy": "continue_on_error"
-        }
-        """
-
-        let plan = try JSONDecoder().decode(BatchPlan.self, from: Data(json.utf8))
-
-        XCTAssertEqual(plan.policy, .continueOnError)
-        XCTAssertEqual(plan.steps.count, 2)
-        guard case .waitForIdle(let waitTarget) = plan.steps[0].action else {
-            return XCTFail("Expected legacy wait step to lower to wait_for_idle action")
-        }
-        XCTAssertEqual(waitTarget.timeout, 0.25)
-        XCTAssertEqual(plan.steps[0].expectation, .delivery)
-        XCTAssertEqual(plan.steps[0].deadline, Deadline(timeout: 0.25))
-        guard case .checkpoint(let checkpoint) = plan.steps[1].operation else {
-            return XCTFail("Expected legacy checkpoint step to lower to checkpoint operation")
-        }
-        XCTAssertEqual(checkpoint.name, "loaded")
-        XCTAssertEqual(plan.steps[1].expectation, .screenChanged)
-        XCTAssertEqual(plan.steps[1].deadline, Deadline(timeout: 1.5))
-    }
-
-    func testBatchActionRejectsReadOnlyClientMessages() throws {
-        let json = #"{"type":"get_pasteboard"}"#
-
-        XCTAssertThrowsError(
-            try JSONDecoder().decode(TheScore.Action.self, from: Data(json.utf8))
-        ) { error in
-            guard case .dataCorrupted(let context) = error as? DecodingError else {
-                return XCTFail("Expected dataCorrupted decoding error, got \(error)")
-            }
-            XCTAssertEqual(context.debugDescription, "get_pasteboard is a read operation and is not a batch Action")
-        }
     }
 
     private func jsonObject(_ data: Data) throws -> [String: Any] {

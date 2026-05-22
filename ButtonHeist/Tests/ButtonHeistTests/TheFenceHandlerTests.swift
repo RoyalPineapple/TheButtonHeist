@@ -2298,11 +2298,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(step.commandName, "activate")
         XCTAssertEqual(step.expectation, .elementsChanged)
 
-        guard case .action(let action) = step.operation else {
-            return XCTFail("Expected action operation, got \(step.operation)")
-        }
-        guard case .activate(let actionTarget) = action else {
-            return XCTFail("Expected activate action, got \(action)")
+        guard case .activate(let actionTarget) = step.action else {
+            return XCTFail("Expected activate action, got \(step.action)")
         }
         XCTAssertNil(actionTarget.sourceHeistId)
         XCTAssertEqual(actionTarget.matcher.identifier, "save-button")
@@ -2310,7 +2307,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBatchPreparationClassifiesActionWaitAndCheckpointCandidates() async throws {
+    func testBatchPreparationClassifiesActionAndWaitCandidates() async throws {
         let (fence, _) = makeConnectedFence()
 
         let batch = try decodedRunBatch(
@@ -2346,9 +2343,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let steps = plannedBatchSteps(from: batch)
         XCTAssertEqual(steps.map(\.commandName), ["activate", "wait_for"])
 
-        guard case .action(let firstAction) = steps[0].operation,
-              case .activate(let actionTarget) = firstAction
-        else {
+        guard case .activate(let actionTarget) = steps[0].action else {
             return XCTFail("Expected activate action with source heistId plus matcher target")
         }
         XCTAssertEqual(actionTarget.sourceHeistId, "leaf-123")

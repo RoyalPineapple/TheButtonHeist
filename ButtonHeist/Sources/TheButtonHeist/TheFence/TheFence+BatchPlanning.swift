@@ -130,14 +130,14 @@ extension TheFence {
             return RunBatchPreparedStep(
                 originalIndex: originalIndex,
                 commandName: request.command.rawValue,
-                operation: .action(action),
+                action: action,
                 expectation: overrideExpectation ?? expectation ?? action.defaultExpectation,
-                deadline: deadline(for: .action(action), timeout: stepTimeout)
+                deadline: deadline(for: action, timeout: stepTimeout)
             )
         }
 
-        private func deadline(for operation: TheScore.BatchOperation, timeout: Double?) -> TheScore.Deadline {
-            timeout.map(TheScore.Deadline.init(timeout:)) ?? operation.defaultDeadline
+        private func deadline(for action: TheScore.Action, timeout: Double?) -> TheScore.Deadline {
+            timeout.map(TheScore.Deadline.init(timeout:)) ?? action.defaultDeadline
         }
     }
 

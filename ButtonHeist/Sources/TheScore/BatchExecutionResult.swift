@@ -72,13 +72,6 @@ public struct BatchExecutionStepResult: Codable, Sendable {
         if actionName == nil, expectationName == nil { return true }
         return false
     }
-
-    public var displayName: String {
-        if let actionName, let expectationName {
-            return "\(actionName)+\(expectationName)"
-        }
-        return actionName ?? expectationName ?? "invalid"
-    }
 }
 
 public struct BatchExecutionSkippedStepResult: Codable, Sendable {

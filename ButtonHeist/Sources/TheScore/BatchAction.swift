@@ -20,41 +20,18 @@ extension Deadline: CustomStringConvertible {
 
 /// One executable non-read operation in a batch plan.
 public struct BatchStep: Sendable {
-    public let operation: BatchOperation
+    public let action: Action
     public let expectation: ActionExpectation
     public let deadline: Deadline
-
-    public init(
-        operation: BatchOperation,
-        expectation: ActionExpectation,
-        deadline: Deadline
-    ) {
-        self.operation = operation
-        self.expectation = expectation
-        self.deadline = deadline
-    }
 
     public init(
         action: Action,
         expectation: ActionExpectation,
         deadline: Deadline
     ) {
-        self.init(
-            operation: BatchOperation(legacyAction: action),
-            expectation: expectation,
-            deadline: deadline
-        )
-    }
-
-    /// Compatibility projection for callers that still inspect the legacy
-    /// action-shaped wire value. Runtime execution should use `operation`.
-    public var action: Action {
-        operation.legacyAction
-    }
-
-    public var userAction: Action? {
-        guard case .action(let action) = operation else { return nil }
-        return action
+        self.action = action
+        self.expectation = expectation
+        self.deadline = deadline
     }
 
     public static func action(
@@ -68,28 +45,12 @@ public struct BatchStep: Sendable {
             deadline: deadline ?? action.defaultDeadline
         )
     }
-
-    public static func wait(_ wait: BatchExecutionWait) -> BatchStep {
-        BatchStep(
-            action: wait.action,
-            expectation: wait.defaultExpectation,
-            deadline: wait.defaultDeadline
-        )
-    }
-
-    public static func checkpoint(_ checkpoint: BatchExecutionCheckpoint) -> BatchStep {
-        BatchStep(
-            operation: .checkpoint(CheckpointAction(name: checkpoint.name)),
-            expectation: checkpoint.expect,
-            deadline: Deadline(timeout: checkpoint.timeout)
-        )
-    }
 }
 
 extension BatchStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("step", [
-            "operation=\(operation)",
+            "action=\(action)",
             "expect=\(expectation)",
             "deadline=\(deadline)",
         ])
@@ -98,135 +59,26 @@ extension BatchStep: CustomStringConvertible {
 
 extension BatchStep: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, action, wait, checkpoint, expect, deadline
-    }
-
-    private enum Kind: String, Codable {
-        case action, wait, checkpoint
+        case action, expect, deadline
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        if container.contains(.action) {
-            let action = try container.decode(Action.self, forKey: .action)
-            let operation = BatchOperation(legacyAction: action)
-            self.init(
-                operation: operation,
-                expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expect)
-                    ?? operation.defaultExpectation,
-                deadline: try container.decodeIfPresent(Deadline.self, forKey: .deadline)
-                    ?? operation.defaultDeadline
-            )
-            return
-        }
-
-        switch try container.decode(Kind.self, forKey: .kind) {
-        case .action:
-            let action = try container.decode(Action.self, forKey: .action)
-            let operation = BatchOperation(legacyAction: action)
-            self.init(
-                operation: operation,
-                expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expect)
-                    ?? operation.defaultExpectation,
-                deadline: try container.decodeIfPresent(Deadline.self, forKey: .deadline)
-                    ?? operation.defaultDeadline
-            )
-        case .wait:
-            self = .wait(try container.decode(BatchExecutionWait.self, forKey: .wait))
-        case .checkpoint:
-            self = .checkpoint(try container.decode(BatchExecutionCheckpoint.self, forKey: .checkpoint))
-        }
+        let action = try container.decode(Action.self, forKey: .action)
+        self.init(
+            action: action,
+            expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expect)
+                ?? action.defaultExpectation,
+            deadline: try container.decodeIfPresent(Deadline.self, forKey: .deadline)
+                ?? action.defaultDeadline
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(operation.legacyAction, forKey: .action)
+        try container.encode(action, forKey: .action)
         try container.encode(expectation, forKey: .expect)
         try container.encode(deadline, forKey: .deadline)
-    }
-}
-
-public typealias BatchExecutionStep = BatchStep
-
-/// Executable operation carried by a batch step. Checkpoints are distinct from
-/// user actions so execution never has to fake a successful tap just to wait on
-/// an expectation.
-public enum BatchOperation: Sendable {
-    case action(Action)
-    case checkpoint(CheckpointAction)
-}
-
-extension BatchOperation {
-    init(legacyAction: Action) {
-        switch legacyAction {
-        case .checkpoint(let checkpoint):
-            self = .checkpoint(checkpoint)
-        default:
-            self = .action(legacyAction)
-        }
-    }
-
-    var legacyAction: Action {
-        switch self {
-        case .action(let action):
-            return action
-        case .checkpoint(let checkpoint):
-            return .checkpoint(checkpoint)
-        }
-    }
-
-    public var defaultExpectation: ActionExpectation {
-        switch self {
-        case .action(let action):
-            return action.defaultExpectation
-        case .checkpoint:
-            return .delivery
-        }
-    }
-
-    public var defaultDeadline: Deadline {
-        switch self {
-        case .action(let action):
-            return action.defaultDeadline
-        case .checkpoint:
-            return Deadline()
-        }
-    }
-}
-
-extension BatchOperation: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .action(let action):
-            return action.description
-        case .checkpoint(let checkpoint):
-            return checkpoint.description
-        }
-    }
-}
-
-extension BatchOperation: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case action, checkpoint
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        if container.contains(.checkpoint) {
-            self = .checkpoint(try container.decode(CheckpointAction.self, forKey: .checkpoint))
-        } else {
-            self = .action(try container.decode(Action.self, forKey: .action))
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .action(let action):
-            try container.encode(action, forKey: .action)
-        case .checkpoint(let checkpoint):
-            try container.encode(checkpoint, forKey: .checkpoint)
-        }
     }
 }
 
@@ -257,12 +109,9 @@ public enum Action: Sendable {
     case waitForIdle(WaitForIdleTarget)
     case waitForElement(BatchWaitForTarget)
     case waitForChange(WaitForChangeTarget)
-    case checkpoint(CheckpointAction)
     case explore
     case resignFirstResponder
 }
-
-public typealias BatchExecutionAction = Action
 
 extension Action: CustomStringConvertible {
     public var description: String {
@@ -291,7 +140,6 @@ extension Action: CustomStringConvertible {
         case .waitForIdle(let target): return target.description
         case .waitForElement(let target): return target.description
         case .waitForChange(let target): return target.description
-        case .checkpoint(let target): return target.description
         case .explore: return "explore"
         case .resignFirstResponder: return "resignFirstResponder"
         }
@@ -322,7 +170,6 @@ extension Action: Codable {
         case typeText = "type_text"
         case editAction = "edit_action"
         case setPasteboard = "set_pasteboard"
-        case getPasteboard = "get_pasteboard"
         case scroll
         case scrollToVisible = "scroll_to_visible"
         case elementSearch = "element_search"
@@ -330,7 +177,6 @@ extension Action: Codable {
         case waitForIdle = "wait_for_idle"
         case waitForElement = "wait_for"
         case waitForChange = "wait_for_change"
-        case checkpoint
         case explore
         case resignFirstResponder = "resign_first_responder"
     }
@@ -398,11 +244,6 @@ extension Action: Codable {
             self = .editAction(try container.decode(EditActionTarget.self, forKey: .target))
         case .setPasteboard:
             self = .setPasteboard(try container.decode(SetPasteboardTarget.self, forKey: .target))
-        case .getPasteboard:
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "get_pasteboard is a read operation and is not a batch Action"
-            ))
         case .scroll:
             self = .scroll(try BatchScrollTarget(from: decoder))
         case .scrollToVisible:
@@ -417,8 +258,6 @@ extension Action: Codable {
             self = .waitForElement(try container.decode(BatchWaitForTarget.self, forKey: .target))
         case .waitForChange:
             self = .waitForChange(try container.decode(WaitForChangeTarget.self, forKey: .target))
-        case .checkpoint:
-            self = .checkpoint(try CheckpointAction(from: decoder))
         case .explore:
             self = .explore
         case .resignFirstResponder:
@@ -501,127 +340,10 @@ extension Action: Codable {
         case .waitForChange(let target):
             try container.encode(WireType.waitForChange, forKey: .type)
             try container.encode(target, forKey: .target)
-        case .checkpoint(let target):
-            try container.encode(WireType.checkpoint, forKey: .type)
-            try target.encode(to: encoder)
         case .explore:
             try container.encode(WireType.explore, forKey: .type)
         case .resignFirstResponder:
             try container.encode(WireType.resignFirstResponder, forKey: .type)
         }
-    }
-}
-
-public struct CheckpointAction: Codable, Sendable, Equatable {
-    public let name: String?
-
-    public init(name: String? = nil) {
-        self.name = name
-    }
-}
-
-extension CheckpointAction: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("checkpoint", [
-            ScoreDescription.stringField("name", name),
-        ].compactMap { $0 })
-    }
-}
-
-public enum BatchExecutionWait: Sendable {
-    case idle(WaitForIdleTarget)
-    case element(BatchWaitForTarget)
-    case change(WaitForChangeTarget)
-}
-
-extension BatchExecutionWait: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .idle(let target): return target.description
-        case .element(let target): return target.description
-        case .change(let target): return target.description
-        }
-    }
-}
-
-extension BatchExecutionWait: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case type, target
-    }
-
-    private enum WireType: String, Codable {
-        case idle = "wait_for_idle"
-        case element = "wait_for"
-        case change = "wait_for_change"
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(WireType.self, forKey: .type) {
-        case .idle:
-            self = .idle(try container.decode(WaitForIdleTarget.self, forKey: .target))
-        case .element:
-            self = .element(try container.decode(BatchWaitForTarget.self, forKey: .target))
-        case .change:
-            self = .change(try container.decode(WaitForChangeTarget.self, forKey: .target))
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        switch self {
-        case .idle(let target):
-            try container.encode(WireType.idle, forKey: .type)
-            try container.encode(target, forKey: .target)
-        case .element(let target):
-            try container.encode(WireType.element, forKey: .type)
-            try container.encode(target, forKey: .target)
-        case .change(let target):
-            try container.encode(WireType.change, forKey: .type)
-            try container.encode(target, forKey: .target)
-        }
-    }
-}
-
-extension BatchExecutionWait {
-    public var action: Action {
-        switch self {
-        case .idle(let target):
-            return .waitForIdle(target)
-        case .element(let target):
-            return .waitForElement(target)
-        case .change(let target):
-            return .waitForChange(target)
-        }
-    }
-
-    public var defaultExpectation: ActionExpectation {
-        action.defaultExpectation
-    }
-
-    public var defaultDeadline: Deadline {
-        action.defaultDeadline
-    }
-}
-
-public struct BatchExecutionCheckpoint: Codable, Sendable {
-    public let name: String?
-    public let expect: ActionExpectation
-    public let timeout: Double?
-
-    public init(name: String? = nil, expect: ActionExpectation, timeout: Double? = nil) {
-        self.name = name
-        self.expect = expect
-        self.timeout = timeout
-    }
-}
-
-extension BatchExecutionCheckpoint: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("checkpoint", [
-            ScoreDescription.stringField("name", name),
-            "expect=\(expect)",
-            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
-        ].compactMap { $0 })
     }
 }

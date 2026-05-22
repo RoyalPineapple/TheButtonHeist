@@ -46,11 +46,11 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let plan = TheScore.BatchPlan(
             steps: [
                 .action(.setPasteboard(SetPasteboardTarget(text: "ready")), expect: .elementsChanged),
-                .checkpoint(BatchExecutionCheckpoint(
-                    name: "loaded",
+                .action(
+                    .waitForChange(WaitForChangeTarget(expect: .screenChanged, timeout: 0.1)),
                     expect: .screenChanged,
-                    timeout: 0.1
-                )),
+                    deadline: Deadline(timeout: 0.1)
+                ),
             ],
             policy: .continueOnError
         )
@@ -63,7 +63,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             "action:set_pasteboard",
             "expectation:elements_changed",
             "baseline",
-            "expectation:screen_changed",
+            "action:wait_for_change",
             "baseline",
         ])
 
@@ -76,9 +76,9 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertEqual(first.expectation?.met, true)
         XCTAssertEqual(first.expectationActionResult?.method, .waitForChange)
         let second = batch.steps[1]
-        XCTAssertEqual(second.actionName, "checkpoint:loaded")
+        XCTAssertEqual(second.actionName, "wait_for_change")
         XCTAssertEqual(second.expectationName, "screen_changed")
-        XCTAssertNil(second.actionResult)
+        XCTAssertNotNil(second.actionResult)
         XCTAssertEqual(second.expectation?.met, true)
     }
 
@@ -106,7 +106,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             steps: [
                 .action(.setPasteboard(SetPasteboardTarget(text: "first"))),
                 .action(.setPasteboard(SetPasteboardTarget(text: "next"))),
-                .wait(.idle(WaitForIdleTarget(timeout: 0.1))),
+                .action(.waitForIdle(WaitForIdleTarget(timeout: 0.1))),
             ],
             policy: .stopOnError
         )
@@ -213,7 +213,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
 
     func testClientBatchPlanDispatchesToBatchRunner() async throws {
         let plan = TheScore.BatchPlan(steps: [
-            .wait(.idle(WaitForIdleTarget(timeout: 0.01))),
+            .action(.waitForIdle(WaitForIdleTarget(timeout: 0.01))),
         ])
 
         let result = await brains.executeCommand(.batchExecutionPlan(plan))

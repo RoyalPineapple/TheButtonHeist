@@ -162,7 +162,6 @@ public final class TheInsideJob {
 
     var serverPhase: ServerPhase = .stopped
     var pollingPhase: PollingPhase = .disabled
-    private var tlsActive = false
 
     // The crew
     let muscle: TheMuscle
@@ -379,7 +378,6 @@ public final class TheInsideJob {
             serverPhase = .stopped
             throw error
         }
-        self.tlsActive = true
         getaway.identity.tlsActive = true
         serverPhase = .running(transport: transport)
 
@@ -549,11 +547,9 @@ public final class TheInsideJob {
         do {
             return try tlsIdentityProvider()
         } catch let error as InsideJobStartupError {
-            tlsActive = false
             getaway.identity.tlsActive = false
             throw error
         } catch {
-            tlsActive = false
             getaway.identity.tlsActive = false
             throw InsideJobStartupError.tlsIdentityUnavailable(
                 phase: phase,
@@ -851,7 +847,6 @@ public final class TheInsideJob {
                     return
                 }
 
-                self.tlsActive = true
                 self.getaway.identity.tlsActive = true
                 self.serverPhase = .running(transport: transport)
                 startedTransport = nil
@@ -906,7 +901,6 @@ public final class TheInsideJob {
             await stopTask.value
             await getaway.tearDownIfWired(to: transport)
         }
-        tlsActive = false
         getaway.identity.tlsActive = false
     }
 

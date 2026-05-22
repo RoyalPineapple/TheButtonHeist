@@ -158,14 +158,14 @@ final class MockConnection: DeviceConnecting {
             if let failedIndex {
                 let skipped = BatchExecutionSkippedStepResult(
                     index: index,
-                    actionName: step.operation.testCommandName,
+                    actionName: step.action.testCommandName,
                     expectationName: step.expectation.summaryDescription,
                     reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                     afterFailedIndex: failedIndex
                 )
                 stepResults.append(BatchExecutionStepResult(
                     index: index,
-                    actionName: step.operation.testCommandName,
+                    actionName: step.action.testCommandName,
                     expectationName: step.expectation.summaryDescription,
                     durationMs: 0,
                     skipped: skipped
@@ -173,13 +173,13 @@ final class MockConnection: DeviceConnecting {
                 continue
             }
 
-            let actionResult = actionResult(for: step.operation, handler: handler)
+            let actionResult = actionResult(for: step.action, handler: handler)
             let expectation = actionResult.success ? step.expectation.validate(against: actionResult) : nil
             let shouldStop = plan.policy == .stopOnError
                 && (actionResult.success == false || expectation?.met == false)
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: step.operation.testCommandName,
+                actionName: step.action.testCommandName,
                 expectationName: step.expectation.summaryDescription,
                 actionResult: actionResult,
                 expectation: expectation,
@@ -206,16 +206,9 @@ final class MockConnection: DeviceConnecting {
     }
 
     private func actionResult(
-        for operation: TheScore.BatchOperation,
+        for action: TheScore.Action,
         handler: (ClientMessage) -> ServerMessage
     ) -> ActionResult {
-        guard case .action(let action) = operation else {
-            return ActionResult(
-                success: true,
-                method: .waitForChange,
-                message: operation.testCommandName
-            )
-        }
         guard let message = action.testClientMessage else {
             return ActionResult(
                 success: true,
@@ -235,17 +228,6 @@ final class MockConnection: DeviceConnecting {
             )
         default:
             return ActionResult(success: true, method: .activate)
-        }
-    }
-}
-
-private extension TheScore.BatchOperation {
-    var testCommandName: String {
-        switch self {
-        case .action(let action):
-            return action.testCommandName
-        case .checkpoint(let checkpoint):
-            return checkpoint.name.map { "checkpoint:\($0)" } ?? "checkpoint"
         }
     }
 }
@@ -277,8 +259,6 @@ private extension TheScore.Action {
         case .waitForIdle: return "wait_for_idle"
         case .waitForElement: return "wait_for"
         case .waitForChange: return "wait_for_change"
-        case .checkpoint(let checkpoint):
-            return checkpoint.name.map { "checkpoint:\($0)" } ?? "checkpoint"
         case .explore: return "explore"
         case .resignFirstResponder: return "dismiss_keyboard"
         }
@@ -419,8 +399,6 @@ private extension TheScore.Action {
             return .explore
         case .resignFirstResponder:
             return .resignFirstResponder
-        case .checkpoint:
-            return nil
         }
     }
 }
