@@ -411,42 +411,15 @@ final class TheBookKeeper {
         command: TheFence.Command,
         metadata: ScreenshotMetadata
     ) throws -> URL {
-        guard case .active(var session) = phase else {
-            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
-        }
-        guard let data = Data(base64Encoded: base64Data) else {
-            throw BookKeeperError.base64DecodingFailed
-        }
-
-        let sequenceNumber = session.nextSequenceNumber
-        session.nextSequenceNumber += 1
-        let filename = String(format: "%03d-%@.png", sequenceNumber, command.rawValue)
-        let subdirectory = session.directory.appendingPathComponent("screenshots")
-        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
-        let fileURL = subdirectory.appendingPathComponent(filename)
-        try data.write(to: fileURL)
-
-        let entry = ArtifactEntry(
-            type: .screenshot,
-            path: "screenshots/\(filename)",
-            size: data.count,
-            timestamp: Date(),
+        try writeSessionArtifact(
+            base64Data: base64Data,
             requestId: requestId,
-            command: command.rawValue,
+            command: command,
+            type: .screenshot,
+            subdirectoryName: "screenshots",
+            fileExtension: "png",
             metadata: ["width": metadata.width, "height": metadata.height]
         )
-        try appendLogLine(ArtifactLogEntry(
-            t: iso8601String(from: entry.timestamp),
-            artifactType: entry.type,
-            path: entry.path,
-            size: entry.size,
-            requestId: entry.requestId,
-            command: entry.command,
-            metadata: entry.metadata.isEmpty ? nil : entry.metadata
-        ), to: session.logHandle)
-        phase = .active(session)
-
-        return fileURL
     }
 
     func writeRecording(
@@ -454,6 +427,32 @@ final class TheBookKeeper {
         requestId: String,
         command: TheFence.Command,
         metadata: RecordingMetadata
+    ) throws -> URL {
+        try writeSessionArtifact(
+            base64Data: base64Data,
+            requestId: requestId,
+            command: command,
+            type: .recording,
+            subdirectoryName: "recordings",
+            fileExtension: "mp4",
+            metadata: [
+                "width": Double(metadata.width),
+                "height": Double(metadata.height),
+                "duration": metadata.duration,
+                "fps": Double(metadata.fps),
+                "frameCount": Double(metadata.frameCount),
+            ]
+        )
+    }
+
+    private func writeSessionArtifact(
+        base64Data: String,
+        requestId: String,
+        command: TheFence.Command,
+        type: ArtifactType,
+        subdirectoryName: String,
+        fileExtension: String,
+        metadata: [String: Double]
     ) throws -> URL {
         guard case .active(var session) = phase else {
             throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
@@ -464,35 +463,20 @@ final class TheBookKeeper {
 
         let sequenceNumber = session.nextSequenceNumber
         session.nextSequenceNumber += 1
-        let filename = String(format: "%03d-%@.mp4", sequenceNumber, command.rawValue)
-        let subdirectory = session.directory.appendingPathComponent("recordings")
+        let filename = String(format: "%03d-%@.%@", sequenceNumber, command.rawValue, fileExtension)
+        let subdirectory = session.directory.appendingPathComponent(subdirectoryName)
         try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
         let fileURL = subdirectory.appendingPathComponent(filename)
         try data.write(to: fileURL)
 
-        let entry = ArtifactEntry(
-            type: .recording,
-            path: "recordings/\(filename)",
+        try appendLogLine(ArtifactLogEntry(
+            t: iso8601Now(),
+            artifactType: type,
+            path: "\(subdirectoryName)/\(filename)",
             size: data.count,
-            timestamp: Date(),
             requestId: requestId,
             command: command.rawValue,
-            metadata: [
-                "width": Double(metadata.width),
-                "height": Double(metadata.height),
-                "duration": metadata.duration,
-                "fps": Double(metadata.fps),
-                "frameCount": Double(metadata.frameCount),
-            ]
-        )
-        try appendLogLine(ArtifactLogEntry(
-            t: iso8601String(from: entry.timestamp),
-            artifactType: entry.type,
-            path: entry.path,
-            size: entry.size,
-            requestId: entry.requestId,
-            command: entry.command,
-            metadata: entry.metadata.isEmpty ? nil : entry.metadata
+            metadata: metadata.isEmpty ? nil : metadata
         ), to: session.logHandle)
         phase = .active(session)
 

@@ -129,6 +129,11 @@ private extension Dictionary where Key == String, Value == HeistValue {
         }
     }
 
+    mutating func appendTarget(_ target: ElementTarget?, includeTarget: Bool) {
+        guard includeTarget else { return }
+        appendTarget(target)
+    }
+
     mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) {
         if let expectation {
             self[.expect] = HeistValue.encoded(expectation)
@@ -201,22 +206,14 @@ private extension TheFence.RequestPayload {
         case .screen(let request):
             var arguments: [String: HeistValue] = [:]
             arguments.set(.output, request.outputPath)
-            if request.inlineData {
-                arguments.set(.inlineData, true)
-            }
-            if request.includeInterface {
-                arguments.set(.includeInterface, true)
-            }
+            arguments.set(.inlineData, request.inlineData ? true : nil)
+            arguments.set(.includeInterface, request.includeInterface ? true : nil)
             return arguments
         case .artifact(let request):
             var arguments: [String: HeistValue] = [:]
             arguments.set(.output, request.outputPath)
-            if request.inlineData {
-                arguments.set(.inlineData, true)
-            }
-            if request.includeInteractionLog {
-                arguments.set(.includeInteractionLog, true)
-            }
+            arguments.set(.inlineData, request.inlineData ? true : nil)
+            arguments.set(.includeInteractionLog, request.includeInteractionLog ? true : nil)
             return arguments
         case .gesture(let payload):
             return payload.bookKeeperArguments(includeTarget: includeTarget)
@@ -229,9 +226,7 @@ private extension TheFence.RequestPayload {
         case .typeText(let target):
             var arguments: [String: HeistValue] = [:]
             arguments.set(.text, target.text)
-            if includeTarget {
-                arguments.appendTarget(target.elementTarget)
-            }
+            arguments.appendTarget(target.elementTarget, includeTarget: includeTarget)
             return arguments
         case .editAction(let target):
             var arguments: [String: HeistValue] = [:]
@@ -255,9 +250,7 @@ private extension TheFence.RequestPayload {
             return request.bookKeeperArguments
         case .archiveSession(let request):
             var arguments: [String: HeistValue] = [:]
-            if request.deleteSource {
-                arguments.set(.deleteSource, true)
-            }
+            arguments.set(.deleteSource, request.deleteSource ? true : nil)
             return arguments
         case .startHeist(let request):
             var arguments: [String: HeistValue] = [:]
@@ -427,9 +420,7 @@ private extension TouchTapTarget {
         var arguments: [String: HeistValue] = [:]
         arguments.set(.x, pointX)
         arguments.set(.y, pointY)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -440,9 +431,7 @@ private extension LongPressTarget {
         arguments.set(.x, pointX)
         arguments.set(.y, pointY)
         arguments.set(.duration, duration)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -462,9 +451,7 @@ private extension SwipeTarget {
         if let end {
             arguments[.end] = end.bookKeeperValue
         }
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -477,9 +464,7 @@ private extension DragTarget {
         arguments.set(.endX, endX)
         arguments.set(.endY, endY)
         arguments.set(.duration, duration)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -492,9 +477,7 @@ private extension PinchTarget {
         arguments.set(.scale, scale)
         arguments.set(.spread, spread)
         arguments.set(.duration, duration)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -507,9 +490,7 @@ private extension RotateTarget {
         arguments.set(.angle, angle)
         arguments.set(.radius, radius)
         arguments.set(.duration, duration)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -520,9 +501,7 @@ private extension TwoFingerTapTarget {
         arguments.set(.centerX, centerX)
         arguments.set(.centerY, centerY)
         arguments.set(.spread, spread)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -588,16 +567,12 @@ private extension TheFence.ScrollPayload {
             return target.bookKeeperArguments(includeTarget: includeTarget)
         case .scrollToVisible(let target):
             var arguments: [String: HeistValue] = [:]
-            if includeTarget {
-                arguments.appendTarget(target.elementTarget)
-            }
+            arguments.appendTarget(target.elementTarget, includeTarget: includeTarget)
             return arguments
         case .elementSearch(let target):
             var arguments: [String: HeistValue] = [:]
             arguments.set(.direction, target.direction)
-            if includeTarget {
-                arguments.appendTarget(target.elementTarget)
-            }
+            arguments.appendTarget(target.elementTarget, includeTarget: includeTarget)
             return arguments
         case .scrollToEdge(let target):
             return target.bookKeeperArguments(includeTarget: includeTarget)
@@ -622,9 +597,7 @@ private extension ScrollTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
         arguments.set(.direction, direction)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -633,9 +606,7 @@ private extension ScrollToEdgeTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
         arguments.set(.edge, edge)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -647,15 +618,11 @@ private extension TheFence.AccessibilityPayload {
         case .activate(let target, let actionName, let count):
             arguments.set(.action, actionName)
             arguments.set(.count, count.value)
-            if includeTarget {
-                arguments.appendTarget(target)
-            }
+            arguments.appendTarget(target, includeTarget: includeTarget)
         case .increment(let target, let count),
              .decrement(let target, let count):
             arguments.set(.count, count.value)
-            if includeTarget {
-                arguments.appendTarget(target)
-            }
+            arguments.appendTarget(target, includeTarget: includeTarget)
         case .performCustomAction(let target, let count):
             arguments.set(.action, target.actionName)
             arguments.set(.count, count.value)
@@ -664,7 +631,7 @@ private extension TheFence.AccessibilityPayload {
                     arguments.appendTarget(elementTarget)
                 }
                 if let containerTarget = target.containerTarget {
-                    arguments["container"] = .object(containerTarget.bookKeeperArguments)
+                    arguments["container"] = containerTarget.bookKeeperValue
                     arguments.set("ordinal", target.containerOrdinal)
                 }
             }
@@ -684,19 +651,6 @@ private extension TheFence.AccessibilityPayload {
     }
 }
 
-private extension ContainerMatcher {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set("stableId", stableId)
-        arguments.set("type", type?.rawValue)
-        arguments.set("label", label)
-        arguments.set("value", value)
-        arguments.set("identifier", identifier)
-        arguments.set("isModalBoundary", isModalBoundary)
-        return arguments
-    }
-}
-
 private extension RotorTarget {
     func bookKeeperArguments(includeTarget: Bool) -> [String: HeistValue] {
         var arguments: [String: HeistValue] = [:]
@@ -706,9 +660,7 @@ private extension RotorTarget {
         arguments.set(.currentHeistId, currentHeistId)
         arguments.set(.currentTextStartOffset, currentTextRange?.startOffset)
         arguments.set(.currentTextEndOffset, currentTextRange?.endOffset)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
@@ -718,9 +670,7 @@ private extension WaitForTarget {
         var arguments: [String: HeistValue] = [:]
         arguments.set(.absent, absent)
         arguments.set(.timeout, timeout)
-        if includeTarget {
-            arguments.appendTarget(elementTarget)
-        }
+        arguments.appendTarget(elementTarget, includeTarget: includeTarget)
         return arguments
     }
 }
