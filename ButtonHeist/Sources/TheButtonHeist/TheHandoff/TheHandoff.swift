@@ -648,9 +648,6 @@ final class TheHandoff {
         connection?.onEvent = { [weak self, attemptID] event in
             guard let self else { return }
             switch event {
-            // Transport-up signal is informational; the `.connected` event drives state transitions and external callbacks.
-            case .transportReady:
-                return
             case .connected:
                 guard self.isActiveConnectionAttempt(attemptID) else { return }
                 self.transitionToConnected(attemptID: attemptID, device: device)

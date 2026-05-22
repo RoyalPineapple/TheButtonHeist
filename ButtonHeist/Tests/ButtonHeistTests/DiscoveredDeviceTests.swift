@@ -534,11 +534,12 @@ final class DiscoveredDeviceTests: XCTestCase {
 }
 
 @ButtonHeistActor
-private final class ReachabilityProbeConnection: DeviceConnecting {
+private final class ReachabilityProbeConnection: TransportReachabilityConnecting {
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
+    var onTransportReady: (@ButtonHeistActor () -> Void)?
 
     func connect() {
-        onEvent?(.transportReady)
+        onTransportReady?()
     }
 
     func disconnect() {}

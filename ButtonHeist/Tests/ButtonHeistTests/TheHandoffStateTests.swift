@@ -31,6 +31,21 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTransportReadyHookDoesNotMarkHandoffConnected() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _, _, _ in mock }
+
+        handoff.connect(to: device)
+        mock.onTransportReady?()
+
+        assertConnecting(handoff.connectionPhase, device: device)
+        XCTAssertNil(handoff.connectedDevice)
+    }
+
+    @ButtonHeistActor
     func testDisconnectClearsState() async {
         let handoff = TheHandoff()
 

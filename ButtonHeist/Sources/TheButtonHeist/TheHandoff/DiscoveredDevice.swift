@@ -223,7 +223,7 @@ extension Array where Element == DiscoveredDevice {
 }
 
 @ButtonHeistActor
-var makeReachabilityConnection: (DiscoveredDevice) -> any DeviceConnecting = { device in
+var makeReachabilityConnection: (DiscoveredDevice) -> any TransportReachabilityConnecting = { device in
     let connection = DeviceConnection(device: device, token: nil, driverId: nil)
     connection.autoRespondToAuthRequired = false
     return connection
@@ -254,16 +254,17 @@ extension DiscoveredDevice {
         let deviceName = name
         let resolver = ReachabilityResolver()
 
-        // Wire the connection's onEvent callback to resolve the probe:
-        // `.transportReady` resolves reachable; `.disconnected` records
+        // Wire the connection callbacks to resolve the probe:
+        // raw socket readiness resolves reachable; `.disconnected` records
         // contract failures that should not be flattened into transport misses.
         // The resolver is one-shot so a subsequent `.disconnected` after a
-        // successful transport-ready signal is a no-op.
+        // successful socket-ready signal is a no-op.
+        connection.onTransportReady = {
+            reachabilityLogger.debug("Transport reachable: \(deviceName, privacy: .public)")
+            resolver.resolve(.reachable)
+        }
         connection.onEvent = { event in
             switch event {
-            case .transportReady:
-                reachabilityLogger.debug("Transport reachable: \(deviceName, privacy: .public)")
-                resolver.resolve(.reachable)
             case .connected:
                 break
             case .message:

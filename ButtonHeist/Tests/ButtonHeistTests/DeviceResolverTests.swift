@@ -114,7 +114,7 @@ final class DeviceResolverTests: XCTestCase {
         let previousFactory = makeReachabilityConnection
         makeReachabilityConnection = { _ in
             let connection = MockConnection()
-            connection.connectEventsOverride = [.transportReady]
+            connection.emitTransportReadyOnConnect = true
             return connection
         }
         defer { makeReachabilityConnection = previousFactory }
