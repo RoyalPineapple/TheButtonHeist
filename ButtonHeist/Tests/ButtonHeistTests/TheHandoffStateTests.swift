@@ -1233,7 +1233,7 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTerminalAttemptDeliversRequestScopedError() async {
+    func testTerminalAttemptIgnoresLateRequestScopedError() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
@@ -1262,16 +1262,13 @@ final class TheHandoffStateTests: XCTestCase {
             accessibilityTrace: nil
         ))
 
-        guard case .error(let receivedError)? = receivedMessage else {
-            return XCTFail("Expected error message, got \(String(describing: receivedMessage))")
-        }
-        XCTAssertEqual(receivedError.message, "request failed")
-        XCTAssertEqual(receivedRequestID, "request-1")
+        XCTAssertNil(receivedMessage)
+        XCTAssertNil(receivedRequestID)
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
     }
 
     @ButtonHeistActor
-    func testTerminalAttemptDeliversRequestScopedObservationPayloads() async {
+    func testTerminalAttemptIgnoresLateRequestScopedObservationPayloads() async {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
@@ -1314,20 +1311,7 @@ final class TheHandoffStateTests: XCTestCase {
             accessibilityTrace: nil
         ))
 
-        XCTAssertEqual(receivedMessages.count, 2)
-        guard case .interface(let receivedInterface) = receivedMessages[0].message else {
-            return XCTFail("Expected interface message, got \(receivedMessages[0].message)")
-        }
-        XCTAssertEqual(receivedInterface, interface)
-        XCTAssertEqual(receivedMessages[0].requestID, "interface-1")
-        guard case .screen(let receivedScreen) = receivedMessages[1].message else {
-            return XCTFail("Expected screen message, got \(receivedMessages[1].message)")
-        }
-        XCTAssertEqual(receivedScreen.pngData, screen.pngData)
-        XCTAssertEqual(receivedScreen.width, screen.width)
-        XCTAssertEqual(receivedScreen.height, screen.height)
-        XCTAssertEqual(receivedScreen.timestamp, screen.timestamp)
-        XCTAssertEqual(receivedMessages[1].requestID, "screen-1")
+        XCTAssertTrue(receivedMessages.isEmpty)
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
     }
 

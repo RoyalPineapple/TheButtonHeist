@@ -85,12 +85,14 @@ public final class TheFence {
     public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 
     var config: Configuration
-    private let sessionConnectionState = SessionConnectionState(handoff: TheHandoff())
-    var handoff: TheHandoff {
-        sessionConnectionState.handoff
-    }
+    let handoff = TheHandoff()
     var sessionConnectionSnapshot: SessionConnectionSnapshot {
-        sessionConnectionState.snapshot
+        SessionConnectionSnapshot(
+            connected: handoff.isConnected,
+            phase: sessionConnectionPhase,
+            device: sessionDevicePayload,
+            lastFailure: sessionFailurePayload
+        )
     }
     let bookKeeper: TheBookKeeper
     /// Heist playback re-entrancy state. `.playing` carries the wall-clock
@@ -147,6 +149,42 @@ public final class TheFence {
 
     private var configuredAuthTokenForStatus: String? {
         config.token ?? EnvironmentKey.buttonheistToken.value
+    }
+
+    private var sessionConnectionPhase: SessionConnectionPhase {
+        switch handoff.connectionPhase {
+        case .disconnected:
+            return .disconnected
+        case .connecting:
+            return .connecting
+        case .connected:
+            return .connected
+        case .failed:
+            return .failed
+        }
+    }
+
+    private var sessionDevicePayload: SessionDevicePayload? {
+        handoff.connectedDevice.map { device in
+            SessionDevicePayload(
+                deviceName: handoff.displayName(for: device),
+                appName: device.appName,
+                connectionType: device.connectionType,
+                shortId: device.shortId
+            )
+        }
+    }
+
+    private var sessionFailurePayload: SessionFailurePayload? {
+        handoff.connectionDiagnosticFailure.map { failure in
+            SessionFailurePayload(
+                errorCode: failure.failureCode,
+                phase: failure.phase,
+                retryable: failure.retryable,
+                message: failure.errorDescription,
+                hint: failure.hint
+            )
+        }
     }
 
     private func wireUpResponseCallbacks() {
