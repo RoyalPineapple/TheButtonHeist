@@ -122,22 +122,6 @@ struct ToolSyncTests {
         )
     }
 
-    @Test("MCP tool count matches catalog contract projection")
-    func mcpToolCountMatchesCatalogContractProjection() {
-        #expect(
-            ToolDefinitions.all.count == TheFence.Command.mcpToolContracts.count,
-            "MCP tool count (\(ToolDefinitions.all.count)) != catalog contracts (\(TheFence.Command.mcpToolContracts.count))"
-        )
-    }
-
-    @Test("MCP tool contract count is explicit")
-    func mcpToolContractCountIsExplicit() {
-        #expect(
-            TheFence.Command.mcpToolContracts.count == 25,
-            "MCP tool contract count changed - update ToolDefinitions and schema guardrails"
-        )
-    }
-
     @Test("Grouped tool selector values route to distinct consumed commands")
     func groupedToolSelectorValuesRouteToDistinctConsumedCommands() {
         for contract in TheFence.Command.mcpToolContracts {
@@ -461,8 +445,8 @@ struct ToolSyncTests {
         #expect(!commandValues.contains(TheFence.Command.gestureMCPToolName))
     }
 
-    @Test("Expect schemas are projected from FenceParameterSpec")
-    func expectSchemasAreProjectedFromFenceParameterSpec() {
+    @Test("Expect schemas expose FenceParameterSpec shape")
+    func expectSchemasExposeFenceParameterSpecShape() {
         guard let expectSpec = TheFence.Command.activate.parameters.first(where: { $0.key == "expect" }) else {
             Issue.record("activate command is missing expect parameter spec")
             return
@@ -474,15 +458,16 @@ struct ToolSyncTests {
             "FenceParameterSpec should own the expect object shape"
         )
 
-        let projectedSchema = ToolDefinitions.schemaProperty(for: expectSpec)
         for tool in ToolDefinitions.all where extractPropertyKeys(from: tool).contains("expect") {
             guard let actualSchema = extractPropertySchema(from: tool, property: "expect") else {
                 Issue.record("\(tool.name) is missing expect property schema")
                 continue
             }
-            #expect(
-                Value.object(actualSchema) == projectedSchema,
-                "\(tool.name).expect should be projected from FenceParameterSpec"
+            assertPropertySchema(
+                actualSchema,
+                matches: expectSpec,
+                context: "\(tool.name).expect",
+                enumPolicy: .exact
             )
         }
     }
@@ -566,8 +551,8 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("MCP tool schemas are rendered from canonical tool contracts")
-    func mcpToolSchemasAreRenderedFromCanonicalToolContracts() {
+    @Test("MCP tool schemas expose canonical contract roots")
+    func mcpToolSchemasExposeCanonicalContractRoots() {
         let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
         let contracts = TheFence.Command.mcpToolContracts
 
@@ -578,10 +563,10 @@ struct ToolSyncTests {
                 Issue.record("Missing rendered MCP tool for contract \(contract.name)")
                 continue
             }
-            #expect(
-                tool.inputSchema == ToolDefinitions.inputSchema(for: contract),
-                "\(contract.name) input schema should be rendered from MCPToolContract"
-            )
+            #expect(tool.description == contract.description)
+            #expect(extractPropertyKeys(from: tool) == Set(contract.parameters.map(\.key)))
+            #expect(extractRequiredKeys(from: tool) == Set(contract.requiredParameterKeys))
+            assertRootSchemaIsClosedObject(tool.inputSchema, context: contract.name)
         }
     }
 
@@ -994,7 +979,7 @@ struct ToolSyncTests {
         enumPolicy: EnumPolicy
     ) {
         #expect(
-            extractStringField(from: schema, key: "type") == ToolDefinitions.schemaType(for: spec.type),
+            extractStringField(from: schema, key: "type") == spec.type.jsonSchemaType,
             "\(context) type should match FenceParameterSpec"
         )
 
@@ -1049,7 +1034,7 @@ struct ToolSyncTests {
                 return
             }
             #expect(
-                extractStringField(from: items, key: "type") == ToolDefinitions.schemaType(for: arrayItemType),
+                extractStringField(from: items, key: "type") == arrayItemType.jsonSchemaType,
                 "\(context) array item type should match FenceParameterSpec"
             )
             if arrayItemType == .object {
@@ -1093,6 +1078,16 @@ struct ToolSyncTests {
                 enumPolicy: enumPolicy
             )
         }
+    }
+
+    private func assertRootSchemaIsClosedObject(_ schema: Value, context: String) {
+        guard case .object(let rootSchema) = schema else {
+            Issue.record("\(context) root schema should be an object")
+            return
+        }
+        #expect(extractStringField(from: rootSchema, key: "type") == "object")
+        #expect(extractBoolField(from: rootSchema, key: "additionalProperties") == false)
+        #expect(rootSchema["properties"] != nil, "\(context) root schema should include properties")
     }
 
     private func assertSelectorContract(

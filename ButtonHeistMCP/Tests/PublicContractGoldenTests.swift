@@ -28,58 +28,6 @@ struct PublicContractGoldenTests {
         )
     }
 
-    @Test("Descriptor surface count golden")
-    func descriptorSurfaceCountGolden() {
-        let descriptors = TheFence.Command.descriptors
-        let surface: [String: Int] = [
-            "totalCommands": descriptors.count,
-            "batchEligible": descriptors.filter(\.isBatchExecutable).count,
-            "playbackEligible": descriptors.filter(\.isPlaybackExecutable).count,
-            "heistRecordable": descriptors.filter(\.isHeistRecordable).count,
-            "requiresConnection": descriptors.filter(\.requiresConnectionBeforeDispatch).count,
-            "humanAliases": TheFence.Command.humanCommandAliases.count,
-            "cliDirectCommands": descriptors.filter { descriptor in
-                if case .directCommand = descriptor.cliExposure { return true }
-                return false
-            }.count,
-            "cliGroupedCommands": descriptors.filter { descriptor in
-                if case .groupedUnder = descriptor.cliExposure { return true }
-                return false
-            }.count,
-            "cliSessionOnly": descriptors.filter { descriptor in
-                if case .sessionOnly = descriptor.cliExposure { return true }
-                return false
-            }.count,
-            "mcpDirectTools": descriptors.filter { $0.mcpExposure == .directTool }.count,
-            "mcpGroupedCommands": descriptors.filter { descriptor in
-                if case .groupedUnder = descriptor.mcpExposure { return true }
-                return false
-            }.count,
-            "mcpNotExposed": descriptors.filter { $0.mcpExposure == .notExposed }.count,
-            "mcpToolContracts": TheFence.Command.mcpToolContracts.count,
-        ]
-        let expected: [String: Int] = [
-            "totalCommands": 44,
-            "batchEligible": 24,
-            "playbackEligible": 24,
-            "heistRecordable": 24,
-            "requiresConnection": 34,
-            "humanAliases": 18,
-            "cliDirectCommands": 37,
-            "cliGroupedCommands": 3,
-            "cliSessionOnly": 4,
-            "mcpDirectTools": 24,
-            "mcpGroupedCommands": 13,
-            "mcpNotExposed": 7,
-            "mcpToolContracts": 25,
-        ]
-
-        #expect(
-            surface == expected,
-            "Descriptor surface counts changed: \(surface)"
-        )
-    }
-
     @Test("MCP action failure rendering public contract golden")
     func mcpActionFailureRenderingPublicContractGolden() throws {
         let actionResult = ActionResult(

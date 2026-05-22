@@ -11,22 +11,6 @@ enum ToolDefinitions {
         TheFence.Command.mcpToolContracts.map(tool(for:))
     }
 
-    static func inputSchema(for contract: MCPToolContract) -> Value {
-        value(from: contract.inputJSONSchema)
-    }
-
-    static func schemaProperties(from specs: [FenceParameterSpec]) -> [String: Value] {
-        FenceParameterSpec.jsonSchemaProperties(from: specs).mapValues { value(from: $0) }
-    }
-
-    static func schemaProperty(for spec: FenceParameterSpec) -> Value {
-        value(from: spec.jsonSchemaProperty)
-    }
-
-    static func schemaType(for type: FenceParameterSpec.ParamType) -> String {
-        type.jsonSchemaType
-    }
-
     private static func tool(for contract: MCPToolContract) -> Tool {
         let schema = inputSchema(for: contract)
         if let annotations = contract.annotations {
@@ -46,6 +30,10 @@ enum ToolDefinitions {
             description: contract.description,
             inputSchema: schema
         )
+    }
+
+    private static func inputSchema(for contract: MCPToolContract) -> Value {
+        value(from: contract.inputJSONSchema)
     }
 
     private static func value(from schemaValue: FenceJSONSchemaValue) -> Value {
