@@ -164,7 +164,7 @@ extension Navigation {
                     stash.currentScreen = parsed
                     union = union.merging(parsed)
                 }
-                if proof.atEdge || proof.visibleStateUnchanged(after: stash.visibleIds) {
+                if !proof.moved || stash.visibleIds == proof.previousVisibleIds {
                     break
                 }
             }
