@@ -2456,6 +2456,22 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRecordingLifecycleResetCancelsPendingStartWait() async throws {
+        let recording = FenceRecordingLifecycle()
+
+        do {
+            try await recording.waitForStartAcknowledgement(timeout: 5.0) {
+                recording.reset()
+            }
+            XCTFail("Expected reset to cancel the pending start wait")
+        } catch is CancellationError {
+            // expected
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
     func testStopRecordingRetrievesCachedPayloadWhenLocalRecordingPhaseIsIdle() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let tempDirectory = TempDirectoryFixture.make(prefix: "cached-recording")

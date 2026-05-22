@@ -141,7 +141,79 @@ extension Action: CustomStringConvertible {
         case .waitForElement(let target): return target.description
         case .waitForChange(let target): return target.description
         case .explore: return "explore"
-        case .resignFirstResponder: return "resignFirstResponder"
+        case .resignFirstResponder: return "resign_first_responder"
+        }
+    }
+}
+
+extension Action {
+    public var canonicalName: String {
+        switch self {
+        case .activate: return "activate"
+        case .increment: return "increment"
+        case .decrement: return "decrement"
+        case .performCustomAction: return "perform_custom_action"
+        case .rotor: return "rotor"
+        case .touchTap: return "touch_tap"
+        case .touchLongPress: return "touch_long_press"
+        case .touchSwipe: return "touch_swipe"
+        case .touchDrag: return "touch_drag"
+        case .touchPinch: return "touch_pinch"
+        case .touchRotate: return "touch_rotate"
+        case .touchTwoFingerTap: return "touch_two_finger_tap"
+        case .touchDrawPath: return "touch_draw_path"
+        case .touchDrawBezier: return "touch_draw_bezier"
+        case .typeText: return "type_text"
+        case .editAction: return "edit_action"
+        case .setPasteboard: return "set_pasteboard"
+        case .scroll: return "scroll"
+        case .scrollToVisible: return "scroll_to_visible"
+        case .elementSearch: return "element_search"
+        case .scrollToEdge: return "scroll_to_edge"
+        case .waitForIdle: return "wait_for_idle"
+        case .waitForElement: return "wait_for"
+        case .waitForChange: return "wait_for_change"
+        case .explore: return "explore"
+        case .resignFirstResponder: return "resign_first_responder"
+        }
+    }
+
+    public var actionMethod: ActionMethod {
+        switch self {
+        case .activate: return .activate
+        case .increment: return .increment
+        case .decrement: return .decrement
+        case .performCustomAction: return .customAction
+        case .rotor: return .rotor
+        case .touchTap: return .syntheticTap
+        case .touchLongPress: return .syntheticLongPress
+        case .touchSwipe: return .syntheticSwipe
+        case .touchDrag: return .syntheticDrag
+        case .touchPinch: return .syntheticPinch
+        case .touchRotate: return .syntheticRotate
+        case .touchTwoFingerTap: return .syntheticTwoFingerTap
+        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
+        case .typeText: return .typeText
+        case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
+        case .scrollToEdge: return .scrollToEdge
+        case .waitForIdle: return .waitForIdle
+        case .waitForElement: return .waitFor
+        case .waitForChange: return .waitForChange
+        case .explore: return .explore
+        case .resignFirstResponder: return .resignFirstResponder
+        }
+    }
+
+    public var fulfillsOwnExpectation: Bool {
+        switch self {
+        case .waitForElement, .waitForChange:
+            return true
+        default:
+            return false
         }
     }
 }

@@ -110,7 +110,7 @@ extension TheBrains {
 
         return BatchExecutionStepResult(
             index: index,
-            actionName: step.action.batchExecutionActionName,
+            actionName: step.action.canonicalName,
             expectationName: step.expectation.summaryDescription,
             actionResult: actionResult,
             expectationActionResult: expectationReceipt?.actionResult,
@@ -133,7 +133,7 @@ extension TheBrains {
                 expectation: immediateExpectation
             )
         }
-        if step.action.fulfillsOwnBatchExpectation {
+        if step.action.fulfillsOwnExpectation {
             return BatchExpectationReceipt(
                 actionResult: actionResult,
                 expectation: ExpectationResult(
@@ -314,7 +314,7 @@ extension TheBrains {
             screenName: screenName,
             screenId: screenId
         )
-        builder.message = "Unsupported batch Action '\(action.batchExecutionActionName)': \(reason)"
+        builder.message = "Unsupported batch Action '\(action.canonicalName)': \(reason)"
         return builder.failure(errorKind: .unsupported)
     }
 
@@ -327,14 +327,14 @@ extension TheBrains {
             let index = failedIndex + 1 + offset
             let skipped = BatchExecutionSkippedStepResult(
                 index: index,
-                actionName: step.action.batchExecutionActionName,
+                actionName: step.action.canonicalName,
                 expectationName: step.expectation.summaryDescription,
                 reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                 afterFailedIndex: failedIndex
             )
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: step.action.batchExecutionActionName,
+                actionName: step.action.canonicalName,
                 expectationName: step.expectation.summaryDescription,
                 durationMs: 0,
                 skipped: skipped
@@ -367,35 +367,9 @@ private struct BatchExpectationReceipt {
 }
 
 extension TheScore.Action {
-    var batchExecutionActionName: String {
-        guard let caseName = Mirror(reflecting: self).children.first?.label else { return description }
-        return caseName == "waitForElement" ? "wait_for" : caseName.batchSnakeCase
-    }
-
-    var fulfillsOwnBatchExpectation: Bool {
-        if case .waitForElement = self { return true }
-        if case .waitForChange = self { return true }
-        return false
-    }
-
     var pendingRotorResultTargetHeistId: HeistId? {
         guard case .rotor(let target) = self else { return nil }
         return target.currentSourceHeistId
-    }
-}
-
-private extension String {
-    var batchSnakeCase: String {
-        var output = ""
-        for character in self {
-            if character.isUppercase {
-                if !output.isEmpty { output.append("_") }
-                output.append(character.lowercased())
-            } else {
-                output.append(character)
-            }
-        }
-        return output
     }
 }
 

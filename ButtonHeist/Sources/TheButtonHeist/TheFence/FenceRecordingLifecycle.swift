@@ -91,6 +91,7 @@ private enum RecordingLifecycle {
     case completing(wait: RecordingWait<RecordingPayload>, serverRecording: Bool)
 }
 
+/// Owns the Fence recording state machine and pending recording waits.
 @ButtonHeistActor
 final class FenceRecordingLifecycle {
     private var lifecycle: RecordingLifecycle = .idle
@@ -120,7 +121,9 @@ final class FenceRecordingLifecycle {
         return false
     }
 
+    /// Cancels any active wait and returns to idle; safe to call after a prior cancel.
     func reset() {
+        cancelAll(error: CancellationError())
         lifecycle = .idle
     }
 
