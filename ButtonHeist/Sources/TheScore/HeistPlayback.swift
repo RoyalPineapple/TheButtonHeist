@@ -242,31 +242,6 @@ public enum HeistValue: Codable, Sendable, Equatable {
         }
     }
 
-    /// Create from an untyped value. Returns nil for unsupported types.
-    public static func from(_ value: Any) -> HeistValue? {
-        switch value {
-        case let boolValue as Bool: return .bool(boolValue)
-        case let intValue as Int: return .int(intValue)
-        case let doubleValue as Double: return .double(doubleValue)
-        case let stringValue as String: return .string(stringValue)
-        case let arrayValue as [Any]:
-            var converted: [HeistValue] = []
-            for element in arrayValue {
-                guard let heistValue = from(element) else { return nil }
-                converted.append(heistValue)
-            }
-            return .array(converted)
-        case let objectValue as [String: Any]:
-            var result: [String: HeistValue] = [:]
-            for (key, nestedValue) in objectValue {
-                guard let converted = from(nestedValue) else { return nil }
-                result[key] = converted
-            }
-            return .object(result)
-        default:
-            return nil
-        }
-    }
 }
 
 extension HeistValue: CustomStringConvertible {
@@ -302,10 +277,6 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public let frame: RecordedFrame?
     /// Whether the step used coordinate-only targeting (no element).
     public let coordinateOnly: Bool?
-    /// Inputs omitted from replay because they were not JSON-compatible.
-    public let unsupportedArguments: [RecordedUnsupportedInput]?
-    /// Inputs capped or clamped while recording. Diagnostic only.
-    public let caps: [RecordedInputCap]?
     /// Accessibility trace observed while recording.
     public let accessibilityTrace: AccessibilityTrace?
     /// Expectation evidence observed while recording. Playback ignores this.
@@ -319,8 +290,6 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         case heistId
         case frame
         case coordinateOnly
-        case unsupportedArguments
-        case caps
         case accessibilityTrace
         case expectation
     }
@@ -329,16 +298,12 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         heistId: HeistId? = nil,
         frame: RecordedFrame? = nil,
         coordinateOnly: Bool? = nil,
-        unsupportedArguments: [RecordedUnsupportedInput]? = nil,
-        caps: [RecordedInputCap]? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         expectation: ExpectationResult? = nil
     ) {
         self.heistId = heistId
         self.frame = frame
         self.coordinateOnly = coordinateOnly
-        self.unsupportedArguments = unsupportedArguments?.isEmpty == true ? nil : unsupportedArguments
-        self.caps = caps?.isEmpty == true ? nil : caps
         self.accessibilityTrace = accessibilityTrace
         self.expectation = expectation
     }
@@ -349,8 +314,6 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
             heistId: try container.decodeIfPresent(HeistId.self, forKey: .heistId),
             frame: try container.decodeIfPresent(RecordedFrame.self, forKey: .frame),
             coordinateOnly: try container.decodeIfPresent(Bool.self, forKey: .coordinateOnly),
-            unsupportedArguments: try container.decodeIfPresent([RecordedUnsupportedInput].self, forKey: .unsupportedArguments),
-            caps: try container.decodeIfPresent([RecordedInputCap].self, forKey: .caps),
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
         )
@@ -364,8 +327,6 @@ extension RecordedMetadata: CustomStringConvertible {
             ScoreDescription.stringField("heistId", heistId),
             frame?.description,
             ScoreDescription.valueField("coordinateOnly", coordinateOnly),
-            unsupportedArguments.map { "unsupported=\($0.count)" },
-            caps.map { "caps=\($0.count)" },
             traceReceiptCount.map { "traceReceipts=\($0)" },
             expectation?.description,
         ].compactMap { $0 })

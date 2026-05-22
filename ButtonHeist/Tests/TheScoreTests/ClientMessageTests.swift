@@ -16,12 +16,22 @@ final class ClientMessageTests: XCTestCase {
     func testRequestSnapshotEncodeDecode() throws {
         let message = ClientMessage.requestInterface(InterfaceQuery())
         let data = try JSONEncoder().encode(message)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["type"] as? String, "requestInterface")
+        XCTAssertNotNil(object["payload"] as? [String: Any])
+
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .requestInterface = decoded {
         } else {
             XCTFail("Expected requestInterface, got \(decoded)")
         }
+    }
+
+    func testRequestSnapshotRejectsMissingPayload() throws {
+        let data = Data(#"{"type":"requestInterface"}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data))
     }
 
     func testPingEncodeDecode() throws {

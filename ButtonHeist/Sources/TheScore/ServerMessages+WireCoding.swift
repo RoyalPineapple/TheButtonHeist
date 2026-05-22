@@ -83,9 +83,7 @@ extension ServerMessage {
         case .serverHello: return .serverHello
         case .authRequired: return .authRequired
         case .authApprovalPending: return .authApprovalPending(try AuthApprovalPendingPayload(from: try payload()))
-        case .pong:
-            guard let payloadDecoder else { return .pong() }
-            return .pong(try PongPayload(from: payloadDecoder))
+        case .pong: return .pong(try PongPayload(from: try payload()))
         case .recordingStarted: return .recordingStarted
         case .recordingStopped: return .recordingStopped
         case .protocolMismatch: return .protocolMismatch(try ProtocolMismatchPayload(from: try payload()))
