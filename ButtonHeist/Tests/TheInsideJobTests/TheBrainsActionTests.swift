@@ -387,6 +387,46 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(customActionTarget.invocationCount, 1)
     }
 
+    func testExecuteCustomActionDispatchesLiveContainerCustomAction() async {
+        let path = TreePath([0])
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 200, height: 80)),
+            customActions: [.init(name: "Archive")]
+        )
+        let liveObject = UIView(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
+        let customActionTarget = CustomActionTargetObject()
+        liveObject.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(
+                name: "Archive",
+                target: customActionTarget,
+                selector: #selector(CustomActionTargetObject.archive(_:))
+            ),
+        ]
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerStableIds: [container: "semantic_actions__actions"],
+            containerStableIdsByPath: [path: "semantic_actions__actions"],
+            heistIdByElement: [:],
+            elementRefs: [:],
+            containerRefsByPath: [path: Screen.ContainerRef(object: liveObject)],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let result = await brains.actions.executeCustomAction(
+            CustomActionTarget(
+                containerTarget: ContainerMatcher(stableId: "semantic_actions__actions"),
+                actionName: "Archive"
+            )
+        )
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(result.method, .customAction)
+        XCTAssertEqual(customActionTarget.invocationCount, 1)
+    }
+
     func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async {
         let heistId = "plain_action"
         let liveObject = ActionActivationOverrideView()

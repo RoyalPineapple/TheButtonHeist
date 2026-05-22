@@ -163,6 +163,9 @@ extension FenceResponse {
         if container.isModalBoundary {
             parts.append("modal")
         }
+        if let actions = annotation?.actions, !actions.isEmpty {
+            parts.append("{\(actions.map(\.description).joined(separator: ","))}")
+        }
         if detail == .full {
             let frame = container.frame
             parts.append(

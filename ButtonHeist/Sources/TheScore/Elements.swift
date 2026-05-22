@@ -322,10 +322,12 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
 public struct InterfaceContainerAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let stableId: HeistContainer?
+    public let actions: [ElementAction]
 
-    public init(path: TreePath, stableId: HeistContainer?) {
+    public init(path: TreePath, stableId: HeistContainer?, actions: [ElementAction] = []) {
         self.path = path
         self.stableId = stableId
+        self.actions = actions
     }
 }
 
@@ -430,9 +432,11 @@ public struct Interface: Codable, Equatable, Sendable {
             guard case .container = node else { return nil }
             let relativePath = Array(newPath.indices.dropFirst(rootPath.indices.count))
             let oldPath = TreePath(originalPath.indices + relativePath)
+            guard let annotation = containersByPath[oldPath] else { return nil }
             return InterfaceContainerAnnotation(
                 path: newPath,
-                stableId: containersByPath[oldPath]?.stableId
+                stableId: annotation.stableId,
+                actions: annotation.actions
             )
         }
         return InterfaceAnnotations(elements: elements, containers: containers)

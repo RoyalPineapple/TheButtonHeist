@@ -64,6 +64,7 @@ struct Screen: Equatable {
                 heistIdByElement: [:],
                 heistIdByElementPath: [:],
                 elementRefs: elementRefs,
+                containerRefsByPath: [:],
                 firstResponderHeistId: firstResponderHeistId,
                 scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath
@@ -80,6 +81,7 @@ struct Screen: Equatable {
         heistIdByElement: [AccessibilityElement: HeistId],
         heistIdByElementPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
+        containerRefsByPath: [TreePath: ContainerRef] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
@@ -93,6 +95,7 @@ struct Screen: Equatable {
                 heistIdByElement: heistIdByElement,
                 heistIdByElementPath: heistIdByElementPath,
                 elementRefs: elementRefs,
+                containerRefsByPath: containerRefsByPath,
                 firstResponderHeistId: firstResponderHeistId,
                 scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath,
@@ -198,6 +201,17 @@ struct Screen: Equatable {
         }
     }
 
+    // `@unchecked Sendable` rationale: weak UIKit refs are only observed
+    // behind TheStash on the main actor.
+    // swiftlint:disable:next agent_unchecked_sendable_no_comment
+    struct ContainerRef: @unchecked Sendable, Equatable {
+        weak var object: NSObject?
+
+        static func == (lhs: ContainerRef, rhs: ContainerRef) -> Bool {
+            lhs.object === rhs.object
+        }
+    }
+
     /// Targetable semantic state retained across exploration.
     struct KnownInterface: Equatable {
         let elements: [HeistId: ScreenElement]
@@ -222,6 +236,7 @@ struct Screen: Equatable {
         let heistIdByElement: [AccessibilityElement: HeistId]
         let heistIdByElementPath: [TreePath: HeistId]
         let elementRefs: [HeistId: ElementRef]
+        let containerRefsByPath: [TreePath: ContainerRef]
         let firstResponderHeistId: HeistId?
         let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
         let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
@@ -234,6 +249,7 @@ struct Screen: Equatable {
             heistIdByElement: [AccessibilityElement: HeistId],
             heistIdByElementPath: [TreePath: HeistId] = [:],
             elementRefs: [HeistId: ElementRef],
+            containerRefsByPath: [TreePath: ContainerRef] = [:],
             firstResponderHeistId: HeistId?,
             scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
             scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
@@ -245,6 +261,7 @@ struct Screen: Equatable {
             self.heistIdByElement = heistIdByElement
             self.heistIdByElementPath = heistIdByElementPath
             self.elementRefs = elementRefs
+            self.containerRefsByPath = containerRefsByPath
             self.firstResponderHeistId = firstResponderHeistId
             self.scrollableContainerViews = scrollableContainerViews
             self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
@@ -257,6 +274,7 @@ struct Screen: Equatable {
             heistIdByElement: [:],
             heistIdByElementPath: [:],
             elementRefs: [:],
+            containerRefsByPath: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )
@@ -287,6 +305,10 @@ struct Screen: Equatable {
 
         func scrollView(forContainer stableId: HeistContainer) -> UIScrollView? {
             scrollableViewsByStableId[stableId]?.view as? UIScrollView
+        }
+
+        func containerObject(forPath path: TreePath) -> NSObject? {
+            containerRefsByPath[path]?.object
         }
 
         func scrollView(for element: ScreenElement) -> UIScrollView? {

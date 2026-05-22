@@ -725,7 +725,6 @@ private extension ClientMessage {
         case .activate,
              .increment,
              .decrement,
-             .performCustomAction,
              .rotor,
              .touchTap,
              .touchLongPress,
@@ -740,6 +739,8 @@ private extension ClientMessage {
              .elementSearch,
              .scrollToEdge:
             return actionTarget != nil
+        case .performCustomAction(let target):
+            return target.elementTarget != nil || target.containerTarget != nil
         case .clientHello,
              .authenticate,
              .requestInterface,

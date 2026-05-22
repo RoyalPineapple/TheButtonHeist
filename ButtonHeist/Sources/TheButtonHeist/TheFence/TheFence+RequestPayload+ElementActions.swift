@@ -113,6 +113,61 @@ private extension TheFence {
             return ScrollContainerTarget(stableId: stableId, captureLocalRef: captureLocalRef)
         }
 
+        func customActionContainerTarget() throws -> (matcher: ContainerMatcher, ordinal: Int?)? {
+            guard let container = try request.schemaDictionary("container") else { return nil }
+            let matcher = ContainerMatcher(
+                stableId: try container.schemaString("stableId"),
+                type: try container.schemaEnum("type", as: ContainerTypeName.self),
+                label: try container.schemaString("label"),
+                value: try container.schemaString("value"),
+                identifier: try container.schemaString("identifier"),
+                isModalBoundary: try container.schemaBoolean("isModalBoundary")
+            )
+            let ordinal = try nonNegativeInteger("ordinal")
+            guard matcher.hasPredicates || ordinal != nil else {
+                throw SchemaValidationError(
+                    field: "container",
+                    observed: container,
+                    expected: "container selector with stableId, type, label, value, identifier, isModalBoundary, or ordinal"
+                )
+            }
+            return (matcher, ordinal)
+        }
+
+        @ButtonHeistActor
+        func customActionTarget(actionName: String, in fence: TheFence) throws -> CustomActionTarget {
+            let containerTarget = try customActionContainerTarget()
+            if let containerTarget {
+                guard !hasElementTargetFields else {
+                    throw SchemaValidationError(
+                        field: "target",
+                        observed: request,
+                        expected: "exactly one element target or container selector"
+                    )
+                }
+                return CustomActionTarget(
+                    containerTarget: containerTarget.matcher,
+                    ordinal: containerTarget.ordinal,
+                    actionName: actionName
+                )
+            }
+
+            guard let elementTarget = try elementTarget(in: fence) else {
+                throw MissingElementTarget(command: TheFence.Command.performCustomAction.rawValue)
+            }
+            return CustomActionTarget(elementTarget: elementTarget, actionName: actionName)
+        }
+
+        var hasElementTargetFields: Bool {
+            if request.keys.contains("heistId") { return true }
+            if request.keys.contains("label") { return true }
+            if request.keys.contains("identifier") { return true }
+            if request.keys.contains("value") { return true }
+            if request.keys.contains("traits") { return true }
+            if request.keys.contains("excludeTraits") { return true }
+            return false
+        }
+
         @ButtonHeistActor
         func matcher(in fence: TheFence) throws -> ElementMatcher {
             ElementMatcher(
@@ -311,10 +366,9 @@ private extension TheFence {
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let target = try request.requiredElementTarget(command: .performCustomAction, in: fence)
+            let actionName = try request.requiredString("action")
             payload = .performCustomAction(
-                target,
-                actionName: try request.requiredString("action"),
+                try request.customActionTarget(actionName: actionName, in: fence),
                 count: try request.countArgument()
             )
         }

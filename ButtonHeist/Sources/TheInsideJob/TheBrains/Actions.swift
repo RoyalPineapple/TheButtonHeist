@@ -384,7 +384,7 @@ final class Actions {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await performElementAction(target: target, method: .activate, recordedScreen: recordedScreen) { context in
+        return await performElementAction(target: target, method: .activate, recordedScreen: recordedScreen) { context in
             let liveTarget = context.liveTarget
             // First attempt — accessibilityActivate on the live UIKit object.
             let firstOutcome = self.stash.activate(liveTarget)
@@ -468,7 +468,7 @@ final class Actions {
     }
 
     func executeIncrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await performElementAction(
+        return await performElementAction(
             target: target,
             method: .increment,
             recordedScreen: recordedScreen,
@@ -495,7 +495,7 @@ final class Actions {
     }
 
     func executeDecrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await performElementAction(
+        return await performElementAction(
             target: target,
             method: .decrement,
             recordedScreen: recordedScreen,
@@ -525,8 +525,18 @@ final class Actions {
         _ target: CustomActionTarget,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        await performElementAction(
-            target: target.elementTarget,
+        if let containerTarget = target.containerTarget {
+            return executeContainerCustomAction(
+                containerTarget,
+                ordinal: target.containerOrdinal,
+                actionName: target.actionName
+            )
+        }
+        guard let elementTarget = target.elementTarget else {
+            return .failure(.customAction, message: "custom action failed: missing element or container target")
+        }
+        return await performElementAction(
+            target: elementTarget,
             method: .customAction,
             recordedScreen: recordedScreen,
             deallocatedBoundary: "custom action"
@@ -555,6 +565,42 @@ final class Actions {
             case .succeeded:
                 return .success(method: .customAction)
             }
+        }
+    }
+
+    private func executeContainerCustomAction(
+        _ matcher: ContainerMatcher,
+        ordinal: Int?,
+        actionName: String
+    ) -> TheSafecracker.InteractionResult {
+        let resolution = stash.resolveContainerTarget(matcher, ordinal: ordinal)
+        guard case .resolved(let containerTarget) = resolution else {
+            return .failure(
+                .customAction,
+                message: "custom action failed: \(resolution.diagnostics); try get_interface to inspect container stableIds."
+            )
+        }
+        switch stash.performCustomAction(named: actionName, on: containerTarget) {
+        case .deallocated:
+            return .failure(.customAction, message: "custom action failed: container object deallocated")
+        case .noSuchAction:
+            let available = containerTarget.container.customActions.map(\.name).filter { !$0.isEmpty }
+            let suffix = available.isEmpty ? "" : "; available custom actions: \(available.map { "\"\($0)\"" }.joined(separator: ", "))"
+            return .failure(
+                .customAction,
+                message: "custom action failed: requestedAction=\"\(actionName)\" not found on container\(suffix)"
+            )
+        case .declined:
+            return .failure(
+                .customAction,
+                message: "custom action failed: requestedAction=\"\(actionName)\" declined by container handler"
+            )
+        case .succeeded:
+            safecracker.showFingerprint(at: CGPoint(
+                x: containerTarget.container.frame.origin.x + containerTarget.container.frame.size.width / 2,
+                y: containerTarget.container.frame.origin.y + containerTarget.container.frame.size.height / 2
+            ))
+            return .success(method: .customAction)
         }
     }
 

@@ -158,6 +158,27 @@ final class TheStash {
         }
     }
 
+    struct ResolvedContainerTarget {
+        let container: AccessibilityContainer
+        let path: TreePath
+        let stableId: HeistContainer?
+        let object: NSObject
+    }
+
+    enum ContainerTargetResolution {
+        case resolved(ResolvedContainerTarget)
+        case notFound(diagnostics: String)
+        case ambiguous(candidates: [String], diagnostics: String)
+
+        var diagnostics: String {
+            switch self {
+            case .resolved: return ""
+            case .notFound(let message): return message
+            case .ambiguous(_, let message): return message
+            }
+        }
+    }
+
     /// Executable form of a caller-provided element target.
     ///
     /// Direct heistIds are input handles: when the source screen still knows
@@ -449,6 +470,10 @@ final class TheStash {
         performCustomAction(named: name, on: liveTarget.object)
     }
 
+    func performCustomAction(named name: String, on containerTarget: ResolvedContainerTarget) -> CustomActionOutcome {
+        performCustomAction(named: name, on: containerTarget.object)
+    }
+
     private func performCustomAction(named name: String, on object: NSObject) -> CustomActionOutcome {
         guard let action = object.accessibilityCustomActions?
             .first(where: { $0.name == name }) else {
@@ -589,6 +614,44 @@ final class TheStash {
         resolveTarget(target, in: currentScreen.visibleOnly, includePendingRotor: false, resolutionScope: .visible)
     }
 
+    func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
+        guard matcher.hasPredicates || ordinal != nil else {
+            return .notFound(diagnostics: "container target requires stableId, type, label, value, identifier, or ordinal")
+        }
+        let matches = currentScreen.liveInterface.hierarchy.containerPaths.compactMap { item -> ResolvedContainerTarget? in
+            let annotation = InterfaceContainerAnnotation(
+                path: item.path,
+                stableId: currentScreen.liveInterface.containerStableIdsByPath[item.path]
+            )
+            guard item.container.matches(matcher, annotation: annotation) else { return nil }
+            guard let object = currentScreen.liveInterface.containerObject(forPath: item.path) else { return nil }
+            return ResolvedContainerTarget(
+                container: item.container,
+                path: item.path,
+                stableId: annotation.stableId,
+                object: object
+            )
+        }
+        if let ordinal {
+            guard matches.indices.contains(ordinal) else {
+                return .notFound(diagnostics: "container target ordinal \(ordinal) is outside \(matches.count) matching container(s)")
+            }
+            return .resolved(matches[ordinal])
+        }
+        switch matches.count {
+        case 1:
+            return .resolved(matches[0])
+        case 0:
+            return .notFound(diagnostics: "no live container matched \(matcher)")
+        default:
+            let candidates = matches.map(Self.containerCandidateSummary)
+            return .ambiguous(
+                candidates: candidates,
+                diagnostics: "container target matched \(matches.count) containers; provide ordinal. Candidates: \(candidates.joined(separator: "; "))"
+            )
+        }
+    }
+
     /// Convert direct heistId input into the minimum semantic matcher for the
     /// source screen when the source element is still known. If the handle is
     /// unknown, keep it executable as a direct heistId so existing not-found
@@ -644,6 +707,16 @@ final class TheStash {
         case .matcher(let matcher, let ordinal):
             return resolveMatcher(matcher, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
         }
+    }
+
+    private static func containerCandidateSummary(_ target: ResolvedContainerTarget) -> String {
+        [
+            target.stableId.map { "stableId=\"\($0)\"" },
+            "type=\(target.container.typeName.rawValue)",
+            target.container.containerIdentifier.map { "identifier=\"\($0)\"" },
+            target.container.containerLabel.map { "label=\"\($0)\"" },
+            target.container.containerValue.map { "value=\"\($0)\"" },
+        ].compactMap { $0 }.joined(separator: " ")
     }
 
     private func minimumMatcher(for sourceElement: ScreenElement, in sourceScreen: Screen) -> MinimumMatcher {

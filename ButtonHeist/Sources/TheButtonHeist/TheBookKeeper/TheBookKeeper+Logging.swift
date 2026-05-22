@@ -656,24 +656,44 @@ private extension TheFence.AccessibilityPayload {
             if includeTarget {
                 arguments.appendTarget(target)
             }
-        case .performCustomAction(let target, let actionName, let count):
-            arguments.set(.action, actionName)
+        case .performCustomAction(let target, let count):
+            arguments.set(.action, target.actionName)
             arguments.set(.count, count.value)
             if includeTarget {
-                arguments.appendTarget(target)
+                if let elementTarget = target.elementTarget {
+                    arguments.appendTarget(elementTarget)
+                }
+                if let containerTarget = target.containerTarget {
+                    arguments["container"] = .object(containerTarget.bookKeeperArguments)
+                    arguments.set("ordinal", target.containerOrdinal)
+                }
             }
         }
         return arguments
     }
 
-    var bookKeeperElementTarget: ElementTarget {
+    var bookKeeperElementTarget: ElementTarget? {
         switch self {
         case .activate(let target, _, _),
              .increment(let target, _),
-             .decrement(let target, _),
-             .performCustomAction(let target, _, _):
+             .decrement(let target, _):
             return target
+        case .performCustomAction(let target, _):
+            return target.elementTarget
         }
+    }
+}
+
+private extension ContainerMatcher {
+    var bookKeeperArguments: [String: HeistValue] {
+        var arguments: [String: HeistValue] = [:]
+        arguments.set("stableId", stableId)
+        arguments.set("type", type?.rawValue)
+        arguments.set("label", label)
+        arguments.set("value", value)
+        arguments.set("identifier", identifier)
+        arguments.set("isModalBoundary", isModalBoundary)
+        return arguments
     }
 }
 

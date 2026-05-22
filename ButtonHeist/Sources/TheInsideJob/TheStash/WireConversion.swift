@@ -94,6 +94,19 @@ extension TheStash {
         return activate + adjustable + custom
     }
 
+    static func buildActions(for container: AccessibilityContainer, object: NSObject? = nil) -> [ElementAction] {
+        var names = container.customActions
+            .map(\.name)
+            .filter { !$0.isEmpty }
+        let liveNames = object?.accessibilityCustomActions?
+            .map(\.name)
+            .filter { !$0.isEmpty } ?? []
+        for name in liveNames where !names.contains(name) {
+            names.append(name)
+        }
+        return names.map(ElementAction.custom)
+    }
+
     // MARK: - Wire Output
 
     static func toWire(_ entry: ScreenElement) -> HeistElement {
@@ -150,7 +163,11 @@ extension TheStash {
             return InterfaceContainerAnnotation(
                 path: path,
                 stableId: screen.liveInterface.containerStableIdsByPath[path]
-                    ?? screen.liveInterface.containerStableIds[container]
+                    ?? screen.liveInterface.containerStableIds[container],
+                actions: buildActions(
+                    for: container,
+                    object: screen.liveInterface.containerObject(forPath: path)
+                )
             )
         }
     }

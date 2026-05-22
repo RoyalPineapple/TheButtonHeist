@@ -330,12 +330,22 @@ extension TheFence {
             try rejectRepeatedBatchCount(count, command: context.request.command)
             let semanticTarget = semanticTarget(from: context.operation, fallback: target)
             return try context.plan(action: .decrement(requiredExecutionTarget(semanticTarget)))
-        case .performCustomAction(let target, let actionName, let count):
+        case .performCustomAction(let target, let count):
             try rejectObservedBatchCount(count, command: context.request.command)
-            let semanticTarget = semanticTarget(from: context.operation, fallback: target)
-            return try context.plan(action: .performCustomAction(BatchCustomActionTarget(
-                target: requiredExecutionTarget(semanticTarget),
-                actionName: actionName
+            if let elementTarget = target.elementTarget {
+                let semanticTarget = semanticTarget(from: context.operation, fallback: elementTarget)
+                return try context.plan(action: .performCustomAction(BatchCustomActionTarget(
+                    target: requiredExecutionTarget(semanticTarget),
+                    actionName: target.actionName
+                )))
+            }
+            guard let containerTarget = target.containerTarget else {
+                throw MissingElementTarget(command: context.request.command.rawValue)
+            }
+            return context.plan(action: .performCustomAction(BatchCustomActionTarget(
+                containerTarget: containerTarget,
+                ordinal: target.containerOrdinal,
+                actionName: target.actionName
             )))
         }
     }

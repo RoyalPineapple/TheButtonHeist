@@ -36,6 +36,7 @@ final class TheBurglar {
         let hierarchy: [AccessibilityHierarchy]
         let objects: [AccessibilityElement: NSObject]
         let objectsByPath: [TreePath: NSObject]
+        let containerObjectsByPath: [TreePath: NSObject]
         let scrollViews: [AccessibilityContainer: UIView]
         let scrollViewsByPath: [TreePath: UIView]
 
@@ -43,12 +44,14 @@ final class TheBurglar {
             hierarchy: [AccessibilityHierarchy],
             objects: [AccessibilityElement: NSObject],
             objectsByPath: [TreePath: NSObject] = [:],
+            containerObjectsByPath: [TreePath: NSObject] = [:],
             scrollViews: [AccessibilityContainer: UIView],
             scrollViewsByPath: [TreePath: UIView] = [:]
         ) {
             self.hierarchy = hierarchy
             self.objects = objects
             self.objectsByPath = objectsByPath
+            self.containerObjectsByPath = containerObjectsByPath
             self.scrollViews = scrollViews
             self.scrollViewsByPath = scrollViewsByPath
         }
@@ -82,6 +85,7 @@ final class TheBurglar {
         var allHierarchy: [AccessibilityHierarchy] = []
         var allObjects: [AccessibilityElement: NSObject] = [:]
         var objectCandidates: [AccessibilityElement: [NSObject]] = [:]
+        var containerObjectCandidates: [AccessibilityContainer: [NSObject]] = [:]
         var scrollViewCandidates: [AccessibilityContainer: [UIView]] = [:]
 
         for (window, rootView) in windows {
@@ -95,6 +99,7 @@ final class TheBurglar {
                         objectCandidates[element, default: []].append(object)
                     },
                     containerVisitor: { container, object in
+                        containerObjectCandidates[container, default: []].append(object)
                         if case .scrollable = container.type, let view = object as? UIView {
                             scrollViewCandidates[container, default: []].append(view)
                         }
@@ -135,10 +140,15 @@ final class TheBurglar {
             hierarchy: allHierarchy,
             objectCandidates: objectCandidates
         )
+        let allContainerObjectsByPath = Self.containerObjectsByPath(
+            hierarchy: allHierarchy,
+            objectCandidates: containerObjectCandidates
+        )
         return ParseResult(
             hierarchy: allHierarchy,
             objects: allObjects,
             objectsByPath: allObjectsByPath,
+            containerObjectsByPath: allContainerObjectsByPath,
             scrollViews: Self.scrollViewsByContainerForCurrentCapture(
                 hierarchy: allHierarchy,
                 scrollViewsByPath: allScrollViewsByPath
@@ -489,6 +499,9 @@ final class TheBurglar {
         let scrollableViewRefsByPath = result.scrollViewsByPath.mapValues {
             Screen.ScrollableViewRef(view: $0)
         }
+        let containerRefsByPath = result.containerObjectsByPath.mapValues {
+            Screen.ContainerRef(object: $0)
+        }
         return Screen(
             elements: screenElements,
             hierarchy: result.hierarchy,
@@ -497,6 +510,7 @@ final class TheBurglar {
             heistIdByElement: heistIdByElement,
             heistIdByElementPath: heistIdByElementPath,
             elementRefs: elementRefs,
+            containerRefsByPath: containerRefsByPath,
             firstResponderHeistId: firstResponders.first?.1,
             scrollableContainerViews: scrollableViewRefs,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
@@ -532,6 +546,43 @@ final class TheBurglar {
             }
             consumedCounts[container] = nextIndex + 1
         }
+        return result
+    }
+
+    private static func containerObjectsByPath(
+        hierarchy: [AccessibilityHierarchy],
+        objectCandidates: [AccessibilityContainer: [NSObject]]
+    ) -> [TreePath: NSObject] {
+        var consumedCounts: [AccessibilityContainer: Int] = [:]
+        var result: [TreePath: NSObject] = [:]
+        for (container, path) in parserVisitorContainerPaths(hierarchy: hierarchy) {
+            let nextIndex = consumedCounts[container, default: 0]
+            if let objects = objectCandidates[container], objects.indices.contains(nextIndex) {
+                result[path] = objects[nextIndex]
+            }
+            consumedCounts[container] = nextIndex + 1
+        }
+        return result
+    }
+
+    private static func parserVisitorContainerPaths(
+        hierarchy: [AccessibilityHierarchy]
+    ) -> [(container: AccessibilityContainer, path: TreePath)] {
+        hierarchy.enumerated().flatMap { index, node in
+            parserVisitorContainerPaths(node: node, path: TreePath([index]))
+        }
+    }
+
+    private static func parserVisitorContainerPaths(
+        node: AccessibilityHierarchy,
+        path: TreePath
+    ) -> [(container: AccessibilityContainer, path: TreePath)] {
+        guard case .container(let container, let children) = node else { return [] }
+
+        var result = children.enumerated().flatMap { index, child in
+            parserVisitorContainerPaths(node: child, path: path.appending(index))
+        }
+        result.append((container, path))
         return result
     }
 
