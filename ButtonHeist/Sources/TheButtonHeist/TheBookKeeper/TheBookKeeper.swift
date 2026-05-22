@@ -381,7 +381,6 @@ final class TheBookKeeper {
         requestId: String,
         status: ResponseStatus,
         durationMilliseconds: Int,
-        artifact: String? = nil,
         error: String? = nil
     ) throws {
         guard case .active(let session) = phase else { return }
@@ -390,7 +389,6 @@ final class TheBookKeeper {
             requestId: requestId,
             status: status,
             durationMilliseconds: durationMilliseconds,
-            artifact: artifact,
             error: error
         ), to: session.logHandle)
     }
