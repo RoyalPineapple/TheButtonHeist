@@ -154,13 +154,27 @@ extension TheFence {
         case .decrement(let target, let count):
             let count = try accessibilityAdjustmentCount(count)
             return try await sendRepeatedAdjustment(.decrement(target), actionName: Command.decrement.rawValue, count: count)
-        case .performCustomAction(let target, let actionName, let count):
+        case .performCustomAction(let target, let count):
             return try await handleNamedAccessibilityAction(
                 target: target,
-                actionName: actionName,
                 count: count
             )
         }
+    }
+
+    private func handleNamedAccessibilityAction(
+        target: CustomActionTarget,
+        count: CountArgument
+    ) async throws -> FenceResponse {
+        if let elementTarget = target.elementTarget {
+            return try await handleNamedAccessibilityAction(
+                target: elementTarget,
+                actionName: target.actionName,
+                count: count
+            )
+        }
+        try rejectCount(count)
+        return try await sendAction(.performCustomAction(target))
     }
 
     private func handleNamedAccessibilityAction(

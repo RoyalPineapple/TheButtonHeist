@@ -55,8 +55,16 @@ enum BatchActionClientMessageBridge {
         case .decrement(let target):
             return .decrement(target.executableTarget)
         case .performCustomAction(let target):
+            if let elementTarget = target.target {
+                return .performCustomAction(CustomActionTarget(
+                    elementTarget: elementTarget.executableTarget,
+                    actionName: target.actionName
+                ))
+            }
+            guard let containerTarget = target.containerTarget else { return nil }
             return .performCustomAction(CustomActionTarget(
-                elementTarget: target.target.executableTarget,
+                containerTarget: containerTarget,
+                ordinal: target.containerOrdinal,
                 actionName: target.actionName
             ))
         case .rotor(let target):

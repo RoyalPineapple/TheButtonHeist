@@ -450,13 +450,28 @@ extension ElementTarget: Codable {
     }
 }
 
-/// Target for custom actions
+/// Target for custom actions.
+///
+/// Element targeting keeps the historical `elementTarget` wire field.
+/// Container targeting uses the same `container` selector shape as
+/// `get_interface.subtree`, with `ordinal` as the disambiguator.
 public struct CustomActionTarget: Codable, Sendable {
-    public let elementTarget: ElementTarget
+    public let elementTarget: ElementTarget?
+    public let containerTarget: ContainerMatcher?
+    public let containerOrdinal: Int?
     public let actionName: String
 
     public init(elementTarget: ElementTarget, actionName: String) {
         self.elementTarget = elementTarget
+        self.containerTarget = nil
+        self.containerOrdinal = nil
+        self.actionName = actionName
+    }
+
+    public init(containerTarget: ContainerMatcher, ordinal: Int? = nil, actionName: String) {
+        self.elementTarget = nil
+        self.containerTarget = containerTarget
+        self.containerOrdinal = ordinal
         self.actionName = actionName
     }
 }
@@ -464,9 +479,80 @@ public struct CustomActionTarget: Codable, Sendable {
 extension CustomActionTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("customAction", [
-            elementTarget.description,
+            elementTarget?.description,
+            containerTarget.map {
+                ScoreDescription.call("container", [
+                    $0.description,
+                    ScoreDescription.valueField("ordinal", containerOrdinal),
+                ].compactMap { $0 })
+            },
             ScoreDescription.stringField("action", actionName),
         ].compactMap { $0 })
+    }
+}
+
+extension CustomActionTarget {
+    private enum CodingKeys: String, CodingKey {
+        case elementTarget
+        case container
+        case ordinal
+        case actionName
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        actionName = try container.decode(String.self, forKey: .actionName)
+        let hasElementTarget = container.contains(.elementTarget)
+        let hasContainerTarget = container.contains(.container)
+        guard hasElementTarget != hasContainerTarget else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .elementTarget,
+                in: container,
+                debugDescription: "CustomActionTarget requires exactly one of elementTarget or container"
+            )
+        }
+        if hasElementTarget {
+            elementTarget = try container.decode(ElementTarget.self, forKey: .elementTarget)
+            containerTarget = nil
+            containerOrdinal = nil
+        } else {
+            elementTarget = nil
+            let matcher = try container.decode(ContainerMatcher.self, forKey: .container)
+            let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+            guard matcher.hasPredicates || ordinal != nil else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .container,
+                    in: container,
+                    debugDescription: "CustomActionTarget container requires stableId, type, label, value, identifier, isModalBoundary, or ordinal"
+                )
+            }
+            containerTarget = matcher
+            if let ordinal, ordinal < 0 {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .ordinal,
+                    in: container,
+                    debugDescription: "ordinal must be non-negative, got \(ordinal)"
+                )
+            }
+            containerOrdinal = ordinal
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(actionName, forKey: .actionName)
+        switch (elementTarget, containerTarget) {
+        case (let elementTarget?, nil):
+            try container.encode(elementTarget, forKey: .elementTarget)
+        case (nil, let containerTarget?):
+            try container.encode(containerTarget, forKey: .container)
+            try container.encodeIfPresent(containerOrdinal, forKey: .ordinal)
+        default:
+            throw EncodingError.invalidValue(self, .init(
+                codingPath: encoder.codingPath,
+                debugDescription: "CustomActionTarget requires exactly one of elementTarget or container"
+            ))
+        }
     }
 }
 

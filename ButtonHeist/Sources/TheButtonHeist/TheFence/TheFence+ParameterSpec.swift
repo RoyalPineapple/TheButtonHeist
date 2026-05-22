@@ -989,6 +989,10 @@ extension TheFence.Command {
 
         case .performCustomAction:
             return target + [
+                .init(
+                    key: "container", type: .object, optionalRole: .matcher,
+                    description: "Container selector for custom actions exposed by a container node"
+                ),
                 .init(key: "action", type: .string, required: true, description: "Custom accessibility action name"),
             ] + expectation
 

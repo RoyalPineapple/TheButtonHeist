@@ -231,7 +231,7 @@ extension TheFence {
         case activate(ElementTarget, actionName: String?, count: CountArgument)
         case increment(ElementTarget, count: CountArgument)
         case decrement(ElementTarget, count: CountArgument)
-        case performCustomAction(ElementTarget, actionName: String, count: CountArgument)
+        case performCustomAction(CustomActionTarget, count: CountArgument)
     }
 
     struct CountArgument {

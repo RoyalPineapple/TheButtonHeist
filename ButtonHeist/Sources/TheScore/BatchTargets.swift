@@ -91,11 +91,22 @@ extension BatchExecutionTarget: CustomStringConvertible {
 }
 
 public struct BatchCustomActionTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget
+    public let target: BatchExecutionTarget?
+    public let containerTarget: ContainerMatcher?
+    public let containerOrdinal: Int?
     public let actionName: String
 
     public init(target: BatchExecutionTarget, actionName: String) {
         self.target = target
+        self.containerTarget = nil
+        self.containerOrdinal = nil
+        self.actionName = actionName
+    }
+
+    public init(containerTarget: ContainerMatcher, ordinal: Int? = nil, actionName: String) {
+        self.target = nil
+        self.containerTarget = containerTarget
+        self.containerOrdinal = ordinal
         self.actionName = actionName
     }
 }
@@ -103,9 +114,80 @@ public struct BatchCustomActionTarget: Codable, Sendable {
 extension BatchCustomActionTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("customAction", [
-            target.description,
+            target?.description,
+            containerTarget.map {
+                ScoreDescription.call("container", [
+                    $0.description,
+                    ScoreDescription.valueField("ordinal", containerOrdinal),
+                ].compactMap { $0 })
+            },
             ScoreDescription.stringField("action", actionName),
         ].compactMap { $0 })
+    }
+}
+
+extension BatchCustomActionTarget {
+    private enum CodingKeys: String, CodingKey {
+        case target
+        case container
+        case ordinal
+        case actionName
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        actionName = try container.decode(String.self, forKey: .actionName)
+        let hasElementTarget = container.contains(.target)
+        let hasContainerTarget = container.contains(.container)
+        guard hasElementTarget != hasContainerTarget else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .target,
+                in: container,
+                debugDescription: "BatchCustomActionTarget requires exactly one of target or container"
+            )
+        }
+        if hasElementTarget {
+            target = try container.decode(BatchExecutionTarget.self, forKey: .target)
+            containerTarget = nil
+            containerOrdinal = nil
+        } else {
+            target = nil
+            let matcher = try container.decode(ContainerMatcher.self, forKey: .container)
+            let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+            guard matcher.hasPredicates || ordinal != nil else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .container,
+                    in: container,
+                    debugDescription: "BatchCustomActionTarget container requires stableId, type, label, value, identifier, isModalBoundary, or ordinal"
+                )
+            }
+            containerTarget = matcher
+            if let ordinal, ordinal < 0 {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .ordinal,
+                    in: container,
+                    debugDescription: "ordinal must be non-negative, got \(ordinal)"
+                )
+            }
+            containerOrdinal = ordinal
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(actionName, forKey: .actionName)
+        switch (target, containerTarget) {
+        case (let target?, nil):
+            try container.encode(target, forKey: .target)
+        case (nil, let containerTarget?):
+            try container.encode(containerTarget, forKey: .container)
+            try container.encodeIfPresent(containerOrdinal, forKey: .ordinal)
+        default:
+            throw EncodingError.invalidValue(self, .init(
+                codingPath: encoder.codingPath,
+                debugDescription: "BatchCustomActionTarget requires exactly one of target or container"
+            ))
+        }
     }
 }
 

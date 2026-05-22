@@ -240,6 +240,7 @@ struct PublicContainer: Encodable {
     let contentHeight: Double?
     let isModalBoundary: Bool?
     let stableId: String?
+    let actions: [String]?
     let frameX: Double?
     let frameY: Double?
     let frameWidth: Double?
@@ -310,6 +311,7 @@ struct PublicContainer: Encodable {
         }
         self.isModalBoundary = container.isModalBoundary ? true : nil
         self.stableId = annotation?.stableId
+        self.actions = annotation?.actions.isEmpty == false ? annotation?.actions.map(\.description) : nil
         self.children = children
         guard detail == .full else {
             self.frameX = nil

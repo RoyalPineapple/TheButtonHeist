@@ -92,7 +92,7 @@ extension AccessibilityElement {
                 hasher.combine(safeInt(rect.origin.x))
                 hasher.combine(safeInt(rect.origin.y))
             case let .path(path):
-                let bounds = AccessibilityShape.path(path).frame
+                let bounds = safePathBounds(path)
                 hasher.combine(safeInt(bounds.origin.x))
                 hasher.combine(safeInt(bounds.origin.y))
             }
@@ -103,7 +103,7 @@ extension AccessibilityElement {
             hasher.combine(safeInt(rect.size.width))
             hasher.combine(safeInt(rect.size.height))
         case let .path(path):
-            let bounds = AccessibilityShape.path(path).frame
+            let bounds = safePathBounds(path)
             hasher.combine(safeInt(bounds.size.width))
             hasher.combine(safeInt(bounds.size.height))
         }
@@ -475,5 +475,22 @@ private func buttonHeistReconcilePage(
     page: [AccessibilityElement]
 ) -> PageReconciliation {
     reconcilePage(accumulated: accumulated, page: page)
+}
+
+private func safePathBounds(_ pathElements: [AccessibilityPathElement]) -> CGRect {
+    let path = UIBezierPath()
+    for element in pathElements {
+        element.apply(to: path)
+    }
+    guard !path.isEmpty else { return .zero }
+    let bounds = path.cgPath.boundingBoxOfPath
+    guard !bounds.isNull,
+          bounds.origin.x.isFinite,
+          bounds.origin.y.isFinite,
+          bounds.size.width.isFinite,
+          bounds.size.height.isFinite else {
+        return .zero
+    }
+    return bounds
 }
 #endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

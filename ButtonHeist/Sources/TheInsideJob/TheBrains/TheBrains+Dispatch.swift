@@ -479,7 +479,7 @@ private extension ClientMessage {
              .decrement(let target):
             return target.exactHeistId
         case .performCustomAction(let target):
-            return target.elementTarget.exactHeistId
+            return target.elementTarget?.exactHeistId
         case .rotor(let target):
             return target.currentHeistId
         case .touchTap(let target):

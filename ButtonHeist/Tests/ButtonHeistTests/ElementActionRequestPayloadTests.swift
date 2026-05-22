@@ -54,12 +54,45 @@ final class ElementActionRequestPayloadTests: XCTestCase {
             "action": "Dismiss",
         ])
 
-        guard case .accessibility(.performCustomAction(let target, let actionName, let count)) = payload else {
+        guard case .accessibility(.performCustomAction(let target, let count)) = payload else {
             return XCTFail("Expected perform_custom_action accessibility payload")
         }
-        XCTAssertEqual(target, .heistId("card"))
-        XCTAssertEqual(actionName, "Dismiss")
+        XCTAssertEqual(target.elementTarget, .heistId("card"))
+        XCTAssertEqual(target.actionName, "Dismiss")
         XCTAssertNil(count.value)
+    }
+
+    @ButtonHeistActor
+    func testCustomActionRequestDecodesContainerTarget() async throws {
+        let payload = try parsedPayload(.performCustomAction, request: [
+            "command": "perform_custom_action",
+            "container": ["stableId": "semantic_actions__actions"],
+            "action": "Dismiss",
+        ])
+
+        guard case .accessibility(.performCustomAction(let target, _)) = payload else {
+            return XCTFail("Expected perform_custom_action accessibility payload")
+        }
+        XCTAssertEqual(target.containerTarget?.stableId, "semantic_actions__actions")
+        XCTAssertEqual(target.actionName, "Dismiss")
+    }
+
+    @ButtonHeistActor
+    func testCustomActionRequestDecodesContainerOrdinalTarget() async throws {
+        let payload = try parsedPayload(.performCustomAction, request: [
+            "command": "perform_custom_action",
+            "container": ["type": "semanticGroup"],
+            "ordinal": 1,
+            "action": "Dismiss",
+        ])
+
+        guard case .accessibility(.performCustomAction(let target, _)) = payload else {
+            return XCTFail("Expected perform_custom_action accessibility payload")
+        }
+        XCTAssertNil(target.elementTarget)
+        XCTAssertEqual(target.containerTarget?.type, .semanticGroup)
+        XCTAssertEqual(target.containerOrdinal, 1)
+        XCTAssertEqual(target.actionName, "Dismiss")
     }
 
     @ButtonHeistActor

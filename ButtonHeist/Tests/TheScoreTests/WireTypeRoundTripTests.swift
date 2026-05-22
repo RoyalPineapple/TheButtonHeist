@@ -46,6 +46,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
         XCTAssertEqual(decoded.elementTarget, .heistId("btn_save"))
+        XCTAssertNil(decoded.containerTarget)
         XCTAssertEqual(decoded.actionName, "Delete Item")
     }
 
@@ -56,7 +57,48 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
+        XCTAssertEqual(decoded.elementTarget, .matcher(ElementMatcher(label: "Menu")))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
+    }
+
+    func testCustomActionTargetWithContainerRoundTrip() throws {
+        let target = CustomActionTarget(
+            containerTarget: ContainerMatcher(stableId: "semantic_actions__actions"),
+            actionName: "Dismiss"
+        )
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(CustomActionTarget.self, from: data)
+        XCTAssertNil(decoded.elementTarget)
+        XCTAssertEqual(decoded.containerTarget?.stableId, "semantic_actions__actions")
+        XCTAssertEqual(decoded.actionName, "Dismiss")
+    }
+
+    func testCustomActionTargetWithContainerOrdinalOnlyRoundTrip() throws {
+        let target = CustomActionTarget(
+            containerTarget: ContainerMatcher(),
+            ordinal: 1,
+            actionName: "Dismiss"
+        )
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(CustomActionTarget.self, from: data)
+        XCTAssertNil(decoded.elementTarget)
+        XCTAssertEqual(decoded.containerTarget, ContainerMatcher())
+        XCTAssertEqual(decoded.containerOrdinal, 1)
+        XCTAssertEqual(decoded.actionName, "Dismiss")
+    }
+
+    func testBatchCustomActionTargetWithContainerOrdinalOnlyRoundTrip() throws {
+        let target = BatchCustomActionTarget(
+            containerTarget: ContainerMatcher(),
+            ordinal: 1,
+            actionName: "Dismiss"
+        )
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(BatchCustomActionTarget.self, from: data)
+        XCTAssertNil(decoded.target)
+        XCTAssertEqual(decoded.containerTarget, ContainerMatcher())
+        XCTAssertEqual(decoded.containerOrdinal, 1)
+        XCTAssertEqual(decoded.actionName, "Dismiss")
     }
 
     // MARK: - LongPressTarget
