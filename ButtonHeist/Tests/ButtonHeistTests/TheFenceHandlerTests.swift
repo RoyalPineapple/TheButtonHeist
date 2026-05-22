@@ -2705,6 +2705,36 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchRejectsContainerTargetedScrollBeforeExecution() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                [
+                    "command": "scroll",
+                    "container": ["stableId": "main_scroll"],
+                    "direction": "down",
+                ],
+            ] as [[String: Any]],
+        ])
+
+        guard let batch = inspectBatch(response) else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertTrue(mockConn.sent.isEmpty, "Invalid batch steps should fail before execution")
+        XCTAssertEqual(batch.results.count, 1)
+        XCTAssertEqual(batch.failedIndex, 0)
+        XCTAssertEqual(batch.summaries.map(\.command), ["scroll"])
+        XCTAssertEqual(
+            batch.summaries[0].error,
+            "run_batch step command \"scroll\" does not support container-targeted scrolling; " +
+                "use an element target in run_batch or call scroll outside run_batch"
+        )
+    }
+
+    @ButtonHeistActor
     func testBatchRejectsTooManyStepsBeforeExecution() async {
         let steps = Array(repeating: ["command": "activate", "identifier": "btn"], count: TheFence.DecodeLimits.maxRunBatchSteps + 1)
         await assertValidationError(

@@ -283,6 +283,7 @@ extension TheFence {
     ) throws -> RunBatchPreparedStep {
         switch payload {
         case .scroll(let target):
+            try rejectBatchScrollContainerTarget(target.containerTarget, command: context.request.command)
             let semanticTarget = semanticTarget(from: context.operation, fallback: target.elementTarget)
             return try context.plan(action: .scroll(BatchScrollTarget(
                 target: optionalExecutionTarget(semanticTarget),
@@ -300,6 +301,7 @@ extension TheFence {
                 direction: target.direction
             )))
         case .scrollToEdge(let target):
+            try rejectBatchScrollContainerTarget(target.containerTarget, command: context.request.command)
             let semanticTarget = semanticTarget(from: context.operation, fallback: target.elementTarget)
             return try context.plan(action: .scrollToEdge(BatchScrollToEdgeTarget(
                 target: optionalExecutionTarget(semanticTarget),
@@ -462,6 +464,14 @@ extension TheFence {
         guard count.observed != nil else { return }
         throw BatchStepPlanBuildError(
             message: "run_batch step command \"\(command.rawValue)\" does not support count in typed batch execution"
+        )
+    }
+
+    private func rejectBatchScrollContainerTarget(_ containerTarget: ScrollContainerTarget?, command: Command) throws {
+        guard containerTarget != nil else { return }
+        throw BatchStepPlanBuildError(
+            message: "run_batch step command \"\(command.rawValue)\" does not support container-targeted scrolling; " +
+                "use an element target in run_batch or call \(command.rawValue) outside run_batch"
         )
     }
 
