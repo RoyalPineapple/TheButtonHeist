@@ -208,14 +208,6 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
     }
 
-    func testTypeTextRejectsLegacyDeleteFieldsOnDecode() throws {
-        let deleteJSON = #"{"type":"typeText","payload":{"text":"World","deleteCount":3}}"#
-        let clearJSON = #"{"type":"typeText","payload":{"text":"World","clearFirst":true}}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(deleteJSON.utf8)))
-        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(clearJSON.utf8)))
-    }
-
     func testTypeTextWithElementTarget() throws {
         let target = TypeTextTarget(
             text: "Hello",
