@@ -2768,6 +2768,31 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchRejectsRepeatedAdjustmentCountBeforeExecution() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+
+        let response = try await fence.execute(request: [
+            "command": "run_batch",
+            "steps": [
+                ["command": "increment", "identifier": "quantity", "count": 2],
+            ] as [[String: Any]],
+        ])
+
+        guard let batch = inspectBatch(response) else {
+            XCTFail("Expected batch response, got \(response)")
+            return
+        }
+        XCTAssertTrue(mockConn.sent.isEmpty, "Invalid batch steps should fail before execution")
+        XCTAssertEqual(batch.results.count, 1)
+        XCTAssertEqual(batch.failedIndex, 0)
+        XCTAssertEqual(batch.summaries.map(\.command), ["increment"])
+        XCTAssertEqual(
+            batch.summaries[0].error,
+            "run_batch step command \"increment\" with count > 1 is not supported by typed batch execution"
+        )
+    }
+
+    @ButtonHeistActor
     func testBatchRejectsTooManyStepsBeforeExecution() async {
         let steps = Array(repeating: ["command": "activate", "identifier": "btn"], count: TheFence.DecodeLimits.maxRunBatchSteps + 1)
         await assertValidationError(
