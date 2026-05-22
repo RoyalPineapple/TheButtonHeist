@@ -168,7 +168,6 @@ extension AccessibilityElement {
     static let defaultTimeoutMs: Int = 5_000
 
     typealias ParseProvider = @MainActor () -> Screen?
-    typealias TopVCProvider = @MainActor () -> ObjectIdentifier?
     typealias TripwireSignalProvider = @MainActor () -> TheTripwire.TripwireSignal
     typealias Sleeper = @Sendable (UInt64) async throws -> Void
 
@@ -178,30 +177,6 @@ extension AccessibilityElement {
     let cyclesRequired: Int
     let cycleIntervalMs: Int
     let timeoutMs: Int
-
-    init(
-        parseProvider: @escaping ParseProvider,
-        topVCProvider: @escaping TopVCProvider,
-        sleeper: @escaping Sleeper = { try await Task.sleep(nanoseconds: $0) },
-        cyclesRequired: Int = SettleSession.defaultCyclesRequired,
-        cycleIntervalMs: Int = SettleSession.defaultCycleIntervalMs,
-        timeoutMs: Int = SettleSession.defaultTimeoutMs
-    ) {
-        self.init(
-            parseProvider: parseProvider,
-            tripwireSignalProvider: {
-                TheTripwire.TripwireSignal(
-                    topmostVC: topVCProvider(),
-                    navigation: .empty,
-                    windowStack: .empty
-                )
-            },
-            sleeper: sleeper,
-            cyclesRequired: cyclesRequired,
-            cycleIntervalMs: cycleIntervalMs,
-            timeoutMs: timeoutMs
-        )
-    }
 
     init(
         parseProvider: @escaping ParseProvider,
@@ -250,35 +225,12 @@ extension AccessibilityElement {
         let elementsByKey: [TimelineKey: AccessibilityElement]
     }
 
-    /// Run the settle loop.
-    ///
-    /// `baselineTopVC` is the topmost view controller captured *before* the
-    /// action that triggered this settle — passed in explicitly so the
-    /// caller owns the snapshot point and the loop never asks the
-    /// provider for the baseline itself. This eliminates an ambiguity
-    /// in scripted test seams (where the same closure was called once
-    /// for the baseline and again per cycle) and makes the contract:
-    /// "the provider answers `the current top VC` and nothing else."
-    /// Production callers now use `run(start:baselineTripwireSignal:)`. This
-    /// overload remains for tests and older call seams that only model VC
-    /// identity.
-    func run(start: CFAbsoluteTime, baselineTopVC: ObjectIdentifier?) async -> Outcome {
-        await run(
-            start: start,
-            baselineTripwireSignal: TheTripwire.TripwireSignal(
-                topmostVC: baselineTopVC,
-                navigation: .empty,
-                windowStack: .empty
-            )
-        )
-    }
-
-    /// Same loop as `run(start:baselineTopVC:)`, with the full tripwire signal.
-    /// Production uses this path so visible window/navigation/key changes reset
-    /// the settle baseline, then the loop proves the post-transition AX tree is
-    /// stable before returning. The returned events record any Tripwire signals
-    /// observed along the way so callers can suppress transition transients
-    /// without treating the signal itself as a screen-change classification.
+    /// Run the settle loop with the full tripwire signal captured before the
+    /// action. Visible window/navigation/key changes reset the settle baseline,
+    /// then the loop proves the post-transition AX tree is stable before
+    /// returning. The returned events record any Tripwire signals observed along
+    /// the way so callers can suppress transition transients without treating
+    /// the signal itself as a screen-change classification.
     func run(start: CFAbsoluteTime, baselineTripwireSignal: TheTripwire.TripwireSignal) async -> Outcome {
         let cycleNs = UInt64(cycleIntervalMs) * 1_000_000
         let deadline = start + Double(timeoutMs) / 1000

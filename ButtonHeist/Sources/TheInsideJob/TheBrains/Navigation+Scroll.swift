@@ -322,52 +322,34 @@ extension Navigation {
 
         let knownScreen = recordedScreen ?? stash.currentScreen
         let normalizedTarget = stash.normalizeTarget(elementTarget, in: knownScreen)
-        let executableTarget = normalizedTarget.executableTarget
-        let targetResolution = recordedScreen == nil
-            ? resolvePositioningTarget(normalizedTarget)
-            : stash.resolveTarget(executableTarget, in: knownScreen)
-        switch targetResolution {
-        case .resolved(let semanticTarget):
-            let inflation = stash.inflateTarget(semanticTarget.screenElement)
-            if case .failed = inflation {
-                return .failure(
-                    .scrollToVisible,
-                    message: scrollToVisibleKnownTargetFailureMessage(semanticTarget.screenElement)
-                )
-            }
-            if inflation.didScroll {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                refresh()
-            }
-            let liveResolution = stash.resolveVisibleTarget(executableTarget)
-            guard let found = liveResolution.resolved else {
-                let suffix = liveResolution.diagnostics.isEmpty ? "" : ": \(liveResolution.diagnostics)"
-                return .failure(
-                    .scrollToVisible,
-                    message: normalizedTarget.diagnostics("Element not visible after inflation\(suffix)")
-                )
-            }
-            let ensureResult = await ensureVisibleResolvedTarget(found)
-            guard ensureResult.succeeded else {
-                let failure = ensureResult.failure
-                return .failure(
-                    failure?.method ?? .scrollToVisible,
-                    message: failure?.message ?? "Element is present but could not be scrolled fully on-screen"
-                )
-            }
-            let refreshedResolution = stash.resolveVisibleTarget(executableTarget)
-            guard refreshedResolution.resolved != nil else {
-                let suffix = refreshedResolution.diagnostics.isEmpty ? "" : ": \(refreshedResolution.diagnostics)"
-                return .failure(
-                    .scrollToVisible,
-                    message: normalizedTarget.diagnostics("Element disappeared after inflation\(suffix)")
-                )
-            }
-            let message = inflation.didScroll ? nil : "Already visible"
-            return .success(method: .scrollToVisible, message: message)
-        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
-            return .failure(.scrollToVisible, message: normalizedTarget.diagnostics(diagnostics))
+        let ensureResult = await ensureOnScreen(
+            for: normalizedTarget,
+            allowSourceScreenFallback: recordedScreen != nil
+        )
+        guard ensureResult.succeeded else {
+            return .failure(
+                .scrollToVisible,
+                message: ensureResult.failure?.message ?? "\(ScrollMode.toVisible.canonicalCommand) failed"
+            )
         }
+
+        let refreshedResolution = stash.resolveVisibleTarget(normalizedTarget.executableTarget)
+        guard refreshedResolution.resolved != nil else {
+            let suffix = refreshedResolution.diagnostics.isEmpty ? "" : ": \(refreshedResolution.diagnostics)"
+            return .failure(
+                .scrollToVisible,
+                message: normalizedTarget.diagnostics("Element disappeared after inflation\(suffix)")
+            )
+        }
+
+        let message: String?
+        switch ensureResult {
+        case .alreadyUsable, .adjustedVisibleTarget:
+            message = "Already visible"
+        case .recoveredKnownOffscreen, .operationLocalRotorResult, .failed:
+            message = nil
+        }
+        return .success(method: .scrollToVisible, message: message)
     }
 
     // MARK: - Element Search (Iterative)
@@ -710,16 +692,23 @@ extension Navigation {
 
     func ensureOnScreen(for target: ElementTarget, recordedScreen: Screen? = nil) async -> EnsureOnScreenResult {
         let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
-        return await ensureOnScreen(for: normalizedTarget)
+        return await ensureOnScreen(for: normalizedTarget, allowSourceScreenFallback: recordedScreen != nil)
     }
 
     func ensureOnScreen(for normalizedTarget: TheStash.NormalizedTarget) async -> EnsureOnScreenResult {
+        await ensureOnScreen(for: normalizedTarget, allowSourceScreenFallback: false)
+    }
+
+    private func ensureOnScreen(
+        for normalizedTarget: TheStash.NormalizedTarget,
+        allowSourceScreenFallback: Bool
+    ) async -> EnsureOnScreenResult {
         let target = normalizedTarget.executableTarget
         if stash.activePendingRotorResult(for: normalizedTarget.originalTarget) != nil {
             return .operationLocalRotorResult
         }
 
-        switch resolvePositioningTarget(normalizedTarget) {
+        switch resolvePositioningTarget(normalizedTarget, allowSourceScreenFallback: allowSourceScreenFallback) {
         case .resolved(let semanticTarget):
             let inflation = stash.inflateTarget(semanticTarget.screenElement)
             if case .failed = inflation {
@@ -748,9 +737,13 @@ extension Navigation {
         }
     }
 
-    private func resolvePositioningTarget(_ normalizedTarget: TheStash.NormalizedTarget) -> TheStash.TargetResolution {
+    private func resolvePositioningTarget(
+        _ normalizedTarget: TheStash.NormalizedTarget,
+        allowSourceScreenFallback: Bool = false
+    ) -> TheStash.TargetResolution {
         let currentResolution = stash.resolveTarget(normalizedTarget.executableTarget)
-        guard case .notFound = currentResolution, normalizedTarget.didNormalizeHeistId else {
+        guard case .notFound = currentResolution,
+              allowSourceScreenFallback || normalizedTarget.didNormalizeHeistId else {
             return currentResolution
         }
         return stash.resolveTarget(normalizedTarget.executableTarget, in: normalizedTarget.sourceScreen)
