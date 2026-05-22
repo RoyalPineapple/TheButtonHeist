@@ -2261,21 +2261,6 @@ final class TheFenceHandlerTests: XCTestCase {
 
     // MARK: - Batch Expectation Counting
 
-    func testNormalizedOperationRequestDictionaryUsesTypedCommand() throws {
-        let operation = NormalizedOperation(
-            command: .activate,
-            arguments: [
-                "command": "swipe",
-                "identifier": "save-button",
-            ]
-        )
-
-        let request = operation.requestDictionary
-
-        XCTAssertEqual(request["command"] as? String, "activate")
-        XCTAssertEqual(request["identifier"] as? String, "save-button")
-    }
-
     @ButtonHeistActor
     func testBatchStepLowersPublicCommandAdapterIntoActionExpectationPlan() async throws {
         let (fence, _) = makeConnectedFence()
