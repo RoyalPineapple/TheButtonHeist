@@ -23,7 +23,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(action.batchExecutionActionName)")
+                events.append("action:\(action.canonicalName)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
@@ -85,7 +85,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(action.batchExecutionActionName)")
+                events.append("action:\(action.canonicalName)")
                 return ActionResult(
                     success: false,
                     method: .setPasteboard,
@@ -139,7 +139,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         ]
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(action.batchExecutionActionName)")
+                events.append("action:\(action.canonicalName)")
                 return results.removeFirst()
             },
             waitForExpectation: { _, _ in
@@ -173,11 +173,48 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertEqual(batch.steps.map(\.actionResult?.success), [false, true])
     }
 
+    func testBatchExecutionUsesExplicitActionNamesForCasesWithoutAssociatedValues() async throws {
+        var events: [String] = []
+        let runtime = TheBrains.BatchExecutionRuntime(
+            execute: { action in
+                events.append("action:\(action.canonicalName)")
+                return ActionResult(success: true, method: action.actionMethod)
+            },
+            waitForExpectation: { _, _ in
+                XCTFail("Delivery expectation should not wait")
+                return ActionResult(success: true, method: .waitForChange)
+            },
+            settleRefreshRecordBaseline: {
+                events.append("baseline")
+            }
+        )
+        let plan = TheScore.BatchPlan(
+            steps: [
+                .action(.explore),
+                .action(.resignFirstResponder),
+            ],
+            policy: .continueOnError
+        )
+
+        let result = await brains.executeBatchExecutionPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(events, [
+            "action:explore",
+            "baseline",
+            "action:resign_first_responder",
+            "baseline",
+        ])
+        let batch = try XCTUnwrap(result.batchExecutionPayload)
+        XCTAssertEqual(batch.steps.map(\.actionName), ["explore", "resign_first_responder"])
+        XCTAssertEqual(batch.steps.map(\.actionResult?.method), [.explore, .resignFirstResponder])
+    }
+
     func testBatchExecutionDoesNotWaitWhenActionAlreadySatisfiesExpectation() async throws {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { action in
-                events.append("action:\(action.batchExecutionActionName)")
+                events.append("action:\(action.canonicalName)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,

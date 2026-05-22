@@ -233,7 +233,7 @@ extension TheFence {
         }
     }
 
-    struct BatchStepPlanningContext {
+    private struct BatchStepPlanningContext {
         let originalIndex: Int
         let operation: NormalizedOperation
         let request: ParsedRequest
@@ -406,7 +406,7 @@ extension TheFence {
         }
     }
 
-    enum BatchAccessibilityActionKind {
+    private enum BatchAccessibilityActionKind {
         case activate
         case increment
         case decrement

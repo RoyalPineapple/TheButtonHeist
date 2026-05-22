@@ -641,6 +641,53 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     // MARK: - BatchPlan
 
+    func testBatchActionCanonicalNamesMatchEncodedWireTypes() throws {
+        let target = BatchExecutionTarget(matcher: ElementMatcher(label: "Target", traits: [.button]))
+        let cases: [Action] = [
+            .activate(target),
+            .increment(target),
+            .decrement(target),
+            .performCustomAction(BatchCustomActionTarget(target: target, actionName: "Open")),
+            .rotor(BatchRotorTarget(target: target, rotor: "Headings")),
+            .touchTap(BatchTouchTapTarget(pointX: 10, pointY: 20)),
+            .touchLongPress(BatchLongPressTarget(pointX: 10, pointY: 20)),
+            .touchSwipe(BatchSwipeTarget(direction: .down)),
+            .touchDrag(BatchDragTarget(endX: 20, endY: 40)),
+            .touchPinch(BatchPinchTarget(scale: 1.2)),
+            .touchRotate(BatchRotateTarget(angle: 0.5)),
+            .touchTwoFingerTap(BatchTwoFingerTapTarget(centerX: 10, centerY: 20)),
+            .touchDrawPath(DrawPathTarget(points: [
+                PathPoint(x: 0, y: 0),
+                PathPoint(x: 20, y: 20),
+            ])),
+            .touchDrawBezier(DrawBezierTarget(
+                startX: 0,
+                startY: 0,
+                segments: [BezierSegment(cp1X: 5, cp1Y: 5, cp2X: 10, cp2Y: 10, endX: 20, endY: 20)]
+            )),
+            .typeText(BatchTypeTextTarget(text: "hello")),
+            .editAction(EditActionTarget(action: .paste)),
+            .setPasteboard(SetPasteboardTarget(text: "ready")),
+            .scroll(BatchScrollTarget(direction: .down)),
+            .scrollToVisible(BatchScrollToVisibleTarget(target: target)),
+            .elementSearch(BatchElementSearchTarget(target: target, direction: .down)),
+            .scrollToEdge(BatchScrollToEdgeTarget(edge: .top)),
+            .waitForIdle(WaitForIdleTarget(timeout: 0.1)),
+            .waitForElement(BatchWaitForTarget(target: target)),
+            .waitForChange(WaitForChangeTarget(expect: .screenChanged, timeout: 0.1)),
+            .explore,
+            .resignFirstResponder,
+        ]
+
+        for action in cases {
+            let data = try encoder.encode(action)
+            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertEqual(payload["type"] as? String, action.canonicalName)
+            let decoded = try decoder.decode(Action.self, from: data)
+            XCTAssertEqual(decoded.canonicalName, action.canonicalName)
+        }
+    }
+
     func testBatchPlanRoundTripPreservesTypedStepWireShape() throws {
         let plan = BatchPlan(
             steps: [
