@@ -64,5 +64,3 @@ extension BatchPlan: Codable {
         try container.encode(policy, forKey: .policy)
     }
 }
-
-public typealias BatchExecutionPlan = BatchPlan

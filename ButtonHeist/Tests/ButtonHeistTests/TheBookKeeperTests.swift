@@ -352,7 +352,7 @@ final class TheBookKeeperTests: XCTestCase {
     @ButtonHeistActor
     func testBeginSessionRejectsOptionLikeIdentifier() async {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "--checkpoint-action=exec=echo")) { error in
+        XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "--unsafe-option=exec=echo")) { error in
             guard case BookKeeperError.unsafePath = error else {
                 XCTFail("Expected unsafePath error, got \(error)")
                 return
@@ -572,10 +572,9 @@ final class TheBookKeeperTests: XCTestCase {
 
         XCTAssertEqual(projection.commandName, "type_text")
         XCTAssertEqual(projection.arguments["index"], HeistValue.int(0))
-        guard case .object(let operation)? = projection.arguments["operation"],
-              case .object(let action)? = operation["action"],
+        guard case .object(let action)? = projection.arguments["action"],
               action["type"] == .string("type_text") else {
-            return XCTFail("Expected typed batch operation log")
+            return XCTFail("Expected typed batch action log")
         }
         XCTAssertEqual(action["text"], HeistValue.string("hello"))
         XCTAssertNil(projection.arguments["command"])

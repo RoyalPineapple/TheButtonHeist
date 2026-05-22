@@ -767,7 +767,7 @@ extension TheFence.RunBatchStep {
                 commandName: step.commandName,
                 arguments: [
                     "index": .int(step.originalIndex),
-                    "operation": HeistValue.encoded(step.operation),
+                    "action": HeistValue.encoded(step.action),
                     "expect": HeistValue.encoded(step.expectation),
                     "deadline": HeistValue.encoded(step.deadline),
                 ]
@@ -809,34 +809,18 @@ enum SessionLogEntry: Encodable {
     }
 }
 
-enum SessionLogEntryType: String, Encodable {
-    case header
-    case command
-    case response
-    case artifact
-}
-
 struct HeaderLogEntry: Encodable {
-    let type = SessionLogEntryType.header
+    let type = "header"
     let formatVersion: String
     let sessionId: String
 }
 
 struct CommandLogEntry: Encodable {
     let t: String
-    let type = SessionLogEntryType.command
+    let type = "command"
     let requestId: String
-    let command: CommandLogName
+    let command: String
     let args: CommandLogArguments?
-}
-
-struct CommandLogName: Encodable {
-    let command: TheFence.Command
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        try container.encode(command.rawValue)
-    }
 }
 
 struct CommandLogArguments: Encodable {
@@ -857,7 +841,7 @@ struct CommandLogArguments: Encodable {
 
 struct ResponseLogEntry: Encodable {
     let t: String
-    let type = SessionLogEntryType.response
+    let type = "response"
     let requestId: String
     let status: ResponseStatus
     let durationMilliseconds: Int
@@ -877,7 +861,7 @@ struct ResponseLogEntry: Encodable {
 
 struct ArtifactLogEntry: Encodable {
     let t: String
-    let type = SessionLogEntryType.artifact
+    let type = "artifact"
     let artifactType: ArtifactType
     let path: String
     let size: Int
@@ -905,7 +889,7 @@ extension TheBookKeeper {
         return .command(CommandLogEntry(
             t: iso8601Now(),
             requestId: projection.requestId,
-            command: CommandLogName(command: projection.command),
+            command: projection.command.rawValue,
             args: CommandLogArguments(
                 projection.arguments,
                 maxStringLength: Self.maxLoggedStringLength
@@ -957,16 +941,6 @@ extension TheBookKeeper {
         var lineData = jsonData
         lineData.append(contentsOf: [0x0A]) // newline
         try handle.write(contentsOf: lineData)
-    }
-
-    /// Derive command and error counts from the append-only session log.
-    func sessionLogCounts(in directory: URL) throws -> SessionLogCounts {
-        try sessionLogProjection(in: directory).counts
-    }
-
-    /// Derive command and error counts from the session log stored in an archive.
-    func sessionLogCounts(inArchive archivePath: URL) throws -> SessionLogCounts {
-        try sessionLogProjection(inArchive: archivePath).counts
     }
 
     /// Derive metadata projections from the append-only session log.

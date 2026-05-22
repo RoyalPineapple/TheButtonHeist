@@ -267,18 +267,18 @@ extension TheFence {
     struct RunBatchPreparedStep {
         let originalIndex: Int
         let commandName: String
-        let operation: TheScore.BatchOperation
+        let action: TheScore.Action
         let expectation: ActionExpectation
         let deadline: TheScore.Deadline
 
         init(
             originalIndex: Int,
             commandName: String,
-            operation: TheScore.BatchOperation,
+            action: TheScore.Action,
             expectation: ActionExpectation,
             deadline: TheScore.Deadline
         ) {
-            self.operation = operation
+            self.action = action
             self.expectation = expectation
             self.deadline = deadline
             self.originalIndex = originalIndex
@@ -287,7 +287,7 @@ extension TheFence {
 
         var typedStep: TheScore.BatchStep {
             TheScore.BatchStep(
-                operation: operation,
+                action: action,
                 expectation: expectation,
                 deadline: deadline
             )

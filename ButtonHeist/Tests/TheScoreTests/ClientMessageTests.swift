@@ -56,12 +56,15 @@ final class ClientMessageTests: XCTestCase {
         let plan = BatchPlan(
             steps: [
                 .action(.activate(saveTarget), expect: .screenChanged),
-                .wait(.element(BatchWaitForTarget(target: saveTarget, absent: false, timeout: 2.5))),
-                .checkpoint(BatchExecutionCheckpoint(
-                    name: "saved",
+                .action(.waitForElement(BatchWaitForTarget(target: saveTarget, absent: false, timeout: 2.5))),
+                .action(
+                    .waitForChange(WaitForChangeTarget(
+                        expect: .elementAppeared(ElementMatcher(label: "Done")),
+                        timeout: 1.0
+                    )),
                     expect: .elementAppeared(ElementMatcher(label: "Done")),
-                    timeout: 1.0
-                )),
+                    deadline: Deadline(timeout: 1.0)
+                ),
             ],
             policy: .continueOnError
         )
@@ -110,7 +113,7 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decoded.requestId, "batch-1")
         guard case .batchExecutionPlan(let decodedPlan) = decoded.message,
               let step = decodedPlan.steps.first,
-              case .action(.typeText(let target)) = step.operation,
+              case .typeText(let target) = step.action,
               step.expectation == .delivery else {
             return XCTFail("Expected batchExecutionPlan envelope, got \(decoded.message)")
         }
@@ -134,7 +137,7 @@ final class ClientMessageTests: XCTestCase {
         )
         XCTAssertEqual(
             step.description,
-            #"step(operation=activate(batchTarget(sourceHeistId="button_save" matcher(label="Save" traits=[button]) ordinal=1))"#
+            #"step(action=activate(batchTarget(sourceHeistId="button_save" matcher(label="Save" traits=[button]) ordinal=1))"#
                 + #" expect=screen_changed deadline=deadline(*))"#
         )
         XCTAssertEqual(
