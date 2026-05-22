@@ -58,7 +58,6 @@ enum DiscoveryEvent {
 /// Manages a single connection to a discovered device, sending and receiving messages.
 @ButtonHeistActor
 protocol DeviceConnecting: AnyObject {
-    var isConnected: Bool { get }
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)? { get set }
     func connect()
     func disconnect()

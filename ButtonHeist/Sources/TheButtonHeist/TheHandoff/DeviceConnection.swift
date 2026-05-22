@@ -245,14 +245,8 @@ final class DeviceConnection: DeviceConnecting {
     private let device: DiscoveredDevice
     private(set) var token: String?
 
-    var isConnected: Bool {
-        if case .connected = connectionState { return true }
-        return false
-    }
-
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var autoRespondToAuthRequired = true
-    var onSend: (@ButtonHeistActor (ClientMessage, String?) -> Void)?
     var sendContent: (
         @Sendable (
             _ connection: NWConnection,
@@ -365,7 +359,6 @@ final class DeviceConnection: DeviceConnecting {
         guard case .connected(let active) = connectionState else {
             return .failed(.notConnected)
         }
-        onSend?(message, requestId)
         let envelope = RequestEnvelope(requestId: requestId, message: message)
         let data: Data
         do {

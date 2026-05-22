@@ -535,17 +535,13 @@ final class DiscoveredDeviceTests: XCTestCase {
 
 @ButtonHeistActor
 private final class ReachabilityProbeConnection: DeviceConnecting {
-    var isConnected = false
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
 
     func connect() {
-        isConnected = true
         onEvent?(.transportReady)
     }
 
-    func disconnect() {
-        isConnected = false
-    }
+    func disconnect() {}
 
     @discardableResult
     func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome {

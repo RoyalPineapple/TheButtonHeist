@@ -41,7 +41,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
 
         connection.handleEventStreamOverflow(connection: activeConnection)
 
-        XCTAssertFalse(connection.isConnected)
+        assertDeviceConnectionDisconnected(connection)
         XCTAssertEqual(
             disconnectReason,
             .eventBacklogOverflow(maxEvents: DeviceConnection.eventStreamBufferLimit)
@@ -194,7 +194,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
 
         XCTAssertEqual(receivedScreen?.width, 1366)
         XCTAssertEqual(receivedScreen?.pngData.count, oversizedForOldLimit.count)
-        XCTAssertTrue(connection.isConnected)
+        assertDeviceConnectionConnected(connection)
     }
 
     @ButtonHeistActor
