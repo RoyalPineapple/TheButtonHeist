@@ -13,6 +13,12 @@ private final class ActionActivationOverrideView: UIView {
     }
 }
 
+private final class RefusingActivationView: UIView {
+    override func accessibilityActivate() -> Bool {
+        false
+    }
+}
+
 private final class CustomActionTargetObject: NSObject {
     private(set) var invocationCount = 0
 
@@ -771,6 +777,44 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(liveObject.incrementCount, 1)
+    }
+
+    func testExecuteActivateUsesRefreshedTargetForSecondActivationAttempt() async throws {
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+        let liveObject = ActionActivationOverrideView(
+            frame: CGRect(x: 80, y: 180, width: 180, height: 44)
+        )
+        liveObject.isAccessibilityElement = true
+        liveObject.accessibilityLabel = "Refresh Activate"
+        liveObject.accessibilityIdentifier = "refresh_activate"
+        liveObject.accessibilityTraits = .button
+        rootView.addSubview(liveObject)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        registerScreenElement(
+            heistId: "stale_refresh_activate",
+            element: makeElement(
+                label: "Refresh Activate",
+                identifier: "refresh_activate",
+                traits: .button
+            ),
+            object: RefusingActivationView()
+        )
+
+        let result = await brains.actions.executeActivate(
+            .matcher(ElementMatcher(identifier: "refresh_activate"))
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "activate failed")
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(liveObject.activationCount, 1)
     }
 
     func testExecuteTypeTextWithoutActiveInputReportsFocusState() async {

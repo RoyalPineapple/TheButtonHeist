@@ -10,7 +10,7 @@ extension Actions {
     }
 }
 
-/// Resolves a live action target, retrying once on recoverable stale-object failures.
+/// Resolves a live action target, refreshing once on recoverable stale-object failures.
 struct LiveActionTargetRecoveryPolicy {
     struct Request {
         let normalizedTarget: TheStash.NormalizedTarget
@@ -23,7 +23,6 @@ struct LiveActionTargetRecoveryPolicy {
     enum Resolution {
         case success(Actions.LiveElementActionContext)
         case failure(TheSafecracker.InteractionResult)
-        case retryableFailure(TheSafecracker.InteractionResult)
     }
 
     let stash: TheStash
@@ -39,32 +38,60 @@ struct LiveActionTargetRecoveryPolicy {
                 message: request.normalizedTarget.diagnostics(firstResolution.diagnostics)
             ))
         }
-        switch makeContext(request, resolved: firstResolved) {
-        case .success(let context):
-            return .success(context)
-        case .failure(let result):
-            return .failure(result)
-        case .retryableFailure(let initialFailure):
-            // Re-parse once to recover from cell reuse or a stale live ref.
-            // Preserve the original diagnostic if the retry cannot recover.
-            navigation.refresh()
-            let retryPositioning = await navigation.ensureOnScreen(for: request.normalizedTarget)
-            if retryPositioning.failure != nil {
-                return .failure(initialFailure)
-            }
-            let retryResolution = stash.resolveTarget(target)
-            guard let retryResolved = retryResolution.resolved else {
-                return .failure(initialFailure)
-            }
-            return makeContext(request, resolved: retryResolved)
+        return await makeContext(request, target: target, resolved: firstResolved, allowingRefresh: true)
+    }
+
+    @MainActor
+    func refreshActivationTarget(
+        _ normalizedTarget: TheStash.NormalizedTarget
+    ) async -> ActivationPolicy.RefreshResult {
+        navigation.refresh()
+        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
+        if let failure = positioning.failure {
+            return .failure(.failure(failure.method ?? .activate, message: failure.message))
         }
+        let resolution = stash.resolveTarget(normalizedTarget.executableTarget)
+        guard let resolved = resolution.resolved else {
+            return .failure(.failure(
+                .elementNotFound,
+                message: normalizedTarget.diagnostics(resolution.diagnostics)
+            ))
+        }
+        let liveTargetResolution = stash.resolveLiveActionTarget(for: resolved)
+        guard case .resolved(let liveTarget) = liveTargetResolution else {
+            return activationRefreshFailure(
+                for: liveTargetResolution,
+                resolved: resolved
+            )
+        }
+        return .resolved(resolvedTarget: resolved, liveTarget: liveTarget)
+    }
+
+    @MainActor
+    private func resolveAfterRefresh(
+        _ request: Request,
+        target: ElementTarget,
+        initialFailure: TheSafecracker.InteractionResult
+    ) async -> Resolution {
+        navigation.refresh()
+        let positioning = await navigation.ensureOnScreen(for: request.normalizedTarget)
+        if positioning.failure != nil {
+            return .failure(initialFailure)
+        }
+        let resolution = stash.resolveTarget(target)
+        guard let resolved = resolution.resolved else {
+            return .failure(initialFailure)
+        }
+        return await makeContext(request, target: target, resolved: resolved, allowingRefresh: false)
     }
 
     @MainActor
     private func makeContext(
         _ request: Request,
-        resolved: TheStash.ResolvedTarget
-    ) -> Resolution {
+        target: ElementTarget,
+        resolved: TheStash.ResolvedTarget,
+        allowingRefresh: Bool
+    ) async -> Resolution {
         if let failure = request.preflight?(resolved) {
             return .failure(failure)
         }
@@ -82,7 +109,11 @@ struct LiveActionTargetRecoveryPolicy {
             ) else {
                 return .failure(.failure(request.method, message: "\(request.method.rawValue) failed"))
             }
-            return .retryableFailure(annotateFailure(failure, with: request.normalizedTarget))
+            let annotatedFailure = annotateFailure(failure, with: request.normalizedTarget)
+            guard allowingRefresh else {
+                return .failure(annotatedFailure)
+            }
+            return await resolveAfterRefresh(request, target: target, initialFailure: annotatedFailure)
         case .geometryUnavailable:
             guard let failure = liveActionTargetFailure(
                 for: liveTargetResolution,
@@ -146,6 +177,37 @@ struct LiveActionTargetRecoveryPolicy {
                     isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
                 )
             )
+        }
+    }
+
+    @MainActor
+    private func activationRefreshFailure(
+        for resolution: TheStash.LiveActionTargetResolution,
+        resolved: TheStash.ResolvedTarget
+    ) -> ActivationPolicy.RefreshResult {
+        switch resolution {
+        case .objectUnavailable:
+            let traitNames = ActionCapabilityDiagnostic.traitNames(resolved.element.traits)
+            let message = ActivateFailureDiagnostic.build(
+                element: resolved.element,
+                traitNames: traitNames,
+                activateOutcome: .objectDeallocated,
+                tapAttempted: false,
+                tapReceiver: nil,
+                screenBounds: ScreenMetrics.current.bounds
+            )
+            return .failure(.failure(.activate, message: message))
+        case .geometryUnavailable:
+            return .failure(.failure(
+                .activate,
+                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: .activate,
+                    element: resolved.screenElement,
+                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                )
+            ))
+        case .resolved:
+            return .failure(.failure(.activate, message: "activate failed"))
         }
     }
 
