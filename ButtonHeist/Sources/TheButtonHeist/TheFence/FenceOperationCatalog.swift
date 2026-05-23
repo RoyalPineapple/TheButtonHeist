@@ -11,7 +11,7 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
     public var errorDescription: String? { message }
 }
 
-/// Canonical Fence operation routed from external input while raw arguments stay at the request edge.
+/// Canonical Fence operation routed from external input with typed routed request metadata.
 public struct NormalizedOperation {
     public let command: TheFence.Command
     let request: TheFence.RoutedCommandRequest

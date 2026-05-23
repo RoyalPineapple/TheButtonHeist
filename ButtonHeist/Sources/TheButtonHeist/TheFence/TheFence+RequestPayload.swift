@@ -344,6 +344,28 @@ extension TheFence {
         }
 
         func string(_ key: String) -> String? { arguments[key] as? String }
+
+        func batchExecutionTarget() throws -> BatchExecutionTarget? {
+            try Self.batchExecutionTarget(from: arguments)
+        }
+
+        private static func batchExecutionTarget(from arguments: [String: Any]) throws -> BatchExecutionTarget? {
+            let sourceHeistId = try arguments.schemaString("heistId")
+            let ordinal = try arguments.schemaNonNegativeInteger("ordinal")
+            let matcher = ElementMatcher(
+                label: try arguments.schemaString("label"),
+                identifier: try arguments.schemaString("identifier"),
+                value: try arguments.schemaString("value"),
+                traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: "traits"),
+                excludeTraits: try TheFence.parseTraitNames(
+                    try arguments.schemaStringArray("excludeTraits"),
+                    field: "excludeTraits"
+                )
+            )
+            guard sourceHeistId != nil || matcher.hasPredicates || ordinal != nil else { return nil }
+            return BatchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
+        }
+
     }
 
     struct ArchiveSessionRequest {
@@ -432,7 +454,7 @@ extension TheFence {
             command: operation.command,
             arguments: request.arguments,
             expectationPayload: request.expectationPayload,
-            routedBatchTarget: try decodedBatchExecutionTarget(request.arguments)
+            routedBatchTarget: try request.batchExecutionTarget()
         )
     }
 

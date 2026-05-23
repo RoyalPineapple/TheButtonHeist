@@ -119,6 +119,14 @@ extension Dictionary where Key == String, Value == Any {
         throw SchemaValidationError(field: key, observed: value, expected: "integer")
     }
 
+    func schemaNonNegativeInteger(_ key: String) throws -> Int? {
+        guard let value = try schemaInteger(key) else { return nil }
+        guard value >= 0 else {
+            throw SchemaValidationError(field: key, observed: value, expected: "integer >= 0")
+        }
+        return value
+    }
+
     func requiredSchemaInteger(_ key: String) throws -> Int {
         guard let value = try schemaInteger(key) else {
             throw SchemaValidationError(field: key, observed: nil, expected: "integer")

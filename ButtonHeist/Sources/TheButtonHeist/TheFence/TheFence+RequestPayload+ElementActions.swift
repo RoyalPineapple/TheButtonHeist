@@ -50,18 +50,14 @@ extension TheFence {
     }
 
     func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
-        try ElementActionRequestInput(dictionary).matcher(in: self)
-    }
-
-    func decodedBatchExecutionTarget(_ request: [String: Any]) throws -> BatchExecutionTarget? {
-        try ElementActionRequestInput(request).batchExecutionTarget(in: self)
+        try ElementActionRequestInput(dictionary).matcher()
     }
 
     /// Parse an array of trait name strings into typed `HeistTrait` values.
-    /// Throws `FenceError.invalidRequest` with the list of valid names when an
+    /// Throws `SchemaValidationError` with the list of valid names when an
     /// unknown name is encountered. Returns `nil` when `names` is `nil` so
     /// callers can pass a missing field through unchanged.
-    private func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
+    nonisolated static func parseTraitNames(_ names: [String]?, field: String) throws -> [HeistTrait]? {
         try names?.enumerated().map { index, name in
             guard let trait = HeistTrait(rawValue: name) else {
                 throw SchemaValidationError(
@@ -88,18 +84,9 @@ private extension TheFence {
         func elementTarget(in fence: TheFence) throws -> ElementTarget? {
             ElementTarget(
                 heistId: try string("heistId"),
-                matcher: try matcher(in: fence),
+                matcher: try matcher(),
                 ordinal: try ordinal()
             )
-        }
-
-        @ButtonHeistActor
-        func batchExecutionTarget(in fence: TheFence) throws -> BatchExecutionTarget? {
-            let sourceHeistId = try string("heistId")
-            let ordinal = try ordinal()
-            let matcher = try matcher(in: fence)
-            guard sourceHeistId != nil || matcher.hasPredicates || ordinal != nil else { return nil }
-            return BatchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
         }
 
         @ButtonHeistActor
@@ -174,13 +161,13 @@ private extension TheFence {
         }
 
         @ButtonHeistActor
-        func matcher(in fence: TheFence) throws -> ElementMatcher {
+        func matcher() throws -> ElementMatcher {
             ElementMatcher(
                 label: try string("label"),
                 identifier: try string("identifier"),
                 value: try string("value"),
-                traits: try fence.parseTraitNames(try request.schemaStringArray("traits"), field: "traits"),
-                excludeTraits: try fence.parseTraitNames(
+                traits: try TheFence.parseTraitNames(try request.schemaStringArray("traits"), field: "traits"),
+                excludeTraits: try TheFence.parseTraitNames(
                     try request.schemaStringArray("excludeTraits"),
                     field: "excludeTraits"
                 )
@@ -208,11 +195,7 @@ private extension TheFence {
         }
 
         func nonNegativeInteger(_ key: String) throws -> Int? {
-            guard let value = try integer(key) else { return nil }
-            guard value >= 0 else {
-                throw SchemaValidationError(field: key, observed: value, expected: "integer >= 0")
-            }
-            return value
+            try request.schemaNonNegativeInteger(key)
         }
 
         func ordinal() throws -> Int? {
