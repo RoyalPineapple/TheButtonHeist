@@ -521,17 +521,69 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParsedRequestBuildsHeistEvidenceProjection() async throws {
+    func testParsedRequestExposesHeistEvidenceFields() async throws {
         let activate = try parsedRequest(
             requestId: "r1",
             command: .activate,
             arguments: ["heistId": "login_button"]
         )
-        let heistProjection = activate.heistEvidenceProjection
 
-        XCTAssertEqual(heistProjection.command, .activate)
-        XCTAssertEqual(heistProjection.elementTarget, .heistId("login_button"))
-        XCTAssertNil(heistProjection.arguments["heistId"])
+        XCTAssertEqual(activate.command, .activate)
+        XCTAssertEqual(activate.payload.bookKeeperElementTarget, .heistId("login_button"))
+        XCTAssertNil(activate.heistEvidenceArguments["heistId"])
+    }
+
+    @ButtonHeistActor
+    func testTypedTapCoordinatesUseHeistReplayKeys() async throws {
+        let tap = try parsedRequest(
+            requestId: "r1",
+            command: .oneFingerTap,
+            arguments: ["x": 10.5, "y": 20.25]
+        )
+        let arguments = tap.heistEvidenceArguments
+
+        XCTAssertEqual(arguments["x"], .double(10.5))
+        XCTAssertEqual(arguments["y"], .double(20.25))
+        XCTAssertNil(arguments["pointX"])
+        XCTAssertNil(arguments["pointY"])
+    }
+
+    @ButtonHeistActor
+    func testCustomActionUsesHeistReplayActionKey() async throws {
+        let action = try parsedRequest(
+            requestId: "r1",
+            command: .performCustomAction,
+            arguments: ["label": "Row", "action": "Archive"]
+        )
+        let arguments = action.heistEvidenceArguments
+
+        XCTAssertEqual(Set(arguments.keys), Set(["action"]))
+        XCTAssertEqual(arguments["action"], .string("Archive"))
+        XCTAssertNil(arguments["actionName"])
+        XCTAssertNil(arguments["label"])
+    }
+
+    @ButtonHeistActor
+    func testRotorTextRangeUsesHeistReplayKeys() async throws {
+        let rotor = try parsedRequest(
+            requestId: "r1",
+            command: .rotor,
+            arguments: [
+                "heistId": "field",
+                "rotor": "Words",
+                "currentHeistId": "word_1",
+                "currentTextStartOffset": 4,
+                "currentTextEndOffset": 9,
+            ]
+        )
+        let arguments = rotor.heistEvidenceArguments
+
+        XCTAssertEqual(arguments["rotor"], .string("Words"))
+        XCTAssertEqual(arguments["currentHeistId"], .string("word_1"))
+        XCTAssertEqual(arguments["currentTextStartOffset"], .int(4))
+        XCTAssertEqual(arguments["currentTextEndOffset"], .int(9))
+        XCTAssertNil(arguments["currentTextRange"])
+        XCTAssertNil(arguments["heistId"])
     }
 
     @ButtonHeistActor
@@ -606,7 +658,7 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testNestedTypedValuesRemainStructuredInHeistEvidenceProjection() async throws {
+    func testNestedTypedValuesRemainStructuredInHeistEvidenceArguments() async throws {
         let request = try parsedRequest(
             requestId: "r1",
             command: .waitForChange,
@@ -623,16 +675,16 @@ final class TheBookKeeperTests: XCTestCase {
             ]
         )
 
-        let projection = request.heistEvidenceProjection
+        let arguments = request.heistEvidenceArguments
 
-        XCTAssertEqual(projection.arguments["expect"], .object([
+        XCTAssertEqual(arguments["expect"], .object([
             "type": .string("element_appeared"),
             "matcher": .object([
                 "label": .string("Submit"),
                 "traits": .array([.string("button")]),
             ]),
         ]))
-        XCTAssertEqual(projection.arguments["timeout"], .double(2.5))
+        XCTAssertEqual(arguments["timeout"], .double(2.5))
     }
 
     @ButtonHeistActor

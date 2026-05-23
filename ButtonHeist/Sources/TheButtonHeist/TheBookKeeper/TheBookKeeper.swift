@@ -695,9 +695,8 @@ final class TheBookKeeper {
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
-        let projection = request.heistEvidenceProjection
         let step = buildStep(
-            projection: projection,
+            request: request,
             targetCapture: targetCapture,
             actionResult: actionResult,
             expectation: expectation
@@ -713,7 +712,7 @@ final class TheBookKeeper {
             recording.fileHandle.write(lineData)
         } catch {
             logger.error(
-                "Failed to encode heist evidence for \(projection.command.rawValue): \(error.localizedDescription)"
+                "Failed to encode heist evidence for \(request.command.rawValue): \(error.localizedDescription)"
             )
             return
         }
@@ -722,87 +721,57 @@ final class TheBookKeeper {
     // MARK: - Heist Step Construction
 
     private func buildStep(
-        projection: TheFence.HeistEvidenceProjection,
+        request: TheFence.ParsedRequest,
         targetCapture: AccessibilityTrace.Capture?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) -> HeistEvidence {
+        let elementTarget = request.payload.bookKeeperElementTarget
         var target: ElementMatcher?
         var ordinal: Int?
         var recordedHeistId: HeistId?
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
 
-        if case .heistId(let heistId)? = projection.elementTarget,
-           let source = matcherSource(
-            heistId: heistId,
-            targetCapture: targetCapture
-        ) {
-            let minimumMatcher = MinimumMatcher.build(element: source.element, in: source.capture)
+        if case .heistId(let heistId)? = elementTarget,
+           let targetCapture,
+           let element = targetCapture.interface.elements.last(where: { $0.heistId == heistId }) {
+            let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
             target = minimumMatcher.matcher
             ordinal = minimumMatcher.ordinal
             recordedHeistId = heistId
             recordedFrame = RecordedFrame(
-                x: source.element.frameX, y: source.element.frameY,
-                width: source.element.frameWidth, height: source.element.frameHeight
+                x: element.frameX, y: element.frameY,
+                width: element.frameWidth, height: element.frameHeight
             )
-        } else if case .matcher(let matcher, let matchedOrdinal)? = projection.elementTarget {
+        } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
             target = matcher
             ordinal = matchedOrdinal
-        } else if projection.coordinateOnly {
+        } else if request.payload.bookKeeperCoordinateOnly {
             coordinateOnly = true
         }
 
-        return HeistEvidence(
-            command: projection.command.rawValue,
-            target: target,
-            ordinal: ordinal,
-            arguments: projection.arguments,
-            recorded: buildRecordedMetadata(
+        let accessibilityTrace = actionResult?.accessibilityTrace
+        let recorded = recordedHeistId != nil ||
+            recordedFrame != nil ||
+            coordinateOnly != nil ||
+            accessibilityTrace != nil ||
+            expectation != nil
+            ? RecordedMetadata(
                 heistId: recordedHeistId,
                 frame: recordedFrame,
                 coordinateOnly: coordinateOnly,
-                actionResult: actionResult,
+                accessibilityTrace: accessibilityTrace,
                 expectation: expectation
             )
-        )
-    }
+            : nil
 
-    private func matcherSource(
-        heistId: HeistId,
-        targetCapture: AccessibilityTrace.Capture?
-    ) -> (element: HeistElement, capture: AccessibilityTrace.Capture)? {
-        guard let targetCapture else { return nil }
-        let elementsByHeistId = targetCapture.interface.elements.reduce(
-            into: [HeistId: HeistElement]()
-        ) { partialResult, element in
-            partialResult[element.heistId] = element
-        }
-        guard let element = elementsByHeistId[heistId] else { return nil }
-        return (element, targetCapture)
-    }
-
-    private func buildRecordedMetadata(
-        heistId: HeistId?,
-        frame: RecordedFrame?,
-        coordinateOnly: Bool?,
-        actionResult: ActionResult?,
-        expectation: ExpectationResult?
-    ) -> RecordedMetadata? {
-        let accessibilityTrace = actionResult?.accessibilityTrace
-        guard heistId != nil ||
-            frame != nil ||
-            coordinateOnly != nil ||
-            accessibilityTrace != nil ||
-            expectation != nil else {
-            return nil
-        }
-        return RecordedMetadata(
-            heistId: heistId,
-            frame: frame,
-            coordinateOnly: coordinateOnly,
-            accessibilityTrace: accessibilityTrace,
-            expectation: expectation
+        return HeistEvidence(
+            command: request.command.rawValue,
+            target: target,
+            ordinal: ordinal,
+            arguments: request.heistEvidenceArguments,
+            recorded: recorded
         )
     }
 
