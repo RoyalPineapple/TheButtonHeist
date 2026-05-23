@@ -157,7 +157,7 @@ final class CLICommandSyncTests: XCTestCase {
             #""command"\s*:\s*TheFence\.Command"#,
             #"TheFence\.Command\.[A-Za-z0-9_]+\.rawValue"#,
         ]
-        let mirroredFenceKeys = Set(FenceParameterKey.allCases.map(\.rawValue))
+        let mirroredFenceKeys = descriptorParameterKeys.union(["command"])
         let requestKeyPatterns = [
             #"(?:request|result|parsed|dictionary)\["([^"]+)"\]"#,
             #"(?:fenceRequest|cliRequest)\(\["([^"]+)"\s*:"#,
@@ -729,6 +729,12 @@ final class CLICommandSyncTests: XCTestCase {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
         }
+    }
+
+    private var descriptorParameterKeys: Set<String> {
+        var keys = Set(TheFence.Command.descriptors.flatMap { $0.parameters.map(\.key) })
+        keys.formUnion(TheFence.Command.mcpToolContracts.compactMap { $0.selector?.parameter.key })
+        return keys
     }
 
     private func commandTypeIdentifiers(_ commandTypes: [ParsableCommand.Type]) -> [ObjectIdentifier] {

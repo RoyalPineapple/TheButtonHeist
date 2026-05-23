@@ -1,77 +1,23 @@
-import Foundation
 import TheScore
 
-// MARK: - Parameter Specification
-
-/// Describes one parameter key that TheFence extracts from the `[String: Any]` request dictionary.
-/// Used to generate MCP tool schemas and verify CLI/MCP sync.
-///
-/// Declared at module scope (not nested in TheFence) to avoid inheriting @ButtonHeistActor isolation.
 public struct FenceParameterSpec: Sendable, Equatable {
 
-    // MARK: - Nested Types
-
-    /// JSON-level type of a parameter value.
     public enum ParamType: String, Sendable, Equatable {
         case string
         case integer
-        case number       // double
+        case number
         case boolean
         case stringArray
         case object
-        case array        // generic array (points, segments, steps)
+        case array
     }
-
-    // MARK: - Properties
 
     public let key: String
     public let type: ParamType
     public let required: Bool
     public let enumValues: [String]?
-    public let minimum: Double?
-    public let maximum: Double?
-    public let minLength: Int?
-    public let minItems: Int?
-    public let maxItems: Int?
-    public let objectProperties: [FenceParameterSpec]
-    public let objectAdditionalProperties: Bool
-    public let arrayItemType: ParamType?
-    public let arrayItemProperties: [FenceParameterSpec]
-    public let arrayItemAdditionalProperties: Bool
+    public let jsonSchemaProperty: FenceJSONSchemaValue
 
-    // MARK: - Init
-
-    public init(
-        key: String,
-        type: ParamType,
-        required: Bool = false,
-        enumValues: [String]? = nil,
-        minimum: Double? = nil,
-        maximum: Double? = nil,
-        minLength: Int? = nil,
-        minItems: Int? = nil,
-        maxItems: Int? = nil,
-        objectProperties: [FenceParameterSpec] = [],
-        objectAdditionalProperties: Bool = false,
-        arrayItemType: ParamType? = nil,
-        arrayItemProperties: [FenceParameterSpec] = [],
-        arrayItemAdditionalProperties: Bool = false
-    ) {
-        self.key = key
-        self.type = type
-        self.required = required
-        self.enumValues = enumValues
-        self.minimum = minimum
-        self.maximum = maximum
-        self.minLength = minLength
-        self.minItems = minItems
-        self.maxItems = maxItems
-        self.objectProperties = objectProperties
-        self.objectAdditionalProperties = objectAdditionalProperties
-        self.arrayItemType = arrayItemType
-        self.arrayItemProperties = arrayItemProperties
-        self.arrayItemAdditionalProperties = arrayItemAdditionalProperties
-    }
 }
 
 extension TheFence {
@@ -94,114 +40,42 @@ extension TheFence {
     }
 }
 
-/// Canonical external request keys owned by The Fence.
-public enum FenceParameterKey: String, CaseIterable, Sendable {
-    case absent
-    case action
-    case angle
-    case app
-    case centerX
-    case centerY
-    case command
-    case container
-    case count
-    case cp1X
-    case cp1Y
-    case cp2X
-    case cp2Y
-    case captureLocalRef
-    case currentHeistId
-    case currentTextEndOffset
-    case currentTextStartOffset
-    case deleteSource = "delete_source"
-    case detail
-    case device
-    case direction
-    case duration
-    case edge
-    case element
-    case elements
-    case end
-    case endX
-    case endY
-    case excludeTraits
-    case expect
-    case expectations
-    case fps
-    case heistId
-    case identifier
-    case inactivityTimeout = "inactivity_timeout"
-    case includeInteractionLog
-    case includeInterface
-    case inlineData
-    case input
-    case isModalBoundary
-    case label
-    case matcher
-    case maxDuration = "max_duration"
-    case mode
-    case newValue
-    case oldValue
-    case ordinal
-    case output
-    case points
-    case policy
-    case property
-    case radius
-    case rotor
-    case rotorIndex
-    case samplesPerSegment
-    case scale
-    case segments
-    case spread
-    case start
-    case startX
-    case startY
-    case stableId
-    case steps
-    case subtree
-    case target
-    case text
-    case timeout
-    case token
-    case traits
-    case type
-    case value
-    case velocity
-    case x
-    case y
+public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
+    public let rawValue: String
+
+    public init?(rawValue: String) {
+        guard !rawValue.isEmpty else { return nil }
+        self.rawValue = rawValue
+    }
+
+    private init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
 }
 
-public extension FenceParameterSpec {
-    init(
-        key: FenceParameterKey,
-        type: ParamType,
-        required: Bool = false,
-        enumValues: [String]? = nil,
-        minimum: Double? = nil,
-        maximum: Double? = nil,
-        minLength: Int? = nil,
-        objectProperties: [FenceParameterSpec] = [],
-        objectAdditionalProperties: Bool = false,
-        arrayItemType: ParamType? = nil,
-        arrayItemProperties: [FenceParameterSpec] = [],
-        arrayItemAdditionalProperties: Bool = false
-    ) {
-        self.init(
-            key: key.rawValue,
-            type: type,
-            required: required,
-            enumValues: enumValues,
-            minimum: minimum,
-            maximum: maximum,
-            minLength: minLength,
-            objectProperties: objectProperties,
-            objectAdditionalProperties: objectAdditionalProperties,
-            arrayItemType: arrayItemType,
-            arrayItemProperties: arrayItemProperties,
-            arrayItemAdditionalProperties: arrayItemAdditionalProperties
-        )
-    }
+public extension FenceParameterKey {
+    static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
+    static let centerX = Self("centerX"), centerY = Self("centerY"), command = Self("command")
+    static let container = Self("container"), count = Self("count"), captureLocalRef = Self("captureLocalRef")
+    static let cp1X = Self("cp1X"), cp1Y = Self("cp1Y"), cp2X = Self("cp2X"), cp2Y = Self("cp2Y")
+    static let currentHeistId = Self("currentHeistId"), currentTextEndOffset = Self("currentTextEndOffset")
+    static let currentTextStartOffset = Self("currentTextStartOffset"), deleteSource = Self("delete_source")
+    static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
+    static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
+    static let endX = Self("endX"), endY = Self("endY"), excludeTraits = Self("excludeTraits")
+    static let expect = Self("expect"), expectations = Self("expectations"), fps = Self("fps"), heistId = Self("heistId")
+    static let identifier = Self("identifier"), inactivityTimeout = Self("inactivity_timeout")
+    static let includeInteractionLog = Self("includeInteractionLog"), includeInterface = Self("includeInterface")
+    static let inlineData = Self("inlineData"), input = Self("input"), isModalBoundary = Self("isModalBoundary")
+    static let label = Self("label"), matcher = Self("matcher"), maxDuration = Self("max_duration"), mode = Self("mode")
+    static let newValue = Self("newValue"), oldValue = Self("oldValue"), ordinal = Self("ordinal"), output = Self("output")
+    static let points = Self("points"), policy = Self("policy"), property = Self("property"), radius = Self("radius")
+    static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex"), samplesPerSegment = Self("samplesPerSegment")
+    static let scale = Self("scale"), segments = Self("segments"), spread = Self("spread"), start = Self("start")
+    static let startX = Self("startX"), startY = Self("startY"), stableId = Self("stableId"), steps = Self("steps")
+    static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), timeout = Self("timeout")
+    static let token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")
+    static let velocity = Self("velocity"), x = Self("x"), y = Self("y")
 }
 
 func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawRepresentable, E.RawValue == String {
@@ -224,43 +98,62 @@ func param(
     arrayItemProperties: [FenceParameterSpec] = [],
     arrayItemAdditionalProperties: Bool = false
 ) -> FenceParameterSpec {
-    FenceParameterSpec(
+    var schema: [String: FenceJSONSchemaValue] = ["type": .string(type.jsonSchemaType)]
+    if let enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
+    if let minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
+    if let maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
+    if let minLength { schema["minLength"] = .int(minLength) }
+    if let minItems { schema["minItems"] = .int(minItems) }
+    if let maxItems { schema["maxItems"] = .int(maxItems) }
+
+    switch type {
+    case .stringArray:
+        schema["items"] = .object(["type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType)])
+    case .object where !objectProperties.isEmpty:
+        schema["properties"] = .object(FenceParameterSpec.jsonSchemaProperties(from: objectProperties))
+        addRequiredKeys(from: objectProperties, to: &schema)
+        schema["additionalProperties"] = .bool(objectAdditionalProperties)
+    case .array:
+        if let arrayItemType {
+            var items: [String: FenceJSONSchemaValue] = ["type": .string(arrayItemType.jsonSchemaType)]
+            if arrayItemType == .object {
+                items["properties"] = .object(FenceParameterSpec.jsonSchemaProperties(from: arrayItemProperties))
+                addRequiredKeys(from: arrayItemProperties, to: &items)
+                items["additionalProperties"] = .bool(arrayItemAdditionalProperties)
+            }
+            schema["items"] = .object(items)
+        }
+    default:
+        break
+    }
+
+    return FenceParameterSpec(
         key: key.rawValue,
         type: type,
         required: required,
         enumValues: enumValues,
-        minimum: minimum,
-        maximum: maximum,
-        minLength: minLength,
-        minItems: minItems,
-        maxItems: maxItems,
-        objectProperties: objectProperties,
-        objectAdditionalProperties: objectAdditionalProperties,
-        arrayItemType: arrayItemType,
-        arrayItemProperties: arrayItemProperties,
-        arrayItemAdditionalProperties: arrayItemAdditionalProperties
+        jsonSchemaProperty: .object(schema)
     )
 }
 
-// MARK: - MCP Exposure
+private func addRequiredKeys(
+    from specs: [FenceParameterSpec],
+    to schema: inout [String: FenceJSONSchemaValue]
+) {
+    let required = specs.filter(\.required).map(\.key)
+    if !required.isEmpty { schema["required"] = .array(required.map { .string($0) }) }
+}
 
-/// How a command is surfaced in the MCP tool list.
-///
-/// Declared at module scope to avoid inheriting @ButtonHeistActor isolation.
+private func jsonSchemaNumber(_ value: Double) -> FenceJSONSchemaValue {
+    value.rounded(.towardZero) == value ? .int(Int(value)) : .double(value)
+}
+
 public enum MCPExposure: Sendable, Equatable {
-    /// Tool name equals command rawValue (1:1 mapping).
     case directTool
-    /// Command is routed through a grouped tool (e.g. gestures via the "gesture" tool).
     case groupedUnder(String)
-    /// Not exposed via MCP (REPL-only or subsumed by another command).
     case notExposed
 }
 
-/// Selector metadata for an MCP tool that routes to more than one Fence command.
-///
-/// This is part of the command contract because it defines the external tool
-/// parameter that selects the canonical Fence command. The MCP adapter renders
-/// it; runtime routing also consumes it.
 public struct MCPToolSelector: Sendable, Equatable {
     public let parameter: FenceParameterSpec
     public let defaultValue: String?
@@ -298,10 +191,6 @@ public struct MCPToolSelector: Sendable, Equatable {
     }
 }
 
-/// MCP annotation metadata owned by the canonical tool contract.
-///
-/// The MCP adapter translates this neutral spec into SDK-specific annotation
-/// values without owning the command-name lists that receive those annotations.
 public struct MCPToolAnnotationSpec: Sendable, Equatable {
     public let readOnlyHint: Bool?
     public let idempotentHint: Bool?
@@ -315,10 +204,6 @@ public struct MCPToolAnnotationSpec: Sendable, Equatable {
     }
 }
 
-/// Canonical MCP-facing tool contract derived from the Fence command catalog.
-///
-/// MCP adapters render tool metadata and schemas from this contract instead of
-/// hand-maintaining command-name or parameter-name mirrors.
 public struct MCPToolContract: Sendable, Equatable {
     public let name: String
     public let commands: [TheFence.Command]
@@ -342,11 +227,15 @@ public struct MCPToolContract: Sendable, Equatable {
 
     public var parameters: [FenceParameterSpec] {
         var merged: [FenceParameterSpec] = []
-        for spec in commands.flatMap(\.parameters) {
-            append(spec, to: &merged, replacingExisting: false)
+        for spec in commands.flatMap(\.parameters) where !merged.contains(where: { $0.key == spec.key }) {
+            merged.append(spec)
         }
         if let selector {
-            append(selector.parameter, to: &merged, replacingExisting: true)
+            if let existingIndex = merged.firstIndex(where: { $0.key == selector.parameter.key }) {
+                merged[existingIndex] = selector.parameter
+            } else {
+                merged.append(selector.parameter)
+            }
         }
         return merged
     }
@@ -360,34 +249,9 @@ public struct MCPToolContract: Sendable, Equatable {
         }
         return parameters.filter(\.required).map(\.key)
     }
-
-    private func append(
-        _ spec: FenceParameterSpec,
-        to specs: inout [FenceParameterSpec],
-        replacingExisting: Bool
-    ) {
-        guard let existingIndex = specs.firstIndex(where: { $0.key == spec.key }) else {
-            specs.append(spec)
-            return
-        }
-        if replacingExisting {
-            specs[existingIndex] = spec
-        }
-    }
 }
 
-/// Neutral JSON Schema value owned by the Fence command contract.
-///
-/// Adapters translate this tree into their transport-specific value type; they
-/// do not own schema literals or parameter-shape branching.
-public enum FenceJSONSchemaValue: Sendable, Equatable {
-    case string(String)
-    case int(Int)
-    case double(Double)
-    case bool(Bool)
-    case array([FenceJSONSchemaValue])
-    case object([String: FenceJSONSchemaValue])
-}
+public typealias FenceJSONSchemaValue = HeistValue
 
 public extension MCPToolContract {
     var inputJSONSchema: FenceJSONSchemaValue {
@@ -400,28 +264,11 @@ public extension MCPToolContract {
 
 public extension FenceParameterSpec.ParamType {
     var jsonSchemaType: String {
-        switch self {
-        case .string:
-            return "string"
-        case .integer:
-            return "integer"
-        case .number:
-            return "number"
-        case .boolean:
-            return "boolean"
-        case .stringArray, .array:
-            return "array"
-        case .object:
-            return "object"
-        }
+        self == .stringArray ? "array" : rawValue
     }
 }
 
 public extension FenceParameterSpec {
-    var jsonSchemaProperty: FenceJSONSchemaValue {
-        Self.jsonSchemaProperty(for: self)
-    }
-
     static func jsonSchemaProperties(from specs: [FenceParameterSpec]) -> [String: FenceJSONSchemaValue] {
         var properties: [String: FenceJSONSchemaValue] = [:]
         for spec in specs where properties[spec.key] == nil {
@@ -444,86 +291,28 @@ public extension FenceParameterSpec {
         }
         return .object(schema)
     }
-
-    static func jsonSchemaProperty(for spec: FenceParameterSpec) -> FenceJSONSchemaValue {
-        var schema: [String: FenceJSONSchemaValue] = ["type": .string(spec.type.jsonSchemaType)]
-        if let enumValues = spec.enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
-        if let minimum = spec.minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
-        if let maximum = spec.maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
-        if let minLength = spec.minLength { schema["minLength"] = .int(minLength) }
-        if let minItems = spec.minItems { schema["minItems"] = .int(minItems) }
-        if let maxItems = spec.maxItems { schema["maxItems"] = .int(maxItems) }
-
-        switch spec.type {
-        case .stringArray:
-            schema["items"] = .object(["type": .string(FenceParameterSpec.ParamType.string.jsonSchemaType)])
-
-        case .object where !spec.objectProperties.isEmpty:
-            schema["properties"] = .object(jsonSchemaProperties(from: spec.objectProperties))
-            let required = spec.objectProperties.filter(\.required).map(\.key)
-            if !required.isEmpty { schema["required"] = .array(required.map { .string($0) }) }
-            schema["additionalProperties"] = .bool(spec.objectAdditionalProperties)
-
-        case .array:
-            if let itemType = spec.arrayItemType {
-                var items: [String: FenceJSONSchemaValue] = ["type": .string(itemType.jsonSchemaType)]
-                if itemType == .object {
-                    items["properties"] = .object(jsonSchemaProperties(from: spec.arrayItemProperties))
-                    let required = spec.arrayItemProperties.filter(\.required).map(\.key)
-                    if !required.isEmpty { items["required"] = .array(required.map { .string($0) }) }
-                    items["additionalProperties"] = .bool(spec.arrayItemAdditionalProperties)
-                }
-                schema["items"] = .object(items)
-            }
-
-        default:
-            break
-        }
-
-        return .object(schema)
-    }
-
-    private static func jsonSchemaNumber(_ value: Double) -> FenceJSONSchemaValue {
-        if value.rounded(.towardZero) == value {
-            return .int(Int(value))
-        }
-        return .double(value)
-    }
 }
 
-// MARK: - CLI Exposure
-
-/// How a command is surfaced by the top-level `buttonheist` CLI.
-///
-/// Declared next to `MCPExposure` so command-surface contracts live with the
-/// command catalog instead of being reverse-engineered from docs.
 public enum CLIExposure: Sendable, Equatable {
-    /// Top-level CLI command name equals the command raw value.
     case directCommand
-    /// Command is routed through another top-level command.
     case groupedUnder(String)
-    /// Only accepted by the interactive session parser or raw JSON mode.
     case sessionOnly
-    /// Not exposed by the CLI.
     case notExposed
 }
 
-// MARK: - Shared Parameter Blocks
-
-/// Reusable parameter groups shared across command specs.
-/// At module scope so they're not actor-isolated.
 enum FenceParameterBlocks: Sendable {
-    static let elementTarget: [FenceParameterSpec] = [
-        param(.heistId, .string), param(.label, .string), param(.value, .string),
+    private static let matcherFields: [FenceParameterSpec] = [
+        param(.label, .string), param(.identifier, .string), param(.value, .string),
         param(.traits, .stringArray), param(.excludeTraits, .stringArray),
-        param(.identifier, .string), param(.ordinal, .integer),
     ]
 
-    static var elementFilter: [FenceParameterSpec] {
-        elementTarget.filter {
-            $0.key != FenceParameterKey.heistId.rawValue && $0.key != FenceParameterKey.ordinal.rawValue
-        }
-    }
+    static let elementTarget: [FenceParameterSpec] = [
+        param(.heistId, .string),
+    ] + matcherFields + [
+        param(.ordinal, .integer),
+    ]
+
+    static let elementFilter = matcherFields
 
     private static let scrollContainerFields: [FenceParameterSpec] = [
         param(.stableId, .string), param(.captureLocalRef, .string),
@@ -533,10 +322,7 @@ enum FenceParameterBlocks: Sendable {
         param(.container, .object, objectProperties: scrollContainerFields),
     ]
 
-    private static let subtreeElementProperties: [FenceParameterSpec] = [
-        param(.heistId, .string), param(.label, .string), param(.value, .string),
-        param(.identifier, .string), param(.traits, .stringArray), param(.excludeTraits, .stringArray),
-    ]
+    private static let subtreeElementProperties = [param(.heistId, .string)] + matcherFields
 
     private static let subtreeContainerProperties: [FenceParameterSpec] = [
         param(.stableId, .string),
@@ -559,11 +345,6 @@ enum FenceParameterBlocks: Sendable {
         enumValues: ActionExpectation.wireTypeValues
     )
 
-    private static let expectationMatcherProperties: [FenceParameterSpec] = [
-        param(.label, .string), param(.identifier, .string), param(.value, .string),
-        param(.traits, .stringArray), param(.excludeTraits, .stringArray),
-    ]
-
     static let expect: FenceParameterSpec = param(
         .expect, .object,
         objectProperties: [
@@ -572,7 +353,7 @@ enum FenceParameterBlocks: Sendable {
             param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
             param(.oldValue, .string),
             param(.newValue, .string),
-            param(.matcher, .object, objectProperties: expectationMatcherProperties),
+            param(.matcher, .object, objectProperties: matcherFields),
             param(
                 .expectations, .array,
                 arrayItemType: .object,
@@ -611,12 +392,8 @@ enum FenceParameterBlocks: Sendable {
     ]
 }
 
-// MARK: - Per-Command Specs
-
 extension TheFence.Command {
 
-    /// All parameter keys this command extracts from the request dictionary.
-    /// Does not include the "command" key itself or internal keys like "_requestId".
     var catalogParameters: [FenceParameterSpec] {
         let target = FenceParameterBlocks.elementTarget
         let scrollContainerTarget = FenceParameterBlocks.scrollContainerTarget
@@ -627,7 +404,6 @@ extension TheFence.Command {
 
         switch self {
 
-        // MARK: No parameters (meta / read-only)
         case .help, .quit, .exit, .status, .ping, .listDevices, .getSessionState,
              .listTargets, .getSessionLog:
             return []
@@ -635,7 +411,6 @@ extension TheFence.Command {
         case .dismissKeyboard:
             return expectation
 
-        // MARK: Interface / observation
         case .getInterface:
             return filter + [
                 FenceParameterBlocks.interfaceSubtree,
@@ -649,7 +424,6 @@ extension TheFence.Command {
         case .waitForChange:
             return expectation
 
-        // MARK: Gestures
         case .oneFingerTap:
             return target + FenceParameterBlocks.coordinateXY + expectation
 
@@ -710,7 +484,6 @@ extension TheFence.Command {
                 param(.velocity, .number),
             ] + expectation
 
-        // MARK: Scroll
         case .scroll:
             return scrollContainerTarget + target + [
                 param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self)),
@@ -729,7 +502,6 @@ extension TheFence.Command {
                 param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self)),
             ] + expectation
 
-        // MARK: Accessibility actions
         case .activate:
             return target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation
 
@@ -749,25 +521,21 @@ extension TheFence.Command {
                 param(.currentTextEndOffset, .integer, minimum: 0),
             ] + expectation
 
-        // MARK: Text / keyboard
         case .typeText:
             return target + [param(.text, .string, required: true, minLength: 1)] + expectation
 
         case .editAction:
             return [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + expectation
 
-        // MARK: Pasteboard
         case .setPasteboard:
             return [param(.text, .string, required: true)] + expectation
 
         case .getPasteboard:
             return []
 
-        // MARK: Wait
         case .waitFor:
             return target + [param(.absent, .boolean), FenceParameterBlocks.expectationTimeout, expect]
 
-        // MARK: Recording
         case .startRecording:
             return [
                 param(.fps, .integer, minimum: 1, maximum: 15),
@@ -779,7 +547,6 @@ extension TheFence.Command {
         case .stopRecording:
             return [param(.output, .string), param(.inlineData, .boolean), param(.includeInteractionLog, .boolean)]
 
-        // MARK: Batch
         case .runBatch:
             return [
                 param(
@@ -799,11 +566,9 @@ extension TheFence.Command {
                 param(.policy, .string, enumValues: fenceEnumValues(TheFence.BatchPolicy.self)),
             ]
 
-        // MARK: Connection
         case .connect:
             return [param(.target, .string), param(.device, .string), param(.token, .string)]
 
-        // MARK: Session management
         case .archiveSession:
             return [param(.deleteSource, .boolean)]
 
