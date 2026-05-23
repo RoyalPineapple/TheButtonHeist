@@ -137,8 +137,6 @@ classDiagram
         +Double activationPointY
         +[ElementAction] actions
         +[HeistCustomContent]? customContent
-        +frame: CGRect (computed)
-        +activationPoint: CGPoint (computed)
     }
 
     class AccessibilityHierarchy {

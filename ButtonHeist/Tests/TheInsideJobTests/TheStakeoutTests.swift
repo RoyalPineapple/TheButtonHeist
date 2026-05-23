@@ -293,8 +293,6 @@ final class TheStakeoutTests: XCTestCase {
             return XCTFail("Expected successful recording, got \(String(describing: completionResult.value))")
         }
 
-        XCTAssertEqual(payload.evidence?.requestedConfig?.fps, 30)
-        XCTAssertEqual(payload.evidence?.appliedConfig?.fps, 15)
         XCTAssertEqual(payload.evidence?.interactionLogLimit, 500)
         XCTAssertEqual(payload.evidence?.droppedInteractionCount, 3)
         XCTAssertEqual(payload.evidence?.fileSizeLimitBytes, 7_000_000)

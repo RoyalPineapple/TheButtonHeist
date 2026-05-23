@@ -73,17 +73,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(target.description, #"target(matcher(label="Save" traits=[button]) ordinal=1)"#)
     }
 
-    func testClientMessageDescriptionComposesCommandAndPayload() {
-        let message = ClientMessage.scrollToVisible(.init(
-            elementTarget: .matcher(ElementMatcher(label: "Delivery", traits: [.button]))
-        ))
-
-        XCTAssertEqual(
-            message.description,
-            #"scroll_to_visible(scrollToVisible(target(matcher(label="Delivery" traits=[button]))))"#
-        )
-    }
-
     func testElementTargetDecodesOrdinalOnlyFallback() throws {
         let data = Data(#"{"ordinal":1}"#.utf8)
         let target = try JSONDecoder().decode(ElementTarget.self, from: data)

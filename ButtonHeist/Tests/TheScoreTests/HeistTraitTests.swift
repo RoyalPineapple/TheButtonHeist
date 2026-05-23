@@ -26,23 +26,4 @@ final class HeistTraitTests: XCTestCase {
         XCTAssertNil(HeistTrait(rawValue: "futureTrait"))
     }
 
-    func testIsExtendedPrivate() {
-        let extendedCases: [HeistTrait] = [
-            .webContent, .pickerElement, .radioButton, .launchIcon, .statusBarElement,
-            .secureTextField, .inactive, .footer, .autoCorrectCandidate, .deleteKey,
-            .selectionDismissesItem, .visited, .spacer, .tableIndex, .map,
-            .textOperationsAvailable, .draggable, .popupButton, .menuItem, .alert,
-        ]
-        for trait in extendedCases {
-            XCTAssertTrue(trait.isExtendedPrivate, "\(trait) should be extended private")
-        }
-
-        let nonExtended: [HeistTrait] = [
-            .button, .link, .image, .staticText, .header, .adjustable,
-            .textEntry, .isEditing, .backButton, .tabBarItem, .textArea, .switchButton,
-        ]
-        for trait in nonExtended {
-            XCTAssertFalse(trait.isExtendedPrivate, "\(trait) should not be extended private")
-        }
-    }
 }

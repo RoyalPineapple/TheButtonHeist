@@ -1049,7 +1049,6 @@ here.
 - `systemVersion: String` - iOS version
 - `screenWidth: Double` - Screen width in points
 - `screenHeight: Double` - Screen height in points
-- `screenSize: CGSize` - Computed from width/height
 - `instanceId: String?` - Per-launch session UUID
 - `instanceIdentifier: String?` - Human-readable instance identifier (from `INSIDEJOB_ID` env var, or shortId fallback)
 - `listeningPort: UInt16?` - Port the server is listening on
@@ -1128,13 +1127,6 @@ Represents a single UI element captured from the accessibility hierarchy.
 | `customContent` | `[HeistCustomContent]?` | Custom accessibility content |
 | `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
 
-#### Computed Properties
-
-```swift
-public var frame: CGRect            // Frame as CGRect
-public var activationPoint: CGPoint // Activation point as CGPoint
-```
-
 ### Trait Reference
 
 `HeistTrait` is a `String`-backed enum aligned 1:1 with the AccessibilitySnapshot parser's `knownTraits`. Trait names are used in `traits` and `excludeTraits` fields throughout the API.
@@ -1176,7 +1168,7 @@ These come from AXRuntime private SPI, surfaced by the AccessibilitySnapshot par
 
 #### Private Traits — Extended (AXRuntime Diagnostics)
 
-These are from the full AXRuntime trait space. Marked `isExtendedPrivate = true` on `HeistTrait`. Useful for diagnostics and advanced filtering.
+These are from the full AXRuntime trait space. They are retained as canonical trait names for diagnostics and advanced filtering.
 
 | Trait Name | Trait Name | Trait Name |
 |------------|------------|------------|

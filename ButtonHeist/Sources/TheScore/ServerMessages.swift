@@ -1,5 +1,4 @@
 import Foundation
-import CoreGraphics
 import AccessibilitySnapshotModel
 
 // MARK: - Response Envelope
@@ -128,30 +127,6 @@ public struct PongPayload: Codable, Sendable, Equatable {
         self.appBuild = appBuild
         self.serverInstanceIdentifier = serverInstanceIdentifier
         self.serverTimestampMs = serverTimestampMs
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case buttonHeistVersion
-        case appName
-        case bundleIdentifier
-        case appVersion
-        case appBuild
-        case serverInstanceIdentifier
-        case serverTimestampMs
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            buttonHeistVersion: try container.decodeIfPresent(String.self, forKey: .buttonHeistVersion)
-                ?? TheScore.buttonHeistVersion,
-            appName: try container.decodeIfPresent(String.self, forKey: .appName) ?? "",
-            bundleIdentifier: try container.decodeIfPresent(String.self, forKey: .bundleIdentifier) ?? "",
-            appVersion: try container.decodeIfPresent(String.self, forKey: .appVersion),
-            appBuild: try container.decodeIfPresent(String.self, forKey: .appBuild),
-            serverInstanceIdentifier: try container.decodeIfPresent(String.self, forKey: .serverInstanceIdentifier),
-            serverTimestampMs: try container.decodeIfPresent(Int64.self, forKey: .serverTimestampMs)
-        )
     }
 
     public func withServerTimestamp(_ date: Date = Date()) -> PongPayload {
@@ -746,7 +721,7 @@ public struct RecordingPayload: Codable, Sendable {
     public let stopReason: StopReason
     /// Ordered log of interactions recorded during this session, or nil if none occurred.
     public let interactionLog: [InteractionEvent]?
-    /// Recording-time evidence about config clamping and omitted inputs.
+    /// Recording-time evidence about config clamping.
     /// This is diagnostic only; it is never replay authority.
     public let evidence: RecordingPayloadEvidence?
 
@@ -781,67 +756,24 @@ public struct RecordingPayload: Codable, Sendable {
 
 /// Diagnostic evidence attached to a completed screen recording.
 ///
-/// These fields describe what happened while collecting evidence: requested
-/// recording options, applied options after clamping, hard limits, and inputs
-/// that were intentionally omitted because they are not serializable. They do
-/// not affect playback.
+/// These fields describe what happened while collecting evidence: values clamped
+/// at runtime and hard limits. They do not affect playback.
 public struct RecordingPayloadEvidence: Codable, Sendable, Equatable {
-    public let requestedConfig: RecordingConfigurationEvidence?
-    public let appliedConfig: RecordingConfigurationEvidence?
     public let caps: [RecordedInputCap]?
-    public let unsupportedInputs: [RecordedUnsupportedInput]?
     public let interactionLogLimit: Int?
     public let droppedInteractionCount: Int?
     public let fileSizeLimitBytes: Int?
 
     public init(
-        requestedConfig: RecordingConfigurationEvidence? = nil,
-        appliedConfig: RecordingConfigurationEvidence? = nil,
         caps: [RecordedInputCap]? = nil,
-        unsupportedInputs: [RecordedUnsupportedInput]? = nil,
         interactionLogLimit: Int? = nil,
         droppedInteractionCount: Int? = nil,
         fileSizeLimitBytes: Int? = nil
     ) {
-        self.requestedConfig = requestedConfig
-        self.appliedConfig = appliedConfig
         self.caps = caps?.isEmpty == true ? nil : caps
-        self.unsupportedInputs = unsupportedInputs?.isEmpty == true ? nil : unsupportedInputs
         self.interactionLogLimit = interactionLogLimit
         self.droppedInteractionCount = droppedInteractionCount
         self.fileSizeLimitBytes = fileSizeLimitBytes
-    }
-}
-
-/// Non-validating snapshot of recording configuration values.
-///
-/// Unlike `RecordingConfig`, this type is evidence: it can preserve requested
-/// values that were later clamped by the recorder.
-public struct RecordingConfigurationEvidence: Codable, Sendable, Equatable {
-    public let fps: Int?
-    public let scale: Double?
-    public let inactivityTimeout: Double?
-    public let maxDuration: Double?
-
-    public init(
-        fps: Int? = nil,
-        scale: Double? = nil,
-        inactivityTimeout: Double? = nil,
-        maxDuration: Double? = nil
-    ) {
-        self.fps = fps
-        self.scale = scale
-        self.inactivityTimeout = inactivityTimeout
-        self.maxDuration = maxDuration
-    }
-
-    public init(_ config: RecordingConfig) {
-        self.init(
-            fps: config.fps,
-            scale: config.scale,
-            inactivityTimeout: config.inactivityTimeout,
-            maxDuration: config.maxDuration
-        )
     }
 }
 
@@ -867,19 +799,6 @@ public struct RecordedInputCap: Codable, Sendable, Equatable {
         self.applied = applied
         self.minimum = minimum
         self.maximum = maximum
-        self.reason = reason
-    }
-}
-
-/// Evidence that an input was omitted from the replay contract.
-public struct RecordedUnsupportedInput: Codable, Sendable, Equatable {
-    public let name: String
-    public let valueType: String
-    public let reason: String
-
-    public init(name: String, valueType: String, reason: String) {
-        self.name = name
-        self.valueType = valueType
         self.reason = reason
     }
 }
@@ -994,11 +913,5 @@ public struct ServerInfo: Codable, Sendable {
         self.simulatorUDID = simulatorUDID
         self.vendorIdentifier = vendorIdentifier
         self.tlsActive = tlsActive
-    }
-}
-
-extension ServerInfo {
-    public var screenSize: CGSize {
-        CGSize(width: screenWidth, height: screenHeight)
     }
 }
