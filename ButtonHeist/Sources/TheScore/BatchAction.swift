@@ -147,34 +147,67 @@ extension Action: CustomStringConvertible {
 }
 
 extension Action {
+    fileprivate enum WireType: String, Codable {
+        case activate
+        case increment
+        case decrement
+        case performCustomAction = "perform_custom_action"
+        case rotor
+        case touchTap = "touch_tap"
+        case touchLongPress = "touch_long_press"
+        case touchSwipe = "touch_swipe"
+        case touchDrag = "touch_drag"
+        case touchPinch = "touch_pinch"
+        case touchRotate = "touch_rotate"
+        case touchTwoFingerTap = "touch_two_finger_tap"
+        case touchDrawPath = "touch_draw_path"
+        case touchDrawBezier = "touch_draw_bezier"
+        case typeText = "type_text"
+        case editAction = "edit_action"
+        case setPasteboard = "set_pasteboard"
+        case scroll
+        case scrollToVisible = "scroll_to_visible"
+        case elementSearch = "element_search"
+        case scrollToEdge = "scroll_to_edge"
+        case waitForIdle = "wait_for_idle"
+        case waitForElement = "wait_for"
+        case waitForChange = "wait_for_change"
+        case explore
+        case resignFirstResponder = "resign_first_responder"
+    }
+
     public var canonicalName: String {
+        wireType.rawValue
+    }
+
+    fileprivate var wireType: WireType {
         switch self {
-        case .activate: return "activate"
-        case .increment: return "increment"
-        case .decrement: return "decrement"
-        case .performCustomAction: return "perform_custom_action"
-        case .rotor: return "rotor"
-        case .touchTap: return "touch_tap"
-        case .touchLongPress: return "touch_long_press"
-        case .touchSwipe: return "touch_swipe"
-        case .touchDrag: return "touch_drag"
-        case .touchPinch: return "touch_pinch"
-        case .touchRotate: return "touch_rotate"
-        case .touchTwoFingerTap: return "touch_two_finger_tap"
-        case .touchDrawPath: return "touch_draw_path"
-        case .touchDrawBezier: return "touch_draw_bezier"
-        case .typeText: return "type_text"
-        case .editAction: return "edit_action"
-        case .setPasteboard: return "set_pasteboard"
-        case .scroll: return "scroll"
-        case .scrollToVisible: return "scroll_to_visible"
-        case .elementSearch: return "element_search"
-        case .scrollToEdge: return "scroll_to_edge"
-        case .waitForIdle: return "wait_for_idle"
-        case .waitForElement: return "wait_for"
-        case .waitForChange: return "wait_for_change"
-        case .explore: return "explore"
-        case .resignFirstResponder: return "resign_first_responder"
+        case .activate: return .activate
+        case .increment: return .increment
+        case .decrement: return .decrement
+        case .performCustomAction: return .performCustomAction
+        case .rotor: return .rotor
+        case .touchTap: return .touchTap
+        case .touchLongPress: return .touchLongPress
+        case .touchSwipe: return .touchSwipe
+        case .touchDrag: return .touchDrag
+        case .touchPinch: return .touchPinch
+        case .touchRotate: return .touchRotate
+        case .touchTwoFingerTap: return .touchTwoFingerTap
+        case .touchDrawPath: return .touchDrawPath
+        case .touchDrawBezier: return .touchDrawBezier
+        case .typeText: return .typeText
+        case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
+        case .scrollToEdge: return .scrollToEdge
+        case .waitForIdle: return .waitForIdle
+        case .waitForElement: return .waitForElement
+        case .waitForChange: return .waitForChange
+        case .explore: return .explore
+        case .resignFirstResponder: return .resignFirstResponder
         }
     }
 
@@ -222,35 +255,6 @@ extension Action: Codable {
     private enum CodingKeys: String, CodingKey {
         case type
         case target
-    }
-
-    private enum WireType: String, Codable {
-        case activate
-        case increment
-        case decrement
-        case performCustomAction = "perform_custom_action"
-        case rotor
-        case touchTap = "touch_tap"
-        case touchLongPress = "touch_long_press"
-        case touchSwipe = "touch_swipe"
-        case touchDrag = "touch_drag"
-        case touchPinch = "touch_pinch"
-        case touchRotate = "touch_rotate"
-        case touchTwoFingerTap = "touch_two_finger_tap"
-        case touchDrawPath = "touch_draw_path"
-        case touchDrawBezier = "touch_draw_bezier"
-        case typeText = "type_text"
-        case editAction = "edit_action"
-        case setPasteboard = "set_pasteboard"
-        case scroll
-        case scrollToVisible = "scroll_to_visible"
-        case elementSearch = "element_search"
-        case scrollToEdge = "scroll_to_edge"
-        case waitForIdle = "wait_for_idle"
-        case waitForElement = "wait_for"
-        case waitForChange = "wait_for_change"
-        case explore
-        case resignFirstResponder = "resign_first_responder"
     }
 
     public var defaultExpectation: ActionExpectation {
@@ -339,83 +343,58 @@ extension Action: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(wireType, forKey: .type)
         switch self {
         case .activate(let target):
-            try container.encode(WireType.activate, forKey: .type)
             try container.encode(target, forKey: .target)
         case .increment(let target):
-            try container.encode(WireType.increment, forKey: .type)
             try container.encode(target, forKey: .target)
         case .decrement(let target):
-            try container.encode(WireType.decrement, forKey: .type)
             try container.encode(target, forKey: .target)
         case .performCustomAction(let target):
-            try container.encode(WireType.performCustomAction, forKey: .type)
             try target.encode(to: encoder)
         case .rotor(let target):
-            try container.encode(WireType.rotor, forKey: .type)
             try target.encode(to: encoder)
         case .touchTap(let target):
-            try container.encode(WireType.touchTap, forKey: .type)
             try target.encode(to: encoder)
         case .touchLongPress(let target):
-            try container.encode(WireType.touchLongPress, forKey: .type)
             try target.encode(to: encoder)
         case .touchSwipe(let target):
-            try container.encode(WireType.touchSwipe, forKey: .type)
             try target.encode(to: encoder)
         case .touchDrag(let target):
-            try container.encode(WireType.touchDrag, forKey: .type)
             try target.encode(to: encoder)
         case .touchPinch(let target):
-            try container.encode(WireType.touchPinch, forKey: .type)
             try target.encode(to: encoder)
         case .touchRotate(let target):
-            try container.encode(WireType.touchRotate, forKey: .type)
             try target.encode(to: encoder)
         case .touchTwoFingerTap(let target):
-            try container.encode(WireType.touchTwoFingerTap, forKey: .type)
             try target.encode(to: encoder)
         case .touchDrawPath(let target):
-            try container.encode(WireType.touchDrawPath, forKey: .type)
             try container.encode(target, forKey: .target)
         case .touchDrawBezier(let target):
-            try container.encode(WireType.touchDrawBezier, forKey: .type)
             try container.encode(target, forKey: .target)
         case .typeText(let target):
-            try container.encode(WireType.typeText, forKey: .type)
             try target.encode(to: encoder)
         case .editAction(let target):
-            try container.encode(WireType.editAction, forKey: .type)
             try container.encode(target, forKey: .target)
         case .setPasteboard(let target):
-            try container.encode(WireType.setPasteboard, forKey: .type)
             try container.encode(target, forKey: .target)
         case .scroll(let target):
-            try container.encode(WireType.scroll, forKey: .type)
             try target.encode(to: encoder)
         case .scrollToVisible(let target):
-            try container.encode(WireType.scrollToVisible, forKey: .type)
             try target.encode(to: encoder)
         case .elementSearch(let target):
-            try container.encode(WireType.elementSearch, forKey: .type)
             try target.encode(to: encoder)
         case .scrollToEdge(let target):
-            try container.encode(WireType.scrollToEdge, forKey: .type)
             try target.encode(to: encoder)
         case .waitForIdle(let target):
-            try container.encode(WireType.waitForIdle, forKey: .type)
             try container.encode(target, forKey: .target)
         case .waitForElement(let target):
-            try container.encode(WireType.waitForElement, forKey: .type)
             try container.encode(target, forKey: .target)
         case .waitForChange(let target):
-            try container.encode(WireType.waitForChange, forKey: .type)
             try container.encode(target, forKey: .target)
-        case .explore:
-            try container.encode(WireType.explore, forKey: .type)
-        case .resignFirstResponder:
-            try container.encode(WireType.resignFirstResponder, forKey: .type)
+        case .explore, .resignFirstResponder:
+            break
         }
     }
 }
