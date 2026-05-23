@@ -151,56 +151,90 @@ final class TheFenceParameterSpecTests: XCTestCase {
         )
     }
 
-    func testEveryParameterSpecKeyIsBackedByFenceParameterKey() {
-        let knownKeys = Set(FenceParameterKey.allCases.map(\.rawValue))
+    func testRepresentativeDescriptorParametersOwnRenderedSchemaProperties() throws {
+        let text = try parameter("text", in: .typeText)
+        XCTAssertEqual(text.required, true)
+        XCTAssertEqual(try schemaString("type", in: text), "string")
+        XCTAssertEqual(try schemaInt("minLength", in: text), 1)
 
-        for command in TheFence.Command.allCases {
-            assertParameterKeysAreBacked(
-                command.parameters,
-                knownKeys: knownKeys,
-                context: command.rawValue
-            )
-        }
+        let editAction = try parameter("action", in: .editAction)
+        XCTAssertEqual(editAction.required, true)
+        XCTAssertEqual(editAction.enumValues, EditAction.allCases.map(\.rawValue))
+        XCTAssertEqual(try schemaEnumValues(in: editAction), Set(EditAction.allCases.map(\.rawValue)))
 
-        for contract in TheFence.Command.mcpToolContracts {
-            guard let selector = contract.selector else { continue }
-            assertParameterKeysAreBacked(
-                [selector.parameter],
-                knownKeys: knownKeys,
-                context: "\(contract.name).selector"
-            )
-        }
+        let drawPathPoints = try parameter("points", in: .drawPath)
+        XCTAssertEqual(drawPathPoints.required, true)
+        XCTAssertEqual(try schemaInt("minItems", in: drawPathPoints), 2)
+        XCTAssertEqual(try schemaInt("maxItems", in: drawPathPoints), TheFence.DecodeLimits.maxDrawPathPoints)
+        let pointProperties = try itemProperties(in: drawPathPoints)
+        XCTAssertEqual(Set(pointProperties.keys), ["x", "y"])
+        XCTAssertEqual(try requiredKeys(in: itemSchema(in: drawPathPoints)), Set(["x", "y"]))
+
+        let expect = try parameter("expect", in: .activate)
+        XCTAssertEqual(
+            try propertyKeys(in: expect),
+            Set(["expectations", "heistId", "matcher", "newValue", "oldValue", "property", "type"])
+        )
     }
 
-    private func assertParameterKeysAreBacked(
-        _ specs: [FenceParameterSpec],
-        knownKeys: Set<String>,
-        context: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        for spec in specs {
-            XCTAssertTrue(
-                knownKeys.contains(spec.key),
-                "\(context).\(spec.key) is not in FenceParameterKey - add a case or fix the spec key",
-                file: file,
-                line: line
-            )
-            assertParameterKeysAreBacked(
-                spec.objectProperties,
-                knownKeys: knownKeys,
-                context: "\(context).\(spec.key)",
-                file: file,
-                line: line
-            )
-            assertParameterKeysAreBacked(
-                spec.arrayItemProperties,
-                knownKeys: knownKeys,
-                context: "\(context).\(spec.key)[]",
-                file: file,
-                line: line
-            )
-        }
+    private func parameter(_ key: String, in command: TheFence.Command) throws -> FenceParameterSpec {
+        try XCTUnwrap(command.parameters.first { $0.key == key }, "\(command.rawValue) missing \(key)")
     }
 
+    private func schemaObject(in spec: FenceParameterSpec) throws -> [String: FenceJSONSchemaValue] {
+        try schemaObject(spec.jsonSchemaProperty)
+    }
+
+    private func schemaObject(_ value: FenceJSONSchemaValue) throws -> [String: FenceJSONSchemaValue] {
+        guard case .object(let object) = value else {
+            XCTFail("Expected object schema, got \(value)")
+            return [:]
+        }
+        return object
+    }
+
+    private func schemaString(_ key: String, in spec: FenceParameterSpec) throws -> String? {
+        guard case .string(let value)? = try schemaObject(in: spec)[key] else { return nil }
+        return value
+    }
+
+    private func schemaInt(_ key: String, in spec: FenceParameterSpec) throws -> Int? {
+        guard case .int(let value)? = try schemaObject(in: spec)[key] else { return nil }
+        return value
+    }
+
+    private func schemaEnumValues(in spec: FenceParameterSpec) throws -> Set<String> {
+        guard case .array(let values)? = try schemaObject(in: spec)["enum"] else { return [] }
+        return Set(values.compactMap {
+            guard case .string(let value) = $0 else { return nil }
+            return value
+        })
+    }
+
+    private func propertyKeys(in spec: FenceParameterSpec) throws -> Set<String> {
+        Set(try properties(in: spec).keys)
+    }
+
+    private func properties(in spec: FenceParameterSpec) throws -> [String: FenceJSONSchemaValue] {
+        guard case .object(let properties)? = try schemaObject(in: spec)["properties"] else { return [:] }
+        return properties
+    }
+
+    private func itemSchema(in spec: FenceParameterSpec) throws -> [String: FenceJSONSchemaValue] {
+        guard let items = try schemaObject(in: spec)["items"] else { return [:] }
+        return try schemaObject(items)
+    }
+
+    private func itemProperties(in spec: FenceParameterSpec) throws -> [String: FenceJSONSchemaValue] {
+        guard case .object(let properties)? = try itemSchema(in: spec)["properties"] else { return [:] }
+        return properties
+    }
+
+    private func requiredKeys(in schema: [String: FenceJSONSchemaValue]) throws -> Set<String> {
+        guard case .array(let values)? = schema["required"] else { return [] }
+        return Set(values.compactMap {
+            guard case .string(let value) = $0 else { return nil }
+            return value
+        })
+    }
 }

@@ -445,17 +445,21 @@ struct ToolSyncTests {
         #expect(!commandValues.contains(TheFence.Command.gestureMCPToolName))
     }
 
-    @Test("Expect schemas expose FenceParameterSpec shape")
-    func expectSchemasExposeFenceParameterSpecShape() {
+    @Test("Expect schemas expose descriptor-owned schema shape")
+    func expectSchemasExposeDescriptorOwnedSchemaShape() {
         guard let expectSpec = TheFence.Command.activate.parameters.first(where: { $0.key == "expect" }) else {
             Issue.record("activate command is missing expect parameter spec")
             return
         }
+        guard case .object(let expectSchema) = value(from: expectSpec.jsonSchemaProperty) else {
+            Issue.record("activate expect parameter schema is not an object")
+            return
+        }
         #expect(
-            Set(expectSpec.objectProperties.map(\.key)) == [
+            extractPropertyKeys(from: expectSchema) == [
                 "type", "heistId", "property", "oldValue", "newValue", "matcher", "expectations",
             ],
-            "FenceParameterSpec should own the expect object shape"
+            "FenceParameterSpec should expose the descriptor-owned expect object shape"
         )
 
         for tool in ToolDefinitions.all where extractPropertyKeys(from: tool).contains("expect") {
@@ -650,20 +654,6 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("FenceParameterKey covers every advertised command parameter")
-    func fenceParameterKeyCoversEveryAdvertisedCommandParameter() {
-        let advertisedKeys = Self.fenceCatalogLiterals
-            .subtracting(TheFence.Command.allCases.map(\.rawValue))
-            .subtracting(TheFence.Command.mcpToolContracts.map(\.name))
-        let knownKeys = Set(FenceParameterKey.allCases.map(\.rawValue))
-        let missingKeys = advertisedKeys.subtracting(knownKeys)
-
-        #expect(
-            missingKeys.isEmpty,
-            "FenceParameterKey is missing advertised parameter keys: \(missingKeys.sorted())"
-        )
-    }
-
     @Test("Grouped MCP selectors are owned by command contracts")
     func groupedMCPSelectorsAreOwnedByCommandContracts() {
         let editActionSelectorContract = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!
@@ -840,8 +830,24 @@ struct ToolSyncTests {
     ) {
         for spec in specs {
             literals.insert(spec.key)
-            collectParameterKeys(from: spec.objectProperties, into: &literals)
-            collectParameterKeys(from: spec.arrayItemProperties, into: &literals)
+            collectParameterKeys(from: spec.jsonSchemaProperty, into: &literals)
+        }
+    }
+
+    private static func collectParameterKeys(
+        from schema: FenceJSONSchemaValue,
+        into literals: inout Set<String>
+    ) {
+        guard case .object(let object) = schema else { return }
+
+        if case .object(let properties)? = object["properties"] {
+            for (key, propertySchema) in properties {
+                literals.insert(key)
+                collectParameterKeys(from: propertySchema, into: &literals)
+            }
+        }
+        if let items = object["items"] {
+            collectParameterKeys(from: items, into: &literals)
         }
     }
 
@@ -978,106 +984,75 @@ struct ToolSyncTests {
         context: String,
         enumPolicy: EnumPolicy
     ) {
-        #expect(
-            extractStringField(from: schema, key: "type") == spec.type.jsonSchemaType,
-            "\(context) type should match FenceParameterSpec"
-        )
-
-        if let expectedEnumValues = spec.enumValues {
-            let expected = Set(expectedEnumValues)
-            let actual = extractEnumValues(from: schema)
-            switch enumPolicy {
-            case .exact:
-                #expect(actual == expected, "\(context) enum should match FenceParameterSpec")
-            case .schemaMayBeSuperset:
-                #expect(actual.isSuperset(of: expected), "\(context) enum should include FenceParameterSpec values")
-            }
+        guard case .object(let expectedSchema) = value(from: spec.jsonSchemaProperty) else {
+            Issue.record("\(context) FenceParameterSpec schema is not an object")
+            return
         }
-
-        if let minimum = spec.minimum {
-            #expect(extractNumberField(from: schema, key: "minimum") == minimum, "\(context) minimum should match FenceParameterSpec")
-        }
-        if let maximum = spec.maximum {
-            #expect(extractNumberField(from: schema, key: "maximum") == maximum, "\(context) maximum should match FenceParameterSpec")
-        }
-        if let minLength = spec.minLength {
-            #expect(extractIntField(from: schema, key: "minLength") == minLength, "\(context) minLength should match FenceParameterSpec")
-        }
-        if let minItems = spec.minItems {
-            #expect(extractIntField(from: schema, key: "minItems") == minItems, "\(context) minItems should match FenceParameterSpec")
-        }
-        if let maxItems = spec.maxItems {
-            #expect(extractIntField(from: schema, key: "maxItems") == maxItems, "\(context) maxItems should match FenceParameterSpec")
-        }
-
-        if spec.type == .stringArray {
-            guard let items = extractObjectField(from: schema, key: "items") else {
-                Issue.record("\(context) missing array item schema")
-                return
-            }
-            #expect(extractStringField(from: items, key: "type") == "string", "\(context) should be an array of strings")
-        }
-
-        if !spec.objectProperties.isEmpty {
-            assertObjectShape(
-                schema,
-                properties: spec.objectProperties,
-                additionalProperties: spec.objectAdditionalProperties,
-                context: context,
-                enumPolicy: enumPolicy
-            )
-        }
-
-        if let arrayItemType = spec.arrayItemType {
-            guard let items = extractObjectField(from: schema, key: "items") else {
-                Issue.record("\(context) missing array item schema")
-                return
-            }
-            #expect(
-                extractStringField(from: items, key: "type") == arrayItemType.jsonSchemaType,
-                "\(context) array item type should match FenceParameterSpec"
-            )
-            if arrayItemType == .object {
-                assertObjectShape(
-                    items,
-                    properties: spec.arrayItemProperties,
-                    additionalProperties: spec.arrayItemAdditionalProperties,
-                    context: "\(context).items",
-                    enumPolicy: enumPolicy
-                )
-            }
-        }
+        assertSchema(schema, matches: expectedSchema, context: context, enumPolicy: enumPolicy)
     }
 
-    private func assertObjectShape(
-        _ schema: [String: Value],
-        properties expectedProperties: [FenceParameterSpec],
-        additionalProperties expectedAdditionalProperties: Bool,
+    private func assertSchema(
+        _ actual: [String: Value],
+        matches expected: [String: Value],
         context: String,
         enumPolicy: EnumPolicy
     ) {
-        guard let properties = extractObjectField(from: schema, key: "properties") else {
-            Issue.record("\(context) missing object properties")
-            return
-        }
-        let expectedKeys = Set(expectedProperties.map(\.key))
-        #expect(Set(properties.keys) == expectedKeys, "\(context) object properties should match FenceParameterSpec")
-        #expect(extractRequiredKeys(from: schema) == Set(expectedProperties.filter(\.required).map(\.key)))
-        #expect(extractBoolField(from: schema, key: "additionalProperties") == expectedAdditionalProperties)
-
-        for nestedSpec in expectedProperties {
-            guard let nestedValue = properties[nestedSpec.key],
-                  case .object(let nestedSchema) = nestedValue else {
-                Issue.record("\(context).\(nestedSpec.key) missing nested property schema")
+        #expect(Set(actual.keys) == Set(expected.keys), "\(context) schema keys should match FenceParameterSpec")
+        for (key, expectedValue) in expected {
+            guard let actualValue = actual[key] else {
+                Issue.record("\(context) missing schema key \(key)")
                 continue
             }
-            assertPropertySchema(
-                nestedSchema,
-                matches: nestedSpec,
-                context: "\(context).\(nestedSpec.key)",
-                enumPolicy: enumPolicy
-            )
+            assertSchemaValue(actualValue, matches: expectedValue, context: "\(context).\(key)", enumPolicy: enumPolicy)
         }
+    }
+
+    private func assertSchemaValue(
+        _ actual: Value,
+        matches expected: Value,
+        context: String,
+        enumPolicy: EnumPolicy
+    ) {
+        if case .schemaMayBeSuperset = enumPolicy,
+           context.hasSuffix(".enum"),
+           case .array(let actualValues) = actual,
+           case .array(let expectedValues) = expected {
+            #expect(
+                enumValues(from: actualValues).isSuperset(of: enumValues(from: expectedValues)),
+                "\(context) should include FenceParameterSpec enum values"
+            )
+            return
+        }
+        if case .object(let actualObject) = actual,
+           case .object(let expectedObject) = expected {
+            assertSchema(actualObject, matches: expectedObject, context: context, enumPolicy: enumPolicy)
+            return
+        }
+        #expect(actual == expected, "\(context) should match FenceParameterSpec")
+    }
+
+    private func value(from schemaValue: FenceJSONSchemaValue) -> Value {
+        switch schemaValue {
+        case .string(let value):
+            return .string(value)
+        case .int(let value):
+            return .int(value)
+        case .double(let value):
+            return .double(value)
+        case .bool(let value):
+            return .bool(value)
+        case .array(let values):
+            return .array(values.map { value(from: $0) })
+        case .object(let values):
+            return .object(values.mapValues { value(from: $0) })
+        }
+    }
+
+    private func enumValues(from values: [Value]) -> Set<String> {
+        Set(values.compactMap {
+            guard case .string(let value) = $0 else { return nil }
+            return value
+        })
     }
 
     private func assertRootSchemaIsClosedObject(_ schema: Value, context: String) {
