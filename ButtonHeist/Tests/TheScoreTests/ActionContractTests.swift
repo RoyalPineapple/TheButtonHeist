@@ -20,6 +20,16 @@ final class ActionContractTests: XCTestCase {
         }
     }
 
+    func testActionCanonicalNamesMatchWireRawValues() {
+        for kind in ActionDescriptor.Kind.allCases {
+            XCTAssertEqual(
+                ActionDescriptor(kind: kind).canonicalName,
+                kind.rawValue,
+                "\(kind) canonical name must match its wire raw value"
+            )
+        }
+    }
+
     func testActionEncodingUsesDescriptorCanonicalNameAsWireType() throws {
         for fixture in actionFixtures() {
             let data = try JSONEncoder().encode(fixture.action)
@@ -183,7 +193,11 @@ final class ActionContractTests: XCTestCase {
         [
             (
                 .waitForIdle(WaitForIdleTarget(timeout: 0.5)),
-                ActionDescriptor(kind: .waitForIdle, defaultDeadline: Deadline(timeout: 0.5))
+                ActionDescriptor(
+                    kind: .waitForIdle,
+                    defaultExpectation: .delivery,
+                    defaultDeadline: Deadline(timeout: 0.5)
+                )
             ),
             (
                 .waitForElement(BatchWaitForTarget(target: waitTarget, timeout: 2)),

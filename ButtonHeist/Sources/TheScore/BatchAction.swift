@@ -50,66 +50,119 @@ public struct ActionDescriptor: Sendable, Equatable {
     }
 
     public let kind: Kind
+    public let canonicalName: String
     public let actionMethod: ActionMethod
     public let fulfillsOwnExpectation: Bool
     public let defaultExpectation: ActionExpectation
     public let defaultDeadline: Deadline
 
-    public var canonicalName: String {
-        kind.rawValue
+    public init(kind: Kind) {
+        let contract = kind.contract
+        self.kind = kind
+        self.canonicalName = contract.canonicalName
+        self.actionMethod = contract.actionMethod
+        self.fulfillsOwnExpectation = contract.fulfillsOwnExpectation
+        self.defaultExpectation = contract.defaultExpectation
+        self.defaultDeadline = contract.defaultDeadline
     }
 
     public init(
         kind: Kind,
-        defaultExpectation: ActionExpectation = .delivery,
-        defaultDeadline: Deadline = Deadline()
+        defaultExpectation: ActionExpectation,
+        defaultDeadline: Deadline
     ) {
+        let contract = kind.contract
         self.kind = kind
-        self.actionMethod = kind.actionMethod
-        self.fulfillsOwnExpectation = kind.fulfillsOwnExpectation
+        self.canonicalName = contract.canonicalName
+        self.actionMethod = contract.actionMethod
+        self.fulfillsOwnExpectation = contract.fulfillsOwnExpectation
         self.defaultExpectation = defaultExpectation
         self.defaultDeadline = defaultDeadline
     }
 }
 
 private extension ActionDescriptor.Kind {
-    var actionMethod: ActionMethod {
-        switch self {
-        case .activate: return .activate
-        case .increment: return .increment
-        case .decrement: return .decrement
-        case .performCustomAction: return .customAction
-        case .rotor: return .rotor
-        case .touchTap: return .syntheticTap
-        case .touchLongPress: return .syntheticLongPress
-        case .touchSwipe: return .syntheticSwipe
-        case .touchDrag: return .syntheticDrag
-        case .touchPinch: return .syntheticPinch
-        case .touchRotate: return .syntheticRotate
-        case .touchTwoFingerTap: return .syntheticTwoFingerTap
-        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
-        case .typeText: return .typeText
-        case .editAction: return .editAction
-        case .setPasteboard: return .setPasteboard
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .elementSearch: return .elementSearch
-        case .scrollToEdge: return .scrollToEdge
-        case .waitForIdle: return .waitForIdle
-        case .waitForElement: return .waitFor
-        case .waitForChange: return .waitForChange
-        case .explore: return .explore
-        case .resignFirstResponder: return .resignFirstResponder
+    struct Contract {
+        let canonicalName: String
+        let actionMethod: ActionMethod
+        let fulfillsOwnExpectation: Bool
+        let defaultExpectation: ActionExpectation
+        let defaultDeadline: Deadline
+
+        init(
+            _ canonicalName: String,
+            _ actionMethod: ActionMethod,
+            _ fulfillsOwnExpectation: Bool,
+            _ defaultExpectation: ActionExpectation,
+            _ defaultDeadline: Deadline
+        ) {
+            self.canonicalName = canonicalName
+            self.actionMethod = actionMethod
+            self.fulfillsOwnExpectation = fulfillsOwnExpectation
+            self.defaultExpectation = defaultExpectation
+            self.defaultDeadline = defaultDeadline
         }
     }
 
-    var fulfillsOwnExpectation: Bool {
+    var contract: Contract {
         switch self {
-        case .waitForElement, .waitForChange:
-            return true
-        default:
-            return false
+        case .activate:
+            return Contract("activate", .activate, false, .delivery, Deadline())
+        case .increment:
+            return Contract("increment", .increment, false, .delivery, Deadline())
+        case .decrement:
+            return Contract("decrement", .decrement, false, .delivery, Deadline())
+        case .performCustomAction:
+            return Contract("perform_custom_action", .customAction, false, .delivery, Deadline())
+        case .rotor:
+            return Contract("rotor", .rotor, false, .delivery, Deadline())
+        case .touchTap:
+            return Contract("touch_tap", .syntheticTap, false, .delivery, Deadline())
+        case .touchLongPress:
+            return Contract("touch_long_press", .syntheticLongPress, false, .delivery, Deadline())
+        case .touchSwipe:
+            return Contract("touch_swipe", .syntheticSwipe, false, .delivery, Deadline())
+        case .touchDrag:
+            return Contract("touch_drag", .syntheticDrag, false, .delivery, Deadline())
+        case .touchPinch:
+            return Contract("touch_pinch", .syntheticPinch, false, .delivery, Deadline())
+        case .touchRotate:
+            return Contract("touch_rotate", .syntheticRotate, false, .delivery, Deadline())
+        case .touchTwoFingerTap:
+            return Contract("touch_two_finger_tap", .syntheticTwoFingerTap, false, .delivery, Deadline())
+        case .touchDrawPath:
+            return Contract("touch_draw_path", .syntheticDrawPath, false, .delivery, Deadline())
+        case .touchDrawBezier:
+            return Contract("touch_draw_bezier", .syntheticDrawPath, false, .delivery, Deadline())
+        case .typeText:
+            return Contract("type_text", .typeText, false, .delivery, Deadline())
+        case .editAction:
+            return Contract("edit_action", .editAction, false, .delivery, Deadline())
+        case .setPasteboard:
+            return Contract("set_pasteboard", .setPasteboard, false, .delivery, Deadline())
+        case .scroll:
+            return Contract("scroll", .scroll, false, .delivery, Deadline())
+        case .scrollToVisible:
+            return Contract("scroll_to_visible", .scrollToVisible, false, .delivery, Deadline())
+        case .elementSearch:
+            return Contract("element_search", .elementSearch, false, .delivery, Deadline())
+        case .scrollToEdge:
+            return Contract("scroll_to_edge", .scrollToEdge, false, .delivery, Deadline())
+        case .waitForIdle:
+            return Contract("wait_for_idle", .waitForIdle, false, .delivery, Deadline(timeout: 5))
+        case .waitForElement:
+            return Contract("wait_for", .waitFor, true, .delivery, Deadline(timeout: 30))
+        case .waitForChange:
+            return Contract("wait_for_change", .waitForChange, true, .screenChanged, Deadline(timeout: 30))
+        case .explore:
+            return Contract("explore", .explore, false, .delivery, Deadline())
+        case .resignFirstResponder:
+            return Contract("resign_first_responder", .resignFirstResponder, false, .delivery, Deadline())
         }
+    }
+
+    static func kind(canonicalName: String) -> ActionDescriptor.Kind? {
+        ActionDescriptor.Kind(rawValue: canonicalName)
     }
 }
 
@@ -289,6 +342,7 @@ extension Action {
         case .waitForIdle(let target):
             return ActionDescriptor(
                 kind: .waitForIdle,
+                defaultExpectation: .delivery,
                 defaultDeadline: Deadline(timeout: target.timeout ?? 5)
             )
         case .waitForElement(let target):
@@ -341,7 +395,15 @@ extension Action: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(ActionDescriptor.Kind.self, forKey: .type) {
+        let canonicalName = try container.decode(String.self, forKey: .type)
+        guard let kind = ActionDescriptor.Kind.kind(canonicalName: canonicalName) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .type,
+                in: container,
+                debugDescription: "Unknown batch action type: \(canonicalName)"
+            )
+        }
+        switch kind {
         case .activate:
             self = .activate(try container.decode(BatchExecutionTarget.self, forKey: .target))
         case .increment:
@@ -399,7 +461,7 @@ extension Action: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(descriptor.kind, forKey: .type)
+        try container.encode(descriptor.canonicalName, forKey: .type)
         switch self {
         case .activate(let target):
             try container.encode(target, forKey: .target)
