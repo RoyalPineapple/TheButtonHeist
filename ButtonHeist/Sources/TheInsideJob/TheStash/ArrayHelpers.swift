@@ -17,10 +17,8 @@ extension Array where Element == HeistElement {
                 return (index, element)
             }
             .min { left, right in
-                let leftFrame = left.element.frame
-                let rightFrame = right.element.frame
-                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
-                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
+                if left.element.frameY != right.element.frameY { return left.element.frameY < right.element.frameY }
+                if left.element.frameX != right.element.frameX { return left.element.frameX < right.element.frameX }
                 return left.index < right.index
             }?
             .element

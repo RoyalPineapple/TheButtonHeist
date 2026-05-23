@@ -3,21 +3,6 @@ import XCTest
 
 final class ServerInfoTests: XCTestCase {
 
-    func testScreenSizeComputed() {
-        let info = ServerInfo(
-            appName: "Test",
-            bundleIdentifier: "com.test",
-            deviceName: "iPhone",
-            systemVersion: "17.0",
-            screenWidth: 390,
-            screenHeight: 844
-        )
-
-        let size = info.screenSize
-        XCTAssertEqual(size.width, 390)
-        XCTAssertEqual(size.height, 844)
-    }
-
     func testEncodingRoundTrip() throws {
         let info = ServerInfo(
             appName: "TestApp",
@@ -158,8 +143,8 @@ final class ServerInfoTests: XCTestCase {
             let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
 
             XCTAssertEqual(decoded.deviceName, name)
-            XCTAssertEqual(decoded.screenSize.width, width)
-            XCTAssertEqual(decoded.screenSize.height, height)
+            XCTAssertEqual(decoded.screenWidth, width)
+            XCTAssertEqual(decoded.screenHeight, height)
         }
     }
 }

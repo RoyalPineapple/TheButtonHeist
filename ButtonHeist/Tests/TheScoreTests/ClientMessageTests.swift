@@ -148,7 +148,6 @@ final class ClientMessageTests: XCTestCase {
             ordinal: 1
         )
         let step = BatchStep.action(.activate(target), expect: .screenChanged)
-        let message = ClientMessage.batchExecutionPlan(BatchPlan(steps: [step]))
 
         XCTAssertEqual(
             target.description,
@@ -158,10 +157,6 @@ final class ClientMessageTests: XCTestCase {
             step.description,
             #"step(action=activate(batchTarget(sourceHeistId="button_save" matcher(label="Save" traits=[button]) ordinal=1))"#
                 + #" expect=screen_changed deadline=deadline(*))"#
-        )
-        XCTAssertEqual(
-            message.description,
-            "batch_execution_plan(batchExecutionPlan(policy=stop_on_error steps=1))"
         )
     }
 

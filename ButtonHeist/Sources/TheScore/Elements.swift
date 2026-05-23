@@ -151,18 +151,6 @@ public enum HeistTrait: Equatable, Hashable, Sendable {
     /// Unknown trait from a newer server — preserved for round-tripping.
     case unknown(String)
 
-    /// Whether this trait is from the extended AXRuntime private set (not standard UIKit).
-    /// Clients can use this to show/hide private diagnostic traits in their UI.
-    public var isExtendedPrivate: Bool {
-        Self.extendedPrivateSet.contains(self)
-    }
-
-    private static let extendedPrivateSet: Set<HeistTrait> = [
-        .webContent, .pickerElement, .radioButton, .launchIcon, .statusBarElement,
-        .secureTextField, .inactive, .footer, .autoCorrectCandidate, .deleteKey,
-        .selectionDismissesItem, .visited, .spacer, .tableIndex, .map,
-        .textOperationsAvailable, .draggable, .popupButton, .menuItem, .alert,
-    ]
 }
 
 extension HeistTrait: CaseIterable {
@@ -248,10 +236,6 @@ extension HeistTrait: RawRepresentable {
     }
 
     public var rawValue: String { nameValue }
-}
-
-extension HeistTrait: CustomStringConvertible {
-    public var description: String { rawValue }
 }
 
 extension HeistTrait: Codable {
@@ -532,10 +516,8 @@ public struct Interface: Codable, Equatable, Sendable {
                 return (index, element)
             }
             .min { left, right in
-                let leftFrame = left.element.frame
-                let rightFrame = right.element.frame
-                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
-                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
+                if left.element.frameY != right.element.frameY { return left.element.frameY < right.element.frameY }
+                if left.element.frameX != right.element.frameX { return left.element.frameX < right.element.frameX }
                 return left.index < right.index
             }?
             .element
@@ -1155,14 +1137,6 @@ extension SubtreeSelector: CustomStringConvertible {
 // MARK: - Convenience Extensions
 
 extension HeistElement {
-    public var frame: CGRect {
-        CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
-    }
-
-    public var activationPoint: CGPoint {
-        CGPoint(x: activationPointX, y: activationPointY)
-    }
-
     /// Known trait values. Used to reject unknown traits in matcher queries (fail-safe).
     private static let knownTraits = Set(HeistTrait.allCases)
 

@@ -201,68 +201,6 @@ public enum ClientMessage: Codable, Sendable {
 
 }
 
-extension ClientMessage: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .clientHello, .ping, .status, .requestScreen, .explore, .stopRecording,
-             .resignFirstResponder, .getPasteboard:
-            return canonicalName
-        case .authenticate:
-            return "\(canonicalName)(token=<redacted>)"
-        case .requestInterface(let query):
-            return "\(canonicalName)(\(query))"
-        case .activate(let target), .increment(let target), .decrement(let target):
-            return "\(canonicalName)(\(target))"
-        case .performCustomAction(let target):
-            return "\(canonicalName)(\(target))"
-        case .rotor(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchTap(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchLongPress(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchSwipe(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchDrag(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchPinch(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchRotate(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchTwoFingerTap(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchDrawPath(let target):
-            return "\(canonicalName)(\(target))"
-        case .touchDrawBezier(let target):
-            return "\(canonicalName)(\(target))"
-        case .typeText(let target):
-            return "\(canonicalName)(\(target))"
-        case .editAction(let target):
-            return "\(canonicalName)(\(target))"
-        case .scroll(let target):
-            return "\(canonicalName)(\(target))"
-        case .scrollToVisible(let target):
-            return "\(canonicalName)(\(target))"
-        case .elementSearch(let target):
-            return "\(canonicalName)(\(target))"
-        case .scrollToEdge(let target):
-            return "\(canonicalName)(\(target))"
-        case .setPasteboard(let target):
-            return "\(canonicalName)(\(target))"
-        case .waitForIdle(let target):
-            return "\(canonicalName)(\(target))"
-        case .waitFor(let target):
-            return "\(canonicalName)(\(target))"
-        case .waitForChange(let target):
-            return "\(canonicalName)(\(target))"
-        case .batchExecutionPlan(let plan):
-            return "\(canonicalName)(\(plan))"
-        case .startRecording(let config):
-            return "\(canonicalName)(\(config))"
-        }
-    }
-}
-
 // MARK: - Action Targets
 
 /// Target for element actions.
@@ -842,17 +780,6 @@ public struct RecordingConfig: Sendable {
         self.scale = scale
         self.inactivityTimeout = inactivityTimeout
         self.maxDuration = maxDuration
-    }
-}
-
-extension RecordingConfig: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("recordingConfig", [
-            ScoreDescription.valueField("fps", fps),
-            scale.map { "scale=\(ScoreDescription.decimal($0))" },
-            inactivityTimeout.map { "inactivityTimeout=\(ScoreDescription.decimal($0))" },
-            maxDuration.map { "maxDuration=\(ScoreDescription.decimal($0))" },
-        ].compactMap { $0 })
     }
 }
 

@@ -23,16 +23,6 @@ final class HeistElementTests: XCTestCase {
         XCTAssertEqual(set.count, 1)
     }
 
-    func testFrameComputed() {
-        let element = makeElement(label: "Test")
-        let frame = element.frame
-
-        XCTAssertEqual(frame.origin.x, 10)
-        XCTAssertEqual(frame.origin.y, 20)
-        XCTAssertEqual(frame.size.width, 100)
-        XCTAssertEqual(frame.size.height, 44)
-    }
-
     func testEncodingRoundTrip() throws {
         let element = makeElement(label: "RoundTrip")
 

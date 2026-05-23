@@ -112,8 +112,6 @@ actor TheStakeout {
     }
 
     struct RecordingEvidenceState {
-        let requestedConfig: RecordingConfigurationEvidence
-        let appliedConfig: RecordingConfigurationEvidence
         let caps: [RecordedInputCap]
     }
 
@@ -192,8 +190,6 @@ actor TheStakeout {
     }
 
     private struct RecordingSetup {
-        let requestedConfig: RecordingConfigurationEvidence
-        let appliedConfig: RecordingConfigurationEvidence
         let caps: [RecordedInputCap]
         let fps: Int
         let maxDuration: TimeInterval
@@ -337,7 +333,6 @@ actor TheStakeout {
     }
 
     private static func makeRecordingSetup(config: RecordingConfig, screen: ScreenInfo) -> RecordingSetup {
-        let requestedConfig = RecordingConfigurationEvidence(config)
         var caps: [RecordedInputCap] = []
 
         let fps = clampInt(
@@ -408,15 +403,7 @@ actor TheStakeout {
             ))
         }
 
-        let appliedConfig = RecordingConfigurationEvidence(
-            fps: fps,
-            scale: Double(effectiveScale),
-            inactivityTimeout: inactivityTimeout,
-            maxDuration: maxDuration
-        )
         return RecordingSetup(
-            requestedConfig: requestedConfig,
-            appliedConfig: appliedConfig,
             caps: caps,
             fps: fps,
             maxDuration: maxDuration,
@@ -500,8 +487,6 @@ actor TheStakeout {
             output: RecordingOutput(screenBounds: setup.screenBounds, fps: setup.fps),
             timing: RecordingTiming(maxDuration: setup.maxDuration),
             evidence: RecordingEvidenceState(
-                requestedConfig: setup.requestedConfig,
-                appliedConfig: setup.appliedConfig,
                 caps: setup.caps
             ),
             startedAt: now,
@@ -784,8 +769,6 @@ actor TheStakeout {
             stopReason: reason,
             interactionLog: session.interactions.events.isEmpty ? nil : session.interactions.events,
             evidence: RecordingPayloadEvidence(
-                requestedConfig: session.evidence.requestedConfig,
-                appliedConfig: session.evidence.appliedConfig,
                 caps: session.evidence.caps,
                 interactionLogLimit: Self.maxInteractionCount,
                 droppedInteractionCount: session.interactions.droppedCount == 0 ? nil : session.interactions.droppedCount,
