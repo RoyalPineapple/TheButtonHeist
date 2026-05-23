@@ -334,6 +334,18 @@ extension TheFence {
         }
     }
 
+    struct RoutedCommandRequest {
+        fileprivate let arguments: [String: Any]
+        let expectationPayload: ExpectationPayload?
+
+        init(arguments: [String: Any], expectationPayload: ExpectationPayload? = nil) {
+            self.arguments = arguments.filter { $0.key != "command" }
+            self.expectationPayload = expectationPayload
+        }
+
+        func string(_ key: String) -> String? { arguments[key] as? String }
+    }
+
     struct ArchiveSessionRequest {
         let deleteSource: Bool
     }
@@ -415,11 +427,12 @@ extension TheFence {
     }
 
     func parseRequest(operation: NormalizedOperation) throws -> ParsedRequest {
-        try parseRequest(
+        let request = operation.request
+        return try parseRequest(
             command: operation.command,
-            arguments: operation.arguments,
-            expectationPayload: operation.expectationPayload,
-            routedBatchTarget: try decodedBatchExecutionTarget(operation.arguments)
+            arguments: request.arguments,
+            expectationPayload: request.expectationPayload,
+            routedBatchTarget: try decodedBatchExecutionTarget(request.arguments)
         )
     }
 

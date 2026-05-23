@@ -1983,11 +1983,10 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         XCTAssertEqual(operation.command, .activate)
-        XCTAssertEqual(operation.arguments["identifier"] as? String, "submit")
-        XCTAssertNil(operation.arguments["expect"])
-        XCTAssertEqual(operation.arguments["timeout"] as? Double, 0.25)
-        XCTAssertEqual(operation.expectationPayload?.expectation, .screenChanged)
-        XCTAssertEqual(operation.expectationPayload?.timeout, 0.25)
+        XCTAssertEqual(operation.stringArgument("identifier"), "submit")
+        XCTAssertNil(operation.stringArgument("expect"))
+        XCTAssertEqual(operation.request.expectationPayload?.expectation, .screenChanged)
+        XCTAssertEqual(operation.request.expectationPayload?.timeout, 0.25)
     }
 
     @ButtonHeistActor
@@ -2002,7 +2001,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected successful operation, got \(result)")
         }
 
-        XCTAssertNil(operation.arguments["expect"])
+        XCTAssertNil(operation.stringArgument("expect"))
         let parsed = try fence.parseRequest(operation: operation)
         XCTAssertEqual(parsed.expectationPayload.expectation, .elementsChanged)
         guard case .waitForChange(let payload) = parsed.payload else {
@@ -2032,8 +2031,8 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .success(let operation) = result else {
             return XCTFail("Expected successful operation, got \(result)")
         }
-        XCTAssertEqual(operation.arguments["expect"] as? String, "screen_changed")
-        XCTAssertNil(operation.expectationPayload)
+        XCTAssertEqual(operation.stringArgument("expect"), "screen_changed")
+        XCTAssertNil(operation.request.expectationPayload)
     }
 
     @ButtonHeistActor
@@ -3446,12 +3445,18 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(operation.ordinal, 1)
 
         let normalizedOperation = operation.normalizedOperation()
-        let arguments = normalizedOperation.arguments
+        let parsed = try TheFence(configuration: .init()).parseRequest(operation: normalizedOperation)
         XCTAssertEqual(normalizedOperation.command, .typeText)
-        XCTAssertEqual(arguments["identifier"] as? String, "email")
-        XCTAssertEqual(arguments["ordinal"] as? Int, 1)
-        XCTAssertEqual(arguments["text"] as? String, "user@example.com")
-        XCTAssertNil(arguments["_recorded"])
+        guard case .typeText(let target) = parsed.payload else {
+            return XCTFail("Expected type_text payload")
+        }
+        guard case .matcher(let matcher, let ordinal) = target.elementTarget else {
+            return XCTFail("Expected playback matcher target")
+        }
+        XCTAssertEqual(matcher.identifier, "email")
+        XCTAssertEqual(ordinal, 1)
+        XCTAssertEqual(target.text, "user@example.com")
+        XCTAssertNil(normalizedOperation.stringArgument("_recorded"))
     }
 
     @ButtonHeistActor

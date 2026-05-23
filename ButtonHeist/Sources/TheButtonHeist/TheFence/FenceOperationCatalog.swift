@@ -11,29 +11,23 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
     public var errorDescription: String? { message }
 }
 
-/// A command plus its already-normalized arguments.
-///
-/// External string command names are parsed into `TheFence.Command` at the
-/// routing edge.
+/// Canonical Fence operation routed from external input while raw arguments stay at the request edge.
 public struct NormalizedOperation {
     public let command: TheFence.Command
-    public let arguments: [String: Any]
-    let expectationPayload: TheFence.ExpectationPayload?
+    let request: TheFence.RoutedCommandRequest
 
-    public init(command: TheFence.Command, arguments: [String: Any]) {
-        self.init(command: command, arguments: arguments, expectationPayload: nil)
-    }
+    public func stringArgument(_ key: String) -> String? { request.string(key) }
 
     init(
         command: TheFence.Command,
         arguments: [String: Any],
-        expectationPayload: TheFence.ExpectationPayload?
+        expectationPayload: TheFence.ExpectationPayload? = nil
     ) {
-        var sanitizedArguments = arguments
-        sanitizedArguments.removeValue(forKey: "command")
         self.command = command
-        self.arguments = sanitizedArguments
-        self.expectationPayload = expectationPayload
+        request = TheFence.RoutedCommandRequest(
+            arguments: arguments,
+            expectationPayload: expectationPayload
+        )
     }
 }
 

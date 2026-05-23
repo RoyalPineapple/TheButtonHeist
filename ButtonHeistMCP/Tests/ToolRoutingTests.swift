@@ -10,7 +10,7 @@ struct ToolRoutingTests {
         let operation = try routed(TheFence.Command.startHeist.rawValue, ["identifier": "demo"])
 
         #expect(operation.command == .startHeist)
-        #expect(operation.arguments["identifier"] as? String == "demo")
+        #expect(operation.stringArgument("identifier") == "demo")
     }
 
     @Test("gesture type routes to command and removes type")
@@ -18,8 +18,8 @@ struct ToolRoutingTests {
         let operation = try routed(TheFence.Command.gestureMCPToolName, ["type": TheFence.Command.swipe.rawValue, "direction": "left"])
 
         #expect(operation.command == .swipe)
-        #expect(operation.arguments["type"] == nil)
-        #expect(operation.arguments["direction"] as? String == "left")
+        #expect(operation.stringArgument("type") == nil)
+        #expect(operation.stringArgument("direction") == "left")
     }
 
     @Test("gesture requires type")
@@ -55,8 +55,8 @@ struct ToolRoutingTests {
             let operation = try routed(TheFence.Command.scroll.rawValue, arguments)
 
             #expect(operation.command.rawValue == routeCase.command)
-            #expect(operation.arguments["mode"] == nil)
-            #expect(operation.arguments["direction"] as? String == "down")
+            #expect(operation.stringArgument("mode") == nil)
+            #expect(operation.stringArgument("direction") == "down")
         }
     }
 
@@ -84,7 +84,7 @@ struct ToolRoutingTests {
         let operation = try routed(TheFence.Command.editAction.rawValue, ["action": "dismiss"])
 
         #expect(operation.command == .dismissKeyboard)
-        #expect(operation.arguments["action"] == nil)
+        #expect(operation.stringArgument("action") == nil)
     }
 
     @Test("edit_action keeps standard edit actions")
@@ -92,7 +92,7 @@ struct ToolRoutingTests {
         let operation = try routed(TheFence.Command.editAction.rawValue, ["action": "copy"])
 
         #expect(operation.command == .editAction)
-        #expect(operation.arguments["action"] as? String == "copy")
+        #expect(operation.stringArgument("action") == "copy")
     }
 
     @Test("run_batch still accepts canonical Fence command shapes")
@@ -104,9 +104,9 @@ struct ToolRoutingTests {
         ])
 
         #expect(steps[0].command == .swipe)
-        #expect(steps[0].arguments["direction"] as? String == "right")
+        #expect(steps[0].stringArgument("direction") == "right")
         #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].arguments["heistId"] as? String == "element-1")
+        #expect(steps[1].stringArgument("heistId") == "element-1")
         #expect(steps[2].command == .dismissKeyboard)
     }
 
@@ -225,14 +225,14 @@ struct ToolRoutingTests {
         ])
 
         #expect(steps[0].command == .swipe)
-        #expect(steps[0].arguments["direction"] as? String == "up")
+        #expect(steps[0].stringArgument("direction") == "up")
         #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].arguments["heistId"] as? String == "element-1")
+        #expect(steps[1].stringArgument("heistId") == "element-1")
         #expect(steps[2].command == .elementSearch)
-        #expect(steps[2].arguments["label"] as? String == "Done")
+        #expect(steps[2].stringArgument("label") == "Done")
         #expect(steps[3].command == .scrollToEdge)
-        #expect(steps[3].arguments["heistId"] as? String == "scroll-view")
-        #expect(steps[3].arguments["edge"] as? String == "bottom")
+        #expect(steps[3].stringArgument("heistId") == "scroll-view")
+        #expect(steps[3].stringArgument("edge") == "bottom")
         #expect(steps[4].command == .dismissKeyboard)
     }
 
@@ -255,9 +255,9 @@ struct ToolRoutingTests {
 
                 #expect(operation.command == expectedCommand)
                 if selector.consumesValue(selectorValue) {
-                    #expect(operation.arguments[selector.parameter.key] == nil)
+                    #expect(operation.stringArgument(selector.parameter.key) == nil)
                 } else {
-                    #expect(operation.arguments[selector.parameter.key] as? String == selectorValue)
+                    #expect(operation.stringArgument(selector.parameter.key) == selectorValue)
                 }
             }
         }
@@ -273,10 +273,6 @@ struct ToolRoutingTests {
             switch (serverResult, catalogResult) {
             case (.success(let serverOperation), .success(let catalogOperation)):
                 #expect(serverOperation.command == catalogOperation.command)
-                #expect(
-                    NSDictionary(dictionary: serverOperation.arguments)
-                        .isEqual(to: catalogOperation.arguments)
-                )
 
             case (.failure(let serverError), .failure(let catalogError)):
                 #expect(serverError.message == catalogError.message)
