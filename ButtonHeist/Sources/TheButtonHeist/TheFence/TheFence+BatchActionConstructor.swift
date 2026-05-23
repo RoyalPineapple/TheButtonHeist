@@ -1,5 +1,3 @@
-import Foundation
-
 import TheScore
 
 extension TheFence {
@@ -8,21 +6,20 @@ extension TheFence {
     struct BatchActionConstructor {
         private let targetResolver: BatchTargetResolver
 
-        init(targetResolver: BatchTargetResolver) {
-            self.targetResolver = targetResolver
-        }
+        init(targetResolver: BatchTargetResolver) { self.targetResolver = targetResolver }
 
         func construct(context: BatchStepPlanningContext) throws -> BatchStepActionPlan {
+            try BatchShapeValidator.rejectUnsupportedShapes(request: context.request)
             switch context.request.payload {
             case .gesture(let payload):
-                return try gestureAction(payload, context: context)
+                return try BatchStepActionPlan(action: gestureAction(payload, request: context.request))
             case .scroll(let payload):
-                return try scrollAction(payload, context: context)
+                return try BatchStepActionPlan(action: scrollAction(payload, request: context.request))
             case .accessibility(let payload):
-                return try accessibilityAction(payload, context: context)
+                return try BatchStepActionPlan(action: accessibilityAction(payload, request: context.request))
             case .rotor(let target):
                 return try BatchStepActionPlan(action: .rotor(BatchRotorTarget(
-                    target: targetResolver.requiredTarget(from: context.request, fallback: target.elementTarget),
+                    target: required(context.request, target.elementTarget),
                     rotor: target.rotor,
                     rotorIndex: target.rotorIndex,
                     direction: target.direction,
@@ -32,7 +29,7 @@ extension TheFence {
             case .typeText(let target):
                 return try BatchStepActionPlan(action: .typeText(BatchTypeTextTarget(
                     text: target.text,
-                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget)
+                    target: self.target(context.request, target.elementTarget)
                 )))
             case .editAction(let target):
                 return BatchStepActionPlan(action: .editAction(target))
@@ -47,181 +44,106 @@ extension TheFence {
                     action: .waitForChange(WaitForChangeTarget(expect: context.expectation, timeout: context.timeout))
                 )
             default:
-                throw BatchStepPlanBuildError(
-                    message: "run_batch step command \"\(context.request.command.rawValue)\" is not a non-read batch Action"
-                )
+                throw BatchStepPlanBuildError(message: "run_batch step command \"\(context.request.command.rawValue)\" is not a non-read batch Action")
             }
         }
 
-        private func gestureAction(
-            _ payload: GesturePayload,
-            context: BatchStepPlanningContext
-        ) throws -> BatchStepActionPlan {
+        private func gestureAction(_ payload: GesturePayload, request: ParsedRequest) throws -> TheScore.Action {
             switch payload {
             case .oneFingerTap(let payload):
-                return try BatchStepActionPlan(action: .touchTap(BatchTouchTapTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
-                    pointX: payload.pointX,
-                    pointY: payload.pointY
-                )))
+                return try .touchTap(.init(target: target(request, payload.elementTarget), pointX: payload.pointX, pointY: payload.pointY))
             case .longPress(let payload):
-                return try BatchStepActionPlan(action: .touchLongPress(BatchLongPressTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
-                    pointX: payload.pointX,
-                    pointY: payload.pointY,
-                    duration: payload.duration
-                )))
+                let resolved = try target(request, payload.elementTarget)
+                return .touchLongPress(.init(target: resolved, pointX: payload.pointX, pointY: payload.pointY, duration: payload.duration))
             case .swipe(let payload):
-                return try BatchStepActionPlan(action: .touchSwipe(BatchSwipeTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
-                    startX: payload.startX,
-                    startY: payload.startY,
-                    endX: payload.endX,
-                    endY: payload.endY,
-                    direction: payload.direction,
-                    duration: payload.duration,
-                    start: payload.start,
-                    end: payload.end
-                )))
+                let resolved = try target(request, payload.elementTarget)
+                return .touchSwipe(.init(
+                    target: resolved, startX: payload.startX, startY: payload.startY, endX: payload.endX, endY: payload.endY,
+                    direction: payload.direction, duration: payload.duration, start: payload.start, end: payload.end
+                ))
             case .drag(let payload):
-                return try BatchStepActionPlan(action: .touchDrag(BatchDragTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
-                    startX: payload.startX,
-                    startY: payload.startY,
-                    endX: payload.endX,
-                    endY: payload.endY,
-                    duration: payload.duration
-                )))
+                let resolved = try target(request, payload.elementTarget)
+                return .touchDrag(.init(
+                    target: resolved, startX: payload.startX, startY: payload.startY,
+                    endX: payload.endX, endY: payload.endY, duration: payload.duration
+                ))
             case .pinch(let payload):
-                return try BatchStepActionPlan(action: .touchPinch(BatchPinchTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
-                    centerX: payload.centerX,
-                    centerY: payload.centerY,
-                    scale: payload.scale,
-                    spread: payload.spread,
-                    duration: payload.duration
-                )))
+                let resolved = try target(request, payload.elementTarget)
+                return .touchPinch(.init(
+                    target: resolved, centerX: payload.centerX, centerY: payload.centerY,
+                    scale: payload.scale, spread: payload.spread, duration: payload.duration
+                ))
             case .rotate(let payload):
-                return try BatchStepActionPlan(action: .touchRotate(BatchRotateTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
-                    centerX: payload.centerX,
-                    centerY: payload.centerY,
-                    angle: payload.angle,
-                    radius: payload.radius,
-                    duration: payload.duration
-                )))
+                let resolved = try target(request, payload.elementTarget)
+                return .touchRotate(.init(
+                    target: resolved, centerX: payload.centerX, centerY: payload.centerY,
+                    angle: payload.angle, radius: payload.radius, duration: payload.duration
+                ))
             case .twoFingerTap(let payload):
-                return try BatchStepActionPlan(action: .touchTwoFingerTap(BatchTwoFingerTapTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: payload.elementTarget),
-                    centerX: payload.centerX,
-                    centerY: payload.centerY,
-                    spread: payload.spread
-                )))
+                let resolved = try target(request, payload.elementTarget)
+                return .touchTwoFingerTap(.init(target: resolved, centerX: payload.centerX, centerY: payload.centerY, spread: payload.spread))
             case .drawPath(let payload):
-                return BatchStepActionPlan(action: .touchDrawPath(payload.target))
+                return .touchDrawPath(payload.target)
             case .drawBezier(let payload):
-                return BatchStepActionPlan(action: .touchDrawBezier(payload.target))
+                return .touchDrawBezier(payload.target)
             }
         }
 
-        private func scrollAction(
-            _ payload: ScrollPayload,
-            context: BatchStepPlanningContext
-        ) throws -> BatchStepActionPlan {
+        private func scrollAction(_ payload: ScrollPayload, request: ParsedRequest) throws -> TheScore.Action {
             switch payload {
             case .scroll(let target):
-                try BatchShapeValidator.rejectContainerTargetedScroll(
-                    target.containerTarget,
-                    command: context.request.command
-                )
-                return try BatchStepActionPlan(action: .scroll(BatchScrollTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget),
-                    direction: target.direction
-                )))
+                return try .scroll(.init(target: self.target(request, target.elementTarget), direction: target.direction))
             case .scrollToVisible(let target):
-                return try BatchStepActionPlan(action: .scrollToVisible(BatchScrollToVisibleTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget)
-                )))
+                return try .scrollToVisible(.init(target: self.target(request, target.elementTarget)))
             case .elementSearch(let target):
-                return try BatchStepActionPlan(action: .elementSearch(BatchElementSearchTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget),
-                    direction: target.direction
-                )))
+                return try .elementSearch(.init(target: self.target(request, target.elementTarget), direction: target.direction))
             case .scrollToEdge(let target):
-                try BatchShapeValidator.rejectContainerTargetedScroll(
-                    target.containerTarget,
-                    command: context.request.command
-                )
-                return try BatchStepActionPlan(action: .scrollToEdge(BatchScrollToEdgeTarget(
-                    target: targetResolver.optionalTarget(from: context.request, fallback: target.elementTarget),
-                    edge: target.edge
-                )))
+                return try .scrollToEdge(.init(target: self.target(request, target.elementTarget), edge: target.edge))
             }
         }
 
-        private func accessibilityAction(
-            _ payload: AccessibilityPayload,
-            context: BatchStepPlanningContext
-        ) throws -> BatchStepActionPlan {
+        private func accessibilityAction(_ payload: AccessibilityPayload, request: ParsedRequest) throws -> TheScore.Action {
             switch payload {
             case .activate(let target, let actionName, let count):
-                return try BatchStepActionPlan(action: BatchAccessibilityActionShape(
+                return try BatchAccessibilityActionShape(
                     actionName: actionName,
                     count: count,
-                    command: context.request.command
-                ).action(target: targetResolver.requiredTarget(from: context.request, fallback: target)))
-            case .increment(let target, let count):
-                try BatchShapeValidator.rejectRepeatedCount(count, command: context.request.command)
-                return try BatchStepActionPlan(action: .increment(targetResolver.requiredTarget(
-                    from: context.request,
-                    fallback: target
-                )))
-            case .decrement(let target, let count):
-                try BatchShapeValidator.rejectRepeatedCount(count, command: context.request.command)
-                return try BatchStepActionPlan(action: .decrement(targetResolver.requiredTarget(
-                    from: context.request,
-                    fallback: target
-                )))
-            case .performCustomAction(let target, let count):
-                try BatchShapeValidator.rejectObservedCount(count, command: context.request.command)
-                return try BatchStepActionPlan(action: customAction(target, context: context))
+                    command: request.command
+                ).action(target: required(request, target))
+            case .increment(let target, _):
+                return try .increment(required(request, target))
+            case .decrement(let target, _):
+                return try .decrement(required(request, target))
+            case .performCustomAction(let target, _):
+                return try .performCustomAction(customActionTarget(target, request: request))
             }
         }
 
-        private func customAction(
-            _ target: CustomActionTarget,
-            context: BatchStepPlanningContext
-        ) throws -> TheScore.Action {
+        private func customActionTarget(_ target: CustomActionTarget, request: ParsedRequest) throws -> BatchCustomActionTarget {
             if let elementTarget = target.elementTarget {
-                return try .performCustomAction(BatchCustomActionTarget(
-                    target: targetResolver.requiredTarget(from: context.request, fallback: elementTarget),
-                    actionName: target.actionName
-                ))
+                return try BatchCustomActionTarget(target: required(request, elementTarget), actionName: target.actionName)
             }
             guard let containerTarget = target.containerTarget else {
-                throw MissingElementTarget(command: context.request.command.rawValue)
+                throw MissingElementTarget(command: request.command.rawValue)
             }
-            return .performCustomAction(BatchCustomActionTarget(
-                containerTarget: containerTarget,
-                ordinal: target.containerOrdinal,
-                actionName: target.actionName
-            ))
+            return BatchCustomActionTarget(containerTarget: containerTarget, ordinal: target.containerOrdinal, actionName: target.actionName)
         }
 
-        private func waitForAction(
-            _ target: WaitForTarget,
-            context: BatchStepPlanningContext
-        ) throws -> BatchStepActionPlan {
+        private func waitForAction(_ target: WaitForTarget, context: BatchStepPlanningContext) throws -> BatchStepActionPlan {
             let semanticTarget = targetResolver.executionTarget(from: context.request, fallback: target.elementTarget)
-            let resolvedTimeout = target.timeout ?? context.timeout
-            let waitAction = TheScore.Action.waitForElement(BatchWaitForTarget(
-                target: try targetResolver.requiredExecutionTarget(semanticTarget),
+            return try BatchStepActionPlan(action: .waitForElement(.init(
+                target: targetResolver.requiredExecutionTarget(semanticTarget),
                 absent: target.absent,
-                timeout: resolvedTimeout
-            ))
-            return BatchStepActionPlan(
-                action: waitAction
-            )
+                timeout: target.timeout ?? context.timeout
+            )))
+        }
+
+        private func target(_ request: ParsedRequest, _ target: ElementTarget?) throws -> BatchExecutionTarget? {
+            try targetResolver.optionalTarget(from: request, fallback: target)
+        }
+
+        private func required(_ request: ParsedRequest, _ target: ElementTarget?) throws -> BatchExecutionTarget {
+            try targetResolver.requiredTarget(from: request, fallback: target)
         }
     }
 }
