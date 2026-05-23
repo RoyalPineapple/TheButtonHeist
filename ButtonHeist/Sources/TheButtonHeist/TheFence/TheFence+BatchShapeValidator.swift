@@ -5,6 +5,23 @@ import TheScore
 extension TheFence {
 
     enum BatchShapeValidator {
+        static func rejectUnsupportedShapes(request: ParsedRequest) throws {
+            switch request.payload {
+            case .scroll(.scroll(let target)):
+                try rejectContainerTargetedScroll(target.containerTarget, command: request.command)
+            case .scroll(.scrollToEdge(let target)):
+                try rejectContainerTargetedScroll(target.containerTarget, command: request.command)
+            case .accessibility(.increment(_, let count)):
+                try rejectRepeatedCount(count, command: request.command)
+            case .accessibility(.decrement(_, let count)):
+                try rejectRepeatedCount(count, command: request.command)
+            case .accessibility(.performCustomAction(_, let count)):
+                try rejectObservedCount(count, command: request.command)
+            default:
+                return
+            }
+        }
+
         static func rejectRepeatedCount(_ count: CountArgument, command: Command) throws {
             guard let value = count.value, value != 1 else { return }
             throw BatchStepPlanBuildError(
