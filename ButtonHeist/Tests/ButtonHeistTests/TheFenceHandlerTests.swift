@@ -477,6 +477,45 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(dict.number("bad"))
     }
 
+    func testCommandArgumentEnvelopePreservesJSONScalarTypes() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "bool": NSNumber(value: true),
+            "int": NSNumber(value: 3),
+            "double": NSNumber(value: 2.5),
+            "null": NSNull(),
+        ])
+
+        let raw = envelope.rawDictionary()
+        XCTAssertEqual(raw["bool"] as? Bool, true)
+        XCTAssertEqual(raw["int"] as? Int, 3)
+        XCTAssertEqual(raw["double"] as? Double, 2.5)
+        XCTAssertTrue(raw["null"] is NSNull)
+    }
+
+    func testCommandArgumentEnvelopePreservesNestedJSONValues() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "object": [
+                "label": "Pay",
+                "traits": ["button", "selected"],
+            ],
+            "array": [
+                ["x": 0.25, "y": 0.75],
+                NSNull(),
+            ],
+        ] as [String: Any])
+
+        let raw = envelope.rawDictionary()
+        let object = try XCTUnwrap(raw["object"] as? [String: Any])
+        XCTAssertEqual(object["label"] as? String, "Pay")
+        XCTAssertEqual(object["traits"] as? [String], ["button", "selected"])
+
+        let array = try XCTUnwrap(raw["array"] as? [Any])
+        let first = try XCTUnwrap(array.first as? [String: Any])
+        XCTAssertEqual(first["x"] as? Double, 0.25)
+        XCTAssertEqual(first["y"] as? Double, 0.75)
+        XCTAssertTrue(array[1] is NSNull)
+    }
+
     @ButtonHeistActor
     func testElementTargetWithIdentifier() async throws {
         let (fence, _) = makeConnectedFence()
