@@ -153,6 +153,30 @@ final class TheFenceHandlerTests: XCTestCase {
         return batch
     }
 
+    @ButtonHeistActor
+    private func assertRunBatchDecodeError(
+        steps: [[String: Any]],
+        contains expectedSubstring: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            let batch = try decodedRunBatch(fence, steps: steps)
+            guard case .invalid(_, let failure) = batch.steps.first else {
+                return XCTFail("Expected invalid run_batch step", file: file, line: line)
+            }
+            XCTAssertTrue(
+                failure.message.contains(expectedSubstring),
+                "Expected error containing '\(expectedSubstring)', got: \(failure.message)",
+                file: file,
+                line: line
+            )
+        } catch {
+            XCTFail("Unexpected error type: \(error)", file: file, line: line)
+        }
+    }
+
     private func plannedBatchSteps(
         from batch: TheFence.RunBatchRequest
     ) -> [TheFence.RunBatchPreparedStep] {
@@ -2413,6 +2437,61 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(actionTarget.ordinal)
 
         XCTAssertEqual(steps[1].expectation, .elementAppeared(ElementMatcher(label: "Done")))
+    }
+
+    @ButtonHeistActor
+    func testBatchPreparationUsesRoutedTargetEnvelope() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        let batch = try decodedRunBatch(
+            fence,
+            steps: [
+                [
+                    "command": "activate",
+                    "traits": ["button"],
+                    "excludeTraits": ["header"],
+                    "ordinal": 1,
+                ],
+            ]
+        )
+
+        let steps = plannedBatchSteps(from: batch)
+        guard case .activate(let actionTarget) = steps.first?.action else {
+            return XCTFail("Expected activate action")
+        }
+        XCTAssertEqual(actionTarget.matcher.traits, [.button])
+        XCTAssertEqual(actionTarget.matcher.excludeTraits, [.header])
+        XCTAssertEqual(actionTarget.ordinal, 1)
+    }
+
+    @ButtonHeistActor
+    func testBatchRoutedTargetRejectsInvalidTraitName() async {
+        await assertRunBatchDecodeError(
+            steps: [
+                ["command": "activate", "traits": ["notATrait"]],
+            ],
+            contains: "schema validation failed for traits[0]: observed string \"notATrait\"; expected enum one of"
+        )
+    }
+
+    @ButtonHeistActor
+    func testBatchRoutedTargetRejectsNonIntegerOrdinal() async {
+        await assertRunBatchDecodeError(
+            steps: [
+                ["command": "activate", "label": "Save", "ordinal": "first"],
+            ],
+            contains: "schema validation failed for ordinal: observed string \"first\"; expected integer"
+        )
+    }
+
+    @ButtonHeistActor
+    func testBatchRoutedTargetRejectsNegativeOrdinal() async {
+        await assertRunBatchDecodeError(
+            steps: [
+                ["command": "activate", "label": "Save", "ordinal": -1],
+            ],
+            contains: "schema validation failed for ordinal: observed integer -1; expected integer >= 0"
+        )
     }
 
     @ButtonHeistActor
