@@ -141,11 +141,11 @@ SUBMODULE_DIR="submodules/AccessibilitySnapshotBH"
 if [[ -d "$SUBMODULE_DIR" ]]; then
     git submodule update --init --recursive "$SUBMODULE_DIR"
     BEFORE_PARSER_BUMP=$(git rev-parse HEAD)
-    BUMP_PARSER_ARGS=()
     if [[ "$DRY_RUN" == true ]]; then
-        BUMP_PARSER_ARGS+=(--dry-run)
+        "$SCRIPT_DIR/bump-parser.sh" --dry-run
+    else
+        "$SCRIPT_DIR/bump-parser.sh"
     fi
-    "$SCRIPT_DIR/bump-parser.sh" "${BUMP_PARSER_ARGS[@]}"
     AFTER_PARSER_BUMP=$(git rev-parse HEAD)
     if [[ "$BEFORE_PARSER_BUMP" != "$AFTER_PARSER_BUMP" ]]; then
         if [[ "$DRY_RUN" == true ]]; then
