@@ -3,8 +3,6 @@ import Foundation
 import ButtonHeist
 
 struct ListCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.listDevices
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "List available iOS apps with Button Heist enabled"

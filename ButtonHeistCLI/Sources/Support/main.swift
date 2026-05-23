@@ -18,61 +18,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
             Use `buttonheist session` for an interactive REPL with all commands.
             """,
         version: buttonHeistVersion,
-        subcommands: [
-            // Primary — what you need 90% of the time
-            ListCommand.self,
-            PingCommand.self,
-            GetInterfaceCommand.self,
-            ActivateCommand.self,
-            RotorCommand.self,
-            TypeCommand.self,
-            ScreenshotCommand.self,
-            ScrollCommand.self,
-            SwipeSubcommand.self,
-            SessionCommand.self,
-            ConnectCommand.self,
-
-            // Navigation
-            ScrollToVisibleCommand.self,
-            ElementSearchCommand.self,
-            ScrollToEdgeCommand.self,
-
-            // Edit & keyboard
-            EditActionCommand.self,
-            DismissKeyboardCommand.self,
-
-            // Gestures
-            TapSubcommand.self,
-            LongPressSubcommand.self,
-            DragSubcommand.self,
-            PinchSubcommand.self,
-            RotateSubcommand.self,
-            TwoFingerTapSubcommand.self,
-            DrawPathCommand.self,
-            DrawBezierCommand.self,
-
-            // Pasteboard
-            SetPasteboardCommand.self,
-            GetPasteboardCommand.self,
-
-            // Recording & diagnostics
-            RecordCommand.self,
-            StopRecordingCommand.self,
-            WaitForChangeCommand.self,
-            WaitForCommand.self,
-
-            // Session management
-            SessionLogCommand.self,
-            ArchiveSessionCommand.self,
-            GetSessionStateCommand.self,
-            ListTargetsCommand.self,
-            RunBatchCommand.self,
-
-            // Heist recording & playback
-            StartHeistCommand.self,
-            StopHeistCommand.self,
-            PlayHeistCommand.self,
-        ]
+        subcommands: CLICommandAdapterCatalog.subcommands
     )
 }
 

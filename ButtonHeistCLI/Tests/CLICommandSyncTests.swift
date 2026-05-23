@@ -47,6 +47,14 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testTopLevelSubcommandsComeFromCLIAdapterCatalog() {
+        XCTAssertEqual(
+            commandTypeIdentifiers(ButtonHeistApp.configuration.subcommands),
+            commandTypeIdentifiers(CLICommandAdapterCatalog.subcommands),
+            "ButtonHeistApp should project subcommands from the CLI adapter catalog"
+        )
+    }
+
     func testCLITopLevelCommandsMatchDescriptorIntent() {
         let cliOnlyCommands: Set<String> = ["session"]
         let expectedNames = Set(
@@ -87,6 +95,22 @@ final class CLICommandSyncTests: XCTestCase {
             extraAdapters.isEmpty,
             "CLI adapters expose commands not marked directCommand: \(extraAdapters.map(\.rawValue).sorted())"
         )
+    }
+
+    func testCLIAdapterCatalogMapsOnlyDirectFenceCommands() {
+        for adapter in CLICommandAdapterCatalog.adapters {
+            guard let descriptor = adapter.fenceDescriptor else { continue }
+            XCTAssertEqual(
+                descriptor.cliExposure,
+                .directCommand,
+                "\(adapter.commandType) maps to \(descriptor.canonicalName), which is not a direct CLI command"
+            )
+            XCTAssertEqual(
+                descriptor.cliName,
+                adapter.commandType.configuration.commandName,
+                "\(adapter.commandType) should render the descriptor-owned CLI name"
+            )
+        }
     }
 
     func testCLIDirectCommandCountIsExplicit() {
@@ -158,6 +182,23 @@ final class CLICommandSyncTests: XCTestCase {
                 )
             }
         }
+    }
+
+    func testCLICommandContractDoesNotInferIdentityFromSwiftTypeNames() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLICommandContract.swift")
+
+        XCTAssertFalse(
+            source.contains("String(describing: Self.self)"),
+            "CLI command identity should come from CLICommandAdapterCatalog and FenceCommandDescriptor"
+        )
+        XCTAssertFalse(
+            source.contains("removingSuffix(\"Command\")"),
+            "CLI command identity should not infer Fence commands from adapter type names"
+        )
+        XCTAssertFalse(
+            source.contains("removingSuffix(\"Subcommand\")"),
+            "CLI command identity should not infer Fence commands from adapter type names"
+        )
     }
 
     func testReadmeDoesNotHandMaintainTopLevelCommandRegistry() throws {
@@ -575,6 +616,10 @@ final class CLICommandSyncTests: XCTestCase {
             source.contains("GestureCLICommandContract"),
             "Gesture wrappers should project command identity through descriptor-backed CLI contract"
         )
+        XCTAssertFalse(
+            source.contains("gestureType"),
+            "Gesture wrappers should not carry a second GestureType -> command mirror"
+        )
     }
 
     func testActivateCommandDoesNotMirrorActivationCommandCase() throws {
@@ -684,6 +729,10 @@ final class CLICommandSyncTests: XCTestCase {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
         }
+    }
+
+    private func commandTypeIdentifiers(_ commandTypes: [ParsableCommand.Type]) -> [ObjectIdentifier] {
+        commandTypes.map(ObjectIdentifier.init)
     }
 
     private func readRepositoryFile(_ relativePath: String) throws -> String {

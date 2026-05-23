@@ -2,8 +2,6 @@ import ArgumentParser
 import ButtonHeist
 
 struct TypeCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.typeText
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Type text into a field by tapping keyboard keys",

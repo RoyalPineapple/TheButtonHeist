@@ -1,3 +1,4 @@
+import ArgumentParser
 import ButtonHeist
 import Foundation
 
@@ -7,23 +8,92 @@ protocol CLICommandContract {
     static var fenceCommand: TheFence.Command { get }
 }
 
-protocol GestureCLICommandContract: CLICommandContract {
-    static var gestureType: GestureType { get }
+protocol GestureCLICommandContract: CLICommandContract {}
+
+struct CLICommandAdapter {
+    let commandType: ParsableCommand.Type
+    let fenceDescriptor: FenceCommandDescriptor?
+
+    var fenceCommand: TheFence.Command? {
+        fenceDescriptor?.command
+    }
+
+    static func fence(
+        _ commandType: ParsableCommand.Type,
+        _ fenceCommand: TheFence.Command
+    ) -> Self {
+        Self(commandType: commandType, fenceDescriptor: fenceCommand.descriptor)
+    }
+
+    static func cliOnly(_ commandType: ParsableCommand.Type) -> Self {
+        Self(commandType: commandType, fenceDescriptor: nil)
+    }
+}
+
+enum CLICommandAdapterCatalog {
+    static let adapters: [CLICommandAdapter] = [
+        .fence(ListCommand.self, .listDevices),
+        .fence(PingCommand.self, .ping),
+        .fence(GetInterfaceCommand.self, .getInterface),
+        .fence(ActivateCommand.self, .activate),
+        .fence(RotorCommand.self, .rotor),
+        .fence(TypeCommand.self, .typeText),
+        .fence(ScreenshotCommand.self, .getScreen),
+        .fence(ScrollCommand.self, .scroll),
+        .fence(SwipeSubcommand.self, .swipe),
+        .cliOnly(SessionCommand.self),
+        .fence(ConnectCommand.self, .connect),
+
+        .fence(ScrollToVisibleCommand.self, .scrollToVisible),
+        .fence(ElementSearchCommand.self, .elementSearch),
+        .fence(ScrollToEdgeCommand.self, .scrollToEdge),
+
+        .fence(EditActionCommand.self, .editAction),
+        .fence(DismissKeyboardCommand.self, .dismissKeyboard),
+
+        .fence(TapSubcommand.self, .oneFingerTap),
+        .fence(LongPressSubcommand.self, .longPress),
+        .fence(DragSubcommand.self, .drag),
+        .fence(PinchSubcommand.self, .pinch),
+        .fence(RotateSubcommand.self, .rotate),
+        .fence(TwoFingerTapSubcommand.self, .twoFingerTap),
+        .fence(DrawPathCommand.self, .drawPath),
+        .fence(DrawBezierCommand.self, .drawBezier),
+
+        .fence(SetPasteboardCommand.self, .setPasteboard),
+        .fence(GetPasteboardCommand.self, .getPasteboard),
+
+        .fence(RecordCommand.self, .startRecording),
+        .fence(StopRecordingCommand.self, .stopRecording),
+        .fence(WaitForChangeCommand.self, .waitForChange),
+        .fence(WaitForCommand.self, .waitFor),
+
+        .fence(SessionLogCommand.self, .getSessionLog),
+        .fence(ArchiveSessionCommand.self, .archiveSession),
+        .fence(GetSessionStateCommand.self, .getSessionState),
+        .fence(ListTargetsCommand.self, .listTargets),
+        .fence(RunBatchCommand.self, .runBatch),
+
+        .fence(StartHeistCommand.self, .startHeist),
+        .fence(StopHeistCommand.self, .stopHeist),
+        .fence(PlayHeistCommand.self, .playHeist),
+    ]
+
+    static var subcommands: [ParsableCommand.Type] {
+        adapters.map(\.commandType)
+    }
+
+    static func fenceCommand(for commandType: CLICommandContract.Type) -> TheFence.Command? {
+        adapters.first { adapter in
+            ObjectIdentifier(adapter.commandType) == ObjectIdentifier(commandType)
+        }?.fenceCommand
+    }
 }
 
 extension CLICommandContract {
     static var fenceCommand: TheFence.Command {
-        let typeName = String(describing: Self.self)
-        let commandName = typeName
-            .removingSuffix("Command")
-            .removingSuffix("Subcommand")
-            .lowercasingFirstLetter()
-
-        guard let command = TheFence.Command.descriptors.first(where: { descriptor in
-            descriptor.cliExposure == .directCommand
-                && String(describing: descriptor.command) == commandName
-        })?.command else {
-            fatalError("No direct Fence command descriptor matching CLI adapter \(typeName)")
+        guard let command = CLICommandAdapterCatalog.fenceCommand(for: Self.self) else {
+            fatalError("No Fence command descriptor registered for CLI adapter \(Self.self)")
         }
 
         return command
@@ -45,24 +115,6 @@ extension TheFence.Command {
 
     func cliRequest(_ parameters: CLIRequestParameters = [:]) -> [String: Any] {
         CLIRequestBuilder.request(command: self, parameters: parameters)
-    }
-}
-
-extension GestureCLICommandContract {
-    static var fenceCommand: TheFence.Command {
-        TheFence.Command.command(for: gestureType)
-    }
-}
-
-private extension String {
-    func removingSuffix(_ suffix: String) -> String {
-        guard hasSuffix(suffix) else { return self }
-        return String(dropLast(suffix.count))
-    }
-
-    func lowercasingFirstLetter() -> String {
-        guard let first else { return self }
-        return first.lowercased() + dropFirst()
     }
 }
 
