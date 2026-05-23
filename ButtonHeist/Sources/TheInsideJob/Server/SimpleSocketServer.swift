@@ -82,8 +82,8 @@ enum ServerSendFailure: Error, LocalizedError, Equatable, Sendable {
 }
 
 enum SocketClientAuthentication: Equatable, Sendable {
-    case awaitingAuthentication
-    case awaitingApproval
+    case awaitingAuthentication(deadline: Task<Void, Never>)
+    case awaitingApproval(deadline: Task<Void, Never>)
     case authenticated
 
     var isAuthenticated: Bool {
@@ -91,11 +91,24 @@ enum SocketClientAuthentication: Equatable, Sendable {
         return false
     }
 
+    /// Deadline task identity is deliberately ignored; equality describes the authentication phase.
+    static func == (lhs: SocketClientAuthentication, rhs: SocketClientAuthentication) -> Bool {
+        switch (lhs, rhs) {
+        case (.awaitingAuthentication, .awaitingAuthentication),
+             (.awaitingApproval, .awaitingApproval),
+             (.authenticated, .authenticated):
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Move to authenticated when still awaiting auth or approval.
     /// Returns false when the client is already authenticated.
     @discardableResult
     mutating func markAuthenticated() -> Bool {
         guard !isAuthenticated else { return false }
+        cancelDeadline()
         self = .authenticated
         return true
     }
@@ -104,10 +117,27 @@ enum SocketClientAuthentication: Equatable, Sendable {
     /// Returns false once authentication has already completed.
     @discardableResult
     mutating func markApprovalPending() -> Bool {
-        guard !isAuthenticated else { return false }
-        self = .awaitingApproval
-        return true
+        switch self {
+        case .awaitingAuthentication(let deadline):
+            self = .awaitingApproval(deadline: deadline)
+            return true
+        case .awaitingApproval:
+            return true
+        case .authenticated:
+            return false
+        }
     }
+
+    /// Cancels the deadline task owned by an awaiting state.
+    func cancelDeadline() {
+        switch self {
+        case .awaitingAuthentication(let deadline), .awaitingApproval(let deadline):
+            deadline.cancel()
+        case .authenticated:
+            return
+        }
+    }
+
 }
 
 actor SimpleSocketServer {
@@ -148,7 +178,6 @@ actor SimpleSocketServer {
     private var serverPhase: ServerPhase = .stopped
     private var clients: [Int: ClientState] = [:]
     private var clientCounter = 0
-    private var authDeadlineTasks: [Int: Task<Void, Never>] = [:]
 
     /// Tasks that bridge `NWListener` / `NWConnection` callbacks into actor
     /// isolation. Tracked so `stop()` can cancel in-flight work — without
@@ -332,13 +361,12 @@ actor SimpleSocketServer {
 
         let allClients = clients
         clients.removeAll()
-        for task in authDeadlineTasks.values { task.cancel() }
-        authDeadlineTasks.removeAll()
         pendingCallbackTasks.cancelAll()
         serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
         for (_, state) in allClients {
+            state.authentication.cancelDeadline()
             state.connection.cancel()
         }
         listener.cancel()
@@ -475,8 +503,6 @@ actor SimpleSocketServer {
         guard var state = clients[clientId],
               state.authentication.markAuthenticated() else { return }
         clients[clientId] = state
-        authDeadlineTasks[clientId]?.cancel()
-        authDeadlineTasks[clientId] = nil
     }
 
     /// Mark a connected client as waiting on the on-device approval prompt.
@@ -573,7 +599,7 @@ actor SimpleSocketServer {
         let clientId = clientCounter
         clients[clientId] = ClientState(
             connection: connection,
-            authentication: .awaitingAuthentication,
+            authentication: .awaitingAuthentication(deadline: makeAuthDeadline(for: clientId)),
             timestamps: [],
             rateLimitNotified: false,
             pendingBytes: 0
@@ -582,12 +608,11 @@ actor SimpleSocketServer {
         logger.info("Client \(clientId) connected")
         notifyClientConnected(clientId, address: remoteAddress)
         startReceiving(clientId: clientId, connection: connection)
-        scheduleAuthDeadline(for: clientId)
         return clientId
     }
 
-    private func scheduleAuthDeadline(for clientId: Int) {
-        authDeadlineTasks[clientId] = Task { [weak self] in
+    private func makeAuthDeadline(for clientId: Int) -> Task<Void, Never> {
+        Task { [weak self] in
             do {
                 try await Task.sleep(for: .seconds(Self.authDeadlineSeconds))
             } catch {
@@ -625,8 +650,7 @@ actor SimpleSocketServer {
 
     private func removeClient(_ clientId: Int) {
         guard let state = clients.removeValue(forKey: clientId) else { return }
-        authDeadlineTasks[clientId]?.cancel()
-        authDeadlineTasks[clientId] = nil
+        state.authentication.cancelDeadline()
         state.connection.cancel()
         notifyClientDisconnected(clientId)
     }
