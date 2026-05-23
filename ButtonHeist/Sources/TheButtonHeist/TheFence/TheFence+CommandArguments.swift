@@ -213,6 +213,13 @@ extension TheFence.CommandArgumentReadable {
         return number
     }
 
+    func requiredSchemaNumber(_ key: String) throws -> Double {
+        guard let value = try schemaNumber(key) else {
+            throw SchemaValidationError(field: field(key), observed: nil, expected: "number")
+        }
+        return value
+    }
+
     func schemaStringArray(_ key: String) throws -> [String]? {
         guard let value = argumentValues[key] else { return nil }
         guard case .array(let array) = value else {
@@ -230,6 +237,55 @@ extension TheFence.CommandArgumentReadable {
         }
     }
 
+    func schemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject]? {
+        guard let value = argumentValues[key] else { return nil }
+        guard case .array(let array) = value else {
+            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "array of objects")
+        }
+        return try array.enumerated().map { index, item in
+            guard case .object(let object) = item else {
+                throw SchemaValidationError(
+                    field: "\(field(key))[\(index)]",
+                    observed: item.rawValue,
+                    expected: "object"
+                )
+            }
+            return TheFence.CommandArgumentObject(values: object, fieldPrefix: "\(field(key))[\(index)]")
+        }
+    }
+
+    func requiredSchemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject] {
+        guard let array = try schemaObjectArray(key) else {
+            throw SchemaValidationError(field: field(key), observed: nil, expected: "array of objects")
+        }
+        return array
+    }
+
+    func schemaUnitPoint(_ key: String) throws -> UnitPoint? {
+        guard let value = argumentValues[key] else { return nil }
+        guard case .object(let values) = value else {
+            throw SchemaValidationError(
+                field: field(key),
+                observed: value.rawValue,
+                expected: "object with numeric x and y"
+            )
+        }
+        let object = TheFence.CommandArgumentObject(values: values, fieldPrefix: field(key))
+        guard let x = try object.schemaNumber("x") else {
+            throw SchemaValidationError(field: object.field("x"), observed: nil, expected: "number")
+        }
+        guard let y = try object.schemaNumber("y") else {
+            throw SchemaValidationError(field: object.field("y"), observed: nil, expected: "number")
+        }
+        guard (0...1).contains(x) else {
+            throw SchemaValidationError(field: object.field("x"), observed: x, expected: "number in 0...1")
+        }
+        guard (0...1).contains(y) else {
+            throw SchemaValidationError(field: object.field("y"), observed: y, expected: "number in 0...1")
+        }
+        return UnitPoint(x: x, y: y)
+    }
+
     func schemaDictionary(_ key: String) throws -> TheFence.CommandArgumentObject? {
         guard let value = argumentValues[key] else { return nil }
         guard case .object(let object) = value else {
@@ -244,6 +300,28 @@ extension TheFence.CommandArgumentReadable {
         normalizedBy normalize: (String) -> String = { $0 }
     ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
         guard let rawValue = try schemaString(key) else { return nil }
+        guard let value = E(rawValue: normalize(rawValue)) else {
+            throw SchemaValidationError(
+                field: field(key),
+                observed: rawValue as Any,
+                expected: SchemaValidationError.expectedEnum(type)
+            )
+        }
+        return value
+    }
+
+    func requiredSchemaEnum<E>(
+        _ key: String,
+        as type: E.Type,
+        normalizedBy normalize: (String) -> String = { $0 }
+    ) throws -> E where E: CaseIterable & RawRepresentable, E.RawValue == String {
+        guard let rawValue = try schemaString(key) else {
+            throw SchemaValidationError(
+                field: field(key),
+                observed: nil,
+                expected: SchemaValidationError.expectedEnum(type)
+            )
+        }
         guard let value = E(rawValue: normalize(rawValue)) else {
             throw SchemaValidationError(
                 field: field(key),

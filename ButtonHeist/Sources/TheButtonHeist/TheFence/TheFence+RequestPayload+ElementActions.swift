@@ -6,9 +6,9 @@ extension TheFence {
 
     func decodeElementActionPayload(
         command: Command,
-        request: [String: Any]
+        arguments: CommandArgumentEnvelope
     ) throws -> RequestPayload {
-        let input = ElementActionRequestInput(request)
+        let input = ElementActionRequestInput(arguments)
         switch command {
         case .scroll:
             return .scroll(.scroll(try ScrollRequestInput(input, fence: self).target))
@@ -41,16 +41,16 @@ extension TheFence {
         }
     }
 
-    func decodedElementTarget(_ request: [String: Any]) throws -> ElementTarget? {
-        try ElementActionRequestInput(request).elementTarget(in: self)
+    func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {
+        try ElementActionRequestInput(arguments).elementTarget(in: self)
     }
 
     func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
-        try ElementActionRequestInput(dictionary).elementTarget(in: self)
+        try decodedElementTarget(CommandArgumentEnvelope(arguments: dictionary))
     }
 
     func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
-        try ElementActionRequestInput(dictionary).matcher()
+        try ElementActionRequestInput(CommandArgumentEnvelope(arguments: dictionary)).matcher()
     }
 
     /// Parse an array of trait name strings into typed `HeistTrait` values.
@@ -74,9 +74,9 @@ extension TheFence {
 private extension TheFence {
 
     struct ElementActionRequestInput {
-        private let request: [String: Any]
+        private let request: any CommandArgumentReadable
 
-        init(_ request: [String: Any]) {
+        init(_ request: some CommandArgumentReadable) {
             self.request = request
         }
 
@@ -119,7 +119,7 @@ private extension TheFence {
             guard matcher.hasPredicates || ordinal != nil else {
                 throw SchemaValidationError(
                     field: "container",
-                    observed: container,
+                    observed: container.rawValue,
                     expected: "container selector with stableId, type, label, value, identifier, isModalBoundary, or ordinal"
                 )
             }
@@ -133,7 +133,7 @@ private extension TheFence {
                 guard !hasElementTargetFields else {
                     throw SchemaValidationError(
                         field: "target",
-                        observed: request,
+                        observed: request.rawValue,
                         expected: "exactly one element target or container selector"
                     )
                 }
@@ -229,7 +229,7 @@ private extension TheFence {
         func countArgument() throws -> TheFence.CountArgument {
             TheFence.CountArgument(
                 value: try integer("count"),
-                observed: request["count"]
+                observed: request.observedValue(for: "count")
             )
         }
 

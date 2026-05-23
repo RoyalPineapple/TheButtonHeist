@@ -608,13 +608,11 @@ extension TheFence {
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
              .twoFingerTap, .drawPath, .drawBezier:
-            let request = arguments.decodeEdgeRawDictionary()
-            return try decodeGestureRequestPayload(command: command, request: request)
+            return try decodeGestureRequestPayload(command: command, arguments: arguments)
         case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
              .activate, .increment, .decrement, .performCustomAction,
              .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
-            let request = arguments.decodeEdgeRawDictionary()
-            return try decodeElementActionPayload(command: command, request: request)
+            return try decodeElementActionPayload(command: command, arguments: arguments)
         case .startRecording, .runBatch, .connect, .archiveSession, .startHeist,
              .stopHeist, .playHeist:
             return try decodeSessionPayload(command: command, arguments: arguments)
