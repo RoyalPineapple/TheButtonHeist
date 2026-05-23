@@ -4,6 +4,11 @@ import TheScore
 
 // MARK: - Typed Request Recording
 
+private let evidenceTargetKeys: Set<String> = [
+    "heistId", "label", "identifier", "value", "traits", "excludeTraits",
+    "ordinal", "elementTarget",
+]
+
 private extension HeistValue {
     static func encoded<T: Encodable>(_ value: T) -> HeistValue {
         do {
@@ -18,85 +23,46 @@ private extension HeistValue {
     }
 }
 
-private extension Dictionary where Key == String, Value == HeistValue {
-    subscript(_ key: FenceParameterKey) -> HeistValue? {
-        get { self[key.rawValue] }
-        set { self[key.rawValue] = newValue }
-    }
-
-    mutating func set(_ key: String, _ value: String?) {
-        guard let value else { return }
-        self[key] = .string(value)
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: String?) {
-        set(key.rawValue, value)
-    }
-
-    mutating func set(_ key: String, _ value: Int?) {
-        guard let value else { return }
-        self[key] = .int(value)
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Int?) {
-        set(key.rawValue, value)
-    }
-
-    mutating func set(_ key: String, _ value: Double?) {
-        guard let value else { return }
-        self[key] = .double(value)
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Double?) {
-        set(key.rawValue, value)
-    }
-
-    mutating func set(_ key: String, _ value: Bool?) {
-        guard let value else { return }
-        self[key] = .bool(value)
-    }
-
-    mutating func set(_ key: FenceParameterKey, _ value: Bool?) {
-        set(key.rawValue, value)
-    }
-
-    mutating func set<E: RawRepresentable>(_ key: String, _ value: E?) where E.RawValue == String {
-        guard let value else { return }
-        self[key] = .string(value.rawValue)
-    }
-
-    mutating func set<E: RawRepresentable>(_ key: FenceParameterKey, _ value: E?) where E.RawValue == String {
-        set(key.rawValue, value)
-    }
-
-    mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) {
-        if let expectation {
-            self[.expect] = HeistValue.encoded(expectation)
+private extension Encodable {
+    func heistEvidenceArguments(renaming renamedKeys: [String: String] = [:]) -> [String: HeistValue] {
+        guard case .object(let encoded) = HeistValue.encoded(self) else { return [:] }
+        var arguments = encoded.reduce(into: [String: HeistValue]()) { result, pair in
+            guard !evidenceTargetKeys.contains(pair.key) else { return }
+            result[renamedKeys[pair.key] ?? pair.key] = pair.value
         }
-        set(.timeout, timeout)
+        arguments.flattenRotorTextRange()
+        return arguments
     }
 }
 
-extension TheFence {
-    struct HeistEvidenceProjection {
-        let command: Command
-        let arguments: [String: HeistValue]
-        let elementTarget: ElementTarget?
-        let coordinateOnly: Bool
+private extension Dictionary where Key == String, Value == HeistValue {
+    mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) {
+        if let expectation {
+            self["expect"] = HeistValue.encoded(expectation)
+        }
+        if let timeout {
+            self["timeout"] = HeistValue.encoded(timeout)
+        }
     }
+
+    mutating func flattenRotorTextRange() {
+        guard case .object(let textRange)? = removeValue(forKey: "currentTextRange") else { return }
+        if let startOffset = textRange["startOffset"] {
+            self["currentTextStartOffset"] = startOffset
+        }
+        if let endOffset = textRange["endOffset"] {
+            self["currentTextEndOffset"] = endOffset
+        }
+    }
+}
+
+private struct AccessibilityEvidenceArguments: Encodable {
+    let action: String?
+    let count: Int?
 }
 
 extension TheFence.ParsedRequest {
-    var heistEvidenceProjection: TheFence.HeistEvidenceProjection {
-        TheFence.HeistEvidenceProjection(
-            command: command,
-            arguments: heistEvidenceArguments,
-            elementTarget: payload.bookKeeperElementTarget,
-            coordinateOnly: payload.bookKeeperCoordinateOnly
-        )
-    }
-
-    private var heistEvidenceArguments: [String: HeistValue] {
+    var heistEvidenceArguments: [String: HeistValue] {
         var arguments = payload.heistEvidenceArguments
         if command != .waitForChange {
             let timeout = expectationPayload.expectation == nil ? nil : expectationPayload.timeout
@@ -106,35 +72,28 @@ extension TheFence.ParsedRequest {
     }
 }
 
-private extension TheFence.RequestPayload {
+extension TheFence.RequestPayload {
     var heistEvidenceArguments: [String: HeistValue] {
         switch self {
         case .gesture(let payload):
-            return payload.bookKeeperArguments
+            return payload.heistEvidenceArguments
         case .scroll(let payload):
-            return payload.bookKeeperArguments
+            return payload.heistEvidenceArguments
         case .accessibility(let payload):
-            return payload.bookKeeperArguments
+            return payload.heistEvidenceArguments
         case .rotor(let target):
-            return target.bookKeeperArguments
+            return target.heistEvidenceArguments()
         case .typeText(let target):
-            var arguments: [String: HeistValue] = [:]
-            arguments.set(.text, target.text)
-            return arguments
+            return target.heistEvidenceArguments()
         case .editAction(let target):
-            var arguments: [String: HeistValue] = [:]
-            arguments.set(.action, target.action)
-            return arguments
+            return target.heistEvidenceArguments()
         case .setPasteboard(let target):
-            var arguments: [String: HeistValue] = [:]
-            arguments.set(.text, target.text)
-            return arguments
+            return target.heistEvidenceArguments()
         case .waitFor(let target):
-            return target.bookKeeperArguments
+            return target.heistEvidenceArguments()
         case .waitForChange(let payload):
-            var arguments: [String: HeistValue] = [:]
-            arguments.appendExpectation(payload.expectation, timeout: payload.timeout)
-            return arguments
+            return WaitForChangeTarget(expect: payload.expectation, timeout: payload.timeout)
+                .heistEvidenceArguments()
         case .none, .getInterface, .screen, .artifact, .startRecording, .connect,
              .runBatch, .archiveSession, .startHeist, .stopHeist, .playHeist:
             return [:]
@@ -173,26 +132,26 @@ private extension TheFence.RequestPayload {
 }
 
 private extension TheFence.GesturePayload {
-    var bookKeeperArguments: [String: HeistValue] {
+    var heistEvidenceArguments: [String: HeistValue] {
         switch self {
         case .oneFingerTap(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"])
         case .longPress(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"])
         case .swipe(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments()
         case .drag(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments()
         case .pinch(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments()
         case .rotate(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments()
         case .twoFingerTap(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments()
         case .drawPath(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments()
         case .drawBezier(let payload):
-            return payload.target.bookKeeperArguments
+            return payload.target.heistEvidenceArguments()
         }
     }
 
@@ -239,126 +198,17 @@ private extension TheFence.GesturePayload {
     }
 }
 
-private extension TouchTapTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.x, pointX)
-        arguments.set(.y, pointY)
-        return arguments
-    }
-}
-
-private extension LongPressTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.x, pointX)
-        arguments.set(.y, pointY)
-        arguments.set(.duration, duration)
-        return arguments
-    }
-}
-
-private extension SwipeTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.direction, direction)
-        arguments.set(.startX, startX)
-        arguments.set(.startY, startY)
-        arguments.set(.endX, endX)
-        arguments.set(.endY, endY)
-        arguments.set(.duration, duration)
-        if let start {
-            arguments[.start] = HeistValue.encoded(start)
-        }
-        if let end {
-            arguments[.end] = HeistValue.encoded(end)
-        }
-        return arguments
-    }
-}
-
-private extension DragTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.startX, startX)
-        arguments.set(.startY, startY)
-        arguments.set(.endX, endX)
-        arguments.set(.endY, endY)
-        arguments.set(.duration, duration)
-        return arguments
-    }
-}
-
-private extension PinchTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.centerX, centerX)
-        arguments.set(.centerY, centerY)
-        arguments.set(.scale, scale)
-        arguments.set(.spread, spread)
-        arguments.set(.duration, duration)
-        return arguments
-    }
-}
-
-private extension RotateTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.centerX, centerX)
-        arguments.set(.centerY, centerY)
-        arguments.set(.angle, angle)
-        arguments.set(.radius, radius)
-        arguments.set(.duration, duration)
-        return arguments
-    }
-}
-
-private extension TwoFingerTapTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.centerX, centerX)
-        arguments.set(.centerY, centerY)
-        arguments.set(.spread, spread)
-        return arguments
-    }
-}
-
-private extension DrawPathTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments[.points] = .array(points.map { HeistValue.encoded($0) })
-        arguments.set(.duration, duration)
-        arguments.set(.velocity, velocity)
-        return arguments
-    }
-}
-
-private extension DrawBezierTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.startX, startX)
-        arguments.set(.startY, startY)
-        arguments[.segments] = .array(segments.map { HeistValue.encoded($0) })
-        arguments.set(.samplesPerSegment, samplesPerSegment)
-        arguments.set(.duration, duration)
-        arguments.set(.velocity, velocity)
-        return arguments
-    }
-}
-
 private extension TheFence.ScrollPayload {
-    var bookKeeperArguments: [String: HeistValue] {
+    var heistEvidenceArguments: [String: HeistValue] {
         switch self {
         case .scroll(let target):
-            return target.bookKeeperArguments
+            return target.heistEvidenceArguments()
         case .scrollToVisible:
             return [:]
         case .elementSearch(let target):
-            var arguments: [String: HeistValue] = [:]
-            arguments.set(.direction, target.direction)
-            return arguments
+            return target.heistEvidenceArguments()
         case .scrollToEdge(let target):
-            return target.bookKeeperArguments
+            return target.heistEvidenceArguments()
         }
     }
 
@@ -376,37 +226,20 @@ private extension TheFence.ScrollPayload {
     }
 }
 
-private extension ScrollTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.direction, direction)
-        return arguments
-    }
-}
-
-private extension ScrollToEdgeTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.edge, edge)
-        return arguments
-    }
-}
-
 private extension TheFence.AccessibilityPayload {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
+    var heistEvidenceArguments: [String: HeistValue] {
         switch self {
         case .activate(_, let actionName, let count):
-            arguments.set(.action, actionName)
-            arguments.set(.count, count.value)
+            return AccessibilityEvidenceArguments(action: actionName, count: count.value)
+                .heistEvidenceArguments()
         case .increment(_, let count),
              .decrement(_, let count):
-            arguments.set(.count, count.value)
+            return AccessibilityEvidenceArguments(action: nil, count: count.value)
+                .heistEvidenceArguments()
         case .performCustomAction(let target, let count):
-            arguments.set(.action, target.actionName)
-            arguments.set(.count, count.value)
+            return AccessibilityEvidenceArguments(action: target.actionName, count: count.value)
+                .heistEvidenceArguments()
         }
-        return arguments
     }
 
     var bookKeeperElementTarget: ElementTarget? {
@@ -418,28 +251,6 @@ private extension TheFence.AccessibilityPayload {
         case .performCustomAction(let target, _):
             return target.elementTarget
         }
-    }
-}
-
-private extension RotorTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.rotor, rotor)
-        arguments.set(.rotorIndex, rotorIndex)
-        arguments.set(.direction, direction)
-        arguments.set(.currentHeistId, currentHeistId)
-        arguments.set(.currentTextStartOffset, currentTextRange?.startOffset)
-        arguments.set(.currentTextEndOffset, currentTextRange?.endOffset)
-        return arguments
-    }
-}
-
-private extension WaitForTarget {
-    var bookKeeperArguments: [String: HeistValue] {
-        var arguments: [String: HeistValue] = [:]
-        arguments.set(.absent, absent)
-        arguments.set(.timeout, timeout)
-        return arguments
     }
 }
 
