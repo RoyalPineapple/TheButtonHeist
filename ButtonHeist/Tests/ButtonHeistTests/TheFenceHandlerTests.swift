@@ -516,6 +516,52 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertTrue(array[1] is NSNull)
     }
 
+    func testCommandArgumentEnvelopeReadsNestedTypedObjects() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "subtree": [
+                "element": [
+                    "label": "Pay",
+                    "traits": ["button", "selected"],
+                ],
+                "container": [
+                    "type": "scrollable",
+                    "isModalBoundary": true,
+                    "ratio": 0.5,
+                ],
+                "ordinal": 2,
+            ],
+        ] as [String: Any])
+
+        let subtree = try XCTUnwrap(try envelope.schemaDictionary("subtree"))
+        let element = try XCTUnwrap(try subtree.schemaDictionary("element"))
+        let container = try XCTUnwrap(try subtree.schemaDictionary("container"))
+        XCTAssertEqual(try subtree.schemaInteger("ordinal"), 2)
+        XCTAssertEqual(try element.schemaString("label"), "Pay")
+        XCTAssertEqual(try element.schemaStringArray("traits"), ["button", "selected"])
+        XCTAssertEqual(try container.schemaEnum("type", as: ContainerTypeName.self), .scrollable)
+        XCTAssertEqual(try container.schemaBoolean("isModalBoundary"), true)
+        XCTAssertEqual(try container.schemaNumber("ratio"), 0.5)
+    }
+
+    func testCommandArgumentEnvelopeNestedSchemaErrorsUseQualifiedFields() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "subtree": [
+                "element": [
+                    "traits": [7],
+                ],
+            ],
+        ] as [String: Any])
+
+        let subtree = try XCTUnwrap(try envelope.schemaDictionary("subtree"))
+        let element = try XCTUnwrap(try subtree.schemaDictionary("element"))
+        XCTAssertThrowsError(try element.schemaStringArray("traits")) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for subtree.element.traits[0]: observed integer 7; expected string"
+            )
+        }
+    }
+
     @ButtonHeistActor
     func testElementTargetWithIdentifier() async throws {
         let (fence, _) = makeConnectedFence()

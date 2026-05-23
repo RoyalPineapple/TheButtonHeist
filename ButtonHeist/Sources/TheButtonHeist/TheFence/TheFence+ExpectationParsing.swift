@@ -20,6 +20,13 @@ extension TheFence {
             )
         }
 
+        init(arguments: CommandArgumentEnvelope) throws {
+            self.init(
+                expectation: try Self.parseExpectation(arguments.observedValue(for: "expect")),
+                timeout: try arguments.schemaNumber("timeout")
+            )
+        }
+
         var postActionValidationTimeout: Double? {
             expectation == nil ? nil : timeout
         }
@@ -43,6 +50,10 @@ extension TheFence {
 
     func parseExpectationPayload(_ dictionary: [String: Any]) throws -> ExpectationPayload {
         try ExpectationPayload(arguments: dictionary)
+    }
+
+    func parseExpectationPayload(_ arguments: CommandArgumentEnvelope) throws -> ExpectationPayload {
+        try ExpectationPayload(arguments: arguments)
     }
 }
 
