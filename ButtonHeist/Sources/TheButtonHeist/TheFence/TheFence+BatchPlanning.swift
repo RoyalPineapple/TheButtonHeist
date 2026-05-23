@@ -9,25 +9,28 @@ extension TheFence {
             maxBytes: DecodeLimits.maxRunBatchRequestBytes,
             maxDepth: DecodeLimits.maxRunBatchNestingDepth
         )
-        let rawSteps = try request.requiredSchemaDictionaryArray("steps")
-        guard !rawSteps.isEmpty else {
+        let batchStepDecodeInputs = try request.requiredSchemaDictionaryArray("steps")
+        guard !batchStepDecodeInputs.isEmpty else {
             throw SchemaValidationError(
                 field: "steps",
                 observed: "array count 0",
                 expected: "array count 1...\(DecodeLimits.maxRunBatchSteps)"
             )
         }
-        guard rawSteps.count <= DecodeLimits.maxRunBatchSteps else {
+        guard batchStepDecodeInputs.count <= DecodeLimits.maxRunBatchSteps else {
             throw SchemaValidationError(
                 field: "steps",
-                observed: "array count \(rawSteps.count)",
+                observed: "array count \(batchStepDecodeInputs.count)",
                 expected: "array count 1...\(DecodeLimits.maxRunBatchSteps)"
             )
         }
         let parser = BatchCommandParser(fence: self)
         return RunBatchRequest(
-            steps: rawSteps.enumerated().map { index, step in
-                parser.decode(step, index: index)
+            steps: batchStepDecodeInputs.enumerated().map { index, stepDecodeInput in
+                parser.decode(
+                    FenceOperationCatalog.routeBatchStepDecodeInput(stepDecodeInput),
+                    index: index
+                )
             },
             policy: try request.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
         )

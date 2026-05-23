@@ -438,13 +438,13 @@ extension TheFence {
                 immediateResponse: immediate
             )
         }
-        let rawArguments = arguments.rawDictionary()
+        let requestDecodeInput = arguments.decodeEdgeRawDictionary()
         let requestId = arguments.string("requestId") ?? UUID().uuidString
-        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(rawArguments)
+        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(requestDecodeInput)
         let payload: RequestPayload = if command == .waitForChange {
             .waitForChange(expectationPayload)
         } else {
-            try decodeRequestPayload(command: command, request: rawArguments, requestId: requestId)
+            try decodeRequestPayload(command: command, request: requestDecodeInput, requestId: requestId)
         }
 
         return ParsedRequest(

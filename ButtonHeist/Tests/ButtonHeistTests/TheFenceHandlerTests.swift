@@ -485,7 +485,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "null": NSNull(),
         ])
 
-        let raw = envelope.rawDictionary()
+        let raw = envelope.decodeEdgeRawDictionary()
         XCTAssertEqual(raw["bool"] as? Bool, true)
         XCTAssertEqual(raw["int"] as? Int, 3)
         XCTAssertEqual(raw["double"] as? Double, 2.5)
@@ -504,7 +504,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ],
         ] as [String: Any])
 
-        let raw = envelope.rawDictionary()
+        let raw = envelope.decodeEdgeRawDictionary()
         let object = try XCTUnwrap(raw["object"] as? [String: Any])
         XCTAssertEqual(object["label"] as? String, "Pay")
         XCTAssertEqual(object["traits"] as? [String], ["button", "selected"])
@@ -2171,7 +2171,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        let result = try fence.parseExpectation(operation.requestArguments())
+        let result = try fence.parseExpectation(operation.requestDecodeInputArguments())
 
         XCTAssertEqual(
             result,
@@ -2190,7 +2190,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        XCTAssertThrowsError(try fence.parseExpectation(operation.requestArguments())) { error in
+        XCTAssertThrowsError(try fence.parseExpectation(operation.requestDecodeInputArguments())) { error in
             guard case FenceError.invalidRequest(let msg) = error else {
                 XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
@@ -2520,6 +2520,16 @@ final class TheFenceHandlerTests: XCTestCase {
                 ["command": "activate", "label": "Save", "ordinal": "first"],
             ],
             contains: "schema validation failed for ordinal: observed string \"first\"; expected integer"
+        )
+    }
+
+    @ButtonHeistActor
+    func testBatchRoutingReportsNonStringCommandClearly() async {
+        await assertRunBatchDecodeError(
+            steps: [
+                ["command": 7, "identifier": "btn"],
+            ],
+            contains: "run_batch step 0: schema validation failed for command: observed integer 7; expected string"
         )
     }
 
@@ -3626,7 +3636,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.map(\.command), [.activate])
         XCTAssertEqual(playback.steps.first?.target?.identifier, "submit")
-        let expect = playback.steps.first?.requestArguments()["expect"] as? [String: Any]
+        let expect = playback.steps.first?.requestDecodeInputArguments()["expect"] as? [String: Any]
         XCTAssertEqual(expect?["type"] as? String, "screen_changed")
     }
 
@@ -3660,7 +3670,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        let expect = operation.requestArguments()["expect"] as? [String: Any]
+        let expect = operation.requestDecodeInputArguments()["expect"] as? [String: Any]
         XCTAssertEqual(expect?["type"] as? String, "screen_changed")
     }
 
@@ -3849,7 +3859,7 @@ final class TheFenceHandlerTests: XCTestCase {
             index: 0
         )
 
-        let arguments = operation.requestArguments()
+        let arguments = operation.requestDecodeInputArguments()
         XCTAssertEqual(arguments["identifier"] as? String, "btn1")
         XCTAssertNil(arguments["heistId"])
 

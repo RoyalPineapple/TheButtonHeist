@@ -172,9 +172,21 @@ final class PublicContractGoldenTests: XCTestCase {
             normalizedOperation.contains("RoutedCommandRequest"),
             "NormalizedOperation should keep routed request metadata behind a typed envelope."
         )
+        XCTAssertTrue(
+            catalog.contains("routeBatchStepDecodeInput"),
+            "Raw batch steps should be adapted at a named decode edge before batch planning."
+        )
 
         let batchParser = try sourceFile(
             "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+BatchCommandParser.swift"
+        )
+        XCTAssertFalse(
+            batchParser.contains("[String: Any]"),
+            "Batch planning should consume routed batch steps, not raw batch step dictionaries."
+        )
+        XCTAssertTrue(
+            batchParser.contains("RoutedBatchStep"),
+            "Batch planning should receive typed routed batch steps from the catalog."
         )
         XCTAssertFalse(
             batchParser.contains("operation.arguments"),

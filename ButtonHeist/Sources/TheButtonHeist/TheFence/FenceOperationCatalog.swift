@@ -33,6 +33,11 @@ public struct NormalizedOperation {
 
 /// Shared routing table for MCP tool calls and batch steps.
 public enum FenceOperationCatalog {
+    struct RoutedBatchStep {
+        let diagnosticCommandName: String
+        let normalizedOperation: Result<NormalizedOperation, FenceOperationRoutingError>
+    }
+
     public static func normalizeToolCall(
         name: String,
         arguments: [String: Any]
@@ -60,6 +65,24 @@ public enum FenceOperationCatalog {
             nonExecutableLabel: "batch-executable",
             isExecutable: \.isBatchExecutable
         )
+    }
+
+    static func routeBatchStepDecodeInput(_ step: [String: Any]) -> RoutedBatchStep {
+        RoutedBatchStep(
+            diagnosticCommandName: diagnosticCommandName(forBatchStep: step),
+            normalizedOperation: normalizeBatchStep(step)
+        )
+    }
+
+    private static func diagnosticCommandName(forBatchStep step: [String: Any]) -> String {
+        do {
+            guard let commandName = try step.schemaString("command") else {
+                return "?"
+            }
+            return commandName
+        } catch {
+            return "?"
+        }
     }
 
     public static func normalizePlaybackStep(

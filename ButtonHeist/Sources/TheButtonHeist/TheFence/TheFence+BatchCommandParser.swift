@@ -10,16 +10,15 @@ extension TheFence {
             self.fence = fence
         }
 
-        func decode(_ step: [String: Any], index: Int) -> RunBatchStep {
-            let originalCommandName = step["command"] as? String ?? "?"
-            switch FenceOperationCatalog.normalizeBatchStep(step) {
+        func decode(_ routedStep: FenceOperationCatalog.RoutedBatchStep, index: Int) -> RunBatchStep {
+            switch routedStep.normalizedOperation {
             case .success(let operation):
                 return decode(operation: operation, index: index)
 
             case .failure(let error):
                 let fenceError = FenceError.invalidRequest("run_batch step \(index): \(error.message)")
                 return .invalid(
-                    commandName: originalCommandName,
+                    commandName: routedStep.diagnosticCommandName,
                     failure: BatchStepFailure(
                         message: fenceError.coreMessage,
                         details: fenceError.failureDetails,
