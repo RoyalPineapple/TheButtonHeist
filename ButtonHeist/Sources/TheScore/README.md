@@ -4,7 +4,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 ## Reading order
 
-1. **`Messages.swift`** — Start here. `WireMessageType` is a 50-case `String` enum — every JSON message has a `"type"` key whose value is one of these raw strings. Also defines `TXTRecordKey` (Bonjour record keys), `EnvironmentKey` (all env vars in one place), and `buttonHeistVersion` — the single product version checked for exact equality at handshake time.
+1. **`Messages.swift`** — Start here. `ClientWireMessageType` and `ServerWireMessageType` are direction-specific `String` enums — every JSON message has a `"type"` key whose value is one of these raw strings. Also defines `TXTRecordKey` (Bonjour record keys), `EnvironmentKey` (all env vars in one place), and `buttonHeistVersion` — the single product version checked for exact equality at handshake time.
 
 2. **`Elements.swift`** — The element model. Nearly everything else references these types.
    - `HeistElement` — wire representation of one accessibility element (heistId, label, value, traits, frame, actions, etc.)
@@ -32,7 +32,7 @@ Shared wire protocol. Every type that crosses the TCP boundary lives here. No UI
 
 **Client encodes:** `RequestEnvelope(message: .activate(.heistId("button_save")))` → encoder writes `{"buttonHeistVersion":"<semver>","type":"activate","payload":{"heistId":"button_save"}}`. The `type` string comes from `ClientMessage.wireRepresentation`.
 
-**Server decodes:** `RequestEnvelope.decoded(from: data)` → reads `type` as `WireMessageType.activate` → `decodeActionMessage` calls `ElementTarget(from: payloadDecoder)` → returns `.activate(.heistId("button_save"))`.
+**Server decodes:** `RequestEnvelope.decoded(from: data)` → reads `type` as `ClientWireMessageType.activate` → `decodeActionMessage` calls `ElementTarget(from: payloadDecoder)` → returns `.activate(.heistId("button_save"))`.
 
 **Server encodes response:** `ResponseEnvelope(message: .actionResult(...), accessibilityTrace: trace)` → encoder writes the envelope with `type: "actionResult"`, the result as `payload`, and optional `accessibilityTrace` captures.
 

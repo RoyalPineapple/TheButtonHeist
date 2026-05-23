@@ -133,6 +133,19 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ResponseEnvelope.self, from: data))
     }
 
+    func testResponseEnvelopeRejectsClientOnlyMessageTypeAtTypedBoundary() {
+        let data = Data("""
+        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"clientHello"}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ResponseEnvelope.self, from: data)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertEqual(context.debugDescription, "Unsupported server wire message type: clientHello")
+        }
+    }
+
     func testErrorEncodeDecode() throws {
         let message = ServerMessage.error(ServerError(kind: .general, message: "Connection failed"))
         let data = try JSONEncoder().encode(message)

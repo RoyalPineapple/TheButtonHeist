@@ -21,7 +21,7 @@ extension RequestEnvelope {
         let container = try decoder.container(keyedBy: RequestEnvelopeCodingKeys.self)
         buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
-        let type = try container.decode(WireMessageType.self, forKey: .type)
+        let type = try container.decode(ClientWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
@@ -47,7 +47,7 @@ extension ClientMessage {
     /// type tag and (optional) payload value. Used by both encode sites in
     /// this file. Adding a new case requires extending this switch — Swift's
     /// exhaustivity check is the drift detector.
-    fileprivate var wireRepresentation: (type: WireMessageType, payload: (any Encodable)?) {
+    fileprivate var wireRepresentation: (type: ClientWireMessageType, payload: (any Encodable)?) {
         switch self {
         case .clientHello: return (.clientHello, nil)
         case .requestInterface(let payload): return (.requestInterface, payload)
@@ -90,7 +90,7 @@ extension ClientMessage {
 
     // MARK: - Decoding
 
-    fileprivate static func decode(from payloadDecoder: Decoder?, type: WireMessageType) throws -> ClientMessage {
+    fileprivate static func decode(from payloadDecoder: Decoder?, type: ClientWireMessageType) throws -> ClientMessage {
         func payload() throws -> Decoder {
             guard let payloadDecoder else { throw missingClientPayload(type) }
             return payloadDecoder
@@ -132,11 +132,6 @@ extension ClientMessage {
         case .waitForChange: return .waitForChange(try WaitForChangeTarget(from: try payload()))
         case .batchExecutionPlan: return .batchExecutionPlan(try TheScore.BatchPlan(from: try payload()))
         case .startRecording: return .startRecording(try RecordingConfig(from: try payload()))
-        default:
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: payloadDecoder?.codingPath ?? [],
-                debugDescription: "Unsupported client message type: \(type.rawValue)"
-            ))
         }
     }
 
@@ -144,7 +139,7 @@ extension ClientMessage {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: ClientMessageCodingKeys.self)
-        let type = try container.decode(WireMessageType.self, forKey: .type)
+        let type = try container.decode(ClientWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
@@ -163,6 +158,6 @@ extension ClientMessage {
 
 // MARK: - Helpers
 
-private func missingClientPayload(_ type: WireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
+private func missingClientPayload(_ type: ClientWireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
     .missingPayload(key: ClientMessageCodingKeys.payload, type: type, codingPath: codingPath)
 }

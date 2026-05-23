@@ -23,7 +23,7 @@ extension ResponseEnvelope {
         buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
         accessibilityTrace = try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace)
-        let type = try container.decode(WireMessageType.self, forKey: .type)
+        let type = try container.decode(ServerWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
@@ -50,7 +50,7 @@ extension ServerMessage {
     /// type tag and (optional) payload value. Used by both encode sites in
     /// this file. Adding a new case requires extending this switch — Swift's
     /// exhaustivity check is the drift detector.
-    fileprivate var wireRepresentation: (type: WireMessageType, payload: (any Encodable)?) {
+    fileprivate var wireRepresentation: (type: ServerWireMessageType, payload: (any Encodable)?) {
         switch self {
         case .serverHello: return (.serverHello, nil)
         case .authRequired: return (.authRequired, nil)
@@ -74,7 +74,7 @@ extension ServerMessage {
 
     // MARK: - Decoding
 
-    fileprivate static func decode(from payloadDecoder: Decoder?, type: WireMessageType) throws -> ServerMessage {
+    fileprivate static func decode(from payloadDecoder: Decoder?, type: ServerWireMessageType) throws -> ServerMessage {
         func payload() throws -> Decoder {
             guard let payloadDecoder else { throw missingServerPayload(type) }
             return payloadDecoder
@@ -97,11 +97,6 @@ extension ServerMessage {
         case .interaction: return .interaction(try InteractionEvent(from: try payload()))
         case .status: return .status(try StatusPayload(from: try payload()))
         case .recording: return .recording(try RecordingPayload(from: try payload()))
-        default:
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: payloadDecoder?.codingPath ?? [],
-                debugDescription: "Unsupported server message type: \(type.rawValue)"
-            ))
         }
     }
 
@@ -109,7 +104,7 @@ extension ServerMessage {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: ServerMessageCodingKeys.self)
-        let type = try container.decode(WireMessageType.self, forKey: .type)
+        let type = try container.decode(ServerWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
             ? try container.superDecoder(forKey: .payload)
             : nil
@@ -128,6 +123,6 @@ extension ServerMessage {
 
 // MARK: - Helpers
 
-private func missingServerPayload(_ type: WireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
+private func missingServerPayload(_ type: ServerWireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
     .missingPayload(key: ServerMessageCodingKeys.payload, type: type, codingPath: codingPath)
 }

@@ -872,14 +872,85 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    // MARK: - WireMessageType
+    // MARK: - Wire Message Types
 
-    func testWireMessageTypeAllCasesRoundTrip() throws {
-        for messageType in WireMessageType.allCases {
+    func testClientWireMessageTypeAllCasesRoundTrip() throws {
+        for messageType in ClientWireMessageType.allCases {
             let data = try encoder.encode(messageType)
-            let decoded = try decoder.decode(WireMessageType.self, from: data)
+            let decoded = try decoder.decode(ClientWireMessageType.self, from: data)
             XCTAssertEqual(decoded, messageType)
         }
+    }
+
+    func testServerWireMessageTypeAllCasesRoundTrip() throws {
+        for messageType in ServerWireMessageType.allCases {
+            let data = try encoder.encode(messageType)
+            let decoded = try decoder.decode(ServerWireMessageType.self, from: data)
+            XCTAssertEqual(decoded, messageType)
+        }
+    }
+
+    func testClientWireMessageTypeRawValues() {
+        XCTAssertEqual(ClientWireMessageType.allCases.map(\.rawValue), [
+            "clientHello",
+            "authenticate",
+            "requestInterface",
+            "ping",
+            "status",
+            "activate",
+            "increment",
+            "decrement",
+            "performCustomAction",
+            "rotor",
+            "touchTap",
+            "touchLongPress",
+            "touchSwipe",
+            "touchDrag",
+            "touchPinch",
+            "touchRotate",
+            "touchTwoFingerTap",
+            "touchDrawPath",
+            "touchDrawBezier",
+            "typeText",
+            "editAction",
+            "setPasteboard",
+            "getPasteboard",
+            "scroll",
+            "scrollToVisible",
+            "elementSearch",
+            "scrollToEdge",
+            "resignFirstResponder",
+            "requestScreen",
+            "explore",
+            "waitForIdle",
+            "startRecording",
+            "stopRecording",
+            "waitFor",
+            "waitForChange",
+            "batchExecutionPlan",
+        ])
+    }
+
+    func testServerWireMessageTypeRawValues() {
+        XCTAssertEqual(ServerWireMessageType.allCases.map(\.rawValue), [
+            "serverHello",
+            "protocolMismatch",
+            "authRequired",
+            "authApprovalPending",
+            "authApproved",
+            "info",
+            "interface",
+            "pong",
+            "status",
+            "error",
+            "actionResult",
+            "screen",
+            "sessionLocked",
+            "recordingStarted",
+            "recordingStopped",
+            "recording",
+            "interaction",
+        ])
     }
 
     // MARK: - TXTRecordKey

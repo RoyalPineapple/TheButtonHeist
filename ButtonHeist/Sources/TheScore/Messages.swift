@@ -14,64 +14,52 @@ public let buttonHeistServiceType = "_buttonheist._tcp"
 /// `VERSIONING.md` in bh-infra.
 public let buttonHeistVersion = "0.4.4"
 
-/// Explicit wire message discriminator used at JSON boundaries.
-public enum WireMessageType: String, Codable, CaseIterable, Sendable {
-    case clientHello
-    case serverHello
-    case protocolMismatch
-    case authenticate
-    case authRequired
-    case authApprovalPending
-    case authApproved
-    case info
-    case requestInterface
-    case interface
-    case ping
-    case pong
-    case status
-    case error
-    case activate
-    case increment
-    case decrement
-    case performCustomAction
-    case rotor
-    case actionResult
-    case touchTap
-    case touchLongPress
-    case touchSwipe
-    case touchDrag
-    case touchPinch
-    case touchRotate
-    case touchTwoFingerTap
-    case touchDrawPath
-    case touchDrawBezier
-    case typeText
-    case editAction
-    case setPasteboard
-    case getPasteboard
-    case scroll
-    case scrollToVisible
-    case elementSearch
-    case scrollToEdge
-    case resignFirstResponder
-    case requestScreen
-    case explore
-    case screen
-    case waitForIdle
-    case sessionLocked
-    case startRecording
-    case stopRecording
-    case recordingStarted
-    case recordingStopped
-    case recording
-    case waitFor
-    case waitForChange
-    case batchExecutionPlan
-    case interaction
+/// Direction-specific JSON `type` discriminator shared by client and server wire enums.
+public protocol DirectionalWireMessageType: RawRepresentable, Codable, CaseIterable, Sendable, CustomStringConvertible where RawValue == String {
+    static var directionName: String { get }
 }
 
-extension WireMessageType: CustomStringConvertible {
+extension DirectionalWireMessageType {
     public var description: String { rawValue }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        guard let type = Self(rawValue: rawValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unsupported \(Self.directionName) wire message type: \(rawValue)"
+            )
+        }
+        self = type
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Explicit client-to-server wire message discriminator used at JSON boundaries.
+public enum ClientWireMessageType: String, DirectionalWireMessageType {
+    public static let directionName = "client"
+
+    case clientHello, authenticate, requestInterface, ping, status
+    case activate, increment, decrement, performCustomAction, rotor
+    case touchTap, touchLongPress, touchSwipe, touchDrag, touchPinch, touchRotate, touchTwoFingerTap
+    case touchDrawPath, touchDrawBezier, typeText, editAction, setPasteboard, getPasteboard
+    case scroll, scrollToVisible, elementSearch, scrollToEdge, resignFirstResponder
+    case requestScreen, explore, waitForIdle, startRecording, stopRecording
+    case waitFor, waitForChange, batchExecutionPlan
+}
+
+/// Explicit server-to-client wire message discriminator used at JSON boundaries.
+public enum ServerWireMessageType: String, DirectionalWireMessageType {
+    public static let directionName = "server"
+
+    case serverHello, protocolMismatch, authRequired, authApprovalPending, authApproved, info, interface
+    case pong, status, error, actionResult, screen, sessionLocked
+    case recordingStarted, recordingStopped, recording, interaction
 }
 
 // MARK: - TXT Record Keys
@@ -128,7 +116,7 @@ extension EnvironmentKey {
 
 extension DecodingError {
     /// Construct a `.keyNotFound` error for a missing wire message payload.
-    static func missingPayload(key: CodingKey, type: WireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
+    static func missingPayload<T: DirectionalWireMessageType>(key: CodingKey, type: T, codingPath: [CodingKey] = []) -> DecodingError {
         .keyNotFound(key, .init(codingPath: codingPath, debugDescription: "Missing payload for message type \(type.rawValue)"))
     }
 }
