@@ -55,6 +55,10 @@ extension TheFence {
             try request.schemaNumber(key)
         }
 
+        func hasAny(_ keys: String...) -> Bool {
+            keys.contains { request[$0] != nil }
+        }
+
         func requiredNumber(_ key: String) throws -> Double {
             try request.requiredSchemaNumber(key)
         }
@@ -130,57 +134,153 @@ extension TheFence {
         }
     }
 
-    private func decodeTouchTapGesturePayload(_ request: GestureRequestInput) throws -> TouchTapGesturePayload {
-        let payload = TouchTapGesturePayload(
-            elementTarget: try request.elementTarget(in: self),
-            pointX: try request.number("x"),
-            pointY: try request.number("y")
-        )
-        if payload.elementTarget == nil, payload.target.point == nil {
-            throw FenceError.invalidRequest("Must specify element (heistId or matcher) or coordinates (x, y)")
+    private func decodeRequiredPointIntent(
+        request: GestureRequestInput,
+        elementTarget: ElementTarget?,
+        xKey: String,
+        yKey: String,
+        field: String,
+        missingMessage: String
+    ) throws -> GesturePointIntent {
+        let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
+        if elementTarget != nil, point != nil {
+            throw mixedGestureShape(field: field, expected: "element target or coordinates")
         }
-        return payload
+        if let elementTarget {
+            return .element(elementTarget)
+        }
+        if let point {
+            return .point(x: point.x, y: point.y)
+        }
+        throw FenceError.invalidRequest(missingMessage)
+    }
+
+    private func decodeOptionalPointIntent(
+        request: GestureRequestInput,
+        elementTarget: ElementTarget?,
+        xKey: String,
+        yKey: String,
+        field: String
+    ) throws -> GesturePointIntent {
+        let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
+        if elementTarget != nil, point != nil {
+            throw mixedGestureShape(field: field, expected: "element target or coordinates")
+        }
+        if let elementTarget {
+            return .element(elementTarget)
+        }
+        if let point {
+            return .point(x: point.x, y: point.y)
+        }
+        return .unspecified
+    }
+
+    private func decodeCoordinatePair(
+        request: GestureRequestInput,
+        xKey: String,
+        yKey: String,
+        field: String
+    ) throws -> (x: Double, y: Double)? {
+        let x = try request.number(xKey)
+        let y = try request.number(yKey)
+        guard (x != nil) == (y != nil) else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "partial coordinates",
+                expected: "both \(xKey) and \(yKey), or neither"
+            )
+        }
+        guard let x, let y else { return nil }
+        return (x, y)
+    }
+
+    private func mixedGestureShape(field: String, expected: String) -> SchemaValidationError {
+        SchemaValidationError(field: field, observed: "mixed gesture target shapes", expected: expected)
+    }
+
+    private func decodeTouchTapGesturePayload(_ request: GestureRequestInput) throws -> TouchTapGesturePayload {
+        let intent = try decodeRequiredPointIntent(
+            request: request,
+            elementTarget: try request.elementTarget(in: self),
+            xKey: "x",
+            yKey: "y",
+            field: "x/y",
+            missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
+        )
+        return TouchTapGesturePayload(intent: intent)
     }
 
     private func decodeLongPressGesturePayload(_ request: GestureRequestInput) throws -> LongPressGesturePayload {
-        let payload = LongPressGesturePayload(
+        let intent = try decodeRequiredPointIntent(
+            request: request,
             elementTarget: try request.elementTarget(in: self),
-            pointX: try request.number("x"),
-            pointY: try request.number("y"),
-            duration: try request.gestureDuration() ?? 0.5
+            xKey: "x",
+            yKey: "y",
+            field: "x/y",
+            missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
         )
-        if payload.elementTarget == nil, payload.target.point == nil {
-            throw FenceError.invalidRequest("Must specify element (heistId or matcher) or coordinates (x, y)")
-        }
-        return payload
+        return LongPressGesturePayload(intent: intent, duration: try request.gestureDuration() ?? 0.5)
     }
 
     private func decodeSwipeGesturePayload(_ request: GestureRequestInput) throws -> SwipeGesturePayload {
         let start = try request.unitPoint("start")
         let end = try request.unitPoint("end")
-        let payload = SwipeGesturePayload(
-            elementTarget: try request.elementTarget(in: self),
-            startX: try request.number("startX"),
-            startY: try request.number("startY"),
-            endX: try request.number("endX"),
-            endY: try request.number("endY"),
-            direction: try request.enumValue("direction", as: SwipeDirection.self) { $0.lowercased() },
-            duration: try request.gestureDuration(),
-            start: start,
-            end: end
-        )
-        let target = payload.target
-        if (target.start != nil) != (target.end != nil) {
+        if (start != nil) != (end != nil) {
             throw FenceError.invalidRequest("Unit-point swipe requires both start and end")
         }
+        let elementTarget = try request.elementTarget(in: self)
+        let direction = try request.enumValue("direction", as: SwipeDirection.self) { $0.lowercased() }
+        let startPoint = try decodeCoordinatePair(request: request, xKey: "startX", yKey: "startY", field: "startX/startY")
+        let endPoint = try decodeCoordinatePair(request: request, xKey: "endX", yKey: "endY", field: "endX/endY")
+        if start != nil || end != nil, request.hasAny("startX", "startY", "endX", "endY") {
+            throw mixedGestureShape(field: "start/end", expected: "unit points or absolute coordinates")
+        }
+        if let start, let end {
+            return SwipeGesturePayload(
+                intent: .unit(elementTarget: elementTarget, start: start, end: end, direction: direction),
+                duration: try request.gestureDuration()
+            )
+        }
+        if elementTarget != nil, startPoint != nil {
+            throw mixedGestureShape(field: "startX/startY", expected: "element target or absolute start coordinates")
+        }
+        if endPoint != nil, direction != nil {
+            throw mixedGestureShape(field: "endX/endY", expected: "end coordinates or direction")
+        }
+        let startIntent: GesturePointIntent
+        if let elementTarget {
+            startIntent = .element(elementTarget)
+        } else if let startPoint {
+            startIntent = .point(x: startPoint.x, y: startPoint.y)
+        } else {
+            startIntent = .unspecified
+        }
+        let endIntent: SwipeGestureEndIntent
+        if let direction {
+            endIntent = .direction(direction)
+        } else if let endPoint {
+            endIntent = .point(x: endPoint.x, y: endPoint.y)
+        } else {
+            endIntent = .unspecified
+        }
+        let intent = SwipeGestureIntent.absolute(
+            start: startIntent,
+            end: endIntent
+        )
+        let payload = SwipeGesturePayload(intent: intent, duration: try request.gestureDuration())
         return payload
     }
 
     private func decodeDragGesturePayload(_ request: GestureRequestInput) throws -> DragGesturePayload {
-        DragGesturePayload(
+        let start = try decodeOptionalPointIntent(
+            request: request,
             elementTarget: try request.elementTarget(in: self),
-            startX: try request.number("startX"),
-            startY: try request.number("startY"),
+            xKey: "startX",
+            yKey: "startY",
+            field: "startX/startY"
+        )
+        return DragGesturePayload(
+            start: start,
             endX: try request.requiredNumber("endX"),
             endY: try request.requiredNumber("endY"),
             duration: try request.gestureDuration()
@@ -188,10 +288,15 @@ extension TheFence {
     }
 
     private func decodePinchGesturePayload(_ request: GestureRequestInput) throws -> PinchGesturePayload {
-        PinchGesturePayload(
+        let center = try decodeOptionalPointIntent(
+            request: request,
             elementTarget: try request.elementTarget(in: self),
-            centerX: try request.number("centerX"),
-            centerY: try request.number("centerY"),
+            xKey: "centerX",
+            yKey: "centerY",
+            field: "centerX/centerY"
+        )
+        return PinchGesturePayload(
+            center: center,
             scale: try request.requiredPositiveNumber("scale"),
             spread: try request.positiveNumber("spread"),
             duration: try request.gestureDuration()
@@ -199,10 +304,15 @@ extension TheFence {
     }
 
     private func decodeRotateGesturePayload(_ request: GestureRequestInput) throws -> RotateGesturePayload {
-        RotateGesturePayload(
+        let center = try decodeOptionalPointIntent(
+            request: request,
             elementTarget: try request.elementTarget(in: self),
-            centerX: try request.number("centerX"),
-            centerY: try request.number("centerY"),
+            xKey: "centerX",
+            yKey: "centerY",
+            field: "centerX/centerY"
+        )
+        return RotateGesturePayload(
+            center: center,
             angle: try request.requiredNumber("angle"),
             radius: try request.positiveNumber("radius"),
             duration: try request.gestureDuration()
@@ -210,10 +320,15 @@ extension TheFence {
     }
 
     private func decodeTwoFingerTapGesturePayload(_ request: GestureRequestInput) throws -> TwoFingerTapGesturePayload {
-        TwoFingerTapGesturePayload(
+        let center = try decodeOptionalPointIntent(
+            request: request,
             elementTarget: try request.elementTarget(in: self),
-            centerX: try request.number("centerX"),
-            centerY: try request.number("centerY"),
+            xKey: "centerX",
+            yKey: "centerY",
+            field: "centerX/centerY"
+        )
+        return TwoFingerTapGesturePayload(
+            center: center,
             spread: try request.positiveNumber("spread")
         )
     }

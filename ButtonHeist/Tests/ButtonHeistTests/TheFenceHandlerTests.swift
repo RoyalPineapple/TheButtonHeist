@@ -679,6 +679,22 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testOneFingerTapRejectsPartialCoordinates() async {
+        await assertValidationError(
+            ["command": "one_finger_tap", "x": 100.0],
+            equals: "schema validation failed for x/y: observed partial coordinates; expected both x and y, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testOneFingerTapRejectsMixedTargetAndCoordinates() async {
+        await assertValidationError(
+            ["command": "one_finger_tap", "heistId": "button", "x": 100.0, "y": 200.0],
+            equals: "schema validation failed for x/y: observed mixed gesture target shapes; expected element target or coordinates"
+        )
+    }
+
+    @ButtonHeistActor
     func testOneFingerTapRejectsNaNCoordinate() async {
         await assertValidationError(
             ["command": "one_finger_tap", "x": Double.nan, "y": 200.0],
@@ -713,6 +729,22 @@ final class TheFenceHandlerTests: XCTestCase {
     func testLongPressWithCoordinatesPassesValidation() async {
         await assertPassesValidation(
             ["command": "long_press", "x": 50.0, "y": 50.0]
+        )
+    }
+
+    @ButtonHeistActor
+    func testLongPressRejectsPartialCoordinates() async {
+        await assertValidationError(
+            ["command": "long_press", "x": 50.0],
+            equals: "schema validation failed for x/y: observed partial coordinates; expected both x and y, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testLongPressRejectsMixedTargetAndCoordinates() async {
+        await assertValidationError(
+            ["command": "long_press", "identifier": "button", "x": 50.0, "y": 50.0],
+            equals: "schema validation failed for x/y: observed mixed gesture target shapes; expected element target or coordinates"
         )
     }
 
@@ -753,6 +785,42 @@ final class TheFenceHandlerTests: XCTestCase {
             ["command": "swipe", "heistId": "row_5",
              "start": ["x": 0.8, "y": 0.5],
              "end": ["x": 0.2, "y": 0.5]]
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeRejectsPartialStartCoordinates() async {
+        await assertValidationError(
+            ["command": "swipe", "startX": 10.0, "direction": "left"],
+            equals: "schema validation failed for startX/startY: observed partial coordinates; expected both startX and startY, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeRejectsPartialEndCoordinates() async {
+        await assertValidationError(
+            ["command": "swipe", "startX": 10.0, "startY": 20.0, "endX": 30.0],
+            equals: "schema validation failed for endX/endY: observed partial coordinates; expected both endX and endY, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeRejectsMixedUnitAndAbsoluteCoordinates() async {
+        await assertValidationError(
+            ["command": "swipe", "heistId": "row_5",
+             "start": ["x": 0.8, "y": 0.5],
+             "end": ["x": 0.2, "y": 0.5],
+             "startX": 10.0,
+             "startY": 20.0],
+            equals: "schema validation failed for start/end: observed mixed gesture target shapes; expected unit points or absolute coordinates"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeRejectsMixedEndCoordinatesAndDirection() async {
+        await assertValidationError(
+            ["command": "swipe", "startX": 10.0, "startY": 20.0, "endX": 30.0, "endY": 20.0, "direction": "left"],
+            equals: "schema validation failed for endX/endY: observed mixed gesture target shapes; expected end coordinates or direction"
         )
     }
 
@@ -824,6 +892,22 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testDragRejectsPartialStartCoordinates() async {
+        await assertValidationError(
+            ["command": "drag", "startX": 100.0, "endX": 300.0, "endY": 600.0],
+            equals: "schema validation failed for startX/startY: observed partial coordinates; expected both startX and startY, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testDragRejectsMixedTargetAndStartCoordinates() async {
+        await assertValidationError(
+            ["command": "drag", "identifier": "card", "startX": 100.0, "startY": 300.0, "endX": 300.0, "endY": 600.0],
+            equals: "schema validation failed for startX/startY: observed mixed gesture target shapes; expected element target or coordinates"
+        )
+    }
+
+    @ButtonHeistActor
     func testDragRejectsLegacyXYStartAliases() async {
         await assertValidationError(
             ["command": "drag", "x": 100.0, "y": 300.0, "endX": 300.0, "endY": 600.0],
@@ -851,7 +935,6 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         let parsed = try fence.parseRequest([
             "command": "pinch",
-            "heistId": "photo_view",
             "scale": 2.0,
             "centerX": 200.0,
             "centerY": 500.0,
@@ -862,7 +945,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .gesture(.pinch(let payload)) = parsed.payload else {
             return XCTFail("Expected typed pinch payload, got \(parsed.payload)")
         }
-        XCTAssertEqual(payload.elementTarget, .heistId("photo_view"))
+        XCTAssertNil(payload.elementTarget)
         XCTAssertEqual(payload.scale, 2.0)
         XCTAssertEqual(payload.centerX, 200.0)
         XCTAssertEqual(payload.centerY, 500.0)
@@ -886,15 +969,29 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPinchRejectsPartialCenterCoordinates() async {
+        await assertValidationError(
+            ["command": "pinch", "scale": 2.0, "centerX": 200.0],
+            equals: "schema validation failed for centerX/centerY: observed partial coordinates; expected both centerX and centerY, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testPinchRejectsMixedTargetAndCenterCoordinates() async {
+        await assertValidationError(
+            ["command": "pinch", "scale": 2.0, "heistId": "photo_view", "centerX": 200.0, "centerY": 500.0],
+            equals: "schema validation failed for centerX/centerY: observed mixed gesture target shapes; expected element target or coordinates"
+        )
+    }
+
+    @ButtonHeistActor
     func testGestureDispatchRejectsCommandPayloadMismatch() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let parsed = TheFence.ParsedRequest(
             command: .pinch,
             requestId: "gesture-mismatch",
             payload: .gesture(.rotate(.init(
-                elementTarget: nil,
-                centerX: 150.0,
-                centerY: 400.0,
+                center: .point(x: 150.0, y: 400.0),
                 angle: 1.57,
                 radius: nil,
                 duration: nil
@@ -936,6 +1033,22 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRotateRejectsPartialCenterCoordinates() async {
+        await assertValidationError(
+            ["command": "rotate", "angle": 1.57, "centerX": 150.0],
+            equals: "schema validation failed for centerX/centerY: observed partial coordinates; expected both centerX and centerY, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotateRejectsMixedTargetAndCenterCoordinates() async {
+        await assertValidationError(
+            ["command": "rotate", "angle": 1.57, "identifier": "dial", "centerX": 150.0, "centerY": 400.0],
+            equals: "schema validation failed for centerX/centerY: observed mixed gesture target shapes; expected element target or coordinates"
+        )
+    }
+
+    @ButtonHeistActor
     func testRotateRejectsLegacyXYCenterAliases() async {
         await assertValidationError(
             ["command": "rotate", "angle": 1.57, "x": 150.0, "y": 400.0],
@@ -973,6 +1086,22 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(target.centerX, 200.0)
         XCTAssertEqual(target.centerY, 500.0)
+    }
+
+    @ButtonHeistActor
+    func testTwoFingerTapRejectsPartialCenterCoordinates() async {
+        await assertValidationError(
+            ["command": "two_finger_tap", "centerX": 200.0],
+            equals: "schema validation failed for centerX/centerY: observed partial coordinates; expected both centerX and centerY, or neither"
+        )
+    }
+
+    @ButtonHeistActor
+    func testTwoFingerTapRejectsMixedTargetAndCenterCoordinates() async {
+        await assertValidationError(
+            ["command": "two_finger_tap", "label": "Canvas", "centerX": 200.0, "centerY": 500.0],
+            equals: "schema validation failed for centerX/centerY: observed mixed gesture target shapes; expected element target or coordinates"
+        )
     }
 
     @ButtonHeistActor
