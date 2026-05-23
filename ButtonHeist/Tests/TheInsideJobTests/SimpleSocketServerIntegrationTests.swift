@@ -45,6 +45,28 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         XCTAssertEqual(admission.cancel(), 7)
     }
 
+    // MARK: - Client authentication lifecycle
+
+    func testClientAuthenticationCarriesDeadlineOnlyWhileAwaiting() {
+        var authentication = SocketClientAuthentication.awaitingAuthentication
+
+        XCTAssertFalse(authentication.isAuthenticated)
+        XCTAssertEqual(authentication, .awaitingAuthentication)
+        XCTAssertTrue(authentication.markApprovalPending())
+        XCTAssertEqual(authentication, .awaitingApproval)
+        XCTAssertTrue(authentication.markAuthenticated())
+        XCTAssertTrue(authentication.isAuthenticated)
+        XCTAssertFalse(authentication.markApprovalPending())
+        XCTAssertEqual(authentication, .authenticated)
+    }
+
+    func testDirectClientAuthenticationSkipsApproval() {
+        var authentication = SocketClientAuthentication.awaitingAuthentication
+
+        XCTAssertTrue(authentication.markAuthenticated())
+        XCTAssertEqual(authentication, .authenticated)
+    }
+
     // MARK: - ServerPhase transitions
 
     func testStartTransitionsToListening() async throws {
