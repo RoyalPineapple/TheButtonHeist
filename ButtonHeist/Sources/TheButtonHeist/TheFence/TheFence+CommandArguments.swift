@@ -7,22 +7,20 @@ extension TheFence {
     /// Typed JSON-compatible command arguments after external routing has selected a command.
     struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         let argumentValues: [String: CommandArgumentValue]
-        let argumentFieldPrefix: String? = nil
+        let argumentFieldPrefix: String?
 
-        init(arguments: [String: Any]) throws {
+        init(arguments: [String: Any], droppingCommandKey: Bool = true) throws {
             var values: [String: CommandArgumentValue] = [:]
-            for (key, value) in arguments where key != "command" {
+            for (key, value) in arguments where !droppingCommandKey || key != "command" {
                 values[key] = try CommandArgumentValue(value, field: key)
             }
             self.argumentValues = values
+            argumentFieldPrefix = nil
         }
 
-        init(values: [String: CommandArgumentValue]) {
+        init(values: [String: CommandArgumentValue], fieldPrefix: String? = nil) {
             self.argumentValues = values
-        }
-
-        func decodeEdgeRawDictionary() -> [String: Any] {
-            rawValue
+            argumentFieldPrefix = fieldPrefix
         }
 
     }
@@ -31,7 +29,7 @@ extension TheFence {
         let argumentValues: [String: CommandArgumentValue]
         let argumentFieldPrefix: String?
 
-        init(values: [String: CommandArgumentValue], fieldPrefix: String) {
+        init(values: [String: CommandArgumentValue], fieldPrefix: String?) {
             self.argumentValues = values
             self.argumentFieldPrefix = fieldPrefix
         }

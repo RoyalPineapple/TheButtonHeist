@@ -59,6 +59,23 @@ public enum FenceOperationCatalog {
     public static func normalizeBatchStep(
         _ step: [String: Any]
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        do {
+            let envelope = try TheFence.CommandArgumentEnvelope(arguments: step, droppingCommandKey: false)
+            let object = TheFence.CommandArgumentObject(
+                values: envelope.argumentValues,
+                fieldPrefix: nil
+            )
+            return normalizeBatchStep(object)
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
+        }
+    }
+
+    static func normalizeBatchStep(
+        _ step: TheFence.CommandArgumentObject
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         normalizeCanonicalStep(
             step,
             context: "run_batch step",
@@ -67,14 +84,14 @@ public enum FenceOperationCatalog {
         )
     }
 
-    static func routeBatchStepDecodeInput(_ step: [String: Any]) -> RoutedBatchStep {
+    static func routeBatchStepDecodeInput(_ step: TheFence.CommandArgumentObject) -> RoutedBatchStep {
         RoutedBatchStep(
             diagnosticCommandName: diagnosticCommandName(forBatchStep: step),
             normalizedOperation: normalizeBatchStep(step)
         )
     }
 
-    private static func diagnosticCommandName(forBatchStep step: [String: Any]) -> String {
+    private static func diagnosticCommandName(forBatchStep step: some TheFence.CommandArgumentReadable) -> String {
         do {
             guard let commandName = try step.schemaString("command") else {
                 return "?"
@@ -96,7 +113,7 @@ public enum FenceOperationCatalog {
     }
 
     private static func normalizeCanonicalStep(
-        _ step: [String: Any],
+        _ step: TheFence.CommandArgumentObject,
         context: String,
         nonExecutableLabel: String,
         isExecutable: KeyPath<TheFence.Command, Bool>
@@ -110,8 +127,12 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
 
-        var arguments = step
-        arguments.removeValue(forKey: "command")
+        var argumentValues = step.argumentValues
+        argumentValues.removeValue(forKey: "command")
+        let arguments = TheFence.CommandArgumentEnvelope(
+            values: argumentValues,
+            fieldPrefix: step.argumentFieldPrefix
+        )
 
         return normalizeCanonicalStep(
             commandName: commandName,
@@ -124,7 +145,7 @@ public enum FenceOperationCatalog {
 
     private static func normalizeCanonicalStep(
         commandName: String,
-        arguments: [String: Any],
+        arguments: TheFence.CommandArgumentEnvelope,
         context: String,
         nonExecutableLabel: String,
         isExecutable: KeyPath<TheFence.Command, Bool>
@@ -141,20 +162,11 @@ public enum FenceOperationCatalog {
             ))
         }
 
-        if let error = rawCanonicalShapeError(for: command, arguments: arguments, context: context) {
+        if let error = canonicalShapeError(for: command, arguments: arguments, context: context) {
             return .failure(error)
         }
 
-        do {
-            return .success(NormalizedOperation(
-                command: command,
-                arguments: try TheFence.CommandArgumentEnvelope(arguments: arguments)
-            ))
-        } catch let error as SchemaValidationError {
-            return .failure(FenceOperationRoutingError(message: error.message))
-        } catch {
-            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
-        }
+        return .success(NormalizedOperation(command: command, arguments: arguments))
     }
 
     private static func normalizeTypedPlaybackStep(
@@ -221,9 +233,9 @@ public enum FenceOperationCatalog {
         "Tool \"\(rawToolName)\" is grouped under \"\(groupedToolName)\"; call \(groupedToolName) with \(selectorName)=\"\(selectorValue)\"."
     }
 
-    private static func rawCanonicalShapeError(
+    private static func canonicalShapeError(
         for command: TheFence.Command,
-        arguments: [String: Any],
+        arguments: some TheFence.CommandArgumentReadable,
         context: String
     ) -> FenceOperationRoutingError? {
         guard let contract = TheFence.Command.mcpToolContract(named: command.rawValue),
@@ -232,7 +244,7 @@ public enum FenceOperationCatalog {
         }
 
         let selectorKey = selector.parameter.key
-        guard arguments[selectorKey] != nil else { return nil }
+        guard arguments.keys.contains(selectorKey) else { return nil }
 
         let commandParameterKeys = Set(command.parameters.map(\.key))
         if !commandParameterKeys.contains(selectorKey) {
@@ -242,7 +254,7 @@ public enum FenceOperationCatalog {
             )
         }
 
-        guard let selectorValue = arguments[selectorKey] as? String,
+        guard let selectorValue = try? arguments.schemaString(selectorKey),
               selector.consumesValue(selectorValue),
               let selectedCommand = selector.command(for: selectorValue),
               selectedCommand != command else {
@@ -335,7 +347,9 @@ public enum FenceOperationCatalog {
             return nil
         }
 
-        let payload = try TheFence.ExpectationPayload(arguments: arguments)
+        let payload = try TheFence.ExpectationPayload(
+            arguments: TheFence.CommandArgumentEnvelope(arguments: arguments)
+        )
         arguments.removeValue(forKey: "expect")
         return payload
     }

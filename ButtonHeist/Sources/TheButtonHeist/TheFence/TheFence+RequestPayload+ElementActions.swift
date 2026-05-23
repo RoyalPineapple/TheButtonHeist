@@ -45,12 +45,8 @@ extension TheFence {
         try ElementActionRequestInput(arguments).elementTarget(in: self)
     }
 
-    func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
-        try decodedElementTarget(CommandArgumentEnvelope(arguments: dictionary))
-    }
-
-    func elementMatcher(_ dictionary: [String: Any]) throws -> ElementMatcher {
-        try ElementActionRequestInput(CommandArgumentEnvelope(arguments: dictionary)).matcher()
+    func decodedElementMatcher(_ arguments: some CommandArgumentReadable) throws -> ElementMatcher {
+        try ElementActionRequestInput(arguments).matcher()
     }
 
     /// Parse an array of trait name strings into typed `HeistTrait` values.
@@ -166,10 +162,13 @@ private extension TheFence {
                 label: try string("label"),
                 identifier: try string("identifier"),
                 value: try string("value"),
-                traits: try TheFence.parseTraitNames(try request.schemaStringArray("traits"), field: "traits"),
+                traits: try TheFence.parseTraitNames(
+                    try request.schemaStringArray("traits"),
+                    field: request.field("traits")
+                ),
                 excludeTraits: try TheFence.parseTraitNames(
                     try request.schemaStringArray("excludeTraits"),
-                    field: "excludeTraits"
+                    field: request.field("excludeTraits")
                 )
             )
         }
@@ -185,7 +184,7 @@ private extension TheFence {
         func nonEmptyString(_ key: String) throws -> String {
             let value = try requiredString(key)
             if value.isEmpty {
-                throw SchemaValidationError(field: key, observed: value as Any, expected: "non-empty string")
+                throw SchemaValidationError(field: request.field(key), observed: value as Any, expected: "non-empty string")
             }
             return value
         }

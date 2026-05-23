@@ -22,11 +22,11 @@ final class OperationPrimitiveTests: XCTestCase {
     @ButtonHeistActor
     func testReadObservationEntryStaysOutsideOperationPipeline() async throws {
         let fence = TheFence(configuration: .init())
-        let request = try fence.decodeRunBatchRequest([
+        let request = try fence.decodeRunBatchRequest(TheFence.CommandArgumentEnvelope(arguments: [
             "steps": [
                 ["command": "get_screen"],
             ],
-        ])
+        ]))
 
         guard case .invalid(let commandName, let failure)? = request.steps.first else {
             return XCTFail("Expected read command to stay outside batch operation pipeline")
