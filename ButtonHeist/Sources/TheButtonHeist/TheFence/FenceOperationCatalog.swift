@@ -20,7 +20,7 @@ public struct NormalizedOperation {
 
     init(
         command: TheFence.Command,
-        arguments: [String: Any],
+        arguments: TheFence.CommandArgumentEnvelope,
         expectationPayload: TheFence.ExpectationPayload? = nil
     ) {
         self.command = command
@@ -122,7 +122,16 @@ public enum FenceOperationCatalog {
             return .failure(error)
         }
 
-        return .success(NormalizedOperation(command: command, arguments: arguments))
+        do {
+            return .success(NormalizedOperation(
+                command: command,
+                arguments: try TheFence.CommandArgumentEnvelope(arguments: arguments)
+            ))
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
+        }
     }
 
     private static func normalizeTypedPlaybackStep(
@@ -281,11 +290,17 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
 
-        return .success(NormalizedOperation(
-            command: command,
-            arguments: operationArguments,
-            expectationPayload: expectationPayload
-        ))
+        do {
+            return .success(NormalizedOperation(
+                command: command,
+                arguments: try TheFence.CommandArgumentEnvelope(arguments: operationArguments),
+                expectationPayload: expectationPayload
+            ))
+        } catch let error as SchemaValidationError {
+            return .failure(FenceOperationRoutingError(message: error.message))
+        } catch {
+            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
+        }
     }
 
     private static func parsedExpectationPayload(

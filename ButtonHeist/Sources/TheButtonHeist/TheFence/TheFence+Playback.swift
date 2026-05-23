@@ -79,22 +79,33 @@ extension TheFence {
         }
 
         func requestArguments() -> [String: Any] {
-            var arguments = payload.values.mapValues { $0.toAny() }
-
-            if let target {
-                if let label = target.label { arguments["label"] = label }
-                if let matchIdentifier = target.identifier { arguments["identifier"] = matchIdentifier }
-                if let matchValue = target.value { arguments["value"] = matchValue }
-                if let matchTraits = target.traits { arguments["traits"] = matchTraits.map(\.rawValue) }
-                if let matchExclude = target.excludeTraits { arguments["excludeTraits"] = matchExclude.map(\.rawValue) }
-            }
-            if let ordinal { arguments["ordinal"] = ordinal }
-
-            return arguments
+            commandArgumentEnvelope().rawDictionary()
         }
 
         func normalizedOperation() -> NormalizedOperation {
-            NormalizedOperation(command: command, arguments: requestArguments())
+            NormalizedOperation(
+                command: command,
+                arguments: commandArgumentEnvelope()
+            )
+        }
+
+        private func commandArgumentEnvelope() -> CommandArgumentEnvelope {
+            var arguments = payload.values.mapValues(CommandArgumentValue.init)
+
+            if let target {
+                if let label = target.label { arguments["label"] = .string(label) }
+                if let matchIdentifier = target.identifier { arguments["identifier"] = .string(matchIdentifier) }
+                if let matchValue = target.value { arguments["value"] = .string(matchValue) }
+                if let matchTraits = target.traits {
+                    arguments["traits"] = .array(matchTraits.map { .string($0.rawValue) })
+                }
+                if let matchExclude = target.excludeTraits {
+                    arguments["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
+                }
+            }
+            if let ordinal { arguments["ordinal"] = .int(ordinal) }
+
+            return CommandArgumentEnvelope(values: arguments)
         }
     }
 

@@ -335,21 +335,25 @@ extension TheFence {
     }
 
     struct RoutedCommandRequest {
-        fileprivate let arguments: [String: Any]
+        private let arguments: CommandArgumentEnvelope
         let expectationPayload: ExpectationPayload?
 
-        init(arguments: [String: Any], expectationPayload: ExpectationPayload? = nil) {
-            self.arguments = arguments.filter { $0.key != "command" }
+        init(arguments: CommandArgumentEnvelope, expectationPayload: ExpectationPayload? = nil) {
+            self.arguments = arguments
             self.expectationPayload = expectationPayload
         }
 
-        func string(_ key: String) -> String? { arguments[key] as? String }
+        func string(_ key: String) -> String? { arguments.string(key) }
 
         func batchExecutionTarget() throws -> BatchExecutionTarget? {
             try Self.batchExecutionTarget(from: arguments)
         }
 
-        private static func batchExecutionTarget(from arguments: [String: Any]) throws -> BatchExecutionTarget? {
+        func argumentEnvelopeForRequestDecoding() -> CommandArgumentEnvelope {
+            arguments
+        }
+
+        private static func batchExecutionTarget(from arguments: CommandArgumentEnvelope) throws -> BatchExecutionTarget? {
             let sourceHeistId = try arguments.schemaString("heistId")
             let ordinal = try arguments.schemaNonNegativeInteger("ordinal")
             let matcher = ElementMatcher(
@@ -411,12 +415,16 @@ extension TheFence {
     }
 
     func parseRequest(command: Command, arguments: [String: Any]) throws -> ParsedRequest {
-        try parseRequest(command: command, arguments: arguments, expectationPayload: nil)
+        try parseRequest(
+            command: command,
+            arguments: try CommandArgumentEnvelope(arguments: arguments),
+            expectationPayload: nil
+        )
     }
 
     private func parseRequest(
         command: Command,
-        arguments: [String: Any],
+        arguments: CommandArgumentEnvelope,
         expectationPayload typedExpectationPayload: ExpectationPayload?,
         routedBatchTarget: BatchExecutionTarget? = nil
     ) throws -> ParsedRequest {
@@ -430,12 +438,13 @@ extension TheFence {
                 immediateResponse: immediate
             )
         }
-        let requestId = (arguments["requestId"] as? String) ?? UUID().uuidString
-        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
+        let rawArguments = arguments.rawDictionary()
+        let requestId = arguments.string("requestId") ?? UUID().uuidString
+        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(rawArguments)
         let payload: RequestPayload = if command == .waitForChange {
             .waitForChange(expectationPayload)
         } else {
-            try decodeRequestPayload(command: command, request: arguments, requestId: requestId)
+            try decodeRequestPayload(command: command, request: rawArguments, requestId: requestId)
         }
 
         return ParsedRequest(
@@ -452,13 +461,13 @@ extension TheFence {
         let request = operation.request
         return try parseRequest(
             command: operation.command,
-            arguments: request.arguments,
+            arguments: request.argumentEnvelopeForRequestDecoding(),
             expectationPayload: request.expectationPayload,
             routedBatchTarget: try request.batchExecutionTarget()
         )
     }
 
-    private func validateRequestKeys(command: Command, arguments: [String: Any]) throws {
+    private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
         let metadataKeys = Set(["requestId"])
         let parameterKeys = Set(command.parameters.map(\.key))
         let allowedKeys = metadataKeys.union(parameterKeys)
@@ -467,7 +476,7 @@ extension TheFence {
         }
         throw SchemaValidationError(
             field: unexpectedKey,
-            observed: arguments[unexpectedKey],
+            observed: arguments.observedValue(for: unexpectedKey),
             expected: "valid \(command.rawValue) parameter"
         )
     }

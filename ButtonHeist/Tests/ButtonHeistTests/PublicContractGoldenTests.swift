@@ -155,6 +155,55 @@ final class PublicContractGoldenTests: XCTestCase {
         }
     }
 
+    func testNormalizedOperationsDoNotExposeRawBatchArguments() throws {
+        let catalog = try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/FenceOperationCatalog.swift")
+        let normalizedOperation = try XCTUnwrap(
+            catalog.range(of: "public struct NormalizedOperation").flatMap { start in
+                catalog.range(of: "/// Shared routing table", range: start.upperBound..<catalog.endIndex).map { end in
+                    String(catalog[start.lowerBound..<end.lowerBound])
+                }
+            }
+        )
+        XCTAssertFalse(
+            normalizedOperation.contains("[String: Any]"),
+            "NormalizedOperation should carry a typed routed request, not expose raw dictionaries."
+        )
+        XCTAssertTrue(
+            normalizedOperation.contains("RoutedCommandRequest"),
+            "NormalizedOperation should keep routed request metadata behind a typed envelope."
+        )
+
+        let batchParser = try sourceFile(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+BatchCommandParser.swift"
+        )
+        XCTAssertFalse(
+            batchParser.contains("operation.arguments"),
+            "Batch planning should consume parsed requests, not raw operation arguments."
+        )
+        XCTAssertFalse(
+            batchParser.contains("operation.request.arguments"),
+            "Batch planning should consume parsed requests, not raw routed request dictionaries."
+        )
+
+        let batchConstructor = try sourceFile(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+BatchActionConstructor.swift"
+        )
+        let forbiddenConstructorPatterns = [
+            "[String: Any]",
+            "schemaString(",
+            "schemaInteger(",
+            "schemaDictionary(",
+            "operation.arguments",
+            "operation.request.arguments",
+        ]
+        for pattern in forbiddenConstructorPatterns {
+            XCTAssertFalse(
+                batchConstructor.contains(pattern),
+                "Batch action construction should map typed parsed requests, not parse raw dictionaries with \(pattern)."
+            )
+        }
+    }
+
     func testGetInterfacePublicJSONGolden() throws {
         let interface = makeReceiptTestInterface([
             makeReceiptTestElement(heistId: "pay_button", label: "Pay", traits: [.button]),
