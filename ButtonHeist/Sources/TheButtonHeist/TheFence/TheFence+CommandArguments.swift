@@ -74,7 +74,7 @@ extension TheFence {
             }
         }
 
-        func rawDictionary() -> [String: Any] {
+        func decodeEdgeRawDictionary() -> [String: Any] {
             values.mapValues(\.rawValue)
         }
 

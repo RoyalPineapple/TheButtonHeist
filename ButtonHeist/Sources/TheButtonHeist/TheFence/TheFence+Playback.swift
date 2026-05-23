@@ -78,8 +78,8 @@ extension TheFence {
             command.rawValue
         }
 
-        func requestArguments() -> [String: Any] {
-            commandArgumentEnvelope().rawDictionary()
+        func requestDecodeInputArguments() -> [String: Any] {
+            commandArgumentEnvelope().decodeEdgeRawDictionary()
         }
 
         func normalizedOperation() -> NormalizedOperation {
