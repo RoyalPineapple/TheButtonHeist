@@ -6,9 +6,9 @@ extension TheFence {
 
     func decodeGestureRequestPayload(
         command: Command,
-        request: [String: Any]
+        arguments: CommandArgumentEnvelope
     ) throws -> RequestPayload {
-        .gesture(try decodeGesturePayload(command: command, request: GestureRequestInput(request)))
+        .gesture(try decodeGesturePayload(command: command, request: GestureRequestInput(arguments)))
     }
 
     private func decodeGesturePayload(
@@ -40,9 +40,9 @@ extension TheFence {
     }
 
     private struct GestureRequestInput {
-        private let request: [String: Any]
+        private let request: any CommandArgumentReadable
 
-        init(_ request: [String: Any]) {
+        init(_ request: some CommandArgumentReadable) {
             self.request = request
         }
 
@@ -56,7 +56,7 @@ extension TheFence {
         }
 
         func hasAny(_ keys: String...) -> Bool {
-            keys.contains { request[$0] != nil }
+            keys.contains { request.argumentValues[$0] != nil }
         }
 
         func requiredNumber(_ key: String) throws -> Double {
@@ -111,20 +111,20 @@ extension TheFence {
         }
 
         func requiredObjectArray(_ key: String) throws -> [GestureRequestObject] {
-            try request.requiredSchemaDictionaryArray(key).map(GestureRequestObject.init)
+            try request.requiredSchemaObjectArray(key).map(GestureRequestObject.init)
         }
     }
 
     private struct GestureRequestObject {
-        private let dictionary: [String: Any]
+        private let object: CommandArgumentObject
 
-        fileprivate init(_ dictionary: [String: Any]) {
-            self.dictionary = dictionary
+        fileprivate init(_ object: CommandArgumentObject) {
+            self.object = object
         }
 
         func requiredNumber(_ key: String, field: String) throws -> Double {
             do {
-                guard let value = try dictionary.schemaNumber(key) else {
+                guard let value = try object.schemaNumber(key) else {
                     throw SchemaValidationError(field: field, observed: nil, expected: "number")
                 }
                 return value

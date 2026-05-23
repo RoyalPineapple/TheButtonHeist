@@ -562,6 +562,112 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
+    func testCommandArgumentEnvelopeReadsTypedObjectArrays() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "points": [
+                ["x": 0.25, "y": 0.75],
+                ["x": 1, "y": 2],
+            ],
+        ] as [String: Any])
+
+        let points = try envelope.requiredSchemaObjectArray("points")
+        XCTAssertEqual(points.count, 2)
+        XCTAssertEqual(try points[0].requiredSchemaNumber("x"), 0.25)
+        XCTAssertEqual(try points[0].requiredSchemaNumber("y"), 0.75)
+        XCTAssertEqual(try points[1].requiredSchemaNumber("x"), 1)
+        XCTAssertEqual(try points[1].requiredSchemaNumber("y"), 2)
+    }
+
+    func testCommandArgumentEnvelopeObjectArrayErrorsUseIndexedFields() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "points": [
+                ["x": "bad"],
+            ],
+        ] as [String: Any])
+
+        let points = try envelope.requiredSchemaObjectArray("points")
+        XCTAssertThrowsError(try points[0].requiredSchemaNumber("x")) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for points[0].x: observed string \"bad\"; expected number"
+            )
+        }
+    }
+
+    func testCommandArgumentEnvelopeReadsUnitPoint() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "start": ["x": 0.25, "y": 0.75],
+        ] as [String: Any])
+
+        XCTAssertEqual(try envelope.schemaUnitPoint("start"), UnitPoint(x: 0.25, y: 0.75))
+    }
+
+    func testCommandArgumentEnvelopeUnitPointErrorsUseQualifiedFields() throws {
+        let missingField = try TheFence.CommandArgumentEnvelope(arguments: [
+            "start": ["x": 0.25],
+        ] as [String: Any])
+        XCTAssertThrowsError(try missingField.schemaUnitPoint("start")) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for start.y: observed missing; expected number"
+            )
+        }
+
+        let outOfRange = try TheFence.CommandArgumentEnvelope(arguments: [
+            "start": ["x": 1.2, "y": 0.5],
+        ] as [String: Any])
+        XCTAssertThrowsError(try outOfRange.schemaUnitPoint("start")) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for start.x: observed number 1.2; expected number in 0...1"
+            )
+        }
+    }
+
+    func testCommandArgumentEnvelopeUnitPointRejectsNonObjectWithSpecificExpectedShape() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "start": "left",
+        ])
+
+        XCTAssertThrowsError(try envelope.schemaUnitPoint("start")) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for start: observed string \"left\"; expected object with numeric x and y"
+            )
+        }
+    }
+
+    func testCommandArgumentEnvelopeReadsRequiredEnum() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
+            "direction": "UP",
+        ])
+
+        XCTAssertEqual(
+            try envelope.requiredSchemaEnum("direction", as: SwipeDirection.self) { $0.lowercased() },
+            .up
+        )
+    }
+
+    func testCommandArgumentEnvelopeRequiredEnumErrorsUseExpectedCases() throws {
+        let missing = try TheFence.CommandArgumentEnvelope(arguments: [:])
+        XCTAssertThrowsError(try missing.requiredSchemaEnum("direction", as: SwipeDirection.self)) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for direction: observed missing; expected enum one of up, down, left, right"
+            )
+        }
+
+        let invalid = try TheFence.CommandArgumentEnvelope(arguments: [
+            "direction": "diagonal",
+        ])
+        XCTAssertThrowsError(try invalid.requiredSchemaEnum("direction", as: SwipeDirection.self)) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
+            )
+        }
+    }
+
     @ButtonHeistActor
     func testElementTargetWithIdentifier() async throws {
         let (fence, _) = makeConnectedFence()
