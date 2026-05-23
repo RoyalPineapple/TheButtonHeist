@@ -197,14 +197,14 @@ extension TheBrains {
         method: ActionMethod
     ) async -> ActionResult {
         await performElementSearch(
-            elementTarget: target.target?.batchElementTarget,
+            elementTarget: target.target,
             direction: target.direction,
             method: method
         )
     }
 
     func performElementSearch(
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         direction: ScrollSearchDirection?,
         method: ActionMethod
     ) async -> ActionResult {
@@ -244,14 +244,14 @@ extension TheBrains {
 
     func performWaitFor(target: BatchWaitForTarget) async -> ActionResult {
         await performWaitFor(
-            elementTarget: target.target.batchElementTarget,
+            elementTarget: target.target,
             absent: target.absent,
             timeout: target.timeout
         )
     }
 
     func performWaitFor(
-        elementTarget: ElementTarget,
+        elementTarget: any SemanticElementTarget,
         absent: Bool?,
         timeout: Double?
     ) async -> ActionResult {
@@ -277,28 +277,29 @@ extension TheBrains {
 
     /// Execute the wait_for polling loop.
     private func executeWaitFor(
-        elementTarget: ElementTarget,
+        elementTarget: any SemanticElementTarget,
         absent: Bool,
         timeout: Double
     ) async -> TheSafecracker.InteractionResult {
         let deadline = ContinuousClock.now + .seconds(timeout)
         let start = CFAbsoluteTimeGetCurrent()
+        let executableTarget = stash.semanticElementTarget(for: elementTarget)
 
-        guard await refreshSemanticStateForWait(target: elementTarget) else {
+        guard await refreshSemanticStateForWait(target: executableTarget) else {
             return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
         }
-        var resolution = stash.resolveTarget(elementTarget)
+        var resolution = stash.resolveTarget(executableTarget)
         if let result = waitForResult(resolution: resolution, absent: absent, elapsed: nil) {
             return result
         }
 
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            guard await refreshSemanticStateForWait(target: elementTarget) else {
+            guard await refreshSemanticStateForWait(target: executableTarget) else {
                 return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-            resolution = stash.resolveTarget(elementTarget)
+            resolution = stash.resolveTarget(executableTarget)
             if let result = waitForResult(resolution: resolution, absent: absent, elapsed: elapsed) {
                 return result
             }
@@ -308,7 +309,7 @@ extension TheBrains {
         let message = waitForTimeoutMessage(
             absent: absent,
             elapsed: elapsed,
-            target: elementTarget,
+            target: executableTarget,
             resolution: resolution
         )
         return .failure(.waitFor, message: message, failureKind: .timeout)
@@ -339,7 +340,7 @@ extension TheBrains {
     private func waitForTimeoutMessage(
         absent: Bool,
         elapsed: String,
-        target: ElementTarget,
+        target: any SemanticElementTarget,
         resolution: TheStash.TargetResolution
     ) -> String {
         let expected = absent ? "element to disappear" : "element to appear"
@@ -365,17 +366,16 @@ extension TheBrains {
         return parts.joined(separator: "; ")
     }
 
-    private func waitForTargetDescription(_ target: ElementTarget) -> String {
-        switch target {
-        case .heistId(let heistId):
+    private func waitForTargetDescription(_ target: any SemanticElementTarget) -> String {
+        if let heistId = target.exactHeistId {
             return "heistId=\"\(heistId)\""
-        case .matcher(let matcher, let ordinal):
-            var description = stash.formatMatcher(matcher)
-            if let ordinal {
-                description += " ordinal=\(ordinal)"
-            }
-            return description.isEmpty ? "<empty matcher>" : description
         }
+        let matcher = target.semanticMatcher ?? ElementMatcher()
+        var description = stash.formatMatcher(matcher)
+        if let ordinal = target.semanticOrdinal {
+            description += " ordinal=\(ordinal)"
+        }
+        return description.isEmpty ? "<empty matcher>" : description
     }
 
     static func waitForErrorKind(for failureKind: TheSafecracker.FailureKind?) -> ErrorKind {
@@ -543,15 +543,6 @@ private extension ClientMessage {
              .stopRecording:
             return nil
         }
-    }
-}
-
-private extension ElementTarget {
-    var exactHeistId: HeistId? {
-        if case .heistId(let heistId) = self {
-            return heistId
-        }
-        return nil
     }
 }
 

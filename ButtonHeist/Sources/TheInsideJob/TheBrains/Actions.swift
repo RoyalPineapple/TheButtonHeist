@@ -13,14 +13,14 @@ import AccessibilitySnapshotParser
 // the pipeline a closure for the actual gesture or accessibility action.
 
 protocol CustomActionExecutionInput {
-    var actionElementTarget: ElementTarget? { get }
+    var actionElementTarget: (any SemanticElementTarget)? { get }
     var actionContainerTarget: ContainerMatcher? { get }
     var actionContainerOrdinal: Int? { get }
     var actionName: String { get }
 }
 
 protocol RotorExecutionInput {
-    var rotorElementTarget: ElementTarget { get }
+    var rotorElementTarget: any SemanticElementTarget { get }
     var rotor: String? { get }
     var rotorIndex: Int? { get }
     var direction: RotorDirection? { get }
@@ -29,7 +29,7 @@ protocol RotorExecutionInput {
 }
 
 protocol TapExecutionInput {
-    var tapElementTarget: ElementTarget? { get }
+    var tapElementTarget: (any SemanticElementTarget)? { get }
     var pointX: Double? { get }
     var pointY: Double? { get }
 }
@@ -39,7 +39,7 @@ protocol LongPressExecutionInput: TapExecutionInput {
 }
 
 protocol SwipeExecutionInput {
-    var swipeElementTarget: ElementTarget? { get }
+    var swipeElementTarget: (any SemanticElementTarget)? { get }
     var startX: Double? { get }
     var startY: Double? { get }
     var endX: Double? { get }
@@ -51,7 +51,7 @@ protocol SwipeExecutionInput {
 }
 
 protocol DragExecutionInput {
-    var dragElementTarget: ElementTarget? { get }
+    var dragElementTarget: (any SemanticElementTarget)? { get }
     var startX: Double? { get }
     var startY: Double? { get }
     var endX: Double { get }
@@ -60,7 +60,7 @@ protocol DragExecutionInput {
 }
 
 protocol PinchExecutionInput {
-    var pinchElementTarget: ElementTarget? { get }
+    var pinchElementTarget: (any SemanticElementTarget)? { get }
     var centerX: Double? { get }
     var centerY: Double? { get }
     var scale: Double { get }
@@ -69,7 +69,7 @@ protocol PinchExecutionInput {
 }
 
 protocol RotateExecutionInput {
-    var rotateElementTarget: ElementTarget? { get }
+    var rotateElementTarget: (any SemanticElementTarget)? { get }
     var centerX: Double? { get }
     var centerY: Double? { get }
     var angle: Double { get }
@@ -78,7 +78,7 @@ protocol RotateExecutionInput {
 }
 
 protocol TwoFingerTapExecutionInput {
-    var twoFingerTapElementTarget: ElementTarget? { get }
+    var twoFingerTapElementTarget: (any SemanticElementTarget)? { get }
     var centerX: Double? { get }
     var centerY: Double? { get }
     var spread: Double? { get }
@@ -86,7 +86,7 @@ protocol TwoFingerTapExecutionInput {
 
 protocol TypeTextExecutionInput {
     var text: String { get }
-    var typeTextElementTarget: ElementTarget? { get }
+    var typeTextElementTarget: (any SemanticElementTarget)? { get }
 }
 
 /// Actions — element and point action execution.
@@ -131,7 +131,7 @@ final class Actions {
     /// Unified pipeline for actions that target an element:
     /// ensureOnScreen → resolve → check interactivity → perform action.
     func performElementAction(
-        target: ElementTarget,
+        target: any SemanticElementTarget,
         method: ActionMethod,
         recordedScreen: Screen? = nil,
         requireInteractive: Bool = true,
@@ -167,7 +167,7 @@ final class Actions {
     }
 
     private func resolveActivateTarget(
-        _ target: ElementTarget,
+        _ target: any SemanticElementTarget,
         recordedScreen: Screen?
     ) async -> LiveElementActionContextResolution {
         let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
@@ -296,7 +296,7 @@ final class Actions {
     /// Unified pipeline for gestures that target a screen point:
     /// ensureOnScreen (if element target) → resolve point → perform gesture.
     func performPointAction(
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         pointX: Double?,
         pointY: Double?,
         method: ActionMethod,
@@ -479,6 +479,14 @@ final class Actions {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeActivate(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    }
+
+    func executeActivate(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeActivate(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    }
+
+    private func executeActivate(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         switch await resolveActivateTarget(target, recordedScreen: recordedScreen) {
         case .success(let context):
             return await ActivationPolicy(
@@ -492,10 +500,6 @@ final class Actions {
         case .failure(let result), .retryableFailure(let result):
             return result
         }
-    }
-
-    func executeActivate(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeActivate(target.batchElementTarget, recordedScreen: recordedScreen)
     }
 
     private func refreshAndResolveActivationTarget(
@@ -554,6 +558,14 @@ final class Actions {
     }
 
     func executeIncrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeIncrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    }
+
+    func executeIncrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeIncrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    }
+
+    private func executeIncrement(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .increment,
@@ -580,11 +592,15 @@ final class Actions {
         )
     }
 
-    func executeIncrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(target.batchElementTarget, recordedScreen: recordedScreen)
+    func executeDecrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeDecrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
     }
 
-    func executeDecrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+    func executeDecrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeDecrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    }
+
+    private func executeDecrement(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .decrement,
@@ -609,10 +625,6 @@ final class Actions {
                 return .success(method: .decrement)
             }
         )
-    }
-
-    func executeDecrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(target.batchElementTarget, recordedScreen: recordedScreen)
     }
 
     func executeCustomAction(
@@ -907,7 +919,7 @@ final class Actions {
     }
 
     private func unitSwipePoints(
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         direction: SwipeDirection?,
         start: UnitPoint?,
         end: UnitPoint?
@@ -1369,97 +1381,91 @@ final class Actions {
 }
 
 extension CustomActionTarget: CustomActionExecutionInput {
-    var actionElementTarget: ElementTarget? { elementTarget }
+    var actionElementTarget: (any SemanticElementTarget)? { elementTarget }
     var actionContainerTarget: ContainerMatcher? { containerTarget }
     var actionContainerOrdinal: Int? { containerOrdinal }
 }
 
 extension BatchCustomActionTarget: CustomActionExecutionInput {
-    var actionElementTarget: ElementTarget? { target?.batchElementTarget }
+    var actionElementTarget: (any SemanticElementTarget)? { target }
     var actionContainerTarget: ContainerMatcher? { containerTarget }
     var actionContainerOrdinal: Int? { containerOrdinal }
 }
 
 extension RotorTarget: RotorExecutionInput {
-    var rotorElementTarget: ElementTarget { elementTarget }
+    var rotorElementTarget: any SemanticElementTarget { elementTarget }
 }
 
 extension BatchRotorTarget: RotorExecutionInput {
-    var rotorElementTarget: ElementTarget { target.batchElementTarget }
+    var rotorElementTarget: any SemanticElementTarget { target }
     var currentHeistId: HeistId? { currentSourceHeistId }
 }
 
 extension TouchTapTarget: TapExecutionInput {
-    var tapElementTarget: ElementTarget? { elementTarget }
+    var tapElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchTouchTapTarget: TapExecutionInput {
-    var tapElementTarget: ElementTarget? { target?.batchElementTarget }
+    var tapElementTarget: (any SemanticElementTarget)? { target }
 }
 
 extension LongPressTarget: LongPressExecutionInput {
-    var tapElementTarget: ElementTarget? { elementTarget }
+    var tapElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchLongPressTarget: LongPressExecutionInput {
-    var tapElementTarget: ElementTarget? { target?.batchElementTarget }
+    var tapElementTarget: (any SemanticElementTarget)? { target }
 }
 
 extension SwipeTarget: SwipeExecutionInput {
-    var swipeElementTarget: ElementTarget? { elementTarget }
+    var swipeElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchSwipeTarget: SwipeExecutionInput {
-    var swipeElementTarget: ElementTarget? { target?.batchElementTarget }
+    var swipeElementTarget: (any SemanticElementTarget)? { target }
 }
 
 extension DragTarget: DragExecutionInput {
-    var dragElementTarget: ElementTarget? { elementTarget }
+    var dragElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchDragTarget: DragExecutionInput {
-    var dragElementTarget: ElementTarget? { target?.batchElementTarget }
+    var dragElementTarget: (any SemanticElementTarget)? { target }
 }
 
 extension PinchTarget: PinchExecutionInput {
-    var pinchElementTarget: ElementTarget? { elementTarget }
+    var pinchElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchPinchTarget: PinchExecutionInput {
-    var pinchElementTarget: ElementTarget? { target?.batchElementTarget }
+    var pinchElementTarget: (any SemanticElementTarget)? { target }
 }
 
 extension RotateTarget: RotateExecutionInput {
-    var rotateElementTarget: ElementTarget? { elementTarget }
+    var rotateElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchRotateTarget: RotateExecutionInput {
-    var rotateElementTarget: ElementTarget? { target?.batchElementTarget }
+    var rotateElementTarget: (any SemanticElementTarget)? { target }
 }
 
 extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
-    var twoFingerTapElementTarget: ElementTarget? { elementTarget }
+    var twoFingerTapElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchTwoFingerTapTarget: TwoFingerTapExecutionInput {
-    var twoFingerTapElementTarget: ElementTarget? { target?.batchElementTarget }
+    var twoFingerTapElementTarget: (any SemanticElementTarget)? { target }
 }
 
 extension TypeTextTarget: TypeTextExecutionInput {
-    var typeTextElementTarget: ElementTarget? { elementTarget }
+    var typeTextElementTarget: (any SemanticElementTarget)? { elementTarget }
 }
 
 extension BatchTypeTextTarget: TypeTextExecutionInput {
-    var typeTextElementTarget: ElementTarget? { target?.batchElementTarget }
+    var typeTextElementTarget: (any SemanticElementTarget)? { target }
 }
 
-// MARK: - Batch Target Conversion
-
-extension BatchExecutionTarget {
-    var batchElementTarget: ElementTarget {
-        .matcher(matcher, ordinal: ordinal)
-    }
-}
+// MARK: - Semantic Target Resolution
 
 #endif // DEBUG
 #endif // canImport(UIKit)

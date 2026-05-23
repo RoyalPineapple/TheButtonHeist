@@ -258,13 +258,13 @@ extension Navigation {
 
     func executeScroll(_ target: BatchScrollTarget) async -> TheSafecracker.InteractionResult {
         await executeScroll(
-            elementTarget: target.target?.batchElementTarget,
+            elementTarget: target.target,
             direction: target.direction
         )
     }
 
     func executeScroll(
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         containerTarget: ScrollContainerTarget? = nil,
         direction: ScrollDirection
     ) async -> TheSafecracker.InteractionResult {
@@ -298,13 +298,13 @@ extension Navigation {
 
     func executeScrollToEdge(_ target: BatchScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
         await executeScrollToEdge(
-            elementTarget: target.target?.batchElementTarget,
+            elementTarget: target.target,
             edge: target.edge
         )
     }
 
     func executeScrollToEdge(
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         containerTarget: ScrollContainerTarget? = nil,
         edge: ScrollEdge
     ) async -> TheSafecracker.InteractionResult {
@@ -361,13 +361,13 @@ extension Navigation {
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         await executeScrollToVisible(
-            elementTarget: target.target?.batchElementTarget,
+            elementTarget: target.target,
             recordedScreen: recordedScreen
         )
     }
 
     func executeScrollToVisible(
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         guard let elementTarget else {
@@ -420,13 +420,13 @@ extension Navigation {
 
     func executeElementSearch(_ target: BatchElementSearchTarget) async -> TheSafecracker.InteractionResult {
         await executeElementSearch(
-            elementTarget: target.target?.batchElementTarget,
+            elementTarget: target.target,
             direction: target.direction
         )
     }
 
     func executeElementSearch(
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         direction: ScrollSearchDirection?
     ) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = elementTarget else {
@@ -448,7 +448,7 @@ extension Navigation {
             // Unknown targets still use iterative search below.
         } else {
             let direct = await executeScrollToVisible(
-                ScrollToVisibleTarget(elementTarget: searchTarget),
+                elementTarget: searchTarget,
                 recordedScreen: knownScreen
             )
             stash.refresh()
@@ -527,7 +527,7 @@ extension Navigation {
 
     private func searchFineTuneAndResolve(
         _ found: TheStash.ResolvedTarget,
-        searchTarget: ElementTarget,
+        searchTarget: any SemanticElementTarget,
         scrollCount: Int,
         progress: inout ScrollSearchProgress
     ) async -> TheSafecracker.InteractionResult? {
@@ -545,7 +545,7 @@ extension Navigation {
 
     private func resolveContainerScrollTarget(
         containerTarget: ScrollContainerTarget?,
-        elementTarget: ElementTarget?,
+        elementTarget: (any SemanticElementTarget)?,
         axis: ScrollAxis,
         commandName: String
     ) -> ContainerScrollResolution {
@@ -763,6 +763,13 @@ extension Navigation {
     }
 
     func ensureOnScreen(for target: ElementTarget, recordedScreen: Screen? = nil) async -> EnsureOnScreenResult {
+        await ensureOnScreen(for: target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    }
+
+    func ensureOnScreen(
+        for target: any SemanticElementTarget,
+        recordedScreen: Screen? = nil
+    ) async -> EnsureOnScreenResult {
         let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
         return await ensureOnScreen(for: normalizedTarget, allowSourceScreenFallback: recordedScreen != nil)
     }
@@ -892,7 +899,7 @@ extension Navigation {
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
     private func liveScrollElementFailureMessage(
-        _ target: ElementTarget,
+        _ target: any SemanticElementTarget,
         commandName: String
     ) -> String {
         switch stash.resolveTarget(target) {

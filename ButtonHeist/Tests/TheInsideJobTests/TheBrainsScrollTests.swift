@@ -477,17 +477,17 @@ final class TheBrainsScrollTests: XCTestCase {
         var didDispatch = false
 
         let result = await brains.actions.performElementAction(
-            target: .heistId("offscreen_button"),
+            target: ElementTarget.heistId("offscreen_button"),
             method: .activate,
             requireInteractive: false
         ) { _ in
             didDispatch = true
-            return .success(method: .activate)
+            return TheSafecracker.InteractionResult.success(method: .activate)
         }
 
         XCTAssertFalse(didDispatch)
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.method, ActionMethod.activate)
         XCTAssertTrue(result.message?.contains("ensure_on_screen failed") == true)
     }
 
