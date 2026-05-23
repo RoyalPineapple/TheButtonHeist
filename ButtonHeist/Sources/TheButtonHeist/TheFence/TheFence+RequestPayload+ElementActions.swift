@@ -45,14 +45,6 @@ extension TheFence {
         try ElementActionRequestInput(request).elementTarget(in: self)
     }
 
-    func decodedScrollContainerTarget(_ request: [String: Any]) throws -> ScrollContainerTarget? {
-        try ElementActionRequestInput(request).scrollContainerTarget()
-    }
-
-    func requiredElementTarget(_ request: [String: Any], command: Command) throws -> ElementTarget {
-        try ElementActionRequestInput(request).requiredElementTarget(command: command, in: self)
-    }
-
     func elementTarget(_ dictionary: [String: Any]) throws -> ElementTarget? {
         try ElementActionRequestInput(dictionary).elementTarget(in: self)
     }
