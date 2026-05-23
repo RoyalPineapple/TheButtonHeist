@@ -469,10 +469,13 @@ extension TheFence {
                 label: try arguments.schemaString("label"),
                 identifier: try arguments.schemaString("identifier"),
                 value: try arguments.schemaString("value"),
-                traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: "traits"),
+                traits: try TheFence.parseTraitNames(
+                    try arguments.schemaStringArray("traits"),
+                    field: arguments.field("traits")
+                ),
                 excludeTraits: try TheFence.parseTraitNames(
                     try arguments.schemaStringArray("excludeTraits"),
-                    field: "excludeTraits"
+                    field: arguments.field("excludeTraits")
                 )
             )
             guard sourceHeistId != nil || matcher.hasPredicates || ordinal != nil else { return nil }

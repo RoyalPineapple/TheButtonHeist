@@ -13,16 +13,9 @@ extension TheFence {
             self.timeout = timeout
         }
 
-        init(arguments: [String: Any]) throws {
+        init(arguments: some CommandArgumentReadable) throws {
             self.init(
-                expectation: try Self.parseExpectation(arguments["expect"]),
-                timeout: try arguments.schemaNumber("timeout")
-            )
-        }
-
-        init(arguments: CommandArgumentEnvelope) throws {
-            self.init(
-                expectation: try Self.parseExpectation(arguments.observedValue(for: "expect")),
+                expectation: try Self.parseExpectation(arguments.argumentValues["expect"]),
                 timeout: try arguments.schemaNumber("timeout")
             )
         }
@@ -31,7 +24,7 @@ extension TheFence {
             expectation == nil ? nil : timeout
         }
 
-        static func parseExpectation(_ value: Any?) throws -> ActionExpectation? {
+        static func parseExpectation(_ value: CommandArgumentValue?) throws -> ActionExpectation? {
             guard let value else { return nil }
             return try FenceExpectationParser.decode(value)
         }
@@ -44,37 +37,30 @@ extension TheFence {
     /// accepted shape is the discriminator object used by `ActionExpectation`'s
     /// wire encoding: `{"type": "...", …}`. Compound expectations use object
     /// sub-expectations with `{"type": "compound", "expectations": [...]}`.
-    func parseExpectation(_ dictionary: [String: Any]) throws -> ActionExpectation? {
-        try ExpectationPayload.parseExpectation(dictionary["expect"])
-    }
-
-    func parseExpectationPayload(_ dictionary: [String: Any]) throws -> ExpectationPayload {
-        try ExpectationPayload(arguments: dictionary)
-    }
-
-    func parseExpectationPayload(_ arguments: CommandArgumentEnvelope) throws -> ExpectationPayload {
+    func parseExpectationPayload(_ arguments: some CommandArgumentReadable) throws -> ExpectationPayload {
         try ExpectationPayload(arguments: arguments)
     }
 }
 
 private enum FenceExpectationParser {
-    static func decode(_ value: Any) throws -> ActionExpectation {
-        if let object = value as? [String: Any] {
-            return try decode(object)
+    static func decode(_ value: TheFence.CommandArgumentValue) throws -> ActionExpectation {
+        if case .object(let object) = value {
+            return try decode(TheFence.CommandArgumentObject(values: object, fieldPrefix: nil))
         }
         throw FenceError.invalidRequest(
             "Invalid expectation type: expected object with a \"type\" discriminator"
         )
     }
 
-    static func decode(_ object: [String: Any]) throws -> ActionExpectation {
+    static func decode(_ object: TheFence.CommandArgumentObject) throws -> ActionExpectation {
+        let rawObject = object.rawValue
         do {
-            let data = try JSONSerialization.data(withJSONObject: object)
+            let data = try JSONSerialization.data(withJSONObject: rawObject)
             return try JSONDecoder().decode(ActionExpectation.self, from: data)
         } catch let error as FenceError {
             throw error
         } catch let error as DecodingError {
-            throw FenceError.invalidRequest(message(for: error, object: object))
+            throw FenceError.invalidRequest(message(for: error, object: rawObject))
         } catch {
             throw FenceError.invalidRequest(
                 "Invalid expectation object: expected JSON-compatible values"

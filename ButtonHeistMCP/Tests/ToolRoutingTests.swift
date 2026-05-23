@@ -148,7 +148,7 @@ struct ToolRoutingTests {
         ]
 
         for testCase in cases {
-            let result = FenceOperationCatalog.normalizeBatchStep(testCase.step)
+            let result = normalizeBatchStepResult(testCase.step)
             guard case .failure(let error) = result else {
                 Issue.record("Expected routing failure")
                 continue
@@ -160,7 +160,7 @@ struct ToolRoutingTests {
     @Test("run_batch rejects non-batch-executable commands")
     func runBatchRejectsNonBatchExecutableCommands() {
         for command in [TheFence.Command.help, .status, .quit, .exit, .runBatch] {
-            let result = FenceOperationCatalog.normalizeBatchStep(["command": command.rawValue])
+            let result = normalizeBatchStepResult(["command": command.rawValue])
             guard case .failure(let error) = result else {
                 Issue.record("Expected routing failure for \(command.rawValue)")
                 continue
@@ -311,12 +311,18 @@ struct ToolRoutingTests {
     }
 
     private func normalizedBatchStep(_ step: [String: Any]) throws -> NormalizedOperation {
-        switch FenceOperationCatalog.normalizeBatchStep(step) {
+        switch normalizeBatchStepResult(step) {
         case .success(let operation):
             return operation
         case .failure(let error):
             throw error
         }
+    }
+
+    private func normalizeBatchStepResult(
+        _ step: [String: Any]
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        FenceOperationCatalog.normalizeBatchStep(step)
     }
 
     private func minimalArguments(for toolName: String) -> [String: Any] {

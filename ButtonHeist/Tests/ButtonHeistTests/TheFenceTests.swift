@@ -15,7 +15,7 @@ final class TheFenceTests: XCTestCase {
         let args: [String: Any] = ["traits": ["madeUpTrait"]]
         let expectedError = "schema validation failed for traits[0]: observed string \"madeUpTrait\"; " +
             "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
+        XCTAssertThrowsError(try fence.decodedElementMatcher(try TheFence.CommandArgumentEnvelope(arguments: args))) { error in
             XCTAssertEqual(
                 error.localizedDescription,
                 expectedError
@@ -29,7 +29,7 @@ final class TheFenceTests: XCTestCase {
         let args: [String: Any] = ["excludeTraits": ["bogus"]]
         let expectedError = "schema validation failed for excludeTraits[0]: observed string \"bogus\"; " +
             "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.elementMatcher(args)) { error in
+        XCTAssertThrowsError(try fence.decodedElementMatcher(try TheFence.CommandArgumentEnvelope(arguments: args))) { error in
             XCTAssertEqual(
                 error.localizedDescription,
                 expectedError
@@ -41,7 +41,7 @@ final class TheFenceTests: XCTestCase {
     func testElementMatcherAcceptsKnownTraits() async throws {
         let fence = TheFence(configuration: .init())
         let args: [String: Any] = ["traits": ["button", "header"], "excludeTraits": ["selected"]]
-        let matcher = try fence.elementMatcher(args)
+        let matcher = try fence.decodedElementMatcher(try TheFence.CommandArgumentEnvelope(arguments: args))
         XCTAssertEqual(matcher.traits, [.button, .header])
         XCTAssertEqual(matcher.excludeTraits, [.selected])
     }

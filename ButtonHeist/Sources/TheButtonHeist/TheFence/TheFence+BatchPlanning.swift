@@ -2,14 +2,14 @@ import Foundation
 
 extension TheFence {
 
-    func decodeRunBatchRequest(_ request: [String: Any]) throws -> RunBatchRequest {
+    func decodeRunBatchRequest(_ arguments: CommandArgumentEnvelope) throws -> RunBatchRequest {
         try Self.validateJSONEnvelope(
-            request,
+            arguments,
             field: "run_batch",
             maxBytes: DecodeLimits.maxRunBatchRequestBytes,
             maxDepth: DecodeLimits.maxRunBatchNestingDepth
         )
-        let batchStepDecodeInputs = try request.requiredSchemaDictionaryArray("steps")
+        let batchStepDecodeInputs = try arguments.requiredSchemaObjectArray("steps")
         guard !batchStepDecodeInputs.isEmpty else {
             throw SchemaValidationError(
                 field: "steps",
@@ -32,7 +32,7 @@ extension TheFence {
                     index: index
                 )
             },
-            policy: try request.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
+            policy: try arguments.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
         )
     }
 }
@@ -40,13 +40,13 @@ extension TheFence {
 private extension TheFence {
 
     static func validateJSONEnvelope(
-        _ value: Any,
+        _ arguments: some CommandArgumentReadable,
         field: String,
         maxBytes: Int,
         maxDepth: Int
     ) throws {
         let byteCount = try jsonEncodedSize(
-            of: value,
+            of: arguments.argumentValues,
             field: field,
             maxBytes: maxBytes,
             maxDepth: maxDepth
@@ -61,7 +61,7 @@ private extension TheFence {
     }
 
     static func jsonEncodedSize(
-        of value: Any,
+        of object: [String: CommandArgumentValue],
         field: String,
         maxBytes: Int,
         maxDepth: Int,
@@ -86,24 +86,59 @@ private extension TheFence {
             return size
         }
 
-        if let dictionary = value as? [String: Any] {
-            var size = 2
-            for (index, entry) in dictionary.enumerated() {
-                if index > 0 { size = try bounded(size + 1) }
-                size = try bounded(size + jsonStringEncodedSize(entry.key) + 1)
-                let valueSize = try jsonEncodedSize(
-                    of: entry.value,
+        var size = 2
+        for (index, entry) in object.enumerated() {
+            if index > 0 { size = try bounded(size + 1) }
+            size = try bounded(size + jsonStringEncodedSize(entry.key) + 1)
+            let valueSize = try jsonEncodedSize(
+                of: entry.value,
+                field: field,
+                maxBytes: maxBytes,
+                maxDepth: maxDepth,
+                depth: depth + 1
+            )
+            size = try bounded(size + valueSize)
+        }
+        return size
+    }
+
+    static func jsonEncodedSize(
+        of value: CommandArgumentValue,
+        field: String,
+        maxBytes: Int,
+        maxDepth: Int,
+        depth: Int
+    ) throws -> Int {
+        guard depth <= maxDepth else {
+            throw SchemaValidationError(
+                field: field,
+                observed: "nesting depth \(depth)",
+                expected: "nesting depth <= \(maxDepth)"
+            )
+        }
+
+        func bounded(_ size: Int) throws -> Int {
+            guard size <= maxBytes else {
+                throw SchemaValidationError(
                     field: field,
-                    maxBytes: maxBytes,
-                    maxDepth: maxDepth,
-                    depth: depth + 1
+                    observed: "\(size) bytes",
+                    expected: "JSON request <= \(maxBytes) bytes"
                 )
-                size = try bounded(size + valueSize)
             }
             return size
         }
 
-        if let array = value as? [Any] {
+        switch value {
+        case .object(let object):
+            return try jsonEncodedSize(
+                of: object,
+                field: field,
+                maxBytes: maxBytes,
+                maxDepth: maxDepth,
+                depth: depth
+            )
+
+        case .array(let array):
             var size = 2
             for (index, item) in array.enumerated() {
                 if index > 0 { size = try bounded(size + 1) }
@@ -117,28 +152,25 @@ private extension TheFence {
                 size = try bounded(size + itemSize)
             }
             return size
-        }
 
-        if let string = value as? String {
+        case .string(let string):
             return try bounded(jsonStringEncodedSize(string))
-        }
 
-        if let bool = value as? Bool {
+        case .bool(let bool):
             return bool ? 4 : 5
-        }
 
-        if value is NSNull {
+        case .null:
             return 4
-        }
 
-        if let number = value as? NSNumber {
-            guard number.doubleValue.isFinite else {
+        case .int(let number):
+            return try bounded(String(number).utf8.count)
+
+        case .double(let number):
+            guard number.isFinite else {
                 throw SchemaValidationError(field: field, observed: number, expected: "finite JSON number")
             }
-            return try bounded(String(describing: number).utf8.count)
+            return try bounded(String(number).utf8.count)
         }
-
-        throw SchemaValidationError(field: field, observed: value, expected: "JSON value")
     }
 
     static func jsonStringEncodedSize(_ value: String) -> Int {

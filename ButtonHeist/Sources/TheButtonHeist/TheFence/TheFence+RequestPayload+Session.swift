@@ -10,8 +10,7 @@ extension TheFence {
         case .startRecording:
             return .startRecording(try decodeRecordingConfig(arguments))
         case .runBatch:
-            let request = arguments.decodeEdgeRawDictionary()
-            return .runBatch(try decodeRunBatchRequest(request))
+            return .runBatch(try decodeRunBatchRequest(arguments))
         case .connect:
             return .connect(try decodeConnectRequest(arguments))
         case .archiveSession:

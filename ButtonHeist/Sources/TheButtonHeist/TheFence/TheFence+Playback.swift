@@ -79,7 +79,7 @@ extension TheFence {
         }
 
         func requestDecodeInputArguments() -> [String: Any] {
-            commandArgumentEnvelope().decodeEdgeRawDictionary()
+            commandArgumentEnvelope().rawValue
         }
 
         func normalizedOperation() -> NormalizedOperation {
