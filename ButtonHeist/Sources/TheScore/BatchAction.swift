@@ -18,6 +18,11 @@ extension Deadline: CustomStringConvertible {
     }
 }
 
+private enum ActionCodingKeys: String, CodingKey {
+    case type
+    case target
+}
+
 /// The explicit wire and execution contract for a batch `Action`.
 public struct ActionDescriptor: Sendable, Equatable {
     public enum Kind: String, Codable, CaseIterable, Sendable {
@@ -59,7 +64,7 @@ public struct ActionDescriptor: Sendable, Equatable {
     public init(kind: Kind) {
         let contract = kind.contract
         self.kind = kind
-        self.canonicalName = contract.canonicalName
+        self.canonicalName = kind.rawValue
         self.actionMethod = contract.actionMethod
         self.fulfillsOwnExpectation = contract.fulfillsOwnExpectation
         self.defaultExpectation = contract.defaultExpectation
@@ -73,7 +78,7 @@ public struct ActionDescriptor: Sendable, Equatable {
     ) {
         let contract = kind.contract
         self.kind = kind
-        self.canonicalName = contract.canonicalName
+        self.canonicalName = kind.rawValue
         self.actionMethod = contract.actionMethod
         self.fulfillsOwnExpectation = contract.fulfillsOwnExpectation
         self.defaultExpectation = defaultExpectation
@@ -83,86 +88,150 @@ public struct ActionDescriptor: Sendable, Equatable {
 
 private extension ActionDescriptor.Kind {
     struct Contract {
-        let canonicalName: String
         let actionMethod: ActionMethod
         let fulfillsOwnExpectation: Bool
         let defaultExpectation: ActionExpectation
         let defaultDeadline: Deadline
+        let decodeAction: (Decoder) throws -> Action
 
         init(
-            _ canonicalName: String,
             _ actionMethod: ActionMethod,
-            _ fulfillsOwnExpectation: Bool,
-            _ defaultExpectation: ActionExpectation,
-            _ defaultDeadline: Deadline
+            fulfillsOwnExpectation: Bool = false,
+            defaultExpectation: ActionExpectation = .delivery,
+            defaultDeadline: Deadline = Deadline(),
+            decode: @escaping (Decoder) throws -> Action
         ) {
-            self.canonicalName = canonicalName
             self.actionMethod = actionMethod
             self.fulfillsOwnExpectation = fulfillsOwnExpectation
             self.defaultExpectation = defaultExpectation
             self.defaultDeadline = defaultDeadline
+            self.decodeAction = decode
         }
     }
 
     var contract: Contract {
         switch self {
         case .activate:
-            return Contract("activate", .activate, false, .delivery, Deadline())
+            return Contract(.activate, decode: Self.decodeTarget(BatchExecutionTarget.self, Action.activate))
         case .increment:
-            return Contract("increment", .increment, false, .delivery, Deadline())
+            return Contract(.increment, decode: Self.decodeTarget(BatchExecutionTarget.self, Action.increment))
         case .decrement:
-            return Contract("decrement", .decrement, false, .delivery, Deadline())
+            return Contract(.decrement, decode: Self.decodeTarget(BatchExecutionTarget.self, Action.decrement))
         case .performCustomAction:
-            return Contract("perform_custom_action", .customAction, false, .delivery, Deadline())
+            return Contract(
+                .customAction,
+                decode: Self.decodeInline(BatchCustomActionTarget.self, Action.performCustomAction)
+            )
         case .rotor:
-            return Contract("rotor", .rotor, false, .delivery, Deadline())
+            return Contract(.rotor, decode: Self.decodeInline(BatchRotorTarget.self, Action.rotor))
         case .touchTap:
-            return Contract("touch_tap", .syntheticTap, false, .delivery, Deadline())
+            return Contract(.syntheticTap, decode: Self.decodeInline(BatchTouchTapTarget.self, Action.touchTap))
         case .touchLongPress:
-            return Contract("touch_long_press", .syntheticLongPress, false, .delivery, Deadline())
+            return Contract(
+                .syntheticLongPress,
+                decode: Self.decodeInline(BatchLongPressTarget.self, Action.touchLongPress)
+            )
         case .touchSwipe:
-            return Contract("touch_swipe", .syntheticSwipe, false, .delivery, Deadline())
+            return Contract(.syntheticSwipe, decode: Self.decodeInline(BatchSwipeTarget.self, Action.touchSwipe))
         case .touchDrag:
-            return Contract("touch_drag", .syntheticDrag, false, .delivery, Deadline())
+            return Contract(.syntheticDrag, decode: Self.decodeInline(BatchDragTarget.self, Action.touchDrag))
         case .touchPinch:
-            return Contract("touch_pinch", .syntheticPinch, false, .delivery, Deadline())
+            return Contract(.syntheticPinch, decode: Self.decodeInline(BatchPinchTarget.self, Action.touchPinch))
         case .touchRotate:
-            return Contract("touch_rotate", .syntheticRotate, false, .delivery, Deadline())
+            return Contract(.syntheticRotate, decode: Self.decodeInline(BatchRotateTarget.self, Action.touchRotate))
         case .touchTwoFingerTap:
-            return Contract("touch_two_finger_tap", .syntheticTwoFingerTap, false, .delivery, Deadline())
+            return Contract(
+                .syntheticTwoFingerTap,
+                decode: Self.decodeInline(BatchTwoFingerTapTarget.self, Action.touchTwoFingerTap)
+            )
         case .touchDrawPath:
-            return Contract("touch_draw_path", .syntheticDrawPath, false, .delivery, Deadline())
+            return Contract(
+                .syntheticDrawPath,
+                decode: Self.decodeTarget(DrawPathTarget.self, Action.touchDrawPath)
+            )
         case .touchDrawBezier:
-            return Contract("touch_draw_bezier", .syntheticDrawPath, false, .delivery, Deadline())
+            return Contract(
+                .syntheticDrawPath,
+                decode: Self.decodeTarget(DrawBezierTarget.self, Action.touchDrawBezier)
+            )
         case .typeText:
-            return Contract("type_text", .typeText, false, .delivery, Deadline())
+            return Contract(.typeText, decode: Self.decodeInline(BatchTypeTextTarget.self, Action.typeText))
         case .editAction:
-            return Contract("edit_action", .editAction, false, .delivery, Deadline())
+            return Contract(.editAction, decode: Self.decodeTarget(EditActionTarget.self, Action.editAction))
         case .setPasteboard:
-            return Contract("set_pasteboard", .setPasteboard, false, .delivery, Deadline())
+            return Contract(
+                .setPasteboard,
+                decode: Self.decodeTarget(SetPasteboardTarget.self, Action.setPasteboard)
+            )
         case .scroll:
-            return Contract("scroll", .scroll, false, .delivery, Deadline())
+            return Contract(.scroll, decode: Self.decodeInline(BatchScrollTarget.self, Action.scroll))
         case .scrollToVisible:
-            return Contract("scroll_to_visible", .scrollToVisible, false, .delivery, Deadline())
+            return Contract(
+                .scrollToVisible,
+                decode: Self.decodeInline(BatchScrollToVisibleTarget.self, Action.scrollToVisible)
+            )
         case .elementSearch:
-            return Contract("element_search", .elementSearch, false, .delivery, Deadline())
+            return Contract(
+                .elementSearch,
+                decode: Self.decodeInline(BatchElementSearchTarget.self, Action.elementSearch)
+            )
         case .scrollToEdge:
-            return Contract("scroll_to_edge", .scrollToEdge, false, .delivery, Deadline())
+            return Contract(
+                .scrollToEdge,
+                decode: Self.decodeInline(BatchScrollToEdgeTarget.self, Action.scrollToEdge)
+            )
         case .waitForIdle:
-            return Contract("wait_for_idle", .waitForIdle, false, .delivery, Deadline(timeout: 5))
+            return Contract(
+                .waitForIdle,
+                defaultDeadline: Deadline(timeout: 5),
+                decode: Self.decodeTarget(WaitForIdleTarget.self, Action.waitForIdle)
+            )
         case .waitForElement:
-            return Contract("wait_for", .waitFor, true, .delivery, Deadline(timeout: 30))
+            return Contract(
+                .waitFor,
+                fulfillsOwnExpectation: true,
+                defaultDeadline: Deadline(timeout: 30),
+                decode: Self.decodeTarget(BatchWaitForTarget.self, Action.waitForElement)
+            )
         case .waitForChange:
-            return Contract("wait_for_change", .waitForChange, true, .screenChanged, Deadline(timeout: 30))
+            return Contract(
+                .waitForChange,
+                fulfillsOwnExpectation: true,
+                defaultExpectation: .screenChanged,
+                defaultDeadline: Deadline(timeout: 30),
+                decode: Self.decodeTarget(WaitForChangeTarget.self, Action.waitForChange)
+            )
         case .explore:
-            return Contract("explore", .explore, false, .delivery, Deadline())
+            return Contract(.explore, decode: Self.decodeNoPayload(.explore))
         case .resignFirstResponder:
-            return Contract("resign_first_responder", .resignFirstResponder, false, .delivery, Deadline())
+            return Contract(
+                .resignFirstResponder,
+                decode: Self.decodeNoPayload(.resignFirstResponder)
+            )
         }
     }
 
-    static func kind(canonicalName: String) -> ActionDescriptor.Kind? {
-        ActionDescriptor.Kind(rawValue: canonicalName)
+    static func decodeTarget<T: Decodable>(
+        _ type: T.Type,
+        _ build: @escaping (T) -> Action
+    ) -> (Decoder) throws -> Action {
+        { decoder in
+            let container = try decoder.container(keyedBy: ActionCodingKeys.self)
+            return build(try container.decode(type, forKey: .target))
+        }
+    }
+
+    static func decodeInline<T: Decodable>(
+        _ type: T.Type,
+        _ build: @escaping (T) -> Action
+    ) -> (Decoder) throws -> Action {
+        { decoder in
+            build(try type.init(from: decoder))
+        }
+    }
+
+    static func decodeNoPayload(_ action: Action) -> (Decoder) throws -> Action {
+        { _ in action }
     }
 }
 
@@ -261,109 +330,162 @@ public enum Action: Sendable {
     case resignFirstResponder
 }
 
+private struct ActionProjection {
+    let descriptor: ActionDescriptor
+    let description: String
+    let payload: ActionPayloadEncoding
+
+    init(
+        kind: ActionDescriptor.Kind,
+        description: String,
+        payload: ActionPayloadEncoding
+    ) {
+        self.descriptor = ActionDescriptor(kind: kind)
+        self.description = description
+        self.payload = payload
+    }
+
+    init(
+        descriptor: ActionDescriptor,
+        description: String,
+        payload: ActionPayloadEncoding
+    ) {
+        self.descriptor = descriptor
+        self.description = description
+        self.payload = payload
+    }
+}
+
+private struct ActionPayloadEncoding {
+    let encode: (Encoder, inout KeyedEncodingContainer<ActionCodingKeys>) throws -> Void
+
+    static var none: ActionPayloadEncoding {
+        ActionPayloadEncoding { _, _ in }
+    }
+
+    static func keyedTarget<T: Encodable>(_ value: T) -> ActionPayloadEncoding {
+        ActionPayloadEncoding { _, container in
+            try container.encode(value, forKey: .target)
+        }
+    }
+
+    static func inline<T: Encodable>(_ value: T) -> ActionPayloadEncoding {
+        ActionPayloadEncoding { encoder, _ in
+            try value.encode(to: encoder)
+        }
+    }
+}
+
+private extension Action {
+    var projection: ActionProjection {
+        switch self {
+        case .activate(let target):
+            return ActionProjection(
+                kind: .activate,
+                description: ScoreDescription.call("activate", [target.description]),
+                payload: .keyedTarget(target)
+            )
+        case .increment(let target):
+            return ActionProjection(
+                kind: .increment,
+                description: ScoreDescription.call("increment", [target.description]),
+                payload: .keyedTarget(target)
+            )
+        case .decrement(let target):
+            return ActionProjection(
+                kind: .decrement,
+                description: ScoreDescription.call("decrement", [target.description]),
+                payload: .keyedTarget(target)
+            )
+        case .performCustomAction(let target):
+            return ActionProjection(kind: .performCustomAction, description: target.description, payload: .inline(target))
+        case .rotor(let target):
+            return ActionProjection(kind: .rotor, description: target.description, payload: .inline(target))
+        case .touchTap(let target):
+            return ActionProjection(kind: .touchTap, description: target.description, payload: .inline(target))
+        case .touchLongPress(let target):
+            return ActionProjection(kind: .touchLongPress, description: target.description, payload: .inline(target))
+        case .touchSwipe(let target):
+            return ActionProjection(kind: .touchSwipe, description: target.description, payload: .inline(target))
+        case .touchDrag(let target):
+            return ActionProjection(kind: .touchDrag, description: target.description, payload: .inline(target))
+        case .touchPinch(let target):
+            return ActionProjection(kind: .touchPinch, description: target.description, payload: .inline(target))
+        case .touchRotate(let target):
+            return ActionProjection(kind: .touchRotate, description: target.description, payload: .inline(target))
+        case .touchTwoFingerTap(let target):
+            return ActionProjection(kind: .touchTwoFingerTap, description: target.description, payload: .inline(target))
+        case .touchDrawPath(let target):
+            return ActionProjection(kind: .touchDrawPath, description: target.description, payload: .keyedTarget(target))
+        case .touchDrawBezier(let target):
+            return ActionProjection(kind: .touchDrawBezier, description: target.description, payload: .keyedTarget(target))
+        case .typeText(let target):
+            return ActionProjection(kind: .typeText, description: target.description, payload: .inline(target))
+        case .editAction(let target):
+            return ActionProjection(kind: .editAction, description: target.description, payload: .keyedTarget(target))
+        case .setPasteboard(let target):
+            return ActionProjection(kind: .setPasteboard, description: target.description, payload: .keyedTarget(target))
+        case .scroll(let target):
+            return ActionProjection(kind: .scroll, description: target.description, payload: .inline(target))
+        case .scrollToVisible(let target):
+            return ActionProjection(kind: .scrollToVisible, description: target.description, payload: .inline(target))
+        case .elementSearch(let target):
+            return ActionProjection(kind: .elementSearch, description: target.description, payload: .inline(target))
+        case .scrollToEdge(let target):
+            return ActionProjection(kind: .scrollToEdge, description: target.description, payload: .inline(target))
+        case .waitForIdle(let target):
+            return ActionProjection(
+                descriptor: ActionDescriptor(
+                    kind: .waitForIdle,
+                    defaultExpectation: .delivery,
+                    defaultDeadline: Deadline(timeout: target.timeout ?? 5)
+                ),
+                description: target.description,
+                payload: .keyedTarget(target)
+            )
+        case .waitForElement(let target):
+            return ActionProjection(
+                descriptor: ActionDescriptor(
+                    kind: .waitForElement,
+                    defaultExpectation: target.resolvedAbsent
+                        ? .elementDisappeared(target.target.matcher)
+                        : .elementAppeared(target.target.matcher),
+                    defaultDeadline: Deadline(timeout: target.resolvedTimeout)
+                ),
+                description: target.description,
+                payload: .keyedTarget(target)
+            )
+        case .waitForChange(let target):
+            return ActionProjection(
+                descriptor: ActionDescriptor(
+                    kind: .waitForChange,
+                    defaultExpectation: target.expect ?? .screenChanged,
+                    defaultDeadline: Deadline(timeout: target.resolvedTimeout)
+                ),
+                description: target.description,
+                payload: .keyedTarget(target)
+            )
+        case .explore:
+            return ActionProjection(kind: .explore, description: "explore", payload: .none)
+        case .resignFirstResponder:
+            return ActionProjection(
+                kind: .resignFirstResponder,
+                description: "resign_first_responder",
+                payload: .none
+            )
+        }
+    }
+}
+
 extension Action: CustomStringConvertible {
     public var description: String {
-        switch self {
-        case .activate(let target): return ScoreDescription.call("activate", [target.description])
-        case .increment(let target): return ScoreDescription.call("increment", [target.description])
-        case .decrement(let target): return ScoreDescription.call("decrement", [target.description])
-        case .performCustomAction(let target): return target.description
-        case .rotor(let target): return target.description
-        case .touchTap(let target): return target.description
-        case .touchLongPress(let target): return target.description
-        case .touchSwipe(let target): return target.description
-        case .touchDrag(let target): return target.description
-        case .touchPinch(let target): return target.description
-        case .touchRotate(let target): return target.description
-        case .touchTwoFingerTap(let target): return target.description
-        case .touchDrawPath(let target): return target.description
-        case .touchDrawBezier(let target): return target.description
-        case .typeText(let target): return target.description
-        case .editAction(let target): return target.description
-        case .setPasteboard(let target): return target.description
-        case .scroll(let target): return target.description
-        case .scrollToVisible(let target): return target.description
-        case .elementSearch(let target): return target.description
-        case .scrollToEdge(let target): return target.description
-        case .waitForIdle(let target): return target.description
-        case .waitForElement(let target): return target.description
-        case .waitForChange(let target): return target.description
-        case .explore: return "explore"
-        case .resignFirstResponder: return "resign_first_responder"
-        }
+        projection.description
     }
 }
 
 extension Action {
     public var descriptor: ActionDescriptor {
-        switch self {
-        case .activate:
-            return ActionDescriptor(kind: .activate)
-        case .increment:
-            return ActionDescriptor(kind: .increment)
-        case .decrement:
-            return ActionDescriptor(kind: .decrement)
-        case .performCustomAction:
-            return ActionDescriptor(kind: .performCustomAction)
-        case .rotor:
-            return ActionDescriptor(kind: .rotor)
-        case .touchTap:
-            return ActionDescriptor(kind: .touchTap)
-        case .touchLongPress:
-            return ActionDescriptor(kind: .touchLongPress)
-        case .touchSwipe:
-            return ActionDescriptor(kind: .touchSwipe)
-        case .touchDrag:
-            return ActionDescriptor(kind: .touchDrag)
-        case .touchPinch:
-            return ActionDescriptor(kind: .touchPinch)
-        case .touchRotate:
-            return ActionDescriptor(kind: .touchRotate)
-        case .touchTwoFingerTap:
-            return ActionDescriptor(kind: .touchTwoFingerTap)
-        case .touchDrawPath:
-            return ActionDescriptor(kind: .touchDrawPath)
-        case .touchDrawBezier:
-            return ActionDescriptor(kind: .touchDrawBezier)
-        case .typeText:
-            return ActionDescriptor(kind: .typeText)
-        case .editAction:
-            return ActionDescriptor(kind: .editAction)
-        case .setPasteboard:
-            return ActionDescriptor(kind: .setPasteboard)
-        case .scroll:
-            return ActionDescriptor(kind: .scroll)
-        case .scrollToVisible:
-            return ActionDescriptor(kind: .scrollToVisible)
-        case .elementSearch:
-            return ActionDescriptor(kind: .elementSearch)
-        case .scrollToEdge:
-            return ActionDescriptor(kind: .scrollToEdge)
-        case .waitForIdle(let target):
-            return ActionDescriptor(
-                kind: .waitForIdle,
-                defaultExpectation: .delivery,
-                defaultDeadline: Deadline(timeout: target.timeout ?? 5)
-            )
-        case .waitForElement(let target):
-            return ActionDescriptor(
-                kind: .waitForElement,
-                defaultExpectation: target.resolvedAbsent
-                    ? .elementDisappeared(target.target.matcher)
-                    : .elementAppeared(target.target.matcher),
-                defaultDeadline: Deadline(timeout: target.resolvedTimeout)
-            )
-        case .waitForChange(let target):
-            return ActionDescriptor(
-                kind: .waitForChange,
-                defaultExpectation: target.expect ?? .screenChanged,
-                defaultDeadline: Deadline(timeout: target.resolvedTimeout)
-            )
-        case .explore:
-            return ActionDescriptor(kind: .explore)
-        case .resignFirstResponder:
-            return ActionDescriptor(kind: .resignFirstResponder)
-        }
+        projection.descriptor
     }
 
     public var canonicalName: String {
@@ -388,131 +510,23 @@ extension Action {
 }
 
 extension Action: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case type
-        case target
-    }
-
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let container = try decoder.container(keyedBy: ActionCodingKeys.self)
         let canonicalName = try container.decode(String.self, forKey: .type)
-        guard let kind = ActionDescriptor.Kind.kind(canonicalName: canonicalName) else {
+        guard let kind = ActionDescriptor.Kind(rawValue: canonicalName) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
                 in: container,
                 debugDescription: "Unknown batch action type: \(canonicalName)"
             )
         }
-        switch kind {
-        case .activate:
-            self = .activate(try container.decode(BatchExecutionTarget.self, forKey: .target))
-        case .increment:
-            self = .increment(try container.decode(BatchExecutionTarget.self, forKey: .target))
-        case .decrement:
-            self = .decrement(try container.decode(BatchExecutionTarget.self, forKey: .target))
-        case .performCustomAction:
-            self = .performCustomAction(try BatchCustomActionTarget(from: decoder))
-        case .rotor:
-            self = .rotor(try BatchRotorTarget(from: decoder))
-        case .touchTap:
-            self = .touchTap(try BatchTouchTapTarget(from: decoder))
-        case .touchLongPress:
-            self = .touchLongPress(try BatchLongPressTarget(from: decoder))
-        case .touchSwipe:
-            self = .touchSwipe(try BatchSwipeTarget(from: decoder))
-        case .touchDrag:
-            self = .touchDrag(try BatchDragTarget(from: decoder))
-        case .touchPinch:
-            self = .touchPinch(try BatchPinchTarget(from: decoder))
-        case .touchRotate:
-            self = .touchRotate(try BatchRotateTarget(from: decoder))
-        case .touchTwoFingerTap:
-            self = .touchTwoFingerTap(try BatchTwoFingerTapTarget(from: decoder))
-        case .touchDrawPath:
-            self = .touchDrawPath(try container.decode(DrawPathTarget.self, forKey: .target))
-        case .touchDrawBezier:
-            self = .touchDrawBezier(try container.decode(DrawBezierTarget.self, forKey: .target))
-        case .typeText:
-            self = .typeText(try BatchTypeTextTarget(from: decoder))
-        case .editAction:
-            self = .editAction(try container.decode(EditActionTarget.self, forKey: .target))
-        case .setPasteboard:
-            self = .setPasteboard(try container.decode(SetPasteboardTarget.self, forKey: .target))
-        case .scroll:
-            self = .scroll(try BatchScrollTarget(from: decoder))
-        case .scrollToVisible:
-            self = .scrollToVisible(try BatchScrollToVisibleTarget(from: decoder))
-        case .elementSearch:
-            self = .elementSearch(try BatchElementSearchTarget(from: decoder))
-        case .scrollToEdge:
-            self = .scrollToEdge(try BatchScrollToEdgeTarget(from: decoder))
-        case .waitForIdle:
-            self = .waitForIdle(try container.decode(WaitForIdleTarget.self, forKey: .target))
-        case .waitForElement:
-            self = .waitForElement(try container.decode(BatchWaitForTarget.self, forKey: .target))
-        case .waitForChange:
-            self = .waitForChange(try container.decode(WaitForChangeTarget.self, forKey: .target))
-        case .explore:
-            self = .explore
-        case .resignFirstResponder:
-            self = .resignFirstResponder
-        }
+        self = try kind.contract.decodeAction(decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(descriptor.canonicalName, forKey: .type)
-        switch self {
-        case .activate(let target):
-            try container.encode(target, forKey: .target)
-        case .increment(let target):
-            try container.encode(target, forKey: .target)
-        case .decrement(let target):
-            try container.encode(target, forKey: .target)
-        case .performCustomAction(let target):
-            try target.encode(to: encoder)
-        case .rotor(let target):
-            try target.encode(to: encoder)
-        case .touchTap(let target):
-            try target.encode(to: encoder)
-        case .touchLongPress(let target):
-            try target.encode(to: encoder)
-        case .touchSwipe(let target):
-            try target.encode(to: encoder)
-        case .touchDrag(let target):
-            try target.encode(to: encoder)
-        case .touchPinch(let target):
-            try target.encode(to: encoder)
-        case .touchRotate(let target):
-            try target.encode(to: encoder)
-        case .touchTwoFingerTap(let target):
-            try target.encode(to: encoder)
-        case .touchDrawPath(let target):
-            try container.encode(target, forKey: .target)
-        case .touchDrawBezier(let target):
-            try container.encode(target, forKey: .target)
-        case .typeText(let target):
-            try target.encode(to: encoder)
-        case .editAction(let target):
-            try container.encode(target, forKey: .target)
-        case .setPasteboard(let target):
-            try container.encode(target, forKey: .target)
-        case .scroll(let target):
-            try target.encode(to: encoder)
-        case .scrollToVisible(let target):
-            try target.encode(to: encoder)
-        case .elementSearch(let target):
-            try target.encode(to: encoder)
-        case .scrollToEdge(let target):
-            try target.encode(to: encoder)
-        case .waitForIdle(let target):
-            try container.encode(target, forKey: .target)
-        case .waitForElement(let target):
-            try container.encode(target, forKey: .target)
-        case .waitForChange(let target):
-            try container.encode(target, forKey: .target)
-        case .explore, .resignFirstResponder:
-            break
-        }
+        let projection = projection
+        var container = encoder.container(keyedBy: ActionCodingKeys.self)
+        try container.encode(projection.descriptor.canonicalName, forKey: .type)
+        try projection.payload.encode(encoder, &container)
     }
 }
