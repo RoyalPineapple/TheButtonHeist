@@ -168,6 +168,48 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(normalized.sourceHeistId, "missing_button")
     }
 
+    func testBatchSemanticTargetDoesNotExposeExecutableHeistId() {
+        let target = BatchExecutionTarget(
+            sourceHeistId: "quantity_0",
+            matcher: ElementMatcher(identifier: "quantity_stepper"),
+            ordinal: 1
+        )
+
+        XCTAssertNil(target.exactHeistId)
+        XCTAssertEqual(target.sourceHeistId, "quantity_0")
+        XCTAssertEqual(target.semanticMatcher?.identifier, "quantity_stepper")
+        XCTAssertEqual(target.semanticOrdinal, 1)
+    }
+
+    func testNormalizeBatchSemanticTargetKeepsSourceHeistIdAsMetadata() {
+        let currentElement = element(
+            label: "Quantity",
+            value: "1",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
+        let target = BatchExecutionTarget(
+            sourceHeistId: "quantity_0",
+            matcher: ElementMatcher(identifier: "quantity_stepper")
+        )
+
+        let normalized = bagman.normalizeTarget(target)
+
+        guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {
+            XCTFail("Expected batch target to remain matcher-backed, got \(normalized.executableTarget)")
+            return
+        }
+        XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
+        XCTAssertEqual(matcher.identifier, "quantity_stepper")
+        XCTAssertNil(matcher.heistId)
+        XCTAssertNil(ordinal)
+        XCTAssertEqual(
+            bagman.resolveTarget(normalized.executableTarget).resolved?.screenElement.heistId,
+            "quantity_1"
+        )
+    }
+
     // MARK: - Matcher Resolution
 
     func testMatcherResolvesUniqueElement() {
