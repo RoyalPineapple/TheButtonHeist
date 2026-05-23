@@ -6,50 +6,50 @@ extension TheFence {
 
     func decodeObservationPayload(
         command: Command,
-        request: [String: Any],
+        arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> RequestPayload {
         switch command {
         case .getInterface:
-            return .getInterface(try decodeGetInterfaceRequest(request))
+            return .getInterface(try decodeGetInterfaceRequest(arguments))
         case .getScreen:
-            return .screen(try decodeScreenRequest(request, requestId: requestId))
+            return .screen(try decodeScreenRequest(arguments, requestId: requestId))
         case .stopRecording:
-            return .artifact(try decodeArtifactRequest(request, requestId: requestId))
+            return .artifact(try decodeArtifactRequest(arguments, requestId: requestId))
         default:
             throw FenceError.invalidRequest("Unexpected observation command: \(command.rawValue)")
         }
     }
 
-    private func decodeGetInterfaceRequest(_ request: [String: Any]) throws -> GetInterfaceRequest {
+    private func decodeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
         GetInterfaceRequest(
-            detail: try request.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
+            detail: try arguments.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
             query: InterfaceQuery(
-                subtree: try decodeInterfaceSubtreeSelector(request),
-                matcher: try elementMatcher(request),
-                elementIds: try request.schemaStringArray("elements")
+                subtree: try decodeInterfaceSubtreeSelector(arguments),
+                matcher: try interfaceElementMatcher(arguments),
+                elementIds: try arguments.schemaStringArray("elements")
             )
         )
     }
 
     private func decodeArtifactRequest(
-        _ request: [String: Any],
+        _ arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> ArtifactRequest {
         ArtifactRequest(
-            outputPath: try request.schemaString("output"),
+            outputPath: try arguments.schemaString("output"),
             requestId: requestId,
-            inlineData: try request.schemaBoolean("inlineData") ?? false,
-            includeInteractionLog: try request.schemaBoolean("includeInteractionLog") ?? false
+            inlineData: try arguments.schemaBoolean("inlineData") ?? false,
+            includeInteractionLog: try arguments.schemaBoolean("includeInteractionLog") ?? false
         )
     }
 
     private func decodeScreenRequest(
-        _ request: [String: Any],
+        _ arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> ScreenRequest {
-        let outputPath = try request.schemaString("output")
-        let inlineData = try request.schemaBoolean("inlineData") ?? false
+        let outputPath = try arguments.schemaString("output")
+        let inlineData = try arguments.schemaBoolean("inlineData") ?? false
         if inlineData, outputPath != nil {
             throw SchemaValidationError(
                 field: "inlineData/output",
@@ -61,7 +61,7 @@ extension TheFence {
             outputPath: outputPath,
             requestId: requestId,
             inlineData: inlineData,
-            includeInterface: try request.schemaBoolean("includeInterface") ?? false
+            includeInterface: try arguments.schemaBoolean("includeInterface") ?? false
         )
     }
 
@@ -78,12 +78,12 @@ extension TheFence {
         )
     }
 
-    private func decodeInterfaceSubtreeSelector(_ request: [String: Any]) throws -> SubtreeSelector? {
-        guard let subtree = try request.schemaDictionary("subtree") else { return nil }
+    private func decodeInterfaceSubtreeSelector(_ arguments: CommandArgumentEnvelope) throws -> SubtreeSelector? {
+        guard let subtree = try arguments.schemaDictionary("subtree") else { return nil }
         try validateInterfaceSubtreeKeys(subtree)
         let ordinal = try subtree.schemaInteger("ordinal")
         if let ordinal, ordinal < 0 {
-            throw SchemaValidationError(field: "subtree.ordinal", observed: ordinal, expected: "integer >= 0")
+            throw SchemaValidationError(field: subtree.field("ordinal"), observed: ordinal, expected: "integer >= 0")
         }
 
         let elementDictionary = try subtree.schemaDictionary("element")
@@ -91,7 +91,7 @@ extension TheFence {
         guard (elementDictionary == nil) != (containerDictionary == nil) else {
             throw SchemaValidationError(
                 field: "subtree",
-                observed: subtree,
+                observed: subtree.rawValue,
                 expected: "exactly one of element or container"
             )
         }
@@ -106,53 +106,53 @@ extension TheFence {
             let matcher = try subtreeContainerMatcher(containerDictionary)
             selector = .container(matcher, ordinal: ordinal)
         } else {
-            throw SchemaValidationError(field: "subtree", observed: subtree, expected: "element or container selector")
+            throw SchemaValidationError(field: "subtree", observed: subtree.rawValue, expected: "element or container selector")
         }
 
         guard selector.hasPredicates else {
-            throw SchemaValidationError(field: "subtree", observed: subtree, expected: "non-empty subtree selector")
+            throw SchemaValidationError(field: "subtree", observed: subtree.rawValue, expected: "non-empty subtree selector")
         }
         return selector
     }
 
-    private func validateInterfaceSubtreeKeys(_ subtree: [String: Any]) throws {
+    private func validateInterfaceSubtreeKeys(_ subtree: CommandArgumentObject) throws {
         let allowedKeys: Set<String> = ["element", "container", "ordinal"]
         guard let unexpectedKey = subtree.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
         }
         throw SchemaValidationError(
-            field: "subtree.\(unexpectedKey)",
-            observed: subtree[unexpectedKey],
+            field: subtree.field(unexpectedKey),
+            observed: subtree.observedValue(for: unexpectedKey),
             expected: "valid get_interface subtree parameter"
         )
     }
 
-    private func validateInterfaceSubtreeElementKeys(_ element: [String: Any]) throws {
+    private func validateInterfaceSubtreeElementKeys(_ element: CommandArgumentObject) throws {
         let allowedKeys: Set<String> = ["heistId", "label", "value", "identifier", "traits", "excludeTraits"]
         guard let unexpectedKey = element.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
         }
         throw SchemaValidationError(
-            field: "subtree.element.\(unexpectedKey)",
-            observed: element[unexpectedKey],
+            field: element.field(unexpectedKey),
+            observed: element.observedValue(for: unexpectedKey),
             expected: "valid get_interface subtree element parameter"
         )
     }
 
-    private func validateInterfaceSubtreeContainerKeys(_ container: [String: Any]) throws {
+    private func validateInterfaceSubtreeContainerKeys(_ container: CommandArgumentObject) throws {
         let allowedKeys: Set<String> = ["stableId", "type", "label", "value", "identifier", "isModalBoundary"]
         guard let unexpectedKey = container.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
         }
         throw SchemaValidationError(
-            field: "subtree.container.\(unexpectedKey)",
-            observed: container[unexpectedKey],
+            field: container.field(unexpectedKey),
+            observed: container.observedValue(for: unexpectedKey),
             expected: "valid get_interface subtree container parameter"
         )
     }
 
-    private func subtreeElementMatcher(_ element: [String: Any]) throws -> ElementMatcher {
-        let matcher = try elementMatcher(element)
+    private func subtreeElementMatcher(_ element: CommandArgumentObject) throws -> ElementMatcher {
+        let matcher = try interfaceElementMatcher(element)
         return ElementMatcher(
             heistId: try element.schemaString("heistId"),
             label: matcher.label,
@@ -163,7 +163,7 @@ extension TheFence {
         )
     }
 
-    private func subtreeContainerMatcher(_ container: [String: Any]) throws -> ContainerMatcher {
+    private func subtreeContainerMatcher(_ container: CommandArgumentObject) throws -> ContainerMatcher {
         ContainerMatcher(
             stableId: try container.schemaString("stableId"),
             type: try container.schemaEnum("type", as: ContainerTypeName.self),
@@ -171,6 +171,19 @@ extension TheFence {
             value: try container.schemaString("value"),
             identifier: try container.schemaString("identifier"),
             isModalBoundary: try container.schemaBoolean("isModalBoundary")
+        )
+    }
+
+    private func interfaceElementMatcher(_ arguments: some CommandArgumentReadable) throws -> ElementMatcher {
+        ElementMatcher(
+            label: try arguments.schemaString("label"),
+            identifier: try arguments.schemaString("identifier"),
+            value: try arguments.schemaString("value"),
+            traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")),
+            excludeTraits: try TheFence.parseTraitNames(
+                try arguments.schemaStringArray("excludeTraits"),
+                field: arguments.field("excludeTraits")
+            )
         )
     }
 }

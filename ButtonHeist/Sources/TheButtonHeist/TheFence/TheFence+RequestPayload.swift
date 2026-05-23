@@ -547,13 +547,12 @@ extension TheFence {
                 immediateResponse: immediate
             )
         }
-        let requestDecodeInput = arguments.decodeEdgeRawDictionary()
         let requestId = arguments.string("requestId") ?? UUID().uuidString
-        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(requestDecodeInput)
+        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
         let payload: RequestPayload = if command == .waitForChange {
             .waitForChange(expectationPayload)
         } else {
-            try decodeRequestPayload(command: command, request: requestDecodeInput, requestId: requestId)
+            try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
         }
 
         return ParsedRequest(
@@ -596,7 +595,7 @@ extension TheFence {
 
     func decodeRequestPayload(
         command: Command,
-        request: [String: Any],
+        arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> RequestPayload {
         switch command {
@@ -604,19 +603,21 @@ extension TheFence {
              .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
             return .none
         case .getInterface, .getScreen, .stopRecording:
-            return try decodeObservationPayload(command: command, request: request, requestId: requestId)
+            return try decodeObservationPayload(command: command, arguments: arguments, requestId: requestId)
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
         case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
              .twoFingerTap, .drawPath, .drawBezier:
+            let request = arguments.decodeEdgeRawDictionary()
             return try decodeGestureRequestPayload(command: command, request: request)
         case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
              .activate, .increment, .decrement, .performCustomAction,
              .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
+            let request = arguments.decodeEdgeRawDictionary()
             return try decodeElementActionPayload(command: command, request: request)
         case .startRecording, .runBatch, .connect, .archiveSession, .startHeist,
              .stopHeist, .playHeist:
-            return try decodeSessionPayload(command: command, request: request)
+            return try decodeSessionPayload(command: command, arguments: arguments)
         }
     }
 }
