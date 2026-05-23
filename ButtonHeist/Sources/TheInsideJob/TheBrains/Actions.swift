@@ -494,6 +494,10 @@ final class Actions {
         }
     }
 
+    func executeActivate(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeActivate(target.batchElementTarget, recordedScreen: recordedScreen)
+    }
+
     private func refreshAndResolveActivationTarget(
         _ normalizedTarget: TheStash.NormalizedTarget
     ) async -> ActivationPolicy.RefreshResult {
@@ -576,6 +580,10 @@ final class Actions {
         )
     }
 
+    func executeIncrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeIncrement(target.batchElementTarget, recordedScreen: recordedScreen)
+    }
+
     func executeDecrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
@@ -601,6 +609,10 @@ final class Actions {
                 return .success(method: .decrement)
             }
         )
+    }
+
+    func executeDecrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+        await executeDecrement(target.batchElementTarget, recordedScreen: recordedScreen)
     }
 
     func executeCustomAction(
@@ -1363,7 +1375,7 @@ extension CustomActionTarget: CustomActionExecutionInput {
 }
 
 extension BatchCustomActionTarget: CustomActionExecutionInput {
-    var actionElementTarget: ElementTarget? { target?.executableTarget }
+    var actionElementTarget: ElementTarget? { target?.batchElementTarget }
     var actionContainerTarget: ContainerMatcher? { containerTarget }
     var actionContainerOrdinal: Int? { containerOrdinal }
 }
@@ -1373,7 +1385,7 @@ extension RotorTarget: RotorExecutionInput {
 }
 
 extension BatchRotorTarget: RotorExecutionInput {
-    var rotorElementTarget: ElementTarget { target.executableTarget }
+    var rotorElementTarget: ElementTarget { target.batchElementTarget }
     var currentHeistId: HeistId? { currentSourceHeistId }
 }
 
@@ -1382,7 +1394,7 @@ extension TouchTapTarget: TapExecutionInput {
 }
 
 extension BatchTouchTapTarget: TapExecutionInput {
-    var tapElementTarget: ElementTarget? { target?.executableTarget }
+    var tapElementTarget: ElementTarget? { target?.batchElementTarget }
 }
 
 extension LongPressTarget: LongPressExecutionInput {
@@ -1390,7 +1402,7 @@ extension LongPressTarget: LongPressExecutionInput {
 }
 
 extension BatchLongPressTarget: LongPressExecutionInput {
-    var tapElementTarget: ElementTarget? { target?.executableTarget }
+    var tapElementTarget: ElementTarget? { target?.batchElementTarget }
 }
 
 extension SwipeTarget: SwipeExecutionInput {
@@ -1398,7 +1410,7 @@ extension SwipeTarget: SwipeExecutionInput {
 }
 
 extension BatchSwipeTarget: SwipeExecutionInput {
-    var swipeElementTarget: ElementTarget? { target?.executableTarget }
+    var swipeElementTarget: ElementTarget? { target?.batchElementTarget }
 }
 
 extension DragTarget: DragExecutionInput {
@@ -1406,7 +1418,7 @@ extension DragTarget: DragExecutionInput {
 }
 
 extension BatchDragTarget: DragExecutionInput {
-    var dragElementTarget: ElementTarget? { target?.executableTarget }
+    var dragElementTarget: ElementTarget? { target?.batchElementTarget }
 }
 
 extension PinchTarget: PinchExecutionInput {
@@ -1414,7 +1426,7 @@ extension PinchTarget: PinchExecutionInput {
 }
 
 extension BatchPinchTarget: PinchExecutionInput {
-    var pinchElementTarget: ElementTarget? { target?.executableTarget }
+    var pinchElementTarget: ElementTarget? { target?.batchElementTarget }
 }
 
 extension RotateTarget: RotateExecutionInput {
@@ -1422,7 +1434,7 @@ extension RotateTarget: RotateExecutionInput {
 }
 
 extension BatchRotateTarget: RotateExecutionInput {
-    var rotateElementTarget: ElementTarget? { target?.executableTarget }
+    var rotateElementTarget: ElementTarget? { target?.batchElementTarget }
 }
 
 extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
@@ -1430,7 +1442,7 @@ extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
 }
 
 extension BatchTwoFingerTapTarget: TwoFingerTapExecutionInput {
-    var twoFingerTapElementTarget: ElementTarget? { target?.executableTarget }
+    var twoFingerTapElementTarget: ElementTarget? { target?.batchElementTarget }
 }
 
 extension TypeTextTarget: TypeTextExecutionInput {
@@ -1438,7 +1450,15 @@ extension TypeTextTarget: TypeTextExecutionInput {
 }
 
 extension BatchTypeTextTarget: TypeTextExecutionInput {
-    var typeTextElementTarget: ElementTarget? { target?.executableTarget }
+    var typeTextElementTarget: ElementTarget? { target?.batchElementTarget }
+}
+
+// MARK: - Batch Target Conversion
+
+extension BatchExecutionTarget {
+    var batchElementTarget: ElementTarget {
+        .matcher(matcher, ordinal: ordinal)
+    }
 }
 
 #endif // DEBUG

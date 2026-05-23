@@ -601,6 +601,91 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
+    func testBatchMatcherTargetedHelpersMatchSingleMatcherFailures() async {
+        let matcher = ElementMatcher(identifier: "missing_target")
+        let singleTarget = ElementTarget.matcher(matcher)
+        let batchTarget = BatchExecutionTarget(
+            sourceHeistId: "old_missing_target",
+            matcher: matcher
+        )
+
+        assertSameInteraction(
+            "activate",
+            single: await brains.actions.executeActivate(singleTarget),
+            batch: await brains.actions.executeActivate(batchTarget)
+        )
+        assertSameInteraction(
+            "custom action",
+            single: await brains.actions.executeCustomAction(CustomActionTarget(
+                elementTarget: singleTarget,
+                actionName: "Archive"
+            )),
+            batch: await brains.actions.executeCustomAction(BatchCustomActionTarget(
+                target: batchTarget,
+                actionName: "Archive"
+            ))
+        )
+        assertSameInteraction(
+            "rotor",
+            single: await brains.actions.executeRotor(RotorTarget(
+                elementTarget: singleTarget,
+                rotor: "Links"
+            )),
+            batch: await brains.actions.executeRotor(BatchRotorTarget(
+                target: batchTarget,
+                rotor: "Links"
+            ))
+        )
+        assertSameInteraction(
+            "tap",
+            single: await brains.actions.executeTap(TouchTapTarget(elementTarget: singleTarget)),
+            batch: await brains.actions.executeTap(BatchTouchTapTarget(target: batchTarget))
+        )
+        assertSameInteraction(
+            "swipe",
+            single: await brains.actions.executeSwipe(SwipeTarget(
+                elementTarget: singleTarget,
+                direction: .left
+            )),
+            batch: await brains.actions.executeSwipe(BatchSwipeTarget(
+                target: batchTarget,
+                direction: .left
+            ))
+        )
+        assertSameInteraction(
+            "type text",
+            single: await brains.actions.executeTypeText(TypeTextTarget(
+                text: "hello",
+                elementTarget: singleTarget
+            )),
+            batch: await brains.actions.executeTypeText(BatchTypeTextTarget(
+                text: "hello",
+                target: batchTarget
+            ))
+        )
+        assertSameInteraction(
+            "scroll",
+            single: await brains.navigation.executeScroll(ScrollTarget(
+                elementTarget: singleTarget,
+                direction: .down
+            )),
+            batch: await brains.navigation.executeScroll(BatchScrollTarget(
+                target: batchTarget,
+                direction: .down
+            ))
+        )
+
+        let singleWait = await brains.performWaitFor(target: WaitForTarget(
+            elementTarget: singleTarget,
+            timeout: 0.01
+        ))
+        let batchWait = await brains.performWaitFor(target: BatchWaitForTarget(
+            target: batchTarget,
+            timeout: 0.01
+        ))
+        assertSameActionResult("wait", single: singleWait, batch: batchWait, normalizingTimeoutDuration: true)
+    }
+
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
         let heistId = "geometry_missing_slider"
         let element = AccessibilityElement.make(
@@ -1152,6 +1237,51 @@ final class TheBrainsActionTests: XCTestCase {
                 line: line
             )
         }
+    }
+
+    private func assertSameInteraction(
+        _ name: String,
+        single singleResult: TheSafecracker.InteractionResult,
+        batch batchResult: TheSafecracker.InteractionResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(batchResult.success, singleResult.success, name, file: file, line: line)
+        XCTAssertEqual(batchResult.method, singleResult.method, name, file: file, line: line)
+        XCTAssertEqual(batchResult.message, singleResult.message, name, file: file, line: line)
+        XCTAssertEqual(batchResult.failureKind, singleResult.failureKind, name, file: file, line: line)
+    }
+
+    private func assertSameActionResult(
+        _ name: String,
+        single: ActionResult,
+        batch: ActionResult,
+        normalizingTimeoutDuration: Bool = false,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(batch.success, single.success, name, file: file, line: line)
+        XCTAssertEqual(batch.method, single.method, name, file: file, line: line)
+        XCTAssertEqual(batch.errorKind, single.errorKind, name, file: file, line: line)
+        XCTAssertEqual(
+            normalizedActionMessage(batch.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
+            normalizedActionMessage(single.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
+            name,
+            file: file,
+            line: line
+        )
+    }
+
+    private func normalizedActionMessage(
+        _ message: String?,
+        normalizingTimeoutDuration: Bool
+    ) -> String? {
+        guard normalizingTimeoutDuration else { return message }
+        return message?.replacingOccurrences(
+            of: #"timed out after [0-9.]+s"#,
+            with: "timed out after <duration>s",
+            options: .regularExpression
+        )
     }
 
     private func withNoTraversableWindows<T>(

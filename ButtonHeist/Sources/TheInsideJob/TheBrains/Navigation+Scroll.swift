@@ -256,6 +256,13 @@ extension Navigation {
         )
     }
 
+    func executeScroll(_ target: BatchScrollTarget) async -> TheSafecracker.InteractionResult {
+        await executeScroll(
+            elementTarget: target.target?.batchElementTarget,
+            direction: target.direction
+        )
+    }
+
     func executeScroll(
         elementTarget: ElementTarget?,
         containerTarget: ScrollContainerTarget? = nil,
@@ -285,6 +292,13 @@ extension Navigation {
         await executeScrollToEdge(
             elementTarget: target.elementTarget,
             containerTarget: target.containerTarget,
+            edge: target.edge
+        )
+    }
+
+    func executeScrollToEdge(_ target: BatchScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
+        await executeScrollToEdge(
+            elementTarget: target.target?.batchElementTarget,
             edge: target.edge
         )
     }
@@ -343,6 +357,16 @@ extension Navigation {
     }
 
     func executeScrollToVisible(
+        _ target: BatchScrollToVisibleTarget,
+        recordedScreen: Screen? = nil
+    ) async -> TheSafecracker.InteractionResult {
+        await executeScrollToVisible(
+            elementTarget: target.target?.batchElementTarget,
+            recordedScreen: recordedScreen
+        )
+    }
+
+    func executeScrollToVisible(
         elementTarget: ElementTarget?,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
@@ -392,6 +416,13 @@ extension Navigation {
     /// Used when the element has never been seen (not in the current screen).
     func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
         await executeElementSearch(elementTarget: target.elementTarget, direction: target.direction)
+    }
+
+    func executeElementSearch(_ target: BatchElementSearchTarget) async -> TheSafecracker.InteractionResult {
+        await executeElementSearch(
+            elementTarget: target.target?.batchElementTarget,
+            direction: target.direction
+        )
     }
 
     func executeElementSearch(

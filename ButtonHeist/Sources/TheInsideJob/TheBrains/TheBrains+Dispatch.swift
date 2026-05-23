@@ -193,6 +193,17 @@ extension TheBrains {
     }
 
     func performElementSearch(
+        target: BatchElementSearchTarget,
+        method: ActionMethod
+    ) async -> ActionResult {
+        await performElementSearch(
+            elementTarget: target.target?.batchElementTarget,
+            direction: target.direction,
+            method: method
+        )
+    }
+
+    func performElementSearch(
         elementTarget: ElementTarget?,
         direction: ScrollSearchDirection?,
         method: ActionMethod
@@ -226,6 +237,14 @@ extension TheBrains {
     func performWaitFor(target: WaitForTarget) async -> ActionResult {
         await performWaitFor(
             elementTarget: target.elementTarget,
+            absent: target.absent,
+            timeout: target.timeout
+        )
+    }
+
+    func performWaitFor(target: BatchWaitForTarget) async -> ActionResult {
+        await performWaitFor(
+            elementTarget: target.target.batchElementTarget,
             absent: target.absent,
             timeout: target.timeout
         )

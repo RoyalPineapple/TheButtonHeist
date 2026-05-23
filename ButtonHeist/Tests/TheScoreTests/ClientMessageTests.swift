@@ -94,12 +94,8 @@ final class ClientMessageTests: XCTestCase {
         }
         XCTAssertEqual(decodedTarget.sourceHeistId, "button_save")
         XCTAssertEqual(decodedTarget.matcher, ElementMatcher(label: "Save", traits: [.button]))
-        guard case .matcher(let executableMatcher, let ordinal) = decodedTarget.executableTarget else {
-            return XCTFail("Expected matcher executable target")
-        }
-        XCTAssertNil(executableMatcher.heistId)
-        XCTAssertEqual(executableMatcher.label, "Save")
-        XCTAssertNil(ordinal)
+        XCTAssertNil(decodedTarget.matcher.heistId)
+        XCTAssertNil(decodedTarget.ordinal)
     }
 
     func testBatchPlanEnvelopeRoundTrip() throws {
@@ -163,11 +159,8 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(target.sourceHeistId, "button_save")
         XCTAssertNil(target.matcher.heistId)
-        guard case .matcher(let matcher, nil) = target.executableTarget else {
-            return XCTFail("Expected matcher executable target")
-        }
-        XCTAssertNil(matcher.heistId)
-        XCTAssertEqual(matcher.label, "Save")
+        XCTAssertEqual(target.matcher.label, "Save")
+        XCTAssertNil(target.ordinal)
     }
 
     func testBatchExecutionTargetRejectsSourceHeistIdOnlyWirePayload() {
