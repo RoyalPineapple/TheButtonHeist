@@ -29,19 +29,19 @@ extension TheFence {
     }
 
     /// Owns command-execution state derived from dispatched action responses.
-    struct CommandExecutionState {
+    final class CommandExecutionState {
         private(set) var lastAction: LastAction = .none
 
-        mutating func noteDispatchedResponse(_ response: FenceResponse, latencyMs: Int) {
+        func noteDispatchedResponse(_ response: FenceResponse, latencyMs: Int) {
             guard let result = response.actionResult else { return }
             lastAction = .completed(result: result, latencyMs: latencyMs)
         }
 
-        mutating func completeAction(_ result: ActionResult) {
+        func completeAction(_ result: ActionResult) {
             lastAction = .completed(result: result, latencyMs: lastAction.latencyMsForReplacement)
         }
 
-        mutating func reset() {
+        func reset() {
             lastAction = .none
         }
     }

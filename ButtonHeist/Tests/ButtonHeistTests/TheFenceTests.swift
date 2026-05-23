@@ -1690,7 +1690,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testCommandExecutionStateOwnsLastActionAndProjectsSessionPayload() {
-        var state = TheFence.CommandExecutionState()
+        let state = TheFence.CommandExecutionState()
         XCTAssertNil(state.lastAction.sessionPayload)
 
         state.completeAction(ActionResult(success: true, method: .activate))
