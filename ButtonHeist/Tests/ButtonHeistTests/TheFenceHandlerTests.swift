@@ -2360,6 +2360,35 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchWaitDefaultsComeFromTypedAction() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        let batch = try decodedRunBatch(
+            fence,
+            steps: [
+                ["command": "wait_for", "identifier": "toast"],
+                ["command": "wait_for_change"],
+            ] as [[String: Any]]
+        )
+
+        let steps = plannedBatchSteps(from: batch)
+        XCTAssertEqual(steps[0].expectation, .elementAppeared(ElementMatcher(identifier: "toast")))
+        XCTAssertEqual(steps[0].deadline, Deadline(timeout: 10.0))
+        guard case .waitForElement(let waitTarget) = steps[0].action else {
+            return XCTFail("Expected wait_for action, got \(steps[0].action)")
+        }
+        XCTAssertNil(waitTarget.timeout)
+
+        XCTAssertEqual(steps[1].expectation, .screenChanged)
+        XCTAssertEqual(steps[1].deadline, Deadline(timeout: 30.0))
+        guard case .waitForChange(let waitChangeTarget) = steps[1].action else {
+            return XCTFail("Expected wait_for_change action, got \(steps[1].action)")
+        }
+        XCTAssertNil(waitChangeTarget.expect)
+        XCTAssertNil(waitChangeTarget.timeout)
+    }
+
+    @ButtonHeistActor
     func testBatchPreparationRecognizesHeistIdTargetsWithoutLookup() async throws {
         let (fence, mockConn) = makeConnectedFence()
 

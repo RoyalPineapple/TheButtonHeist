@@ -35,17 +35,18 @@ extension TheFence {
 
         func plan(_ actionPlan: BatchStepActionPlan) -> RunBatchPreparedStep {
             let stepTimeout = actionPlan.timeout ?? timeout
+            let typedStep = TheScore.BatchStep.action(
+                actionPlan.action,
+                expect: actionPlan.expectation ?? expectation,
+                deadline: stepTimeout.map(TheScore.Deadline.init(timeout:))
+            )
             return RunBatchPreparedStep(
                 originalIndex: originalIndex,
                 commandName: request.command.rawValue,
-                action: actionPlan.action,
-                expectation: actionPlan.expectation ?? expectation ?? actionPlan.action.defaultExpectation,
-                deadline: deadline(for: actionPlan.action, timeout: stepTimeout)
+                action: typedStep.action,
+                expectation: typedStep.expectation,
+                deadline: typedStep.deadline
             )
-        }
-
-        private func deadline(for action: TheScore.Action, timeout: Double?) -> TheScore.Deadline {
-            timeout.map(TheScore.Deadline.init(timeout:)) ?? action.defaultDeadline
         }
     }
 }
