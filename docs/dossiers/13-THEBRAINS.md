@@ -1,6 +1,6 @@
 # TheBrains - The Mastermind
 
-> **Files:** `TheBrains.swift`, `TheBrains+Dispatch.swift`, `Navigation.swift`, `Navigation+Scroll.swift`, `Navigation+Explore.swift`, `Actions.swift`, `ActionResultBuilder.swift`, `SettleSession.swift`, `ActivateFailureDiagnostic.swift`
+> **Files:** `TheBrains.swift`, `TheBrains+Dispatch.swift`, `Navigation.swift`, `Navigation+Scroll.swift`, `Navigation+Explore.swift`, `Actions.swift`, `ActionExecutionInputs.swift`, `Actions+ElementActions.swift`, `Actions+GestureGeometryResolution.swift`, `Actions+PointGestureActions.swift`, `Actions+RecoveryPolicies.swift`, `Actions+RotorActions.swift`, `Actions+TextInputActions.swift`, `ActionResultBuilder.swift`, `SettleSession.swift`, `ActivateFailureDiagnostic.swift`
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Plans the play, sequences the crew — orchestrates command dispatch, scroll/explore via Navigation, action execution via Actions, and the post-action delta cycle
 
@@ -9,7 +9,7 @@
 TheBrains is an orchestrator class with two internal components:
 
 - **`Navigation`** — scroll and exploration engine. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, and `lastSwipeDirectionByTarget`. Drives TheSafecracker's scroll primitives.
-- **`Actions`** — the 21 `executeXxx` action handlers, plus `performElementAction` / `performPointAction` generic pipelines and duration helpers.
+- **`Actions`** — shared action runtime dependencies. Focused extensions own element actions, point gestures, text/edit/pasteboard actions, gesture geometry, rotor actions, and live-target recovery policy.
 
 Navigation's invariant: visible pages are physical evidence; known state is semantic memory; reconciliation is the only place evidence becomes memory.
 
@@ -20,7 +20,7 @@ TheBrains itself keeps the post-action delta cycle (`captureBeforeState`, `actio
 ## Responsibilities
 
 1. **Command dispatch (`TheBrains+Dispatch.swift`)** — `executeCommand(_:)` routes `ClientMessage` to the appropriate handler: accessibility actions, touch gestures, text/scroll/search, or explore. Switch closures call `actions.executeXxx(...)` or `navigation.executeScroll(...)` etc.
-2. **Action execution (`Actions.swift`)** — Two generic pipelines: `performElementAction` (element-targeted: navigation.ensureOnScreen → resolve → check interactivity → perform action) and `performPointAction` (coordinate-targeted gestures). Most `executeXxx` methods are thin wrappers over these pipelines; `executeSwipe` and `executeTypeText` are specialized multi-step flows.
+2. **Action execution (`Actions*.swift`)** — `Actions.swift` owns shared dependencies. `Actions+ElementActions.swift` and `Actions+PointGestureActions.swift` hold the generic element/point pipelines. Other focused files hold rotor actions, text/edit/pasteboard commands, gesture geometry/duration helpers, and live-target recovery policy.
 3. **Scroll orchestration (`Navigation+Scroll.swift`)** — `executeScroll`, `executeScrollToEdge`, `executeScrollToVisible` (one-shot jump to known position), `executeElementSearch` (iterative page-by-page search for unseen elements). See [14a-SCROLLING.md](14a-SCROLLING.md).
 4. **Screen exploration (`Navigation+Explore.swift`)** — `exploreAndPrune()` scrolls reachable scrollable containers to discover semantic content and restores their visual position. The exploration accumulator is a local `var union: Screen`; the final union is committed by writing it back into `stash.currentScreen`. Targeted exploration may stop early once the target resolves.
 5. **Delta cycle (`TheBrains.swift`)** — `captureBeforeState()` captures a `BeforeState` token; after the action, `actionResultWithDelta(before:)` short-circuits failure responses from the before snapshot, and on success runs the multi-cycle settle, parses via TheStash, lets `ScreenClassifier` classify the parsed result, applies, asks Navigation to explore, and computes the delta. When a screen change is detected but the post-change parse stays empty after 10 repop attempts, `settled: false` is reported so the wire reflects an unhealthy snapshot rather than a confident one.
@@ -46,7 +46,11 @@ graph TD
     end
 
     subgraph Actions["Actions (internal component, @MainActor)"]
-        ActCore["Actions.swift<br/>21 executeXxx + pipelines + helpers"]
+        ActCore["Actions.swift<br/>Shared dependencies"]
+        ActElement["Actions+ElementActions.swift<br/>Element action pipeline"]
+        ActPoint["Actions+PointGestureActions.swift<br/>Point gestures"]
+        ActText["Actions+TextInputActions.swift<br/>Text/edit/pasteboard"]
+        ActRecovery["Actions+RecoveryPolicies.swift<br/>Live-target recovery"]
     end
 
     subgraph Crew["Crew (owned/referenced)"]
@@ -87,7 +91,7 @@ flowchart TD
     INT -->|Yes| ACT["Perform action<br/>(accessibilityActivate, increment, etc.)"]
     ACT --> OK{Succeeded?}
     OK -->|Yes| RET["Return InteractionResult"]
-    OK -->|No| FALL["Fallback: TheSafecracker.tap()<br/>(synthetic touch at activation point)"]
+    OK -->|No| FALL["ActivationPolicy fallback:<br/>TheSafecracker.tap()<br/>(synthetic touch at activation point)"]
     FALL --> RET
 
     RET --> DELTA["actionResultWithDelta(before:)<br/>(parse → detect → apply →<br/>navigation.exploreAndPrune → delta)"]
@@ -137,7 +141,14 @@ flowchart TD
 | `Navigation.swift` | Type + init + state (`lastSwipeDirectionByTarget`) + nested types (`ScrollableTarget`, `ScrollAxis`, `SettleSwipeProfile`, `SettleSwipeLoopState`, `ScreenManifest`) |
 | `Navigation+Scroll.swift` | Scroll orchestration, scroll-to-visible (one-shot), element-search (iterative), ensure-on-screen, axis/direction mapping, safe swipe frame |
 | `Navigation+Explore.swift` | Off-screen semantic content discovery, target-aware exploration, scroll-position restore, presentation-obscuring detection |
-| `Actions.swift` | Unified element/point action pipelines, all 21 executeXxx methods, duration helpers |
+| `Actions.swift` | Shared runtime dependencies for focused action-family extensions |
+| `ActionExecutionInputs.swift` | Execution input protocols and command payload conformances |
+| `Actions+ElementActions.swift` | Element action pipeline plus activate, increment, decrement, and custom actions |
+| `Actions+GestureGeometryResolution.swift` | Gesture point/frame resolution and duration helpers |
+| `Actions+PointGestureActions.swift` | Tap, long press, swipe, drag, pinch, rotate, two-finger tap, and drawing actions |
+| `Actions+RecoveryPolicies.swift` | Live action target recovery policy |
+| `Actions+RotorActions.swift` | Rotor action execution and rotor diagnostics |
+| `Actions+TextInputActions.swift` | Edit action, pasteboard, responder dismissal, and type text |
 | `SettleSession.swift` | Multi-cycle AX-tree settle loop with inline transient capture; `SettleOutcome`, `TimelineKey`, `SettleSession.transientElements` |
 | `ActionResultBuilder.swift` | Builds `ActionResult` with compile-time separation of success/failure fields |
 | `ActivateFailureDiagnostic.swift` | Fact-only diagnostic builder for failed `executeActivate` paths |
