@@ -7,9 +7,24 @@ import os
 import TheScore
 @testable import TheInsideJob
 
+private final class DeadlineCancellationProbe: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
+    private let expectation: XCTestExpectation
+
+    init(_ expectation: XCTestExpectation) {
+        self.expectation = expectation
+    }
+
+    func fulfill() {
+        expectation.fulfill()
+    }
+}
+
 final class SimpleSocketServerIntegrationTests: XCTestCase {
 
     private var server: SimpleSocketServer!
+    private let inertDeadline: @Sendable () -> Task<Void, Never> = {
+        Task {}
+    }
 
     override func setUp() {
         super.setUp()
@@ -48,12 +63,12 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     // MARK: - Client authentication lifecycle
 
     func testClientAuthenticationCarriesDeadlineOnlyWhileAwaiting() {
-        var authentication = SocketClientAuthentication.awaitingAuthentication
+        var authentication = SocketClientAuthentication.awaitingAuthentication(deadline: inertDeadline())
 
         XCTAssertFalse(authentication.isAuthenticated)
-        XCTAssertEqual(authentication, .awaitingAuthentication)
+        XCTAssertEqual(authentication, .awaitingAuthentication(deadline: inertDeadline()))
         XCTAssertTrue(authentication.markApprovalPending())
-        XCTAssertEqual(authentication, .awaitingApproval)
+        XCTAssertEqual(authentication, .awaitingApproval(deadline: inertDeadline()))
         XCTAssertTrue(authentication.markAuthenticated())
         XCTAssertTrue(authentication.isAuthenticated)
         XCTAssertFalse(authentication.markApprovalPending())
@@ -61,9 +76,26 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
     }
 
     func testDirectClientAuthenticationSkipsApproval() {
-        var authentication = SocketClientAuthentication.awaitingAuthentication
+        var authentication = SocketClientAuthentication.awaitingAuthentication(deadline: inertDeadline())
 
         XCTAssertTrue(authentication.markAuthenticated())
+        XCTAssertEqual(authentication, .authenticated)
+    }
+
+    func testMarkAuthenticatedCancelsAuthDeadline() async {
+        let deadlineCancelled = expectation(description: "deadline cancelled")
+        let probe = DeadlineCancellationProbe(deadlineCancelled)
+        let deadline = Task {
+            while !Task.isCancelled {
+                await Task.yield()
+            }
+            probe.fulfill()
+        }
+        var authentication = SocketClientAuthentication.awaitingAuthentication(deadline: deadline)
+
+        XCTAssertTrue(authentication.markAuthenticated())
+
+        await fulfillment(of: [deadlineCancelled], timeout: 1.0)
         XCTAssertEqual(authentication, .authenticated)
     }
 
