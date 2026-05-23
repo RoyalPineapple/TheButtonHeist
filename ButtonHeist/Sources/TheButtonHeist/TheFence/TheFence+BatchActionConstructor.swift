@@ -43,11 +43,8 @@ extension TheFence {
             case .waitFor(let target):
                 return try waitForAction(target, context: context)
             case .waitForChange:
-                let expectation = context.expectation ?? .screenChanged
                 return BatchStepActionPlan(
-                    action: .waitForChange(WaitForChangeTarget(expect: expectation, timeout: context.timeout)),
-                    expectation: expectation,
-                    timeout: context.timeout
+                    action: .waitForChange(WaitForChangeTarget(expect: context.expectation, timeout: context.timeout))
                 )
             default:
                 throw BatchStepPlanBuildError(
@@ -222,10 +219,8 @@ extension TheFence {
                 absent: target.absent,
                 timeout: resolvedTimeout
             ))
-            return try BatchStepActionPlan(
-                action: waitAction,
-                expectation: targetResolver.waitExpectation(target: semanticTarget, absent: target.absent),
-                timeout: resolvedTimeout
+            return BatchStepActionPlan(
+                action: waitAction
             )
         }
     }
