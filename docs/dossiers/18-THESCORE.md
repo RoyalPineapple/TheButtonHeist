@@ -28,7 +28,7 @@ TheScore is the shared playbook. It defines:
 
 | File | Contents |
 |------|----------|
-| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (SemVer), `WireMessageType` (50 cases), `ButtonHeistActor`, `EnvironmentKey` |
+| `Messages.swift` | `buttonHeistServiceType`, `buttonHeistVersion` (SemVer), `ClientWireMessageType`, `ServerWireMessageType`, `ButtonHeistActor`, `EnvironmentKey` |
 | `ClientMessages.swift` | `RequestEnvelope`, `ClientMessage` (35 cases), all action target structs, `UnitPoint`, `RecordingConfig` |
 | `ClientMessages+TouchTargets.swift` | Touch-specific target structs (`TapTarget`, `SwipeTarget`, `DragTarget`, `PinchTarget`, `RotateTarget`, `TwoFingerTapTarget`, `DrawPathTarget`, `DrawBezierTarget`, `LongPressTarget`) |
 | `ServerMessages.swift` | `ResponseEnvelope`, `ServerMessage` (18 cases), `ActionResult`, `ErrorKind`, `StatusPayload`, `ScreenPayload`, `RecordingPayload`, `InteractionEvent`, `ServerInfo` |
@@ -57,7 +57,7 @@ The UIKit-bitmask projections live in TheInsideJob as `AccessibilityPolicy+UIKit
 ```mermaid
 graph TD
     subgraph TheScore["TheScore (Cross-Platform)"]
-        Messages["Messages.swift — serviceType, buttonHeistVersion, WireMessageType (50 cases)"]
+        Messages["Messages.swift — serviceType, buttonHeistVersion, directional wire message types"]
         Client["ClientMessages.swift — RequestEnvelope, ClientMessage (35 cases), UnitPoint"]
         Server["ServerMessages.swift — ResponseEnvelope, ServerMessage (18 cases), StatusPayload"]
         Elements["Elements.swift — HeistElement, Interface, ElementTarget, ElementMatcher"]
