@@ -79,6 +79,7 @@ public final class TheFence {
     /// session.
     public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
 
+    // Dependencies
     var config: Configuration
     let handoff = TheHandoff()
     var sessionConnectionSnapshot: SessionConnectionSnapshot {
@@ -90,16 +91,14 @@ public final class TheFence {
         )
     }
     let bookKeeper: TheBookKeeper
-    let playback = FencePlaybackLifecycle()
-
-    /// Fence-owned accessibility capture history. Captures are the retained
-    /// source of truth; pending trace and lookup views are derived locally from
-    /// retained captures when validation or recording needs them.
-    var backgroundAccessibilityState = BackgroundAccessibilityState()
-
     let pendingRequests = PendingRequestTrackers()
 
+    // Lifecycle owners
+    let backgroundAccessibility = FenceBackgroundAccessibilityLifecycle()
+    let playback = FencePlaybackLifecycle()
     let recording = FenceRecordingLifecycle()
+    let commandExecutionState = CommandExecutionState()
+
     var recordingSnapshot: RecordingSnapshot {
         recording.snapshot
     }
@@ -212,17 +211,17 @@ public final class TheFence {
     }
 
     private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
-        backgroundAccessibilityState.enqueue(trace)
+        backgroundAccessibility.enqueue(trace)
     }
 
     /// Return and clear the oldest queued background accessibility trace, if any.
     public func drainBackgroundAccessibilityTrace() -> AccessibilityTrace? {
-        backgroundAccessibilityState.drainTrace()
+        backgroundAccessibility.drainTrace()
     }
 
     /// Return and clear all queued background accessibility traces in arrival order.
     public func drainBackgroundAccessibilityTraces() -> [AccessibilityTrace] {
-        backgroundAccessibilityState.drainTraces()
+        backgroundAccessibility.drainTraces()
     }
 
     /// Execute a command from a dictionary request. Auto-connects if not
@@ -285,11 +284,11 @@ public final class TheFence {
     }
 
     func beginRecordingAccessibilityHistoryRetention() {
-        backgroundAccessibilityState.beginRecordingRetention()
+        backgroundAccessibility.beginRecordingRetention()
     }
 
     func endRecordingAccessibilityHistoryRetention() {
-        backgroundAccessibilityState.endRecordingRetention()
+        backgroundAccessibility.endRecordingRetention()
     }
 
     // MARK: - Command Dispatch (thin router)
@@ -384,8 +383,6 @@ public final class TheFence {
 
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
-
-    var commandExecutionState = CommandExecutionState()
 
     func recordCompletedAction(_ result: ActionResult) {
         commandExecutionState.completeAction(result)

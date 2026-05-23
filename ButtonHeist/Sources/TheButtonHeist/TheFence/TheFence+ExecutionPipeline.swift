@@ -37,8 +37,8 @@ extension TheFence {
             return backgroundResponse.response
         }
 
-        let preDispatchBackgroundCount = backgroundAccessibilityState.pendingTraceCount
-        let preDispatchCaptureRef = backgroundAccessibilityState.latestRef
+        let preDispatchBackgroundCount = backgroundAccessibility.pendingTraceCount
+        let preDispatchCaptureRef = backgroundAccessibility.latestRef
         let dispatched = try await dispatchCommand(parsed)
         commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
         logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
@@ -80,7 +80,7 @@ extension TheFence {
         preDispatchCaptureRef: AccessibilityTrace.CaptureRef?
     ) -> PostDispatchOutcome {
         if let fullInterface = fullInterfaceCapture(from: response, parsed: parsed) {
-            let captureRef = backgroundAccessibilityState.append(interface: fullInterface)
+            let captureRef = backgroundAccessibility.append(interface: fullInterface)
             return PostDispatchOutcome(
                 preActionCaptureRef: nil,
                 recordingLookupCaptureRef: nil,
@@ -112,33 +112,18 @@ extension TheFence {
     ) -> BackgroundExpectationResponse? {
         guard let expectation else { return nil }
 
-        var matched: (pendingTrace: AccessibilityTrace.PendingTrace, result: ActionResult, validation: ExpectationResult)?
-        for pendingTrace in backgroundAccessibilityState.pendingTraces(startingAt: startIndex) {
-            let trace = pendingTrace.trace
-            guard trace.backgroundDelta != nil else { continue }
-            let syntheticResult = ActionResult(
-                success: true,
-                method: .waitForChange,
-                message: "expectation already met by background change",
-                accessibilityTrace: trace
-            )
-            let validation = expectation.validate(
-                against: syntheticResult,
-                preActionElements: backgroundAccessibilityState.elementLookup(captureRef: pendingTrace.firstRef)
-            )
-            if validation.met {
-                matched = (pendingTrace, syntheticResult, validation)
-                break
-            }
-        }
-
-        guard let matched else { return nil }
-        guard let pendingTrace = backgroundAccessibilityState.removePendingTrace(at: matched.pendingTrace.index) else {
+        guard let match = backgroundAccessibility.consumeFirstTraceMatchingExpectation(
+            expectation,
+            startingAt: startIndex
+        ) else {
             return nil
         }
-        let response = FenceResponse.action(result: matched.result, expectation: matched.validation)
+        let response = FenceResponse.action(result: match.result, expectation: match.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
-        return BackgroundExpectationResponse(response: response, deliveredCaptureRef: pendingTrace.lastRef)
+        return BackgroundExpectationResponse(
+            response: response,
+            deliveredCaptureRef: match.deliveredCaptureRef
+        )
     }
 
     private func ensureConnectedIfNeeded(for command: Command) async throws {
@@ -202,7 +187,7 @@ extension TheFence {
                         deliveredCaptureRef: nil
                     )
                 }
-                let preActionElements = backgroundAccessibilityState.elementLookup(captureRef: preActionCaptureRef)
+                let preActionElements = backgroundAccessibility.elementLookup(captureRef: preActionCaptureRef)
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionElements
                 )
@@ -287,10 +272,10 @@ extension TheFence {
 
     private func ingestActionTrace(_ actionResult: ActionResult) -> AccessibilityTrace.Cursor? {
         guard let trace = actionResult.accessibilityTrace else { return nil }
-        return backgroundAccessibilityState.ingest(trace)
+        return backgroundAccessibility.ingest(trace)
     }
 
     private func finishAccessibilityDelivery(_ captureRef: AccessibilityTrace.CaptureRef?) {
-        backgroundAccessibilityState.markDelivered(through: captureRef)
+        backgroundAccessibility.markDelivered(through: captureRef)
     }
 }

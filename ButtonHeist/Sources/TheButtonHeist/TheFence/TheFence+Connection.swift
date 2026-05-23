@@ -40,7 +40,7 @@ extension TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        backgroundAccessibilityState.reset()
+        backgroundAccessibility.reset()
         commandExecutionState.reset()
         cancelAllPendingRequests(error: error)
         recording.reset()
