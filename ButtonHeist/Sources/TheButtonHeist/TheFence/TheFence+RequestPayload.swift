@@ -62,10 +62,107 @@ extension TheFence {
         case drawBezier(DrawBezierGesturePayload)
     }
 
+    enum GesturePointIntent {
+        case element(ElementTarget)
+        case point(x: Double, y: Double)
+        case unspecified
+
+        var elementTarget: ElementTarget? {
+            guard case .element(let target) = self else { return nil }
+            return target
+        }
+
+        var pointX: Double? {
+            guard case .point(let x, _) = self else { return nil }
+            return x
+        }
+
+        var pointY: Double? {
+            guard case .point(_, let y) = self else { return nil }
+            return y
+        }
+    }
+
+    enum SwipeGestureEndIntent {
+        case point(x: Double, y: Double)
+        case direction(SwipeDirection)
+        case unspecified
+
+        var endX: Double? {
+            guard case .point(let x, _) = self else { return nil }
+            return x
+        }
+
+        var endY: Double? {
+            guard case .point(_, let y) = self else { return nil }
+            return y
+        }
+
+        var direction: SwipeDirection? {
+            guard case .direction(let direction) = self else { return nil }
+            return direction
+        }
+    }
+
+    enum SwipeGestureIntent {
+        case absolute(start: GesturePointIntent, end: SwipeGestureEndIntent)
+        case unit(elementTarget: ElementTarget?, start: UnitPoint, end: UnitPoint, direction: SwipeDirection?)
+
+        var elementTarget: ElementTarget? {
+            switch self {
+            case .absolute(let start, _):
+                return start.elementTarget
+            case .unit(let elementTarget, _, _, _):
+                return elementTarget
+            }
+        }
+
+        var startX: Double? {
+            guard case .absolute(let start, _) = self else { return nil }
+            return start.pointX
+        }
+
+        var startY: Double? {
+            guard case .absolute(let start, _) = self else { return nil }
+            return start.pointY
+        }
+
+        var endX: Double? {
+            guard case .absolute(_, let end) = self else { return nil }
+            return end.endX
+        }
+
+        var endY: Double? {
+            guard case .absolute(_, let end) = self else { return nil }
+            return end.endY
+        }
+
+        var direction: SwipeDirection? {
+            switch self {
+            case .absolute(_, let end):
+                return end.direction
+            case .unit(_, _, _, let direction):
+                return direction
+            }
+        }
+
+        var start: UnitPoint? {
+            guard case .unit(_, let start, _, _) = self else { return nil }
+            return start
+        }
+
+        var end: UnitPoint? {
+            guard case .unit(_, _, let end, _) = self else { return nil }
+            return end
+        }
+    }
+
     struct TouchTapGesturePayload {
-        let elementTarget: ElementTarget?
-        let pointX: Double?
-        let pointY: Double?
+        let intent: GesturePointIntent
+
+        var elementTarget: ElementTarget? { intent.elementTarget }
+        var pointX: Double? { intent.pointX }
+        var pointY: Double? { intent.pointY }
 
         var target: TouchTapTarget {
             TouchTapTarget(elementTarget: elementTarget, pointX: pointX, pointY: pointY)
@@ -73,10 +170,12 @@ extension TheFence {
     }
 
     struct LongPressGesturePayload {
-        let elementTarget: ElementTarget?
-        let pointX: Double?
-        let pointY: Double?
+        let intent: GesturePointIntent
         let duration: Double
+
+        var elementTarget: ElementTarget? { intent.elementTarget }
+        var pointX: Double? { intent.pointX }
+        var pointY: Double? { intent.pointY }
 
         var target: LongPressTarget {
             LongPressTarget(
@@ -89,15 +188,17 @@ extension TheFence {
     }
 
     struct SwipeGesturePayload {
-        let elementTarget: ElementTarget?
-        let startX: Double?
-        let startY: Double?
-        let endX: Double?
-        let endY: Double?
-        let direction: SwipeDirection?
+        let intent: SwipeGestureIntent
         let duration: Double?
-        let start: UnitPoint?
-        let end: UnitPoint?
+
+        var elementTarget: ElementTarget? { intent.elementTarget }
+        var startX: Double? { intent.startX }
+        var startY: Double? { intent.startY }
+        var endX: Double? { intent.endX }
+        var endY: Double? { intent.endY }
+        var direction: SwipeDirection? { intent.direction }
+        var start: UnitPoint? { intent.start }
+        var end: UnitPoint? { intent.end }
 
         var target: SwipeTarget {
             SwipeTarget(
@@ -115,12 +216,14 @@ extension TheFence {
     }
 
     struct DragGesturePayload {
-        let elementTarget: ElementTarget?
-        let startX: Double?
-        let startY: Double?
+        let start: GesturePointIntent
         let endX: Double
         let endY: Double
         let duration: Double?
+
+        var elementTarget: ElementTarget? { start.elementTarget }
+        var startX: Double? { start.pointX }
+        var startY: Double? { start.pointY }
 
         var target: DragTarget {
             DragTarget(
@@ -135,12 +238,14 @@ extension TheFence {
     }
 
     struct PinchGesturePayload {
-        let elementTarget: ElementTarget?
-        let centerX: Double?
-        let centerY: Double?
+        let center: GesturePointIntent
         let scale: Double
         let spread: Double?
         let duration: Double?
+
+        var elementTarget: ElementTarget? { center.elementTarget }
+        var centerX: Double? { center.pointX }
+        var centerY: Double? { center.pointY }
 
         var target: PinchTarget {
             PinchTarget(
@@ -155,12 +260,14 @@ extension TheFence {
     }
 
     struct RotateGesturePayload {
-        let elementTarget: ElementTarget?
-        let centerX: Double?
-        let centerY: Double?
+        let center: GesturePointIntent
         let angle: Double
         let radius: Double?
         let duration: Double?
+
+        var elementTarget: ElementTarget? { center.elementTarget }
+        var centerX: Double? { center.pointX }
+        var centerY: Double? { center.pointY }
 
         var target: RotateTarget {
             RotateTarget(
@@ -175,10 +282,12 @@ extension TheFence {
     }
 
     struct TwoFingerTapGesturePayload {
-        let elementTarget: ElementTarget?
-        let centerX: Double?
-        let centerY: Double?
+        let center: GesturePointIntent
         let spread: Double?
+
+        var elementTarget: ElementTarget? { center.elementTarget }
+        var centerX: Double? { center.pointX }
+        var centerY: Double? { center.pointY }
 
         var target: TwoFingerTapTarget {
             TwoFingerTapTarget(
