@@ -37,19 +37,25 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response s
 
    **TheGetaway-facing methods** — `observeInterface(_:)`, `currentInterface()`, `computeBackgroundAccessibilityTrace()`, `captureScreen()`, `captureScreenForRecording()`, `screenName`, `screenId`, `stakeout`. These exist so TheGetaway and TheInsideJob never reach through to TheStash. Observation policy lives here: `get_interface` requests can trigger exploration and selection, while `get_screen` performs a fresh visible parse and returns geometry with the screenshot.
 
-3. **`Actions.swift`** — Two generic pipelines and all `executeXxx` methods:
-   - `performElementAction(target:method:action:)` — `navigation.ensureOnScreen` → semantic `stash.resolveTarget` → fresh `stash.resolveLiveActionTarget` → check interactivity → action closure with `LiveActionTarget`. Used by activate, increment, decrement, customAction, and rotor.
-   - `performPointAction(elementTarget:pointX:pointY:action:)` — `navigation.ensureOnScreen` when element-targeted → fresh live activation point or raw coordinate passthrough → action closure → showFingerprint. Used by tap, longPress, drag, pinch, rotate, twoFingerTap.
-   - `executeSwipe` has two paths: unit-point (element-relative 0-1 coordinates resolved against frame) and absolute-point.
-   - `executeTypeText` handles optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → type a non-empty string → refresh → re-resolve for value readback.
+3. **`Actions.swift`** — Type declaration and shared dependencies for the action execution component.
 
-4. **`Navigation.swift`** — Type declaration, init, state (`lastSwipeDirectionByTarget`), and the nested types `SettleSwipeProfile`, `SettleSwipeStep`, `SettleSwipeLoopState`, `ScrollableTarget`, `ScrollAxis`, `ScreenManifest`. Plus `refresh()` and `clearCache()` helpers.
+4. **`ActionExecutionInputs.swift`** — Protocol conformances and small input adapters that let batch and single-command execution call the same action methods.
 
-5. **`Navigation+Scroll.swift`** — `executeScroll` does one page. `executeScrollToVisible` tries three strategies: already visible → content-space one-shot jump → failure. `executeElementSearch` searches only containers matching the requested axis, page-by-page up to 200 scrolls. `ensureOnScreen` returns a named pre-action positioning result; targeted action callers must consume failures before dispatch. Direction mapping, axis detection, and `safeSwipeFrame` (tab-bar-aware clip) also live here.
+5. **`Actions+ElementActions.swift`** — Element-targeted accessibility actions and the `performElementAction(target:method:action:)` pipeline: `navigation.ensureOnScreen` → semantic `stash.resolveTarget` → fresh `stash.resolveLiveActionTarget` → interactivity check → action closure with `LiveActionTarget`. Used by activate, increment, decrement, customAction, and rotor.
 
-6. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `reconcilePage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
+6. **`Actions+PointGestureActions.swift`** and **`Actions+GestureGeometryResolution.swift`** — Point and gesture actions plus the geometry helpers that resolve element-relative or absolute points immediately before dispatch. Used by tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, drawPath, and drawBezier.
 
-7. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot/capture. Three init paths (from `[ScreenElement]`, `AccessibilityTrace.Capture`, or explicit screenName/Id). Two terminal methods: `success(payload:)` and `failure(errorKind:payload:)`.
+7. **`Actions+TextInputActions.swift`** — Text, edit, pasteboard, and first-responder commands. `executeTypeText` handles optional `navigation.ensureOnScreen` + tap-to-focus → poll for active text input → type a non-empty string → refresh → re-resolve for value readback.
+
+8. **`Actions+RecoveryPolicies.swift`** — Named recovery policies for stale or refused live targets.
+
+9. **`Navigation.swift`** — Type declaration, init, state (`lastSwipeDirectionByTarget`), and the nested types `SettleSwipeProfile`, `SettleSwipeStep`, `SettleSwipeLoopState`, `ScrollableTarget`, `ScrollAxis`, `ScreenManifest`. Plus `refresh()` and `clearCache()` helpers.
+
+10. **`Navigation+Scroll.swift`** — `executeScroll` does one page. `executeScrollToVisible` tries three strategies: already visible → content-space one-shot jump → failure. `executeElementSearch` searches only containers matching the requested axis, page-by-page up to 200 scrolls. `ensureOnScreen` returns a named pre-action positioning result; targeted action callers must consume failures before dispatch. Direction mapping, axis detection, and `safeSwipeFrame` (tab-bar-aware clip) also live here.
+
+11. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `reconcilePage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
+
+12. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot/capture. Three init paths (from `[ScreenElement]`, `AccessibilityTrace.Capture`, or explicit screenName/Id). Two terminal methods: `success(payload:)` and `failure(errorKind:payload:)`.
 
 > Full dossier: [`docs/dossiers/13-THEBRAINS.md`](../../../../docs/dossiers/13-THEBRAINS.md)
 
