@@ -3,8 +3,6 @@ import Foundation
 import ButtonHeist
 
 struct RecordCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.startRecording
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Record the screen of the connected device"

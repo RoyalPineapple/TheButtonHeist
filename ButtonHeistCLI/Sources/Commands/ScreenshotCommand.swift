@@ -3,8 +3,6 @@ import Foundation
 import ButtonHeist
 
 struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.getScreen
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Capture a screenshot from the connected device"

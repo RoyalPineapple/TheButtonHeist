@@ -1,11 +1,51 @@
 import ArgumentParser
 import ButtonHeist
 
+extension GestureCLICommandContract {
+    static func gestureRequest(
+        parameters: CLIRequestParameters = [:],
+        element: ElementTargetOptions,
+        numbers: [(FenceParameterKey, Double?)] = [],
+        strings: [(FenceParameterKey, String?)] = [],
+        objects: [(FenceParameterKey, [FenceParameterKey: HeistValue]?)] = []
+    ) throws -> [String: Any] {
+        var request = fenceRequest(parameters)
+        try element.applyTo(&request)
+        for (key, value) in numbers {
+            if let value { request.set(key, value) }
+        }
+        for (key, value) in strings {
+            if let value { request.set(key, value) }
+        }
+        for (key, value) in objects {
+            if let value {
+                request.set(key, .object(Dictionary(
+                    value.map { ($0.key.rawValue, $0.value) },
+                    uniquingKeysWith: { _, newest in newest }
+                )))
+            }
+        }
+        return request
+    }
+
+    @ButtonHeistActor
+    static func sendGesture(
+        _ request: [String: Any],
+        connection: ConnectionOptions,
+        output: OutputOptions
+    ) async throws {
+        try await CLIRunner.run(
+            connection: connection,
+            format: output.format,
+            request: request,
+            statusMessage: "Sending gesture..."
+        )
+    }
+}
+
 // MARK: - Tap
 
 struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
-    static let gestureType = GestureType.oneFingerTap
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Raw synthetic tap at coordinates or element center",
@@ -38,25 +78,14 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request = Self.fenceRequest()
-        try element.applyTo(&request)
-        if let x { request.set(.x, x) }
-        if let y { request.set(.y, y) }
-
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            request: request,
-            statusMessage: "Sending gesture..."
-        )
+        let request = try Self.gestureRequest(element: element, numbers: [(.x, x), (.y, y)])
+        try await Self.sendGesture(request, connection: connection, output: output)
     }
 }
 
 // MARK: - Long Press
 
 struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
-    static let gestureType = GestureType.longPress
-
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Long press at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
@@ -79,25 +108,18 @@ struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
         }
 
-        var request = Self.fenceRequest([.duration: .double(duration)])
-        try element.applyTo(&request)
-        if let x { request.set(.x, x) }
-        if let y { request.set(.y, y) }
-
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            request: request,
-            statusMessage: "Sending gesture..."
+        let request = try Self.gestureRequest(
+            parameters: [.duration: .double(duration)],
+            element: element,
+            numbers: [(.x, x), (.y, y)]
         )
+        try await Self.sendGesture(request, connection: connection, output: output)
     }
 }
 
 // MARK: - Swipe
 
 struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
-    static let gestureType = GestureType.swipe
-
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Swipe between two points or in a direction")
 
     @OptionGroup var element: ElementTargetOptions
@@ -167,41 +189,37 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             swipeDirection = nil
         }
 
-        var request = Self.fenceRequest()
-        try element.applyTo(&request)
-        if let fromX { request.set(.startX, fromX) }
-        if let fromY { request.set(.startY, fromY) }
-        if let toX { request.set(.endX, toX) }
-        if let toY { request.set(.endY, toY) }
-        if let swipeDirection { request.set(.direction, swipeDirection.rawValue) }
-        if let duration { request.set(.duration, duration) }
+        let startObject: [FenceParameterKey: HeistValue]?
         if let startUnitX, let startUnitY {
-            request.set(.start, .object([
-                FenceParameterKey.x.rawValue: .double(startUnitX),
-                FenceParameterKey.y.rawValue: .double(startUnitY),
-            ]))
+            startObject = [.x: .double(startUnitX), .y: .double(startUnitY)]
+        } else {
+            startObject = nil
         }
+        let endObject: [FenceParameterKey: HeistValue]?
         if let endUnitX, let endUnitY {
-            request.set(.end, .object([
-                FenceParameterKey.x.rawValue: .double(endUnitX),
-                FenceParameterKey.y.rawValue: .double(endUnitY),
-            ]))
+            endObject = [.x: .double(endUnitX), .y: .double(endUnitY)]
+        } else {
+            endObject = nil
         }
-
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            request: request,
-            statusMessage: "Sending gesture..."
+        let request = try Self.gestureRequest(
+            element: element,
+            numbers: [
+                (.startX, fromX),
+                (.startY, fromY),
+                (.endX, toX),
+                (.endY, toY),
+                (.duration, duration),
+            ],
+            strings: [(.direction, swipeDirection?.rawValue)],
+            objects: [(.start, startObject), (.end, endObject)]
         )
+        try await Self.sendGesture(request, connection: connection, output: output)
     }
 }
 
 // MARK: - Drag
 
 struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
-    static let gestureType = GestureType.drag
-
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Drag from one point to another")
 
     @OptionGroup var element: ElementTargetOptions
@@ -230,29 +248,21 @@ struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --from-x/--from-y coordinates")
         }
 
-        var request = Self.fenceRequest([
-            .endX: .double(toX),
-            .endY: .double(toY),
-        ])
-        try element.applyTo(&request)
-        if let fromX { request.set(.startX, fromX) }
-        if let fromY { request.set(.startY, fromY) }
-        if let duration { request.set(.duration, duration) }
-
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            request: request,
-            statusMessage: "Sending gesture..."
+        let request = try Self.gestureRequest(
+            parameters: [
+                .endX: .double(toX),
+                .endY: .double(toY),
+            ],
+            element: element,
+            numbers: [(.startX, fromX), (.startY, fromY), (.duration, duration)]
         )
+        try await Self.sendGesture(request, connection: connection, output: output)
     }
 }
 
 // MARK: - Pinch
 
 struct PinchSubcommand: AsyncParsableCommand, GestureCLICommandContract {
-    static let gestureType = GestureType.pinch
-
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Pinch/zoom at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
@@ -281,27 +291,23 @@ struct PinchSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
-        var request = Self.fenceRequest([.scale: .double(scale)])
-        try element.applyTo(&request)
-        if let centerX { request.set(.centerX, centerX) }
-        if let centerY { request.set(.centerY, centerY) }
-        if let spread { request.set(.spread, spread) }
-        if let duration { request.set(.duration, duration) }
-
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            request: request,
-            statusMessage: "Sending gesture..."
+        let request = try Self.gestureRequest(
+            parameters: [.scale: .double(scale)],
+            element: element,
+            numbers: [
+                (.centerX, centerX),
+                (.centerY, centerY),
+                (.spread, spread),
+                (.duration, duration),
+            ]
         )
+        try await Self.sendGesture(request, connection: connection, output: output)
     }
 }
 
 // MARK: - Rotate
 
 struct RotateSubcommand: AsyncParsableCommand, GestureCLICommandContract {
-    static let gestureType = GestureType.rotate
-
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Rotate at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
@@ -330,27 +336,23 @@ struct RotateSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
-        var request = Self.fenceRequest([.angle: .double(angle)])
-        try element.applyTo(&request)
-        if let centerX { request.set(.centerX, centerX) }
-        if let centerY { request.set(.centerY, centerY) }
-        if let radius { request.set(.radius, radius) }
-        if let duration { request.set(.duration, duration) }
-
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            request: request,
-            statusMessage: "Sending gesture..."
+        let request = try Self.gestureRequest(
+            parameters: [.angle: .double(angle)],
+            element: element,
+            numbers: [
+                (.centerX, centerX),
+                (.centerY, centerY),
+                (.radius, radius),
+                (.duration, duration),
+            ]
         )
+        try await Self.sendGesture(request, connection: connection, output: output)
     }
 }
 
 // MARK: - Two-Finger Tap
 
 struct TwoFingerTapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
-    static let gestureType = GestureType.twoFingerTap
-
     static let configuration = CommandConfiguration(commandName: Self.cliCommandName, abstract: "Tap with two fingers at a point or element")
 
     @OptionGroup var element: ElementTargetOptions
@@ -373,17 +375,10 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
         }
 
-        var request = Self.fenceRequest()
-        try element.applyTo(&request)
-        if let centerX { request.set(.centerX, centerX) }
-        if let centerY { request.set(.centerY, centerY) }
-        if let spread { request.set(.spread, spread) }
-
-        try await CLIRunner.run(
-            connection: connection,
-            format: output.format,
-            request: request,
-            statusMessage: "Sending gesture..."
+        let request = try Self.gestureRequest(
+            element: element,
+            numbers: [(.centerX, centerX), (.centerY, centerY), (.spread, spread)]
         )
+        try await Self.sendGesture(request, connection: connection, output: output)
     }
 }

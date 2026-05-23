@@ -3,8 +3,6 @@ import ButtonHeist
 import Foundation
 
 struct SessionLogCommand: AsyncParsableCommand, CLICommandContract {
-    static let fenceCommand = TheFence.Command.getSessionLog
-
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
         abstract: "Show the current session log snapshot and stats"
