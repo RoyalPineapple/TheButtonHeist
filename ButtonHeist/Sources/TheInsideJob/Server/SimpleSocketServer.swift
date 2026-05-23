@@ -81,6 +81,35 @@ enum ServerSendFailure: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
+enum SocketClientAuthentication: Equatable, Sendable {
+    case awaitingAuthentication
+    case awaitingApproval
+    case authenticated
+
+    var isAuthenticated: Bool {
+        if case .authenticated = self { return true }
+        return false
+    }
+
+    /// Move to authenticated when still awaiting auth or approval.
+    /// Returns false when the client is already authenticated.
+    @discardableResult
+    mutating func markAuthenticated() -> Bool {
+        guard !isAuthenticated else { return false }
+        self = .authenticated
+        return true
+    }
+
+    /// Move to approval-pending while unauthenticated.
+    /// Returns false once authentication has already completed.
+    @discardableResult
+    mutating func markApprovalPending() -> Bool {
+        guard !isAuthenticated else { return false }
+        self = .awaitingApproval
+        return true
+    }
+}
+
 actor SimpleSocketServer {
     typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
@@ -102,15 +131,9 @@ actor SimpleSocketServer {
         case listening(listener: NWListener, port: UInt16)
     }
 
-    private enum AuthDeadlinePhase: Sendable {
-        case awaitingAuthentication
-        case awaitingApproval
-    }
-
     private struct ClientState {
         let connection: NWConnection
-        var isAuthenticated: Bool
-        var authDeadlinePhase: AuthDeadlinePhase
+        var authentication: SocketClientAuthentication
         var timestamps: [Date]
         var rateLimitNotified: Bool
         /// Bytes currently queued in NWConnection send buffers.
@@ -449,8 +472,8 @@ actor SimpleSocketServer {
 
     /// Mark a client as authenticated.
     func markAuthenticated(_ clientId: Int) {
-        guard var state = clients[clientId], !state.isAuthenticated else { return }
-        state.isAuthenticated = true
+        guard var state = clients[clientId],
+              state.authentication.markAuthenticated() else { return }
         clients[clientId] = state
         authDeadlineTasks[clientId]?.cancel()
         authDeadlineTasks[clientId] = nil
@@ -458,20 +481,20 @@ actor SimpleSocketServer {
 
     /// Mark a connected client as waiting on the on-device approval prompt.
     func markApprovalPending(_ clientId: Int) {
-        guard var state = clients[clientId], !state.isAuthenticated else { return }
-        state.authDeadlinePhase = .awaitingApproval
+        guard var state = clients[clientId],
+              state.authentication.markApprovalPending() else { return }
         clients[clientId] = state
         logger.info("Client \(clientId): approval pending — waiting for user to tap Allow on device")
     }
 
     /// Check if a client is authenticated.
     func isAuthenticated(_ clientId: Int) -> Bool {
-        clients[clientId]?.isAuthenticated == true
+        clients[clientId]?.authentication.isAuthenticated == true
     }
 
     /// Broadcast data to all authenticated clients.
     func broadcastToAll(_ data: Data) {
-        for (clientId, state) in clients where state.isAuthenticated {
+        for (clientId, state) in clients where state.authentication.isAuthenticated {
             send(data, to: clientId)
         }
     }
@@ -550,8 +573,7 @@ actor SimpleSocketServer {
         let clientId = clientCounter
         clients[clientId] = ClientState(
             connection: connection,
-            isAuthenticated: false,
-            authDeadlinePhase: .awaitingAuthentication,
+            authentication: .awaitingAuthentication,
             timestamps: [],
             rateLimitNotified: false,
             pendingBytes: 0
@@ -572,23 +594,23 @@ actor SimpleSocketServer {
                 return
             }
             guard let self else { return }
-            if let state = await self.clients[clientId], !state.isAuthenticated {
-                switch state.authDeadlinePhase {
-                case .awaitingAuthentication:
-                    logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
-                    await self.rejectClientWithServerError(
-                        clientId,
-                        kind: .authFailure,
-                        message: "Authentication timed out after \(Self.authDeadlineSeconds) seconds."
-                    )
-                case .awaitingApproval:
-                    logger.warning("Client \(clientId): approval timed out — user did not respond to the approval prompt on the device")
-                    await self.rejectClientWithServerError(
-                        clientId,
-                        kind: .authApprovalPending,
-                        message: "Approval timed out — user did not respond to the approval prompt on the device."
-                    )
-                }
+            switch await self.clients[clientId]?.authentication {
+            case .awaitingAuthentication:
+                logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
+                await self.rejectClientWithServerError(
+                    clientId,
+                    kind: .authFailure,
+                    message: "Authentication timed out after \(Self.authDeadlineSeconds) seconds."
+                )
+            case .awaitingApproval:
+                logger.warning("Client \(clientId): approval timed out — user did not respond to the approval prompt on the device")
+                await self.rejectClientWithServerError(
+                    clientId,
+                    kind: .authApprovalPending,
+                    message: "Approval timed out — user did not respond to the approval prompt on the device."
+                )
+            case .authenticated, .none:
+                return
             }
         }
     }
