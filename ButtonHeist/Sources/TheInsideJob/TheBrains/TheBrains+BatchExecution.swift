@@ -168,15 +168,15 @@ extension TheBrains {
         switch action {
         case .activate(let target):
             return await performInteraction(method: .activate) { recordedScreen in
-                await self.actions.executeActivate(target.executableTarget, recordedScreen: recordedScreen)
+                await self.actions.executeActivate(target, recordedScreen: recordedScreen)
             }
         case .increment(let target):
             return await performInteraction(method: .increment) { recordedScreen in
-                await self.actions.executeIncrement(target.executableTarget, recordedScreen: recordedScreen)
+                await self.actions.executeIncrement(target, recordedScreen: recordedScreen)
             }
         case .decrement(let target):
             return await performInteraction(method: .decrement) { recordedScreen in
-                await self.actions.executeDecrement(target.executableTarget, recordedScreen: recordedScreen)
+                await self.actions.executeDecrement(target, recordedScreen: recordedScreen)
             }
         case .performCustomAction(let target):
             return await performInteraction(method: .customAction) { recordedScreen in
@@ -186,48 +186,6 @@ extension TheBrains {
             return await performInteraction(method: .rotor) { recordedScreen in
                 await self.actions.executeRotor(target, recordedScreen: recordedScreen)
             }
-        case .touchTap, .touchLongPress, .touchSwipe, .touchDrag,
-             .touchPinch, .touchRotate, .touchTwoFingerTap,
-             .touchDrawPath, .touchDrawBezier:
-            return await executeBatchTouchAction(action)
-        case .typeText(let target):
-            return await performInteraction(method: .typeText) { recordedScreen in
-                await self.actions.executeTypeText(target, recordedScreen: recordedScreen)
-            }
-        case .editAction(let target):
-            return await performInteraction(method: .editAction) {
-                await self.actions.executeEditAction(target)
-            }
-        case .setPasteboard(let target):
-            return await performInteraction(method: .setPasteboard) {
-                await self.actions.executeSetPasteboard(target)
-            }
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge:
-            return await executeBatchScrollAction(action)
-        case .waitForIdle(let target):
-            return await executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
-        case .waitForElement(let target):
-            return await performWaitFor(
-                elementTarget: target.target.executableTarget,
-                absent: target.absent,
-                timeout: target.timeout
-            )
-        case .waitForChange(let target):
-            return await executeWaitForChange(
-                timeout: target.resolvedTimeout,
-                expectation: target.expect
-            )
-        case .explore:
-            return await performExplore()
-        case .resignFirstResponder:
-            return await performInteraction(method: .resignFirstResponder) {
-                await self.actions.executeResignFirstResponder()
-            }
-        }
-    }
-
-    private func executeBatchTouchAction(_ action: TheScore.Action) async -> ActionResult {
-        switch action {
         case .touchTap(let target):
             return await performInteraction(method: .syntheticTap) { recordedScreen in
                 await self.actions.executeTap(target, recordedScreen: recordedScreen)
@@ -257,63 +215,41 @@ extension TheBrains {
                 await self.actions.executeTwoFingerTap(target, recordedScreen: recordedScreen)
             }
         case .touchDrawPath(let target):
-            return await performInteraction(method: .syntheticDrawPath) {
-                await self.actions.executeDrawPath(target)
-            }
+            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawPath(target) }
         case .touchDrawBezier(let target):
-            return await performInteraction(method: .syntheticDrawPath) {
-                await self.actions.executeDrawBezier(target)
+            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawBezier(target) }
+        case .typeText(let target):
+            return await performInteraction(method: .typeText) { recordedScreen in
+                await self.actions.executeTypeText(target, recordedScreen: recordedScreen)
             }
-        default:
-            return unsupportedBatchActionResult(action, reason: "not a touch action")
-        }
-    }
-
-    private func executeBatchScrollAction(_ action: TheScore.Action) async -> ActionResult {
-        switch action {
+        case .editAction(let target):
+            return await performInteraction(method: .editAction) { await self.actions.executeEditAction(target) }
+        case .setPasteboard(let target):
+            return await performInteraction(method: .setPasteboard) { await self.actions.executeSetPasteboard(target) }
         case .scroll(let target):
-            return await performInteraction(method: .scroll) {
-                await self.navigation.executeScroll(
-                    elementTarget: target.target?.executableTarget,
-                    direction: target.direction
-                )
-            }
+            return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
             return await performInteraction(method: .scrollToVisible) { recordedScreen in
-                await self.navigation.executeScrollToVisible(
-                    elementTarget: target.target?.executableTarget,
-                    recordedScreen: recordedScreen
-                )
+                await self.navigation.executeScrollToVisible(target, recordedScreen: recordedScreen)
             }
         case .elementSearch(let target):
-            return await performElementSearch(
-                elementTarget: target.target?.executableTarget,
-                direction: target.direction,
-                method: .elementSearch
-            )
+            return await performElementSearch(target: target, method: .elementSearch)
         case .scrollToEdge(let target):
-            return await performInteraction(method: .scrollToEdge) {
-                await self.navigation.executeScrollToEdge(
-                    elementTarget: target.target?.executableTarget,
-                    edge: target.edge
-                )
-            }
-        default:
-            return unsupportedBatchActionResult(action, reason: "not a scroll action")
+            return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
+        case .waitForIdle(let target):
+            return await executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
+        case .waitForElement(let target):
+            return await performWaitFor(target: target)
+        case .waitForChange(let target):
+            return await executeWaitForChange(
+                timeout: target.resolvedTimeout,
+                expectation: target.expect
+            )
+        case .explore:
+            return await performExplore()
+        case .resignFirstResponder:
+            return await performInteraction(method: .resignFirstResponder) { await self.actions.executeResignFirstResponder() }
         }
-    }
-
-    private func unsupportedBatchActionResult(
-        _ action: TheScore.Action,
-        reason: String
-    ) -> ActionResult {
-        var builder = ActionResultBuilder(
-            method: .unsupportedCommand,
-            screenName: screenName,
-            screenId: screenId
-        )
-        builder.message = "Unsupported batch Action '\(action.canonicalName)': \(reason)"
-        return builder.failure(errorKind: .unsupported)
     }
 
     private func appendSkippedBatchSteps(

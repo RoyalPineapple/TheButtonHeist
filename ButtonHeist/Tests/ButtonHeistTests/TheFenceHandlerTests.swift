@@ -2383,12 +2383,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(actionTarget.matcher.heistId)
         XCTAssertEqual(actionTarget.matcher.label, "Save")
         XCTAssertNil(actionTarget.ordinal)
-        guard case .matcher(let executableMatcher, let executableOrdinal) = actionTarget.executableTarget else {
-            return XCTFail("Expected matcher executable target")
-        }
-        XCTAssertNil(executableMatcher.heistId)
-        XCTAssertEqual(executableMatcher.label, "Save")
-        XCTAssertNil(executableOrdinal)
 
         XCTAssertEqual(steps[1].expectation, .elementAppeared(ElementMatcher(label: "Done")))
     }

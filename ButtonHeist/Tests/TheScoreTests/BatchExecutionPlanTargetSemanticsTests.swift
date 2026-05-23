@@ -16,12 +16,7 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         XCTAssertEqual(target.sourceHeistId, "checkout_total_$12")
         XCTAssertEqual(target.matcher, ElementMatcher(label: "Total"))
         XCTAssertNil(target.matcher.heistId)
-        guard case .matcher(let executableMatcher, let ordinal) = target.executableTarget else {
-            return XCTFail("Expected executable identity to be matcher-based")
-        }
-        XCTAssertEqual(executableMatcher, ElementMatcher(label: "Total"))
-        XCTAssertNil(executableMatcher.heistId)
-        XCTAssertNil(ordinal)
+        XCTAssertNil(target.ordinal)
     }
 
     func testValueChangingActionTargetUsesMatcherIdentityAfterRoundTrip() throws {
@@ -43,11 +38,8 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         }
         XCTAssertEqual(decodedTarget.sourceHeistId, "stepper_count_1")
         XCTAssertNil(decodedTarget.matcher.heistId)
-        guard case .matcher(let executableMatcher, let ordinal) = decodedTarget.executableTarget else {
-            return XCTFail("Expected matcher executable target")
-        }
-        XCTAssertEqual(executableMatcher, ElementMatcher(label: "Count", traits: [.adjustable]))
-        XCTAssertNil(ordinal)
+        XCTAssertEqual(decodedTarget.matcher, ElementMatcher(label: "Count", traits: [.adjustable]))
+        XCTAssertNil(decodedTarget.ordinal)
     }
 
     func testBatchPlanClientMessageWireShapeKeepsTypedBatchPayload() throws {

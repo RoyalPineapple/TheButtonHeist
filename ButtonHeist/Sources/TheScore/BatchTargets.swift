@@ -38,12 +38,6 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
         )
     }
 
-    /// The executable target for existing action implementations. This always
-    /// uses matcher semantics, never direct heistId lookup.
-    public var executableTarget: ElementTarget {
-        .matcher(matcher, ordinal: ordinal)
-    }
-
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let sourceHeistId = try container.decodeIfPresent(HeistId.self, forKey: .sourceHeistId)

@@ -288,15 +288,15 @@ private extension TheScore.Action {
     var testClientMessage: ClientMessage? {
         switch self {
         case .activate(let target):
-            return .activate(target.executableTarget)
+            return .activate(target.testElementTarget)
         case .increment(let target):
-            return .increment(target.executableTarget)
+            return .increment(target.testElementTarget)
         case .decrement(let target):
-            return .decrement(target.executableTarget)
+            return .decrement(target.testElementTarget)
         case .performCustomAction(let target):
             if let elementTarget = target.target {
                 return .performCustomAction(CustomActionTarget(
-                    elementTarget: elementTarget.executableTarget,
+                    elementTarget: elementTarget.testElementTarget,
                     actionName: target.actionName
                 ))
             }
@@ -308,7 +308,7 @@ private extension TheScore.Action {
             ))
         case .rotor(let target):
             return .rotor(RotorTarget(
-                elementTarget: target.target.executableTarget,
+                elementTarget: target.target.testElementTarget,
                 rotor: target.rotor,
                 rotorIndex: target.rotorIndex,
                 direction: target.direction,
@@ -317,20 +317,20 @@ private extension TheScore.Action {
             ))
         case .touchTap(let target):
             return .touchTap(TouchTapTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 pointX: target.pointX,
                 pointY: target.pointY
             ))
         case .touchLongPress(let target):
             return .touchLongPress(LongPressTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 pointX: target.pointX,
                 pointY: target.pointY,
                 duration: target.duration
             ))
         case .touchSwipe(let target):
             return .touchSwipe(SwipeTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 startX: target.startX,
                 startY: target.startY,
                 endX: target.endX,
@@ -342,7 +342,7 @@ private extension TheScore.Action {
             ))
         case .touchDrag(let target):
             return .touchDrag(DragTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 startX: target.startX,
                 startY: target.startY,
                 endX: target.endX,
@@ -351,7 +351,7 @@ private extension TheScore.Action {
             ))
         case .touchPinch(let target):
             return .touchPinch(PinchTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 centerX: target.centerX,
                 centerY: target.centerY,
                 scale: target.scale,
@@ -360,7 +360,7 @@ private extension TheScore.Action {
             ))
         case .touchRotate(let target):
             return .touchRotate(RotateTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 centerX: target.centerX,
                 centerY: target.centerY,
                 angle: target.angle,
@@ -369,7 +369,7 @@ private extension TheScore.Action {
             ))
         case .touchTwoFingerTap(let target):
             return .touchTwoFingerTap(TwoFingerTapTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 centerX: target.centerX,
                 centerY: target.centerY,
                 spread: target.spread
@@ -381,7 +381,7 @@ private extension TheScore.Action {
         case .typeText(let target):
             return .typeText(TypeTextTarget(
                 text: target.text,
-                elementTarget: target.target?.executableTarget
+                elementTarget: target.target?.testElementTarget
             ))
         case .editAction(let target):
             return .editAction(target)
@@ -389,28 +389,28 @@ private extension TheScore.Action {
             return .setPasteboard(target)
         case .scroll(let target):
             return .scroll(ScrollTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 direction: target.direction
             ))
         case .scrollToVisible(let target):
             return .scrollToVisible(ScrollToVisibleTarget(
-                elementTarget: target.target?.executableTarget
+                elementTarget: target.target?.testElementTarget
             ))
         case .elementSearch(let target):
             return .elementSearch(ElementSearchTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 direction: target.direction
             ))
         case .scrollToEdge(let target):
             return .scrollToEdge(ScrollToEdgeTarget(
-                elementTarget: target.target?.executableTarget,
+                elementTarget: target.target?.testElementTarget,
                 edge: target.edge
             ))
         case .waitForIdle(let target):
             return .waitForIdle(target)
         case .waitForElement(let target):
             return .waitFor(WaitForTarget(
-                elementTarget: target.target.executableTarget,
+                elementTarget: target.target.testElementTarget,
                 absent: target.absent,
                 timeout: target.timeout
             ))
@@ -421,6 +421,12 @@ private extension TheScore.Action {
         case .resignFirstResponder:
             return .resignFirstResponder
         }
+    }
+}
+
+private extension BatchExecutionTarget {
+    var testElementTarget: ElementTarget {
+        .matcher(matcher, ordinal: ordinal)
     }
 }
 
