@@ -179,14 +179,14 @@ final class MockConnection: TransportReachabilityConnecting {
             if let failedIndex {
                 let skipped = BatchExecutionSkippedStepResult(
                     index: index,
-                    actionName: step.action.testCommandName,
+                    actionName: step.action.canonicalName,
                     expectationName: step.expectation.summaryDescription,
                     reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                     afterFailedIndex: failedIndex
                 )
                 stepResults.append(BatchExecutionStepResult(
                     index: index,
-                    actionName: step.action.testCommandName,
+                    actionName: step.action.canonicalName,
                     expectationName: step.expectation.summaryDescription,
                     durationMs: 0,
                     skipped: skipped
@@ -200,7 +200,7 @@ final class MockConnection: TransportReachabilityConnecting {
                 && (actionResult.success == false || expectation?.met == false)
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: step.action.testCommandName,
+                actionName: step.action.canonicalName,
                 expectationName: step.expectation.summaryDescription,
                 actionResult: actionResult,
                 expectation: expectation,
@@ -234,7 +234,7 @@ final class MockConnection: TransportReachabilityConnecting {
             return ActionResult(
                 success: true,
                 method: .waitForChange,
-                message: action.testCommandName
+                message: action.canonicalName
             )
         }
         switch handler(message) {
@@ -254,37 +254,6 @@ final class MockConnection: TransportReachabilityConnecting {
 }
 
 private extension TheScore.Action {
-    var testCommandName: String {
-        switch self {
-        case .activate: return "activate"
-        case .increment: return "increment"
-        case .decrement: return "decrement"
-        case .performCustomAction: return "perform_custom_action"
-        case .rotor: return "rotor"
-        case .touchTap: return "tap"
-        case .touchLongPress: return "long_press"
-        case .touchSwipe: return "swipe"
-        case .touchDrag: return "drag"
-        case .touchPinch: return "pinch"
-        case .touchRotate: return "rotate"
-        case .touchTwoFingerTap: return "two_finger_tap"
-        case .touchDrawPath: return "draw_path"
-        case .touchDrawBezier: return "draw_bezier"
-        case .typeText: return "type_text"
-        case .editAction: return "edit_action"
-        case .setPasteboard: return "set_pasteboard"
-        case .scroll: return "scroll"
-        case .scrollToVisible: return "scroll_to_visible"
-        case .elementSearch: return "element_search"
-        case .scrollToEdge: return "scroll_to_edge"
-        case .waitForIdle: return "wait_for_idle"
-        case .waitForElement: return "wait_for"
-        case .waitForChange: return "wait_for_change"
-        case .explore: return "explore"
-        case .resignFirstResponder: return "dismiss_keyboard"
-        }
-    }
-
     var testClientMessage: ClientMessage? {
         switch self {
         case .activate(let target):

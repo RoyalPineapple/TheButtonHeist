@@ -18,6 +18,101 @@ extension Deadline: CustomStringConvertible {
     }
 }
 
+/// The explicit wire and execution contract for a batch `Action`.
+public struct ActionDescriptor: Sendable, Equatable {
+    public enum Kind: String, Codable, CaseIterable, Sendable {
+        case activate
+        case increment
+        case decrement
+        case performCustomAction = "perform_custom_action"
+        case rotor
+        case touchTap = "touch_tap"
+        case touchLongPress = "touch_long_press"
+        case touchSwipe = "touch_swipe"
+        case touchDrag = "touch_drag"
+        case touchPinch = "touch_pinch"
+        case touchRotate = "touch_rotate"
+        case touchTwoFingerTap = "touch_two_finger_tap"
+        case touchDrawPath = "touch_draw_path"
+        case touchDrawBezier = "touch_draw_bezier"
+        case typeText = "type_text"
+        case editAction = "edit_action"
+        case setPasteboard = "set_pasteboard"
+        case scroll
+        case scrollToVisible = "scroll_to_visible"
+        case elementSearch = "element_search"
+        case scrollToEdge = "scroll_to_edge"
+        case waitForIdle = "wait_for_idle"
+        case waitForElement = "wait_for"
+        case waitForChange = "wait_for_change"
+        case explore
+        case resignFirstResponder = "resign_first_responder"
+    }
+
+    public let kind: Kind
+    public let actionMethod: ActionMethod
+    public let fulfillsOwnExpectation: Bool
+    public let defaultExpectation: ActionExpectation
+    public let defaultDeadline: Deadline
+
+    public var canonicalName: String {
+        kind.rawValue
+    }
+
+    public init(
+        kind: Kind,
+        defaultExpectation: ActionExpectation = .delivery,
+        defaultDeadline: Deadline = Deadline()
+    ) {
+        self.kind = kind
+        self.actionMethod = kind.actionMethod
+        self.fulfillsOwnExpectation = kind.fulfillsOwnExpectation
+        self.defaultExpectation = defaultExpectation
+        self.defaultDeadline = defaultDeadline
+    }
+}
+
+private extension ActionDescriptor.Kind {
+    var actionMethod: ActionMethod {
+        switch self {
+        case .activate: return .activate
+        case .increment: return .increment
+        case .decrement: return .decrement
+        case .performCustomAction: return .customAction
+        case .rotor: return .rotor
+        case .touchTap: return .syntheticTap
+        case .touchLongPress: return .syntheticLongPress
+        case .touchSwipe: return .syntheticSwipe
+        case .touchDrag: return .syntheticDrag
+        case .touchPinch: return .syntheticPinch
+        case .touchRotate: return .syntheticRotate
+        case .touchTwoFingerTap: return .syntheticTwoFingerTap
+        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
+        case .typeText: return .typeText
+        case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
+        case .scrollToEdge: return .scrollToEdge
+        case .waitForIdle: return .waitForIdle
+        case .waitForElement: return .waitFor
+        case .waitForChange: return .waitForChange
+        case .explore: return .explore
+        case .resignFirstResponder: return .resignFirstResponder
+        }
+    }
+
+    var fulfillsOwnExpectation: Bool {
+        switch self {
+        case .waitForElement, .waitForChange:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
 /// One executable non-read operation in a batch plan.
 public struct BatchStep: Sendable {
     public let action: Action
@@ -147,74 +242,94 @@ extension Action: CustomStringConvertible {
 }
 
 extension Action {
-    public var canonicalName: String {
+    public var descriptor: ActionDescriptor {
         switch self {
-        case .activate: return "activate"
-        case .increment: return "increment"
-        case .decrement: return "decrement"
-        case .performCustomAction: return "perform_custom_action"
-        case .rotor: return "rotor"
-        case .touchTap: return "touch_tap"
-        case .touchLongPress: return "touch_long_press"
-        case .touchSwipe: return "touch_swipe"
-        case .touchDrag: return "touch_drag"
-        case .touchPinch: return "touch_pinch"
-        case .touchRotate: return "touch_rotate"
-        case .touchTwoFingerTap: return "touch_two_finger_tap"
-        case .touchDrawPath: return "touch_draw_path"
-        case .touchDrawBezier: return "touch_draw_bezier"
-        case .typeText: return "type_text"
-        case .editAction: return "edit_action"
-        case .setPasteboard: return "set_pasteboard"
-        case .scroll: return "scroll"
-        case .scrollToVisible: return "scroll_to_visible"
-        case .elementSearch: return "element_search"
-        case .scrollToEdge: return "scroll_to_edge"
-        case .waitForIdle: return "wait_for_idle"
-        case .waitForElement: return "wait_for"
-        case .waitForChange: return "wait_for_change"
-        case .explore: return "explore"
-        case .resignFirstResponder: return "resign_first_responder"
+        case .activate:
+            return ActionDescriptor(kind: .activate)
+        case .increment:
+            return ActionDescriptor(kind: .increment)
+        case .decrement:
+            return ActionDescriptor(kind: .decrement)
+        case .performCustomAction:
+            return ActionDescriptor(kind: .performCustomAction)
+        case .rotor:
+            return ActionDescriptor(kind: .rotor)
+        case .touchTap:
+            return ActionDescriptor(kind: .touchTap)
+        case .touchLongPress:
+            return ActionDescriptor(kind: .touchLongPress)
+        case .touchSwipe:
+            return ActionDescriptor(kind: .touchSwipe)
+        case .touchDrag:
+            return ActionDescriptor(kind: .touchDrag)
+        case .touchPinch:
+            return ActionDescriptor(kind: .touchPinch)
+        case .touchRotate:
+            return ActionDescriptor(kind: .touchRotate)
+        case .touchTwoFingerTap:
+            return ActionDescriptor(kind: .touchTwoFingerTap)
+        case .touchDrawPath:
+            return ActionDescriptor(kind: .touchDrawPath)
+        case .touchDrawBezier:
+            return ActionDescriptor(kind: .touchDrawBezier)
+        case .typeText:
+            return ActionDescriptor(kind: .typeText)
+        case .editAction:
+            return ActionDescriptor(kind: .editAction)
+        case .setPasteboard:
+            return ActionDescriptor(kind: .setPasteboard)
+        case .scroll:
+            return ActionDescriptor(kind: .scroll)
+        case .scrollToVisible:
+            return ActionDescriptor(kind: .scrollToVisible)
+        case .elementSearch:
+            return ActionDescriptor(kind: .elementSearch)
+        case .scrollToEdge:
+            return ActionDescriptor(kind: .scrollToEdge)
+        case .waitForIdle(let target):
+            return ActionDescriptor(
+                kind: .waitForIdle,
+                defaultDeadline: Deadline(timeout: target.timeout ?? 5)
+            )
+        case .waitForElement(let target):
+            return ActionDescriptor(
+                kind: .waitForElement,
+                defaultExpectation: target.resolvedAbsent
+                    ? .elementDisappeared(target.target.matcher)
+                    : .elementAppeared(target.target.matcher),
+                defaultDeadline: Deadline(timeout: target.resolvedTimeout)
+            )
+        case .waitForChange(let target):
+            return ActionDescriptor(
+                kind: .waitForChange,
+                defaultExpectation: target.expect ?? .screenChanged,
+                defaultDeadline: Deadline(timeout: target.resolvedTimeout)
+            )
+        case .explore:
+            return ActionDescriptor(kind: .explore)
+        case .resignFirstResponder:
+            return ActionDescriptor(kind: .resignFirstResponder)
         }
+    }
+
+    public var canonicalName: String {
+        descriptor.canonicalName
     }
 
     public var actionMethod: ActionMethod {
-        switch self {
-        case .activate: return .activate
-        case .increment: return .increment
-        case .decrement: return .decrement
-        case .performCustomAction: return .customAction
-        case .rotor: return .rotor
-        case .touchTap: return .syntheticTap
-        case .touchLongPress: return .syntheticLongPress
-        case .touchSwipe: return .syntheticSwipe
-        case .touchDrag: return .syntheticDrag
-        case .touchPinch: return .syntheticPinch
-        case .touchRotate: return .syntheticRotate
-        case .touchTwoFingerTap: return .syntheticTwoFingerTap
-        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
-        case .typeText: return .typeText
-        case .editAction: return .editAction
-        case .setPasteboard: return .setPasteboard
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .elementSearch: return .elementSearch
-        case .scrollToEdge: return .scrollToEdge
-        case .waitForIdle: return .waitForIdle
-        case .waitForElement: return .waitFor
-        case .waitForChange: return .waitForChange
-        case .explore: return .explore
-        case .resignFirstResponder: return .resignFirstResponder
-        }
+        descriptor.actionMethod
     }
 
     public var fulfillsOwnExpectation: Bool {
-        switch self {
-        case .waitForElement, .waitForChange:
-            return true
-        default:
-            return false
-        }
+        descriptor.fulfillsOwnExpectation
+    }
+
+    public var defaultExpectation: ActionExpectation {
+        descriptor.defaultExpectation
+    }
+
+    public var defaultDeadline: Deadline {
+        descriptor.defaultDeadline
     }
 }
 
@@ -224,64 +339,9 @@ extension Action: Codable {
         case target
     }
 
-    private enum WireType: String, Codable {
-        case activate
-        case increment
-        case decrement
-        case performCustomAction = "perform_custom_action"
-        case rotor
-        case touchTap = "touch_tap"
-        case touchLongPress = "touch_long_press"
-        case touchSwipe = "touch_swipe"
-        case touchDrag = "touch_drag"
-        case touchPinch = "touch_pinch"
-        case touchRotate = "touch_rotate"
-        case touchTwoFingerTap = "touch_two_finger_tap"
-        case touchDrawPath = "touch_draw_path"
-        case touchDrawBezier = "touch_draw_bezier"
-        case typeText = "type_text"
-        case editAction = "edit_action"
-        case setPasteboard = "set_pasteboard"
-        case scroll
-        case scrollToVisible = "scroll_to_visible"
-        case elementSearch = "element_search"
-        case scrollToEdge = "scroll_to_edge"
-        case waitForIdle = "wait_for_idle"
-        case waitForElement = "wait_for"
-        case waitForChange = "wait_for_change"
-        case explore
-        case resignFirstResponder = "resign_first_responder"
-    }
-
-    public var defaultExpectation: ActionExpectation {
-        switch self {
-        case .waitForElement(let target):
-            return target.resolvedAbsent
-                ? .elementDisappeared(target.target.matcher)
-                : .elementAppeared(target.target.matcher)
-        case .waitForChange(let target):
-            return target.expect ?? .screenChanged
-        default:
-            return .delivery
-        }
-    }
-
-    public var defaultDeadline: Deadline {
-        switch self {
-        case .waitForIdle(let target):
-            return Deadline(timeout: target.timeout ?? 5)
-        case .waitForElement(let target):
-            return Deadline(timeout: target.resolvedTimeout)
-        case .waitForChange(let target):
-            return Deadline(timeout: target.resolvedTimeout)
-        default:
-            return Deadline()
-        }
-    }
-
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        switch try container.decode(WireType.self, forKey: .type) {
+        switch try container.decode(ActionDescriptor.Kind.self, forKey: .type) {
         case .activate:
             self = .activate(try container.decode(BatchExecutionTarget.self, forKey: .target))
         case .increment:
@@ -339,83 +399,58 @@ extension Action: Codable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(descriptor.kind, forKey: .type)
         switch self {
         case .activate(let target):
-            try container.encode(WireType.activate, forKey: .type)
             try container.encode(target, forKey: .target)
         case .increment(let target):
-            try container.encode(WireType.increment, forKey: .type)
             try container.encode(target, forKey: .target)
         case .decrement(let target):
-            try container.encode(WireType.decrement, forKey: .type)
             try container.encode(target, forKey: .target)
         case .performCustomAction(let target):
-            try container.encode(WireType.performCustomAction, forKey: .type)
             try target.encode(to: encoder)
         case .rotor(let target):
-            try container.encode(WireType.rotor, forKey: .type)
             try target.encode(to: encoder)
         case .touchTap(let target):
-            try container.encode(WireType.touchTap, forKey: .type)
             try target.encode(to: encoder)
         case .touchLongPress(let target):
-            try container.encode(WireType.touchLongPress, forKey: .type)
             try target.encode(to: encoder)
         case .touchSwipe(let target):
-            try container.encode(WireType.touchSwipe, forKey: .type)
             try target.encode(to: encoder)
         case .touchDrag(let target):
-            try container.encode(WireType.touchDrag, forKey: .type)
             try target.encode(to: encoder)
         case .touchPinch(let target):
-            try container.encode(WireType.touchPinch, forKey: .type)
             try target.encode(to: encoder)
         case .touchRotate(let target):
-            try container.encode(WireType.touchRotate, forKey: .type)
             try target.encode(to: encoder)
         case .touchTwoFingerTap(let target):
-            try container.encode(WireType.touchTwoFingerTap, forKey: .type)
             try target.encode(to: encoder)
         case .touchDrawPath(let target):
-            try container.encode(WireType.touchDrawPath, forKey: .type)
             try container.encode(target, forKey: .target)
         case .touchDrawBezier(let target):
-            try container.encode(WireType.touchDrawBezier, forKey: .type)
             try container.encode(target, forKey: .target)
         case .typeText(let target):
-            try container.encode(WireType.typeText, forKey: .type)
             try target.encode(to: encoder)
         case .editAction(let target):
-            try container.encode(WireType.editAction, forKey: .type)
             try container.encode(target, forKey: .target)
         case .setPasteboard(let target):
-            try container.encode(WireType.setPasteboard, forKey: .type)
             try container.encode(target, forKey: .target)
         case .scroll(let target):
-            try container.encode(WireType.scroll, forKey: .type)
             try target.encode(to: encoder)
         case .scrollToVisible(let target):
-            try container.encode(WireType.scrollToVisible, forKey: .type)
             try target.encode(to: encoder)
         case .elementSearch(let target):
-            try container.encode(WireType.elementSearch, forKey: .type)
             try target.encode(to: encoder)
         case .scrollToEdge(let target):
-            try container.encode(WireType.scrollToEdge, forKey: .type)
             try target.encode(to: encoder)
         case .waitForIdle(let target):
-            try container.encode(WireType.waitForIdle, forKey: .type)
             try container.encode(target, forKey: .target)
         case .waitForElement(let target):
-            try container.encode(WireType.waitForElement, forKey: .type)
             try container.encode(target, forKey: .target)
         case .waitForChange(let target):
-            try container.encode(WireType.waitForChange, forKey: .type)
             try container.encode(target, forKey: .target)
-        case .explore:
-            try container.encode(WireType.explore, forKey: .type)
-        case .resignFirstResponder:
-            try container.encode(WireType.resignFirstResponder, forKey: .type)
+        case .explore, .resignFirstResponder:
+            break
         }
     }
 }
