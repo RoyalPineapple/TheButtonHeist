@@ -517,19 +517,13 @@ extension TheFence {
         }
         var arguments = request
         arguments.removeValue(forKey: "command")
-        return try parseRequest(command: command, arguments: arguments)
+        return try parseRequest(command: command, arguments: CommandArgumentEnvelope(arguments: arguments))
     }
 
-    func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
-        var arguments = request
-        arguments.removeValue(forKey: "command")
-        return try parseRequest(command: command, arguments: arguments)
-    }
-
-    func parseRequest(command: Command, arguments: [String: Any]) throws -> ParsedRequest {
+    func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
         try parseRequest(
             command: command,
-            arguments: try CommandArgumentEnvelope(arguments: arguments),
+            arguments: arguments,
             expectationPayload: nil
         )
     }
