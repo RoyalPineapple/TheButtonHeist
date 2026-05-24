@@ -56,10 +56,14 @@ final class RecordingArtifactResponseTests: XCTestCase {
         XCTAssertEqual(recording.videoData, videoData)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), Data("video".utf8))
 
-        let json = response.jsonDict()
-        XCTAssertEqual(json["path"] as? String, path)
-        XCTAssertEqual(json["videoData"] as? String, videoData)
-        XCTAssertEqual((json["interactionLog"] as? [[String: Any]])?.count, 2)
+        let json = try JSONDecoder().decode(
+            ExpandedRecordingPublicJSON.self,
+            from: response.jsonData()
+        )
+        XCTAssertEqual(json.status, "ok")
+        XCTAssertEqual(json.path, path)
+        XCTAssertEqual(json.videoData, videoData)
+        XCTAssertEqual(json.interactionLog?.count, 2)
     }
 
     @ButtonHeistActor
@@ -138,5 +142,12 @@ final class RecordingArtifactResponseTests: XCTestCase {
             stopReason: .manual,
             interactionLog: events.isEmpty ? nil : events
         )
+    }
+
+    private struct ExpandedRecordingPublicJSON: Decodable {
+        let status: String
+        let path: String
+        let videoData: String
+        let interactionLog: [InteractionEvent]?
     }
 }

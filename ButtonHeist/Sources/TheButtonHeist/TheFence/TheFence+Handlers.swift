@@ -481,19 +481,10 @@ extension TheFence {
     }
 
     private func validateExpandedRecordingResponseSize(_ response: FenceResponse) -> FenceResponse? {
-        let dict = response.jsonDict()
-        guard JSONSerialization.isValidJSONObject(dict) else {
-            return .error(
-                "Failed to encode expanded recording response",
-                details: FailureDetails(
-                    errorCode: "recording.expanded_response_encoding_failed",
-                    phase: .client,
-                    retryable: false,
-                    hint: "Omit inlineData or includeInteractionLog and retry."
-                )
-            )
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]) else {
+        let data: Data
+        do {
+            data = try response.jsonData(outputFormatting: [.sortedKeys])
+        } catch {
             return .error(
                 "Failed to encode expanded recording response",
                 details: FailureDetails(
