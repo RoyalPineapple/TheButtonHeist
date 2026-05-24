@@ -91,6 +91,15 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let parameters: [FenceParameterSpec]
     public let description: String
 
+    /// Parameter keys that identify an element target for this command.
+    ///
+    /// Adapters use this projection when they need to talk about target matcher
+    /// fields without knowing how the catalog orders or composes parameter blocks.
+    public var elementTargetParameterKeys: [String] {
+        let elementTargetKeys = Set(FenceParameterBlocks.elementTarget.map(\.key))
+        return parameters.map(\.key).filter(elementTargetKeys.contains)
+    }
+
     public init(
         command: TheFence.Command,
         actionResultMethod: ActionMethod? = nil,

@@ -28,7 +28,7 @@ struct ButtonHeistMCPServer {
     }
 
     static var instructions: String {
-        let matcherKeys = inlineList(matcherParameterKeys(for: .activate))
+        let matcherKeys = inlineList(TheFence.Command.activate.descriptor.elementTargetParameterKeys)
         let expectationKey = parameterKey(.expect, in: .activate)
         return """
             Button Heist drives iOS apps through the accessibility layer — the same interface \
@@ -62,12 +62,6 @@ struct ButtonHeistMCPServer {
         in command: TheFence.Command
     ) -> String {
         command.parameters.first { $0.key == key.rawValue }?.key ?? key.rawValue
-    }
-
-    private static func matcherParameterKeys(for command: TheFence.Command) -> [String] {
-        command.parameters
-            .prefix { $0.key != FenceParameterKey.action.rawValue }
-            .map(\.key)
     }
 
     private static func inlineList(_ values: [String]) -> String {

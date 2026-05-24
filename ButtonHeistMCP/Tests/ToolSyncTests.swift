@@ -650,10 +650,8 @@ struct ToolSyncTests {
                 "Server instructions should render the MCP tool name for \(command.rawValue) from command exposure"
             )
         }
-        let activateKeys = TheFence.Command.activate.parameters
-        let expectedInstructionKeys = activateKeys
-            .prefix { $0.key != FenceParameterKey.action.rawValue }
-            .map(\.key) + [FenceParameterKey.expect.rawValue]
+        let expectedInstructionKeys = TheFence.Command.activate.descriptor.elementTargetParameterKeys +
+            [FenceParameterKey.expect.rawValue]
         for key in expectedInstructionKeys {
             #expect(
                 instructions.contains(inlineCode(key)),
