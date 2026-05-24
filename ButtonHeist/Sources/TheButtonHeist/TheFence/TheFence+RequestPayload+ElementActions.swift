@@ -115,7 +115,7 @@ private extension TheFence {
             guard matcher.hasPredicates || ordinal != nil else {
                 throw SchemaValidationError(
                     field: "container",
-                    observed: container.rawValue,
+                    observed: container.observedDescription,
                     expected: "container selector with stableId, type, label, value, identifier, isModalBoundary, or ordinal"
                 )
             }
@@ -129,7 +129,7 @@ private extension TheFence {
                 guard !hasElementTargetFields else {
                     throw SchemaValidationError(
                         field: "target",
-                        observed: request.rawValue,
+                        observed: request.observedDescription,
                         expected: "exactly one element target or container selector"
                     )
                 }

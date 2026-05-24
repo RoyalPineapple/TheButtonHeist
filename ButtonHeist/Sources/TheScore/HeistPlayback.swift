@@ -230,18 +230,6 @@ public enum HeistValue: Codable, Sendable, Equatable {
         }
     }
 
-    /// Convert to an untyped `Any` for passing to TheFence.execute(request:).
-    public func toAny() -> Any {
-        switch self {
-        case .string(let stringValue): return stringValue
-        case .int(let intValue): return intValue
-        case .double(let doubleValue): return doubleValue
-        case .bool(let boolValue): return boolValue
-        case .array(let arrayValue): return arrayValue.map { $0.toAny() }
-        case .object(let objectValue): return objectValue.mapValues { $0.toAny() }
-        }
-    }
-
 }
 
 extension HeistValue: CustomStringConvertible {

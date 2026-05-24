@@ -820,7 +820,7 @@ final class CLICommandSyncTests: XCTestCase {
         case .array(let expectedValue):
             XCTAssertEqual(
                 (actual as? [Any])?.map { String(describing: $0) },
-                expectedValue.map { String(describing: $0.toAny()) },
+                expectedValue.map { String(describing: $0.cliRawValue) },
                 message(),
                 file: file,
                 line: line
@@ -828,7 +828,7 @@ final class CLICommandSyncTests: XCTestCase {
         case .object(let expectedValue):
             XCTAssertEqual(
                 (actual as? [String: Any])?.mapValues { String(describing: $0) },
-                expectedValue.mapValues { String(describing: $0.toAny()) },
+                expectedValue.mapValues { String(describing: $0.cliRawValue) },
                 message(),
                 file: file,
                 line: line

@@ -157,14 +157,18 @@ final class TheFenceSecurityTests: XCTestCase {
 
     // MARK: - Edge Cases: Arg Parsing with Mixed Types
 
-    func testIntegerFromInvalidString() {
-        let dict: [String: Any] = ["count": "not_a_number"]
-        XCTAssertNil(dict.integer("count"))
+    func testIntegerFromInvalidStringThrowsTypedSchemaError() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: ["count": "not_a_number"])
+        XCTAssertThrowsError(try envelope.schemaInteger("count")) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.expected, "integer")
+        }
     }
 
-    func testNumberFromInvalidString() {
-        let dict: [String: Any] = ["x": "not_a_number"]
-        XCTAssertNil(dict.number("x"))
+    func testNumberFromInvalidStringThrowsTypedSchemaError() throws {
+        let envelope = try TheFence.CommandArgumentEnvelope(arguments: ["x": "not_a_number"])
+        XCTAssertThrowsError(try envelope.schemaNumber("x")) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.expected, "number")
+        }
     }
 
 }

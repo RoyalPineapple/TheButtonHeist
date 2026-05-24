@@ -113,7 +113,7 @@ enum CLIRequestBuilder {
               case .string? = object[FenceParameterKey.command.rawValue] else {
             throw ValidationError("Expected JSON object with string field 'command'")
         }
-        return CLIParsedRequest(request: object.mapValues { $0.toAny() }, mode: .machine)
+        return CLIParsedRequest(request: object.mapValues(\.cliRawValue), mode: .machine)
     }
 
     static func diagnosticMessage(for error: Error) -> String {
