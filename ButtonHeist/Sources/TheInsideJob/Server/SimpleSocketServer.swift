@@ -9,142 +9,11 @@ import TheScore
 /// Actor-isolated — all mutable state is protected by Swift concurrency.
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
-/// Cross-queue admission state for a connection while Network.framework
-/// delivers `.ready` and `.cancelled` callbacks. The server actor owns the
-/// client table, but those callbacks arrive on the NWConnection queue before
-/// the actor has necessarily accepted the ready connection.
-final class ConnectionAdmission: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private struct State {
-        var clientId: Int?
-        var isCancelled = false
-    }
-
-    private let state = OSAllocatedUnfairLock<State>(initialState: State())
-
-    var shouldAccept: Bool {
-        state.withLock { !$0.isCancelled }
-    }
-
-    /// Records the accepted client id. Returns true if cancellation already
-    /// arrived and the caller should immediately remove the just-accepted
-    /// client from the actor table.
-    func assign(_ clientId: Int?) -> Bool {
-        state.withLock { current in
-            if let clientId {
-                current.clientId = clientId
-            }
-            return current.isCancelled
-        }
-    }
-
-    /// Marks the connection cancelled/failed. Returns an already-accepted
-    /// client id when cleanup must be scheduled on the server actor.
-    func cancel() -> Int? {
-        state.withLock { current in
-            current.isCancelled = true
-            return current.clientId
-        }
-    }
-}
-
-/// Synchronous outcome for handing bytes to a client socket.
-enum ServerSendOutcome: Equatable, Sendable {
-    case enqueued
-    case failed(ServerSendFailure)
-
-    var didEnqueue: Bool {
-        if case .enqueued = self { return true }
-        return false
-    }
-}
-
-enum ServerSendFailure: Error, LocalizedError, Equatable, Sendable {
-    case clientNotFound(Int)
-    case transportUnavailable
-    case transportFailed(clientId: Int, message: String)
-    case payloadTooLarge(byteCount: Int, maxBytes: Int)
-    case sendBufferFull(pendingBytes: Int, byteCount: Int, maxBytes: Int)
-
-    var errorDescription: String? {
-        switch self {
-        case .clientNotFound(let clientId):
-            return "Client \(clientId) is no longer connected"
-        case .transportUnavailable:
-            return "Server transport is not available"
-        case .transportFailed(let clientId, let message):
-            return "Transport send to client \(clientId) failed: \(message)"
-        case .payloadTooLarge(let byteCount, let maxBytes):
-            return "Payload is too large to send (\(byteCount) bytes, max \(maxBytes))"
-        case .sendBufferFull(let pendingBytes, let byteCount, let maxBytes):
-            return "Send buffer is full (\(pendingBytes) bytes pending, \(byteCount) bytes requested, max \(maxBytes))"
-        }
-    }
-}
-
-enum SocketClientAuthentication: Equatable, Sendable {
-    case awaitingAuthentication(deadline: Task<Void, Never>)
-    case awaitingApproval(deadline: Task<Void, Never>)
-    case authenticated
-
-    var isAuthenticated: Bool {
-        if case .authenticated = self { return true }
-        return false
-    }
-
-    /// Deadline task identity is deliberately ignored; equality describes the authentication phase.
-    static func == (lhs: SocketClientAuthentication, rhs: SocketClientAuthentication) -> Bool {
-        switch (lhs, rhs) {
-        case (.awaitingAuthentication, .awaitingAuthentication),
-             (.awaitingApproval, .awaitingApproval),
-             (.authenticated, .authenticated):
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// Move to authenticated when still awaiting auth or approval.
-    /// Returns false when the client is already authenticated.
-    @discardableResult
-    mutating func markAuthenticated() -> Bool {
-        guard !isAuthenticated else { return false }
-        cancelDeadline()
-        self = .authenticated
-        return true
-    }
-
-    /// Move to approval-pending while unauthenticated.
-    /// Returns false once authentication has already completed.
-    @discardableResult
-    mutating func markApprovalPending() -> Bool {
-        switch self {
-        case .awaitingAuthentication(let deadline):
-            self = .awaitingApproval(deadline: deadline)
-            return true
-        case .awaitingApproval:
-            return true
-        case .authenticated:
-            return false
-        }
-    }
-
-    /// Cancels the deadline task owned by an awaiting state.
-    func cancelDeadline() {
-        switch self {
-        case .awaitingAuthentication(let deadline), .awaitingApproval(let deadline):
-            deadline.cancel()
-        case .authenticated:
-            return
-        }
-    }
-
-}
-
 actor SimpleSocketServer {
     typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
     private static let maxConnections = 5
-    static let maxMessagesPerSecond = 30
+    static let maxMessagesPerSecond = SocketRateLimiter.defaultMaxMessagesPerSecond
     private static let errorFlushGracePeriod: Duration = .milliseconds(100)
 
     // MARK: - State Machines
@@ -154,21 +23,12 @@ actor SimpleSocketServer {
         case listening(listener: NWListener, port: UInt16)
     }
 
-    private struct ClientState {
-        let connection: NWConnection
-        var authentication: SocketClientAuthentication
-        var timestamps: [Date]
-        var rateLimitNotified: Bool
-        var sendBuffer: SocketSendBuffer
-    }
-
     // MARK: - Actor-isolated mutable state
 
     private static let authDeadlineSeconds: UInt64 = 10
 
     private var serverPhase: ServerPhase = .stopped
-    private var clients: [Int: ClientState] = [:]
-    private var clientCounter = 0
+    private var clientRegistry = SocketClientRegistry()
 
     /// Tasks that bridge `NWListener` / `NWConnection` callbacks into actor
     /// isolation. Tracked so `stop()` can cancel in-flight work — without
@@ -350,13 +210,12 @@ actor SimpleSocketServer {
     func stop() {
         guard case .listening(let listener, _) = serverPhase else { return }
 
-        let allClients = clients
-        clients.removeAll()
+        let allClients = clientRegistry.drain()
         pendingCallbackTasks.cancelAll()
         serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
-        for (_, state) in allClients {
+        for state in allClients {
             state.authentication.cancelDeadline()
             state.connection.cancel()
         }
@@ -379,17 +238,19 @@ actor SimpleSocketServer {
     /// Enforces per-client send-buffer accounting before queueing bytes on the socket.
     @discardableResult
     func send(_ data: Data, to clientId: Int) -> ServerSendOutcome {
-        guard var state = clients[clientId] else {
-            return .failed(.clientNotFound(clientId))
-        }
-
         var dataToSend = data
         if !dataToSend.hasSuffix(Data([0x0A])) {
             dataToSend.append(0x0A)
         }
 
         let byteCount = dataToSend.count
-        if let rejection = state.sendBuffer.reserve(byteCount: byteCount) {
+        let connection: NWConnection
+        switch clientRegistry.reserveSend(clientId: clientId, byteCount: byteCount) {
+        case .missingClient:
+            return .failed(.clientNotFound(clientId))
+        case .accepted(let acceptedConnection):
+            connection = acceptedConnection
+        case .rejected(let rejection, let state):
             switch rejection {
             case .payloadTooLarge:
                 logger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
@@ -399,9 +260,8 @@ actor SimpleSocketServer {
             }
             return .failed(rejection.sendFailure)
         }
-        clients[clientId] = state
 
-        sendContent(state.connection, dataToSend, .contentProcessed { [weak self] error in
+        sendContent(connection, dataToSend, .contentProcessed { [weak self] error in
             if let error {
                 logger.error("Send error to client \(clientId): \(error)")
             }
@@ -421,7 +281,7 @@ actor SimpleSocketServer {
         clientId: Int,
         originalData: Data,
         byteCount: Int,
-        state: ClientState
+        state: SocketClientRegistry.Client
     ) {
         let envelope: ResponseEnvelope
         do {
@@ -448,7 +308,7 @@ actor SimpleSocketServer {
         )
     }
 
-    private func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope, state: ClientState) {
+    private func sendErrorEnvelope(clientId: Int, envelope: ResponseEnvelope, state: SocketClientRegistry.Client) {
         let response: Data
         do {
             response = try envelope.encoded()
@@ -469,9 +329,7 @@ actor SimpleSocketServer {
 
     /// Called when NWConnection finishes processing a send.
     private func completedSend(clientId: Int, byteCount: Int, error: NWError?) {
-        guard var state = clients[clientId] else { return }
-        state.sendBuffer.complete(byteCount: byteCount)
-        clients[clientId] = state
+        clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)
         if let error {
             callbacks.onSendFailed?(clientId, .transportFailed(clientId: clientId, message: error.localizedDescription))
         }
@@ -484,27 +342,23 @@ actor SimpleSocketServer {
 
     /// Mark a client as authenticated.
     func markAuthenticated(_ clientId: Int) {
-        guard var state = clients[clientId],
-              state.authentication.markAuthenticated() else { return }
-        clients[clientId] = state
+        clientRegistry.markAuthenticated(clientId)
     }
 
     /// Mark a connected client as waiting on the on-device approval prompt.
     func markApprovalPending(_ clientId: Int) {
-        guard var state = clients[clientId],
-              state.authentication.markApprovalPending() else { return }
-        clients[clientId] = state
+        guard clientRegistry.markApprovalPending(clientId) else { return }
         logger.info("Client \(clientId): approval pending — waiting for user to tap Allow on device")
     }
 
     /// Check if a client is authenticated.
     func isAuthenticated(_ clientId: Int) -> Bool {
-        clients[clientId]?.authentication.isAuthenticated == true
+        clientRegistry.isAuthenticated(clientId)
     }
 
     /// Broadcast data to all authenticated clients.
     func broadcastToAll(_ data: Data) {
-        for (clientId, state) in clients where state.authentication.isAuthenticated {
+        for clientId in clientRegistry.authenticatedClientIds {
             send(data, to: clientId)
         }
     }
@@ -542,7 +396,7 @@ actor SimpleSocketServer {
     }
 
     private func acceptReadyConnection(_ connection: NWConnection) -> Int? {
-        if clients.count >= Self.maxConnections {
+        if clientRegistry.count >= Self.maxConnections {
             logger.warning("Max connections (\(Self.maxConnections)) reached, rejecting")
             rejectStartedConnectionWithServerError(
                 connection,
@@ -579,15 +433,9 @@ actor SimpleSocketServer {
             logger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
         }
 
-        clientCounter += 1
-        let clientId = clientCounter
-        clients[clientId] = ClientState(
-            connection: connection,
-            authentication: .awaitingAuthentication(deadline: makeAuthDeadline(for: clientId)),
-            timestamps: [],
-            rateLimitNotified: false,
-            sendBuffer: SocketSendBuffer()
-        )
+        let clientId = clientRegistry.insert(connection: connection) { clientId in
+            .awaitingAuthentication(deadline: makeAuthDeadline(for: clientId))
+        }
         let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
         logger.info("Client \(clientId) connected")
         notifyClientConnected(clientId, address: remoteAddress)
@@ -603,7 +451,7 @@ actor SimpleSocketServer {
                 return
             }
             guard let self else { return }
-            switch await self.clients[clientId]?.authentication {
+            switch await self.authentication(for: clientId) {
             case .awaitingAuthentication:
                 logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
                 await self.rejectClientWithServerError(
@@ -633,7 +481,7 @@ actor SimpleSocketServer {
     }
 
     private func removeClient(_ clientId: Int) {
-        guard let state = clients.removeValue(forKey: clientId) else { return }
+        guard let state = clientRegistry.remove(clientId) else { return }
         state.authentication.cancelDeadline()
         state.connection.cancel()
         notifyClientDisconnected(clientId)
@@ -663,7 +511,7 @@ actor SimpleSocketServer {
     }
 
     private func rejectClientWithServerError(_ clientId: Int, kind: ErrorKind, message: String) {
-        guard let state = clients[clientId] else { return }
+        guard let state = clientRegistry.client(clientId) else { return }
         sendErrorEnvelope(
             clientId: clientId,
             envelope: ResponseEnvelope(message: .error(TheScore.ServerError(kind: kind, message: message))),
@@ -679,26 +527,11 @@ actor SimpleSocketServer {
         }
     }
 
-    // ClientState is a value type — copy, mutate timestamps, write back.
-    private func isRateLimited(_ clientId: Int) -> Bool {
-        guard var state = clients[clientId] else { return true }
-        let now = Date()
-        var timestamps = state.timestamps.filter { now.timeIntervalSince($0) < 1.0 }
-        let limited = timestamps.count >= Self.maxMessagesPerSecond
-        if !limited {
-            timestamps.append(now)
-            state.rateLimitNotified = false
-        }
-        state.timestamps = timestamps
-        clients[clientId] = state
-        return limited
+    private func authentication(for clientId: Int) -> SocketClientAuthentication? {
+        clientRegistry.authentication(for: clientId)
     }
 
-    /// Send a rate-limit error to the client on the first drop per window.
-    private func notifyRateLimitIfNeeded(_ clientId: Int) {
-        guard var state = clients[clientId], !state.rateLimitNotified else { return }
-        state.rateLimitNotified = true
-        clients[clientId] = state
+    private func notifyRateLimit(_ clientId: Int) {
         callbacks.onRateLimited?(clientId) { [weak self] response in
             guard let self else { return }
             self.spawnTrackedTask { server in await server.send(response, to: clientId) }
@@ -755,21 +588,25 @@ actor SimpleSocketServer {
         }
 
         for messageData in messageFrames {
-            let authenticated = isAuthenticated(clientId)
-            if isRateLimited(clientId) {
+            switch clientRegistry.recordInboundMessage(clientId: clientId) {
+            case .missingClient:
+                return
+            case .rateLimited(let authenticated, let shouldNotify):
                 if authenticated {
                     logger.warning("Client \(clientId) rate limited, dropping message")
                 } else {
                     logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
                 }
-                notifyRateLimitIfNeeded(clientId)
+                if shouldNotify {
+                    notifyRateLimit(clientId)
+                }
                 continue
-            }
-
-            let dataHandler = authenticated ? callbacks.onDataReceived : callbacks.onUnauthenticatedData
-            dataHandler?(clientId, messageData) { [weak self] response in
-                guard let self else { return }
-                self.spawnTrackedTask { server in await server.send(response, to: clientId) }
+            case .accepted(let authenticated):
+                let dataHandler = authenticated ? callbacks.onDataReceived : callbacks.onUnauthenticatedData
+                dataHandler?(clientId, messageData) { [weak self] response in
+                    guard let self else { return }
+                    self.spawnTrackedTask { server in await server.send(response, to: clientId) }
+                }
             }
         }
 
