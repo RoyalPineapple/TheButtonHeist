@@ -11,14 +11,15 @@ final class PublicContractGoldenTests: XCTestCase {
         XCTAssertLessThanOrEqual(
             lineCount(source),
             110,
-            "TheFence+Formatting+JSON.swift should stay a small encoding/jsonDict compatibility shell."
+            "TheFence+Formatting+JSON.swift should stay a small typed JSON entrypoint."
         )
         XCTAssertTrue(
             source.contains("PublicResponseModel(response: self)"),
             "FenceResponse.jsonData should encode the typed public response model."
         )
+        let serializer = try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/PublicJSONSerializer.swift")
         XCTAssertTrue(
-            source.contains("enum PublicJSONSerializer"),
+            serializer.contains("enum PublicJSONSerializer"),
             "Foundation object conversion should stay behind the named public JSON serializer shim."
         )
 
@@ -55,14 +56,16 @@ final class PublicContractGoldenTests: XCTestCase {
         )
             .filter { url in
                 let name = url.lastPathComponent
-                return name.hasPrefix("FenceJSON+") || name.hasPrefix("TheFence+Formatting")
+                return name.hasPrefix("FenceJSON+")
+                    || name.hasPrefix("TheFence+Formatting")
+                    || name == "PublicJSONSerializer.swift"
             }
 
         XCTAssertFalse(formattingSources.isEmpty)
 
         for file in formattingSources {
             let source = try String(contentsOf: file, encoding: .utf8)
-            let isSerializerShim = file.lastPathComponent == "TheFence+Formatting+JSON.swift"
+            let isSerializerShim = file.lastPathComponent == "PublicJSONSerializer.swift"
 
             if isSerializerShim {
                 XCTAssertTrue(source.contains("PublicJSONSerializer"))
@@ -83,6 +86,19 @@ final class PublicContractGoldenTests: XCTestCase {
                 "\(file.lastPathComponent) should not call the Foundation dictionary compatibility adapter."
             )
         }
+    }
+
+    func testCLIJSONOutputUsesTypedSerializerBoundary() throws {
+        let source = try sourceFile("ButtonHeistCLI/Sources/Session/SessionRepl.swift")
+
+        XCTAssertTrue(
+            source.contains("response.jsonData(requestId: id)"),
+            "REPL JSON output should serialize the typed public response model with request id at the serializer boundary."
+        )
+        XCTAssertFalse(
+            source.contains("response.jsonDict()"),
+            "REPL JSON output must not round-trip through the Foundation dictionary compatibility adapter."
+        )
     }
 
     func testPublicJSONResponseFamiliesStaySplitByDomain() throws {
@@ -286,6 +302,13 @@ final class PublicContractGoldenTests: XCTestCase {
         XCTAssertEqual(
             try jsonString(FenceResponse.action(result: result)),
             #"{"method":"getPasteboard","screenId":"receipt","screenName":"Receipt","status":"ok","value":"copied"}"#
+        )
+    }
+
+    func testPublicJSONRequestIdIsAddedAtSerializerBoundary() throws {
+        XCTAssertEqual(
+            try jsonString(FenceResponse.ok(message: "done"), requestId: "req-1"),
+            #"{"id":"req-1","message":"done","status":"ok"}"#
         )
     }
 
@@ -556,6 +579,11 @@ final class PublicContractGoldenTests: XCTestCase {
 
     private func jsonString(_ response: FenceResponse) throws -> String {
         let data = try response.jsonData()
+        return try XCTUnwrap(String(data: data, encoding: .utf8))
+    }
+
+    private func jsonString(_ response: FenceResponse, requestId: Any) throws -> String {
+        let data = try response.jsonData(requestId: requestId)
         return try XCTUnwrap(String(data: data, encoding: .utf8))
     }
 
