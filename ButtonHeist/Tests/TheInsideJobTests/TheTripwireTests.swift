@@ -745,9 +745,8 @@ final class TheTripwireTests: XCTestCase {
                       "Should return deepest presented VC's view, not the keyboard")
     }
 
-    func testFilterFallbackExcludesPassthroughWindows() {
+    func testFilterExcludesPassthroughWindowsWhenAppWindowsRemain() {
         // No overlay, no presented VC, two app-level windows plus a keyboard.
-        // The fallback should return the two app windows and drop the keyboard.
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let a = makeWindow(level: .normal, rootVC: UIViewController())
         let b = makeWindow(level: .normal - 1, rootVC: UIViewController())
@@ -762,15 +761,13 @@ final class TheTripwireTests: XCTestCase {
             isPassthrough: { $0 === keyboard }
         )
 
-        XCTAssertEqual(result.count, 2, "Fallback should return only app windows")
+        XCTAssertEqual(result.count, 2, "Only app windows should remain")
         XCTAssertFalse(result.contains(where: { $0.window === keyboard }),
-                       "Passthrough window must not be in fallback result")
+                       "Passthrough window must not be in accessible result")
     }
 
-    func testFilterReturnsAllWhenOnlyPassthroughsExist() {
-        // When every window is a passthrough, the canonical behaviour is to
-        // return the full input rather than an empty list — better to
-        // over-include than starve the parser of any windows at all.
+    func testFilterReturnsEmptyWhenOnlyPassthroughsExist() {
+        // Passthrough windows do not provide app accessibility roots.
         let keyboard = makeWindow(level: .alert, rootVC: UIViewController())
         let textEffects = makeWindow(level: .alert + 1, rootVC: UIViewController())
         let input = [
@@ -783,8 +780,8 @@ final class TheTripwireTests: XCTestCase {
             isPassthrough: { _ in true }
         )
 
-        XCTAssertEqual(result.count, 2,
-                       "All-passthrough input should fall back to original list, not empty")
+        XCTAssertTrue(result.isEmpty,
+                      "All-passthrough input should not be promoted to app accessibility roots")
     }
 
     // MARK: - topmostViewController(in:) Passthrough
