@@ -553,17 +553,14 @@ extension TheFence {
         guard let resolvedURL = bookKeeper.validateOutputPath(request.outputPath) else {
             throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
         }
-        do {
-            let heist = try bookKeeper.stopHeistRecording()
-            endRecordingAccessibilityHistoryRetention()
-            try TheBookKeeper.writeHeist(heist, to: resolvedURL)
-            return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
-        } catch {
+        defer {
             if !bookKeeper.isRecordingHeist {
                 endRecordingAccessibilityHistoryRetention()
             }
-            throw error
         }
+        let heist = try bookKeeper.stopHeistRecording()
+        try TheBookKeeper.writeHeist(heist, to: resolvedURL)
+        return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
     }
 
     func handlePlayHeist(_ request: PlayHeistRequest) async throws -> FenceResponse {
