@@ -186,13 +186,11 @@ final class TheHandoff {
 
     // MARK: - State
 
-    private(set) var discoveredDevices: [DiscoveredDevice] = []
-    private(set) var isDiscovering: Bool = false
     private(set) var connectionPhase: ConnectionPhase = .disconnected
     private(set) var reconnectPolicy: ReconnectPolicy = .disabled
     private var connectionAttemptFailure: ConnectionError?
-    private var discoverySessionID: UUID?
 
+    private let discoveryLifecycle = HandoffDiscoveryLifecycle()
     private let connectionResultWaiters = ConnectionResultWaiters()
 
     // MARK: - State Transitions
@@ -369,6 +367,14 @@ final class TheHandoff {
         return 0
     }
 
+    var discoveredDevices: [DiscoveredDevice] {
+        discoveryLifecycle.discoveredDevices
+    }
+
+    var isDiscovering: Bool {
+        discoveryLifecycle.isDiscovering
+    }
+
     // MARK: - Discovery Callbacks
 
     // All callbacks below fire on `@ButtonHeistActor`.
@@ -424,11 +430,10 @@ final class TheHandoff {
 
     // MARK: - Discovery / Connection Handles
 
-    private var discovery: (any DeviceDiscovering)?
     private var connection: (any DeviceConnecting)?
 
     var hasActiveDiscoverySession: Bool {
-        discovery != nil
+        discoveryLifecycle.hasActiveSession
     }
 
     /// Resolved driver ID: explicit override if set, otherwise a persistent auto-generated UUID.
@@ -495,48 +500,21 @@ final class TheHandoff {
 
     func startDiscovery() {
         logger.info("startDiscovery called, hasSession=\(self.hasActiveDiscoverySession)")
-        guard discovery == nil else {
+        guard !discoveryLifecycle.hasActiveSession else {
             logger.info("Already discovering, skipping")
             return
         }
 
-        let sessionID = UUID()
-        discoveredDevices.removeAll()
-        isDiscovering = false
-        let activeDiscovery = makeDiscovery()
-        discovery = activeDiscovery
-        discoverySessionID = sessionID
-        activeDiscovery.onEvent = { [weak self, sessionID] event in
-            guard let self, self.isCurrentDiscoverySession(sessionID) else { return }
-            switch event {
-            case .found(let device):
-                logger.info("Device found: \(device.name)")
-                self.discoveredDevices = self.discovery?.discoveredDevices ?? []
-                self.onDeviceFound?(device)
-            case .lost(let device):
-                logger.info("Device lost: \(device.name)")
-                self.discoveredDevices = self.discovery?.discoveredDevices ?? []
-                self.onDeviceLost?(device)
-            case .stateChanged(let isReady):
-                logger.info("Discovery state changed: isReady=\(isReady)")
-                self.isDiscovering = isReady
-            }
-        }
-        activeDiscovery.start()
+        discoveryLifecycle.start(
+            makeDiscovery: makeDiscovery,
+            onDeviceFound: { [weak self] device in self?.onDeviceFound?(device) },
+            onDeviceLost: { [weak self] device in self?.onDeviceLost?(device) }
+        )
         logger.info("Discovery started")
     }
 
     func stopDiscovery() {
-        let activeDiscovery = discovery
-        discoverySessionID = nil
-        discovery = nil
-        isDiscovering = false
-        discoveredDevices = []
-        activeDiscovery?.stop()
-    }
-
-    private func isCurrentDiscoverySession(_ sessionID: UUID) -> Bool {
-        discoverySessionID == sessionID && discovery != nil
+        discoveryLifecycle.stop()
     }
 
     // MARK: - Reachability Probing
@@ -1041,6 +1019,79 @@ final class TheHandoff {
             return "\(appName) (\(device.deviceName))"
         } else {
             return appName
+        }
+    }
+}
+
+/// Discovery lifecycle invariant: only callbacks from the current live discovery session can mutate the discovery projection.
+@ButtonHeistActor
+private final class HandoffDiscoveryLifecycle {
+
+    private struct ActiveSession {
+        let id: UUID
+        let discovery: any DeviceDiscovering
+    }
+
+    private var activeSession: ActiveSession?
+
+    private(set) var discoveredDevices: [DiscoveredDevice] = []
+    private(set) var isDiscovering = false
+
+    var hasActiveSession: Bool {
+        activeSession != nil
+    }
+
+    @discardableResult
+    func start(
+        makeDiscovery: () -> any DeviceDiscovering,
+        onDeviceFound: @escaping @ButtonHeistActor (DiscoveredDevice) -> Void,
+        onDeviceLost: @escaping @ButtonHeistActor (DiscoveredDevice) -> Void
+    ) -> Bool {
+        guard activeSession == nil else { return false }
+
+        discoveredDevices.removeAll()
+        isDiscovering = false
+
+        let sessionID = UUID()
+        let activeDiscovery = makeDiscovery()
+        activeSession = ActiveSession(id: sessionID, discovery: activeDiscovery)
+        activeDiscovery.onEvent = { [weak self, sessionID] event in
+            guard let self, self.isCurrentSession(sessionID) else { return }
+            self.handle(event, onDeviceFound: onDeviceFound, onDeviceLost: onDeviceLost)
+        }
+        activeDiscovery.start()
+        return true
+    }
+
+    func stop() {
+        let activeDiscovery = activeSession?.discovery
+        activeSession = nil
+        isDiscovering = false
+        discoveredDevices = []
+        activeDiscovery?.stop()
+    }
+
+    private func isCurrentSession(_ sessionID: UUID) -> Bool {
+        activeSession?.id == sessionID
+    }
+
+    private func handle(
+        _ event: DiscoveryEvent,
+        onDeviceFound: @ButtonHeistActor (DiscoveredDevice) -> Void,
+        onDeviceLost: @ButtonHeistActor (DiscoveredDevice) -> Void
+    ) {
+        switch event {
+        case .found(let device):
+            logger.info("Device found: \(device.name)")
+            discoveredDevices = activeSession?.discovery.discoveredDevices ?? []
+            onDeviceFound(device)
+        case .lost(let device):
+            logger.info("Device lost: \(device.name)")
+            discoveredDevices = activeSession?.discovery.discoveredDevices ?? []
+            onDeviceLost(device)
+        case .stateChanged(let isReady):
+            logger.info("Discovery state changed: isReady=\(isReady)")
+            isDiscovering = isReady
         }
     }
 }
