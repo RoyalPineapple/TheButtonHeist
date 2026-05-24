@@ -23,6 +23,11 @@ extension TheFence {
             argumentFieldPrefix = fieldPrefix
         }
 
+        func dropping(_ key: String) -> CommandArgumentEnvelope {
+            var values = argumentValues
+            values.removeValue(forKey: key)
+            return CommandArgumentEnvelope(values: values, fieldPrefix: argumentFieldPrefix)
+        }
     }
 
     public struct CommandArgumentObject: CommandArgumentReadable, Sendable {
@@ -151,10 +156,6 @@ extension TheFence.CommandArgumentReadable {
         argumentValues.keys
     }
 
-    var rawValue: [String: Any] {
-        argumentValues.mapValues(\.rawValue)
-    }
-
     func string(_ key: String) -> String? {
         guard case .string(let value) = argumentValues[key] else { return nil }
         return value
@@ -162,6 +163,10 @@ extension TheFence.CommandArgumentReadable {
 
     func observedValue(for key: String) -> Any? {
         argumentValues[key]?.rawValue
+    }
+
+    var observedDescription: String {
+        "object"
     }
 
     func schemaInteger(_ key: String) throws -> Int? {

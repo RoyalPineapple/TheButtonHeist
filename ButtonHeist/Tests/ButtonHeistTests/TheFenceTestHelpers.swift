@@ -39,7 +39,7 @@ extension TheFence {
 
 extension TheFence.PlaybackOperation {
     func requestDecodeInputArguments() -> [String: Any] {
-        requestDecodeInputEnvelope().rawValue
+        requestDecodeInputEnvelope().argumentValues.mapValues(\.rawValue)
     }
 }
 

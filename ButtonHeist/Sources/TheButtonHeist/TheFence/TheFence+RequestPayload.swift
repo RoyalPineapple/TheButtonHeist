@@ -505,7 +505,8 @@ extension TheFence {
     /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
     /// so the caller short-circuits without logging or dispatching.
     func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
-        let commandString = try request.requiredSchemaString("command")
+        let requestEnvelope = try CommandArgumentEnvelope(arguments: request, droppingCommandKey: false)
+        let commandString = try requestEnvelope.requiredSchemaString("command")
         guard let command = Command(rawValue: commandString) else {
             return ParsedRequest(
                 command: .help,
@@ -515,9 +516,7 @@ extension TheFence {
                 immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
             )
         }
-        var arguments = request
-        arguments.removeValue(forKey: "command")
-        return try parseRequest(command: command, arguments: CommandArgumentEnvelope(arguments: arguments))
+        return try parseRequest(command: command, arguments: requestEnvelope.dropping("command"))
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {

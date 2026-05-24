@@ -399,83 +399,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
     }
 
-    // MARK: - Argument Parsing Helpers
-
-    func testStringArg() {
-        let dict: [String: Any] = ["key": "hello", "number": 42]
-        XCTAssertEqual(dict.string("key"), "hello")
-        XCTAssertNil(dict.string("number"))
-        XCTAssertNil(dict.string("missing"))
-    }
-
-    func testIntegerFromInt() {
-        let dict: [String: Any] = ["count": 5]
-        XCTAssertEqual(dict.integer("count"), 5)
-    }
-
-    func testIntegerRejectsFractionalDouble() {
-        let dict: [String: Any] = ["count": 5.7]
-        XCTAssertNil(dict.integer("count"))
-    }
-
-    func testIntegerFromWholeDouble() {
-        let dict: [String: Any] = ["count": 5.0]
-        XCTAssertEqual(dict.integer("count"), 5)
-    }
-
-    func testIntegerRejectsOutOfRangeDouble() {
-        let dict: [String: Any] = ["count": Double(Int.max)]
-        XCTAssertNil(dict.integer("count"))
-    }
-
-    func testIntegerRejectsString() {
-        let dict: [String: Any] = ["count": "42"]
-        XCTAssertNil(dict.integer("count"))
-    }
-
-    func testIntegerRejectsBool() {
-        let dict: [String: Any] = ["count": true]
-        XCTAssertNil(dict.integer("count"))
-    }
-
-    func testIntegerMissing() {
-        let dict: [String: Any] = [:]
-        XCTAssertNil(dict.integer("count"))
-    }
-
-    func testNumberFromDouble() {
-        let dict: [String: Any] = ["x": 3.14]
-        XCTAssertEqual(dict.number("x"), 3.14)
-    }
-
-    func testNumberFromInt() {
-        let dict: [String: Any] = ["x": 7]
-        XCTAssertEqual(dict.number("x"), 7.0)
-    }
-
-    func testNumberRejectsString() {
-        let dict: [String: Any] = ["x": "2.5"]
-        XCTAssertNil(dict.number("x"))
-    }
-
-    func testNumberRejectsBool() {
-        let dict: [String: Any] = ["x": true]
-        XCTAssertNil(dict.number("x"))
-    }
-
-    func testNumberMissing() {
-        let dict: [String: Any] = [:]
-        XCTAssertNil(dict.number("x"))
-    }
-
-    func testNumberVariousTypes() {
-        let dict: [String: Any] = ["d": 1.5, "i": 3, "s": "4.2", "bad": "notANumber"]
-        XCTAssertEqual(dict.number("d"), 1.5)
-        XCTAssertEqual(dict.number("i"), 3.0)
-        XCTAssertNil(dict.number("s"))
-        XCTAssertNil(dict.number("missing"))
-        XCTAssertNil(dict.number("bad"))
-    }
+    // MARK: - Typed Argument Parsing
 
     func testCommandArgumentEnvelopePreservesJSONScalarTypes() throws {
         let envelope = try TheFence.CommandArgumentEnvelope(arguments: [
@@ -485,11 +409,11 @@ final class TheFenceHandlerTests: XCTestCase {
             "null": NSNull(),
         ])
 
-        let raw = envelope.rawValue
-        XCTAssertEqual(raw["bool"] as? Bool, true)
-        XCTAssertEqual(raw["int"] as? Int, 3)
-        XCTAssertEqual(raw["double"] as? Double, 2.5)
-        XCTAssertTrue(raw["null"] is NSNull)
+        XCTAssertEqual(try envelope.schemaBoolean("bool"), true)
+        XCTAssertEqual(try envelope.schemaInteger("int"), 3)
+        XCTAssertEqual(try envelope.schemaNumber("double"), 2.5)
+        XCTAssertNil(envelope.observedValue(for: "missing"))
+        XCTAssertTrue(envelope.argumentValues["null"] == .null)
     }
 
     func testCommandArgumentEnvelopePreservesNestedJSONValues() throws {
@@ -504,16 +428,21 @@ final class TheFenceHandlerTests: XCTestCase {
             ],
         ] as [String: Any])
 
-        let raw = envelope.rawValue
-        let object = try XCTUnwrap(raw["object"] as? [String: Any])
-        XCTAssertEqual(object["label"] as? String, "Pay")
-        XCTAssertEqual(object["traits"] as? [String], ["button", "selected"])
+        let object = try XCTUnwrap(try envelope.schemaDictionary("object"))
+        XCTAssertEqual(try object.schemaString("label"), "Pay")
+        XCTAssertEqual(try object.schemaStringArray("traits"), ["button", "selected"])
 
-        let array = try XCTUnwrap(raw["array"] as? [Any])
-        let first = try XCTUnwrap(array.first as? [String: Any])
-        XCTAssertEqual(first["x"] as? Double, 0.25)
-        XCTAssertEqual(first["y"] as? Double, 0.75)
-        XCTAssertTrue(array[1] is NSNull)
+        guard case .array(let array)? = envelope.argumentValues["array"] else {
+            return XCTFail("Expected typed array")
+        }
+        XCTAssertEqual(array.count, 2)
+        guard case .object(let firstObject) = array[0] else {
+            return XCTFail("Expected typed object")
+        }
+        let first = TheFence.CommandArgumentObject(values: firstObject, fieldPrefix: "array[0]")
+        XCTAssertEqual(try first.schemaNumber("x"), 0.25)
+        XCTAssertEqual(try first.schemaNumber("y"), 0.75)
+        XCTAssertEqual(array[1], .null)
     }
 
     func testCommandArgumentEnvelopeReadsNestedTypedObjects() throws {

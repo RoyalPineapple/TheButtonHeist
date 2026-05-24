@@ -121,9 +121,28 @@ extension TheFence.Command {
 extension FenceParameterKey {
     static func rawDictionary(_ parameters: CLIRequestParameters) -> [String: Any] {
         Dictionary(
-            parameters.map { ($0.key.rawValue, $0.value.toAny()) },
+            parameters.map { ($0.key.rawValue, $0.value.cliRawValue) },
             uniquingKeysWith: { _, newest in newest }
         )
+    }
+}
+
+extension HeistValue {
+    var cliRawValue: Any {
+        switch self {
+        case .string(let value):
+            value
+        case .int(let value):
+            value
+        case .double(let value):
+            value
+        case .bool(let value):
+            value
+        case .array(let values):
+            values.map(\.cliRawValue)
+        case .object(let values):
+            values.mapValues(\.cliRawValue)
+        }
     }
 }
 
@@ -134,7 +153,7 @@ extension Dictionary where Key == String, Value == Any {
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
-        self[key] = value.toAny()
+        self[key] = value.cliRawValue
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: String) {

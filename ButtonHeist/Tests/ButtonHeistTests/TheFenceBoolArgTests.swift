@@ -4,32 +4,34 @@ import TheScore
 
 final class TheFenceBoolArgTests: XCTestCase {
 
-    func testBooleanFromBool() {
-        let args: [String: Any] = ["key": true]
-        XCTAssertEqual(args.boolean("key"), true)
-        XCTAssertEqual(["key": false].boolean("key"), false)
+    func testBooleanFromBool() throws {
+        let args = try TheFence.CommandArgumentEnvelope(arguments: ["key": true])
+        XCTAssertEqual(try args.schemaBoolean("key"), true)
+
+        let falseArgs = try TheFence.CommandArgumentEnvelope(arguments: ["key": false])
+        XCTAssertEqual(try falseArgs.schemaBoolean("key"), false)
     }
 
-    func testBooleanRejectsInt() {
-        XCTAssertNil((["key": 1] as [String: Any]).boolean("key"))
-        XCTAssertNil((["key": 0] as [String: Any]).boolean("key"))
-        XCTAssertNil((["key": 42] as [String: Any]).boolean("key"))
+    func testBooleanRejectsInt() throws {
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": 1]).schemaBoolean("key"))
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": 0]).schemaBoolean("key"))
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": 42]).schemaBoolean("key"))
     }
 
-    func testBooleanRejectsString() {
-        XCTAssertNil((["key": "true"] as [String: Any]).boolean("key"))
-        XCTAssertNil((["key": "1"] as [String: Any]).boolean("key"))
-        XCTAssertNil((["key": "false"] as [String: Any]).boolean("key"))
-        XCTAssertNil((["key": "0"] as [String: Any]).boolean("key"))
-        XCTAssertNil((["key": "yes"] as [String: Any]).boolean("key"))
+    func testBooleanRejectsString() throws {
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": "true"]).schemaBoolean("key"))
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": "1"]).schemaBoolean("key"))
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": "false"]).schemaBoolean("key"))
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": "0"]).schemaBoolean("key"))
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": "yes"]).schemaBoolean("key"))
     }
 
-    func testBooleanMissing() {
-        let args: [String: Any] = [:]
-        XCTAssertNil(args.boolean("key"))
+    func testBooleanMissing() throws {
+        let args = try TheFence.CommandArgumentEnvelope(arguments: [:])
+        XCTAssertNil(try args.schemaBoolean("key"))
     }
 
-    func testBooleanWrongType() {
-        XCTAssertNil((["key": 3.14] as [String: Any]).boolean("key"))
+    func testBooleanWrongType() throws {
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: ["key": 3.14]).schemaBoolean("key"))
     }
 }

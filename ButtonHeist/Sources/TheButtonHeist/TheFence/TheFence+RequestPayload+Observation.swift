@@ -91,7 +91,7 @@ extension TheFence {
         guard (elementDictionary == nil) != (containerDictionary == nil) else {
             throw SchemaValidationError(
                 field: "subtree",
-                observed: subtree.rawValue,
+                observed: subtree.observedDescription,
                 expected: "exactly one of element or container"
             )
         }
@@ -106,11 +106,11 @@ extension TheFence {
             let matcher = try subtreeContainerMatcher(containerDictionary)
             selector = .container(matcher, ordinal: ordinal)
         } else {
-            throw SchemaValidationError(field: "subtree", observed: subtree.rawValue, expected: "element or container selector")
+            throw SchemaValidationError(field: "subtree", observed: subtree.observedDescription, expected: "element or container selector")
         }
 
         guard selector.hasPredicates else {
-            throw SchemaValidationError(field: "subtree", observed: subtree.rawValue, expected: "non-empty subtree selector")
+            throw SchemaValidationError(field: "subtree", observed: subtree.observedDescription, expected: "non-empty subtree selector")
         }
         return selector
     }

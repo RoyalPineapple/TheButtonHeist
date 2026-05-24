@@ -252,13 +252,6 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testHeistValueToAny() {
-        XCTAssertEqual(HeistValue.string("hello").toAny() as? String, "hello")
-        XCTAssertEqual(HeistValue.int(42).toAny() as? Int, 42)
-        XCTAssertEqual(HeistValue.double(3.14).toAny() as? Double, 3.14)
-        XCTAssertEqual(HeistValue.bool(true).toAny() as? Bool, true)
-    }
-
     func testHeistValueDescriptionIsDeterministicAndQuoted() {
         let value = HeistValue.object([
             "text": .string(#"Save "Now""#),
