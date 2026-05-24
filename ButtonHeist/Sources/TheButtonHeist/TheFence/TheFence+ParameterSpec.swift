@@ -16,6 +16,7 @@ public struct FenceParameterSpec: Sendable, Equatable {
     public let type: ParamType
     public let required: Bool
     public let enumValues: [String]?
+    public let defaultValue: HeistValue?
     public let jsonSchemaProperty: FenceJSONSchemaValue
 
 }
@@ -87,6 +88,7 @@ func param(
     _ type: FenceParameterSpec.ParamType,
     required: Bool = false,
     enumValues: [String]? = nil,
+    defaultValue: HeistValue? = nil,
     minimum: Double? = nil,
     maximum: Double? = nil,
     minLength: Int? = nil,
@@ -132,6 +134,7 @@ func param(
         type: type,
         required: required,
         enumValues: enumValues,
+        defaultValue: defaultValue,
         jsonSchemaProperty: .object(schema)
     )
 }
@@ -486,7 +489,11 @@ extension TheFence.Command {
 
         case .scroll:
             return scrollContainerTarget + target + [
-                param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self)),
+                param(
+                    .direction, .string,
+                    enumValues: fenceEnumValues(ScrollDirection.self),
+                    defaultValue: .string(ScrollDirection.down.rawValue)
+                ),
             ] + expectation
 
         case .scrollToVisible:
@@ -499,7 +506,11 @@ extension TheFence.Command {
 
         case .scrollToEdge:
             return scrollContainerTarget + target + [
-                param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self)),
+                param(
+                    .edge, .string,
+                    enumValues: fenceEnumValues(ScrollEdge.self),
+                    defaultValue: .string(ScrollEdge.top.rawValue)
+                ),
             ] + expectation
 
         case .activate:
@@ -515,7 +526,11 @@ extension TheFence.Command {
             return target + [
                 param(.rotor, .string),
                 param(.rotorIndex, .integer, minimum: 0),
-                param(.direction, .string, enumValues: fenceEnumValues(RotorDirection.self)),
+                param(
+                    .direction, .string,
+                    enumValues: fenceEnumValues(RotorDirection.self),
+                    defaultValue: .string(RotorDirection.next.rawValue)
+                ),
                 param(.currentHeistId, .string),
                 param(.currentTextStartOffset, .integer, minimum: 0),
                 param(.currentTextEndOffset, .integer, minimum: 0),

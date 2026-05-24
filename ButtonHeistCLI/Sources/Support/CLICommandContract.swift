@@ -106,6 +106,13 @@ extension CLICommandContract {
     static func fenceRequest(_ parameters: CLIRequestParameters = [:]) -> [String: Any] {
         fenceCommand.cliRequest(parameters)
     }
+
+    static func catalogDefaultString(for key: FenceParameterKey) -> String {
+        guard case .string(let value)? = fenceCommand.defaultArgumentValue(for: key) else {
+            fatalError("No string default registered for \(fenceCommand.rawValue).\(key.rawValue)")
+        }
+        return value
+    }
 }
 
 extension TheFence.Command {

@@ -24,7 +24,7 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     var stableId: String?
 
     @Option(name: .shortAndLong, help: "Scroll direction: up, down, left, right, next, previous (default: down)")
-    var direction: String = "down"
+    var direction: String = Self.catalogDefaultString(for: .direction)
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions

@@ -24,7 +24,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
     var stableId: String?
 
     @Option(name: .shortAndLong, help: "Edge to scroll to: top, bottom, left, right (default: top)")
-    var edge: String = "top"
+    var edge: String = Self.catalogDefaultString(for: .edge)
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
