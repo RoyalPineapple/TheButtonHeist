@@ -17,6 +17,10 @@ final class PublicContractGoldenTests: XCTestCase {
             source.contains("PublicResponseModel(response: self)"),
             "FenceResponse.jsonData should encode the typed public response model."
         )
+        XCTAssertTrue(
+            source.contains("enum PublicJSONSerializer"),
+            "Foundation object conversion should stay behind the named public JSON serializer shim."
+        )
 
         let forbiddenRuntimeFormatting = [
             "case .interface",
@@ -39,6 +43,44 @@ final class PublicContractGoldenTests: XCTestCase {
             XCTAssertFalse(
                 source.contains(pattern),
                 "The central JSON shim should not hand-shape public JSON with \(pattern)."
+            )
+        }
+    }
+
+    func testPublicJSONHandShapingIsContainedToSerializerShim() throws {
+        let fenceDirectory = try sourceDirectory("ButtonHeist/Sources/TheButtonHeist/TheFence")
+        let formattingSources = try FileManager.default.contentsOfDirectory(
+            at: fenceDirectory,
+            includingPropertiesForKeys: nil
+        )
+            .filter { url in
+                let name = url.lastPathComponent
+                return name.hasPrefix("FenceJSON+") || name.hasPrefix("TheFence+Formatting")
+            }
+
+        XCTAssertFalse(formattingSources.isEmpty)
+
+        for file in formattingSources {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            let isSerializerShim = file.lastPathComponent == "TheFence+Formatting+JSON.swift"
+
+            if isSerializerShim {
+                XCTAssertTrue(source.contains("PublicJSONSerializer"))
+                XCTAssertTrue(source.contains("compatibilityDictionary"))
+                continue
+            }
+
+            XCTAssertFalse(
+                source.contains("[String: Any]"),
+                "\(file.lastPathComponent) should render from typed Encodable models, not Foundation dictionaries."
+            )
+            XCTAssertFalse(
+                source.contains("JSONSerialization"),
+                "\(file.lastPathComponent) should not cross the final JSON serialization boundary."
+            )
+            XCTAssertFalse(
+                source.contains("jsonDict("),
+                "\(file.lastPathComponent) should not call the Foundation dictionary compatibility adapter."
             )
         }
     }
@@ -536,6 +578,15 @@ final class PublicContractGoldenTests: XCTestCase {
             .deletingLastPathComponent()
         let url = repoRoot.appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func sourceDirectory(_ relativePath: String) throws -> URL {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return repoRoot.appendingPathComponent(relativePath)
     }
 
     private func lineCount(_ source: String) -> Int {
