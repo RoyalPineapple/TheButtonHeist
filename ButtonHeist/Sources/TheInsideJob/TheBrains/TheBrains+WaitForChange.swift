@@ -1,0 +1,262 @@
+#if canImport(UIKit)
+#if DEBUG
+import Foundation
+
+import TheScore
+
+extension TheBrains {
+    /// Install one wait predicate, check current state, then watch settled changes until it matches.
+    func executeWaitForChange(timeout: TimeInterval, expectation: ActionExpectation?) async -> ActionResult {
+        let start = CFAbsoluteTimeGetCurrent()
+
+        guard let predicate = waitForChangeState.install(
+            expectation: expectation,
+            timeout: timeout,
+            start: start
+        ) else {
+            var builder = ActionResultBuilder(
+                method: .waitForChange,
+                screenName: stash.lastScreenName,
+                screenId: stash.lastScreenId
+            )
+            builder.message = "wait_for_change already in progress"
+            return builder.failure(errorKind: .actionFailed)
+        }
+        defer { waitForChangeState.finish() }
+
+        let sentBaseline = responseStateHistory.waitForChangeBaseline
+
+        guard let initial = await refreshSemanticSnapshot(baseline: sentBaseline) else {
+            return treeUnavailableResult(method: .waitForChange)
+        }
+
+        let baseline = sentBaseline ?? initial
+        let preWaitElements = Dictionary(
+            TheStash.WireConversion.toWire(baseline.snapshot).map {
+                ($0.heistId, $0)
+            },
+            uniquingKeysWith: { _, newest in newest }
+        )
+
+        if let expectation = predicate.expectation,
+           CurrentStateExpectationValidator.validate(expectation, snapshot: initial.snapshot).met {
+            var builder = ActionResultBuilder(method: .waitForChange, snapshot: initial.snapshot)
+            builder.message = "expectation already met by current state (0.0s)"
+            builder.accessibilityTrace = AccessibilityTrace(captures: [initial.capture, initial.capture])
+            return builder.success()
+        }
+
+        // Fast path: semantic state already changed since the last response.
+        if let sentBaseline {
+            let classification = ScreenClassifier.classify(
+                before: sentBaseline.screenSnapshot,
+                after: initial.screenSnapshot
+            )
+            if Self.shouldRecordAccessibilityTrace(
+                baseline: sentBaseline,
+                current: initial,
+                classification: classification
+            ) {
+                let accessibilityTrace = makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
+                let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: initial.snapshot.count))
+                if let result = evaluateWaitForChange(
+                    delta: delta,
+                    accessibilityTrace: accessibilityTrace,
+                    afterSnapshot: initial.snapshot,
+                    expectation: predicate.expectation,
+                    preWaitElements: preWaitElements,
+                    start: start,
+                    round: 0,
+                    message: "already changed (0.0s)"
+                ) {
+                    return result
+                }
+            }
+        }
+
+        if let result = await waitForChangeThroughSettledSnapshots(
+            baseline: baseline,
+            initial: initial,
+            predicate: predicate,
+            preWaitElements: preWaitElements,
+            start: start
+        ) {
+            return result
+        }
+
+        // Timeout
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        let current = await refreshSemanticSnapshot(baseline: baseline)
+        let afterSnapshot = current?.snapshot ?? []
+        let timeoutAccessibilityTrace = current.map {
+            makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
+        }
+        let delta = timeoutAccessibilityTrace?.captureEndpointDelta ?? .noChange(.init(elementCount: 0))
+        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        builder.message = waitForChangeTimeoutMessage(
+            elapsed: elapsed,
+            expectation: predicate.expectation,
+            delta: delta,
+            elementCount: afterSnapshot.count
+        )
+        builder.accessibilityTrace = timeoutAccessibilityTrace
+        return builder.failure(errorKind: .timeout)
+    }
+
+    private func waitForChangeThroughSettledSnapshots(
+        baseline: BeforeState,
+        initial: BeforeState,
+        predicate: WaitForChangeState.Predicate,
+        preWaitElements: [String: HeistElement],
+        start: CFAbsoluteTime
+    ) async -> ActionResult? {
+        // Wait for stable AX-tree observations until a change lands or we time
+        // out. Tripwire signals reset the settle baseline inside
+        // `SettleSession`; the parsed AX captures below still decide whether
+        // anything changed.
+        var settleBaseline = initial
+        var round = 0
+
+        while CFAbsoluteTimeGetCurrent() < predicate.deadline {
+            let remaining = predicate.deadline - CFAbsoluteTimeGetCurrent()
+            guard remaining > 0 else { break }
+
+            guard let current = await waitForSettledSemanticSnapshot(
+                baseline: settleBaseline,
+                timeout: min(remaining, 1.0)
+            ) else { continue }
+            round += 1
+
+            let classification = ScreenClassifier.classify(
+                before: settleBaseline.screenSnapshot,
+                after: current.screenSnapshot
+            )
+            guard Self.shouldRecordAccessibilityTrace(
+                baseline: settleBaseline,
+                current: current,
+                classification: classification
+            ) else {
+                settleBaseline = current
+                continue
+            }
+
+            let accessibilityTrace = makeClassifiedAccessibilityTrace(after: current, parent: baseline)
+            let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: current.snapshot.count))
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+
+            if let result = evaluateWaitForChange(
+                delta: delta,
+                accessibilityTrace: accessibilityTrace,
+                afterSnapshot: current.snapshot,
+                expectation: predicate.expectation,
+                preWaitElements: preWaitElements,
+                start: start,
+                round: round,
+                message: "changed after \(elapsed)s (\(round) rounds)"
+            ) {
+                return result
+            }
+
+            settleBaseline = current
+            insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
+        }
+
+        return nil
+    }
+
+    private func waitForChangeTimeoutMessage(
+        elapsed: String,
+        expectation: ActionExpectation?,
+        delta: AccessibilityTrace.Delta,
+        elementCount: Int
+    ) -> String {
+        let expected = expectation?.summaryDescription ?? "any settled UI change"
+        var parts = [
+            "timed out after \(elapsed)s",
+            "expected: \(expected)",
+            "observed: \(delta.kindRawValue)",
+            "known: \(elementCount) elements",
+        ]
+        if let screenId = stash.lastScreenId {
+            parts.append("screen: \(screenId)")
+        }
+        if expectation == .screenChanged {
+            parts.append(
+                "Next: retry wait_for_change with expect: {\"type\": \"elements_changed\"} " +
+                    "if element-level updates are acceptable, or call get_interface() " +
+                    "to inspect the current screen."
+            )
+        } else {
+            parts.append(
+                "Next: get_interface() to inspect the current screen, " +
+                    "then retry wait_for_change with the expected state."
+            )
+        }
+        return parts.joined(separator: "; ")
+    }
+
+    private func evaluateWaitForChange(
+        delta: AccessibilityTrace.Delta,
+        accessibilityTrace: AccessibilityTrace?,
+        afterSnapshot: [Screen.ScreenElement],
+        expectation: ActionExpectation?,
+        preWaitElements: [String: HeistElement],
+        start: CFAbsoluteTime,
+        round: Int,
+        message: String
+    ) -> ActionResult? {
+        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        builder.accessibilityTrace = accessibilityTrace
+
+        guard let expectation else {
+            builder.message = message
+            return builder.success()
+        }
+
+        let currentState = CurrentStateExpectationValidator.validate(expectation, snapshot: afterSnapshot)
+        if currentState.met {
+            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+            builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
+            return builder.success()
+        }
+
+        guard expectation.validate(
+            against: builder.success(),
+            preActionElements: preWaitElements
+        ).met else { return nil }
+
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
+        return builder.success()
+    }
+
+    private func refreshSemanticSnapshot(baseline: BeforeState? = nil) async -> BeforeState? {
+        guard refresh() != nil else { return nil }
+        if let baseline {
+            return await semanticStateAfterVisibleRefresh(baseline: baseline)
+        }
+        return captureSemanticState()
+    }
+
+    private func waitForSettledSemanticSnapshot(
+        baseline: BeforeState,
+        timeout: TimeInterval
+    ) async -> BeforeState? {
+        let timeoutMs = max(1, Int(timeout * 1000))
+        let settleSession = SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: timeoutMs
+        )
+        let settle = await settleSession.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: baseline.tripwireSignal
+        )
+        guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
+        stash.currentScreen = screen
+        return await semanticStateAfterVisibleRefresh(baseline: baseline)
+    }
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)
