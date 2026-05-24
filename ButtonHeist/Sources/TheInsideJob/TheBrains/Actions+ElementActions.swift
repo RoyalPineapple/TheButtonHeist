@@ -207,7 +207,11 @@ extension Actions {
                 message: "custom action failed: \(resolution.diagnostics); try get_interface to inspect container stableIds."
             )
         }
-        switch stash.performCustomAction(named: actionName, on: containerTarget) {
+        let liveTargetResolution = stash.resolveLiveContainerTarget(for: containerTarget)
+        guard case .resolved(let liveContainerTarget) = liveTargetResolution else {
+            return .failure(.customAction, message: "custom action failed: container object deallocated")
+        }
+        switch stash.performCustomAction(named: actionName, on: liveContainerTarget) {
         case .deallocated:
             return .failure(.customAction, message: "custom action failed: container object deallocated")
         case .noSuchAction:

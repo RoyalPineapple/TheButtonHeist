@@ -69,6 +69,22 @@ extension TheStash {
         case geometryUnavailable
     }
 
+    /// Dispatch-only container target.
+    ///
+    /// `resolvedTarget` is semantic container identity. The backing object is
+    /// acquired from the latest live interface immediately before dispatch.
+    struct LiveContainerTarget {
+        let resolvedTarget: ResolvedContainerTarget
+        let object: NSObject
+
+        var container: AccessibilityContainer { resolvedTarget.container }
+    }
+
+    enum LiveContainerTargetResolution {
+        case resolved(LiveContainerTarget)
+        case objectUnavailable
+    }
+
     func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
         guard let object = dispatchObject(for: screenElement),
               let scrollView = liveScrollView(for: screenElement),
@@ -93,6 +109,13 @@ extension TheStash {
             frame: geometry.frame,
             activationPoint: geometry.activationPoint
         ))
+    }
+
+    func resolveLiveContainerTarget(for resolvedTarget: ResolvedContainerTarget) -> LiveContainerTargetResolution {
+        guard let object = currentScreen.liveInterface.containerObject(forPath: resolvedTarget.path) else {
+            return .objectUnavailable
+        }
+        return .resolved(LiveContainerTarget(resolvedTarget: resolvedTarget, object: object))
     }
 
     func liveObject(for screenElement: ScreenElement) -> NSObject? {
