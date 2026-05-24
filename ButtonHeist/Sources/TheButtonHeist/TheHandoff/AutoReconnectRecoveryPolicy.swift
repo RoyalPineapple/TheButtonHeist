@@ -27,7 +27,7 @@ struct AutoReconnectRecoveryPolicy: Equatable {
         return delay + Double.random(in: 0...(delay * jitterRatio))
     }
 
-    func terminalFailure(targetDisplayName: String) -> TheHandoff.ConnectionError {
+    func terminalFailure(targetDisplayName: String) -> HandoffConnectionError {
         .connectionFailed(terminalFailureMessage(targetDisplayName: targetDisplayName))
     }
 

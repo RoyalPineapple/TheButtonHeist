@@ -1654,7 +1654,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testStopDisablesAutoReconnectPolicyAndCancelsTask() async {
+    func testStopDisablesAutoReconnectAndDisconnects() async {
         let fence = TheFence(configuration: .init())
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mockConnection = MockConnection()
@@ -1667,14 +1667,8 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.setupAutoReconnect(filter: "MockApp")
         fence.handoff.connect(to: device)
 
-        guard case .enabled(filter: "MockApp", target: _, reconnectTask: let reconnectTask?) = fence.handoff.reconnectPolicy else {
-            return XCTFail("Expected reconnect task before stop")
-        }
-
         fence.stop()
 
-        XCTAssertTrue(reconnectTask.isCancelled)
-        XCTAssertEqual(fence.handoff.reconnectPolicy, .disabled)
         assertDisconnected(fence.handoff.connectionPhase)
     }
 

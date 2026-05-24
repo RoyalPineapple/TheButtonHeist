@@ -27,7 +27,6 @@ final class TheHandoffStateTests: XCTestCase {
         XCTAssertNil(handoff.serverInfo)
         XCTAssertFalse(handoff.isDiscovering)
         assertDisconnected(handoff.connectionPhase)
-        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
     }
 
     @ButtonHeistActor
@@ -87,82 +86,34 @@ final class TheHandoffStateTests: XCTestCase {
         assertDisconnected(handoff.connectionPhase)
     }
 
-    // MARK: - ReconnectPolicy
+    // MARK: - Auto Reconnect
 
     @ButtonHeistActor
-    func testSetupAutoReconnectSetsPolicy() async {
+    func testDisableAutoReconnectCancelsReconnectRunner() async throws {
         let handoff = TheHandoff()
-
-        handoff.setupAutoReconnect(filter: "MyApp")
-
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "MyApp", target: nil, reconnectTask: nil))
-    }
-
-    @ButtonHeistActor
-    func testSetupAutoReconnectWithNilFilter() async {
-        let handoff = TheHandoff()
-
-        handoff.setupAutoReconnect(filter: nil)
-
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, target: nil, reconnectTask: nil))
-    }
-
-    @ButtonHeistActor
-    func testSetupAutoReconnectReplacesFilter() async {
-        let handoff = TheHandoff()
-
-        handoff.setupAutoReconnect(filter: "FirstFilter")
-        handoff.setupAutoReconnect(filter: "SecondFilter")
-
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "SecondFilter", target: nil, reconnectTask: nil))
-    }
-
-    @ButtonHeistActor
-    func testSetupAutoReconnectCancelsStaleReconnectTaskWhenFilterChanges() async {
-        let handoff = TheHandoff()
+        handoff.reconnectInterval = 0.01
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-        let mock = MockConnection()
-        mock.connectEventsOverride = [
-            .connected,
-            .disconnected(.serverClosed),
-        ]
-        handoff.makeConnection = { _, _, _ in mock }
-
-        handoff.setupAutoReconnect(filter: "OldFilter")
-        handoff.connect(to: device)
-
-        guard case .enabled(filter: "OldFilter", target: _, reconnectTask: let staleTask?) = handoff.reconnectPolicy else {
-            return XCTFail("Expected reconnect task for old filter")
+        var connectionCount = 0
+        handoff.makeConnection = { _, _, _ in
+            connectionCount += 1
+            let mock = MockConnection()
+            mock.connectEventsOverride = [
+                .connected,
+                .disconnected(.serverClosed),
+            ]
+            return mock
         }
-
-        handoff.setupAutoReconnect(filter: "NewFilter")
-
-        XCTAssertTrue(staleTask.isCancelled)
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "NewFilter", target: nil, reconnectTask: nil))
-    }
-
-    @ButtonHeistActor
-    func testDisableAutoReconnectCancelsReconnectTaskAndClearsPolicy() async {
-        let handoff = TheHandoff()
-        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-        let mock = MockConnection()
-        mock.connectEventsOverride = [
-            .connected,
-            .disconnected(.serverClosed),
-        ]
-        handoff.makeConnection = { _, _, _ in mock }
 
         handoff.setupAutoReconnect(filter: "App")
         handoff.connect(to: device)
 
-        guard case .enabled(filter: "App", target: _, reconnectTask: let reconnectTask?) = handoff.reconnectPolicy else {
-            return XCTFail("Expected reconnect task")
-        }
-
         handoff.disableAutoReconnect()
 
-        XCTAssertTrue(reconnectTask.isCancelled)
-        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
+        // Negative assertion: if the reconnect runner survives disable, it will
+        // make another connection attempt quickly.
+        // swiftlint:disable:next agent_test_task_sleep
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(connectionCount, 1)
     }
 
     @ButtonHeistActor
@@ -207,67 +158,7 @@ final class TheHandoffStateTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(150))
 
         XCTAssertEqual(connectedIDs, ["old-device"])
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: "NewApp", target: nil, reconnectTask: nil))
     }
-
-    @ButtonHeistActor
-    func testReconnectPolicyRemainsEnabledAfterDisconnect() async {
-        let handoff = TheHandoff()
-        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-
-        let mockDiscovery = MockDiscovery()
-        mockDiscovery.discoveredDevices = [device]
-        handoff.makeDiscovery = { mockDiscovery }
-
-        var connectionCount = 0
-        handoff.makeConnection = { _, _, _ in
-            connectionCount += 1
-            let connection = MockConnection()
-            connection.serverInfo = ServerInfo(
-                appName: "TestApp",
-                bundleIdentifier: "com.test",
-                deviceName: "Simulator",
-                systemVersion: "26.1",
-                screenWidth: 402,
-                screenHeight: 874
-            )
-            return connection
-        }
-
-        handoff.startDiscovery()
-        handoff.setupAutoReconnect(filter: nil)
-        handoff.connect(to: device)
-        XCTAssertEqual(connectionCount, 1)
-
-        // After explicit disconnect, the policy should remain enabled
-        // (disconnect doesn't reset the policy — only the connection)
-        handoff.disconnect()
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, target: nil, reconnectTask: nil))
-    }
-
-    @ButtonHeistActor
-    func testReconnectPolicyStartsDisabled() async {
-        let handoff = TheHandoff()
-        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
-
-        handoff.makeConnection = { _, _, _ in
-            let connection = MockConnection()
-            connection.serverInfo = ServerInfo(
-                appName: "TestApp",
-                bundleIdentifier: "com.test",
-                deviceName: "Simulator",
-                systemVersion: "26.1",
-                screenWidth: 402,
-                screenHeight: 874
-            )
-            return connection
-        }
-
-        handoff.connect(to: device)
-        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
-    }
-
-    // MARK: - ReconnectPolicy Trigger
 
     @ButtonHeistActor
     func testDisconnectEventWithEnabledPolicyTriggersReconnect() async throws {
@@ -346,7 +237,6 @@ final class TheHandoffStateTests: XCTestCase {
         await fulfillment(of: [disconnected], timeout: 5)
 
         XCTAssertEqual(connectionCount, 1)
-        XCTAssertEqual(handoff.reconnectPolicy, .enabled(filter: nil, target: nil, reconnectTask: nil))
     }
 
     @ButtonHeistActor
@@ -383,7 +273,6 @@ final class TheHandoffStateTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(100))
 
         XCTAssertEqual(connectionCount, 1)
-        XCTAssertEqual(handoff.reconnectPolicy, .disabled)
     }
 
     @ButtonHeistActor

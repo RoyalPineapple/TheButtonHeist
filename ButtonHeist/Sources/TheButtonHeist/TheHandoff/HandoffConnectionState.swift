@@ -140,23 +140,6 @@ struct HandoffReconnectTarget: Equatable {
     }
 }
 
-/// Whether auto-reconnect fires on disconnect.
-enum HandoffReconnectPolicy: Equatable {
-    case disabled
-    case enabled(filter: String?, target: HandoffReconnectTarget?, reconnectTask: Task<Void, Never>?)
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
-        case (.disabled, .disabled):
-            return true
-        case (.enabled(let lhsFilter, let lhsTarget, _), .enabled(let rhsFilter, let rhsTarget, _)):
-            return lhsFilter == rhsFilter && lhsTarget == rhsTarget
-        default:
-            return false
-        }
-    }
-}
-
 private extension DiscoveredDevice {
     var reconnectsWithoutDiscovery: Bool {
         if case .hostPort = endpoint {
