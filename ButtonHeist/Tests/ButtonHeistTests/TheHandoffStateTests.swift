@@ -585,6 +585,18 @@ final class TheHandoffStateTests: XCTestCase {
         )
     }
 
+    func testAutoReconnectRecoveryPolicyBacksOffDiscoveryMissesAndNamesTerminalFailure() {
+        let policy = AutoReconnectRecoveryPolicy(maxAttempts: 3, baseInterval: 2)
+
+        XCTAssertEqual(policy.delay(afterConsecutiveDiscoveryMisses: 0), 2)
+        XCTAssertEqual(policy.delay(afterConsecutiveDiscoveryMisses: 1), 4)
+        XCTAssertEqual(policy.delay(afterConsecutiveDiscoveryMisses: 10), 30)
+        XCTAssertEqual(
+            policy.terminalFailureMessage(targetDisplayName: "Checkout#old"),
+            "Auto-reconnect gave up after 3 attempts to Checkout#old. Retry the connection or choose a new target."
+        )
+    }
+
     // MARK: - Discovery (existing)
 
     @ButtonHeistActor

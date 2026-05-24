@@ -418,6 +418,9 @@ final class TheHandoff {
     var reconnectMaxAttempts = 60
     /// Per-attempt connection timeout used by the reconnect runner.
     var reconnectAttemptTimeout: TimeInterval = 10
+    private var autoReconnectRecoveryPolicy: AutoReconnectRecoveryPolicy {
+        AutoReconnectRecoveryPolicy(maxAttempts: reconnectMaxAttempts, baseInterval: reconnectInterval)
+    }
     private static let keepaliveInterval: Duration = .seconds(5)
     private static let maxMissedPongs = 6
 
@@ -955,13 +958,13 @@ final class TheHandoff {
     private func runAutoReconnect(target: ReconnectTarget) async {
         onStatus?("Device disconnected — watching for reconnection...")
         var consecutiveMisses = 0
-        for _ in 0..<reconnectMaxAttempts {
+        for _ in autoReconnectRecoveryPolicy.attempts {
             guard !Task.isCancelled else { return }
             guard isAutoReconnectCurrent(target: target) else { return }
-            // Backoff grows while no device is visible; resets after each connection attempt
-            let delay = min(reconnectInterval * pow(2.0, Double(min(consecutiveMisses, 5))), 30.0)
-            let jitter = Double.random(in: 0...(delay * 0.2))
-            guard await Task.cancellableSleep(for: .seconds(delay + jitter)) else { return }
+            let sleepDuration = autoReconnectRecoveryPolicy.sleepDuration(
+                afterConsecutiveDiscoveryMisses: consecutiveMisses
+            )
+            guard await Task.cancellableSleep(for: .seconds(sleepDuration)) else { return }
             guard !Task.isCancelled else { return }
             guard isAutoReconnectCurrent(target: target) else { return }
             if let device = target.resolve(from: discoveredDevices) {
@@ -989,9 +992,7 @@ final class TheHandoff {
                 consecutiveMisses += 1
             }
         }
-        let failure = ConnectionError.connectionFailed(
-            "Auto-reconnect gave up after \(reconnectMaxAttempts) attempts to \(target.displayName). Retry the connection or choose a new target."
-        )
+        let failure = autoReconnectRecoveryPolicy.terminalFailure(targetDisplayName: target.displayName)
         onStatus?(failure.errorDescription ?? "Auto-reconnect gave up")
         guard isAutoReconnectCurrent(target: target) else { return }
         reconnectPolicy = .disabled
