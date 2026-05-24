@@ -28,7 +28,7 @@ extension Actions {
         requireInteractive: Bool = true,
         deallocatedBoundary: String = "element action",
         preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)? = nil,
-        action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult?
+        action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
         let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
         let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
@@ -43,7 +43,7 @@ extension Actions {
             preflight: preflight
         )) {
         case .success(let context):
-            return await action(context) ?? .failure(method, message: "\(method.rawValue) failed")
+            return await action(context)
         case .failure(let result):
             return result
         }

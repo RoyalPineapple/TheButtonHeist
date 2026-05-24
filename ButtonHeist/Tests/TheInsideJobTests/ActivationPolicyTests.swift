@@ -173,7 +173,31 @@ final class ActivationPolicyTests: XCTestCase {
         ])
     }
 
-    func testLiveTargetRecoveryDiagnosticKeepsRecoveryObservation() {
+    func testLiveTargetRecoveryDiagnosticBuildsTypedRefreshReresolveFailure() {
+        let diagnostic = LiveActionTargetRecoveryDiagnostic.refreshReresolveFailed(
+            initialFailure: .failure(
+                .elementDeallocated,
+                message: "element action failed: observed liveObject=deallocated"
+            ),
+            recoveryObservation: "ensure_on_screen failed: known target offscreen",
+            method: .customAction
+        )
+
+        XCTAssertEqual(
+            diagnostic.contractFailed,
+            "live action target must be reachable after refresh"
+        )
+        XCTAssertEqual(
+            diagnostic.knownState,
+            "refresh/re-resolve failed; observed ensure_on_screen failed: known target offscreen"
+        )
+        XCTAssertEqual(
+            diagnostic.nextValidCommand,
+            "get_interface, then retry customAction against the refreshed element"
+        )
+    }
+
+    func testLiveTargetRecoveryDiagnosticResultKeepsRecoveryObservation() {
         let result = LiveActionTargetRecoveryDiagnostic.recoveryFailed(
             initialFailure: .failure(
                 .elementDeallocated,
@@ -187,10 +211,10 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .elementDeallocated)
         XCTAssertDiagnostic(result.message, contains: [
             "element action failed: observed liveObject=deallocated",
-            "contract: live action target must be reachable after refresh",
+            "contractFailed: live action target must be reachable after refresh",
             "knownState: refresh/re-resolve failed",
             "ensure_on_screen failed: known target offscreen",
-            "tryNext: run get_interface, then retry customAction against the refreshed element",
+            "nextValidCommand: get_interface, then retry customAction against the refreshed element",
         ])
     }
 
@@ -205,7 +229,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed",
             "knownState: refresh/re-resolve failed; observed unknown",
-            "tryNext: run get_interface, then retry activate against the refreshed element",
+            "nextValidCommand: get_interface, then retry activate against the refreshed element",
         ])
     }
 

@@ -109,28 +109,21 @@ struct LiveActionTargetRecoveryPolicy {
         case .resolved(let resolvedLiveTarget):
             liveTarget = resolvedLiveTarget
         case .objectUnavailable:
-            guard let failure = liveActionTargetFailure(
-                for: liveTargetResolution,
+            let failure = objectUnavailableFailure(
                 method: request.method,
                 resolved: resolved,
                 deallocatedBoundary: request.deallocatedBoundary
-            ) else {
-                return .failure(.failure(request.method, message: "\(request.method.rawValue) failed"))
-            }
+            )
             let annotatedFailure = annotateFailure(failure, with: request.normalizedTarget)
             guard allowingRefresh else {
                 return .failure(annotatedFailure)
             }
             return await resolveAfterRefresh(request, target: target, initialFailure: annotatedFailure)
         case .geometryUnavailable:
-            guard let failure = liveActionTargetFailure(
-                for: liveTargetResolution,
+            let failure = geometryUnavailableFailure(
                 method: request.method,
-                resolved: resolved,
-                deallocatedBoundary: request.deallocatedBoundary
-            ) else {
-                return .failure(.failure(request.method, message: "\(request.method.rawValue) failed"))
-            }
+                resolved: resolved
+            )
             return .failure(annotateFailure(failure, with: request.normalizedTarget))
         }
         if request.requireInteractive {
@@ -158,34 +151,34 @@ struct LiveActionTargetRecoveryPolicy {
     }
 
     @MainActor
-    private func liveActionTargetFailure(
-        for resolution: TheStash.LiveActionTargetResolution,
+    private func objectUnavailableFailure(
         method: ActionMethod,
         resolved: TheStash.ResolvedTarget,
         deallocatedBoundary: String
-    ) -> TheSafecracker.InteractionResult? {
-        switch resolution {
-        case .resolved:
-            return nil
-        case .objectUnavailable:
-            return .failure(
-                .elementDeallocated,
-                message: ActionCapabilityDiagnostic.elementDeallocated(
-                    boundary: deallocatedBoundary,
-                    element: resolved.screenElement,
-                    isInflated: stash.visibleIds.contains(resolved.screenElement.heistId)
-                )
+    ) -> TheSafecracker.InteractionResult {
+        .failure(
+            .elementDeallocated,
+            message: ActionCapabilityDiagnostic.elementDeallocated(
+                boundary: deallocatedBoundary,
+                element: resolved.screenElement,
+                isInflated: stash.visibleIds.contains(resolved.screenElement.heistId)
             )
-        case .geometryUnavailable:
-            return .failure(
-                method,
-                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: method,
-                    element: resolved.screenElement,
-                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
-                )
+        )
+    }
+
+    @MainActor
+    private func geometryUnavailableFailure(
+        method: ActionMethod,
+        resolved: TheStash.ResolvedTarget
+    ) -> TheSafecracker.InteractionResult {
+        .failure(
+            method,
+            message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                method: method,
+                element: resolved.screenElement,
+                isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
             )
-        }
+        )
     }
 
     @MainActor
@@ -234,12 +227,26 @@ struct LiveActionTargetRecoveryPolicy {
     }
 }
 
-enum LiveActionTargetRecoveryDiagnostic {
-    static func recoveryFailed(
+struct LiveActionTargetRecoveryDiagnostic: Equatable {
+    let initialFailureMessage: String
+    let contractFailed: String
+    let knownState: String
+    let nextValidCommand: String
+
+    var message: String {
+        [
+            initialFailureMessage,
+            "- contractFailed: \(contractFailed)",
+            "- knownState: \(knownState)",
+            "- nextValidCommand: \(nextValidCommand)",
+        ].joined(separator: "\n")
+    }
+
+    static func refreshReresolveFailed(
         initialFailure: TheSafecracker.InteractionResult,
         recoveryObservation: String?,
         method: ActionMethod
-    ) -> TheSafecracker.InteractionResult {
+    ) -> LiveActionTargetRecoveryDiagnostic {
         let initialMessage = initialFailure.message ?? "\(method.rawValue) failed"
         let observed: String
         if let recoveryObservation, !recoveryObservation.isEmpty {
@@ -247,15 +254,27 @@ enum LiveActionTargetRecoveryDiagnostic {
         } else {
             observed = "unknown"
         }
-        let message = [
-            initialMessage,
-            "- contract: live action target must be reachable after refresh",
-            "- knownState: refresh/re-resolve failed; observed \(observed)",
-            "- tryNext: run get_interface, then retry \(method.rawValue) against the refreshed element",
-        ].joined(separator: "\n")
+        return LiveActionTargetRecoveryDiagnostic(
+            initialFailureMessage: initialMessage,
+            contractFailed: "live action target must be reachable after refresh",
+            knownState: "refresh/re-resolve failed; observed \(observed)",
+            nextValidCommand: "get_interface, then retry \(method.rawValue) against the refreshed element"
+        )
+    }
+
+    static func recoveryFailed(
+        initialFailure: TheSafecracker.InteractionResult,
+        recoveryObservation: String?,
+        method: ActionMethod
+    ) -> TheSafecracker.InteractionResult {
+        let diagnostic = refreshReresolveFailed(
+            initialFailure: initialFailure,
+            recoveryObservation: recoveryObservation,
+            method: method
+        )
         return .failure(
             initialFailure.method,
-            message: message,
+            message: diagnostic.message,
             payload: initialFailure.payload,
             failureKind: initialFailure.failureKind
         )
