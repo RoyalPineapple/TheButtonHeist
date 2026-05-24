@@ -143,7 +143,6 @@ enum SocketClientAuthentication: Equatable, Sendable {
 actor SimpleSocketServer {
     typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
-    private static let maxBufferSize = 10_000_000 // 10 MB
     private static let maxConnections = 5
     static let maxMessagesPerSecond = 30
     private static let errorFlushGracePeriod: Duration = .milliseconds(100)
@@ -707,10 +706,10 @@ actor SimpleSocketServer {
     }
 
     private func startReceiving(clientId: Int, connection: NWConnection) {
-        receiveNextChunk(clientId: clientId, connection: connection, buffer: Data())
+        receiveNextChunk(clientId: clientId, connection: connection, framer: SocketReceiveFramer())
     }
 
-    private func receiveNextChunk(clientId: Int, connection: NWConnection, buffer: Data) {
+    private func receiveNextChunk(clientId: Int, connection: NWConnection, framer: SocketReceiveFramer) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, isComplete, error in
             guard let self else { return }
             self.spawnTrackedTask { server in
@@ -720,7 +719,7 @@ actor SimpleSocketServer {
                     content: content,
                     isComplete: isComplete,
                     error: error,
-                    buffer: buffer
+                    framer: framer
                 )
             }
         }
@@ -733,7 +732,7 @@ actor SimpleSocketServer {
         content: Data?,
         isComplete: Bool,
         error: NWError?,
-        buffer: Data
+        framer: SocketReceiveFramer
     ) {
         if let error {
             logger.error("Receive error from client \(clientId): \(error)")
@@ -741,12 +740,11 @@ actor SimpleSocketServer {
             return
         }
 
-        var messageBuffer = buffer
-        if let content {
-            messageBuffer.append(content)
-        }
-
-        if messageBuffer.count > Self.maxBufferSize {
+        var receiveFramer = framer
+        let messageFrames: [Data]
+        do {
+            messageFrames = try receiveFramer.append(content)
+        } catch {
             logger.error("Client \(clientId) exceeded max buffer size, disconnecting")
             rejectClientWithServerError(
                 clientId,
@@ -756,40 +754,29 @@ actor SimpleSocketServer {
             return
         }
 
-        // Process newline-delimited messages
-        while let newlineIndex = messageBuffer.firstIndex(of: 0x0A) {
-            let messageData = Data(messageBuffer.prefix(upTo: newlineIndex))
-            messageBuffer = Data(messageBuffer.suffix(from: messageBuffer.index(after: newlineIndex)))
-
-            if !messageData.isEmpty {
-                if isAuthenticated(clientId) {
-                    if isRateLimited(clientId) {
-                        logger.warning("Client \(clientId) rate limited, dropping message")
-                        notifyRateLimitIfNeeded(clientId)
-                    } else {
-                        callbacks.onDataReceived?(clientId, messageData) { [weak self] response in
-                            guard let self else { return }
-                            self.spawnTrackedTask { server in await server.send(response, to: clientId) }
-                        }
-                    }
+        for messageData in messageFrames {
+            let authenticated = isAuthenticated(clientId)
+            if isRateLimited(clientId) {
+                if authenticated {
+                    logger.warning("Client \(clientId) rate limited, dropping message")
                 } else {
-                    if isRateLimited(clientId) {
-                        logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
-                        notifyRateLimitIfNeeded(clientId)
-                    } else {
-                        callbacks.onUnauthenticatedData?(clientId, messageData) { [weak self] response in
-                            guard let self else { return }
-                            self.spawnTrackedTask { server in await server.send(response, to: clientId) }
-                        }
-                    }
+                    logger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
                 }
+                notifyRateLimitIfNeeded(clientId)
+                continue
+            }
+
+            let dataHandler = authenticated ? callbacks.onDataReceived : callbacks.onUnauthenticatedData
+            dataHandler?(clientId, messageData) { [weak self] response in
+                guard let self else { return }
+                self.spawnTrackedTask { server in await server.send(response, to: clientId) }
             }
         }
 
         if isComplete {
             removeClient(clientId)
         } else {
-            receiveNextChunk(clientId: clientId, connection: connection, buffer: messageBuffer)
+            receiveNextChunk(clientId: clientId, connection: connection, framer: receiveFramer)
         }
     }
 

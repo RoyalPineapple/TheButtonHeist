@@ -114,7 +114,7 @@ flowchart LR
 if fileSize > 7_000_000  // 7MB raw = ~9.3MB base64, under 10MB buffer limit
 ```
 - The 7MB raw → ~9.3MB base64 math is correct (base64 expansion is ~1.33x)
-- But this constant is not derived from `SimpleSocketServer.maxBufferSize` (10_000_000)
+- But this constant is not derived from `SocketReceiveFramer.defaultMaxBufferedBytes` (10_000_000)
 - If someone changes the buffer limit, this constant won't auto-adjust
 - The relationship is only documented in a code comment
 
