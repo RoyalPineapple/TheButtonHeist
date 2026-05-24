@@ -4,9 +4,11 @@ import Foundation
 
 typealias CLIRequestParameters = [FenceParameterKey: HeistValue]
 
-protocol CLICommandContract {
-    static var fenceCommand: TheFence.Command { get }
-}
+/// Marker for CLI commands backed by the Fence command catalog.
+///
+/// Command identity is intentionally not a protocol requirement: concrete CLI
+/// command types should not own or override Fence command identity.
+protocol CLICommandContract {}
 
 protocol GestureCLICommandContract: CLICommandContract {}
 
