@@ -2313,11 +2313,11 @@ final class TheFenceHandlerTests: XCTestCase {
     func testNormalizeToolCallParsesExpectationPayloadAtCatalogEdge() throws {
         let result = FenceOperationCatalog.normalizeToolCall(
             name: "activate",
-            arguments: [
-                "identifier": "submit",
-                "expect": ["type": "screen_changed"],
-                "timeout": 0.25,
-            ] as [String: Any]
+            arguments: TheFence.CommandArgumentEnvelope(values: [
+                "identifier": .string("submit"),
+                "expect": .object(["type": .string("screen_changed")]),
+                "timeout": .double(0.25),
+            ])
         )
 
         guard case .success(let operation) = result else {
@@ -2336,7 +2336,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         let result = FenceOperationCatalog.normalizeToolCall(
             name: "wait_for_change",
-            arguments: ["expect": ["type": "elements_changed"]] as [String: Any]
+            arguments: TheFence.CommandArgumentEnvelope(values: [
+                "expect": .object(["type": .string("elements_changed")]),
+            ])
         )
 
         guard case .success(let operation) = result else {
@@ -2355,7 +2357,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testNormalizeToolCallReportsExpectationParseFailure() {
         let result = FenceOperationCatalog.normalizeToolCall(
             name: "activate",
-            arguments: ["expect": "screen_changed"]
+            arguments: TheFence.CommandArgumentEnvelope(values: ["expect": .string("screen_changed")])
         )
 
         guard case .failure(let error) = result else {
@@ -2367,7 +2369,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testNormalizeToolCallLeavesUnsupportedExpectationForRequestValidation() throws {
         let result = FenceOperationCatalog.normalizeToolCall(
             name: "get_screen",
-            arguments: ["expect": "screen_changed"]
+            arguments: TheFence.CommandArgumentEnvelope(values: ["expect": .string("screen_changed")])
         )
 
         guard case .success(let operation) = result else {

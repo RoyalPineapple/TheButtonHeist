@@ -4,10 +4,11 @@ import Testing
 import ButtonHeist
 
 struct ToolRoutingTests {
+    private typealias Argument = TheFence.CommandArgumentValue
 
     @Test("direct tools route to same command")
     func directToolRoutesToSameCommand() throws {
-        let operation = try routed(TheFence.Command.startHeist.rawValue, ["identifier": "demo"])
+        let operation = try routed(TheFence.Command.startHeist.rawValue, ["identifier": .string("demo")])
 
         #expect(operation.command == .startHeist)
         #expect(operation.stringArgument("identifier") == "demo")
@@ -15,7 +16,10 @@ struct ToolRoutingTests {
 
     @Test("gesture type routes to command and removes type")
     func gestureTypeRoutesToCommand() throws {
-        let operation = try routed(TheFence.Command.gestureMCPToolName, ["type": TheFence.Command.swipe.rawValue, "direction": "left"])
+        let operation = try routed(
+            TheFence.Command.gestureMCPToolName,
+            ["type": .string(TheFence.Command.swipe.rawValue), "direction": .string("left")]
+        )
 
         #expect(operation.command == .swipe)
         #expect(operation.stringArgument("type") == nil)
@@ -24,7 +28,10 @@ struct ToolRoutingTests {
 
     @Test("gesture requires type")
     func gestureRequiresType() {
-        let result = ButtonHeistMCPServer.routeToolRequest(name: TheFence.Command.gestureMCPToolName, arguments: [:])
+        let result = ButtonHeistMCPServer.routeToolRequest(
+            name: TheFence.Command.gestureMCPToolName,
+            arguments: envelope()
+        )
 
         guard case .failure(let error) = result else {
             Issue.record("Expected routing failure")
@@ -48,9 +55,9 @@ struct ToolRoutingTests {
         ]
 
         for routeCase in cases {
-            var arguments: [String: Any] = ["direction": "down"]
+            var arguments: [String: Argument] = ["direction": .string("down")]
             if let mode = routeCase.mode {
-                arguments["mode"] = mode
+                arguments["mode"] = .string(mode)
             }
             let operation = try routed(TheFence.Command.scroll.rawValue, arguments)
 
@@ -64,7 +71,7 @@ struct ToolRoutingTests {
     func scrollRejectsUnknownMode() {
         let result = ButtonHeistMCPServer.routeToolRequest(
             name: TheFence.Command.scroll.rawValue,
-            arguments: ["mode": "sideways"]
+            arguments: envelope(["mode": .string("sideways")])
         )
 
         guard case .failure(let error) = result else {
@@ -81,7 +88,7 @@ struct ToolRoutingTests {
 
     @Test("edit_action dismiss routes to dismiss_keyboard")
     func editActionDismissRoutesToDismissKeyboard() throws {
-        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": "dismiss"])
+        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": .string("dismiss")])
 
         #expect(operation.command == .dismissKeyboard)
         #expect(operation.stringArgument("action") == nil)
@@ -89,7 +96,7 @@ struct ToolRoutingTests {
 
     @Test("edit_action keeps standard edit actions")
     func editActionKeepsStandardEditActions() throws {
-        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": "copy"])
+        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": .string("copy")])
 
         #expect(operation.command == .editAction)
         #expect(operation.stringArgument("action") == "copy")
@@ -98,9 +105,9 @@ struct ToolRoutingTests {
     @Test("run_batch still accepts canonical Fence command shapes")
     func runBatchAcceptsCanonicalFenceCommandShapes() throws {
         let steps = try normalizeBatchSteps([
-            ["command": TheFence.Command.swipe.rawValue, "direction": "right"],
-            ["command": TheFence.Command.scrollToVisible.rawValue, "heistId": "element-1"],
-            ["command": TheFence.Command.dismissKeyboard.rawValue],
+            ["command": .string(TheFence.Command.swipe.rawValue), "direction": .string("right")],
+            ["command": .string(TheFence.Command.scrollToVisible.rawValue), "heistId": .string("element-1")],
+            ["command": .string(TheFence.Command.dismissKeyboard.rawValue)],
         ])
 
         #expect(steps[0].command == .swipe)
@@ -120,28 +127,28 @@ struct ToolRoutingTests {
             .first(where: { editActionSelector.command(for: $0) == .dismissKeyboard })!
         let dismissCommand = editActionSelector.command(for: dismissSelectorValue)!
 
-        let cases: [(step: [String: Any], message: String)] = [
+        let cases: [(step: [String: Argument], message: String)] = [
             (
                 [
-                    "command": TheFence.Command.gestureMCPToolName,
-                    "type": TheFence.Command.swipe.rawValue,
-                    "direction": "left",
+                    "command": .string(TheFence.Command.gestureMCPToolName),
+                    "type": .string(TheFence.Command.swipe.rawValue),
+                    "direction": .string("left"),
                 ],
                 "run_batch step command must be a canonical TheFence.Command; " +
                     "unknown command \"\(TheFence.Command.gestureMCPToolName)\""
             ),
             (
                 [
-                    "command": TheFence.Command.scroll.rawValue,
-                    "mode": ScrollMode.search.rawValue,
-                    "label": "Done",
+                    "command": .string(TheFence.Command.scroll.rawValue),
+                    "mode": .string(ScrollMode.search.rawValue),
+                    "label": .string("Done"),
                 ],
                 "run_batch step \"\(TheFence.Command.scroll.rawValue)\" uses the MCP " +
                     "\(scrollSelector.parameter.key) selector; use canonical Fence commands " +
                     "\(rawCommandList(scrollContract.commands))."
             ),
             (
-                ["command": TheFence.Command.editAction.rawValue, "action": dismissSelectorValue],
+                ["command": .string(TheFence.Command.editAction.rawValue), "action": .string(dismissSelectorValue)],
                 "run_batch step \"\(TheFence.Command.editAction.rawValue)\" uses the MCP " +
                     "\(dismissSelectorValue) selector; use canonical Fence command \(dismissCommand.rawValue)."
             ),
@@ -160,7 +167,7 @@ struct ToolRoutingTests {
     @Test("run_batch rejects non-batch-executable commands")
     func runBatchRejectsNonBatchExecutableCommands() {
         for command in [TheFence.Command.help, .status, .quit, .exit, .runBatch] {
-            let result = normalizeBatchStepResult(["command": command.rawValue])
+            let result = normalizeBatchStepResult(["command": .string(command.rawValue)])
             guard case .failure(let error) = result else {
                 Issue.record("Expected routing failure for \(command.rawValue)")
                 continue
@@ -205,7 +212,10 @@ struct ToolRoutingTests {
         ]
 
         for routeCase in cases {
-            let result = ButtonHeistMCPServer.routeToolRequest(name: routeCase.toolName, arguments: [:])
+            let result = ButtonHeistMCPServer.routeToolRequest(
+                name: routeCase.toolName,
+                arguments: envelope()
+            )
             guard case .failure(let error) = result else {
                 Issue.record("Expected top-level routing failure for \(routeCase.toolName)")
                 continue
@@ -217,11 +227,15 @@ struct ToolRoutingTests {
     @Test("raw grouped commands stay accepted in batch")
     func rawGroupedCommandsStayAcceptedInBatch() throws {
         let steps = try normalizeBatchSteps([
-            ["command": TheFence.Command.swipe.rawValue, "direction": "up"],
-            ["command": TheFence.Command.scrollToVisible.rawValue, "heistId": "element-1"],
-            ["command": TheFence.Command.elementSearch.rawValue, "label": "Done"],
-            ["command": TheFence.Command.scrollToEdge.rawValue, "heistId": "scroll-view", "edge": "bottom"],
-            ["command": TheFence.Command.dismissKeyboard.rawValue],
+            ["command": .string(TheFence.Command.swipe.rawValue), "direction": .string("up")],
+            ["command": .string(TheFence.Command.scrollToVisible.rawValue), "heistId": .string("element-1")],
+            ["command": .string(TheFence.Command.elementSearch.rawValue), "label": .string("Done")],
+            [
+                "command": .string(TheFence.Command.scrollToEdge.rawValue),
+                "heistId": .string("scroll-view"),
+                "edge": .string("bottom"),
+            ],
+            ["command": .string(TheFence.Command.dismissKeyboard.rawValue)],
         ])
 
         #expect(steps[0].command == .swipe)
@@ -250,7 +264,7 @@ struct ToolRoutingTests {
         for contract in TheFence.Command.mcpToolContracts {
             guard let selector = contract.selector else { continue }
             for selectorValue in selector.parameter.enumValues ?? [] {
-                let operation = try routed(contract.name, [selector.parameter.key: selectorValue])
+                let operation = try routed(contract.name, [selector.parameter.key: .string(selectorValue)])
                 let expectedCommand = try #require(selector.command(for: selectorValue))
 
                 #expect(operation.command == expectedCommand)
@@ -267,8 +281,8 @@ struct ToolRoutingTests {
     func serverToolRoutingDelegatesToSharedFenceCatalog() throws {
         for tool in ToolDefinitions.all {
             let arguments = minimalArguments(for: tool.name)
-            let serverResult = ButtonHeistMCPServer.routeToolRequest(name: tool.name, arguments: arguments)
-            let catalogResult = FenceOperationCatalog.normalizeToolCall(name: tool.name, arguments: arguments)
+            let serverResult = ButtonHeistMCPServer.routeToolRequest(name: tool.name, arguments: envelope(arguments))
+            let catalogResult = FenceOperationCatalog.normalizeToolCall(name: tool.name, arguments: envelope(arguments))
 
             switch (serverResult, catalogResult) {
             case (.success(let serverOperation), .success(let catalogOperation)):
@@ -285,7 +299,7 @@ struct ToolRoutingTests {
 
     @Test("unknown tool returns routing error")
     func unknownToolReturnsRoutingError() {
-        let result = ButtonHeistMCPServer.routeToolRequest(name: "not_a_tool", arguments: [:])
+        let result = ButtonHeistMCPServer.routeToolRequest(name: "not_a_tool", arguments: envelope())
 
         guard case .failure(let error) = result else {
             Issue.record("Expected routing failure")
@@ -296,9 +310,9 @@ struct ToolRoutingTests {
 
     private func routed(
         _ name: String,
-        _ arguments: [String: Any]
+        _ arguments: [String: Argument]
     ) throws -> NormalizedOperation {
-        switch ButtonHeistMCPServer.routeToolRequest(name: name, arguments: arguments) {
+        switch ButtonHeistMCPServer.routeToolRequest(name: name, arguments: envelope(arguments)) {
         case .success(let operation):
             return operation
         case .failure(let error):
@@ -306,11 +320,11 @@ struct ToolRoutingTests {
         }
     }
 
-    private func normalizeBatchSteps(_ steps: [[String: Any]]) throws -> [NormalizedOperation] {
+    private func normalizeBatchSteps(_ steps: [[String: Argument]]) throws -> [NormalizedOperation] {
         try steps.map(normalizedBatchStep)
     }
 
-    private func normalizedBatchStep(_ step: [String: Any]) throws -> NormalizedOperation {
+    private func normalizedBatchStep(_ step: [String: Argument]) throws -> NormalizedOperation {
         switch normalizeBatchStepResult(step) {
         case .success(let operation):
             return operation
@@ -320,22 +334,26 @@ struct ToolRoutingTests {
     }
 
     private func normalizeBatchStepResult(
-        _ step: [String: Any]
+        _ step: [String: Argument]
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        FenceOperationCatalog.normalizeBatchStep(step)
+        FenceOperationCatalog.normalizeBatchStep(TheFence.CommandArgumentObject(values: step, fieldPrefix: nil))
     }
 
-    private func minimalArguments(for toolName: String) -> [String: Any] {
+    private func minimalArguments(for toolName: String) -> [String: Argument] {
         switch toolName {
         case TheFence.Command.gestureMCPToolName:
-            return ["type": TheFence.Command.swipe.rawValue]
+            return ["type": .string(TheFence.Command.swipe.rawValue)]
         case TheFence.Command.editAction.rawValue:
-            return ["action": "copy"]
+            return ["action": .string("copy")]
         case TheFence.Command.runBatch.rawValue:
-            return ["steps": [["command": TheFence.Command.getSessionState.rawValue]]]
+            return ["steps": .array([.object(["command": .string(TheFence.Command.getSessionState.rawValue)])])]
         default:
             return [:]
         }
+    }
+
+    private func envelope(_ arguments: [String: Argument] = [:]) -> TheFence.CommandArgumentEnvelope {
+        TheFence.CommandArgumentEnvelope(values: arguments)
     }
 
     /// Mirrors the formatting logic in `FenceOperationCatalog.rawCommandList` for test assertions.

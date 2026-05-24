@@ -619,6 +619,14 @@ struct ToolSyncTests {
             literalMirrors.isEmpty,
             "main.swift should not hard-code catalog command or parameter literals: \(literalMirrors.sorted())"
         )
+        #expect(
+            !source.contains("[String: Any]"),
+            "main.swift should decode MCP arguments into CommandArgumentValue, not a raw dictionary"
+        )
+        #expect(
+            !source.contains("anyValue"),
+            "main.swift should not route through an untyped Any conversion helper"
+        )
     }
 
     @Test("MCP server instructions render descriptor-backed tool names")

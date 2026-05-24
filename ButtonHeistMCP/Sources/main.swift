@@ -96,7 +96,7 @@ struct ButtonHeistMCPServer {
     ) async -> CallTool.Result {
         defer { idleMonitor.resetTimer() }
         do {
-            let arguments = decodeArguments(params.arguments)
+            let arguments = try decodeArguments(params.arguments)
             let routed = routeToolRequest(name: params.name, arguments: arguments)
             let operation: NormalizedOperation
             switch routed {
@@ -117,37 +117,49 @@ struct ButtonHeistMCPServer {
 
     static func routeToolRequest(
         name: String,
-        arguments: [String: Any]
+        arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         FenceOperationCatalog.normalizeToolCall(name: name, arguments: arguments)
     }
 
-    private static func decodeArguments(_ arguments: [String: Value]?) -> [String: Any] {
-        arguments?.mapValues(anyValue(from:)) ?? [:]
+    private static func decodeArguments(_ arguments: [String: Value]?) throws -> TheFence.CommandArgumentEnvelope {
+        var values: [String: TheFence.CommandArgumentValue] = [:]
+        for (key, value) in arguments ?? [:] {
+            values[key] = try commandArgumentValue(from: value, field: key)
+        }
+        return TheFence.CommandArgumentEnvelope(values: values)
     }
 
-    private static func anyValue(from value: Value) -> Any {
+    private static func commandArgumentValue(
+        from value: Value,
+        field: String
+    ) throws -> TheFence.CommandArgumentValue {
         switch value {
         case .null:
-            return NSNull()
+            return .null
         case .bool(let bool):
-            return bool
+            return .bool(bool)
         case .int(let int):
-            return int
+            return .int(int)
         case .double(let double):
-            return double
-        case .string(let string):
-            return string
-        case .data(_, let data):
-            return data.base64EncodedString()
-        case .array(let values):
-            return values.map(anyValue(from:))
-        case .object(let object):
-            var result: [String: Any] = [:]
-            for (key, nested) in object {
-                result[key] = anyValue(from: nested)
+            guard double.isFinite else {
+                throw SchemaValidationError(field: field, observed: double, expected: "finite number")
             }
-            return result
+            return .double(double)
+        case .string(let string):
+            return .string(string)
+        case .data(_, let data):
+            return .string(data.base64EncodedString())
+        case .array(let values):
+            return .array(try values.enumerated().map { index, nested in
+                try commandArgumentValue(from: nested, field: "\(field)[\(index)]")
+            })
+        case .object(let object):
+            var result: [String: TheFence.CommandArgumentValue] = [:]
+            for (key, nested) in object {
+                result[key] = try commandArgumentValue(from: nested, field: "\(field).\(key)")
+            }
+            return .object(result)
         }
     }
 

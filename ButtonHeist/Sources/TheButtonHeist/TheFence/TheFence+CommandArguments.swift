@@ -5,8 +5,8 @@ import TheScore
 extension TheFence {
 
     /// Typed JSON-compatible command arguments after external routing has selected a command.
-    struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
-        let argumentValues: [String: CommandArgumentValue]
+    public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
+        public let argumentValues: [String: CommandArgumentValue]
         let argumentFieldPrefix: String?
 
         init(arguments: [String: Any], droppingCommandKey: Bool = true) throws {
@@ -18,18 +18,18 @@ extension TheFence {
             argumentFieldPrefix = nil
         }
 
-        init(values: [String: CommandArgumentValue], fieldPrefix: String? = nil) {
+        public init(values: [String: CommandArgumentValue], fieldPrefix: String? = nil) {
             self.argumentValues = values
             argumentFieldPrefix = fieldPrefix
         }
 
     }
 
-    struct CommandArgumentObject: CommandArgumentReadable, Sendable {
-        let argumentValues: [String: CommandArgumentValue]
+    public struct CommandArgumentObject: CommandArgumentReadable, Sendable {
+        public let argumentValues: [String: CommandArgumentValue]
         let argumentFieldPrefix: String?
 
-        init(values: [String: CommandArgumentValue], fieldPrefix: String?) {
+        public init(values: [String: CommandArgumentValue], fieldPrefix: String?) {
             self.argumentValues = values
             self.argumentFieldPrefix = fieldPrefix
         }
@@ -41,7 +41,7 @@ extension TheFence {
     }
 
     /// JSON-compatible command argument value used between routing and request decoding.
-    enum CommandArgumentValue: Sendable, Equatable {
+    public enum CommandArgumentValue: Sendable, Equatable {
         case string(String)
         case int(Int)
         case double(Double)
