@@ -148,12 +148,6 @@ actor SimpleSocketServer {
     static let maxMessagesPerSecond = 30
     private static let errorFlushGracePeriod: Duration = .milliseconds(100)
 
-    /// Maximum bytes queued for sending per client before new sends are dropped.
-    /// Prevents unbounded NWConnection buffer growth when a client reads slowly
-    /// or disconnects without the TCP stack noticing. 20 MB is roughly 4-5 screen
-    /// broadcasts — enough to absorb a burst without starving the client.
-    private static let maxPendingBytesPerClient = 20_000_000
-
     // MARK: - State Machines
 
     private enum ServerPhase {
@@ -166,9 +160,7 @@ actor SimpleSocketServer {
         var authentication: SocketClientAuthentication
         var timestamps: [Date]
         var rateLimitNotified: Bool
-        /// Bytes currently queued in NWConnection send buffers.
-        /// Incremented on send, decremented on contentProcessed completion.
-        var pendingBytes: Int
+        var sendBuffer: SocketSendBuffer
     }
 
     // MARK: - Actor-isolated mutable state
@@ -385,9 +377,7 @@ actor SimpleSocketServer {
 
     /// Send data to a specific client.
     ///
-    /// Enforces a per-client high-water mark on pending bytes. When a client's
-    /// NWConnection send buffer exceeds `maxPendingBytesPerClient`, new sends
-    /// are dropped to prevent unbounded memory growth from slow or stalled readers.
+    /// Enforces per-client send-buffer accounting before queueing bytes on the socket.
     @discardableResult
     func send(_ data: Data, to clientId: Int) -> ServerSendOutcome {
         guard var state = clients[clientId] else {
@@ -400,21 +390,16 @@ actor SimpleSocketServer {
         }
 
         let byteCount = dataToSend.count
-        if byteCount > Self.maxPendingBytesPerClient {
-            logger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
-            sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount, state: state)
-            return .failed(.payloadTooLarge(byteCount: byteCount, maxBytes: Self.maxPendingBytesPerClient))
+        if let rejection = state.sendBuffer.reserve(byteCount: byteCount) {
+            switch rejection {
+            case .payloadTooLarge:
+                logger.warning("Client \(clientId) send payload exceeds cap (\(byteCount) bytes), failing the originating request")
+                sendOversizedResponseError(clientId: clientId, originalData: data, byteCount: byteCount, state: state)
+            case .bufferFull(let pendingBytes, _, _):
+                logger.warning("Client \(clientId) send buffer full (\(pendingBytes) bytes pending), dropping \(byteCount) bytes")
+            }
+            return .failed(rejection.sendFailure)
         }
-        if state.pendingBytes + byteCount > Self.maxPendingBytesPerClient {
-            logger.warning("Client \(clientId) send buffer full (\(state.pendingBytes) bytes pending), dropping \(byteCount) bytes")
-            return .failed(.sendBufferFull(
-                pendingBytes: state.pendingBytes,
-                byteCount: byteCount,
-                maxBytes: Self.maxPendingBytesPerClient
-            ))
-        }
-
-        state.pendingBytes += byteCount
         clients[clientId] = state
 
         sendContent(state.connection, dataToSend, .contentProcessed { [weak self] error in
@@ -486,7 +471,7 @@ actor SimpleSocketServer {
     /// Called when NWConnection finishes processing a send.
     private func completedSend(clientId: Int, byteCount: Int, error: NWError?) {
         guard var state = clients[clientId] else { return }
-        state.pendingBytes = max(0, state.pendingBytes - byteCount)
+        state.sendBuffer.complete(byteCount: byteCount)
         clients[clientId] = state
         if let error {
             callbacks.onSendFailed?(clientId, .transportFailed(clientId: clientId, message: error.localizedDescription))
@@ -602,7 +587,7 @@ actor SimpleSocketServer {
             authentication: .awaitingAuthentication(deadline: makeAuthDeadline(for: clientId)),
             timestamps: [],
             rateLimitNotified: false,
-            pendingBytes: 0
+            sendBuffer: SocketSendBuffer()
         )
         let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
         logger.info("Client \(clientId) connected")
