@@ -314,6 +314,7 @@
 		DC7C882C0847C34A72E1B4A0 /* HeistTraitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */; };
 		DE851FFADFCAC1719EC060DC /* ObjCRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14BC478345C6BE0A8B155580 /* ObjCRuntime.swift */; };
 		DEFD37E760F6D330DE96EC02 /* TLSIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00ABB66C5FED7BD84301E2D3 /* TLSIdentity.swift */; };
+		DF9E954469B10A302A98B780 /* CodebaseBoundaryGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1156CD74A712841DCB21EA7C /* CodebaseBoundaryGuardTests.swift */; };
 		E01E46CF260DB52E1C094704 /* FenceJSON+Response.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6536DB1847A58980945D1D48 /* FenceJSON+Response.swift */; };
 		E04A409AF6997E327F9D1828 /* ConnectionResultWaitersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30350583523C830C2C298AE7 /* ConnectionResultWaitersTests.swift */; };
 		E053E068CA957250B66351E4 /* TheFenceHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B1D087B067D089CF13A7BBC /* TheFenceHandlerTests.swift */; };
@@ -495,6 +496,7 @@
 		0F6A4B7485D71E57F9ED1123 /* TheTripwire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwire.swift; sourceTree = "<group>"; };
 		10D4AA78D802F6F18119E5F4 /* Interactivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interactivity.swift; sourceTree = "<group>"; };
 		10D79C29B3000357A40270A6 /* ScreenFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenFactory.swift; sourceTree = "<group>"; };
+		1156CD74A712841DCB21EA7C /* CodebaseBoundaryGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodebaseBoundaryGuardTests.swift; sourceTree = "<group>"; };
 		1308BFFECC16AF7E933839EB /* TheSafecracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecracker.swift; sourceTree = "<group>"; };
 		13769C994060E71D59731BFC /* PublicCommandContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicCommandContractTests.swift; sourceTree = "<group>"; };
 		13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSL.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -885,6 +887,7 @@
 				FABF374ED46E8B26F4A831C2 /* AuthFailureTests.swift */,
 				DB4DDD1535AD9C1FE02A2C86 /* AuthFlowTests.swift */,
 				B71B881BAC0E71A88ED33B2A /* BookKeeperHeistTests.swift */,
+				1156CD74A712841DCB21EA7C /* CodebaseBoundaryGuardTests.swift */,
 				BE04A923F733FBDDDE13EAFA /* ConnectionPhaseTests.swift */,
 				30350583523C830C2C298AE7 /* ConnectionResultWaitersTests.swift */,
 				C9D1CD4282C3885E93C6D8CA /* DeviceConnectionReceiveTests.swift */,
@@ -1956,6 +1959,7 @@
 				0B727DFA33963386D57AA5BD /* AuthFailureTests.swift in Sources */,
 				4EA716ADB670727F35977007 /* AuthFlowTests.swift in Sources */,
 				3E0DF1F21AED8674F1FBE844 /* BookKeeperHeistTests.swift in Sources */,
+				DF9E954469B10A302A98B780 /* CodebaseBoundaryGuardTests.swift in Sources */,
 				8E9AD2C6656A928C3154500D /* ConnectionPhaseTests.swift in Sources */,
 				E04A409AF6997E327F9D1828 /* ConnectionResultWaitersTests.swift in Sources */,
 				B54E9C9ABD76E906EAEECFD1 /* DeviceConnectionReceiveTests.swift in Sources */,
