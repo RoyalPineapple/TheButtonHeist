@@ -1,3 +1,4 @@
+import Foundation
 import TheScore
 
 extension TheFence {
@@ -37,6 +38,33 @@ extension TheFence {
     /// sub-expectations with `{"type": "compound", "expectations": [...]}`.
     func parseExpectationPayload(_ arguments: some CommandArgumentReadable) throws -> ExpectationPayload {
         try ExpectationPayload(arguments: arguments)
+    }
+
+    /// Parse compact command input into the same typed expectation argument
+    /// shape accepted by direct, MCP, batch, and playback request decoding.
+    public nonisolated static func parseExpectationArgument(_ rawValue: String) throws -> HeistValue {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if ActionExpectation.shorthandWireTypeValues.contains(trimmed) {
+            return .object([FenceParameterKey.type.rawValue: .string(trimmed)])
+        }
+
+        guard trimmed.first == "{" else {
+            throw FenceError.invalidRequest(
+                "Expected expectation shorthand \(ActionExpectation.shorthandWireTypeValues.joined(separator: "/")) or a JSON object"
+            )
+        }
+
+        let value: HeistValue
+        do {
+            value = try JSONDecoder().decode(HeistValue.self, from: Data(trimmed.utf8))
+        } catch {
+            throw FenceError.invalidRequest("Invalid expectation JSON: \(error.localizedDescription)")
+        }
+
+        guard case .object = value else {
+            throw FenceError.invalidRequest("Expected expectation JSON to decode as an object")
+        }
+        return value
     }
 }
 

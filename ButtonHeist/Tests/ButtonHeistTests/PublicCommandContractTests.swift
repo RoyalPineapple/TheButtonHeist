@@ -74,6 +74,21 @@ final class PublicCommandContractTests: XCTestCase {
         }
     }
 
+    func testExpectationArgumentShorthandsAreContractOwned() throws {
+        XCTAssertEqual(
+            ActionExpectation.shorthandWireTypeValues,
+            ["screen_changed", "elements_changed"]
+        )
+
+        for shorthand in ActionExpectation.shorthandWireTypeValues {
+            let value = try TheFence.parseExpectationArgument(shorthand)
+            XCTAssertEqual(value, .object([FenceParameterKey.type.rawValue: .string(shorthand)]))
+        }
+
+        let jsonValue = try TheFence.parseExpectationArgument(#"{"type":"screen_changed"}"#)
+        XCTAssertEqual(jsonValue, .object([FenceParameterKey.type.rawValue: .string("screen_changed")]))
+    }
+
     @ButtonHeistActor
     func testEveryPublicCommandRejectsUnknownRequestKeysFromFenceSpecs() async {
         let fence = TheFence(configuration: .init())

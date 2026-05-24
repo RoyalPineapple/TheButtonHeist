@@ -20,7 +20,7 @@ struct WaitForChangeCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         var request = Self.fenceRequest([.timeout: .double(timeout)])
         if let expect {
-            request.set(.expect, try ExpectationArgumentParser.parse(expect))
+            request.set(.expect, try TheFence.parseExpectationArgument(expect))
         }
         try await CLIRunner.run(
             connection: connection,
