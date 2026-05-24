@@ -91,7 +91,7 @@ extension TheFence {
         do {
             try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
         } catch let error as TheHandoff.ConnectionError where error == .timeout {
-            handoff.disconnectConnectionAttempt(attemptID, failure: .timeout)
+            handoff.abortConnectionAttempt(attemptID, failure: .timeout)
             throw FenceError(error)
         } catch let error as TheHandoff.ConnectionError {
             throw FenceError(error)

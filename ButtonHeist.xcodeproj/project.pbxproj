@@ -194,6 +194,7 @@
 		866B155C8E02C05E322C90FB /* BatchPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9670ADDD96D01D99D2FF81C2 /* BatchPlan.swift */; };
 		86AD65304E33955480EAF158 /* TheBurglarContainerFramesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */; };
 		871194C060FF486DFB34A4C6 /* TheStash+Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0108809EB5567BB0C5665090 /* TheStash+Matching.swift */; };
+		88254C9CD449024D2B1F0709 /* HandoffConnectionLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBF8A973B827DD9A6ED5EE47 /* HandoffConnectionLifecycle.swift */; };
 		8854D0EBA5D2E6EA3B503E5D /* InterfaceQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A47A1C4514B352FEB2DF816 /* InterfaceQuery.swift */; };
 		89284D94AD5C257AB04C81E9 /* ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */; };
 		8974D2478119A5B83268E05E /* BatchTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B334A85E74CAB5B055BFE5F /* BatchTargets.swift */; };
@@ -714,6 +715,7 @@
 		B81B7B89A758E15463329565 /* String+PathValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+PathValidation.swift"; sourceTree = "<group>"; };
 		B8938E5441D36291E59552BA /* GeometryValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeometryValidation.swift; sourceTree = "<group>"; };
 		BB8D4C2E483F550C29C4FDE2 /* TheFence+Formatting+JSON.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting+JSON.swift"; sourceTree = "<group>"; };
+		BBF8A973B827DD9A6ED5EE47 /* HandoffConnectionLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffConnectionLifecycle.swift; sourceTree = "<group>"; };
 		BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = TheInsideJob.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		BD414D07E60258326145755A /* TheBrainsScrollTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBrainsScrollTests.swift; sourceTree = "<group>"; };
 		BDB73CF66308BB76E8AF5E0D /* TheHandoffMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheHandoffMessageTests.swift; sourceTree = "<group>"; };
@@ -1218,6 +1220,7 @@
 				D43D24A6682C61D9E2826547 /* DeviceProtocols.swift */,
 				44278872AF4289E309CD78E2 /* DeviceResolver.swift */,
 				558658BD430870069086F3A8 /* DiscoveredDevice.swift */,
+				BBF8A973B827DD9A6ED5EE47 /* HandoffConnectionLifecycle.swift */,
 				D355B25F35519BEF35AD6E72 /* HandoffConnectionState.swift */,
 				45EA199501640A247FB114DE /* HandoffDiscoveryLifecycle.swift */,
 				9433DDF2A1AA0533161A52E2 /* HandoffReconnectController.swift */,
@@ -1963,6 +1966,7 @@
 				3199385249BEDA947E25945D /* DeviceProtocols.swift in Sources */,
 				2E0CD071F454D6FD708D52DC /* DeviceResolver.swift in Sources */,
 				D1CABD6D09423256E7BA63A3 /* DiscoveredDevice.swift in Sources */,
+				88254C9CD449024D2B1F0709 /* HandoffConnectionLifecycle.swift in Sources */,
 				D672C9A6BBBE5949E0E9A8DE /* HandoffConnectionState.swift in Sources */,
 				8F6EEC1B563048DE8C0A41B1 /* HandoffDiscoveryLifecycle.swift in Sources */,
 				834E39398185AABFB104A9CA /* HandoffReconnectController.swift in Sources */,

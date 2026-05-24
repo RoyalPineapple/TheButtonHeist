@@ -18,176 +18,28 @@ final class TheHandoff {
 
     // MARK: - State
 
-    private(set) var connectionPhase: ConnectionPhase = .disconnected
-    private var connectionAttemptFailure: ConnectionError?
-
+    private let connectionLifecycle = HandoffConnectionLifecycle()
     private let discoveryLifecycle = HandoffDiscoveryLifecycle()
-    private let connectionResultWaiters = ConnectionResultWaiters()
     private let reconnectController = HandoffReconnectController()
-
-    // MARK: - State Transitions
-
-    private var activeConnectionAttemptID: UUID? {
-        switch connectionPhase {
-        case .connecting(let attempt):
-            return attempt.id
-        case .connected(let session):
-            return session.attemptID
-        case .disconnected, .failed:
-            return nil
-        }
-    }
-
-    private func isActiveConnectionAttempt(_ attemptID: UUID) -> Bool {
-        activeConnectionAttemptID == attemptID
-    }
-
-    private func transitionToConnecting(device: DiscoveredDevice) -> UUID {
-        let attempt = ConnectionAttempt(id: UUID(), device: device)
-        connectionAttemptFailure = nil
-        setConnectionPhase(.connecting(attempt))
-        return attempt.id
-    }
-
-    private func transitionToConnected(attemptID: UUID, device: DiscoveredDevice) {
-        guard case .connecting(let attempt) = connectionPhase, attempt.id == attemptID else { return }
-        let keepaliveTask = makeKeepaliveTask()
-        connectionAttemptFailure = nil
-        setConnectionPhase(.connected(ConnectedSession(attemptID: attemptID, device: device, keepaliveTask: keepaliveTask)))
-        connectionResultWaiters.resolve(attemptID: attemptID, with: .success(()))
-    }
-
-    private func transitionToFailed(_ failure: ConnectionError) {
-        connectionAttemptFailure = failure
-        let attemptID = activeConnectionAttemptID
-        let wasActive: Bool
-        switch connectionPhase {
-        case .connecting, .connected:
-            wasActive = true
-        case .disconnected, .failed:
-            wasActive = false
-        }
-        if case .connected(let session) = connectionPhase {
-            session.keepaliveTask.cancel()
-        }
-        setConnectionPhase(.failed(failure))
-        if wasActive, let attemptID {
-            connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
-        }
-    }
-
-    @discardableResult
-    private func transitionToDisconnected(reason: DisconnectReason? = nil, attemptID expectedAttemptID: UUID? = nil) -> Bool {
-        let attemptID = activeConnectionAttemptID
-        if let expectedAttemptID, attemptID != expectedAttemptID { return false }
-
-        let wasActive: Bool
-        switch connectionPhase {
-        case .connecting, .connected:
-            wasActive = true
-        case .disconnected, .failed:
-            wasActive = false
-        }
-        if case .connected(let session) = connectionPhase {
-            session.keepaliveTask.cancel()
-        }
-        if wasActive {
-            if let reason {
-                let failure = ConnectionError.disconnected(reason)
-                connectionAttemptFailure = failure
-                setConnectionPhase(.disconnected)
-                if let attemptID {
-                    connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
-                }
-            } else {
-                let failure = ConnectionError.connectionFailed(
-                    "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-                )
-                setConnectionPhase(.disconnected)
-                if let attemptID {
-                    connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
-                }
-            }
-        } else {
-            if reason == nil {
-                // No active transition and no new cause: clear any stale attempt cause.
-                // If a cause arrives after the first disconnect, keep the original cause
-                // because it is the one waitForConnectionResult reports on the fast path.
-                connectionAttemptFailure = nil
-            }
-            setConnectionPhase(.disconnected)
-        }
-        return wasActive
-    }
-
-    /// Tear down an in-flight connection attempt after its owner reaches a setup
-    /// terminal state (for example, discovery/direct-connect timeout). This
-    /// intentionally does not schedule reconnect:
-    /// there was no usable session drop, only a failed setup attempt.
-    func disconnectConnectionAttempt(_ attemptID: UUID, failure: ConnectionError) {
-        guard activeConnectionAttemptID == attemptID else { return }
-        connectionAttemptFailure = failure
-        if case .connected(let session) = connectionPhase {
-            session.keepaliveTask.cancel()
-        }
-        connection?.disconnect()
-        connection = nil
-        setConnectionPhase(.disconnected)
-        connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
-    }
-
-    private func setConnectionPhase(_ phase: ConnectionPhase) {
-        let previousPhase = connectionPhase
-        connectionPhase = phase
-        guard !Self.isSameConnectionPhase(previousPhase, phase) else { return }
-        onConnectionStateChanged?(phase)
-    }
-
-    private static func isSameConnectionPhase(_ lhs: ConnectionPhase, _ rhs: ConnectionPhase) -> Bool {
-        switch (lhs, rhs) {
-        case (.disconnected, .disconnected),
-             (.connecting, .connecting),
-             (.connected, .connected),
-             (.failed, .failed):
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// Mutate the connected session in place. No-op when not connected.
-    private func mutateConnectedSession(_ body: (inout ConnectedSession) -> Void) {
-        guard case .connected(var session) = connectionPhase else { return }
-        body(&session)
-        connectionPhase = .connected(session)
-    }
 
     // MARK: - Derived State
 
+    var connectionPhase: ConnectionPhase { connectionLifecycle.phase }
+
     var isConnected: Bool {
-        if case .connected = connectionPhase { return true }
-        return false
+        connectionLifecycle.isConnected
     }
 
     var connectionDiagnosticFailure: ConnectionError? {
-        switch connectionPhase {
-        case .failed(let failure):
-            return failure
-        case .disconnected:
-            return connectionAttemptFailure
-        case .connecting, .connected:
-            return nil
-        }
+        connectionLifecycle.diagnosticFailure
     }
 
     var connectedDevice: DiscoveredDevice? {
-        if case .connected(let session) = connectionPhase { return session.device }
-        return nil
+        connectionLifecycle.connectedDevice
     }
 
     var serverInfo: ServerInfo? {
-        if case .connected(let session) = connectionPhase { return session.serverInfo }
-        return nil
+        connectionLifecycle.serverInfo
     }
 
     /// Test seam: how many pings have been sent on the live connection
@@ -195,8 +47,7 @@ final class TheHandoff {
     /// arrives, and is automatically discarded when the connection phase
     /// leaves `.connected`. Returns zero in any non-connected phase.
     var missedPongCount: Int {
-        if case .connected(let session) = connectionPhase { return session.missedPongCount }
-        return 0
+        connectionLifecycle.missedPongCount
     }
 
     var discoveredDevices: [DiscoveredDevice] {
@@ -329,7 +180,11 @@ final class TheHandoff {
 
     // MARK: - Init
 
-    init() {}
+    init() {
+        connectionLifecycle.onPhaseChanged = { [weak self] phase in
+            self?.onConnectionStateChanged?(phase)
+        }
+    }
 
     // MARK: - Discovery
 
@@ -384,7 +239,7 @@ final class TheHandoff {
     @discardableResult
     func connect(to device: DiscoveredDevice, cancelReconnectTaskOnReplacement: Bool = true) -> UUID {
         disconnectForReplacement(cancelReconnectTask: cancelReconnectTaskOnReplacement)
-        let attemptID = transitionToConnecting(device: device)
+        let attemptID = connectionLifecycle.beginConnecting(device: device)
 
         connection = makeConnection(device, token, effectiveDriverId)
 
@@ -392,22 +247,29 @@ final class TheHandoff {
             guard let self else { return }
             switch event {
             case .connected:
-                guard self.isActiveConnectionAttempt(attemptID) else { return }
-                self.transitionToConnected(attemptID: attemptID, device: device)
+                guard self.connectionLifecycle.isActiveAttempt(attemptID) else { return }
+                self.connectionLifecycle.markConnected(
+                    attemptID: attemptID,
+                    device: device,
+                    keepaliveTask: self.makeKeepaliveTask()
+                )
             case .disconnected(let reason):
-                guard self.isActiveConnectionAttempt(attemptID) else { return }
+                guard self.connectionLifecycle.isActiveAttempt(attemptID) else { return }
                 if case .failed = self.connectionPhase {
                     return
                 }
-                guard self.transitionToDisconnected(reason: reason, attemptID: attemptID) else { return }
+                guard self.connectionLifecycle.markDisconnected(
+                    reason: reason,
+                    expectedAttemptID: attemptID
+                ) else { return }
                 if reason.retryable {
                     self.scheduleAutoReconnectIfNeeded(disconnectedDevice: device)
                 }
             case .sendFailed(let failure, let requestId):
-                guard self.isActiveConnectionAttempt(attemptID) else { return }
+                guard self.connectionLifecycle.isActiveAttempt(attemptID) else { return }
                 self.onSendFailure?(failure, requestId)
             case .message(let message, let requestId, let accessibilityTrace):
-                guard self.isActiveConnectionAttempt(attemptID) else { return }
+                guard self.connectionLifecycle.isActiveAttempt(attemptID) else { return }
                 self.handleServerMessage(
                     message,
                     requestId: requestId,
@@ -428,7 +290,7 @@ final class TheHandoff {
         handleBackgroundAccessibility(accessibilityTrace)
         switch message {
         case .info(let info):
-            mutateConnectedSession { $0.serverInfo = info }
+            connectionLifecycle.recordServerInfo(info)
         case .interface, .actionResult, .screen:
             forwardServerMessage(message, requestId: requestId)
         case .recordingStarted:
@@ -440,33 +302,33 @@ final class TheHandoff {
             case .recording:
                 emitRecordingEvent(.failed(serverError.message))
             case .authFailure:
-                transitionToFailed(.disconnected(.authFailed(serverError.message)))
+                connectionLifecycle.markFailed(.disconnected(.authFailed(serverError.message)))
             case .authApprovalPending:
-                transitionToFailed(.disconnected(.authApprovalPending(serverError.message)))
+                connectionLifecycle.markFailed(.disconnected(.authApprovalPending(serverError.message)))
             default:
                 if let requestId {
                     forwardServerMessage(message, requestId: requestId)
                 } else {
-                    transitionToFailed(.connectionFailed(serverError.message))
+                    connectionLifecycle.markFailed(.connectionFailed(serverError.message))
                 }
             }
         case .authApproved(let payload):
             token = payload.token
             onAuthApproved?(payload.token)
         case .authApprovalPending(let payload):
-            connectionAttemptFailure = .disconnected(.authApprovalPending(payload.message))
+            connectionLifecycle.recordAttemptFailure(.disconnected(.authApprovalPending(payload.message)))
             onStatus?(payload.hint)
         case .sessionLocked(let payload):
-            transitionToFailed(.disconnected(.sessionLocked(payload.message)))
+            connectionLifecycle.markFailed(.disconnected(.sessionLocked(payload.message)))
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
-            transitionToFailed(.disconnected(.buttonHeistVersionMismatch(
+            connectionLifecycle.markFailed(.disconnected(.buttonHeistVersionMismatch(
                 serverVersion: payload.serverButtonHeistVersion,
                 clientVersion: payload.clientButtonHeistVersion
             )))
         case .pong:
-            mutateConnectedSession { $0.missedPongCount = 0 }
+            connectionLifecycle.markPongReceived()
             if let requestId {
                 forwardServerMessage(message, requestId: requestId)
             }
@@ -498,12 +360,12 @@ final class TheHandoff {
         reconnectController.cancelRunnerAndClearTarget()
         connection?.disconnect()
         connection = nil
-        transitionToDisconnected()
+        connectionLifecycle.markDisconnected()
     }
 
     @discardableResult
     private func disconnectForReplacement(cancelReconnectTask: Bool = true) -> Bool {
-        let hadActiveSession = activeConnectionAttemptID != nil
+        let hadActiveSession = connectionLifecycle.activeAttemptID != nil
         if cancelReconnectTask {
             reconnectController.cancelRunnerAndClearTarget()
         }
@@ -511,11 +373,21 @@ final class TheHandoff {
         connection = nil
 
         if hadActiveSession {
-            transitionToDisconnected(reason: .localDisconnect)
+            connectionLifecycle.markDisconnected(reason: .localDisconnect)
         } else {
-            transitionToDisconnected()
+            connectionLifecycle.markDisconnected()
         }
         return hadActiveSession
+    }
+
+    /// Tear down an in-flight connection attempt after its owner reaches a setup
+    /// terminal state (for example, discovery/direct-connect timeout). This
+    /// intentionally does not schedule reconnect: there was no usable session
+    /// drop, only a failed setup attempt.
+    func abortConnectionAttempt(_ attemptID: UUID, failure: ConnectionError) {
+        guard connectionLifecycle.disconnectAttempt(attemptID, failure: failure) else { return }
+        connection?.disconnect()
+        connection = nil
     }
 
     func disableAutoReconnect() {
@@ -532,57 +404,7 @@ final class TheHandoff {
     /// Cancelling the calling task aborts the wait and propagates
     /// `CancellationError`.
     func waitForConnectionResult(timeout: TimeInterval) async throws {
-        let attemptID: UUID
-        // Fast path: already terminal.
-        switch connectionPhase {
-        case .connected:
-            return
-        case .failed(let failure):
-            throw failure
-        case .disconnected:
-            if let failure = connectionAttemptFailure {
-                throw failure
-            }
-            throw ConnectionError.connectionFailed(
-                "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-            )
-        case .connecting(let attempt):
-            attemptID = attempt.id
-        }
-
-        let waiterID = UUID()
-        let timeoutDuration: Duration = .seconds(max(timeout, 0))
-        let timeoutTask = Task { @ButtonHeistActor [weak self] in
-            guard await Task.cancellableSleep(for: timeoutDuration) else { return }
-            self?.connectionResultWaiters.fail(id: waiterID, attemptID: attemptID, with: ConnectionError.timeout)
-        }
-        defer { timeoutTask.cancel() }
-
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                // Early-cancel guard: if the calling task was already cancelled
-                // before we registered the continuation, the cancellation
-                // handler may have already run against an empty awaiter list.
-                // Resume immediately rather than appending an orphaned
-                // continuation that would only resolve on phase transition or
-                // timeout.
-                if Task.isCancelled {
-                    continuation.resume(throwing: CancellationError())
-                    return
-                }
-                guard activeConnectionAttemptID == attemptID else {
-                    continuation.resume(throwing: ConnectionError.connectionFailed(
-                        "Disconnected during connection attempt. The app may have been busy, suspended, or restarted before the handshake completed."
-                    ))
-                    return
-                }
-                connectionResultWaiters.register(id: waiterID, attemptID: attemptID, continuation: continuation)
-            }
-        } onCancel: {
-            Task { @ButtonHeistActor [weak self] in
-                self?.connectionResultWaiters.cancel(id: waiterID)
-            }
-        }
+        try await connectionLifecycle.waitForConnectionResult(timeout: timeout)
     }
 
     /// Force-close the connection. Use when a timeout suggests the connection
@@ -594,7 +416,7 @@ final class TheHandoff {
         reconnectController.cancelRunnerAndClearTarget()
         connection?.disconnect()
         connection = nil
-        transitionToDisconnected(reason: .localDisconnect)
+        connectionLifecycle.markDisconnected(reason: .localDisconnect)
         if let reconnectDevice {
             scheduleAutoReconnectIfNeeded(disconnectedDevice: reconnectDevice)
         }
@@ -635,12 +457,9 @@ final class TheHandoff {
     /// keepalive cycles without waiting on the 5s interval.
     @discardableResult
     func tickKeepalive() -> Int {
-        guard case .connected(var session) = connectionPhase else { return 0 }
-        connection?.send(.ping)
-        session.missedPongCount += 1
-        let count = session.missedPongCount
-        connectionPhase = .connected(session)
-        return count
+        connectionLifecycle.tickKeepalive {
+            connection?.send(.ping)
+        }
     }
 
     // MARK: - Session Management (discovery → connect → reconnect)
@@ -673,7 +492,7 @@ final class TheHandoff {
         } catch {
             if startedDiscovery { stopDiscovery() }
             if let connectionError = error as? ConnectionError {
-                connectionAttemptFailure = connectionError
+                connectionLifecycle.recordAttemptFailure(connectionError)
             }
             throw error
         }
@@ -685,7 +504,7 @@ final class TheHandoff {
         do {
             try await waitForConnectionResult(timeout: timeout)
         } catch let error as ConnectionError where error == .timeout {
-            disconnectConnectionAttempt(attemptID, failure: .timeout)
+            abortConnectionAttempt(attemptID, failure: .timeout)
             throw error
         }
         onStatus?("Connected to \(displayName(for: device))")
@@ -756,10 +575,10 @@ extension TheHandoff: HandoffReconnectRuntime {
     }
 
     func disconnectAutoReconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError) {
-        disconnectConnectionAttempt(attemptID, failure: failure)
+        abortConnectionAttempt(attemptID, failure: failure)
     }
 
     func failAutoReconnect(_ failure: HandoffConnectionError) {
-        transitionToFailed(failure)
+        connectionLifecycle.markFailed(failure)
     }
 }
