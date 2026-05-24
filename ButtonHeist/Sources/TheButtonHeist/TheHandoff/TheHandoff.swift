@@ -193,16 +193,7 @@ final class TheHandoff {
     private var connectionAttemptFailure: ConnectionError?
     private var discoverySessionID: UUID?
 
-    /// Continuations awaiting a terminal connection-phase transition. Each
-    /// continuation is tied to the connection attempt that was active when
-    /// it registered. Individual cancellation/timeout resolves only that
-    /// waiter; terminal transitions resolve all waiters for the attempt.
-    private struct PhaseAwaiter {
-        let attemptID: UUID
-        let continuation: CheckedContinuation<Void, Error>
-    }
-
-    private var phaseAwaiters: [UUID: PhaseAwaiter] = [:]
+    private let connectionResultWaiters = ConnectionResultWaiters()
 
     // MARK: - State Transitions
 
@@ -233,7 +224,7 @@ final class TheHandoff {
         let keepaliveTask = makeKeepaliveTask()
         connectionAttemptFailure = nil
         setConnectionPhase(.connected(ConnectedSession(attemptID: attemptID, device: device, keepaliveTask: keepaliveTask)))
-        resumePhaseAwaiters(for: attemptID, with: .success(()))
+        connectionResultWaiters.resolve(attemptID: attemptID, with: .success(()))
     }
 
     private func transitionToFailed(_ failure: ConnectionError) {
@@ -251,7 +242,7 @@ final class TheHandoff {
         }
         setConnectionPhase(.failed(failure))
         if wasActive, let attemptID {
-            resumePhaseAwaiters(for: attemptID, with: .failure(failure))
+            connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
         }
     }
 
@@ -276,7 +267,7 @@ final class TheHandoff {
                 connectionAttemptFailure = failure
                 setConnectionPhase(.disconnected)
                 if let attemptID {
-                    resumePhaseAwaiters(for: attemptID, with: .failure(failure))
+                    connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
                 }
             } else {
                 let failure = ConnectionError.connectionFailed(
@@ -284,7 +275,7 @@ final class TheHandoff {
                 )
                 setConnectionPhase(.disconnected)
                 if let attemptID {
-                    resumePhaseAwaiters(for: attemptID, with: .failure(failure))
+                    connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
                 }
             }
         } else {
@@ -312,7 +303,7 @@ final class TheHandoff {
         connection?.disconnect()
         connection = nil
         setConnectionPhase(.disconnected)
-        resumePhaseAwaiters(for: attemptID, with: .failure(failure))
+        connectionResultWaiters.resolve(attemptID: attemptID, with: .failure(failure))
     }
 
     private func setConnectionPhase(_ phase: ConnectionPhase) {
@@ -331,16 +322,6 @@ final class TheHandoff {
             return true
         default:
             return false
-        }
-    }
-
-    private func resumePhaseAwaiters(for attemptID: UUID, with result: Result<Void, Error>) {
-        let waiterIDs = phaseAwaiters.compactMap { id, awaiter in
-            awaiter.attemptID == attemptID ? id : nil
-        }
-        for id in waiterIDs {
-            guard let awaiter = phaseAwaiters.removeValue(forKey: id) else { continue }
-            awaiter.continuation.resume(with: result)
         }
     }
 
@@ -806,7 +787,7 @@ final class TheHandoff {
         let timeoutDuration: Duration = .seconds(max(timeout, 0))
         let timeoutTask = Task { @ButtonHeistActor [weak self] in
             guard await Task.cancellableSleep(for: timeoutDuration) else { return }
-            self?.failPhaseAwaiterWithTimeout(id: waiterID, attemptID: attemptID)
+            self?.connectionResultWaiters.fail(id: waiterID, attemptID: attemptID, with: ConnectionError.timeout)
         }
         defer { timeoutTask.cancel() }
 
@@ -828,29 +809,13 @@ final class TheHandoff {
                     ))
                     return
                 }
-                phaseAwaiters[waiterID] = PhaseAwaiter(attemptID: attemptID, continuation: continuation)
+                connectionResultWaiters.register(id: waiterID, attemptID: attemptID, continuation: continuation)
             }
         } onCancel: {
             Task { @ButtonHeistActor [weak self] in
-                self?.cancelPhaseAwaiter(id: waiterID)
+                self?.connectionResultWaiters.cancel(id: waiterID)
             }
         }
-    }
-
-    /// Resume one registered awaiter with a `CancellationError`. Called
-    /// from the cancellation handler of `waitForConnectionResult`.
-    private func cancelPhaseAwaiter(id: UUID) {
-        guard let awaiter = phaseAwaiters.removeValue(forKey: id) else { return }
-        awaiter.continuation.resume(throwing: CancellationError())
-    }
-
-    /// Resume one registered awaiter with `ConnectionError.timeout`. Scheduled by
-    /// `waitForConnectionResult` and runs on the actor when the timeout
-    /// duration elapses without a phase transition.
-    private func failPhaseAwaiterWithTimeout(id: UUID, attemptID: UUID) {
-        let failure = ConnectionError.timeout
-        guard let awaiter = phaseAwaiters.removeValue(forKey: id), awaiter.attemptID == attemptID else { return }
-        awaiter.continuation.resume(throwing: failure)
     }
 
     /// Force-close the connection. Use when a timeout suggests the connection
