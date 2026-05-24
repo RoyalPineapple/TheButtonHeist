@@ -272,9 +272,9 @@ public enum FenceOperationCatalog {
         do {
             rawValue = try selectorValue(in: arguments, selector: selector)
         } catch let error as SchemaValidationError {
-            return .failure(FenceOperationRoutingError(message: error.message))
+            return .failure(selectorRoutingError(error, contract: contract, selector: selector))
         } catch {
-            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
+            return .failure(selectorRoutingError(error.localizedDescription, contract: contract, selector: selector))
         }
 
         guard let command = selector.command(for: rawValue) else {
@@ -360,6 +360,24 @@ public enum FenceOperationCatalog {
             )
         }
         return selector.defaultValue
+    }
+
+    private static func selectorRoutingError(
+        _ error: SchemaValidationError,
+        contract: MCPToolContract,
+        selector: MCPToolSelector
+    ) -> FenceOperationRoutingError {
+        selectorRoutingError(error.message, contract: contract, selector: selector)
+    }
+
+    private static func selectorRoutingError(
+        _ message: String,
+        contract: MCPToolContract,
+        selector: MCPToolSelector
+    ) -> FenceOperationRoutingError {
+        FenceOperationRoutingError(
+            message: "\(contract.name).\(selector.parameter.key): \(message)"
+        )
     }
 }
 
