@@ -477,8 +477,6 @@ final class TheTripwire {
     ///    VC is parsed from the deepest presented VC's view, matching what
     ///    `UIPresentationController` exposes to UIKit's AX for that window.
     ///
-    /// If no app windows remain, the full traversable input is returned.
-    ///
     /// For screenshots, use `getTraversableWindows()` — visual compositing should
     /// include all windows so the dimmed background remains visible.
     func getAccessibleWindows() -> [(window: UIWindow, rootView: UIView)] {
@@ -519,9 +517,7 @@ final class TheTripwire {
         guard !windows.isEmpty else { return [] }
 
         let appWindows = windows.filter { !isPassthrough($0.window) }
-        let accessibleWindows = appWindows.map { accessibleRootEntry($0) ?? $0 }
-
-        return accessibleWindows.isEmpty ? windows : accessibleWindows
+        return appWindows.map { accessibleRootEntry($0) ?? $0 }
     }
 
     /// Return the view that should anchor accessibility parsing for a window.
