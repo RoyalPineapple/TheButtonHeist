@@ -26,6 +26,7 @@ final class TheBrains {
     let tripwire: TheTripwire
     let navigation: Navigation
     let actions: Actions
+    private let responseStateHistory = ResponseStateHistory()
 
     private enum WaitForChangePhase {
         case idle
@@ -335,48 +336,21 @@ final class TheBrains {
     func clearCache() {
         stash.clearCache()
         navigation.clearCache()
-        sentHistory = .fresh
+        responseStateHistory.reset()
     }
 
     // MARK: - Response State Tracking
 
-    /// State captured after each response sent to the driver.
-    struct SentState {
-        let beforeState: BeforeState
-
-        var interfaceHash: String {
-            beforeState.interfaceHash
-        }
-
-        var captureHash: String {
-            beforeState.capture.hash
-        }
-
-        var screenId: String? {
-            beforeState.screenId
-        }
-    }
-
-    /// Two-phase sent-state history: `.fresh` before the first response, and
-    /// `.sent` once a response has been recorded. Modelled as an enum so the
-    /// "never sent" case is structurally distinct from any sent state — every
-    /// caller must handle it explicitly rather than guarding against `nil`.
-    enum SentHistory {
-        case fresh
-        case sent(SentState)
-    }
-
-    private(set) var sentHistory: SentHistory = .fresh
+    typealias SentState = ResponseStateHistory.SentState
 
     /// The state of the last response sent to the driver, if any.
     var lastSentState: SentState? {
-        if case .sent(let state) = sentHistory { return state }
-        return nil
+        responseStateHistory.lastSentState
     }
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
-        sentHistory = .sent(SentState(beforeState: captureSemanticState()))
+        responseStateHistory.record(captureSemanticState())
     }
 
     // MARK: - Settled Tripwire Parsing
@@ -458,7 +432,7 @@ final class TheBrains {
     /// Check if the accessibility tree changed since the last response and
     /// return the public accessibility trace.
     func computeBackgroundAccessibilityTrace() async -> AccessibilityTrace? {
-        guard case .sent(let sent) = sentHistory else { return nil }
+        guard let sent = responseStateHistory.lastSentState else { return nil }
         guard refresh() != nil else { return nil }
         let current = await semanticStateAfterVisibleRefresh(baseline: sent.beforeState)
         let classification = ScreenClassifier.classify(
@@ -484,17 +458,12 @@ final class TheBrains {
 
     /// Whether the screen changed since the last response (for fast-redirect logic).
     var screenChangedSinceLastSent: Bool {
-        guard case .sent(let sent) = sentHistory else { return false }
-        return ScreenClassifier.classify(
-            before: sent.beforeState.screenSnapshot,
-            after: ScreenClassifier.snapshot(of: stash.currentScreen)
-        ).isScreenChange
+        responseStateHistory.screenChangedSinceLastSent(currentScreen: stash.currentScreen)
     }
 
     /// Screen ID from the last response, for diagnostic messages.
     var lastSentScreenId: String? {
-        if case .sent(let sent) = sentHistory { return sent.screenId }
-        return nil
+        responseStateHistory.lastSentScreenId
     }
 
     // MARK: - Wait For Idle
@@ -536,12 +505,7 @@ final class TheBrains {
         }
         defer { waitForChangePhase = .idle }
 
-        let sentBaseline: BeforeState? = {
-            if case .sent(let sent) = sentHistory, !sent.captureHash.isEmpty {
-                return sent.beforeState
-            }
-            return nil
-        }()
+        let sentBaseline = responseStateHistory.waitForChangeBaseline
 
         guard let initial = await refreshSemanticSnapshot(baseline: sentBaseline) else {
             return treeUnavailableResult(method: .waitForChange)
@@ -556,7 +520,7 @@ final class TheBrains {
         )
 
         if let expectation = predicate.expectation,
-           validateCurrentState(expectation, snapshot: initial.snapshot).met {
+           CurrentStateExpectationValidator.validate(expectation, snapshot: initial.snapshot).met {
             var builder = ActionResultBuilder(method: .waitForChange, snapshot: initial.snapshot)
             builder.message = "expectation already met by current state (0.0s)"
             builder.accessibilityTrace = AccessibilityTrace(captures: [initial.capture, initial.capture])
@@ -736,7 +700,7 @@ final class TheBrains {
             return builder.success()
         }
 
-        let currentState = validateCurrentState(expectation, snapshot: afterSnapshot)
+        let currentState = CurrentStateExpectationValidator.validate(expectation, snapshot: afterSnapshot)
         if currentState.met {
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
@@ -751,120 +715,6 @@ final class TheBrains {
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
         return builder.success()
-    }
-
-    private func validateCurrentState(
-        _ expectation: ActionExpectation,
-        snapshot: [Screen.ScreenElement]
-    ) -> ExpectationResult {
-        validateCurrentState(
-            expectation,
-            elements: TheStash.WireConversion.toWire(snapshot)
-        )
-    }
-
-    private func validateCurrentState(
-        _ expectation: ActionExpectation,
-        elements: [HeistElement]
-    ) -> ExpectationResult {
-        switch expectation {
-        case .delivery:
-            return ExpectationResult(
-                met: true,
-                expectation: expectation,
-                actual: "delivered"
-            )
-        case .screenChanged:
-            return ExpectationResult(
-                met: false, expectation: expectation,
-                actual: "requires observed screen change"
-            )
-        case .elementsChanged:
-            return ExpectationResult(
-                met: false, expectation: expectation,
-                actual: "requires observed element change"
-            )
-        case .elementUpdated(let heistId, let property, let oldValue, let newValue):
-            return validateElementUpdatedCurrentState(
-                heistId: heistId, property: property,
-                oldValue: oldValue, newValue: newValue,
-                expectation: expectation,
-                elements: elements
-            )
-        case .elementAppeared(let matcher):
-            let present = elements.contains { $0.matches(matcher) }
-            return ExpectationResult(
-                met: present, expectation: expectation,
-                actual: present ? "present" : "not present"
-            )
-        case .elementDisappeared(let matcher):
-            let present = elements.contains { $0.matches(matcher) }
-            return ExpectationResult(
-                met: !present, expectation: expectation,
-                actual: present ? "still present" : "absent"
-            )
-        case .compound(let expectations):
-            let failures = expectations.compactMap { subExpectation -> String? in
-                let result = validateCurrentState(subExpectation, elements: elements)
-                guard !result.met else { return nil }
-                return "\(subExpectation.summaryDescription): \(result.actual ?? "failed")"
-            }
-            guard !failures.isEmpty else {
-                return ExpectationResult(met: true, expectation: expectation, actual: nil)
-            }
-            return ExpectationResult(
-                met: false, expectation: expectation,
-                actual: failures.joined(separator: "; ")
-            )
-        }
-    }
-
-    private func validateElementUpdatedCurrentState(
-        heistId: HeistId?,
-        property: ElementProperty?,
-        oldValue: String?,
-        newValue: String?,
-        expectation: ActionExpectation,
-        elements: [HeistElement]
-    ) -> ExpectationResult {
-        guard oldValue == nil else {
-            return ExpectationResult(
-                met: false, expectation: expectation,
-                actual: "oldValue requires observed update"
-            )
-        }
-        guard let newValue else {
-            return ExpectationResult(
-                met: false, expectation: expectation,
-                actual: "newValue required for current state"
-            )
-        }
-
-        let candidates = elements.filter { element in
-            guard let heistId else { return true }
-            return element.heistId == heistId
-        }
-        guard !candidates.isEmpty else {
-            return ExpectationResult(met: false, expectation: expectation, actual: "element not found")
-        }
-
-        let properties = property.map { [$0] } ?? ElementProperty.allCases
-        let matched = candidates.contains { element in
-            properties.contains { element.currentStateValue(for: $0) == newValue }
-        }
-        guard !matched else {
-            return ExpectationResult(met: true, expectation: expectation, actual: nil)
-        }
-
-        let observed = candidates.prefix(5).map { element in
-            let values = properties
-                .map { property in
-                    "\(property.rawValue): \(element.currentStateValue(for: property) ?? "nil")"
-                }
-                .joined(separator: ", ")
-            return "\(element.heistId): \(values)"
-        }.joined(separator: "; ")
-        return ExpectationResult(met: false, expectation: expectation, actual: observed)
     }
 
     // MARK: - Private Helpers
@@ -1032,47 +882,6 @@ final class TheBrains {
         set { stash.stakeout = newValue }
     }
 
-}
-
-private extension HeistElement {
-    func currentStateValue(for property: ElementProperty) -> String? {
-        switch property {
-        case .label:
-            return label
-        case .value:
-            return value
-        case .traits:
-            return traits.map(\.rawValue).joined(separator: ", ")
-        case .hint:
-            return hint
-        case .actions:
-            return actions.map(\.description).joined(separator: ", ")
-        case .frame:
-            return "\(Int(frameX)),\(Int(frameY)),\(Int(frameWidth)),\(Int(frameHeight))"
-        case .activationPoint:
-            return "\(Int(activationPointX)),\(Int(activationPointY))"
-        case .customContent:
-            return customContent?.formattedCurrentStateValue
-        case .rotors:
-            guard let rotors, !rotors.isEmpty else { return nil }
-            return rotors.map(\.name).joined(separator: ", ")
-        }
-    }
-}
-
-private extension Array where Element == HeistCustomContent {
-    var formattedCurrentStateValue: String? {
-        let formatted = compactMap { item -> String? in
-            switch (item.label.isEmpty, item.value.isEmpty) {
-            case (false, false): return "\(item.label): \(item.value)"
-            case (false, true): return item.label
-            case (true, false): return item.value
-            case (true, true): return nil
-            }
-        }
-        guard !formatted.isEmpty else { return nil }
-        return formatted.joined(separator: "; ")
-    }
 }
 
 #endif // DEBUG
