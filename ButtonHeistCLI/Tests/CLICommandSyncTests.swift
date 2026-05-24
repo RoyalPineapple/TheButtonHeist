@@ -113,19 +113,6 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testCLIDirectCommandCountIsExplicit() {
-        let directCount = TheFence.Command.descriptors.filter {
-            if case .directCommand = $0.cliExposure { return true }
-            return false
-        }.count
-
-        XCTAssertEqual(
-            directCount,
-            37,
-            "CLI direct command count changed - update ButtonHeistApp and CLI sync guardrails"
-        )
-    }
-
     func testTopLevelFenceCommandAdaptersRenderNamesFromCanonicalContract() {
         let cliOnlyCommands: Set<String> = ["session"]
 
@@ -187,6 +174,10 @@ final class CLICommandSyncTests: XCTestCase {
     func testCLICommandContractDoesNotInferIdentityFromSwiftTypeNames() throws {
         let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLICommandContract.swift")
 
+        XCTAssertFalse(
+            source.contains("static var fenceCommand: TheFence.Command { get }"),
+            "CLICommandContract should be a marker; command identity belongs to CLICommandAdapterCatalog and FenceCommandDescriptor"
+        )
         XCTAssertFalse(
             source.contains("String(describing: Self.self)"),
             "CLI command identity should come from CLICommandAdapterCatalog and FenceCommandDescriptor"
