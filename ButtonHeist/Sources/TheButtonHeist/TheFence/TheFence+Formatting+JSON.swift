@@ -1,9 +1,6 @@
 import Foundation
-import os.log
 
 import TheScore
-
-private let logger = Logger(subsystem: "com.buttonheist.thefence", category: "formatting")
 
 extension FenceResponse {
 
@@ -22,19 +19,6 @@ extension FenceResponse {
               let dict = try? Self.jsonObjectDictionary(from: data)
         else { return Self.jsonEncodingFailureDict() }
         return dict
-    }
-
-    static func expectationResultDict(_ result: ExpectationResult) -> [String: Any] {
-        do {
-            return try Self.jsonObjectDictionary(from: PublicExpectationResult(result: result))
-        } catch {
-            logger.warning("Failed to encode expectation result: \(error.localizedDescription)")
-            var fallback: [String: Any] = ["met": result.met]
-            if let actual = result.actual {
-                fallback["actual"] = actual
-            }
-            return fallback
-        }
     }
 
     private static func encodePublicJSON<T: Encodable>(

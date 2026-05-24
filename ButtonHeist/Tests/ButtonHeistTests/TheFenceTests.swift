@@ -931,32 +931,33 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(json["errorCode"] as? String, "request.accessibility_tree_unavailable")
     }
 
-    // MARK: - FenceResponse.expectationResultDict
+    // MARK: - FenceResponse: Typed Expectation JSON
 
-    func testExpectationResultDictMet() {
+    func testActionExpectationJSONMet() throws {
         let result = ExpectationResult(met: true, expectation: .elementsChanged, actual: "elementsChanged")
-        let dict = FenceResponse.expectationResultDict(result)
-        XCTAssertEqual(dict["met"] as? Bool, true)
-        XCTAssertEqual(dict["actual"] as? String, "elementsChanged")
-        XCTAssertNotNil(dict["expected"])
+        let json = try decodeActionExpectationJSON(result)
+        XCTAssertEqual(json.status, "ok")
+        XCTAssertEqual(json.expectation?.met, true)
+        XCTAssertEqual(json.expectation?.actual, "elementsChanged")
+        XCTAssertNotNil(json.expectation?.expected)
     }
 
-    func testExpectationResultDictDelivery() {
+    func testActionExpectationJSONDelivery() throws {
         let result = ExpectationResult(met: true, expectation: nil, actual: "delivered")
-        let dict = FenceResponse.expectationResultDict(result)
-        XCTAssertEqual(dict["met"] as? Bool, true)
-        XCTAssertEqual(dict["actual"] as? String, "delivered")
-        XCTAssertNil(dict["expected"])
+        let json = try decodeActionExpectationJSON(result)
+        XCTAssertEqual(json.status, "ok")
+        XCTAssertEqual(json.expectation?.met, true)
+        XCTAssertEqual(json.expectation?.actual, "delivered")
+        XCTAssertNil(json.expectation?.expected)
     }
 
-    func testExpectationResultDictElementUpdatedExpectation() {
+    func testActionExpectationJSONElementUpdatedExpectation() throws {
         let result = ExpectationResult(met: false, expectation: .elementUpdated(newValue: "hello"), actual: "counter: value: world → goodbye")
-        let dict = FenceResponse.expectationResultDict(result)
-        XCTAssertEqual(dict["met"] as? Bool, false)
-        XCTAssertEqual(dict["actual"] as? String, "counter: value: world → goodbye")
-        // "expected" should be the JSON-encoded ActionExpectation
-        let expected = dict["expected"]
-        XCTAssertNotNil(expected)
+        let json = try decodeActionExpectationJSON(result)
+        XCTAssertEqual(json.status, "expectation_failed")
+        XCTAssertEqual(json.expectation?.met, false)
+        XCTAssertEqual(json.expectation?.actual, "counter: value: world → goodbye")
+        XCTAssertNotNil(json.expectation?.expected)
     }
 
     // MARK: - FenceResponse: Batch with Expectations
@@ -4098,6 +4099,25 @@ final class TheFenceTests: XCTestCase {
         recording.fileHandle.synchronizeFile()
         guard let data = try? Data(contentsOf: recording.filePath) else { return nil }
         return data.split(separator: 0x0A).count
+    }
+
+    private func decodeActionExpectationJSON(_ result: ExpectationResult) throws -> ActionExpectationPublicJSON {
+        let response = FenceResponse.action(
+            result: ActionResult(success: true, method: .activate),
+            expectation: result
+        )
+        return try JSONDecoder().decode(ActionExpectationPublicJSON.self, from: response.jsonData())
+    }
+
+    private struct ActionExpectationPublicJSON: Decodable {
+        let status: String
+        let expectation: ActionExpectationJSON?
+    }
+
+    private struct ActionExpectationJSON: Decodable {
+        let met: Bool
+        let actual: String?
+        let expected: ActionExpectation?
     }
 
     private static func jsonObject(from data: Data) throws -> [String: Any] {
