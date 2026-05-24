@@ -17,7 +17,7 @@ extension FenceResponse {
     public func jsonDict() -> [String: Any] {
         guard let data = try? jsonData(outputFormatting: []),
               let dict = try? Self.jsonObjectDictionary(from: data)
-        else { return Self.jsonEncodingFailureDict() }
+        else { return Self.jsonEncodingFailureCompatibilityDictionary() }
         return dict
     }
 
@@ -49,15 +49,15 @@ extension FenceResponse {
         return try Self.jsonObjectDictionary(from: data)
     }
 
-    private static func jsonEncodingFailureDict() -> [String: Any] {
-        [
-            "status": "error",
-            "message": "Failed to encode JSON response: response contained non-JSON values",
-            "errorCode": "formatting.json_encoding_failed",
-            "phase": FailurePhase.client.rawValue,
-            "retryable": false,
-            "hint": "Report this diagnostic with the command that produced it.",
-        ]
+    private static func jsonEncodingFailureCompatibilityDictionary() -> [String: Any] {
+        do {
+            return try jsonObjectDictionary(from: jsonEncodingFailureResponse())
+        } catch {
+            return [
+                "status": "error",
+                "message": "Failed to encode JSON response: response contained non-JSON values",
+            ]
+        }
     }
 
     private static func jsonEncodingFailureResponse() -> PublicErrorResponse {
