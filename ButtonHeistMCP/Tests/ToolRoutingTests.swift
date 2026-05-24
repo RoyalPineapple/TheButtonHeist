@@ -39,8 +39,31 @@ struct ToolRoutingTests {
         }
         let gestureSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.gestureMCPToolName)!.selector!
         #expect(
-            error.message == "schema validation failed for \(gestureSelector.parameter.key): observed missing; " +
+            error.message == selectorErrorPrefix(
+                toolName: TheFence.Command.gestureMCPToolName,
+                selector: gestureSelector
+            ) + "schema validation failed for \(gestureSelector.parameter.key): observed missing; " +
                 "expected \(SchemaValidationError.expectedEnumValues(gestureSelector.parameter.enumValues!))"
+        )
+    }
+
+    @Test("gesture rejects wrong-shaped type")
+    func gestureRejectsWrongShapedType() {
+        let result = ButtonHeistMCPServer.routeToolRequest(
+            name: TheFence.Command.gestureMCPToolName,
+            arguments: envelope(["type": .int(7)])
+        )
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected routing failure")
+            return
+        }
+        let gestureSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.gestureMCPToolName)!.selector!
+        #expect(
+            error.message == selectorErrorPrefix(
+                toolName: TheFence.Command.gestureMCPToolName,
+                selector: gestureSelector
+            ) + "schema validation failed for \(gestureSelector.parameter.key): observed integer 7; expected string"
         )
     }
 
@@ -80,9 +103,32 @@ struct ToolRoutingTests {
         }
         let scrollSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.scroll.rawValue)!.selector!
         #expect(
-            error.message == "schema validation failed for \(scrollSelector.parameter.key): " +
+            error.message == selectorErrorPrefix(
+                toolName: TheFence.Command.scroll.rawValue,
+                selector: scrollSelector
+            ) + "schema validation failed for \(scrollSelector.parameter.key): " +
                 "observed string \"sideways\"; " +
                 "expected \(SchemaValidationError.expectedEnumValues(scrollSelector.parameter.enumValues!))"
+        )
+    }
+
+    @Test("scroll rejects wrong-shaped mode")
+    func scrollRejectsWrongShapedMode() {
+        let result = ButtonHeistMCPServer.routeToolRequest(
+            name: TheFence.Command.scroll.rawValue,
+            arguments: envelope(["mode": .int(7)])
+        )
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected routing failure")
+            return
+        }
+        let scrollSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.scroll.rawValue)!.selector!
+        #expect(
+            error.message == selectorErrorPrefix(
+                toolName: TheFence.Command.scroll.rawValue,
+                selector: scrollSelector
+            ) + "schema validation failed for \(scrollSelector.parameter.key): observed integer 7; expected string"
         )
     }
 
@@ -100,6 +146,47 @@ struct ToolRoutingTests {
 
         #expect(operation.command == .editAction)
         #expect(operation.stringArgument("action") == "copy")
+    }
+
+    @Test("edit_action requires action selector")
+    func editActionRequiresActionSelector() {
+        let result = ButtonHeistMCPServer.routeToolRequest(
+            name: TheFence.Command.editAction.rawValue,
+            arguments: envelope()
+        )
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected routing failure")
+            return
+        }
+        let selector = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!.selector!
+        #expect(
+            error.message == selectorErrorPrefix(
+                toolName: TheFence.Command.editAction.rawValue,
+                selector: selector
+            ) + "schema validation failed for \(selector.parameter.key): observed missing; " +
+                "expected \(SchemaValidationError.expectedEnumValues(selector.parameter.enumValues!))"
+        )
+    }
+
+    @Test("edit_action rejects wrong-shaped action selector")
+    func editActionRejectsWrongShapedActionSelector() {
+        let result = ButtonHeistMCPServer.routeToolRequest(
+            name: TheFence.Command.editAction.rawValue,
+            arguments: envelope(["action": .int(7)])
+        )
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected routing failure")
+            return
+        }
+        let selector = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!.selector!
+        #expect(
+            error.message == selectorErrorPrefix(
+                toolName: TheFence.Command.editAction.rawValue,
+                selector: selector
+            ) + "schema validation failed for \(selector.parameter.key): observed integer 7; expected string"
+        )
     }
 
     @Test("run_batch still accepts canonical Fence command shapes")
@@ -354,6 +441,10 @@ struct ToolRoutingTests {
 
     private func envelope(_ arguments: [String: Argument] = [:]) -> TheFence.CommandArgumentEnvelope {
         TheFence.CommandArgumentEnvelope(values: arguments)
+    }
+
+    private func selectorErrorPrefix(toolName: String, selector: MCPToolSelector) -> String {
+        "\(toolName).\(selector.parameter.key): "
     }
 
     /// Mirrors the formatting logic in `FenceOperationCatalog.rawCommandList` for test assertions.
