@@ -40,7 +40,7 @@ public enum FenceOperationCatalog {
 
     public static func normalizeToolCall(
         name: String,
-        arguments: [String: Any]
+        arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let contract = TheFence.Command.mcpToolContract(named: name) else {
             return routeCommandNamed(name, arguments: arguments)
@@ -57,23 +57,6 @@ public enum FenceOperationCatalog {
     }
 
     public static func normalizeBatchStep(
-        _ step: [String: Any]
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        do {
-            let envelope = try TheFence.CommandArgumentEnvelope(arguments: step, droppingCommandKey: false)
-            let object = TheFence.CommandArgumentObject(
-                values: envelope.argumentValues,
-                fieldPrefix: nil
-            )
-            return normalizeBatchStep(object)
-        } catch let error as SchemaValidationError {
-            return .failure(FenceOperationRoutingError(message: error.message))
-        } catch {
-            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
-        }
-    }
-
-    static func normalizeBatchStep(
         _ step: TheFence.CommandArgumentObject
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         normalizeCanonicalStep(
@@ -190,7 +173,7 @@ public enum FenceOperationCatalog {
 
     private static func routeCommandNamed(
         _ name: String,
-        arguments: [String: Any]
+        arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: name) else {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
@@ -283,12 +266,11 @@ public enum FenceOperationCatalog {
     private static func routeSelectorTool(
         _ contract: MCPToolContract,
         selector: MCPToolSelector,
-        arguments: [String: Any]
+        arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        var operationArguments = arguments
         let rawValue: String?
         do {
-            rawValue = try selectorValue(in: operationArguments, selector: selector)
+            rawValue = try selectorValue(in: arguments, selector: selector)
         } catch let error as SchemaValidationError {
             return .failure(FenceOperationRoutingError(message: error.message))
         } catch {
@@ -300,23 +282,27 @@ public enum FenceOperationCatalog {
                 message: "Unknown \(contract.name) selector value: \(rawValue ?? "missing")"
             ))
         }
+        var operationValues = arguments.argumentValues
         if selector.consumesValue(rawValue) {
-            operationArguments.removeValue(forKey: selector.parameter.key)
+            operationValues.removeValue(forKey: selector.parameter.key)
         }
+        let operationArguments = TheFence.CommandArgumentEnvelope(values: operationValues)
         return normalizeToolOperation(command: command, arguments: operationArguments)
     }
 
     private static func normalizeToolOperation(
         command: TheFence.Command,
-        arguments: [String: Any]
+        arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        var operationArguments = arguments
         let expectationPayload: TheFence.ExpectationPayload?
+        let operationArguments: TheFence.CommandArgumentEnvelope
         do {
-            expectationPayload = try parsedExpectationPayload(
+            let parsedExpectation = try parsedExpectationPayload(
                 for: command,
-                arguments: &operationArguments
+                arguments: arguments
             )
+            expectationPayload = parsedExpectation.payload
+            operationArguments = parsedExpectation.arguments
         } catch let error as SchemaValidationError {
             return .failure(FenceOperationRoutingError(message: error.message))
         } catch let error as FenceError {
@@ -325,37 +311,30 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
 
-        do {
-            return .success(NormalizedOperation(
-                command: command,
-                arguments: try TheFence.CommandArgumentEnvelope(arguments: operationArguments),
-                expectationPayload: expectationPayload
-            ))
-        } catch let error as SchemaValidationError {
-            return .failure(FenceOperationRoutingError(message: error.message))
-        } catch {
-            return .failure(FenceOperationRoutingError(message: error.localizedDescription))
-        }
+        return .success(NormalizedOperation(
+            command: command,
+            arguments: operationArguments,
+            expectationPayload: expectationPayload
+        ))
     }
 
     private static func parsedExpectationPayload(
         for command: TheFence.Command,
-        arguments: inout [String: Any]
-    ) throws -> TheFence.ExpectationPayload? {
+        arguments: TheFence.CommandArgumentEnvelope
+    ) throws -> (payload: TheFence.ExpectationPayload?, arguments: TheFence.CommandArgumentEnvelope) {
         guard command.acceptsExpectationPayload,
-              arguments["expect"] != nil || arguments["timeout"] != nil else {
-            return nil
+              arguments.keys.contains("expect") || arguments.keys.contains("timeout") else {
+            return (nil, arguments)
         }
 
-        let payload = try TheFence.ExpectationPayload(
-            arguments: TheFence.CommandArgumentEnvelope(arguments: arguments)
-        )
-        arguments.removeValue(forKey: "expect")
-        return payload
+        let payload = try TheFence.ExpectationPayload(arguments: arguments)
+        var operationValues = arguments.argumentValues
+        operationValues.removeValue(forKey: "expect")
+        return (payload, TheFence.CommandArgumentEnvelope(values: operationValues))
     }
 
     private static func selectorValue(
-        in arguments: [String: Any],
+        in arguments: some TheFence.CommandArgumentReadable,
         selector: MCPToolSelector
     ) throws -> String? {
         let key = selector.parameter.key
@@ -366,7 +345,7 @@ public enum FenceOperationCatalog {
             guard enumValues.contains(rawValue) else {
                 throw SchemaValidationError(
                     field: key,
-                    observed: rawValue as Any,
+                    observed: SchemaValidationError.observedDescription(rawValue),
                     expected: SchemaValidationError.expectedEnumValues(enumValues)
                 )
             }
