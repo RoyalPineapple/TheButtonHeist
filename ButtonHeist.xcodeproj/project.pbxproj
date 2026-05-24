@@ -293,6 +293,7 @@
 		D4DD25AEB8F75449440CABCB /* InterfaceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBFD1ED73E1E76F4C0DFCE1F /* InterfaceTestHelpers.swift */; };
 		D5F2CD06CD5BC3904D0964C4 /* Navigation+Scroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147524407CD6DC3F6BD684FF /* Navigation+Scroll.swift */; };
 		D668B976C02A9BAF6D2D512D /* TheFence+BatchActionConstructor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33AF4FEAB617A8F6889B3C6 /* TheFence+BatchActionConstructor.swift */; };
+		D73AF669F2F4C132C0391CAF /* TheStash+LiveGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */; };
 		D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */; };
 		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -747,6 +748,7 @@
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
 		E20911C376F477524EC4F207 /* TheStakeoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStakeoutTests.swift; sourceTree = "<group>"; };
 		E239B3DF04A37884F2E211EA /* ServerExposureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerExposureTests.swift; sourceTree = "<group>"; };
+		E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+LiveGeometry.swift"; sourceTree = "<group>"; };
 		E2AF1DB1AFE33B9BE284CC9E /* TheFence+CommandPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandPresentation.swift"; sourceTree = "<group>"; };
 		E4E2CC1F69874C1BC9C88BBD /* HeistPlaybackReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlaybackReport.swift; sourceTree = "<group>"; };
 		E52AAF089A5FF3332696D2C8 /* Crypto.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Crypto.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1091,6 +1093,7 @@
 				CD54BF184FD9589D4A4A9804 /* Screen.swift */,
 				951C56AB163FAFB179DFDA9B /* TheStash.swift */,
 				CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */,
+				E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */,
 				0108809EB5567BB0C5665090 /* TheStash+Matching.swift */,
 				85F00EF7237962DD4F94F135 /* WireConversion.swift */,
 			);
@@ -1813,6 +1816,7 @@
 				4E025AADAFC3705425334617 /* Interactivity.swift in Sources */,
 				09987A8680B07DB479C74267 /* Screen.swift in Sources */,
 				475C23DE0FA87D9D78D1DB5A /* TheStash+Capture.swift in Sources */,
+				D73AF669F2F4C132C0391CAF /* TheStash+LiveGeometry.swift in Sources */,
 				871194C060FF486DFB34A4C6 /* TheStash+Matching.swift in Sources */,
 				97376AD47CD2A760A727ABE8 /* TheStash.swift in Sources */,
 				5283417AB9EDA1F0444CECFA /* WireConversion.swift in Sources */,

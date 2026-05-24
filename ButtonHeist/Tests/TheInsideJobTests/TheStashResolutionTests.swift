@@ -210,6 +210,65 @@ final class TheStashResolutionTests: XCTestCase {
         )
     }
 
+    func testNormalizedReplaySelectorAcquiresFreshLiveGeometry() {
+        let sourceFrame = CGRect(x: 10, y: 20, width: 80, height: 44)
+        let sourcePoint = CGPoint(x: 50, y: 42)
+        let sourceElement = AccessibilityElement.make(
+            label: "Quantity",
+            value: "0",
+            identifier: "quantity_stepper",
+            traits: .adjustable,
+            shape: .frame(AccessibilityRect(sourceFrame)),
+            activationPoint: sourcePoint
+        )
+        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+
+        let freshFrame = CGRect(x: 120, y: 240, width: 80, height: 44)
+        let freshPoint = CGPoint(x: 160, y: 262)
+        let currentElement = AccessibilityElement.make(
+            label: "Quantity",
+            value: "1",
+            identifier: "quantity_stepper",
+            traits: .adjustable,
+            shape: .frame(AccessibilityRect(freshFrame)),
+            activationPoint: freshPoint
+        )
+        let object = UIAccessibilityElement(accessibilityContainer: NSObject())
+        object.accessibilityFrame = freshFrame
+        object.accessibilityActivationPoint = freshPoint
+        bagman.currentScreen = Screen.makeForTests(
+            elements: [(currentElement, "quantity_1")],
+            objects: ["quantity_1": object]
+        )
+
+        let normalized = bagman.normalizeTarget(.heistId("quantity_0"), in: sourceScreen)
+
+        XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
+        XCTAssertEqual(normalized.sourceScreen.findElement(heistId: "quantity_0")?.element.shape.frame, sourceFrame)
+        guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {
+            XCTFail("Expected replay heistId to become semantic matcher, got \(normalized.executableTarget)")
+            return
+        }
+        XCTAssertEqual(matcher.identifier, "quantity_stepper")
+        XCTAssertNil(matcher.heistId)
+        XCTAssertNil(ordinal)
+
+        guard let resolved = bagman.resolveTarget(normalized.executableTarget).resolved else {
+            XCTFail("Expected semantic replay selector to resolve against current screen")
+            return
+        }
+        XCTAssertEqual(resolved.screenElement.heistId, "quantity_1")
+
+        guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: resolved) else {
+            XCTFail("Expected current live object to provide action geometry")
+            return
+        }
+        XCTAssertEqual(liveTarget.frame, freshFrame)
+        XCTAssertEqual(liveTarget.activationPoint, freshPoint)
+        XCTAssertNotEqual(liveTarget.frame, sourceFrame)
+        XCTAssertNotEqual(liveTarget.activationPoint, sourcePoint)
+    }
+
     // MARK: - Matcher Resolution
 
     func testMatcherResolvesUniqueElement() {
@@ -661,6 +720,40 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(bagman.increment(liveTarget))
         XCTAssertNotNil(bagman.liveGeometry(for: refreshed.screenElement))
+    }
+
+    func testLiveGeometryRejectsNonFiniteActivationPoint() {
+        let visible = element(label: "Visible", traits: .button)
+        let object = UIAccessibilityElement(accessibilityContainer: NSObject())
+        object.accessibilityFrame = CGRect(x: 0, y: 0, width: 100, height: 44)
+        object.accessibilityActivationPoint = CGPoint(x: CGFloat.infinity, y: 22)
+        let scrollView = UIScrollView()
+        let entry = Screen.ScreenElement(
+            heistId: "button_visible",
+            contentSpaceOrigin: nil,
+            element: visible
+        )
+        bagman.currentScreen = Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [.element(visible, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [visible: entry.heistId],
+            elementRefs: [
+                entry.heistId: .init(object: object, scrollView: scrollView)
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        guard let resolved = bagman.resolveTarget(.heistId("button_visible")).resolved else {
+            XCTFail("Expected visible target to resolve")
+            return
+        }
+        XCTAssertNil(bagman.liveGeometry(for: resolved.screenElement))
+        guard case .geometryUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
+            XCTFail("Expected non-finite activation point to be rejected as missing live geometry")
+            return
+        }
     }
 
     /// `hasTarget` powers wait-style predicates, so it must use the same
