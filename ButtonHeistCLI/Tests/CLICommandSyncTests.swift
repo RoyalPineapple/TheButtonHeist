@@ -527,15 +527,40 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         let requestBuilderSource = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift")
+        XCTAssertFalse(
+            requestBuilderSource.contains("parseExpectationArgument"),
+            "Shared CLI request construction should not parse expectation shorthand directly"
+        )
         XCTAssertTrue(
-            requestBuilderSource.contains("TheFence.parseExpectationArgument"),
-            "Human REPL parsing should delegate expectation rules to TheFence"
+            requestBuilderSource.contains("FenceCommandDescriptor.humanRequest"),
+            "Human REPL parsing should project requests through FenceCommandDescriptor"
+        )
+
+        let humanRequestSource = try readRepositoryFile(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+HumanCommandRequest.swift"
+        )
+        XCTAssertTrue(
+            humanRequestSource.contains("TheFence.parseExpectationArgument"),
+            "Human request parsing should delegate expectation rules to TheFence"
         )
 
         let commandSource = try readRepositoryFile("ButtonHeistCLI/Sources/Commands/WaitForChangeCommand.swift")
         XCTAssertTrue(
             commandSource.contains("TheFence.parseExpectationArgument"),
             "Wait-for-change CLI parsing should delegate expectation rules to TheFence"
+        )
+    }
+
+    func testSharedRequestBuilderDoesNotDeclareDescriptorLookupMirror() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift")
+
+        XCTAssertFalse(
+            source.contains("extension FenceCommandDescriptor"),
+            "CLI request building should use descriptor catalog APIs instead of private descriptor lookup extensions"
+        )
+        XCTAssertFalse(
+            source.contains("TheFence.Command.descriptors.first"),
+            "CLI request building should not scan descriptor catalogs directly"
         )
     }
 

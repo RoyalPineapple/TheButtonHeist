@@ -44,6 +44,7 @@
 		15ACCDAABA1FB72018B87121 /* TheBurglar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B68F25EE20E871B3447D1A /* TheBurglar.swift */; };
 		15E21D8057F2471052C0CE95 /* ScreenManifestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */; };
 		172D155B6F1B4DAFA1040B54 /* TheFenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EDD81A8A08CBF2229093AA4 /* TheFenceTests.swift */; };
+		182257DC6DD6B6288287071F /* TheFence+HumanCommandRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30EFA040147AF9848C57F4A5 /* TheFence+HumanCommandRequest.swift */; };
 		182D08F34A032A4555C8B88C /* TheFence+RequestPayload+ElementActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C563F9006A5994C60474596B /* TheFence+RequestPayload+ElementActions.swift */; };
 		19B2883BD89FF79837579882 /* TheSafecracker+TapDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */; };
 		1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */; };
@@ -544,6 +545,7 @@
 		30350583523C830C2C298AE7 /* ConnectionResultWaitersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionResultWaitersTests.swift; sourceTree = "<group>"; };
 		309BB45F850067AAEA4E20C3 /* TheFence+Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Connection.swift"; sourceTree = "<group>"; };
 		30B1C879F7F60355AD00033E /* SocketRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketRateLimiter.swift; sourceTree = "<group>"; };
+		30EFA040147AF9848C57F4A5 /* TheFence+HumanCommandRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+HumanCommandRequest.swift"; sourceTree = "<group>"; };
 		321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+IOHIDEventBuilder.swift"; sourceTree = "<group>"; };
 		32FA31515D39E073761B8D66 /* SwiftASN1.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftASN1.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3535E1A875F4E39BB589D4A3 /* TheBrains+Dispatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBrains+Dispatch.swift"; sourceTree = "<group>"; };
@@ -999,6 +1001,7 @@
 				EC2771DB546DDE036C0782AC /* TheFence+Formatting+Compact+Session.swift */,
 				BB8D4C2E483F550C29C4FDE2 /* TheFence+Formatting+JSON.swift */,
 				821D139B3D3163A97A58AEBE /* TheFence+Handlers.swift */,
+				30EFA040147AF9848C57F4A5 /* TheFence+HumanCommandRequest.swift */,
 				F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */,
 				CA752E01A8136738F8789715 /* TheFence+PendingRequestTrackers.swift */,
 				4B0A2A0866EE7E1975FF7580 /* TheFence+Playback.swift */,
@@ -1947,6 +1950,7 @@
 				28F5CFC5C8490148E35536F5 /* TheFence+Formatting+JSON.swift in Sources */,
 				2765930D8582515F8D54B664 /* TheFence+Formatting.swift in Sources */,
 				BBB6F36C1141BC08BD726088 /* TheFence+Handlers.swift in Sources */,
+				182257DC6DD6B6288287071F /* TheFence+HumanCommandRequest.swift in Sources */,
 				E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */,
 				B3A7E0DD9341201CC97ED43F /* TheFence+PendingRequestTrackers.swift in Sources */,
 				C140A15F6C6D720933A5FA2B /* TheFence+Playback.swift in Sources */,
