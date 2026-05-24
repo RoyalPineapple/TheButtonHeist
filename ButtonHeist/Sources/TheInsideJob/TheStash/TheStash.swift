@@ -258,28 +258,6 @@ final class TheStash {
         case resultTargetNotParsed(String)
     }
 
-    struct LiveGeometry {
-        let frame: CGRect
-        let activationPoint: CGPoint
-        let scrollView: UIScrollView
-    }
-
-    struct LiveActionTarget {
-        let resolvedTarget: ResolvedTarget
-        let object: NSObject
-        let frame: CGRect
-        let activationPoint: CGPoint
-
-        var screenElement: ScreenElement { resolvedTarget.screenElement }
-        var element: AccessibilityElement { resolvedTarget.element }
-    }
-
-    enum LiveActionTargetResolution {
-        case resolved(LiveActionTarget)
-        case objectUnavailable
-        case geometryUnavailable
-    }
-
     enum KnownTargetInflationFailure: Equatable {
         case missingContentOrigin
         case noLiveScrollableAncestor
@@ -386,49 +364,6 @@ final class TheStash {
         return CGPoint(x: targetX, y: targetY)
     }
 
-    func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
-        guard let object = dispatchObject(for: screenElement),
-              let scrollView = liveScrollView(for: screenElement) else { return nil }
-        let frame = object.accessibilityFrame
-        guard !frame.isNull, !frame.isEmpty else { return nil }
-        return LiveGeometry(
-            frame: frame,
-            activationPoint: object.accessibilityActivationPoint,
-            scrollView: scrollView
-        )
-    }
-
-    func resolveLiveActionTarget(for resolvedTarget: ResolvedTarget) -> LiveActionTargetResolution {
-        guard let object = dispatchObject(for: resolvedTarget.screenElement) else {
-            return .objectUnavailable
-        }
-        let frame = object.accessibilityFrame
-        let activationPoint = object.accessibilityActivationPoint
-        guard Self.isUsableFrame(frame),
-              Self.isUsablePoint(activationPoint) else {
-            return .geometryUnavailable
-        }
-        return .resolved(LiveActionTarget(
-            resolvedTarget: resolvedTarget,
-            object: object,
-            frame: frame,
-            activationPoint: activationPoint
-        ))
-    }
-
-    private static func isUsableFrame(_ frame: CGRect) -> Bool {
-        !frame.isNull
-            && !frame.isEmpty
-            && frame.origin.x.isFinite
-            && frame.origin.y.isFinite
-            && frame.size.width.isFinite
-            && frame.size.height.isFinite
-    }
-
-    private static func isUsablePoint(_ point: CGPoint) -> Bool {
-        point.x.isFinite && point.y.isFinite
-    }
-
     func activate(_ liveTarget: LiveActionTarget) -> ActivateOutcome {
         liveTarget.object.accessibilityActivate() ? .success : .refused
     }
@@ -466,28 +401,6 @@ final class TheStash {
             return .succeeded
         }
         return .noSuchAction
-    }
-
-    private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {
-        if visibleIds.contains(screenElement.heistId) {
-            return currentScreen.liveInterface.object(for: screenElement.heistId)
-        }
-        if case .active(let pending) = pendingRotorState,
-           pending.screenElement.heistId == screenElement.heistId {
-            return pending.object
-        }
-        if currentScreen.knownInterface.findElement(heistId: screenElement.heistId) == nil {
-            return currentScreen.liveInterface.object(for: screenElement.heistId)
-        }
-        return nil
-    }
-
-    func liveObject(for screenElement: ScreenElement) -> NSObject? {
-        dispatchObject(for: screenElement)
-    }
-
-    func liveScrollView(for screenElement: ScreenElement) -> UIScrollView? {
-        currentScreen.liveInterface.scrollView(for: screenElement)
     }
 
     func performRotor(
@@ -531,7 +444,7 @@ final class TheStash {
         predicate.searchDirection = direction.uiAccessibilityDirection
         if let currentHeistId {
             guard let current = resolveTarget(.heistId(currentHeistId)).resolved?.screenElement,
-                  let currentObject = dispatchObject(for: current) else {
+                  let currentObject = liveObject(for: current) else {
                 return .currentItemUnavailable(currentHeistId)
             }
             let currentRange: UITextRange?
@@ -1103,6 +1016,14 @@ final class TheStash {
             return nil
         }
         return pendingRotorResult.screenElement
+    }
+
+    func activePendingRotorObject(heistId: HeistId) -> NSObject? {
+        guard case .active(let pendingRotorResult) = pendingRotorState,
+              pendingRotorResult.screenElement.heistId == heistId else {
+            return nil
+        }
+        return pendingRotorResult.object
     }
 
     private func pendingRotorHeistId(for element: AccessibilityElement) -> HeistId {
