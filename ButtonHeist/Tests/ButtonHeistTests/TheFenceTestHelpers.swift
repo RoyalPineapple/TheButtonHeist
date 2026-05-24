@@ -359,7 +359,7 @@ func inspectBatch(_ response: FenceResponse) -> BatchInspection? {
     }
     return BatchInspection(
         outcomes: outcomes,
-        results: outcomes.jsonResultRows,
+        results: outcomes.compactMap { $0.response?.jsonDict() },
         completedSteps: outcomes.completedStepCount,
         failedIndex: outcomes.stoppedFailedIndex,
         totalTimingMs: totalTimingMs,

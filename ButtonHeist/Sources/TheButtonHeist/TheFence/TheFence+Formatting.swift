@@ -234,9 +234,6 @@ extension Array where Element == BatchStepOutcome {
         map(\.stepSummary)
     }
 
-    var jsonResultRows: [[String: Any]] {
-        compactMap { $0.response?.jsonDict() }
-    }
 }
 
 public enum SessionConnectionPhase: String, Sendable, Equatable {
