@@ -2539,6 +2539,76 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testParseExpectationTypedPayloadPreservesMatcherTraits() async throws {
+        let result = try parseTypedExpectation(.object([
+            "type": .string("element_disappeared"),
+            "matcher": .object([
+                "label": .string("Spinner"),
+                "traits": .array([.string("button")]),
+                "excludeTraits": .array([.string("selected")]),
+            ]),
+        ]))
+
+        XCTAssertEqual(
+            result,
+            .elementDisappeared(
+                ElementMatcher(label: "Spinner", traits: [.button], excludeTraits: [.selected])
+            )
+        )
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationTypedPayloadBadMatcherFieldNamesField() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("element_appeared"),
+            "matcher": .object([
+                "traits": .array([.int(7)]),
+            ]),
+        ]))) { error in
+            guard let error = error as? SchemaValidationError else {
+                XCTFail("Expected SchemaValidationError, got \(error)")
+                return
+            }
+            XCTAssertEqual(error.field, "matcher.traits[0]")
+            XCTAssertEqual(error.expected, "string")
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationTypedPayloadNonStringTypeNamesTypeField() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .int(7),
+        ]))) { error in
+            guard case FenceError.invalidRequest(let message) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+                return
+            }
+            XCTAssertTrue(message.contains("string \"type\" discriminator"))
+            XCTAssertTrue(message.contains("type: 7"))
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationTypedCompoundBadNestedFieldNamesField() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("compound"),
+            "expectations": .array([
+                .object([
+                    "type": .string("element_updated"),
+                    "property": .int(7),
+                ]),
+            ]),
+        ]))) { error in
+            guard let error = error as? SchemaValidationError else {
+                XCTFail("Expected SchemaValidationError, got \(error)")
+                return
+            }
+            XCTAssertEqual(error.field, "expectations[0].property")
+            XCTAssertEqual(error.expected, "string")
+        }
+    }
+
+    @ButtonHeistActor
     func testParseExpectationDiscriminatorElementAppearedWithoutMatcherThrows() async {
         XCTAssertThrowsError(try parseExpectation([
             "expect": ["type": "element_appeared"]
@@ -2630,6 +2700,40 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(Set(cases.map(\.type)), Set(ActionExpectation.wireTypeValues))
         for testCase in cases {
             let result = try parseExpectation(["expect": testCase.payload])
+            XCTAssertEqual(result, testCase.expected, "Failed to parse \(testCase.type)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testParseExpectationTypedDiscriminatorCoversAllWireTypes() async throws {
+        let cases: [(type: String, payload: TheFence.CommandArgumentValue, expected: ActionExpectation)] = [
+            ("delivery", .object(["type": .string("delivery")]), .delivery),
+            ("screen_changed", .object(["type": .string("screen_changed")]), .screenChanged),
+            ("elements_changed", .object(["type": .string("elements_changed")]), .elementsChanged),
+            ("element_updated", .object(["type": .string("element_updated")]), .elementUpdated()),
+            (
+                "element_appeared",
+                .object(["type": .string("element_appeared"), "matcher": .object(["label": .string("Cart")])]),
+                .elementAppeared(ElementMatcher(label: "Cart"))
+            ),
+            (
+                "element_disappeared",
+                .object(["type": .string("element_disappeared"), "matcher": .object(["label": .string("Spinner")])]),
+                .elementDisappeared(ElementMatcher(label: "Spinner"))
+            ),
+            (
+                "compound",
+                .object([
+                    "type": .string("compound"),
+                    "expectations": .array([.object(["type": .string("screen_changed")])]),
+                ]),
+                .compound([.screenChanged])
+            ),
+        ]
+
+        XCTAssertEqual(Set(cases.map(\.type)), Set(ActionExpectation.wireTypeValues))
+        for testCase in cases {
+            let result = try parseTypedExpectation(testCase.payload)
             XCTAssertEqual(result, testCase.expected, "Failed to parse \(testCase.type)")
         }
     }
@@ -4382,5 +4486,15 @@ final class TheFenceHandlerTests: XCTestCase {
 private func parseExpectation(_ request: [String: Any]) throws -> ActionExpectation? {
     try TheFence.ExpectationPayload(
         arguments: TheFence.CommandArgumentEnvelope(arguments: request)
+    ).expectation
+}
+
+private func parseTypedExpectation(_ expectation: TheFence.CommandArgumentValue?) throws -> ActionExpectation? {
+    var values: [String: TheFence.CommandArgumentValue] = [:]
+    if let expectation {
+        values["expect"] = expectation
+    }
+    return try TheFence.ExpectationPayload(
+        arguments: TheFence.CommandArgumentEnvelope(values: values)
     ).expectation
 }
