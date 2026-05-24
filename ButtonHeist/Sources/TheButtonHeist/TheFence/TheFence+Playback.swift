@@ -78,18 +78,14 @@ extension TheFence {
             command.rawValue
         }
 
-        func requestDecodeInputArguments() -> [String: Any] {
-            commandArgumentEnvelope().rawValue
-        }
-
         func normalizedOperation() -> NormalizedOperation {
             NormalizedOperation(
                 command: command,
-                arguments: commandArgumentEnvelope()
+                arguments: requestDecodeInputEnvelope()
             )
         }
 
-        private func commandArgumentEnvelope() -> CommandArgumentEnvelope {
+        func requestDecodeInputEnvelope() -> CommandArgumentEnvelope {
             var arguments = payload.values.mapValues(CommandArgumentValue.init)
 
             if let target {

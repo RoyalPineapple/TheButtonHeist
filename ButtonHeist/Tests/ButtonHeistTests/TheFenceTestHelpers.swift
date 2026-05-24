@@ -25,6 +25,24 @@ enum TheFenceFixtures {
     )
 }
 
+extension TheFence {
+    @ButtonHeistActor
+    func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
+        var arguments = request
+        arguments.removeValue(forKey: "command")
+        return try parseRequest(
+            command: command,
+            arguments: CommandArgumentEnvelope(arguments: arguments)
+        )
+    }
+}
+
+extension TheFence.PlaybackOperation {
+    func requestDecodeInputArguments() -> [String: Any] {
+        requestDecodeInputEnvelope().rawValue
+    }
+}
+
 @ButtonHeistActor
 func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (TheFence, MockConnection) {
     let mockConn = MockConnection()
