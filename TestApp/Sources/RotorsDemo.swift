@@ -27,6 +27,11 @@ struct RotorsDemo: View {
                 TextRangeRotorView()
                     .frame(minHeight: 160)
             }
+
+            Section("UIKit Rotor Host") {
+                UIKitRotorHostView()
+                    .frame(height: 104)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Validation Results")
@@ -42,6 +47,48 @@ struct RotorsDemo: View {
         }
         .navigationTitle("Custom Rotors")
     }
+}
+
+private struct UIKitRotorHostView: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let root = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 104))
+        root.isAccessibilityElement = false
+
+        let rotorHost = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+        rotorHost.isAccessibilityElement = true
+        rotorHost.accessibilityLabel = "Rotor Host"
+
+        let rotorHostLabel = UILabel(frame: rotorHost.bounds)
+        rotorHostLabel.text = "Rotor Host"
+        rotorHostLabel.font = .preferredFont(forTextStyle: .body)
+        rotorHostLabel.adjustsFontForContentSizeCategory = true
+        rotorHostLabel.isAccessibilityElement = false
+        rotorHost.addSubview(rotorHostLabel)
+
+        let resultView = UIView(frame: CGRect(x: 0, y: 52, width: 320, height: 44))
+        resultView.isAccessibilityElement = true
+        resultView.accessibilityLabel = "Rotor Result: Missing amount"
+
+        let resultLabel = UILabel(frame: resultView.bounds)
+        resultLabel.text = "Rotor Result: Missing amount"
+        resultLabel.font = .preferredFont(forTextStyle: .body)
+        resultLabel.adjustsFontForContentSizeCategory = true
+        resultLabel.isAccessibilityElement = false
+        resultView.addSubview(resultLabel)
+
+        rotorHost.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Errors") { [weak resultView] _ in
+                guard let resultView else { return nil }
+                return UIAccessibilityCustomRotorItemResult(targetElement: resultView, targetRange: nil)
+            }
+        ]
+
+        root.addSubview(rotorHost)
+        root.addSubview(resultView)
+        return root
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
 }
 
 private struct TextRangeRotorView: UIViewRepresentable {
