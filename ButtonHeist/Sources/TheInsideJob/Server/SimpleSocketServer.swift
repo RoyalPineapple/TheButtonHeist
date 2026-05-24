@@ -10,7 +10,8 @@ import TheScore
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
 actor SimpleSocketServer {
-    typealias DataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
+    typealias DataHandler = SocketDataHandler
+    typealias Callbacks = SocketServerCallbacks
 
     private static let maxConnections = 5
     static let maxMessagesPerSecond = SocketRateLimiter.defaultMaxMessagesPerSecond
@@ -42,34 +43,7 @@ actor SimpleSocketServer {
         _syncListeningPort.withLock { $0 }
     }
 
-    // MARK: - Callbacks
-
-    struct Callbacks: Sendable {
-        var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
-        var onClientDisconnected: (@Sendable (Int) -> Void)?
-        var onDataReceived: DataHandler?
-        var onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)?
-        var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
-        var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
-
-        init(
-            onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)? = nil,
-            onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
-            onDataReceived: DataHandler? = nil,
-            onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)? = nil,
-            onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil,
-            onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
-        ) {
-            self.onClientConnected = onClientConnected
-            self.onClientDisconnected = onClientDisconnected
-            self.onDataReceived = onDataReceived
-            self.onSendFailed = onSendFailed
-            self.onUnauthenticatedData = onUnauthenticatedData
-            self.onRateLimited = onRateLimited
-        }
-    }
-
-    private var callbacks = Callbacks()
+    private var clientLifecycle = SocketClientLifecycle()
 
     /// Connection scopes the server will accept. Connections from disallowed scopes are rejected immediately.
     private let allowedScopes: Set<ConnectionScope>
@@ -149,7 +123,7 @@ actor SimpleSocketServer {
             throw ServerError.alreadyRunning
         }
 
-        if let callbacks { self.callbacks = callbacks }
+        if let callbacks { self.clientLifecycle.callbacks = callbacks }
         let host: NWEndpoint.Host = bindToLoopback ? .ipv6(.loopback) : .ipv6(.any)
         parameters.requiredLocalEndpoint = .hostPort(
             host: host,
@@ -215,10 +189,7 @@ actor SimpleSocketServer {
         serverPhase = .stopped
         _syncListeningPort.withLock { $0 = 0 }
 
-        for state in allClients {
-            state.authentication.cancelDeadline()
-            state.connection.cancel()
-        }
+        clientLifecycle.cancelClientsWithoutNotifying(allClients)
         listener.cancel()
         logger.info("Server stopped")
     }
@@ -331,7 +302,7 @@ actor SimpleSocketServer {
     private func completedSend(clientId: Int, byteCount: Int, error: NWError?) {
         clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)
         if let error {
-            callbacks.onSendFailed?(clientId, .transportFailed(clientId: clientId, message: error.localizedDescription))
+            clientLifecycle.sendFailed(clientId, failure: .transportFailed(clientId: clientId, message: error.localizedDescription))
         }
     }
 
@@ -438,7 +409,7 @@ actor SimpleSocketServer {
         }
         let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
         logger.info("Client \(clientId) connected")
-        notifyClientConnected(clientId, address: remoteAddress)
+        clientLifecycle.clientConnected(clientId, address: remoteAddress)
         startReceiving(clientId: clientId, connection: connection)
         return clientId
     }
@@ -472,19 +443,8 @@ actor SimpleSocketServer {
         }
     }
 
-    private func notifyClientConnected(_ clientId: Int, address: String?) {
-        callbacks.onClientConnected?(clientId, address)
-    }
-
-    private func notifyClientDisconnected(_ clientId: Int) {
-        callbacks.onClientDisconnected?(clientId)
-    }
-
     private func removeClient(_ clientId: Int) {
-        guard let state = clientRegistry.remove(clientId) else { return }
-        state.authentication.cancelDeadline()
-        state.connection.cancel()
-        notifyClientDisconnected(clientId)
+        clientLifecycle.removeClient(clientId, from: &clientRegistry)
     }
 
     private func rejectStartedConnectionWithServerError(_ connection: NWConnection, kind: ErrorKind, message: String) {
@@ -532,7 +492,7 @@ actor SimpleSocketServer {
     }
 
     private func notifyRateLimit(_ clientId: Int) {
-        callbacks.onRateLimited?(clientId) { [weak self] response in
+        clientLifecycle.rateLimited(clientId) { [weak self] response in
             guard let self else { return }
             self.spawnTrackedTask { server in await server.send(response, to: clientId) }
         }
@@ -602,8 +562,7 @@ actor SimpleSocketServer {
                 }
                 continue
             case .accepted(let authenticated):
-                let dataHandler = authenticated ? callbacks.onDataReceived : callbacks.onUnauthenticatedData
-                dataHandler?(clientId, messageData) { [weak self] response in
+                clientLifecycle.receivedData(clientId: clientId, data: messageData, authenticated: authenticated) { [weak self] response in
                     guard let self else { return }
                     self.spawnTrackedTask { server in await server.send(response, to: clientId) }
                 }
