@@ -761,6 +761,34 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.edge, "top")
     }
 
+    func testScrollingCLIDefaultsProjectFromFenceParameterSpecs() throws {
+        XCTAssertEqual(
+            try ScrollCommand.parse([]).direction,
+            catalogStringDefault(.scroll, .direction)
+        )
+        XCTAssertEqual(
+            try ScrollToEdgeCommand.parse([]).edge,
+            catalogStringDefault(.scrollToEdge, .edge)
+        )
+        XCTAssertEqual(
+            try RotorCommand.parse(["button"]).direction,
+            catalogStringDefault(.rotor, .direction)
+        )
+    }
+
+    func testScrollingCLICommandsDoNotMirrorCatalogDefaultsInSources() throws {
+        let scrollSource = try readRepositoryFile("ButtonHeistCLI/Sources/Commands/ScrollCommand.swift")
+        let scrollToEdgeSource = try readRepositoryFile("ButtonHeistCLI/Sources/Commands/ScrollToEdgeCommand.swift")
+        let rotorSource = try readRepositoryFile("ButtonHeistCLI/Sources/Commands/RotorCommand.swift")
+
+        XCTAssertTrue(scrollSource.contains("Self.catalogDefaultString(for: .direction)"))
+        XCTAssertFalse(scrollSource.contains(#"var direction: String = "down""#))
+        XCTAssertTrue(scrollToEdgeSource.contains("Self.catalogDefaultString(for: .edge)"))
+        XCTAssertFalse(scrollToEdgeSource.contains(#"var edge: String = "top""#))
+        XCTAssertTrue(rotorSource.contains("Self.catalogDefaultString(for: .direction)"))
+        XCTAssertFalse(rotorSource.contains("var direction: String = RotorDirection.next.rawValue"))
+    }
+
     func testHumanParserMapsCoordinateTapAlias() {
         let request = ReplSession.parseHumanInput("tap 100 200")
 
@@ -787,6 +815,19 @@ final class CLICommandSyncTests: XCTestCase {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
         }
+    }
+
+    private func catalogStringDefault(
+        _ command: TheFence.Command,
+        _ key: FenceParameterKey,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> String {
+        guard case .string(let value)? = command.defaultArgumentValue(for: key) else {
+            XCTFail("Missing catalog string default for \(command.rawValue).\(key.rawValue)", file: file, line: line)
+            return ""
+        }
+        return value
     }
 
     private var descriptorParameterKeys: Set<String> {

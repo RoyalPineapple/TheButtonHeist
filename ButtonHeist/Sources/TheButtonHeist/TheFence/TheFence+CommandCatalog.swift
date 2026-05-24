@@ -204,6 +204,14 @@ public extension TheFence.Command {
         descriptor.parameters
     }
 
+    func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
+        parameters.first { $0.key == key.rawValue }
+    }
+
+    func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
+        parameter(named: key)?.defaultValue
+    }
+
     static func activationAlias(forActionName actionName: String?) -> FenceCommandAlias {
         switch actionName.flatMap({ TheFence.Command(rawValue: $0.lowercased()) }) {
         case .increment:

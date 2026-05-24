@@ -32,7 +32,7 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
     var rotorIndex: Int?
 
     @Option(name: .shortAndLong, help: "Direction: next or previous (default: next)")
-    var direction: String = RotorDirection.next.rawValue
+    var direction: String = Self.catalogDefaultString(for: .direction)
 
     @Option(name: .customLong("current-heist-id"), help: "Current rotor item heistId for continuing next/previous")
     var currentHeistId: String?
