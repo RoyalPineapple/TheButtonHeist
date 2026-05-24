@@ -370,52 +370,13 @@ final class TheHandoff {
             }
         }
 
-        let deadline = Date().addingTimeInterval(timeout)
-        var reachableIDs: Set<String> = []
-        var nextProbeAt: [String: Date] = [:]
-
-        while Date() < deadline {
-            let snapshot = discoveredDevices
-            let currentIDs = Set(snapshot.map(\.id))
-            reachableIDs = reachableIDs.filter { currentIDs.contains($0) }
-            nextProbeAt = nextProbeAt.filter { currentIDs.contains($0.key) }
-
-            let now = Date()
-            let dueDevices = snapshot.filter { device in
-                !reachableIDs.contains(device.id) &&
-                    (nextProbeAt[device.id] ?? .distantPast) <= now
-            }
-
-            if !dueDevices.isEmpty {
-                let probed = await withTaskGroup(of: (String, Bool).self) { group in
-                    for device in dueDevices {
-                        group.addTask {
-                            (device.id, await device.isReachable(timeout: probeTimeout))
-                        }
-                    }
-
-                    var results: [(String, Bool)] = []
-                    for await result in group {
-                        results.append(result)
-                    }
-                    return results
-                }
-
-                let retryAt = Date().addingTimeInterval(retryInterval)
-                for (id, isReachable) in probed {
-                    if isReachable {
-                        reachableIDs.insert(id)
-                        nextProbeAt.removeValue(forKey: id)
-                    } else {
-                        nextProbeAt[id] = retryAt
-                    }
-                }
-            }
-
-            guard await Task.cancellableSleep(for: .milliseconds(100)) else { break }
-        }
-
-        return discoveredDevices.filter { reachableIDs.contains($0.id) }
+        return await ReachableDeviceScanner(getDiscoveredDevices: { [weak self] in
+            self?.discoveredDevices ?? []
+        }).scan(
+            timeout: timeout,
+            probeTimeout: probeTimeout,
+            retryInterval: retryInterval
+        )
     }
 
     // MARK: - Connection

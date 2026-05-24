@@ -48,6 +48,7 @@
 		19B2883BD89FF79837579882 /* TheSafecracker+TapDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */; };
 		1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */; };
 		1D1654DBAB2C186BFB9EF7D9 /* ActionContractTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AE28070E0BC4D26E6C050DB /* ActionContractTests.swift */; };
+		1D61C74D57423686A9738A73 /* ReachableDeviceScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 207F95333F627CA7F0B8AA01 /* ReachableDeviceScanner.swift */; };
 		1DCE97491DF9EAC2AA50E6EB /* DeviceConnectionTLSTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D6FCAB01DA8EBABEF0F5E94 /* DeviceConnectionTLSTests.swift */; };
 		1DE3ACC5C1D8BC396A3F4F16 /* KeyboardBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22E288C7ED5647AD70907B9 /* KeyboardBridge.swift */; };
 		1E800F3E60921774EFC6A9EB /* FenceRecordingLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB6BB03911DA4236C7798B8E /* FenceRecordingLifecycle.swift */; };
@@ -520,6 +521,7 @@
 		1BE3551882C8F9FF740EA26B /* TheBurglarApplyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBurglarApplyTests.swift; sourceTree = "<group>"; };
 		1D2C214AC9E3ECBCA3196E6E /* ActionResultBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionResultBuilder.swift; sourceTree = "<group>"; };
 		1D6FCAB01DA8EBABEF0F5E94 /* DeviceConnectionTLSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionTLSTests.swift; sourceTree = "<group>"; };
+		207F95333F627CA7F0B8AA01 /* ReachableDeviceScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachableDeviceScanner.swift; sourceTree = "<group>"; };
 		20F75B66F13FE91D3C14861B /* ServerTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerTransportTests.swift; sourceTree = "<group>"; };
 		22FE61852546E4B6F51E7605 /* TheFence+Batch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Batch.swift"; sourceTree = "<group>"; };
 		23AABE85FC77329552681A4C /* TestSentinelTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSentinelTask.swift; sourceTree = "<group>"; };
@@ -1219,6 +1221,7 @@
 				D355B25F35519BEF35AD6E72 /* HandoffConnectionState.swift */,
 				45EA199501640A247FB114DE /* HandoffDiscoveryLifecycle.swift */,
 				9433DDF2A1AA0533161A52E2 /* HandoffReconnectController.swift */,
+				207F95333F627CA7F0B8AA01 /* ReachableDeviceScanner.swift */,
 				49DC85F5FB0AB0E2A81C9B96 /* TheHandoff.swift */,
 				DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */,
 			);
@@ -1963,6 +1966,7 @@
 				D672C9A6BBBE5949E0E9A8DE /* HandoffConnectionState.swift in Sources */,
 				8F6EEC1B563048DE8C0A41B1 /* HandoffDiscoveryLifecycle.swift in Sources */,
 				834E39398185AABFB104A9CA /* HandoffReconnectController.swift in Sources */,
+				1D61C74D57423686A9738A73 /* ReachableDeviceScanner.swift in Sources */,
 				A2F13036F15FC1C1828257A0 /* TheHandoff.swift in Sources */,
 				7DE9C29580D34C57826B3ED0 /* USBDeviceDiscovery.swift in Sources */,
 			);
