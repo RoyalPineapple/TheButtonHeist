@@ -235,6 +235,7 @@
 		A339D30D4BB6B82C2D3A9BA3 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 286300664EC22C2386C8F58E /* Exports.swift */; };
 		A35FCD03860CA3E9A8DA641F /* SocketSendBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8078DED719BB15C5C04B462 /* SocketSendBuffer.swift */; };
 		A3C01AF95DA5F2B88C93AD73 /* TripwireIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 802556A6984BBC74DD6AFE1D /* TripwireIntegrationTests.swift */; };
+		A49D71A6A794BCDA7B95070A /* PublicJSONSerializer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4CC3DD5E8E5DA17F81344C6 /* PublicJSONSerializer.swift */; };
 		A4D84B3E4B52BAD473C5F357 /* TheFence+BatchStepConstructor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591D779918A4CB5580E489FE /* TheFence+BatchStepConstructor.swift */; };
 		A5923A680CE4D3E5AE337D19 /* ActionExpectationValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B398A7FAB3ECAE8AD227D3C /* ActionExpectationValidationTests.swift */; };
 		A6405899D9E72AAB0A4AAC95 /* ActionCapabilityDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB73FEEE9E9722037B924026 /* ActionCapabilityDiagnostic.swift */; };
@@ -782,6 +783,7 @@
 		EEC77EDAB1D48630043C140D /* PingFastPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PingFastPath.swift; sourceTree = "<group>"; };
 		F16F859F1B9863B934C03E3E /* Error+Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Error+Message.swift"; sourceTree = "<group>"; };
 		F39B2361B09CAE86D5E0B46A /* CCryptoBoringSSL.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = CCryptoBoringSSL.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F4CC3DD5E8E5DA17F81344C6 /* PublicJSONSerializer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicJSONSerializer.swift; sourceTree = "<group>"; };
 		F4E3560F4324DC93F7EFEFB2 /* TheFenceCompactFormattingContractTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceCompactFormattingContractTests.swift; sourceTree = "<group>"; };
 		F4F0E46D5FDF7214ED8460E8 /* AccessibilityTraceDiffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceDiffTests.swift; sourceTree = "<group>"; };
 		F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+ParameterSpec.swift"; sourceTree = "<group>"; };
@@ -940,6 +942,7 @@
 				9457CF49D9F2CA016C02EEA0 /* FenceOperationCatalog.swift */,
 				566ADFBE16661B2765192C8F /* FencePlaybackLifecycle.swift */,
 				AB6BB03911DA4236C7798B8E /* FenceRecordingLifecycle.swift */,
+				F4CC3DD5E8E5DA17F81344C6 /* PublicJSONSerializer.swift */,
 				37797014C48E03154F0FB75C /* SchemaValidationError.swift */,
 				2B92FA5985EAF1A5C7360207 /* TheFence.swift */,
 				22FE61852546E4B6F51E7605 /* TheFence+Batch.swift */,
@@ -1877,6 +1880,7 @@
 				9CB361ED5426774B8FED8E9C /* FenceOperationCatalog.swift in Sources */,
 				7BF2FBA3CE33E4D71849F2F6 /* FencePlaybackLifecycle.swift in Sources */,
 				1E800F3E60921774EFC6A9EB /* FenceRecordingLifecycle.swift in Sources */,
+				A49D71A6A794BCDA7B95070A /* PublicJSONSerializer.swift in Sources */,
 				F27830B9AF754EF55A035891 /* SchemaValidationError.swift in Sources */,
 				BFA7A094D0F9A4F606474AC6 /* TheFence+Batch.swift in Sources */,
 				D668B976C02A9BAF6D2D512D /* TheFence+BatchActionConstructor.swift in Sources */,

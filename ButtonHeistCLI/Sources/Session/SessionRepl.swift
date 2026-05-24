@@ -141,12 +141,8 @@ final class ReplSession {
         case .compact:
             writeOutput(response.compactFormatted())
         case .json:
-            var dictionary = response.jsonDict()
-            if let id {
-                dictionary["id"] = id
-            }
             do {
-                let data = try JSONSerialization.data(withJSONObject: dictionary, options: [.sortedKeys])
+                let data = try response.jsonData(requestId: id)
                 if let json = String(data: data, encoding: .utf8) {
                     writeOutput(json)
                 } else {
