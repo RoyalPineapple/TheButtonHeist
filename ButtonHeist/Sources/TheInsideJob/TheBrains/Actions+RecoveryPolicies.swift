@@ -75,12 +75,20 @@ struct LiveActionTargetRecoveryPolicy {
     ) async -> Resolution {
         navigation.refresh()
         let positioning = await navigation.ensureOnScreen(for: request.normalizedTarget)
-        if positioning.failure != nil {
-            return .failure(initialFailure)
+        if let recoveryFailure = positioning.failure {
+            return .failure(LiveActionTargetRecoveryDiagnostic.recoveryFailed(
+                initialFailure: initialFailure,
+                recoveryObservation: recoveryFailure.message,
+                method: request.method
+            ))
         }
         let resolution = stash.resolveTarget(target)
         guard let resolved = resolution.resolved else {
-            return .failure(initialFailure)
+            return .failure(LiveActionTargetRecoveryDiagnostic.recoveryFailed(
+                initialFailure: initialFailure,
+                recoveryObservation: request.normalizedTarget.diagnostics(resolution.diagnostics),
+                method: request.method
+            ))
         }
         return await makeContext(request, target: target, resolved: resolved, allowingRefresh: false)
     }
@@ -222,6 +230,34 @@ struct LiveActionTargetRecoveryPolicy {
             message: normalizedTarget.diagnostics(message),
             payload: result.payload,
             failureKind: result.failureKind
+        )
+    }
+}
+
+enum LiveActionTargetRecoveryDiagnostic {
+    static func recoveryFailed(
+        initialFailure: TheSafecracker.InteractionResult,
+        recoveryObservation: String?,
+        method: ActionMethod
+    ) -> TheSafecracker.InteractionResult {
+        let initialMessage = initialFailure.message ?? "\(method.rawValue) failed"
+        let observed: String
+        if let recoveryObservation, !recoveryObservation.isEmpty {
+            observed = recoveryObservation
+        } else {
+            observed = "unknown"
+        }
+        let message = [
+            initialMessage,
+            "- contract: live action target must be reachable after refresh",
+            "- knownState: refresh/re-resolve failed; observed \(observed)",
+            "- tryNext: run get_interface, then retry \(method.rawValue) against the refreshed element",
+        ].joined(separator: "\n")
+        return .failure(
+            initialFailure.method,
+            message: message,
+            payload: initialFailure.payload,
+            failureKind: initialFailure.failureKind
         )
     }
 }

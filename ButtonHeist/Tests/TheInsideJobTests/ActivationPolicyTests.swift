@@ -173,6 +173,42 @@ final class ActivationPolicyTests: XCTestCase {
         ])
     }
 
+    func testLiveTargetRecoveryDiagnosticKeepsRecoveryObservation() {
+        let result = LiveActionTargetRecoveryDiagnostic.recoveryFailed(
+            initialFailure: .failure(
+                .elementDeallocated,
+                message: "element action failed: observed liveObject=deallocated"
+            ),
+            recoveryObservation: "ensure_on_screen failed: known target offscreen",
+            method: .customAction
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .elementDeallocated)
+        XCTAssertDiagnostic(result.message, contains: [
+            "element action failed: observed liveObject=deallocated",
+            "contract: live action target must be reachable after refresh",
+            "knownState: refresh/re-resolve failed",
+            "ensure_on_screen failed: known target offscreen",
+            "tryNext: run get_interface, then retry customAction against the refreshed element",
+        ])
+    }
+
+    func testLiveTargetRecoveryDiagnosticHandlesMissingObservation() {
+        let result = LiveActionTargetRecoveryDiagnostic.recoveryFailed(
+            initialFailure: .failure(.activate, message: "activate failed"),
+            recoveryObservation: nil,
+            method: .activate
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertDiagnostic(result.message, contains: [
+            "activate failed",
+            "knownState: refresh/re-resolve failed; observed unknown",
+            "tryNext: run get_interface, then retry activate against the refreshed element",
+        ])
+    }
+
     private func makePolicy(
         activate: @escaping @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
