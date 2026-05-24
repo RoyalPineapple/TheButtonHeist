@@ -131,6 +131,12 @@ extension ActionExpectation: Codable {
     /// Discriminator strings accepted in object-form expectation payloads.
     public static let wireTypeValues: [String] = WireType.allCases.map(\.rawValue)
 
+    /// Payload-free expectation types accepted as compact command input.
+    public static let shorthandWireTypeValues: [String] = [
+        WireType.screenChanged.rawValue,
+        WireType.elementsChanged.rawValue,
+    ]
+
     private enum ElementUpdatedKey: String, CodingKey {
         case type, heistId, property, oldValue, newValue
     }

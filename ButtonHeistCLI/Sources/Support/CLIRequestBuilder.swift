@@ -174,7 +174,7 @@ enum CLIRequestBuilder {
 
     private static func normalizeExpectationArgument(in draft: inout RequestDraft) {
         guard case .string(let rawExpectation)? = draft[.expect],
-              let expectation = try? ExpectationArgumentParser.parse(rawExpectation) else {
+              let expectation = try? TheFence.parseExpectationArgument(rawExpectation) else {
             return
         }
         draft[.expect] = expectation

@@ -335,8 +335,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try TypeCommand.parse(["--delete", "3", "hello"]))
     }
 
-    func testExpectationArgumentParserNormalizesShorthand() throws {
-        let parsed = try ExpectationArgumentParser.parse("screen_changed")
+    func testFenceExpectationArgumentContractNormalizesShorthand() throws {
+        let parsed = try TheFence.parseExpectationArgument("screen_changed")
 
         guard case .object(let object) = parsed else {
             return XCTFail("expected object expectation")
@@ -344,8 +344,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(object["type"], .string("screen_changed"))
     }
 
-    func testExpectationArgumentParserAcceptsJsonObject() throws {
-        let parsed = try ExpectationArgumentParser.parse(#"{"type":"element_updated","property":"value"}"#)
+    func testFenceExpectationArgumentContractAcceptsJsonObject() throws {
+        let parsed = try TheFence.parseExpectationArgument(#"{"type":"element_updated","property":"value"}"#)
 
         guard case .object(let object) = parsed else {
             return XCTFail("expected object expectation")
@@ -354,8 +354,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(object["property"], .string("value"))
     }
 
-    func testExpectationArgumentParserRejectsUnknownString() {
-        XCTAssertThrowsError(try ExpectationArgumentParser.parse("layout_changed"))
+    func testFenceExpectationArgumentContractRejectsUnknownString() {
+        XCTAssertThrowsError(try TheFence.parseExpectationArgument("layout_changed"))
     }
 
     func testHumanParserNormalizesChangeExpectationShortcut() {
@@ -515,6 +515,28 @@ final class CLICommandSyncTests: XCTestCase {
                 CLIRequestBuilder.diagnosticMessage(for: error)
             )
         }
+    }
+
+    func testCLIHasNoExpectationParserMirror() throws {
+        let supportFiles = try swiftSourceFiles(under: "ButtonHeistCLI/Sources/Support")
+        let parserFiles = supportFiles.filter { $0.lastPathComponent.contains("ExpectationArgumentParser") }
+
+        XCTAssertTrue(
+            parserFiles.isEmpty,
+            "CLI expectation shorthand parsing should live in TheFence.parseExpectationArgument, not an adapter mirror"
+        )
+
+        let requestBuilderSource = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift")
+        XCTAssertTrue(
+            requestBuilderSource.contains("TheFence.parseExpectationArgument"),
+            "Human REPL parsing should delegate expectation rules to TheFence"
+        )
+
+        let commandSource = try readRepositoryFile("ButtonHeistCLI/Sources/Commands/WaitForChangeCommand.swift")
+        XCTAssertTrue(
+            commandSource.contains("TheFence.parseExpectationArgument"),
+            "Wait-for-change CLI parsing should delegate expectation rules to TheFence"
+        )
     }
 
     func testSharedRequestBuilderDoesNotInferParsedCommandFromRequestDictionary() throws {
