@@ -463,6 +463,25 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.request[.command] as? String, "tap")
         XCTAssertEqual(parsed.request["id"] as? Int, 7)
         XCTAssertEqual(parsed.request[.text] as? Bool, false)
+        XCTAssertNil(parsed.command, "Machine JSON should not resolve human aliases before Fence validation")
+    }
+
+    func testSharedRequestBuilderAttachesDescriptorForHumanCommandParsing() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(from: "screenshot")
+
+        XCTAssertEqual(parsed.mode, .human)
+        XCTAssertEqual(parsed.command, .getScreen)
+        XCTAssertEqual(parsed.descriptor?.canonicalName, TheFence.Command.getScreen.rawValue)
+        XCTAssertEqual(parsed.request[.command] as? String, TheFence.Command.getScreen.rawValue)
+    }
+
+    func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"quit","id":"repl-stop"}"#)
+
+        XCTAssertEqual(parsed.mode, .machine)
+        XCTAssertEqual(parsed.command, .quit)
+        XCTAssertEqual(parsed.request[.command] as? String, TheFence.Command.quit.rawValue)
+        XCTAssertEqual(parsed.request["id"] as? String, "repl-stop")
     }
 
     func testSharedRequestBuilderRejectsUnknownHumanCommand() {
@@ -496,6 +515,23 @@ final class CLICommandSyncTests: XCTestCase {
                 CLIRequestBuilder.diagnosticMessage(for: error)
             )
         }
+    }
+
+    func testSharedRequestBuilderDoesNotInferParsedCommandFromRequestDictionary() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift")
+
+        XCTAssertFalse(
+            source.contains("var commandName"),
+            "Parsed request identity should be carried from the descriptor resolved during parsing"
+        )
+        XCTAssertFalse(
+            source.contains("TheFence.Command.init(rawValue:)"),
+            "Parsed request identity should not be inferred back out of the untyped request dictionary"
+        )
+        XCTAssertTrue(
+            source.contains("let descriptor: FenceCommandDescriptor?"),
+            "Parsed requests should retain the descriptor resolved by the parser"
+        )
     }
 
     func testCLIAndREPLShareCanonicalRequestBuilding() {

@@ -9,14 +9,11 @@ enum CLIRequestInputMode: Equatable {
 
 struct CLIParsedRequest {
     let request: [String: Any]
+    let descriptor: FenceCommandDescriptor?
     let mode: CLIRequestInputMode
 
-    var commandName: String? {
-        request[.command] as? String
-    }
-
     var command: TheFence.Command? {
-        commandName.flatMap(TheFence.Command.init(rawValue:))
+        descriptor?.command
     }
 
     var requestId: Any? {
@@ -63,7 +60,7 @@ enum CLIRequestBuilder {
                 let value = String(arg[arg.index(after: eqIndex)...])
                 try draft.setParameter(
                     named: key,
-                    value: try parseHumanValue(value, forParameterNamed: key, command: draft.command)
+                    value: try parseHumanValue(value, forParameterNamed: key, descriptor: draft.descriptor)
                 )
             } else {
                 positional.append(arg)
@@ -73,7 +70,11 @@ enum CLIRequestBuilder {
         interpretPositionalArgs(positional, into: &draft)
         normalizeExpectationArgument(in: &draft)
 
-        return CLIParsedRequest(request: draft.fenceRequest(), mode: .human)
+        return CLIParsedRequest(
+            request: draft.fenceRequest(),
+            descriptor: draft.descriptor,
+            mode: .human
+        )
     }
 
     static func tokenize(_ line: String) -> [String] {
@@ -110,10 +111,14 @@ enum CLIRequestBuilder {
         let data = Data(line.utf8)
         let value = try JSONDecoder().decode(HeistValue.self, from: data)
         guard case .object(let object) = value,
-              case .string? = object[FenceParameterKey.command.rawValue] else {
+              case .string(let commandName)? = object[FenceParameterKey.command.rawValue] else {
             throw ValidationError("Expected JSON object with string field 'command'")
         }
-        return CLIParsedRequest(request: object.mapValues(\.cliRawValue), mode: .machine)
+        return CLIParsedRequest(
+            request: object.mapValues(\.cliRawValue),
+            descriptor: FenceCommandDescriptor.descriptor(canonicalName: commandName),
+            mode: .machine
+        )
     }
 
     static func diagnosticMessage(for error: Error) -> String {
@@ -126,8 +131,8 @@ enum CLIRequestBuilder {
             return RequestDraft(alias: alias)
         }
 
-        if let descriptor = TheFence.Command.descriptor(namedForCLIInput: rawCommand) {
-            return RequestDraft(command: descriptor.command)
+        if let descriptor = FenceCommandDescriptor.descriptor(namedForCLIInput: rawCommand) {
+            return RequestDraft(descriptor: descriptor)
         }
 
         throw ValidationError("Unknown command '\(rawCommand)'. Type 'help' for available commands.")
@@ -136,10 +141,10 @@ enum CLIRequestBuilder {
     private static func parseHumanValue(
         _ value: String,
         forParameterNamed parameterName: String,
-        command: TheFence.Command
+        descriptor: FenceCommandDescriptor
     ) throws -> HeistValue {
-        guard let spec = command.parameters.first(where: { $0.key == parameterName }) else {
-            throw ValidationError("Unknown parameter '\(parameterName)' for \(command.rawValue)")
+        guard let spec = descriptor.parameters.first(where: { $0.key == parameterName }) else {
+            throw ValidationError("Unknown parameter '\(parameterName)' for \(descriptor.canonicalName)")
         }
 
         switch spec.type {
@@ -181,7 +186,7 @@ enum CLIRequestBuilder {
     ) {
         guard !positional.isEmpty else { return }
 
-        switch draft.command.humanPositionalSyntax {
+        switch draft.descriptor.humanPositionalSyntax {
         case .joinedText(let parameter):
             if draft[parameter] == nil {
                 draft[parameter] = .string(positional.joined(separator: " "))
@@ -241,25 +246,31 @@ enum CLIRequestBuilder {
     }
 }
 
-private extension TheFence.Command {
+private extension FenceCommandDescriptor {
     static func descriptor(namedForCLIInput name: String) -> FenceCommandDescriptor? {
-        descriptors.first { descriptor in
+        TheFence.Command.descriptors.first { descriptor in
             descriptor.canonicalName == name || descriptor.cliName == name
+        }
+    }
+
+    static func descriptor(canonicalName name: String) -> FenceCommandDescriptor? {
+        TheFence.Command.descriptors.first { descriptor in
+            descriptor.canonicalName == name
         }
     }
 }
 
 private struct RequestDraft {
-    let command: TheFence.Command
+    let descriptor: FenceCommandDescriptor
     private var typedParameters: CLIRequestParameters
 
-    init(command: TheFence.Command, parameters: CLIRequestParameters = [:]) {
-        self.command = command
+    init(descriptor: FenceCommandDescriptor, parameters: CLIRequestParameters = [:]) {
+        self.descriptor = descriptor
         self.typedParameters = parameters
     }
 
     init(alias: FenceCommandAlias) {
-        self.init(command: alias.command, parameters: alias.parameters)
+        self.init(descriptor: alias.command.descriptor, parameters: alias.parameters)
     }
 
     subscript(_ key: FenceParameterKey) -> HeistValue? {
@@ -275,6 +286,6 @@ private struct RequestDraft {
     }
 
     func fenceRequest() -> [String: Any] {
-        return CLIRequestBuilder.request(command: command, parameters: typedParameters)
+        return CLIRequestBuilder.request(command: descriptor.command, parameters: typedParameters)
     }
 }
