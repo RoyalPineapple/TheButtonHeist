@@ -34,14 +34,7 @@ extension Actions {
             }
             let success = await action(point)
             if success { safecracker.showFingerprint(at: point) }
-            let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
-                method: method,
-                point: point,
-                receiver: safecracker.tapReceiverDiagnostic(at: point)
-            )
-            return success
-                ? .success(method: method)
-                : .failure(method, message: message ?? "\(method.rawValue) failed")
+            return gestureDispatchResult(method: method, diagnosticPoint: point, success: success)
         }
     }
 
@@ -116,15 +109,7 @@ extension Actions {
                 return failure
             }
             let duration = clampDuration(target.duration ?? 0.15)
-            let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
-            let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
-                method: .syntheticSwipe,
-                point: startPoint,
-                receiver: safecracker.tapReceiverDiagnostic(at: startPoint)
-            )
-            return success
-                ? .success(method: .syntheticSwipe)
-                : .failure(.syntheticSwipe, message: message ?? "synthetic swipe failed")
+            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
         }
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
@@ -168,16 +153,17 @@ extension Actions {
                 return failure
             }
             let duration = clampDuration(target.duration ?? 0.15)
-            let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
-            let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
-                method: .syntheticSwipe,
-                point: startPoint,
-                receiver: safecracker.tapReceiverDiagnostic(at: startPoint)
-            )
-            return success
-                ? .success(method: .syntheticSwipe)
-                : .failure(.syntheticSwipe, message: message ?? "synthetic swipe failed")
+            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
         }
+    }
+
+    private func performResolvedSwipe(
+        from startPoint: CGPoint,
+        to endPoint: CGPoint,
+        duration: TimeInterval
+    ) async -> TheSafecracker.InteractionResult {
+        let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
+        return gestureDispatchResult(method: .syntheticSwipe, diagnosticPoint: startPoint, success: success)
     }
 
     private func unitSwipePoints(
@@ -275,15 +261,7 @@ extension Actions {
             return failure
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        let success = await safecracker.drawPath(points: cgPoints, duration: duration)
-        let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
-            method: .syntheticDrawPath,
-            point: cgPoints[0],
-            receiver: safecracker.tapReceiverDiagnostic(at: cgPoints[0])
-        )
-        return success
-            ? .success(method: .syntheticDrawPath)
-            : .failure(.syntheticDrawPath, message: message ?? "synthetic draw path failed")
+        return await performResolvedDrawPath(points: cgPoints, duration: duration)
     }
 
     func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult {
@@ -307,15 +285,37 @@ extension Actions {
             return failure
         }
         let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        let success = await safecracker.drawPath(points: cgPoints, duration: duration)
-        let message = success ? nil : ActionCapabilityDiagnostic.gestureDispatchFailed(
+        return await performResolvedDrawPath(points: cgPoints, duration: duration)
+    }
+
+    private func performResolvedDrawPath(
+        points: [CGPoint],
+        duration: TimeInterval
+    ) async -> TheSafecracker.InteractionResult {
+        let success = await safecracker.drawPath(points: points, duration: duration)
+        return gestureDispatchResult(
             method: .syntheticDrawPath,
-            point: cgPoints[0],
-            receiver: safecracker.tapReceiverDiagnostic(at: cgPoints[0])
+            diagnosticPoint: points[0],
+            success: success
         )
-        return success
-            ? .success(method: .syntheticDrawPath)
-            : .failure(.syntheticDrawPath, message: message ?? "synthetic draw path failed")
+    }
+
+    private func gestureDispatchResult(
+        method: ActionMethod,
+        diagnosticPoint: CGPoint,
+        success: Bool
+    ) -> TheSafecracker.InteractionResult {
+        guard !success else {
+            return .success(method: method)
+        }
+        return .failure(
+            method,
+            message: ActionCapabilityDiagnostic.gestureDispatchFailed(
+                method: method,
+                point: diagnosticPoint,
+                receiver: safecracker.tapReceiverDiagnostic(at: diagnosticPoint)
+            )
+        )
     }
 
 }
