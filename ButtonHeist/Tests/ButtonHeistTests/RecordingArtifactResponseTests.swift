@@ -25,7 +25,7 @@ final class RecordingArtifactResponseTests: XCTestCase {
         XCTAssertEqual(recording.height, 844)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), videoBytes)
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["path"] as? String, path)
         XCTAssertEqual(json["interactionCount"] as? Int, 1)
@@ -90,7 +90,7 @@ final class RecordingArtifactResponseTests: XCTestCase {
         XCTAssertEqual(details?.errorCode, "recording.inline_payload_too_large")
         XCTAssertEqual(details?.phase, .client)
         XCTAssertEqual(details?.retryable, false)
-        XCTAssertNil(response.jsonDict()["videoData"])
+        XCTAssertNil(publicJSONObject(response)["videoData"])
     }
 
     private static func makeTempDirectory() -> URL {

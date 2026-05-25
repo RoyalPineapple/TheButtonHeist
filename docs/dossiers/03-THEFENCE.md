@@ -165,7 +165,7 @@ stateDiagram-v2
 
 **`FenceResponse` recording cases include interaction count**
 - `humanFormatted()` appends "Interactions: N" line when `interactionLog` is non-nil
-- `jsonDict()` includes `interactionCount` key (0 when nil)
+- `jsonData()` encodes an `interactionCount` key (0 when nil) through the typed public response model
 - Well-tested: `FenceResponseTests` covers both human formatting and JSON serialization
 
 **`supportedCommands` derived from `Command` enum** (`TheFence+CommandCatalog.swift`)

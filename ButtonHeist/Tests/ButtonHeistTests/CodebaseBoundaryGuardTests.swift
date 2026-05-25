@@ -1,6 +1,7 @@
 import XCTest
 
 final class CodebaseBoundaryGuardTests: XCTestCase {
+    private let publicDictionaryAdapterCall = "json" + "Dict("
 
     func testRawCommandPayloadDictionariesStayAtNamedBoundaries() throws {
         let violations = try swiftSources(under: [
@@ -14,7 +15,7 @@ final class CodebaseBoundaryGuardTests: XCTestCase {
                 source.contains("[String: Any]")
                     || source.contains("Dictionary<String, Any>")
                     || source.contains("JSONSerialization.")
-                    || source.contains("jsonDict(")
+                    || source.contains(publicDictionaryAdapterCall)
             }
             .filter { source in
                 !Self.allowedUntypedBoundaryFiles.contains(source.relativePath)
@@ -44,7 +45,7 @@ final class CodebaseBoundaryGuardTests: XCTestCase {
                 source.contains("[String: Any]")
                     || source.contains("Dictionary<String, Any>")
                     || source.contains("JSONSerialization.")
-                    || source.contains("jsonDict(")
+                    || source.contains(publicDictionaryAdapterCall)
             }
 
         XCTAssertTrue(
@@ -64,7 +65,7 @@ final class CodebaseBoundaryGuardTests: XCTestCase {
             "ButtonHeistMCP/Sources",
         ])
             .filter { source in
-                source.contains("JSONSerialization.") || source.contains("jsonDict(")
+                source.contains("JSONSerialization.") || source.contains(publicDictionaryAdapterCall)
             }
             .filter { source in
                 source.relativePath != "ButtonHeist/Sources/TheButtonHeist/TheFence/PublicJSONSerializer.swift"

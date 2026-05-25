@@ -493,7 +493,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertNotNil(snapshot.projectionStatus.firstMalformedLineCause)
         XCTAssertEqual(snapshot.projectionStatus.malformedArtifactCount, 0)
 
-        let json = try XCTUnwrap(FenceResponse.sessionLog(snapshot: snapshot).jsonDict())
+        let json = publicJSONObject(FenceResponse.sessionLog(snapshot: snapshot))
         let projectionStatus = try XCTUnwrap(json["projectionStatus"] as? [String: Any])
         XCTAssertEqual(projectionStatus["degraded"] as? Bool, true)
         XCTAssertEqual(projectionStatus["malformedLineCount"] as? Int, 1)
@@ -1058,9 +1058,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(archiveSnapshot.projectionStatus.malformedLineCount, 0)
         XCTAssertEqual(archiveSnapshot.projectionStatus.malformedArtifactCount, 1)
 
-        let json = try XCTUnwrap(
-            FenceResponse.archiveResult(path: archivePath.path, snapshot: archiveSnapshot).jsonDict()
-        )
+        let json = publicJSONObject(FenceResponse.archiveResult(path: archivePath.path, snapshot: archiveSnapshot))
         XCTAssertEqual(json["artifactCount"] as? Int, 1)
         let projectionStatus = try XCTUnwrap(json["projectionStatus"] as? [String: Any])
         XCTAssertEqual(projectionStatus["degraded"] as? Bool, true)

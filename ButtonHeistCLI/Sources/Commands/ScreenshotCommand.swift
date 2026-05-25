@@ -11,7 +11,7 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .shortAndLong, help: "Output file path (default: generated artifact path)")
     var output: String?
 
-    @Flag(name: .long, help: "Write raw PNG bytes to stdout for compatibility")
+    @Flag(name: .long, help: "Write raw PNG bytes to stdout")
     var inline = false
 
     @OptionGroup var connection: ConnectionOptions

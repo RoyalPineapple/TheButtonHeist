@@ -246,21 +246,21 @@ final class TheFenceTests: XCTestCase {
 
     func testOkResponseJSON() {
         let response = FenceResponse.ok(message: "done")
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["message"] as? String, "done")
     }
 
     func testErrorResponseJSON() {
         let response = FenceResponse.error("failed")
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "error")
         XCTAssertEqual(json["message"] as? String, "failed")
     }
 
     func testErrorResponseJSONIncludesFailureDetailsWhenPresent() {
         let response = FenceResponse.failure(FenceError.authFailed("bad token"))
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
 
         XCTAssertEqual(json["status"] as? String, "error")
         let message = json["message"] as? String
@@ -275,7 +275,7 @@ final class TheFenceTests: XCTestCase {
 
     func testAuthFailureHintPreservesConfiguredTokenRemediation() {
         let response = FenceResponse.failure(FenceError.authFailed("Invalid token. Retry with the configured token."))
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
 
         XCTAssertEqual(json["errorCode"] as? String, "auth.failed")
         XCTAssertEqual(json["hint"] as? String, "Retry with the configured token.")
@@ -286,7 +286,7 @@ final class TheFenceTests: XCTestCase {
 
     func testHelpResponseJSON() {
         let response = FenceResponse.help(commands: ["one_finger_tap", "swipe"])
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         let commands = json["commands"] as? [String]
         XCTAssertEqual(commands, ["one_finger_tap", "swipe"])
@@ -294,7 +294,7 @@ final class TheFenceTests: XCTestCase {
 
     func testStatusResponseJSON() {
         let response = FenceResponse.status(connected: true, deviceName: "MyApp")
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["connected"] as? Bool, true)
         XCTAssertEqual(json["device"] as? String, "MyApp")
     }
@@ -325,7 +325,7 @@ final class TheFenceTests: XCTestCase {
             ),
             options: ScreenshotResponseOptions(includeInterface: true)
         )
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["path"] as? String, "/tmp/shot.png")
         XCTAssertEqual(json["width"] as? Double, 390)
@@ -381,7 +381,7 @@ final class TheFenceTests: XCTestCase {
         )
 
         let response = FenceResponse.interface(interface, detail: .full)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let interfaceDict = json["interface"] as! [String: Any]
         let tree = interfaceDict["tree"] as! [[String: Any]]
         XCTAssertNil(interfaceDict["elements"])
@@ -442,7 +442,7 @@ final class TheFenceTests: XCTestCase {
         )
 
         let response = FenceResponse.interface(interface, detail: .summary)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let interfaceDict = json["interface"] as! [String: Any]
         XCTAssertNil(interfaceDict["elements"])
 
@@ -488,7 +488,7 @@ final class TheFenceTests: XCTestCase {
         let interface = makeReceiptTestInterface([element])
 
         let response = FenceResponse.interface(interface, detail: .full)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let interfaceDict = json["interface"] as! [String: Any]
         let tree = interfaceDict["tree"] as! [[String: Any]]
         let nestedElement = tree[0]["element"] as! [String: Any]
@@ -501,7 +501,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(nestedElement["frameY"] as? Double, 44)
     }
 
-    func testInterfacePublicJSONDataMatchesJsonDictModel() throws {
+    func testInterfacePublicJSONDataMatchesTypedJSONModel() throws {
         let element = HeistElement(
             heistId: "receipt_total",
             description: "Total $12.34",
@@ -518,7 +518,7 @@ final class TheFenceTests: XCTestCase {
         let response = FenceResponse.interface(makeReceiptTestInterface([element]), detail: .summary)
 
         let encoded = try Self.jsonObject(from: response.jsonData())
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
 
         XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
         XCTAssertEqual(encoded["detail"] as? String, "summary")
@@ -826,7 +826,7 @@ final class TheFenceTests: XCTestCase {
         let result = ActionResult(success: true, method: .activate)
         let expectation = ExpectationResult(met: true, expectation: .screenChanged, actual: "screenChanged")
         let response = FenceResponse.action(result: result, expectation: expectation)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         let expDict = json["expectation"] as? [String: Any]
         XCTAssertNotNil(expDict)
@@ -838,7 +838,7 @@ final class TheFenceTests: XCTestCase {
         let result = ActionResult(success: true, method: .activate)
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
         let response = FenceResponse.action(result: result, expectation: expectation)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "expectation_failed")
         let expDict = json["expectation"] as? [String: Any]
         XCTAssertEqual(expDict?["met"] as? Bool, false)
@@ -847,12 +847,12 @@ final class TheFenceTests: XCTestCase {
     func testActionWithoutExpectationJSON() {
         let result = ActionResult(success: true, method: .activate)
         let response = FenceResponse.action(result: result)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertNil(json["expectation"])
     }
 
-    func testActionSuccessPublicJSONDataMatchesJsonDictModel() throws {
+    func testActionSuccessPublicJSONDataMatchesTypedJSONModel() throws {
         let result = ActionResult(
             success: true,
             method: .getPasteboard,
@@ -863,7 +863,7 @@ final class TheFenceTests: XCTestCase {
         let response = FenceResponse.action(result: result)
 
         let encoded = try Self.jsonObject(from: response.jsonData())
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
 
         XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
         XCTAssertEqual(encoded["method"] as? String, "getPasteboard")
@@ -881,7 +881,7 @@ final class TheFenceTests: XCTestCase {
         )
         let response = FenceResponse.action(result: result)
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
 
         XCTAssertEqual(json["status"] as? String, "error")
         XCTAssertEqual(json["errorClass"] as? String, "actionFailed")
@@ -891,7 +891,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue((json["hint"] as? String)?.contains("traversable app window") == true)
     }
 
-    func testActionFailurePublicJSONDataMatchesJsonDictModel() throws {
+    func testActionFailurePublicJSONDataMatchesTypedJSONModel() throws {
         let result = ActionResult(
             success: false,
             method: .waitFor,
@@ -901,7 +901,7 @@ final class TheFenceTests: XCTestCase {
         let response = FenceResponse.action(result: result)
 
         let encoded = try Self.jsonObject(from: response.jsonData())
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
 
         XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
         XCTAssertEqual(encoded["errorClass"] as? String, "actionFailed")
@@ -920,7 +920,7 @@ final class TheFenceTests: XCTestCase {
 
         let details = FenceResponse.actionFailureDetails(result)
         let compact = FenceResponse.action(result: result).compactFormatted()
-        let json = FenceResponse.action(result: result).jsonDict()
+        let json = publicJSONObject(FenceResponse.action(result: result))
 
         XCTAssertEqual(details?.errorCode, "request.accessibility_tree_unavailable")
         XCTAssertEqual(
@@ -1006,7 +1006,7 @@ final class TheFenceTests: XCTestCase {
             ],
             totalTimingMs: 50
         )
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["completedSteps"] as? Int, 3)
         let expectations = json["expectations"] as? [String: Any]
@@ -1021,7 +1021,7 @@ final class TheFenceTests: XCTestCase {
             outcomes: [makeBatchOutcome()],
             totalTimingMs: 50
         )
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertNil(json["expectations"])
     }
 
@@ -1033,7 +1033,7 @@ final class TheFenceTests: XCTestCase {
             ],
             totalTimingMs: 0
         )
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let expectations = json["expectations"] as? [String: Any]
         XCTAssertEqual(expectations?["allMet"] as? Bool, true)
     }
@@ -1058,7 +1058,7 @@ final class TheFenceTests: XCTestCase {
             """
         )
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "partial")
         XCTAssertEqual(json["completedSteps"] as? Int, 2)
         XCTAssertEqual(json["failedIndex"] as? Int, 1)
@@ -1093,7 +1093,7 @@ final class TheFenceTests: XCTestCase {
         ))
 
         XCTAssertEqual(response.compactFormatted(), "session: connected")
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["connected"] as? Bool, true)
         XCTAssertEqual(json["phase"] as? String, "connected")
@@ -1106,7 +1106,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNil(lastAction["message"])
     }
 
-    func testSessionStatePublicJSONDataMatchesJsonDictModel() throws {
+    func testSessionStatePublicJSONDataMatchesTypedJSONModel() throws {
         let response = FenceResponse.sessionState(payload: SessionStatePayload(
             connected: false,
             phase: .failed,
@@ -1125,7 +1125,7 @@ final class TheFenceTests: XCTestCase {
         ))
 
         let encoded = try Self.jsonObject(from: response.jsonData())
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
 
         XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
         XCTAssertEqual(encoded["phase"] as? String, "failed")
@@ -1136,7 +1136,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertEqual(failure["retryable"] as? Bool, true)
     }
 
-    func testRecordingPublicJSONDataMatchesJsonDictModel() throws {
+    func testRecordingPublicJSONDataMatchesTypedJSONModel() throws {
         let start = Date(timeIntervalSince1970: 0)
         let payload = RecordingPayload(
             videoData: Data("video".utf8).base64EncodedString(),
@@ -1163,7 +1163,7 @@ final class TheFenceTests: XCTestCase {
         )
 
         let encoded = try Self.jsonObject(from: response.jsonData())
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
 
         XCTAssertEqual(encoded["status"] as? String, dict["status"] as? String)
         XCTAssertEqual(encoded["path"] as? String, "/tmp/recording.mp4")
@@ -1183,7 +1183,7 @@ final class TheFenceTests: XCTestCase {
             )
         )
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
 
         XCTAssertEqual(json["status"] as? String, "error")
         XCTAssertEqual(json["errorCode"] as? String, "formatting.json_encoding_failed")
@@ -1255,7 +1255,7 @@ final class TheFenceTests: XCTestCase {
             ])))
         let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let deltaDict = json["delta"] as! [String: Any]
         let editsDict = deltaDict["edits"] as! [String: Any]
         let updated = editsDict["updated"] as! [[String: Any]]
@@ -1275,7 +1275,7 @@ final class TheFenceTests: XCTestCase {
             ])))
         let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let deltaDict = json["delta"] as! [String: Any]
         // Geometry-only updates are dropped — and with no other edits, the
         // entire `edits` key is omitted from the delta dictionary.
@@ -1290,7 +1290,7 @@ final class TheFenceTests: XCTestCase {
         let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 3, captureEdge: edge))
         let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let deltaDict = json["delta"] as! [String: Any]
         let edgeDict = deltaDict["captureEdge"] as! [String: Any]
         let before = edgeDict["before"] as! [String: Any]
@@ -1365,7 +1365,7 @@ final class TheFenceTests: XCTestCase {
         ))
         let result = ActionResult(success: true, method: .activate, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
 
         let deltaDict = json["delta"] as! [String: Any]
         let editsDict = deltaDict["edits"] as! [String: Any]
@@ -1465,7 +1465,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(compact.contains("hint: Wait for the current driver"))
         XCTAssertTrue(compact.contains("BUTTONHEIST_DRIVER_ID"))
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["errorCode"] as? String, "session.locked")
         XCTAssertTrue((json["message"] as? String)?.contains("owner driver id: driver-a") == true)
         XCTAssertTrue((json["message"] as? String)?.contains("remaining timeout: 8s") == true)
@@ -1570,7 +1570,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(compact.contains("connection failed in tls: observed No TLS fingerprint available"))
         XCTAssertTrue(compact.contains("hint: Use a loopback simulator target"))
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["errorCode"] as? String, "tls.missing_fingerprint")
         XCTAssertEqual(json["phase"] as? String, "tls")
         XCTAssertEqual(json["retryable"] as? Bool, false)

@@ -435,7 +435,7 @@ Single source of truth for supported commands in the product command layer. Each
 public enum FenceResponse
 ```
 
-Typed response enum with `humanFormatted() -> String`, `jsonDict() -> [String: Any]?`, and `compactFormatted() -> String` (token-efficient compact text format used by MCP and JSON output modes) serialization.
+Typed response enum with `humanFormatted() -> String`, `jsonData() -> Data`, and `compactFormatted() -> String` (token-efficient compact text format used by MCP and JSON output modes) serialization. JSON output is encoded from typed public response models.
 
 #### Cases
 

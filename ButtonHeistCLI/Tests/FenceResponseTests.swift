@@ -255,21 +255,21 @@ final class FenceResponseTests: XCTestCase {
 
     func testOkJsonFormatting() {
         let response = FenceResponse.ok(message: "bye")
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["message"] as? String, "bye")
     }
 
     func testErrorJsonFormatting() {
         let response = FenceResponse.error("fail")
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "error")
         XCTAssertEqual(dict["message"] as? String, "fail")
     }
 
     func testHelpJsonFormatting() {
         let response = FenceResponse.help(commands: ["one_finger_tap", "swipe"])
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         let commands = dict["commands"] as? [String]
         XCTAssertEqual(commands, ["one_finger_tap", "swipe"])
@@ -277,7 +277,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testStatusJsonFormatting() {
         let response = FenceResponse.status(connected: true, deviceName: "MyApp")
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["connected"] as? Bool, true)
         XCTAssertEqual(dict["device"] as? String, "MyApp")
@@ -285,7 +285,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testStatusDisconnectedJsonFormatting() {
         let response = FenceResponse.status(connected: false, deviceName: nil)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["connected"] as? Bool, false)
         XCTAssertNil(dict["device"])
     }
@@ -293,7 +293,7 @@ final class FenceResponseTests: XCTestCase {
     func testDevicesJsonFormatting() {
         let device = makeDevice(name: "TestApp-iPhone#abc123", simulatorUDID: "DEAD-BEEF")
         let response = FenceResponse.devices([device])
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         let devices = dict["devices"] as? [[String: Any]]
         XCTAssertEqual(devices?.count, 1)
@@ -309,7 +309,7 @@ final class FenceResponseTests: XCTestCase {
         )
         let iface = makeInterface(elements: [element], timestamp: Date())
         let response = FenceResponse.interface(iface)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertNotNil(dict["interface"])
     }
@@ -317,7 +317,7 @@ final class FenceResponseTests: XCTestCase {
     func testActionSuccessJsonFormatting() {
         let result = ActionResult(success: true, method: .syntheticTap, payload: .value("Hello"))
         let response = FenceResponse.action(result: result)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["method"] as? String, "syntheticTap")
         XCTAssertEqual(dict["value"] as? String, "Hello")
@@ -326,7 +326,7 @@ final class FenceResponseTests: XCTestCase {
     func testActionFailureJsonFormatting() {
         let result = ActionResult(success: false, method: .elementNotFound, message: "Not found")
         let response = FenceResponse.action(result: result)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "error")
         XCTAssertEqual(dict["method"] as? String, "elementNotFound")
         XCTAssertEqual(dict["message"] as? String, "Not found")
@@ -336,7 +336,7 @@ final class FenceResponseTests: XCTestCase {
         let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 5))
         let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertNotNil(dict["delta"])
     }
 
@@ -357,7 +357,7 @@ final class FenceResponseTests: XCTestCase {
             ])))
         let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
         let response = FenceResponse.action(result: result)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         let deltaDict = dict["delta"] as? [String: Any]
         let editsDict = deltaDict?["edits"] as? [String: Any]
 
@@ -374,7 +374,7 @@ final class FenceResponseTests: XCTestCase {
     func testActionAnimatingJsonFormatting() {
         let result = ActionResult(success: true, method: .syntheticTap, animating: true)
         let response = FenceResponse.action(result: result)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["animating"] as? Bool, true)
     }
 
@@ -383,7 +383,7 @@ final class FenceResponseTests: XCTestCase {
             path: "/tmp/s.png",
             payload: ScreenPayload(pngData: "abc123", width: 393, height: 852)
         )
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["path"] as? String, "/tmp/s.png")
         XCTAssertEqual(dict["width"] as? Double, 393)
@@ -394,7 +394,7 @@ final class FenceResponseTests: XCTestCase {
         let response = FenceResponse.screenshotData(
             payload: ScreenPayload(pngData: "base64data", width: 393, height: 852)
         )
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["pngData"] as? String, "base64data")
     }
@@ -402,7 +402,7 @@ final class FenceResponseTests: XCTestCase {
     func testRecordingJsonFormatting() {
         let payload = makeRecordingPayload(stopReason: .maxDuration)
         let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["path"] as? String, "/tmp/rec.mp4")
         XCTAssertEqual(dict["width"] as? Int, 390)
@@ -416,7 +416,7 @@ final class FenceResponseTests: XCTestCase {
     func testRecordingDataJsonFormatting() {
         let payload = makeRecordingPayload(stopReason: .fileSizeLimit)
         let response = FenceResponse.recordingData(payload: payload)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["videoData"] as? String, "AAAAIGZ0eXBpc29t")
         XCTAssertEqual(dict["width"] as? Int, 390)
@@ -449,14 +449,14 @@ final class FenceResponseTests: XCTestCase {
     func testRecordingJsonInteractionCount() {
         let payload = makeRecordingPayloadWithInteractions(count: 7)
         let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["interactionCount"] as? Int, 7)
     }
 
     func testRecordingJsonZeroInteractionCount() {
         let payload = makeRecordingPayload(stopReason: .manual)
         let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["interactionCount"] as? Int, 0)
     }
 
@@ -467,7 +467,7 @@ final class FenceResponseTests: XCTestCase {
             payload: payload,
             options: RecordingResponseOptions(includeInteractionLog: true)
         )
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         let log = dict["interactionLog"] as? [[String: Any]]
         XCTAssertNotNil(log)
         XCTAssertEqual(log?.count, 3)
@@ -476,7 +476,7 @@ final class FenceResponseTests: XCTestCase {
     func testRecordingJsonOmitsInteractionLogUnlessExplicitlyRequested() {
         let payload = makeRecordingPayloadWithInteractions(count: 3)
         let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["interactionCount"] as? Int, 3)
         XCTAssertNil(dict["interactionLog"])
     }
@@ -488,7 +488,7 @@ final class FenceResponseTests: XCTestCase {
             payload: payload,
             options: RecordingResponseOptions(inlineData: true, includeInteractionLog: true)
         )
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertEqual(dict["path"] as? String, "/tmp/rec.mp4")
         XCTAssertEqual(dict["videoData"] as? String, "AAAAIGZ0eXBpc29t")
         XCTAssertEqual((dict["interactionLog"] as? [[String: Any]])?.count, 2)
@@ -497,7 +497,7 @@ final class FenceResponseTests: XCTestCase {
     func testRecordingJsonOmitsInteractionLogWhenNil() {
         let payload = makeRecordingPayload(stopReason: .manual)
         let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
-        let dict = response.jsonDict()
+        let dict = publicJSONObject(response)
         XCTAssertNil(dict["interactionLog"])
     }
 
@@ -619,5 +619,23 @@ final class FenceResponseTests: XCTestCase {
             stopReason: .manual,
             interactionLog: events
         )
+    }
+}
+
+private func publicJSONObject(
+    _ response: FenceResponse,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) -> [String: Any] {
+    do {
+        let object = try JSONSerialization.jsonObject(with: try response.jsonData())
+        guard let dict = object as? [String: Any] else {
+            XCTFail("Expected public JSON object for \(response)", file: file, line: line)
+            return [:]
+        }
+        return dict
+    } catch {
+        XCTFail("Failed to decode public JSON for \(response): \(error)", file: file, line: line)
+        return [:]
     }
 }

@@ -308,7 +308,7 @@ case heistStopped(path: String, stepCount: Int)
 case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)
 ```
 
-All implement `humanFormatted()`, `compactFormatted()`, and `jsonDict()`.
+All implement `humanFormatted()`, `compactFormatted()`, and typed `jsonData()` serialization.
 
 ### Logging integration
 
