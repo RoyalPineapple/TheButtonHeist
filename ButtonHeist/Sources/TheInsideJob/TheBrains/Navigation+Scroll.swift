@@ -444,6 +444,15 @@ extension Navigation {
         )
 
         let normalizedTarget = stash.normalizeTarget(searchTarget, in: knownScreen)
+
+        // Check if already visible before searching or action-positioning a known target.
+        if let found = stash.resolveFirstVisibleMatch(searchTarget) {
+            return searchFoundResult(
+                found, scrollCount: 0,
+                uniqueElementsSeen: progress.uniqueElementsSeen
+            )
+        }
+
         if case .notFound = resolvePositioningTarget(normalizedTarget) {
             // Unknown targets still use iterative search below.
         } else {
@@ -462,16 +471,6 @@ extension Navigation {
                 .elementSearch,
                 message: direct.message ?? "\(ScrollMode.search.canonicalCommand) failed to reveal known target",
                 payload: direct.payload
-            )
-        }
-
-        // Check if already visible before searching
-        if let found = stash.resolveFirstVisibleMatch(searchTarget) {
-            // Element search succeeds once resolved; comfort-zone nudging is best-effort.
-            _ = ensureOnScreenSync(found)
-            return searchFoundResult(
-                found, scrollCount: 0,
-                uniqueElementsSeen: progress.uniqueElementsSeen
             )
         }
 
@@ -505,12 +504,6 @@ extension Navigation {
                 progress: &progress
             )
             if let found = stash.resolveFirstVisibleMatch(searchTarget) {
-                if let result = await searchFineTuneAndResolve(
-                    found, searchTarget: searchTarget,
-                    scrollCount: progress.scrollCount, progress: &progress
-                ) {
-                    return result
-                }
                 return searchFoundResult(
                     found, scrollCount: progress.scrollCount,
                     uniqueElementsSeen: progress.uniqueElementsSeen
@@ -523,24 +516,6 @@ extension Navigation {
         }
 
         return searchNotFoundResult(progress: progress)
-    }
-
-    private func searchFineTuneAndResolve(
-        _ found: TheStash.ResolvedTarget,
-        searchTarget: any SemanticElementTarget,
-        scrollCount: Int,
-        progress: inout ScrollSearchProgress
-    ) async -> TheSafecracker.InteractionResult? {
-        // Search already found the target; this only improves action ergonomics when possible.
-        _ = ensureOnScreenSync(found)
-        await tripwire.yieldRealFrames(Self.postJumpRealFrames)
-        stash.refresh()
-        progress.recordVisibleHeistIds(stash.visibleIds)
-        guard let fresh = stash.resolveFirstVisibleMatch(searchTarget) else { return nil }
-        return searchFoundResult(
-            fresh, scrollCount: scrollCount,
-            uniqueElementsSeen: progress.uniqueElementsSeen
-        )
     }
 
     private func resolveContainerScrollTarget(
@@ -841,17 +816,6 @@ extension Navigation {
             await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             refresh()
         }
-    }
-
-    @discardableResult
-    private func ensureOnScreenSync(_ resolved: TheStash.ResolvedTarget, animated: Bool = true) -> Bool {
-        guard let geometry = stash.liveGeometry(for: resolved.screenElement),
-              !ScreenMetrics.current.bounds.contains(geometry.frame),
-              !Self.interactionComfortZone.contains(geometry.activationPoint) else { return true }
-        return safecracker.scrollToMakeVisible(
-            geometry.frame, in: geometry.scrollView, animated: animated,
-            comfortMarginFraction: Self.comfortMarginFraction
-        )
     }
 
     private func ensureVisibleResolvedTarget(_ resolved: TheStash.ResolvedTarget) async -> EnsureOnScreenResult {
