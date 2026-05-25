@@ -85,6 +85,8 @@ extension UnitPoint: CustomStringConvertible {
 
 /// Target for swipe gesture
 public struct SwipeTarget: Codable, Sendable {
+    public static let defaultDuration = 0.15
+
     /// Start from element's interaction point
     public let elementTarget: ElementTarget?
     /// Or start from explicit coordinates
@@ -122,6 +124,8 @@ public struct SwipeTarget: Codable, Sendable {
         guard let x = startX, let y = startY else { return nil }
         return CGPoint(x: x, y: y)
     }
+
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension SwipeTarget: CustomStringConvertible {
@@ -142,6 +146,8 @@ extension SwipeTarget: CustomStringConvertible {
 
 /// Target for drag gesture
 public struct DragTarget: Codable, Sendable {
+    public static let defaultDuration = 0.5
+
     public let elementTarget: ElementTarget?
     public let startX: Double?
     public let startY: Double?
@@ -170,6 +176,8 @@ public struct DragTarget: Codable, Sendable {
     public var endPoint: CGPoint {
         CGPoint(x: endX, y: endY)
     }
+
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension DragTarget: CustomStringConvertible {
@@ -187,6 +195,9 @@ extension DragTarget: CustomStringConvertible {
 
 /// Target for pinch/zoom gesture
 public struct PinchTarget: Codable, Sendable {
+    public static let defaultSpread = 100.0
+    public static let defaultDuration = 0.5
+
     public let elementTarget: ElementTarget?
     public let centerX: Double?
     public let centerY: Double?
@@ -207,6 +218,9 @@ public struct PinchTarget: Codable, Sendable {
         self.scale = scale; self.spread = spread
         self.duration = duration
     }
+
+    public var resolvedSpread: Double { spread ?? Self.defaultSpread }
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension PinchTarget: CustomStringConvertible {
@@ -224,6 +238,9 @@ extension PinchTarget: CustomStringConvertible {
 
 /// Target for rotation gesture
 public struct RotateTarget: Codable, Sendable {
+    public static let defaultRadius = 100.0
+    public static let defaultDuration = 0.5
+
     public let elementTarget: ElementTarget?
     public let centerX: Double?
     public let centerY: Double?
@@ -244,6 +261,9 @@ public struct RotateTarget: Codable, Sendable {
         self.angle = angle; self.radius = radius
         self.duration = duration
     }
+
+    public var resolvedRadius: Double { radius ?? Self.defaultRadius }
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension RotateTarget: CustomStringConvertible {
@@ -261,6 +281,8 @@ extension RotateTarget: CustomStringConvertible {
 
 /// Target for two-finger tap gesture
 public struct TwoFingerTapTarget: Codable, Sendable {
+    public static let defaultSpread = 40.0
+
     public let elementTarget: ElementTarget?
     public let centerX: Double?
     public let centerY: Double?
@@ -276,6 +298,8 @@ public struct TwoFingerTapTarget: Codable, Sendable {
         self.centerX = centerX; self.centerY = centerY
         self.spread = spread
     }
+
+    public var resolvedSpread: Double { spread ?? Self.defaultSpread }
 }
 
 extension TwoFingerTapTarget: CustomStringConvertible {
@@ -371,6 +395,9 @@ extension BezierSegment: CustomStringConvertible {
 
 /// Target for draw-bezier gesture (cubic bezier curves sampled to polyline)
 public struct DrawBezierTarget: Codable, Sendable {
+    public static let defaultSamplesPerSegment = 20
+    public static let maxSamplesPerSegment = 1_000
+
     /// Starting point of the bezier path
     public let startX: Double
     public let startY: Double
@@ -397,6 +424,10 @@ public struct DrawBezierTarget: Codable, Sendable {
 
     public var startPoint: CGPoint {
         CGPoint(x: startX, y: startY)
+    }
+
+    public var resolvedSamplesPerSegment: Int {
+        min(samplesPerSegment ?? Self.defaultSamplesPerSegment, Self.maxSamplesPerSegment)
     }
 }
 

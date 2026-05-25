@@ -37,7 +37,7 @@ protocol SwipeExecutionInput {
     var endX: Double? { get }
     var endY: Double? { get }
     var direction: SwipeDirection? { get }
-    var duration: Double? { get }
+    var resolvedDuration: Double { get }
     var start: UnitPoint? { get }
     var end: UnitPoint? { get }
 }
@@ -48,7 +48,7 @@ protocol DragExecutionInput {
     var startY: Double? { get }
     var endX: Double { get }
     var endY: Double { get }
-    var duration: Double? { get }
+    var resolvedDuration: Double { get }
 }
 
 protocol PinchExecutionInput {
@@ -56,8 +56,8 @@ protocol PinchExecutionInput {
     var centerX: Double? { get }
     var centerY: Double? { get }
     var scale: Double { get }
-    var spread: Double? { get }
-    var duration: Double? { get }
+    var resolvedSpread: Double { get }
+    var resolvedDuration: Double { get }
 }
 
 protocol RotateExecutionInput {
@@ -65,15 +65,15 @@ protocol RotateExecutionInput {
     var centerX: Double? { get }
     var centerY: Double? { get }
     var angle: Double { get }
-    var radius: Double? { get }
-    var duration: Double? { get }
+    var resolvedRadius: Double { get }
+    var resolvedDuration: Double { get }
 }
 
 protocol TwoFingerTapExecutionInput {
     var twoFingerTapElementTarget: (any SemanticElementTarget)? { get }
     var centerX: Double? { get }
     var centerY: Double? { get }
-    var spread: Double? { get }
+    var resolvedSpread: Double { get }
 }
 
 protocol TypeTextExecutionInput {

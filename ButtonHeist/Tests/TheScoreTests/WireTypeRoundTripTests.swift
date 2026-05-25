@@ -168,6 +168,28 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertNil(noStart.startPoint)
     }
 
+    func testGestureResolvedDefaultsAreContractOwned() {
+        XCTAssertEqual(SwipeTarget(direction: .down).resolvedDuration, 0.15)
+        XCTAssertEqual(BatchSwipeTarget(direction: .down).resolvedDuration, 0.15)
+        XCTAssertEqual(DragTarget(endX: 30, endY: 40).resolvedDuration, 0.5)
+        XCTAssertEqual(BatchDragTarget(endX: 30, endY: 40).resolvedDuration, 0.5)
+        XCTAssertEqual(PinchTarget(scale: 2).resolvedSpread, 100)
+        XCTAssertEqual(PinchTarget(scale: 2).resolvedDuration, 0.5)
+        XCTAssertEqual(BatchPinchTarget(scale: 2).resolvedSpread, 100)
+        XCTAssertEqual(BatchPinchTarget(scale: 2).resolvedDuration, 0.5)
+        XCTAssertEqual(RotateTarget(angle: 1).resolvedRadius, 100)
+        XCTAssertEqual(RotateTarget(angle: 1).resolvedDuration, 0.5)
+        XCTAssertEqual(BatchRotateTarget(angle: 1).resolvedRadius, 100)
+        XCTAssertEqual(BatchRotateTarget(angle: 1).resolvedDuration, 0.5)
+        XCTAssertEqual(TwoFingerTapTarget().resolvedSpread, 40)
+        XCTAssertEqual(BatchTwoFingerTapTarget().resolvedSpread, 40)
+        XCTAssertEqual(DrawBezierTarget(startX: 0, startY: 0, segments: []).resolvedSamplesPerSegment, 20)
+        XCTAssertEqual(
+            DrawBezierTarget(startX: 0, startY: 0, segments: [], samplesPerSegment: 5_000).resolvedSamplesPerSegment,
+            1_000
+        )
+    }
+
     // MARK: - PinchTarget
 
     func testPinchTargetRoundTrip() throws {

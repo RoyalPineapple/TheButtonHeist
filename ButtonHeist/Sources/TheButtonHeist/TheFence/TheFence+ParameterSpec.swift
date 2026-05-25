@@ -35,7 +35,7 @@ extension TheFence {
         static let maxDrawPathPoints = 10_000
         static let maxDrawBezierSegments = 1_000
         static let minDrawBezierSamplesPerSegment = 2
-        static let maxDrawBezierSamplesPerSegment = 1_000
+        static let maxDrawBezierSamplesPerSegment = DrawBezierTarget.maxSamplesPerSegment
         static let maxDrawBezierGeneratedPathPoints = 50_000
         static let maxDrawGestureDurationSeconds = 60.0
     }
