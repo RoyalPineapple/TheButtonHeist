@@ -171,10 +171,17 @@ final class TheBookKeeperTests: XCTestCase {
             directory: tempDirectory,
             manifest: manifest
         )
+        let compressedLogPath = tempDirectory.appendingPathComponent("session.jsonl.gz")
+        let compressing = CompressingSession(
+            closingSession: closing,
+            compressionTask: Task<URL, Error> {
+                compressedLogPath
+            }
+        )
         let closed = ClosedSession(
             sessionId: "malformed",
             directory: tempDirectory,
-            compressedLogPath: tempDirectory.appendingPathComponent("session.jsonl.gz"),
+            compressedLogPath: compressedLogPath,
             manifest: manifest
         )
         let archived = ArchivedSession(
@@ -183,8 +190,34 @@ final class TheBookKeeperTests: XCTestCase {
         )
 
         XCTAssertEqual(closing.endTime, startTime)
+        XCTAssertEqual(compressing.endTime, startTime)
         XCTAssertEqual(closed.endTime, startTime)
         XCTAssertEqual(archived.endTime, startTime)
+    }
+
+    func testCompressingSessionCarriesRequiredCompressionTask() async throws {
+        let manifest = SessionManifest(
+            sessionId: "compressing",
+            startTime: Date(timeIntervalSince1970: 1_000_000),
+            endTime: Date(timeIntervalSince1970: 1_000_001)
+        )
+        let closing = ClosingSession(
+            sessionId: "compressing",
+            directory: tempDirectory,
+            manifest: manifest
+        )
+        let compressedPath = tempDirectory.appendingPathComponent("session.jsonl.gz")
+        let task = Task<URL, Error> { compressedPath }
+
+        let compressing = CompressingSession(closingSession: closing, compressionTask: task)
+        let retryable = compressing.retryableSession
+        let taskValue = try await compressing.compressionTask.value
+
+        XCTAssertEqual(compressing.sessionId, closing.sessionId)
+        XCTAssertEqual(taskValue, compressedPath)
+        XCTAssertEqual(retryable.sessionId, closing.sessionId)
+        XCTAssertEqual(retryable.directory, closing.directory)
+        XCTAssertEqual(retryable.manifest, closing.manifest)
     }
 
     @ButtonHeistActor
@@ -226,7 +259,6 @@ final class TheBookKeeperTests: XCTestCase {
             return XCTFail("Expected closing phase after failed compression")
         }
         XCTAssertEqual(failedClosingSession.sessionId, activeSession.sessionId)
-        XCTAssertNil(failedClosingSession.compressionTask)
 
         XCTAssertThrowsError(try bookKeeper.beginSession(identifier: "replacement")) { error in
             guard case BookKeeperError.invalidPhase(_, "closing") = error else {
