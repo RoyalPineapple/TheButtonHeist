@@ -87,6 +87,19 @@ struct ElementTargetOptions: ParsableArguments {
         if let ordinal { request.set(.ordinal, ordinal) }
     }
 
+    /// Typed equivalent of `applyTo` — returns element targeting as `CLIRequestParameters`.
+    func targetParameters() throws -> CLIRequestParameters {
+        var parameters: CLIRequestParameters = [:]
+        if let resolved = try resolvedHeistId { parameters[.heistId] = .string(resolved) }
+        if let identifier { parameters[.identifier] = .string(identifier) }
+        if let label { parameters[.label] = .string(label) }
+        if let value { parameters[.value] = .string(value) }
+        if !traits.isEmpty { parameters[.traits] = .array(traits.map(HeistValue.string)) }
+        if !excludeTraits.isEmpty { parameters[.excludeTraits] = .array(excludeTraits.map(HeistValue.string)) }
+        if let ordinal { parameters[.ordinal] = .int(ordinal) }
+        return parameters
+    }
+
     /// Returns true when the supplied options construct a valid ElementTarget.
     var hasTarget: Bool {
         get throws {

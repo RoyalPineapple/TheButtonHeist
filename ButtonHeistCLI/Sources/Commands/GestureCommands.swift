@@ -9,23 +9,23 @@ extension GestureCLICommandContract {
         strings: [(FenceParameterKey, String?)] = [],
         objects: [(FenceParameterKey, [FenceParameterKey: HeistValue]?)] = []
     ) throws -> [String: Any] {
-        var request = fenceRequest(parameters)
-        try element.applyTo(&request)
+        var merged = try element.targetParameters()
+        merged.merge(parameters) { _, override in override }
         for (key, value) in numbers {
-            if let value { request.set(key, value) }
+            if let value { merged[key] = .double(value) }
         }
         for (key, value) in strings {
-            if let value { request.set(key, value) }
+            if let value { merged[key] = .string(value) }
         }
         for (key, value) in objects {
             if let value {
-                request.set(key, .object(Dictionary(
+                merged[key] = .object(Dictionary(
                     value.map { ($0.key.rawValue, $0.value) },
                     uniquingKeysWith: { _, newest in newest }
-                )))
+                ))
             }
         }
-        return request
+        return fenceRequest(merged)
     }
 
     @ButtonHeistActor
