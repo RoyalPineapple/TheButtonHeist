@@ -70,8 +70,7 @@ actor TheStakeout {
 
         func finalizing() -> FinalizingRecording {
             FinalizingRecording(
-                id: id,
-                writer: writer.file,
+                assetWriter: writer.assetWriter,
                 output: output,
                 startedAt: startedAt,
                 frameCount: capture.frameCount,
@@ -82,8 +81,7 @@ actor TheStakeout {
     }
 
     struct FinalizingRecording {
-        let id: UUID
-        let writer: RecordingFile
+        let assetWriter: AVAssetWriter
         let output: RecordingOutput
         let startedAt: Date
         let frameCount: Int
@@ -91,14 +89,9 @@ actor TheStakeout {
         let evidence: RecordingEvidenceState
     }
 
-    struct RecordingFile {
+    struct ActiveWriterResources {
         let assetWriter: AVAssetWriter
         let videoInput: AVAssetWriterInput
-        let outputURL: URL
-    }
-
-    struct ActiveWriterResources {
-        let file: RecordingFile
         let pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor
     }
 
@@ -480,10 +473,13 @@ actor TheStakeout {
             inactivityTimeout: setup.inactivityTimeout,
             startedAt: now
         )
-        let file = RecordingFile(assetWriter: writer, videoInput: input, outputURL: url)
         let session = ActiveRecording(
             id: recordingID,
-            writer: ActiveWriterResources(file: file, pixelBufferAdaptor: adaptor),
+            writer: ActiveWriterResources(
+                assetWriter: writer,
+                videoInput: input,
+                pixelBufferAdaptor: adaptor
+            ),
             output: RecordingOutput(screenBounds: setup.screenBounds, fps: setup.fps),
             timing: RecordingTiming(maxDuration: setup.maxDuration),
             evidence: RecordingEvidenceState(
@@ -511,6 +507,7 @@ actor TheStakeout {
         logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(session.capture.frameCount)")
 
         session.cancelRuntimeTasks()
+        session.writer.videoInput.markAsFinished()
 
         let finalizingSession = session.finalizing()
         stakeoutPhase = .finalizing(finalizingSession)
@@ -580,7 +577,7 @@ actor TheStakeout {
 
     private func captureAndAppendFrame() async {
         guard case .recording(let startingSession) = stakeoutPhase,
-              startingSession.writer.file.videoInput.isReadyForMoreMediaData else {
+              startingSession.writer.videoInput.isReadyForMoreMediaData else {
             return
         }
         let sessionID = startingSession.id
@@ -598,7 +595,7 @@ actor TheStakeout {
         // If we can't read the file size, skip the check and continue recording
         let fileSize: Int?
         do {
-            let attributes = try FileManager.default.attributesOfItem(atPath: session.writer.file.outputURL.path)
+            let attributes = try FileManager.default.attributesOfItem(atPath: session.writer.assetWriter.outputURL.path)
             fileSize = attributes[.size] as? Int
         } catch {
             logger.warning("Could not read recording file size, skipping size check: \(error)")
@@ -705,10 +702,7 @@ actor TheStakeout {
     // MARK: - Finalization
 
     private func finalizeRecording(session: FinalizingRecording, reason: RecordingPayload.StopReason) async {
-        let writer = session.writer.assetWriter
-        let sessionID = session.id
-
-        session.writer.videoInput.markAsFinished()
+        let writer = session.assetWriter
 
         // `finishWriting` runs on AVFoundation's internal queue. We bridge
         // back into the actor with `Task { await self.handleFinalize(...) }`,
@@ -716,31 +710,26 @@ actor TheStakeout {
         // by the concurrency audit. `AVAssetWriter` is non-Sendable so it
         // cannot be captured into the `@Sendable` completion closure of
         // `finishWriting`; instead `handleFinalize` re-reads the finalizing
-        // session from `stakeoutPhase` after verifying the session ID, which
-        // gives us back the writer plus all the per-recording metadata in one
-        // step.
+        // session from `stakeoutPhase`. The `.finalizing` phase is exclusive:
+        // `startRecording` only accepts `.idle`, so no second finalizing session
+        // can replace the current one while this writer is finishing.
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             writer.finishWriting { [weak self] in
                 Task { [weak self] in
-                    await self?.handleFinalize(sessionID: sessionID, reason: reason)
+                    await self?.handleFinalize(reason: reason)
                     continuation.resume()
                 }
             }
         }
     }
 
-    private func handleFinalize(sessionID: UUID, reason: RecordingPayload.StopReason) async {
-        // Verify the finalizing session is still ours — if a new recording
-        // started while we were waiting on `finishWriting`, bail out rather
-        // than acting on a foreign writer. (In practice this can't happen
-        // because `startRecording` requires `.idle` and we hold `.finalizing`
-        // until cleanup, but the check makes the invariant explicit.)
-        guard case .finalizing(let session) = stakeoutPhase, session.id == sessionID else { return }
+    private func handleFinalize(reason: RecordingPayload.StopReason) async {
+        guard case .finalizing(let session) = stakeoutPhase else { return }
 
-        defer { cleanup(outputURL: session.writer.outputURL) }
+        defer { cleanup(outputURL: session.assetWriter.outputURL) }
 
-        let writerStatus = session.writer.assetWriter.status
-        let writerError = session.writer.assetWriter.error
+        let writerStatus = session.assetWriter.status
+        let writerError = session.assetWriter.error
         if writerStatus == .failed {
             await deliverError(.finalizationFailed(writerError?.localizedDescription ?? "Unknown"))
             return
@@ -748,7 +737,7 @@ actor TheStakeout {
 
         let videoData: Data
         do {
-            videoData = try Data(contentsOf: session.writer.outputURL)
+            videoData = try Data(contentsOf: session.assetWriter.outputURL)
         } catch {
             await deliverError(.finalizationFailed("Could not read output file: \(error.localizedDescription)"))
             return
