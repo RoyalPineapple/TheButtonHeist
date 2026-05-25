@@ -4,8 +4,10 @@ import AccessibilitySnapshotModel
 import TheScore
 
 final class PublicContractGoldenTests: XCTestCase {
+    private let publicDictionaryAdapterCall = "json" + "Dict("
+    private let publicDictionaryAdapterPath = "compatibility" + "Dictionary"
 
-    func testPublicJSONFormattingCentralFileRemainsCompatibilityShim() throws {
+    func testPublicJSONFormattingCentralFileRemainsTypedEntrypoint() throws {
         let source = try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+Formatting+JSON.swift")
 
         XCTAssertLessThanOrEqual(
@@ -20,7 +22,11 @@ final class PublicContractGoldenTests: XCTestCase {
         let serializer = try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/PublicJSONSerializer.swift")
         XCTAssertTrue(
             serializer.contains("enum PublicJSONSerializer"),
-            "Foundation object conversion should stay behind the named public JSON serializer shim."
+            "Request-id object bridging should stay behind the named public JSON serializer."
+        )
+        XCTAssertFalse(
+            serializer.contains(publicDictionaryAdapterPath),
+            "Public JSON should not expose a Foundation dictionary compatibility path."
         )
 
         let forbiddenRuntimeFormatting = [
@@ -69,7 +75,7 @@ final class PublicContractGoldenTests: XCTestCase {
 
             if isSerializerShim {
                 XCTAssertTrue(source.contains("PublicJSONSerializer"))
-                XCTAssertTrue(source.contains("compatibilityDictionary"))
+                XCTAssertFalse(source.contains(publicDictionaryAdapterPath))
                 continue
             }
 
@@ -82,8 +88,8 @@ final class PublicContractGoldenTests: XCTestCase {
                 "\(file.lastPathComponent) should not cross the final JSON serialization boundary."
             )
             XCTAssertFalse(
-                source.contains("jsonDict("),
-                "\(file.lastPathComponent) should not call the Foundation dictionary compatibility adapter."
+                source.contains(publicDictionaryAdapterCall),
+                "\(file.lastPathComponent) should not call a Foundation dictionary public JSON adapter."
             )
         }
     }
@@ -96,8 +102,8 @@ final class PublicContractGoldenTests: XCTestCase {
             "REPL JSON output should serialize the typed public response model with request id at the serializer boundary."
         )
         XCTAssertFalse(
-            source.contains("response.jsonDict()"),
-            "REPL JSON output must not round-trip through the Foundation dictionary compatibility adapter."
+            source.contains("publicJSONObject(response)"),
+            "REPL JSON output must not round-trip through a Foundation dictionary public JSON adapter."
         )
     }
 
@@ -149,7 +155,7 @@ final class PublicContractGoldenTests: XCTestCase {
             )
             XCTAssertFalse(
                 source.contains("JSONSerialization"),
-                "\(family.path) should stay typed; JSONSerialization belongs only at compatibility adapter edges."
+                "\(family.path) should stay typed; JSONSerialization belongs only at serializer edges."
             )
 
             for type in family.requiredTypes {

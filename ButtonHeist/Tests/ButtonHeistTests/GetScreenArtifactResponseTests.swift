@@ -30,7 +30,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertFalse(options.includeInterface)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), pngBytes)
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["path"] as? String, path)
         XCTAssertEqual(json["width"] as? Double, 393)
@@ -62,24 +62,24 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertTrue(inlinePayload.interface.elements.isEmpty)
         XCTAssertFalse(inlineOptions.includeInterface)
 
-        let inlineJson = inlineResponse.jsonDict()
+        let inlineJson = publicJSONObject(inlineResponse)
         XCTAssertEqual(inlineJson["pngData"] as? String, pngData)
         XCTAssertNil(inlineJson["path"])
         XCTAssertNil(inlineJson["interface"])
 
-        let compatibilityResponse = try await fence.execute(request: [
+        let includedInterfaceResponse = try await fence.execute(request: [
             "command": "get_screen",
             "inlineData": true,
             "includeInterface": true,
         ])
 
-        guard case .screenshotData(let compatibilityPayload, let compatibilityOptions) = compatibilityResponse else {
-            return XCTFail("Expected compatibility screenshot response, got \(compatibilityResponse)")
+        guard case .screenshotData(let includedInterfacePayload, let includedInterfaceOptions) = includedInterfaceResponse else {
+            return XCTFail("Expected inline screenshot response with interface, got \(includedInterfaceResponse)")
         }
-        XCTAssertEqual(compatibilityPayload.pngData, pngData)
-        XCTAssertEqual(compatibilityPayload.interface.elements.map(\.heistId), ["visible_button"])
-        XCTAssertTrue(compatibilityOptions.includeInterface)
-        XCTAssertNotNil(compatibilityResponse.jsonDict()["interface"])
+        XCTAssertEqual(includedInterfacePayload.pngData, pngData)
+        XCTAssertEqual(includedInterfacePayload.interface.elements.map(\.heistId), ["visible_button"])
+        XCTAssertTrue(includedInterfaceOptions.includeInterface)
+        XCTAssertNotNil(publicJSONObject(includedInterfaceResponse)["interface"])
     }
 
     @ButtonHeistActor
@@ -131,7 +131,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertEqual(details?.phase, .client)
         XCTAssertEqual(details?.retryable, false)
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "error")
         XCTAssertEqual(json["errorCode"] as? String, "screen.inline_payload_too_large")
         XCTAssertNil(json["pngData"])

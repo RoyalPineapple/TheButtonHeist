@@ -341,6 +341,24 @@ func makeExpectationBatchOutcome(
     )
 }
 
+func publicJSONObject(
+    _ response: FenceResponse,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) -> [String: Any] {
+    do {
+        let object = try JSONSerialization.jsonObject(with: try response.jsonData())
+        guard let dict = object as? [String: Any] else {
+            XCTFail("Expected public JSON object for \(response)", file: file, line: line)
+            return [:]
+        }
+        return dict
+    } catch {
+        XCTFail("Failed to decode public JSON for \(response): \(error)", file: file, line: line)
+        return [:]
+    }
+}
+
 struct BatchInspection {
     let outcomes: [BatchStepOutcome]
     let results: [[String: Any]]
@@ -359,7 +377,9 @@ func inspectBatch(_ response: FenceResponse) -> BatchInspection? {
     }
     return BatchInspection(
         outcomes: outcomes,
-        results: outcomes.compactMap { $0.response?.jsonDict() },
+        results: outcomes.compactMap { outcome in
+            outcome.response.map { publicJSONObject($0) }
+        },
         completedSteps: outcomes.completedStepCount,
         failedIndex: outcomes.stoppedFailedIndex,
         totalTimingMs: totalTimingMs,

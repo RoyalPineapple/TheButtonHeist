@@ -2950,7 +2950,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let secondDelta = try XCTUnwrap(batch.results[1]["delta"] as? [String: Any])
         XCTAssertEqual(secondDelta["kind"] as? String, "noChange")
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertNil(json["netDelta"], "Batch JSON must not advertise a wrapper-synthesized cumulative delta")
     }
 
@@ -3010,7 +3010,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(batch.summaries.map(\.deltaKind), ["elementsChanged", "elementsChanged"])
         XCTAssertEqual(batch.accessibilityTrace?.captures.count, 3)
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let netDelta = try XCTUnwrap(json["netDelta"] as? [String: Any])
         XCTAssertEqual(netDelta["kind"] as? String, "elementsChanged")
         let edits = try XCTUnwrap(netDelta["edits"] as? [String: Any])
@@ -3528,7 +3528,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(request: ["command": "get_interface"])
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 3)
@@ -3572,7 +3572,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertNotNil(query.subtree)
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -3587,7 +3587,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testContainerStableIdAppearsInSummaryJsonAndCompactOutput() {
         let response = FenceResponse.interface(selectionTestInterface(), detail: .summary)
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         let container = tree[1]["container"] as! [String: Any]
@@ -3626,7 +3626,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(query.matcher.label, "Submit")
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let responseInterface = json["interface"] as! [String: Any]
         let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
@@ -3659,7 +3659,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(query.elementIds, ["second"])
 
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         let responseInterface = json["interface"] as! [String: Any]
         let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)

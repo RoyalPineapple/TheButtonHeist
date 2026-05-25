@@ -293,7 +293,7 @@ final class TargetConfigTests: XCTestCase {
             ],
             defaultTarget: "sim1"
         )
-        let json = response.jsonDict()
+        let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertEqual(json["default"] as? String, "sim1")
         let targets = json["targets"] as? [String: [String: Any]]
