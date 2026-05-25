@@ -4,6 +4,13 @@ import AccessibilitySnapshotModel
 import TheScore
 
 final class TheFenceTests: XCTestCase {
+    private enum NonFenceWaitFailure: Error, Equatable, LocalizedError {
+        case injected
+
+        var errorDescription: String? {
+            "injected wait failure"
+        }
+    }
 
     // MARK: - Command Enum
 
@@ -1799,6 +1806,45 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Async transport send failure must fail the pending tracker instead of timing out")
         } catch {
             XCTFail("Expected actionFailed, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testSendAndAwaitActionPropagatesNonFenceWaitFailure() async {
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mockConnection = MockConnection()
+        mockConnection.connectEventsOverride = [.connected]
+        let fence = TheFence(configuration: .init())
+        fence.handoff.makeConnection = { _, _, _ in mockConnection }
+        fence.handoff.connect(to: device)
+
+        let waitTask = Task { @ButtonHeistActor in
+            try await fence.sendAndAwaitAction(.activate(.heistId("custom-failure")), timeout: 5)
+        }
+
+        while mockConnection.sent.isEmpty {
+            await Task.yield()
+        }
+
+        guard let requestId = mockConnection.sent.last?.1 else {
+            waitTask.cancel()
+            return XCTFail("Expected action request to have been sent with a requestId")
+        }
+
+        fence.pendingRequests.resolveAction(
+            requestId: requestId,
+            result: .failure(NonFenceWaitFailure.injected)
+        )
+
+        do {
+            _ = try await waitTask.value
+            XCTFail("Expected injected wait failure")
+        } catch NonFenceWaitFailure.injected {
+            // expected: transport waits must not coerce unknown tracker failures into actionFailed.
+        } catch FenceError.actionFailed(let message) {
+            XCTFail("Expected injected wait failure, got actionFailed: \(message)")
+        } catch {
+            XCTFail("Expected injected wait failure, got \(error)")
         }
     }
 
