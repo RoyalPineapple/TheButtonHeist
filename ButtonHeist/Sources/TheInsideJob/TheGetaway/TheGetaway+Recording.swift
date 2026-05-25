@@ -270,8 +270,15 @@ extension TheGetaway {
         switch result {
         case .success(let payload):
             let authenticated = await muscle.authenticatedClientIDs
-            if let owner, authenticated.contains(owner),
-               let payloadData = encodeEnvelope(.recording(payload)) {
+            let payloadData: Data
+            switch encodeEnvelope(.recording(payload)) {
+            case .success(let data):
+                payloadData = data
+            case .failure(let failure):
+                logEncodingFailure(failure)
+                return
+            }
+            if let owner, authenticated.contains(owner) {
                 // Targeted delivery to the start_recording originator. They
                 // are parked on `waitForRecording` and need the payload — but
                 // every other client gets the lightweight `.recordingStopped`
@@ -287,10 +294,13 @@ extension TheGetaway {
                 if deliveryOutcome.didEnqueue {
                     replaceRecordingRouteState(.idle)
                 }
-                if let stoppedData = encodeEnvelope(.recordingStopped) {
+                switch encodeEnvelope(.recordingStopped) {
+                case .success(let stoppedData):
                     for otherClient in authenticated where otherClient != owner {
                         _ = await muscle.sendData(stoppedData, toClient: otherClient)
                     }
+                case .failure(let failure):
+                    logEncodingFailure(failure)
                 }
             } else {
                 // Originator is gone (or never recorded). Notify everyone the
