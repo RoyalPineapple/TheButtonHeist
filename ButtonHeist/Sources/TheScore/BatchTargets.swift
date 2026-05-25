@@ -19,7 +19,7 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
         matcher: ElementMatcher,
         ordinal: Int? = nil
     ) {
-        self.sourceHeistId = sourceHeistId ?? matcher.heistId
+        self.sourceHeistId = sourceHeistId
         self.matcher = ElementMatcher(
             label: matcher.label,
             identifier: matcher.identifier,
@@ -43,6 +43,13 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
         let sourceHeistId = try container.decodeIfPresent(HeistId.self, forKey: .sourceHeistId)
         let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
         let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if matcher.heistId != nil {
+            throw DecodingError.dataCorruptedError(
+                forKey: .matcher,
+                in: container,
+                debugDescription: "BatchExecutionTarget matcher must not carry heistId; use top-level sourceHeistId for metadata"
+            )
+        }
         if let ordinal, ordinal < 0 {
             throw DecodingError.dataCorruptedError(
                 forKey: .ordinal,
