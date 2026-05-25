@@ -187,9 +187,8 @@ extension Navigation {
 
     /// Clamp a swipe rectangle to the screen region outside accessibility-level
     /// chrome: above any `.tabBar` container, inset horizontally by the key
-    /// window's layout margins. Returns the intersection when it's non-empty;
-    /// otherwise the frame clipped to the screen so swipes at least stay
-    /// on-screen.
+    /// window's layout margins. Returns nil when the frame has no targetable
+    /// on-screen geometry.
     ///
     /// Nav bar detection is deliberately absent: UIKit does not expose an
     /// accessibility signal for `UINavigationBar`, and we refuse to walk the
@@ -199,7 +198,7 @@ extension Navigation {
     /// fix will come from AXRuntime attribute 2015 (`_accessibilityValueForAttribute:`),
     /// which every element carries as a back-reference to its owning nav bar;
     /// that path needs LLDB validation across OS versions before shipping.
-    func safeSwipeFrame(from frame: CGRect) -> CGRect {
+    func safeSwipeFrame(from frame: CGRect) -> CGRect? {
         let safeIntersection = frame.intersection(currentSwipeSafeBounds())
         if !safeIntersection.isNull, !safeIntersection.isEmpty {
             return safeIntersection
@@ -208,7 +207,7 @@ extension Navigation {
         if !screenIntersection.isNull, !screenIntersection.isEmpty {
             return screenIntersection
         }
-        return frame
+        return nil
     }
 
     /// Region of the screen safe for synthetic swipes. Bottom edge is the top
@@ -650,10 +649,15 @@ extension Navigation {
             if let scrollView = view as? UIScrollView, scrollView.bhIsUnsafeForProgrammaticScrolling {
                 return nil
             }
-            let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil))
+            guard let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil)) else {
+                return nil
+            }
             return .swipeable(frame: screenFrame, contentSize: cgContentSize)
         }
-        return .swipeable(frame: safeSwipeFrame(from: container.frame.cgRect), contentSize: cgContentSize)
+        guard let screenFrame = safeSwipeFrame(from: container.frame.cgRect) else {
+            return nil
+        }
+        return .swipeable(frame: screenFrame, contentSize: cgContentSize)
     }
 
     private func searchNotFoundResult(progress: ScrollSearchProgress) -> TheSafecracker.InteractionResult {
