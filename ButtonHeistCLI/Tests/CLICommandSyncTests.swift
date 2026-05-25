@@ -252,6 +252,19 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(help.contains("Scrolling:"), "REPL help should not carry a hand-maintained command registry")
     }
 
+    func testSessionHelpUsesDescriptorCLINameProjectionForExposure() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Session/SessionRepl.swift")
+
+        XCTAssertTrue(
+            source.contains("descriptor.cliName != nil"),
+            "REPL help should use FenceCommandDescriptor.cliName as the CLI exposure projection"
+        )
+        XCTAssertFalse(
+            source.contains("descriptor.cliExposure"),
+            "REPL help should not reinterpret CLIExposure cases"
+        )
+    }
+
     func testGetInterfaceHelpDoesNotAdvertiseScopeOrLegacyFullAlias() {
         let help = GetInterfaceCommand.helpMessage()
 
