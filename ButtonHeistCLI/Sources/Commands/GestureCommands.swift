@@ -179,10 +179,10 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
             }
         }
 
-        let swipeDirection: SwipeDirection?
+        let swipeDirection: String?
         if let dir = direction {
-            guard let parsedDirection = SwipeDirection(rawValue: dir.lowercased()) else {
-                throw ValidationError("Invalid direction: \(dir). Valid: \(SwipeDirection.allCases.map(\.rawValue).joined(separator: ", "))")
+            guard let parsedDirection = Self.catalogCanonicalStringValue(dir, for: .direction) else {
+                throw ValidationError("Invalid direction: \(dir). Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
             }
             swipeDirection = parsedDirection
         } else {
@@ -210,7 +210,7 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
                 (.endY, toY),
                 (.duration, duration),
             ],
-            strings: [(.direction, swipeDirection?.rawValue)],
+            strings: [(.direction, swipeDirection)],
             objects: [(.start, startObject), (.end, endObject)]
         )
         try await Self.sendGesture(request, connection: connection, output: output)

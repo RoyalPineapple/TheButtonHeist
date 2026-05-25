@@ -20,7 +20,7 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
 
     @OptionGroup var element: ElementTargetOptions
 
-    @Option(name: .shortAndLong, help: "Starting scroll direction: down, up, left, right (default: down)")
+    @Option(name: .shortAndLong, help: "Starting scroll direction: \(Self.catalogAllowedValuesDescription(for: .direction))")
     var direction: String?
 
     @OptionGroup var connection: ConnectionOptions
@@ -33,15 +33,19 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
+        let scrollDirection: String?
         if let direction {
-            guard ScrollSearchDirection(rawValue: direction.lowercased()) != nil else {
-                throw ValidationError("Invalid direction '\(direction)'. Valid: down, up, left, right")
+            guard let parsedDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
+                throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
             }
+            scrollDirection = parsedDirection
+        } else {
+            scrollDirection = nil
         }
 
         var request = Self.fenceRequest([.timeout: .double(timeout)])
         try element.applyTo(&request)
-        if let direction { request.set(.direction, direction.lowercased()) }
+        if let scrollDirection { request.set(.direction, scrollDirection) }
 
         try await CLIRunner.run(
             connection: connection,

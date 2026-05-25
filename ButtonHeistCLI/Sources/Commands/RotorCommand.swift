@@ -31,7 +31,10 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .customLong("rotor-index"), help: "Zero-based rotor index")
     var rotorIndex: Int?
 
-    @Option(name: .shortAndLong, help: "Direction: next or previous (default: next)")
+    @Option(
+        name: .shortAndLong,
+        help: "Direction: \(Self.catalogAllowedValuesDescription(for: .direction))"
+    )
     var direction: String = Self.catalogDefaultString(for: .direction)
 
     @Option(name: .customLong("current-heist-id"), help: "Current rotor item heistId for continuing next/previous")
@@ -49,8 +52,8 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
         if let rotorIndex, rotorIndex < 0 {
             throw ValidationError("rotor-index must be non-negative")
         }
-        guard let rotorDirection = RotorDirection(rawValue: direction.lowercased()) else {
-            throw ValidationError("Invalid direction '\(direction)'. Valid: \(RotorDirection.allCases.map(\.rawValue).joined(separator: ", "))")
+        guard let rotorDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
+            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
         if (currentTextStartOffset == nil) != (currentTextEndOffset == nil) {
             throw ValidationError("current-text-start-offset and current-text-end-offset must be provided together")
@@ -64,7 +67,7 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             }
         }
 
-        var request = Self.fenceRequest([.direction: .string(rotorDirection.rawValue)])
+        var request = Self.fenceRequest([.direction: .string(rotorDirection)])
         if let rotor { request.set(.rotor, rotor) }
         if let rotorIndex { request.set(.rotorIndex, rotorIndex) }
         if let currentHeistId { request.set(.currentHeistId, currentHeistId) }

@@ -23,7 +23,10 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .customLong("stable-id"), help: "Scrollable container stableId from get_interface")
     var stableId: String?
 
-    @Option(name: .shortAndLong, help: "Edge to scroll to: top, bottom, left, right (default: top)")
+    @Option(
+        name: .shortAndLong,
+        help: "Edge to scroll to: \(Self.catalogAllowedValuesDescription(for: .edge))"
+    )
     var edge: String = Self.catalogDefaultString(for: .edge)
 
     @OptionGroup var connection: ConnectionOptions
@@ -32,12 +35,12 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard let scrollEdge = ScrollEdge(rawValue: edge.lowercased()) else {
-            throw ValidationError("Invalid edge '\(edge)'. Valid: \(ScrollEdge.allCases.map(\.rawValue).joined(separator: ", "))")
+        guard let scrollEdge = Self.catalogCanonicalStringValue(edge, for: .edge) else {
+            throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: .edge))")
         }
 
         var request = Self.fenceRequest([
-            .edge: .string(scrollEdge.rawValue),
+            .edge: .string(scrollEdge),
             .timeout: .double(timeoutOption.timeout),
         ])
         if let stableId { request.set(.stableId, stableId) }
