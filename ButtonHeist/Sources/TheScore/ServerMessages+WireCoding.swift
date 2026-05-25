@@ -7,7 +7,7 @@ private enum ServerMessageCodingKeys: String, CodingKey {
     case payload
 }
 
-private enum ResponseEnvelopeCodingKeys: String, CodingKey {
+private enum ResponseEnvelopeCodingKeys: String, CodingKey, CaseIterable {
     case buttonHeistVersion
     case requestId
     case type
@@ -15,10 +15,26 @@ private enum ResponseEnvelopeCodingKeys: String, CodingKey {
     case accessibilityTrace
 }
 
+private struct EnvelopeCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
+    }
+}
+
 // MARK: - ResponseEnvelope Codable
 
 extension ResponseEnvelope {
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownEnvelopeKeys(decoder)
         let container = try decoder.container(keyedBy: ResponseEnvelopeCodingKeys.self)
         buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
@@ -40,6 +56,18 @@ extension ResponseEnvelope {
         if let payload = wire.payload {
             try payload.encode(to: container.superEncoder(forKey: .payload))
         }
+    }
+
+    private static func rejectUnknownEnvelopeKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(ResponseEnvelopeCodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: EnvelopeCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown response envelope field \"\(unknownKey.stringValue)\""
+        ))
     }
 }
 
