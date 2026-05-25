@@ -138,6 +138,58 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertNil(json["path"])
     }
 
+    @ButtonHeistActor
+    func testGetScreenInvalidOutputThrowsTypedInvalidRequest() async throws {
+        let tempDirectory = Self.makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let fence = Self.makeFence(
+            tempDirectory: tempDirectory,
+            pngData: Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString(),
+            interface: Interface(timestamp: Date(), tree: [])
+        )
+
+        do {
+            _ = try await fence.execute(request: [
+                "command": "get_screen",
+                "output": "/tmp/../buttonheist-screen.png",
+            ])
+            XCTFail("Expected invalid output path to throw")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid output path"))
+        } catch {
+            XCTFail("Expected FenceError.invalidRequest, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testGetScreenInvalidBase64ThrowsTypedServerError() async throws {
+        let tempDirectory = Self.makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let fence = Self.makeFence(
+            tempDirectory: tempDirectory,
+            pngData: "not base64",
+            interface: Interface(timestamp: Date(), tree: [])
+        )
+
+        do {
+            _ = try await fence.execute(request: ["command": "get_screen"])
+            XCTFail("Expected invalid screenshot base64 to throw")
+        } catch let error as FenceError {
+            guard case .serverError(let serverError) = error else {
+                return XCTFail("Expected serverError, got \(error)")
+            }
+            XCTAssertEqual(serverError.kind, .general)
+            XCTAssertEqual(serverError.message, "Failed to decode screenshot data")
+        } catch {
+            XCTFail("Expected FenceError.serverError, got \(error)")
+        }
+    }
+
     private static func makeTempDirectory() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("buttonheist-get-screen-\(UUID().uuidString)", isDirectory: true)

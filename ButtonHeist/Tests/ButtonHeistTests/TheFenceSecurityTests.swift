@@ -29,6 +29,15 @@ final class TheFenceSecurityTests: XCTestCase {
             } else {
                 XCTFail("Expected .error response, got: \(response)", file: file, line: line)
             }
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got: \(error)", file: file, line: line)
+            }
+            XCTAssertTrue(
+                message.contains(substring),
+                "Expected error containing '\(substring)', got: \(message)",
+                file: file, line: line
+            )
         } catch {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
         }
@@ -80,17 +89,18 @@ final class TheFenceSecurityTests: XCTestCase {
             _ = try await fence.execute(request: ["command": "start_recording"])
             // Allow the mock's Task-dispatched recordingStarted message to arrive
             for _ in 0..<5 { await Task.yield() }
-            let response = try await fence.execute(request: [
+            _ = try await fence.execute(request: [
                 "command": "stop_recording", "output": "/tmp/../etc/passwd",
             ])
-            if case .error(let message, _) = response {
-                XCTAssertTrue(
-                    message.contains("must not contain '..'"),
-                    "Expected path traversal error, got: \(message)"
-                )
-            } else {
-                XCTFail("Expected .error response, got: \(response)")
+            XCTFail("Expected invalid output path to throw")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got: \(error)")
             }
+            XCTAssertTrue(
+                message.contains("must not contain '..'"),
+                "Expected path traversal error, got: \(message)"
+            )
         } catch {
             XCTFail("Unexpected throw: \(error)")
         }
