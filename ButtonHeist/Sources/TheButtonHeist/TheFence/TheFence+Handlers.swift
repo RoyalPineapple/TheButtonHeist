@@ -71,9 +71,13 @@ extension TheFence {
             )
             return .screenshot(path: url.path, payload: responsePayload, options: options)
         } catch BookKeeperError.unsafePath {
-            return .error("Invalid output path: must not contain '..' components or control characters")
+            throw FenceError.invalidRequest(
+                "Invalid output path: must not contain '..' components or control characters"
+            )
         } catch BookKeeperError.base64DecodingFailed {
-            return .error("Failed to decode screenshot data")
+            throw FenceError.serverError(
+                ServerError(kind: .general, message: "Failed to decode screenshot data")
+            )
         }
     }
 
@@ -447,9 +451,13 @@ extension TheFence {
             }
             return .recording(path: url.path, payload: recording)
         } catch BookKeeperError.unsafePath {
-            return .error("Invalid output path: must not contain '..' components or control characters")
+            throw FenceError.invalidRequest(
+                "Invalid output path: must not contain '..' components or control characters"
+            )
         } catch BookKeeperError.base64DecodingFailed {
-            return .error("Failed to decode video data")
+            throw FenceError.serverError(
+                ServerError(kind: .recording, message: "Failed to decode video data")
+            )
         }
     }
 

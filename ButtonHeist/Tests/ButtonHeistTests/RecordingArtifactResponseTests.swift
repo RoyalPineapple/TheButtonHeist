@@ -93,6 +93,55 @@ final class RecordingArtifactResponseTests: XCTestCase {
         XCTAssertNil(publicJSONObject(response)["videoData"])
     }
 
+    @ButtonHeistActor
+    func testStopRecordingInvalidOutputThrowsTypedInvalidRequest() async throws {
+        let tempDirectory = Self.makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let payload = Self.makeRecordingPayload(
+            videoData: Data("video".utf8).base64EncodedString(),
+            interactionCount: 0
+        )
+        let fence = Self.makeFence(tempDirectory: tempDirectory, payload: payload)
+
+        do {
+            _ = try await fence.execute(request: [
+                "command": "stop_recording",
+                "output": "/tmp/../buttonheist-recording.mp4",
+            ])
+            XCTFail("Expected invalid output path to throw")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Invalid output path"))
+        } catch {
+            XCTFail("Expected FenceError.invalidRequest, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
+    func testStopRecordingInvalidBase64ThrowsTypedServerError() async throws {
+        let tempDirectory = Self.makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let payload = Self.makeRecordingPayload(videoData: "not base64", interactionCount: 0)
+        let fence = Self.makeFence(tempDirectory: tempDirectory, payload: payload)
+
+        do {
+            _ = try await fence.execute(request: ["command": "stop_recording"])
+            XCTFail("Expected invalid recording base64 to throw")
+        } catch let error as FenceError {
+            guard case .serverError(let serverError) = error else {
+                return XCTFail("Expected serverError, got \(error)")
+            }
+            XCTAssertEqual(serverError.kind, .recording)
+            XCTAssertEqual(serverError.message, "Failed to decode video data")
+        } catch {
+            XCTFail("Expected FenceError.serverError, got \(error)")
+        }
+    }
+
     private static func makeTempDirectory() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("buttonheist-recording-\(UUID().uuidString)", isDirectory: true)
