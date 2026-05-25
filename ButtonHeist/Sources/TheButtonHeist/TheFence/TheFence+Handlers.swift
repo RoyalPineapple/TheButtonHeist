@@ -523,7 +523,7 @@ extension TheFence {
 
     func handleGetSessionLog() throws -> FenceResponse {
         guard let snapshot = try bookKeeper.sessionLogSnapshot() else {
-            return .error("No active session")
+            return .failure(FenceError.invalidRequest("No active session"))
         }
         return .sessionLog(snapshot: snapshot)
     }
