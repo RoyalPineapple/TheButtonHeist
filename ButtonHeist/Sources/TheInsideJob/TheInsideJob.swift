@@ -517,15 +517,10 @@ public final class TheInsideJob {
         do {
             return try TLSIdentity.getOrCreate()
         } catch {
-            insideJobLogger.warning("Stored TLS identity failed, trying ephemeral identity: \(error.localizedDescription, privacy: .public)")
-            do {
-                return try TLSIdentity.createEphemeral()
-            } catch {
-                throw InsideJobStartupError.tlsIdentityUnavailable(
-                    phase: "identity-creation",
-                    reason: error.localizedDescription
-                )
-            }
+            throw InsideJobStartupError.tlsIdentityUnavailable(
+                phase: "identity-creation",
+                reason: error.localizedDescription
+            )
         }
     }
 
