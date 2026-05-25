@@ -47,6 +47,19 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    func testRequestEnvelopeRejectsUnknownTopLevelField() throws {
+        let data = Data("""
+        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"ping","protocolVersion":"v9"}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("protocolVersion"),
+                "Expected unknown request envelope field in error, got \(error)"
+            )
+        }
+    }
+
     func testPingEncodeDecode() throws {
         let message = ClientMessage.ping
         let data = try JSONEncoder().encode(message)
