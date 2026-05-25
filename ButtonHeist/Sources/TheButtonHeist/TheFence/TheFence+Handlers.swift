@@ -191,7 +191,7 @@ extension TheFence {
             try rejectCount(count)
             let customName = String(actionName.dropFirst("action:".count))
             guard !customName.isEmpty else {
-                return .error("action: prefix requires a name (e.g. \"action:myAction\")")
+                throw FenceError.invalidRequest("action: prefix requires a name (e.g. \"action:myAction\")")
             }
             return try await sendAction(.performCustomAction(
                 CustomActionTarget(elementTarget: target, actionName: customName)))
