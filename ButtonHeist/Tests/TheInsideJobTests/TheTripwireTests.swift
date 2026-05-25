@@ -784,6 +784,53 @@ final class TheTripwireTests: XCTestCase {
                       "All-passthrough input should not be promoted to app accessibility roots")
     }
 
+    // MARK: - topmostViewController(in:) Standard Containers
+
+    func testTopmostViewControllerWalksNavigationControllerStack() {
+        let first = UIViewController()
+        let top = UIViewController()
+        let navigation = UINavigationController(rootViewController: first)
+        navigation.pushViewController(top, animated: false)
+        let window = makeWindow(level: .normal, rootVC: navigation)
+
+        let result = TheTripwire.topmostViewController(
+            in: [(window: window, rootView: window as UIView)]
+        )
+
+        XCTAssertTrue(result === top)
+    }
+
+    func testTopmostViewControllerWalksSelectedTabController() {
+        let first = UIViewController()
+        let selected = UIViewController()
+        let tabs = UITabBarController()
+        tabs.viewControllers = [first, selected]
+        tabs.selectedIndex = 1
+        let window = makeWindow(level: .normal, rootVC: tabs)
+
+        let result = TheTripwire.topmostViewController(
+            in: [(window: window, rootView: window as UIView)]
+        )
+
+        XCTAssertTrue(result === selected)
+    }
+
+    func testTopmostViewControllerDoesNotGuessArbitraryChildContainer() {
+        let parent = UIViewController()
+        let childTop = UIViewController()
+        let childNavigation = UINavigationController(rootViewController: childTop)
+        parent.addChild(childNavigation)
+        parent.view.addSubview(childNavigation.view)
+        childNavigation.didMove(toParent: parent)
+        let window = makeWindow(level: .normal, rootVC: parent)
+
+        let result = TheTripwire.topmostViewController(
+            in: [(window: window, rootView: window as UIView)]
+        )
+
+        XCTAssertTrue(result === parent)
+    }
+
     // MARK: - topmostViewController(in:) Passthrough
 
     func testTopmostViewControllerSkipsPassthroughWindow() {

@@ -250,8 +250,7 @@ flowchart TD
     IsNav -->|yes| NavTop["deepestViewController(topVC)"]
     IsNav -->|no| IsTab{is UITabBarController?}
     IsTab -->|yes| TabSel["deepestViewController(selectedVC)"]
-    IsTab -->|no| Children["Check children for nav/tab"]
-    Children --> Deepest["Return VC"]
+    IsTab -->|no| Deepest["Return VC"]
 ```
 
 Sampled every tick. A changed Tripwire signal fires `.tripwireTriggered(from:to:)`, which means "parse and check now." It does not guarantee that the parsed accessibility interface changed.

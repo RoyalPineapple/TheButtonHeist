@@ -540,9 +540,10 @@ final class TheTripwire {
 
     // MARK: - View Controller Identity
 
-    /// The topmost visible view controller — the deepest pushed/presented VC.
-    /// Skips system passthrough windows (keyboard, text-effects) so a keyboard
-    /// appearance doesn't falsely register as a view-controller change.
+    /// The topmost visible view controller from public presentation and
+    /// standard container state. Skips system passthrough windows (keyboard,
+    /// text-effects) so a keyboard appearance doesn't falsely register as a
+    /// view-controller change.
     func topmostViewController() -> UIViewController? {
         Self.topmostViewController(in: getTraversableWindows())
     }
@@ -574,11 +575,6 @@ final class TheTripwire {
         }
         if let tab = vc as? UITabBarController, let selected = tab.selectedViewController {
             return deepestViewController(from: selected)
-        }
-        for child in vc.children {
-            if child is UINavigationController || child is UITabBarController {
-                return deepestViewController(from: child)
-            }
         }
         return vc
     }
