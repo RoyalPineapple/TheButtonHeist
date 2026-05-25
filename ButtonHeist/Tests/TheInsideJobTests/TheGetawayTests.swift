@@ -198,6 +198,23 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertLessThanOrEqual(timestamp, afterMs)
     }
 
+    func testMalformedClientMessageReturnsDecodeFailureEnvelope() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        var responseData: Data?
+
+        await getaway.handleClientMessage(1, data: Data("not-json".utf8)) { data in
+            responseData = data
+        }
+
+        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
+        XCTAssertNil(envelope.requestId)
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected malformed decode error, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.message, "Malformed message — could not decode")
+    }
+
     // MARK: - Send Encoding
 
     func testSendMessageDropsUnencodablePayloadInsteadOfSynthesizingFallbackError() async {
@@ -607,6 +624,44 @@ final class TheGetawayTests: XCTestCase {
         if case .none = getaway.completedRecording {} else {
             XCTFail("Successful targeted delivery must clear the completion cache, got \(getaway.completedRecording)")
         }
+    }
+
+    func testAutoFinishPayloadEncodingFailureDoesNotBroadcastStoppedNotification() async {
+        let (getaway, muscle, _) = await makeGetaway()
+        let sent = SentBox()
+        await muscle.installCallbacks(
+            sendToClient: { data, clientId in
+                sent.append(data, clientId: clientId)
+                return .enqueued
+            },
+            markClientAuthenticated: { _ in },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in },
+            onSessionActiveChanged: { _ in }
+        )
+        await muscle.installAuthenticatedClientForTest(7)
+        await muscle.installAuthenticatedClientForTest(8)
+        let stubStakeout = TheStakeout(captureFrame: { @MainActor in nil })
+        getaway.installRecordingRouteStateForTest(.recording(stakeout: stubStakeout, ownerClientId: 7))
+
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100, height: 200,
+            duration: .nan, frameCount: 8, fps: 8,
+            startTime: Date(), endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        await getaway.deliverRecordingResult(.success(payload))
+
+        XCTAssertTrue(
+            sent.all.isEmpty,
+            "Encoding failure must fail closed instead of broadcasting a success-shaped recordingStopped notification"
+        )
+        guard case .succeeded(let cached) = getaway.completedRecording else {
+            return XCTFail("Failed delivery must keep the completed payload for the route owner")
+        }
+        XCTAssertTrue(cached.duration.isNaN)
     }
 
     func testManualStopAfterAutoFinishTargetDeliveryDoesNotDeliverSecondPayload() async {

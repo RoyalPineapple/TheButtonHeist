@@ -422,8 +422,13 @@ final class TheGetaway {
     // MARK: - Message Dispatch
 
     func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
-        guard let envelope = decodeRequest(data) else {
-            sendMessage(.error(ServerError(kind: .general, message: "Malformed message — could not decode")), respond: respond)
+        let envelope: RequestEnvelope
+        switch decodeRequest(data) {
+        case .success(let decoded):
+            envelope = decoded
+        case .failure(let failure):
+            insideJobLogger.error("\(failure.description)")
+            sendMessage(.error(failure.serverError), respond: respond)
             return
         }
 
@@ -546,30 +551,57 @@ final class TheGetaway {
 
     // MARK: - Encode / Decode
 
+    struct ResponseEncodingFailure: Error, Sendable, CustomStringConvertible {
+        let requestId: String?
+        let underlyingDescription: String
+
+        var description: String {
+            if let requestId {
+                return "Failed to encode response envelope for request \(requestId): \(underlyingDescription)"
+            }
+            return "Failed to encode response envelope: \(underlyingDescription)"
+        }
+    }
+
+    struct RequestDecodeFailure: Error, Sendable, CustomStringConvertible {
+        let underlyingDescription: String
+
+        var description: String {
+            "Failed to decode client message: \(underlyingDescription)"
+        }
+
+        var serverError: ServerError {
+            ServerError(kind: .general, message: "Malformed message — could not decode")
+        }
+    }
+
     func encodeEnvelope(
         _ message: ServerMessage,
         requestId: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil
-    ) -> Data? {
+    ) -> Result<Data, ResponseEncodingFailure> {
         do {
-            return try ResponseEnvelope(
+            let envelopeData = try ResponseEnvelope(
                 requestId: requestId,
                 message: message,
                 accessibilityTrace: accessibilityTrace
             ).encoded()
+            return .success(envelopeData)
         } catch {
-            insideJobLogger.error("Failed to encode message: \(error)")
-            return nil
+            return .failure(.init(requestId: requestId, underlyingDescription: String(describing: error)))
         }
     }
 
-    func decodeRequest(_ data: Data) -> RequestEnvelope? {
+    func decodeRequest(_ data: Data) -> Result<RequestEnvelope, RequestDecodeFailure> {
         do {
-            return try RequestEnvelope.decoded(from: data)
+            return .success(try RequestEnvelope.decoded(from: data))
         } catch {
-            insideJobLogger.error("Failed to decode client message: \(error)")
-            return nil
+            return .failure(.init(underlyingDescription: String(describing: error)))
         }
+    }
+
+    func logEncodingFailure(_ failure: ResponseEncodingFailure) {
+        insideJobLogger.error("\(failure.description)")
     }
 
     // MARK: - Send / Broadcast
@@ -580,13 +612,16 @@ final class TheGetaway {
         accessibilityTrace: AccessibilityTrace? = nil,
         respond: @escaping (Data) -> Void
     ) {
-        if let data = encodeEnvelope(
+        switch encodeEnvelope(
             message,
             requestId: requestId,
             accessibilityTrace: accessibilityTrace
         ) {
+        case .success(let data):
             insideJobLogger.debug("Sending \(data.count) bytes")
             respond(data)
+        case .failure(let failure):
+            logEncodingFailure(failure)
         }
     }
 
@@ -600,7 +635,14 @@ final class TheGetaway {
             insideJobLogger.error("Refusing to broadcast screenshot payload; screenshots must be requested explicitly")
             return
         }
-        guard let data = encodeEnvelope(message) else { return }
+        let data: Data
+        switch encodeEnvelope(message) {
+        case .success(let envelopeData):
+            data = envelopeData
+        case .failure(let failure):
+            logEncodingFailure(failure)
+            return
+        }
         // Capture the Sendable SimpleSocketServer actor across the hop —
         // ServerTransport itself is NSObject and non-Sendable.
         guard let server = transport?.server else { return }
