@@ -193,11 +193,8 @@ nonisolated extension ReplSession {
     }
 
     private static func aliasHelpLines() -> [String] {
-        var aliases: [HelpAlias] = []
-        for descriptor in TheFence.Command.descriptors {
-            for alias in descriptor.humanAliases.keys {
-                aliases.append(HelpAlias(alias: alias, command: descriptor.canonicalName))
-            }
+        var aliases = TheFence.Command.humanCommandAliases.map { entry in
+            (alias: entry.key, command: entry.value.command.canonicalName)
         }
         aliases.sort { lhs, rhs in
             lhs.alias == rhs.alias ? lhs.command < rhs.command : lhs.alias < rhs.alias
@@ -219,11 +216,6 @@ nonisolated extension ReplSession {
     private static func padded(_ value: String, to width: Int) -> String {
         guard value.count < width else { return value }
         return value + String(repeating: " ", count: width - value.count)
-    }
-
-    private struct HelpAlias {
-        let alias: String
-        let command: String
     }
 
     static func parseHumanInput(_ line: String) -> [String: Any] {

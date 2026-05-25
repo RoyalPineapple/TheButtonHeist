@@ -627,6 +627,14 @@ struct ToolSyncTests {
             !source.contains("anyValue"),
             "main.swift should not route through an untyped Any conversion helper"
         )
+        #expect(
+            source.contains("parameter(named:"),
+            "main.swift should use the descriptor parameter lookup API for instruction keys"
+        )
+        #expect(
+            !source.contains("parameters.first"),
+            "main.swift should not open-code descriptor parameter scans"
+        )
     }
 
     @Test("MCP server instructions render descriptor-backed tool names")
