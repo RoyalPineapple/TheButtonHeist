@@ -8,7 +8,7 @@ Screen recording engine. Captures frames at configurable FPS, encodes H.264/MP4 
 
 ### State machine
 
-`StakeoutPhase`: `.idle` / `.recording(ActiveRecording)` / `.finalizing(FinalizingRecording)`. Each case carries only the data valid for that lifecycle phase. `ActiveRecording` groups writer resources, output shape, timing, evidence, capture loop, activity tracking, and interaction log state; `FinalizingRecording` drops active-only tasks and the pixel-buffer adaptor before building the payload.
+`StakeoutPhase`: `.idle` / `.recording(ActiveRecording)` / `.finalizing(FinalizingRecording)`. Each case carries only the data valid for that lifecycle phase. `ActiveRecording` groups writer resources, output shape, timing, evidence, capture loop, activity tracking, and interaction log state; `FinalizingRecording` drops active-only tasks, the writer input, and the pixel-buffer adaptor before building the payload.
 
 ### Recording lifecycle
 
