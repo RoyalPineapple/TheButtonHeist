@@ -79,7 +79,12 @@ extension FenceResponse {
         case .heistPlayback(let completedSteps, let failedIndex, let totalTimingMs, let failure, _):
             var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at \(index))" }
-            if let failure { text += " [\(failure.step.command): \(failure.errorMessage)]" }
+            if let failure {
+                text += " [\(failure.step.command): \(failure.errorMessage)]"
+                if let diagnosticCaptureFailure = failure.diagnosticCaptureFailure {
+                    text += " [diagnosticCaptureFailure: \(diagnosticCaptureFailure)]"
+                }
+            }
             return text
         }
     }

@@ -25,13 +25,15 @@ struct PublicPlaybackFailure: Encodable {
     let actionResult: PublicActionResponse?
     let expectation: PublicExpectationResult?
     let interface: PublicInterface?
+    let diagnosticCaptureFailure: String?
 
     init(failure: PlaybackFailure) {
         self.command = failure.step.command
         self.error = failure.errorMessage
         self.target = failure.step.target.map(PublicPlaybackTarget.init)
+        self.diagnosticCaptureFailure = failure.diagnosticCaptureFailure
         switch failure {
-        case .actionFailed(_, let result, let expectation, let interface):
+        case .actionFailed(_, let result, let expectation, let interface, _):
             self.actionResult = PublicActionResponse(result: result, expectation: nil)
             if let expectation, !expectation.met {
                 self.expectation = PublicExpectationResult(result: expectation)
@@ -39,7 +41,7 @@ struct PublicPlaybackFailure: Encodable {
                 self.expectation = nil
             }
             self.interface = interface.map { PublicInterface(interface: $0, detail: .summary) }
-        case .fenceError(_, _, let interface), .thrown(_, _, let interface):
+        case .fenceError(_, _, let interface, _), .thrown(_, _, let interface, _):
             self.actionResult = nil
             self.expectation = nil
             self.interface = interface.map { PublicInterface(interface: $0, detail: .summary) }
