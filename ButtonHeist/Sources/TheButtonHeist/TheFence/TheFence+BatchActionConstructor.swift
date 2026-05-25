@@ -130,7 +130,7 @@ extension TheFence {
         }
 
         private func waitForAction(_ target: WaitForTarget, context: BatchStepPlanningContext) throws -> BatchStepActionPlan {
-            let semanticTarget = targetResolver.executionTarget(from: context.request, fallback: target.elementTarget)
+            let semanticTarget = targetResolver.executionTarget(from: context.request, commandTarget: target.elementTarget)
             return try BatchStepActionPlan(action: .waitForElement(.init(
                 target: targetResolver.requiredExecutionTarget(semanticTarget),
                 absent: target.absent,
@@ -139,11 +139,11 @@ extension TheFence {
         }
 
         private func target(_ request: ParsedRequest, _ target: ElementTarget?) throws -> BatchExecutionTarget? {
-            try targetResolver.optionalTarget(from: request, fallback: target)
+            try targetResolver.optionalTarget(from: request, commandTarget: target)
         }
 
         private func required(_ request: ParsedRequest, _ target: ElementTarget?) throws -> BatchExecutionTarget {
-            try targetResolver.requiredTarget(from: request, fallback: target)
+            try targetResolver.requiredTarget(from: request, commandTarget: target)
         }
     }
 }
