@@ -50,7 +50,7 @@ struct ButtonHeistMCPServer {
         defer { idleMonitor.resetTimer() }
         do {
             let arguments = try decodeArguments(params.arguments)
-            let routed = routeToolRequest(name: params.name, arguments: arguments)
+            let routed = FenceOperationCatalog.normalizeToolCall(name: params.name, arguments: arguments)
             let operation: NormalizedOperation
             switch routed {
             case .success(let value):
@@ -66,13 +66,6 @@ struct ButtonHeistMCPServer {
             let response = FenceResponse.failure(error)
             return .init(content: [.text(text: response.compactFormatted(), annotations: nil, _meta: nil)], isError: true)
         }
-    }
-
-    static func routeToolRequest(
-        name: String,
-        arguments: TheFence.CommandArgumentEnvelope
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        FenceOperationCatalog.normalizeToolCall(name: name, arguments: arguments)
     }
 
     private static func decodeArguments(_ arguments: [String: Value]?) throws -> TheFence.CommandArgumentEnvelope {

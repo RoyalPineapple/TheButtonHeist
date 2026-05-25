@@ -608,6 +608,19 @@ final class CLICommandSyncTests: XCTestCase {
         )
     }
 
+    func testSharedRequestBuilderRendersCommandNameFromDescriptor() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift")
+
+        XCTAssertTrue(
+            source.contains("command.descriptor.canonicalName"),
+            "Shared CLI request rendering should project command names through FenceCommandDescriptor"
+        )
+        XCTAssertFalse(
+            source.contains("request[.command] = command.rawValue"),
+            "Shared CLI request rendering should not bypass FenceCommandDescriptor for command names"
+        )
+    }
+
     func testCLIAndREPLShareCanonicalRequestBuilding() {
         let parameters: CLIRequestParameters = [
             .heistId: .string("button_save"),
