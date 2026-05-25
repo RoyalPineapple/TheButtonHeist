@@ -198,6 +198,23 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertLessThanOrEqual(timestamp, afterMs)
     }
 
+    func testMalformedClientMessageReturnsDecodeFailureEnvelope() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        var responseData: Data?
+
+        await getaway.handleClientMessage(1, data: Data("not-json".utf8)) { data in
+            responseData = data
+        }
+
+        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
+        XCTAssertNil(envelope.requestId)
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected malformed decode error, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.message, "Malformed message — could not decode")
+    }
+
     // MARK: - Send Encoding
 
     func testSendMessageDropsUnencodablePayloadInsteadOfSynthesizingFallbackError() async {
