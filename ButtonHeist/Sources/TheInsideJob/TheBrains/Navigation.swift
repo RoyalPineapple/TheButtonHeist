@@ -47,13 +47,6 @@ final class Navigation {
     /// pass without waiting for animations.
     static let postScrollLayoutFrames: Int = 3
 
-    /// Real (CADisplayLink-paced) frames to yield after an animated
-    /// `scrollToMakeVisible`. UIKit queues an animated scroll; `Task.yield`
-    /// alone won't advance it, so this uses `yieldRealFrames` (Task.sleep at
-    /// 16ms intervals). 20 frames is the empirical budget for that animation
-    /// to land.
-    static let postJumpRealFrames: Int = 20
-
     /// Maximum successful page scrolls `element_search` will perform before
     /// returning a capped, non-exhaustive failure.
     static let scrollSearchMaxScrolls: Int = ScrollSearchProgress.defaultMaxScrolls

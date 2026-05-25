@@ -728,6 +728,39 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
     }
 
+    func testElementSearchDoesNotRepositionVisibleMatch() async {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let elementFrame = CGRect(x: 20, y: ScreenMetrics.current.bounds.maxY + 60, width: 200, height: 44)
+        let object = UIButton(type: .system)
+        object.accessibilityFrame = elementFrame
+        object.accessibilityActivationPoint = CGPoint(x: elementFrame.midX, y: elementFrame.midY)
+        let element = makeElement(label: "Visible", traits: .button, shape: .frame(AccessibilityRect(elementFrame)))
+        let entry = Screen.ScreenElement(
+            heistId: "visible_button",
+            contentSpaceOrigin: nil,
+            element: element
+        )
+        brains.stash.currentScreen = Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [.element(element, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [element: entry.heistId],
+            elementRefs: [entry.heistId: .init(object: object, scrollView: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let result = await brains.navigation.executeElementSearch(
+            ElementSearchTarget(elementTarget: .heistId("visible_button"))
+        )
+
+        XCTAssertTrue(result.success, "Expected element_search to report the visible match: \(String(describing: result.message))")
+        XCTAssertEqual(result.method, .elementSearch)
+        XCTAssertEqual(scrollView.contentOffset, .zero, "element_search should not perform action-positioning scrolls")
+        XCTAssertTrue(scrollView.setContentOffsetAnimations.isEmpty)
+    }
+
     func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async throws {
         let rootView = UIView()
         rootView.backgroundColor = .white
