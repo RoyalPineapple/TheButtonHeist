@@ -28,7 +28,7 @@ enum CLIRequestBuilder {
         parameters: CLIRequestParameters = [:]
     ) -> [String: Any] {
         var request = FenceParameterKey.rawDictionary(parameters)
-        request[.command] = command.rawValue
+        request[.command] = command.descriptor.canonicalName
         return request
     }
 

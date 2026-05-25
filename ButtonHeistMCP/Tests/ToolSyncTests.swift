@@ -636,6 +636,14 @@ struct ToolSyncTests {
             "main.swift should project server instructions from the Fence-owned command presentation"
         )
         #expect(
+            source.contains("FenceOperationCatalog.normalizeToolCall"),
+            "main.swift should route MCP calls through the shared Fence operation catalog"
+        )
+        #expect(
+            !source.contains("routeToolRequest"),
+            "main.swift should not keep an MCP-owned routing mirror around the Fence operation catalog"
+        )
+        #expect(
             !sourceWithoutInstructionProjection.contains("TheFence.Command."),
             "main.swift should not reference command cases outside the Fence-owned instruction projection"
         )

@@ -28,7 +28,7 @@ struct ToolRoutingTests {
 
     @Test("gesture requires type")
     func gestureRequiresType() {
-        let result = ButtonHeistMCPServer.routeToolRequest(
+        let result = routeToolRequest(
             name: TheFence.Command.gestureMCPToolName,
             arguments: envelope()
         )
@@ -49,7 +49,7 @@ struct ToolRoutingTests {
 
     @Test("gesture rejects wrong-shaped type")
     func gestureRejectsWrongShapedType() {
-        let result = ButtonHeistMCPServer.routeToolRequest(
+        let result = routeToolRequest(
             name: TheFence.Command.gestureMCPToolName,
             arguments: envelope(["type": .int(7)])
         )
@@ -92,7 +92,7 @@ struct ToolRoutingTests {
 
     @Test("scroll rejects unknown mode")
     func scrollRejectsUnknownMode() {
-        let result = ButtonHeistMCPServer.routeToolRequest(
+        let result = routeToolRequest(
             name: TheFence.Command.scroll.rawValue,
             arguments: envelope(["mode": .string("sideways")])
         )
@@ -114,7 +114,7 @@ struct ToolRoutingTests {
 
     @Test("scroll rejects wrong-shaped mode")
     func scrollRejectsWrongShapedMode() {
-        let result = ButtonHeistMCPServer.routeToolRequest(
+        let result = routeToolRequest(
             name: TheFence.Command.scroll.rawValue,
             arguments: envelope(["mode": .int(7)])
         )
@@ -150,7 +150,7 @@ struct ToolRoutingTests {
 
     @Test("edit_action requires action selector")
     func editActionRequiresActionSelector() {
-        let result = ButtonHeistMCPServer.routeToolRequest(
+        let result = routeToolRequest(
             name: TheFence.Command.editAction.rawValue,
             arguments: envelope()
         )
@@ -171,7 +171,7 @@ struct ToolRoutingTests {
 
     @Test("edit_action rejects wrong-shaped action selector")
     func editActionRejectsWrongShapedActionSelector() {
-        let result = ButtonHeistMCPServer.routeToolRequest(
+        let result = routeToolRequest(
             name: TheFence.Command.editAction.rawValue,
             arguments: envelope(["action": .int(7)])
         )
@@ -313,7 +313,7 @@ struct ToolRoutingTests {
         ]
 
         for routeCase in cases {
-            let result = ButtonHeistMCPServer.routeToolRequest(
+            let result = routeToolRequest(
                 name: routeCase.toolName,
                 arguments: envelope()
             )
@@ -378,29 +378,9 @@ struct ToolRoutingTests {
         }
     }
 
-    @Test("server tool routing delegates to shared Fence catalog")
-    func serverToolRoutingDelegatesToSharedFenceCatalog() throws {
-        for tool in ToolDefinitions.all {
-            let arguments = minimalArguments(for: tool.name)
-            let serverResult = ButtonHeistMCPServer.routeToolRequest(name: tool.name, arguments: envelope(arguments))
-            let catalogResult = FenceOperationCatalog.normalizeToolCall(name: tool.name, arguments: envelope(arguments))
-
-            switch (serverResult, catalogResult) {
-            case (.success(let serverOperation), .success(let catalogOperation)):
-                #expect(serverOperation.command == catalogOperation.command)
-
-            case (.failure(let serverError), .failure(let catalogError)):
-                #expect(serverError.message == catalogError.message)
-
-            case (.success, .failure), (.failure, .success):
-                Issue.record("\(tool.name) server routing diverged from FenceOperationCatalog")
-            }
-        }
-    }
-
     @Test("unknown tool returns routing error")
     func unknownToolReturnsRoutingError() {
-        let result = ButtonHeistMCPServer.routeToolRequest(name: "not_a_tool", arguments: envelope())
+        let result = routeToolRequest(name: "not_a_tool", arguments: envelope())
 
         guard case .failure(let error) = result else {
             Issue.record("Expected routing failure")
@@ -409,11 +389,18 @@ struct ToolRoutingTests {
         #expect(error.message == "Unknown tool: not_a_tool")
     }
 
+    private func routeToolRequest(
+        name: String,
+        arguments: TheFence.CommandArgumentEnvelope
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        FenceOperationCatalog.normalizeToolCall(name: name, arguments: arguments)
+    }
+
     private func routed(
         _ name: String,
         _ arguments: [String: Argument]
     ) throws -> NormalizedOperation {
-        switch ButtonHeistMCPServer.routeToolRequest(name: name, arguments: envelope(arguments)) {
+        switch routeToolRequest(name: name, arguments: envelope(arguments)) {
         case .success(let operation):
             return operation
         case .failure(let error):
