@@ -217,7 +217,7 @@ final class TheGetawayTests: XCTestCase {
 
     // MARK: - Send Encoding
 
-    func testSendMessageDropsUnencodablePayloadInsteadOfSynthesizingFallbackError() async {
+    func testSendMessageDropsUnencodablePayloadWithoutSynthesizingAlternateError() async {
         let (getaway, _, _) = await makeGetaway()
         var responses: [Data] = []
         let payload = ServerInfo(
@@ -239,7 +239,7 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertEqual(failure.requestId, "bad-info")
         XCTAssertTrue(
             responses.isEmpty,
-            "Encoding failure should not send a guessed fallback response for a payload that never reached the wire"
+            "Encoding failure should not send a guessed alternate response for a payload that never reached the wire"
         )
     }
 
@@ -272,9 +272,114 @@ final class TheGetawayTests: XCTestCase {
 
         let result = await getaway.broadcastToAll(.recordingStopped)
 
-        guard case .failure(.transportUnavailable) = result else {
-            return XCTFail("Expected missing transport broadcast failure, got \(result)")
+        guard case .failure(.connectionUnavailable(clientId: nil)) = result else {
+            return XCTFail("Expected missing connection broadcast failure, got \(result)")
         }
+    }
+
+    func testBroadcastUnencodablePayloadReturnsTypedEncodeFailure() async {
+        let (getaway, _, _) = await makeGetaway()
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100,
+            height: 200,
+            duration: .nan,
+            frameCount: 8,
+            fps: 8,
+            startTime: Date(),
+            endTime: Date(),
+            stopReason: .maxDuration
+        )
+
+        let result = await getaway.broadcastToAll(.recording(payload))
+
+        guard case .failure(.responseEncodingFailed(let failure)) = result else {
+            return XCTFail("Expected broadcast encode failure, got \(result)")
+        }
+        XCTAssertNil(failure.requestId)
+    }
+
+    func testBroadcastSendFailureReturnsTypedSendFailure() async {
+        let (getaway, muscle, transport) = await makeGetaway()
+        _ = transport
+        await muscle.installCallbacks(
+            sendToClient: { _, clientId in
+                .failed(.transportFailed(clientId: clientId, message: "socket write failed"))
+            },
+            markClientAuthenticated: { _ in },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in },
+            onSessionActiveChanged: { _ in }
+        )
+        await muscle.installAuthenticatedClientForTest(7)
+
+        let result = await getaway.broadcastToAll(.recordingStopped)
+
+        guard case .failure(.sendFailed(let clientId, let failure)) = result else {
+            return XCTFail("Expected broadcast send failure, got \(result)")
+        }
+        XCTAssertEqual(clientId, 7)
+        XCTAssertEqual(failure, .transportFailed(clientId: 7, message: "socket write failed"))
+    }
+
+    func testBroadcastContinuesAfterClientSendFailure() async {
+        let (getaway, muscle, transport) = await makeGetaway()
+        _ = transport
+        let sent = SentBox()
+        await muscle.installCallbacks(
+            sendToClient: { data, clientId in
+                sent.append(data, clientId: clientId)
+                if clientId == 7 {
+                    return .failed(.transportFailed(clientId: clientId, message: "socket write failed"))
+                }
+                return .enqueued
+            },
+            markClientAuthenticated: { _ in },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in },
+            onSessionActiveChanged: { _ in }
+        )
+        await muscle.installAuthenticatedClientForTest(7)
+        await muscle.installAuthenticatedClientForTest(8)
+
+        let result = await getaway.broadcastToAll(.recordingStopped)
+
+        guard case .failure(.sendFailed(let clientId, let failure)) = result else {
+            return XCTFail("Expected broadcast send failure, got \(result)")
+        }
+        XCTAssertEqual(clientId, 7)
+        XCTAssertEqual(failure, .transportFailed(clientId: 7, message: "socket write failed"))
+        XCTAssertEqual(sent.all.map(\.1), [7, 8])
+    }
+
+    func testBroadcastClosedConnectionReturnsTypedConnectionFailure() async {
+        let (getaway, muscle, transport) = await makeGetaway()
+        _ = transport
+        await muscle.installCallbacks(
+            sendToClient: { _, clientId in .failed(.clientNotFound(clientId)) },
+            markClientAuthenticated: { _ in },
+            disconnectClient: { _ in },
+            onClientAuthenticated: { _, _ in },
+            onSessionActiveChanged: { _ in }
+        )
+        await muscle.installAuthenticatedClientForTest(7)
+
+        let result = await getaway.broadcastToAll(.recordingStopped)
+
+        guard case .failure(.connectionClosed(clientId: 7)) = result else {
+            return XCTFail("Expected closed connection broadcast failure, got \(result)")
+        }
+    }
+
+    func testBroadcastScreenshotReturnsTypedSessionContractFailure() async {
+        let (getaway, _, _) = await makeGetaway()
+
+        let result = await getaway.broadcastToAll(.screen(ScreenPayload(pngData: "AAAA", width: 10, height: 20)))
+
+        guard case .failure(.sessionContractViolation(let message)) = result else {
+            return XCTFail("Expected session contract broadcast failure, got \(result)")
+        }
+        XCTAssertTrue(message.contains("screenshots must be requested explicitly"))
     }
 
     // MARK: - Stale Targeted Actions

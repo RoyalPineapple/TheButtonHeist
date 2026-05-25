@@ -576,18 +576,38 @@ final class TheGetaway {
     }
 
     enum BroadcastDeliveryFailure: Error, Sendable, Equatable, CustomStringConvertible {
-        case screenshotPayloadRefused
+        case sessionContractViolation(String)
         case responseEncodingFailed(ResponseEncodingFailure)
-        case transportUnavailable
+        case connectionUnavailable(clientId: Int?)
+        case connectionClosed(clientId: Int)
+        case sendFailed(clientId: Int, ServerSendFailure)
 
         var description: String {
             switch self {
-            case .screenshotPayloadRefused:
-                return "Refusing to broadcast screenshot payload; screenshots must be requested explicitly"
+            case .sessionContractViolation(let message):
+                return "Session contract failure while broadcasting response envelope: \(message)"
             case .responseEncodingFailed(let failure):
                 return failure.description
+            case .connectionUnavailable(let clientId):
+                if let clientId {
+                    return "Connection failure while broadcasting response envelope to client \(clientId): transport is unavailable"
+                }
+                return "Connection failure while broadcasting response envelope: no transport is wired"
+            case .connectionClosed(let clientId):
+                return "Connection failure while broadcasting response envelope to client \(clientId): client is no longer connected"
+            case .sendFailed(let clientId, let failure):
+                return "Send failure while broadcasting response envelope to client \(clientId): \(failure.localizedDescription)"
+            }
+        }
+
+        init(clientId: Int, sendFailure: ServerSendFailure) {
+            switch sendFailure {
+            case .clientNotFound:
+                self = .connectionClosed(clientId: clientId)
             case .transportUnavailable:
-                return "Failed to broadcast response envelope: no transport is wired"
+                self = .connectionUnavailable(clientId: clientId)
+            case .transportFailed, .payloadTooLarge, .sendBufferFull:
+                self = .sendFailed(clientId: clientId, sendFailure)
             }
         }
     }
@@ -653,7 +673,9 @@ final class TheGetaway {
     @discardableResult
     func broadcastToAll(_ message: ServerMessage) async -> Result<Void, BroadcastDeliveryFailure> {
         guard !message.isScreenshot else {
-            let failure = BroadcastDeliveryFailure.screenshotPayloadRefused
+            let failure = BroadcastDeliveryFailure.sessionContractViolation(
+                "screenshots must be requested explicitly"
+            )
             insideJobLogger.error("\(failure.description)")
             return .failure(failure)
         }
@@ -665,14 +687,27 @@ final class TheGetaway {
             logEncodingFailure(failure)
             return .failure(.responseEncodingFailed(failure))
         }
-        // Capture the Sendable SimpleSocketServer actor across the hop —
-        // ServerTransport itself is NSObject and non-Sendable.
-        guard let server = transport?.server else {
-            let failure = BroadcastDeliveryFailure.transportUnavailable
+        guard transport != nil else {
+            let failure = BroadcastDeliveryFailure.connectionUnavailable(clientId: nil)
             insideJobLogger.error("\(failure.description)")
             return .failure(failure)
         }
-        await server.broadcastToAll(data)
+        var firstFailure: BroadcastDeliveryFailure?
+        for clientId in await muscle.authenticatedClientIDs.sorted() {
+            switch await muscle.sendData(data, toClient: clientId) {
+            case .enqueued:
+                continue
+            case .failed(let sendFailure):
+                let failure = BroadcastDeliveryFailure(clientId: clientId, sendFailure: sendFailure)
+                insideJobLogger.error("\(failure.description)")
+                if firstFailure == nil {
+                    firstFailure = failure
+                }
+            }
+        }
+        if let firstFailure {
+            return .failure(firstFailure)
+        }
         return .success(())
     }
 
