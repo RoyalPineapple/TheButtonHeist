@@ -189,6 +189,30 @@ private extension TheFence {
             return value
         }
 
+        func optionalNonEmptyString(_ key: String) throws -> String? {
+            guard let value = try string(key) else { return nil }
+            if value.isEmpty {
+                throw SchemaValidationError(field: request.field(key), observed: value as Any, expected: "non-empty string")
+            }
+            return value
+        }
+
+        func accessibilityActionName(_ key: String) throws -> String? {
+            guard let value = try optionalNonEmptyString(key) else { return nil }
+            if value.hasPrefix("action:") {
+                let customName = String(value.dropFirst("action:".count))
+                if !customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return value
+                }
+                throw SchemaValidationError(
+                    field: request.field(key),
+                    observed: value as Any,
+                    expected: "action: prefix followed by a custom action name or a built-in action name"
+                )
+            }
+            return value
+        }
+
         func integer(_ key: String) throws -> Int? {
             try request.schemaInteger(key)
         }
@@ -322,7 +346,7 @@ private extension TheFence {
             let target = try request.requiredElementTarget(command: .activate, in: fence)
             payload = .activate(
                 target,
-                actionName: try request.string("action"),
+                actionName: try request.accessibilityActionName("action"),
                 count: try request.countArgument()
             )
         }
@@ -353,7 +377,7 @@ private extension TheFence {
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let actionName = try request.requiredString("action")
+            let actionName = try request.nonEmptyString("action")
             payload = .performCustomAction(
                 try request.customActionTarget(actionName: actionName, in: fence),
                 count: try request.countArgument()

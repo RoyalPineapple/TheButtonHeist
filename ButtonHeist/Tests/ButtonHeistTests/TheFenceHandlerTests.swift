@@ -1777,6 +1777,42 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testActivateRejectsEmptyActionNameAtRequestBoundary() async {
+        await assertValidationError(
+            ["command": "activate", "identifier": "myElement", "action": ""],
+            equals: "schema validation failed for action: observed string \"\"; expected non-empty string"
+        )
+    }
+
+    @ButtonHeistActor
+    func testActivateRejectsEmptyActionPrefixAtRequestBoundary() async {
+        let expectedMessage = "schema validation failed for action: observed string \"action:\"; " +
+            "expected action: prefix followed by a custom action name or a built-in action name"
+        await assertValidationError(
+            ["command": "activate", "identifier": "myElement", "action": "action:"],
+            equals: expectedMessage
+        )
+    }
+
+    @ButtonHeistActor
+    func testActivateRejectsBlankActionPrefixAtRequestBoundary() async {
+        let expectedMessage = "schema validation failed for action: observed string \"action:   \"; " +
+            "expected action: prefix followed by a custom action name or a built-in action name"
+        await assertValidationError(
+            ["command": "activate", "identifier": "myElement", "action": "action:   "],
+            equals: expectedMessage
+        )
+    }
+
+    @ButtonHeistActor
+    func testPerformCustomActionRejectsEmptyActionNameAtRequestBoundary() async {
+        await assertValidationError(
+            ["command": "perform_custom_action", "identifier": "myElement", "action": ""],
+            equals: "schema validation failed for action: observed string \"\"; expected non-empty string"
+        )
+    }
+
+    @ButtonHeistActor
     func testActivateWithIncrementCountFailsOnIntermediateFailure() async throws {
         let (fence, mockConn) = makeConnectedFence()
         var callCount = 0
