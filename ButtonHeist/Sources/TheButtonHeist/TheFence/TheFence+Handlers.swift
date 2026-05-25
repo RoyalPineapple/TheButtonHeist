@@ -355,11 +355,15 @@ extension TheFence {
             resolvedDirectDevice = nil
         } else if let targetName = request.targetName {
             guard let fileConfig = config.fileConfig else {
-                return .error("No config file loaded. Create .buttonheist.json or ~/.config/buttonheist/config.json")
+                throw FenceError.invalidRequest(
+                    "No config file loaded. Create .buttonheist.json or ~/.config/buttonheist/config.json"
+                )
             }
             guard let target = fileConfig.targets[targetName] else {
                 let available = fileConfig.targets.keys.sorted()
-                return .error("Unknown target '\(targetName)'. Available: \(available.joined(separator: ", "))")
+                throw FenceError.invalidRequest(
+                    "Unknown target '\(targetName)'. Available: \(available.joined(separator: ", "))"
+                )
             }
             resolvedDevice = target.device
             resolvedToken = request.token ?? target.token
@@ -372,7 +376,9 @@ extension TheFence {
         } else if handoff.isConnected || config.deviceFilter != nil || config.directDevice != nil {
             return try await establishSessionOnly()
         } else {
-            return .error("Must specify 'target' (named config target), 'device' (host:port), or configure BUTTONHEIST_DEVICE/.buttonheist.json")
+            throw FenceError.invalidRequest(
+                "Must specify 'target' (named config target), 'device' (host:port), or configure BUTTONHEIST_DEVICE/.buttonheist.json"
+            )
         }
 
         stop()
