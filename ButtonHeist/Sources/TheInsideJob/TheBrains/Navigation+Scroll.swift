@@ -855,10 +855,6 @@ extension Navigation {
         case .failed(.noLiveScrollableAncestor):
             return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) is not inflated because no live "
                 + "scrollable ancestor is available; use \(ScrollMode.search.canonicalCommand) to find it by scrolling"
-        case .failed(.ambiguousLiveScrollableAncestor):
-            return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) is not inflated because the "
-                + "current graph does not identify a unique live scrollable ancestor; use "
-                + "\(ScrollMode.search.canonicalCommand) to find it by scrolling"
         case .failed(.unsafeProgrammaticScroll):
             return "\(ScrollMode.toVisible.canonicalCommand) failed: known target \(description) is inside a scroll view that is "
                 + "unsafe for programmatic scrolling; use \(ScrollMode.search.canonicalCommand) to use semantic search"

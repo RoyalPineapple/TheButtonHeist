@@ -9,7 +9,6 @@ extension TheStash {
     enum KnownTargetInflationFailure: Equatable {
         case missingContentOrigin
         case noLiveScrollableAncestor
-        case ambiguousLiveScrollableAncestor
         case unsafeProgrammaticScroll
     }
 
@@ -29,11 +28,10 @@ extension TheStash {
         }
     }
 
-    /// Make a known target live by scrolling a live parent derived from the
+    /// Make a known target live by scrolling the live parent proven by the
     /// current graph. Known-only semantic elements intentionally carry no
-    /// scroll path; until `Screen` retains semantic container ancestry, a
-    /// known-only target can be inflated only when the current live graph
-    /// exposes exactly one plausible scroll parent for its content origin.
+    /// executable scroll authority unless the parser retained their live
+    /// scroll ancestor.
     /// Inflation is an internal positioning step, so the default is a
     /// non-animated jump that lets the next parse observe settled geometry.
     @discardableResult
@@ -43,16 +41,14 @@ extension TheStash {
         }
         return KnownTargetInflator.inflate(
             screenElement,
-            liveScrollView: liveScrollView(for: screenElement),
-            fallbackScrollViews: currentScreen.liveInterface.scrollableContainerViews.values.compactMap { $0.view as? UIScrollView }
+            liveScrollView: liveScrollView(for: screenElement)
         )
     }
 
     func resolveInflationScrollView(for screenElement: ScreenElement) -> KnownTargetInflationResolution {
         KnownTargetInflator.resolveScrollView(
             for: screenElement,
-            liveScrollView: liveScrollView(for: screenElement),
-            fallbackScrollViews: currentScreen.liveInterface.scrollableContainerViews.values.compactMap { $0.view as? UIScrollView }
+            liveScrollView: liveScrollView(for: screenElement)
         )
     }
 
@@ -66,13 +62,11 @@ private enum KnownTargetInflator {
     @MainActor
     static func inflate(
         _ screenElement: TheStash.ScreenElement,
-        liveScrollView: UIScrollView?,
-        fallbackScrollViews: [UIScrollView]
+        liveScrollView: UIScrollView?
     ) -> TheStash.TargetInflationResolution {
         switch resolveScrollView(
             for: screenElement,
-            liveScrollView: liveScrollView,
-            fallbackScrollViews: fallbackScrollViews
+            liveScrollView: liveScrollView
         ) {
         case .resolved(let scrollView):
             guard let origin = screenElement.contentSpaceOrigin else {
@@ -89,10 +83,9 @@ private enum KnownTargetInflator {
     @MainActor
     static func resolveScrollView(
         for screenElement: TheStash.ScreenElement,
-        liveScrollView: UIScrollView?,
-        fallbackScrollViews: [UIScrollView]
+        liveScrollView: UIScrollView?
     ) -> TheStash.KnownTargetInflationResolution {
-        guard let origin = screenElement.contentSpaceOrigin else {
+        guard screenElement.contentSpaceOrigin != nil else {
             return .failed(.missingContentOrigin)
         }
 
@@ -103,22 +96,7 @@ private enum KnownTargetInflator {
             return .resolved(liveScrollView)
         }
 
-        let scrollViews = deduplicated(fallbackScrollViews)
-        let safeCandidates = scrollViews.filter {
-            !$0.bhIsUnsafeForProgrammaticScrolling && contentOrigin(origin, fitsIn: $0)
-        }
-        switch safeCandidates.count {
-        case 1:
-            return .resolved(safeCandidates[0])
-        case 0:
-            if !scrollViews.isEmpty,
-               scrollViews.allSatisfy(\.bhIsUnsafeForProgrammaticScrolling) {
-                return .failed(.unsafeProgrammaticScroll)
-            }
-            return .failed(.noLiveScrollableAncestor)
-        default:
-            return .failed(.ambiguousLiveScrollableAncestor)
-        }
+        return .failed(.noLiveScrollableAncestor)
     }
 
     @MainActor
@@ -133,25 +111,6 @@ private enum KnownTargetInflator {
         return CGPoint(x: targetX, y: targetY)
     }
 
-    private static func deduplicated(_ scrollViews: [UIScrollView]) -> [UIScrollView] {
-        var seenScrollViews = Set<ObjectIdentifier>()
-        return scrollViews.filter {
-            seenScrollViews.insert(ObjectIdentifier($0)).inserted
-        }
-    }
-
-    @MainActor
-    private static func contentOrigin(_ origin: CGPoint, fitsIn scrollView: UIScrollView) -> Bool {
-        let insets = scrollView.adjustedContentInset
-        let minX = -insets.left
-        let minY = -insets.top
-        let maxX = scrollView.contentSize.width + insets.right
-        let maxY = scrollView.contentSize.height + insets.bottom
-        return origin.x >= minX
-            && origin.y >= minY
-            && origin.x <= maxX
-            && origin.y <= maxY
-    }
 }
 
 #endif // DEBUG
