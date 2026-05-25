@@ -274,7 +274,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
         accessibilityTrace?.captureEndpointDelta
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case heistId
         case frame
         case coordinateOnly
@@ -297,6 +297,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownMetadataKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             heistId: try container.decodeIfPresent(HeistId.self, forKey: .heistId),
@@ -305,6 +306,18 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
         )
+    }
+
+    private static func rejectUnknownMetadataKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown recorded metadata field \"\(unknownKey.stringValue)\""
+        ))
     }
 }
 

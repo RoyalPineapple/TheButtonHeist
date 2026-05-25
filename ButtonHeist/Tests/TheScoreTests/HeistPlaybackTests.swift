@@ -176,7 +176,7 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)
     }
 
-    func testRecordedMetadataIgnoresDecodedDeltaAndProjectsFromTrace() throws {
+    func testRecordedMetadataRejectsDecodedDeltaEvenWithTrace() throws {
         let beforeInterface = makeTestInterface(
             elements: [makeElement(heistId: "status", label: "Old")],
             timestamp: Date(timeIntervalSince1970: 0)
@@ -203,19 +203,15 @@ final class HeistPlaybackTests: XCTestCase {
             "accessibilityDelta": conflictingDeltaJSON,
         ])
 
-        let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
-        let reencoded = try JSONSerialization.jsonObject(
-            with: try JSONEncoder().encode(decoded)
-        ) as? [String: Any]
-
-        XCTAssertEqual(decoded.accessibilityDelta, trace.captureEndpointDelta)
-        XCTAssertNotEqual(decoded.accessibilityDelta, conflictingDelta)
-        XCTAssertEqual(decoded.accessibilityDelta?.captureEdge?.before.hash, trace.captures.first?.hash)
-        XCTAssertEqual(decoded.accessibilityDelta?.captureEdge?.after.hash, trace.captures.last?.hash)
-        XCTAssertNil(reencoded?["accessibilityDelta"])
+        XCTAssertThrowsError(try JSONDecoder().decode(RecordedMetadata.self, from: data)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("accessibilityDelta"),
+                "Expected stale recorded metadata field in error, got \(error)"
+            )
+        }
     }
 
-    func testRecordedMetadataDropsDecodedDeltaWithoutTrace() throws {
+    func testRecordedMetadataRejectsDecodedDeltaWithoutTrace() throws {
         let data = try JSONSerialization.data(withJSONObject: [
             "accessibilityDelta": [
                 "kind": "noChange",
@@ -223,10 +219,12 @@ final class HeistPlaybackTests: XCTestCase {
             ],
         ])
 
-        let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
-
-        XCTAssertNil(decoded.accessibilityTrace)
-        XCTAssertNil(decoded.accessibilityDelta)
+        XCTAssertThrowsError(try JSONDecoder().decode(RecordedMetadata.self, from: data)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("accessibilityDelta"),
+                "Expected stale recorded metadata field in error, got \(error)"
+            )
+        }
     }
 
     func testCurrentVersionIsTwo() {
