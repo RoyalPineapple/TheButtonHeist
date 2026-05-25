@@ -183,7 +183,7 @@ nonisolated extension ReplSession {
 
     private static func descriptorHelpLines() -> [String] {
         let descriptors = TheFence.Command.descriptors
-            .filter { descriptor in descriptor.cliExposure != .notExposed }
+            .filter { descriptor in descriptor.cliName != nil }
             .sorted { $0.canonicalName < $1.canonicalName }
         let width = descriptors.map(\.canonicalName.count).max() ?? 0
 
