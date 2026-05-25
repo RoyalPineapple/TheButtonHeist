@@ -237,7 +237,15 @@ public enum FenceOperationCatalog {
             )
         }
 
-        guard let selectorValue = try? arguments.schemaString(selectorKey),
+        let selectorValue: String?
+        do {
+            selectorValue = try arguments.schemaString(selectorKey)
+        } catch let error as SchemaValidationError {
+            return .init(message: error.message)
+        } catch {
+            return .init(message: error.localizedDescription)
+        }
+        guard let selectorValue,
               selector.consumesValue(selectorValue),
               let selectedCommand = selector.command(for: selectorValue),
               selectedCommand != command else {

@@ -26,7 +26,7 @@ import TheScore
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
 /// Isolation: `actor`. All auth state — `clients`, `addressAuthStates`,
-/// `sessionPhase`, `lockoutTasks` — is mutated exclusively on TheMuscle's
+/// `sessionPhase`, `delayedDisconnectTasks` — is mutated exclusively on TheMuscle's
 /// own actor. UI alert presentation lives in a `@MainActor AlertPresenter`
 /// companion (see `AlertPresenter.swift`); callbacks installed by TheGetaway
 /// (`sendToClient`, `markClientAuthenticated`, `markClientAwaitingApproval`,
@@ -95,17 +95,11 @@ actor TheMuscle {
     private(set) var sessionToken: String
     private let alerts: AlertPresenter
 
-    /// Outstanding "wait then disconnect" tasks. Each entry is a Task spawned by
-    /// `scheduleDelayedDisconnect(_:)` that will fire `disconnectClient` after
-    /// `disconnectGracePeriod`. Every task self-cleans on completion or
-    /// cancellation by removing its own handle from this dictionary; on
-    /// `tearDown()` every outstanding task is cancelled so a torn-down
-    /// TheMuscle never disconnects against a stale client ID. We key by an
-    /// internal monotonic ID so the Task closure doesn't need to capture
-    /// its own handle (which would create a "variable captured before
-    /// initialization" issue under strict concurrency).
-    private var lockoutTasks: [UInt64: Task<Void, Never>] = [:]
-    private var nextLockoutId: UInt64 = 0
+    /// Outstanding "wait then disconnect" tasks. Each entry fires
+    /// `disconnectClient` after `disconnectGracePeriod`; `tearDown()` cancels
+    /// all pending disconnects so a torn-down TheMuscle never targets a stale
+    /// client ID.
+    private let delayedDisconnectTasks = TaskTracker()
 
     /// Tasks spawned by `showApprovalAlert` to hop between actor isolation
     /// and the MainActor-bound `AlertPresenter`. Tracked so `tearDown()` can
@@ -119,7 +113,7 @@ actor TheMuscle {
     /// Test seam: how many delayed-disconnect Tasks are currently tracked.
     /// Used by lifetime tests to assert that `tearDown()` cancelled and
     /// drained every outstanding lockout Task before returning.
-    var pendingLockoutTaskCount: Int { lockoutTasks.count }
+    var pendingLockoutTaskCount: Int { delayedDisconnectTasks.taskCountForTesting }
 
     /// Test seam: install an authenticated client phase without driving the
     /// full hello/authenticate handshake. Lets recording-routing tests
@@ -529,10 +523,7 @@ actor TheMuscle {
 
     func tearDown() async {
         clients.removeAll()
-        for task in lockoutTasks.values {
-            task.cancel()
-        }
-        lockoutTasks.removeAll()
+        delayedDisconnectTasks.cancelAll()
         pendingAlertTasks.cancelAll()
         // Cancel the release timer (if draining) explicitly before tearing down
         // the rest of the session so a fired timer can't see a half-released
@@ -548,33 +539,19 @@ actor TheMuscle {
     /// Schedule a `disconnectClient` callback for `clientId` after
     /// `disconnectGracePeriod` so the recipient can flush a final error
     /// payload before the connection is torn down. The handle is retained
-    /// in `lockoutTasks` until the body completes (or `tearDown()` cancels
-    /// it), so a torn-down TheMuscle never fires a stale disconnect.
+    /// until the body completes (or `tearDown()` cancels it), so a torn-down
+    /// TheMuscle never fires a stale disconnect.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
-        nextLockoutId &+= 1
-        let lockoutId = nextLockoutId
-        let task = Task { [weak self] in
-            // Sleep returns false on cancellation; whether cancelled or not,
-            // we still want to detach our own handle from `lockoutTasks` so
-            // it doesn't accumulate.
-            let proceed = await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod)
-            if proceed {
-                await self?.fireDisconnect(clientId)
-            }
-            await self?.removeLockoutTask(id: lockoutId)
+        delayedDisconnectTasks.spawn { [weak self] in
+            guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
+            await self?.fireDisconnect(clientId)
         }
-        lockoutTasks[lockoutId] = task
     }
 
     /// Called from the delayed-disconnect Task body to actually fire the
     /// `disconnectClient` callback while inside actor isolation.
     private func fireDisconnect(_ clientId: Int) async {
         await disconnectClient?(clientId)
-    }
-
-    /// Drop a finished/cancelled lockout task from the tracking dictionary.
-    private func removeLockoutTask(id: UInt64) {
-        lockoutTasks.removeValue(forKey: id)
     }
 
     // MARK: - Status Accessors
@@ -887,11 +864,6 @@ actor TheMuscle {
     private func sendMessage(_ message: ServerMessage, requestId: String? = nil, respond: @escaping @Sendable (Data) -> Void) {
         if let data = encodeEnvelope(message, requestId: requestId) {
             respond(data)
-        } else if let errorData = encodeEnvelope(
-            .error(ServerError(kind: .general, message: "Encoding failed")),
-            requestId: requestId
-        ) {
-            respond(errorData)
         }
     }
     /// Constant-time comparison for equal-length strings. Returns early on length mismatch (acceptable per AUTH.md threat model).
