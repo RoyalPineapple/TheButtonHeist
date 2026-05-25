@@ -13,6 +13,7 @@ enum SessionPhase: Sendable {
     case idle
     case active(ActiveSession)
     case closing(ClosingSession)
+    case compressing(CompressingSession)
     case closed(ClosedSession)
     case archived(ArchivedSession)
 }
@@ -57,19 +58,6 @@ struct ClosingSession: Sendable {
     let sessionId: String
     let directory: URL
     let manifest: SessionManifest
-    let compressionTask: Task<URL, Error>?
-
-    init(
-        sessionId: String,
-        directory: URL,
-        manifest: SessionManifest,
-        compressionTask: Task<URL, Error>? = nil
-    ) {
-        self.sessionId = sessionId
-        self.directory = directory
-        self.manifest = manifest
-        self.compressionTask = compressionTask
-    }
 
     var startTime: Date {
         manifest.startTime
@@ -82,14 +70,39 @@ struct ClosingSession: Sendable {
         }
         return endTime
     }
+}
 
-    func withCompressionTask(_ compressionTask: Task<URL, Error>?) -> ClosingSession {
+struct CompressingSession: Sendable {
+    let sessionId: String
+    let directory: URL
+    let manifest: SessionManifest
+    let compressionTask: Task<URL, Error>
+
+    init(closingSession: ClosingSession, compressionTask: Task<URL, Error>) {
+        self.sessionId = closingSession.sessionId
+        self.directory = closingSession.directory
+        self.manifest = closingSession.manifest
+        self.compressionTask = compressionTask
+    }
+
+    var retryableSession: ClosingSession {
         ClosingSession(
             sessionId: sessionId,
             directory: directory,
-            manifest: manifest,
-            compressionTask: compressionTask
+            manifest: manifest
         )
+    }
+
+    var startTime: Date {
+        manifest.startTime
+    }
+
+    var endTime: Date {
+        guard let endTime = manifest.endTime else {
+            logger.error("Compressing session manifest is missing endTime; using startTime")
+            return manifest.startTime
+        }
+        return endTime
     }
 }
 
@@ -182,6 +195,8 @@ final class TheBookKeeper {
             return session.manifest
         case .closing(let session):
             return session.manifest
+        case .compressing(let session):
+            return session.manifest
         case .closed(let session):
             return session.manifest
         case .archived(let session):
@@ -197,6 +212,8 @@ final class TheBookKeeper {
             return try sessionLogSnapshot(manifest: session.manifest, directory: session.directory)
         case .closing(let session):
             return try sessionLogSnapshot(manifest: session.manifest, directory: session.directory)
+        case .compressing(let session):
+            return try sessionLogSnapshot(manifest: session.manifest, directory: session.directory)
         case .closed(let session):
             return try sessionLogSnapshot(manifest: session.manifest, directory: session.directory)
         case .archived(let session):
@@ -210,7 +227,7 @@ final class TheBookKeeper {
         switch phase {
         case .idle, .closed, .archived:
             break
-        case .active, .closing:
+        case .active, .closing, .compressing:
             throw BookKeeperError.invalidPhase(expected: "idle, closed, or archived", actual: phaseName)
         }
 
@@ -255,24 +272,27 @@ final class TheBookKeeper {
     }
 
     func closeSession() async throws {
-        let closingSession: ClosingSession
+        let compressingSession: CompressingSession
         switch phase {
         case .active(let session):
-            closingSession = try beginClosingSession(session)
+            let closingSession = try beginClosingSession(session)
+            compressingSession = beginCompression(for: closingSession)
         case .closing(let session):
-            closingSession = ensureCompressionTask(for: session)
+            compressingSession = beginCompression(for: session)
+        case .compressing(let session):
+            compressingSession = session
         case .idle, .closed, .archived:
             throw BookKeeperError.invalidPhase(expected: "active or closing", actual: phaseName)
         }
 
-        try await completeClosingSession(closingSession)
+        try await completeClosingSession(compressingSession)
     }
 
     private func beginClosingSession(_ session: ActiveSession) throws -> ClosingSession {
         let closedManifest = session.manifest.closed(at: Date())
         try flushManifest(manifest: closedManifest, directory: session.directory)
 
-        var closingSession = ClosingSession(
+        let closingSession = ClosingSession(
             sessionId: session.sessionId,
             directory: session.directory,
             manifest: closedManifest
@@ -284,18 +304,17 @@ final class TheBookKeeper {
             abandonedRecording.fileHandle.closeFile()
         }
 
-        closingSession = closingSession.withCompressionTask(makeCompressionTask(for: closingSession))
         phase = .closing(closingSession)
         return closingSession
     }
 
-    private func ensureCompressionTask(for session: ClosingSession) -> ClosingSession {
-        if session.compressionTask != nil {
-            return session
-        }
-        let retryingSession = session.withCompressionTask(makeCompressionTask(for: session))
-        phase = .closing(retryingSession)
-        return retryingSession
+    private func beginCompression(for session: ClosingSession) -> CompressingSession {
+        let compressingSession = CompressingSession(
+            closingSession: session,
+            compressionTask: makeCompressionTask(for: session)
+        )
+        phase = .compressing(compressingSession)
+        return compressingSession
     }
 
     private func makeCompressionTask(for session: ClosingSession) -> Task<URL, Error> {
@@ -305,18 +324,12 @@ final class TheBookKeeper {
         }
     }
 
-    private func completeClosingSession(_ session: ClosingSession) async throws {
-        let closingSession = ensureCompressionTask(for: session)
-        guard let compressionTask = closingSession.compressionTask else {
-            throw BookKeeperError.compressionFailed(
-                "Missing compression task for closing session \(closingSession.sessionId)"
-            )
-        }
+    private func completeClosingSession(_ closingSession: CompressingSession) async throws {
         let compressedPath: URL
         do {
-            compressedPath = try await compressionTask.value
+            compressedPath = try await closingSession.compressionTask.value
         } catch {
-            clearFailedCompressionTask(for: closingSession)
+            markCompressionFailed(for: closingSession)
             throw error
         }
 
@@ -325,7 +338,7 @@ final class TheBookKeeper {
             return
         }
 
-        guard case .closing(let currentSession) = phase,
+        guard case .compressing(let currentSession) = phase,
               currentSession.directory == closingSession.directory else {
             return
         }
@@ -338,12 +351,12 @@ final class TheBookKeeper {
         ))
     }
 
-    private func clearFailedCompressionTask(for session: ClosingSession) {
-        guard case .closing(let currentSession) = phase,
+    private func markCompressionFailed(for session: CompressingSession) {
+        guard case .compressing(let currentSession) = phase,
               currentSession.directory == session.directory else {
             return
         }
-        phase = .closing(currentSession.withCompressionTask(nil))
+        phase = .closing(currentSession.retryableSession)
     }
 
     func archiveSession(deleteSource: Bool = false) async throws -> (URL, SessionLogSnapshot) {
@@ -804,7 +817,7 @@ final class TheBookKeeper {
         switch phase {
         case .idle: return "idle"
         case .active: return "active"
-        case .closing: return "closing"
+        case .closing, .compressing: return "closing"
         case .closed: return "closed"
         case .archived: return "archived"
         }

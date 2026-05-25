@@ -525,7 +525,7 @@ extension TheFence {
             break
         case .active:
             try await bookKeeper.closeSession()
-        case .closing:
+        case .closing, .compressing:
             // A prior close either still owns compression or left a retryable
             // failed compression. closeSession coalesces or retries it.
             try await bookKeeper.closeSession()

@@ -328,7 +328,6 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected closing phase after failed compression")
         }
         XCTAssertEqual(failedClosingSession.sessionId, activeSession.sessionId)
-        XCTAssertNil(failedClosingSession.compressionTask)
 
         try FileManager.default.removeItem(at: compressedLogPath)
         let response = try await fence.handleArchiveSession(.init(deleteSource: false))
