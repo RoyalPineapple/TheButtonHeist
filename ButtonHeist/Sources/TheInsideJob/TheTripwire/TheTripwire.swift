@@ -656,7 +656,8 @@ final class TheTripwire {
     func allClear() -> Bool {
         switch pulsePhase {
         case .running(let context):
-            return context.latestReading?.isSettled ?? false
+            guard let reading = context.latestReading else { return false }
+            return reading.isSettled
         case .idle:
             let scan = scanLayers()
             return !scan.hasPendingLayout && !scan.hasRelevantAnimations

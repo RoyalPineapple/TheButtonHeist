@@ -584,7 +584,12 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scrollToVisible)
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
-        XCTAssertTrue(result.message?.contains("no live scrollable ancestor") == true)
+        XCTAssertTrue(result.message?.contains("No match for") == true)
+        XCTAssertTrue(result.message?.contains("Source heistId: offscreen_button") == true)
+        XCTAssertFalse(
+            result.message?.contains("after inflation") ?? false,
+            "Recorded source screens should not authorize source-only target inflation"
+        )
     }
 
     func testScrollReturnsReasonInsteadOfRevealingKnownOffscreenTarget() async {

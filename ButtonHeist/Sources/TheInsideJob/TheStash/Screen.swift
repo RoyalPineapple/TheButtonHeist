@@ -479,24 +479,21 @@ struct Screen: Equatable {
     }
 
     /// Apply a fresh visible parse. If the visible ids are already known, keep
-    /// explored offscreen memory and replace only the live interface.
-    /// Previously visible non-scroll elements that disappear are dropped; empty
-    /// or unknown refreshes replace the screen.
+    /// previously explored offscreen memory and replace only the live interface.
+    /// Elements that were visible in the prior parse and disappear in the fresh
+    /// parse are dropped; scroll position alone is not semantic retention.
     func refreshingVisibleState(with visibleRefresh: Screen) -> Screen {
         guard !visibleRefresh.visibleIds.isEmpty,
               visibleRefresh.visibleIds.isSubset(of: knownIds) else {
             return visibleRefresh
         }
         let disappearedVisibleIds = visibleIds.subtracting(visibleRefresh.visibleIds)
-        let staleVisibleIds = disappearedVisibleIds.filter {
-            elements[$0]?.contentSpaceOrigin == nil
-        }
-        guard !staleVisibleIds.isEmpty else {
+        guard !disappearedVisibleIds.isEmpty else {
             return merging(visibleRefresh)
         }
         let refreshed = merging(visibleRefresh)
         return Screen(
-            elements: refreshed.elements.filter { !staleVisibleIds.contains($0.key) },
+            elements: refreshed.elements.filter { !disappearedVisibleIds.contains($0.key) },
             liveInterface: refreshed.liveInterface
         )
     }

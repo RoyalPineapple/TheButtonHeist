@@ -500,7 +500,7 @@ final class ScreenTests: XCTestCase {
         XCTAssertNil(updated.findElement(heistId: "disappearing_staticText"))
     }
 
-    func testRefreshingVisibleStatePreservesDisappearedVisibleScrollElements() {
+    func testRefreshingVisibleStateDropsDisappearedVisibleScrollElements() {
         let scrolledAway = makeElement(label: "Scrolled Away", traits: .button)
         let visible = makeElement(label: "Visible", traits: .button)
         let screen = Screen(
@@ -532,9 +532,9 @@ final class ScreenTests: XCTestCase {
 
         let updated = screen.refreshingVisibleState(with: refresh)
 
-        XCTAssertEqual(updated.knownIds, ["button_scrolled_away", "button_visible"])
+        XCTAssertEqual(updated.knownIds, ["button_visible"])
         XCTAssertEqual(updated.visibleIds, ["button_visible"])
-        XCTAssertEqual(updated.findElement(heistId: "button_scrolled_away")?.element.label, "Scrolled Away")
+        XCTAssertNil(updated.findElement(heistId: "button_scrolled_away"))
     }
 
     func testRefreshingVisibleStateReplacesKnownElementsWhenVisibleIdsAreUnknown() {
