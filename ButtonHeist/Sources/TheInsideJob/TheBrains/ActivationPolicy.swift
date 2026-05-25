@@ -7,9 +7,9 @@ import TheScore
 
 /// Ordered activation recovery policy for `activate`.
 ///
-/// Keeps the fallback sequence explicit: try `accessibilityActivate`, retry
-/// after refresh/re-resolve, fall back to a synthetic tap, then produce the
-/// final diagnostic from observed retry state.
+/// Keeps the recovery sequence explicit: try `accessibilityActivate`, retry
+/// once after refresh/re-resolve, try a synthetic tap, then produce the final
+/// diagnostic from observed retry state.
 struct ActivationPolicy {
 
     enum RefreshResult {
@@ -18,21 +18,6 @@ struct ActivationPolicy {
             liveTarget: TheStash.LiveActionTarget
         )
         case failure(TheSafecracker.InteractionResult)
-    }
-
-    private enum State {
-        case accessibilityActivate(TheStash.LiveActionTarget)
-        case refreshReresolveRetry
-        case syntheticTapFallback(
-            resolvedTarget: TheStash.ResolvedTarget,
-            liveTarget: TheStash.LiveActionTarget,
-            activateOutcome: TheStash.ActivateOutcome
-        )
-        case finalDiagnosticFailure(
-            resolvedTarget: TheStash.ResolvedTarget,
-            tapPoint: CGPoint,
-            activateOutcome: TheStash.ActivateOutcome
-        )
     }
 
     var activate: @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome
@@ -44,55 +29,39 @@ struct ActivationPolicy {
 
     @MainActor
     func apply(to liveTarget: TheStash.LiveActionTarget) async -> TheSafecracker.InteractionResult {
-        var state = State.accessibilityActivate(liveTarget)
-
-        while true {
-            switch state {
-            case .accessibilityActivate(let target):
-                let outcome = activate(target)
-                if outcome == .success {
-                    showFingerprint(target.activationPoint)
-                    return .success(method: .activate)
-                }
-                state = .refreshReresolveRetry
-
-            case .refreshReresolveRetry:
-                switch await refreshAndResolve() {
-                case .resolved(let resolvedTarget, let retryLiveTarget):
-                    let retryOutcome = activate(retryLiveTarget)
-                    if retryOutcome == .success {
-                        showFingerprint(retryLiveTarget.activationPoint)
-                        return .success(method: .activate)
-                    }
-                    state = .syntheticTapFallback(
-                        resolvedTarget: resolvedTarget,
-                        liveTarget: retryLiveTarget,
-                        activateOutcome: retryOutcome
-                    )
-                case .failure(let result):
-                    return result
-                }
-
-            case .syntheticTapFallback(let resolvedTarget, let retryLiveTarget, let retryOutcome):
-                let tapPoint = retryLiveTarget.activationPoint
-                if await syntheticTap(tapPoint) {
-                    showFingerprint(tapPoint)
-                    return .success(method: .syntheticTap)
-                }
-                state = .finalDiagnosticFailure(
-                    resolvedTarget: resolvedTarget,
-                    tapPoint: tapPoint,
-                    activateOutcome: retryOutcome
-                )
-
-            case .finalDiagnosticFailure(let resolvedTarget, let tapPoint, let retryOutcome):
-                return finalDiagnosticFailure(
-                    resolvedTarget: resolvedTarget,
-                    tapPoint: tapPoint,
-                    activateOutcome: retryOutcome
-                )
-            }
+        let initialOutcome = activate(liveTarget)
+        if initialOutcome == .success {
+            showFingerprint(liveTarget.activationPoint)
+            return .success(method: .activate)
         }
+
+        let resolvedTarget: TheStash.ResolvedTarget
+        let retryLiveTarget: TheStash.LiveActionTarget
+        switch await refreshAndResolve() {
+        case .resolved(let resolved, let liveTarget):
+            resolvedTarget = resolved
+            retryLiveTarget = liveTarget
+        case .failure(let result):
+            return result
+        }
+
+        let retryOutcome = activate(retryLiveTarget)
+        if retryOutcome == .success {
+            showFingerprint(retryLiveTarget.activationPoint)
+            return .success(method: .activate)
+        }
+
+        let tapPoint = retryLiveTarget.activationPoint
+        if await syntheticTap(tapPoint) {
+            showFingerprint(tapPoint)
+            return .success(method: .syntheticTap)
+        }
+
+        return finalDiagnosticFailure(
+            resolvedTarget: resolvedTarget,
+            tapPoint: tapPoint,
+            activateOutcome: retryOutcome
+        )
     }
 
     @MainActor

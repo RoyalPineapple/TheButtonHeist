@@ -189,6 +189,42 @@ final class TheMuscleTests: XCTestCase {
     /// for call-site stability; remove once all tests are inlined.
     private func flushCallbacks() async {}
 
+    // MARK: - Encoding
+
+    func testEnvelopeEncodingFailureDoesNotInventFallbackMessage() async {
+        let payload = ServerInfo(
+            appName: "Test",
+            bundleIdentifier: "test.bundle",
+            deviceName: "Device",
+            systemVersion: "1",
+            screenWidth: .nan,
+            screenHeight: 100
+        )
+
+        let data = await muscle.encodeEnvelope(.info(payload), requestId: "bad-info")
+
+        XCTAssertNil(
+            data,
+            "Encoding failure should fail closed instead of synthesizing a different response shape"
+        )
+    }
+
+    func testExplicitErrorEnvelopeStillEncodes() async throws {
+        let encoded = await muscle.encodeEnvelope(
+            .error(ServerError(kind: .general, message: "Explicit failure")),
+            requestId: "explicit-error"
+        )
+        let data = try XCTUnwrap(encoded)
+
+        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
+        XCTAssertEqual(envelope.requestId, "explicit-error")
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected explicit error response, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.message, "Explicit failure")
+    }
+
     // MARK: - Auth Flow Tests
 
     func testValidTokenAuthenticates() async throws {

@@ -235,6 +235,20 @@ struct ToolRoutingTests {
                     "\(rawCommandList(scrollContract.commands))."
             ),
             (
+                [
+                    "command": .string(TheFence.Command.scroll.rawValue),
+                    "mode": .int(7),
+                    "label": .string("Done"),
+                ],
+                "run_batch step \"\(TheFence.Command.scroll.rawValue)\" uses the MCP " +
+                    "\(scrollSelector.parameter.key) selector; use canonical Fence commands " +
+                    "\(rawCommandList(scrollContract.commands))."
+            ),
+            (
+                ["command": .string(TheFence.Command.editAction.rawValue), "action": .int(7)],
+                "schema validation failed for \(editActionSelector.parameter.key): observed integer 7; expected string"
+            ),
+            (
                 ["command": .string(TheFence.Command.editAction.rawValue), "action": .string(dismissSelectorValue)],
                 "run_batch step \"\(TheFence.Command.editAction.rawValue)\" uses the MCP " +
                     "\(dismissSelectorValue) selector; use canonical Fence command \(dismissCommand.rawValue)."

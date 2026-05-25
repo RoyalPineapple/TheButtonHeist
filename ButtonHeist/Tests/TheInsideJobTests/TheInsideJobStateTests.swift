@@ -505,7 +505,7 @@ final class TheInsideJobStateTests: XCTestCase {
 
     /// Regression: previously `stop()` was sync and spawned an untracked
     /// `Task { await muscle.tearDown() }`, returning before the tearDown's
-    /// `lockoutTasks` cancellation had a chance to run. A subsequent
+    /// delayed-disconnect task cancellation had a chance to run. A subsequent
     /// `start()` could race against that in-flight tearDown. The fix makes
     /// `stop()` async and awaits `muscle.tearDown()` inline; this test
     /// asserts the contract: after `await job.stop()` returns, no lockout
@@ -513,8 +513,8 @@ final class TheInsideJobStateTests: XCTestCase {
     func testStopAwaitsMuscleTearDownDrainingLockoutTasks() async throws {
         let job = TheInsideJob()
 
-        // Seed a lockout Task: a bad-token authenticate triggers
-        // `scheduleDelayedDisconnect`, which inserts into `lockoutTasks`.
+        // Seed a delayed-disconnect Task: a bad-token authenticate triggers
+        // `scheduleDelayedDisconnect`.
         let sink: @Sendable (Data) -> Void = { _ in }
         await job.muscle.registerClientAddress(1, address: "127.0.0.1")
         let helloData = try JSONEncoder().encode(RequestEnvelope(message: .clientHello))
