@@ -40,8 +40,8 @@ enum CLIRequestBuilder {
         return try parseHumanTokens(tokenize(line))
     }
 
-    static func parseHumanInput(_ line: String) -> [String: Any] {
-        (try? parseHumanTokens(tokenize(line)).request) ?? [:]
+    static func parseHumanInput(_ line: String) throws -> [String: Any] {
+        try parseHumanTokens(tokenize(line)).request
     }
 
     static func parseHumanTokens(_ tokens: [String]) throws -> CLIParsedRequest {

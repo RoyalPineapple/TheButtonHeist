@@ -362,16 +362,16 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try TheFence.parseExpectationArgument("layout_changed"))
     }
 
-    func testHumanParserNormalizesChangeExpectationShortcut() {
-        let request = ReplSession.parseHumanInput("change expect=screen_changed")
+    func testHumanParserNormalizesChangeExpectationShortcut() throws {
+        let request = try ReplSession.parseHumanInput("change expect=screen_changed")
         let expect = request[.expect] as? [String: Any]
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.waitForChange.rawValue)
         XCTAssertEqual(expect?[.type] as? String, "screen_changed")
     }
 
-    func testHumanParserNormalizesChangeExpectationJsonObject() {
-        let request = ReplSession.parseHumanInput(#"change expect='{"type":"elements_changed"}'"#)
+    func testHumanParserNormalizesChangeExpectationJsonObject() throws {
+        let request = try ReplSession.parseHumanInput(#"change expect='{"type":"elements_changed"}'"#)
         let expect = request[.expect] as? [String: Any]
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.waitForChange.rawValue)
@@ -432,31 +432,31 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(object["steps"], .array([]))
     }
 
-    func testHumanParserPreservesKnownStringParameterValues() {
-        let request = ReplSession.parseHumanInput("set_pasteboard text=false")
+    func testHumanParserPreservesKnownStringParameterValues() throws {
+        let request = try ReplSession.parseHumanInput("set_pasteboard text=false")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.setPasteboard.rawValue)
         XCTAssertEqual(request[.text] as? String, "false")
     }
 
-    func testHumanParserCoercesKnownBooleanParametersOnly() {
-        let request = ReplSession.parseHumanInput("wait label=true absent=true")
+    func testHumanParserCoercesKnownBooleanParametersOnly() throws {
+        let request = try ReplSession.parseHumanInput("wait label=true absent=true")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.waitFor.rawValue)
         XCTAssertEqual(request[.label] as? String, "true")
         XCTAssertEqual(request[.absent] as? Bool, true)
     }
 
-    func testHumanParserMapsCompoundCopyAlias() {
-        let request = ReplSession.parseHumanInput("copy")
+    func testHumanParserMapsCompoundCopyAlias() throws {
+        let request = try ReplSession.parseHumanInput("copy")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.editAction.rawValue)
         XCTAssertEqual(request[.action] as? String, EditAction.copy.rawValue)
     }
 
-    func testHumanParserAliasesComeFromSharedCommandContract() {
+    func testHumanParserAliasesComeFromSharedCommandContract() throws {
         for (aliasName, alias) in TheFence.Command.humanCommandAliases {
-            let request = ReplSession.parseHumanInput(aliasName)
+            let request = try ReplSession.parseHumanInput(aliasName)
 
             XCTAssertEqual(
                 request[.command] as? String,
@@ -616,30 +616,30 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(cliRequest[.timeout] as? Double, builderRequest[.timeout] as? Double)
     }
 
-    func testREPLCanonicalCommandMatchesSharedCLIRequestShape() {
+    func testREPLCanonicalCommandMatchesSharedCLIRequestShape() throws {
         let cliRequest = TheFence.Command.activate.cliRequest([.heistId: .string("button_save")])
-        let replRequest = ReplSession.parseHumanInput("activate button_save")
+        let replRequest = try ReplSession.parseHumanInput("activate button_save")
 
         XCTAssertEqual(replRequest[.command] as? String, cliRequest[.command] as? String)
         XCTAssertEqual(replRequest[.heistId] as? String, cliRequest[.heistId] as? String)
     }
 
-    func testREPLAliasCommandMatchesSharedCLIRequestShape() {
+    func testREPLAliasCommandMatchesSharedCLIRequestShape() throws {
         let cliRequest = CLIRequestBuilder.request(
             command: TheFence.Command.oneFingerTap,
             parameters: [.x: .double(100), .y: .double(200)]
         )
-        let replRequest = ReplSession.parseHumanInput("tap 100 200")
+        let replRequest = try ReplSession.parseHumanInput("tap 100 200")
 
         XCTAssertEqual(replRequest[.command] as? String, cliRequest[.command] as? String)
         XCTAssertEqual(replRequest[.x] as? Double, cliRequest[.x] as? Double)
         XCTAssertEqual(replRequest[.y] as? Double, cliRequest[.y] as? Double)
     }
 
-    func testSessionReplDelegatesHumanParsingToSharedRequestBuilder() {
+    func testSessionReplDelegatesHumanParsingToSharedRequestBuilder() throws {
         let line = "swipe up checkout_list timeout=2"
-        let replRequest = ReplSession.parseHumanInput(line)
-        let builderRequest = CLIRequestBuilder.parseHumanInput(line)
+        let replRequest = try ReplSession.parseHumanInput(line)
+        let builderRequest = try CLIRequestBuilder.parseHumanInput(line)
 
         XCTAssertEqual(replRequest[.command] as? String, builderRequest[.command] as? String)
         XCTAssertEqual(replRequest[.direction] as? String, builderRequest[.direction] as? String)
@@ -688,9 +688,9 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(source.contains("humanCommandDescriptor"), "REPL should resolve command identity through CLIRequestBuilder")
     }
 
-    func testHumanParserResolvesCanonicalCommandsThroughDescriptors() {
+    func testHumanParserResolvesCanonicalCommandsThroughDescriptors() throws {
         for descriptor in TheFence.Command.descriptors {
-            let request = ReplSession.parseHumanInput(descriptor.canonicalName)
+            let request = try ReplSession.parseHumanInput(descriptor.canonicalName)
 
             XCTAssertEqual(
                 request[.command] as? String,
@@ -763,24 +763,24 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testHumanParserUsesCatalogPositionalDirectionSyntax() {
-        let request = ReplSession.parseHumanInput("swipe up checkout_list")
+    func testHumanParserUsesCatalogPositionalDirectionSyntax() throws {
+        let request = try ReplSession.parseHumanInput("swipe up checkout_list")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.swipe.rawValue)
         XCTAssertEqual(request[.direction] as? String, "up")
         XCTAssertEqual(request[.heistId] as? String, "checkout_list")
     }
 
-    func testHumanParserUsesCatalogPositionalEdgeSyntax() {
-        let request = ReplSession.parseHumanInput("scroll_to_edge top checkout_list")
+    func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
+        let request = try ReplSession.parseHumanInput("scroll_to_edge top checkout_list")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.scrollToEdge.rawValue)
         XCTAssertEqual(request[.edge] as? String, "top")
         XCTAssertEqual(request[.heistId] as? String, "checkout_list")
     }
 
-    func testHumanParserUsesCatalogTargetThenActionSyntax() {
-        let request = ReplSession.parseHumanInput("perform_custom_action checkout_button Magic Tap")
+    func testHumanParserUsesCatalogTargetThenActionSyntax() throws {
+        let request = try ReplSession.parseHumanInput("perform_custom_action checkout_button Magic Tap")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.performCustomAction.rawValue)
         XCTAssertEqual(request[.heistId] as? String, "checkout_button")
@@ -838,16 +838,16 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(rotorSource.contains("var direction: String = RotorDirection.next.rawValue"))
     }
 
-    func testHumanParserMapsCoordinateTapAlias() {
-        let request = ReplSession.parseHumanInput("tap 100 200")
+    func testHumanParserMapsCoordinateTapAlias() throws {
+        let request = try ReplSession.parseHumanInput("tap 100 200")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.oneFingerTap.rawValue)
         XCTAssertEqual(request[.x] as? Double, 100)
         XCTAssertEqual(request[.y] as? Double, 200)
     }
 
-    func testHumanParserMapsHeistIdPositionalTarget() {
-        let request = ReplSession.parseHumanInput("activate button_save")
+    func testHumanParserMapsHeistIdPositionalTarget() throws {
+        let request = try ReplSession.parseHumanInput("activate button_save")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.activate.rawValue)
         XCTAssertEqual(request[.heistId] as? String, "button_save")
