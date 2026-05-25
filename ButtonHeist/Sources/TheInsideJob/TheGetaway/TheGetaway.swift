@@ -587,8 +587,6 @@ final class TheGetaway {
         ) {
             insideJobLogger.debug("Sending \(data.count) bytes")
             respond(data)
-        } else if let errorData = encodeEnvelope(.error(ServerError(kind: .general, message: "Encoding failed")), requestId: requestId) {
-            respond(errorData)
         }
     }
 

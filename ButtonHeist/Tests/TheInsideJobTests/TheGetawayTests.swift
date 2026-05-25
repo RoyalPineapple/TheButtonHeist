@@ -198,6 +198,50 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertLessThanOrEqual(timestamp, afterMs)
     }
 
+    // MARK: - Send Encoding
+
+    func testSendMessageDropsUnencodablePayloadInsteadOfSynthesizingFallbackError() async {
+        let (getaway, _, _) = await makeGetaway()
+        var responses: [Data] = []
+        let payload = ServerInfo(
+            appName: "Test",
+            bundleIdentifier: "test.bundle",
+            deviceName: "Device",
+            systemVersion: "1",
+            screenWidth: .nan,
+            screenHeight: 100
+        )
+
+        getaway.sendMessage(.info(payload), requestId: "bad-info") { data in
+            responses.append(data)
+        }
+
+        XCTAssertTrue(
+            responses.isEmpty,
+            "Encoding failure should not send a guessed fallback response for a payload that never reached the wire"
+        )
+    }
+
+    func testSendMessageStillEncodesExplicitErrorResponses() async throws {
+        let (getaway, _, _) = await makeGetaway()
+        var responseData: Data?
+
+        getaway.sendMessage(
+            .error(ServerError(kind: .general, message: "Explicit failure")),
+            requestId: "explicit-error"
+        ) { data in
+            responseData = data
+        }
+
+        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
+        XCTAssertEqual(envelope.requestId, "explicit-error")
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected explicit error response, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.message, "Explicit failure")
+    }
+
     // MARK: - Stale Targeted Actions
 
     func testStaleTargetedActionAfterScreenChangeReturnsFailureWithDeltaContext() async throws {

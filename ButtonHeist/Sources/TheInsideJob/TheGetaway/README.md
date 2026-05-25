@@ -24,7 +24,7 @@ Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()
 
 - `encodeEnvelope(_:requestId:accessibilityTrace:)` — wraps `ServerMessage` in `ResponseEnvelope`, JSON-encodes
 - `decodeRequest(_:)` — JSON-decodes `RequestEnvelope`
-- `sendMessage(_:requestId:accessibilityTrace:respond:)` — encode + respond, with error fallback
+- `sendMessage(_:requestId:accessibilityTrace:respond:)` — encode + respond; encoding failures do not synthesize alternate response shapes
 - `broadcastToAll(_:)` — encode once, send lightweight recording notifications to all authenticated clients
 
 ### Recording
