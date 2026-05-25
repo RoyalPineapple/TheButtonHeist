@@ -504,7 +504,8 @@ final class PublicContractGoldenTests: XCTestCase {
                 target: ElementMatcher(label: "Pay", traits: [.button])
             ),
             message: "not connected",
-            interface: nil
+            interface: nil,
+            diagnosticCaptureFailure: nil
         )
 
         XCTAssertEqual(
@@ -516,6 +517,33 @@ final class PublicContractGoldenTests: XCTestCase {
             )),
             golden(
                 #"{"completedSteps":1,"failedIndex":1,"failure":{"command":"activate","#,
+                #""error":"not connected","target":{"label":"Pay","traits":["button"]}},"#,
+                #""status":"error","totalTimingMs":25}"#
+            )
+        )
+    }
+
+    func testPlaybackFailureDiagnosticCaptureFailurePublicJSONGolden() throws {
+        let failure = PlaybackFailure.fenceError(
+            step: PlaybackFailure.FailedStep(
+                command: "activate",
+                target: ElementMatcher(label: "Pay", traits: [.button])
+            ),
+            message: "not connected",
+            interface: nil,
+            diagnosticCaptureFailure: "diagnostic interface unavailable"
+        )
+
+        XCTAssertEqual(
+            try jsonString(FenceResponse.heistPlayback(
+                completedSteps: 1,
+                failedIndex: 1,
+                totalTimingMs: 25,
+                failure: failure
+            )),
+            golden(
+                #"{"completedSteps":1,"failedIndex":1,"failure":{"command":"activate","#,
+                #""diagnosticCaptureFailure":"diagnostic interface unavailable","#,
                 #""error":"not connected","target":{"label":"Pay","traits":["button"]}},"#,
                 #""status":"error","totalTimingMs":25}"#
             )

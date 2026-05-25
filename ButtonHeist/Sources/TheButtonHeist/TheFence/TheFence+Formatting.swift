@@ -496,6 +496,9 @@ public enum FenceResponse {
                     text += "\n  target: \(target)"
                 }
                 text += "\n  error: \(failure.errorMessage)"
+                if let diagnosticCaptureFailure = failure.diagnosticCaptureFailure {
+                    text += "\n  diagnosticCaptureFailure: \(diagnosticCaptureFailure)"
+                }
             }
             return text
         }

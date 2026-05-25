@@ -4213,7 +4213,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(completedSteps, 0)
         XCTAssertEqual(failedIndex, 0)
 
-        guard case .fenceError(let step, let message, _) = failure else {
+        guard case .fenceError(let step, let message, _, _) = failure else {
             return XCTFail("Expected typed fenceError playback failure, got \(String(describing: failure))")
         }
         XCTAssertEqual(step.command, "activate")
@@ -4269,13 +4269,14 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(completedSteps, 0)
         XCTAssertEqual(failedIndex, 0)
 
-        guard case .actionFailed(let step, let result, _, let interface) = failure else {
+        guard case .actionFailed(let step, let result, _, let interface, let diagnosticCaptureFailure) = failure else {
             return XCTFail("Expected actionFailed playback failure, got \(String(describing: failure))")
         }
         XCTAssertEqual(step.command, "activate")
         XCTAssertEqual(result.method, .elementNotFound)
         XCTAssertEqual(result.message, "missing")
         XCTAssertNil(interface)
+        XCTAssertEqual(diagnosticCaptureFailure, "Action failed: diagnostic interface unavailable")
 
         guard case .failed(let reportMessage, let errorKind) = report?.steps.first?.outcome else {
             return XCTFail("Expected failed playback report step, got \(String(describing: report?.steps.first))")

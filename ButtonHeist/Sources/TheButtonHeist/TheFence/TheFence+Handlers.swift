@@ -622,11 +622,13 @@ extension TheFence {
                 if case .invalidRequest = fenceError {
                     throw fenceError
                 } else {
+                    failure = currentFailure.withDiagnosticCaptureFailure(fenceError.displayMessage)
                     logger.error(
                         "Failed to capture interface for playback diagnostics: \(fenceError.displayMessage)"
                     )
                 }
             } catch {
+                failure = currentFailure.withDiagnosticCaptureFailure(error.displayMessage)
                 logger.error("Failed to capture interface for playback diagnostics: \(error.displayMessage)")
             }
         }
@@ -679,7 +681,7 @@ extension TheFence {
     private func failureErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
         switch failure {
         case .fenceError: return .commandError
-        case .actionFailed(_, let result, _, _):
+        case .actionFailed(_, let result, _, _, _):
             guard let errorKind = result.errorKind else { return nil }
             return .action(errorKind)
         case .thrown: return .thrown
@@ -691,9 +693,20 @@ extension TheFence {
         let failedStep = PlaybackFailure.FailedStep(command: operation.commandName, target: operation.target)
         switch response {
         case .error(let message, _):
-            return .fenceError(step: failedStep, message: message, interface: nil)
+            return .fenceError(
+                step: failedStep,
+                message: message,
+                interface: nil,
+                diagnosticCaptureFailure: nil
+            )
         case .action(let result, let expectation) where !result.success || expectation?.met == false:
-            return .actionFailed(step: failedStep, result: result, expectation: expectation, interface: nil)
+            return .actionFailed(
+                step: failedStep,
+                result: result,
+                expectation: expectation,
+                interface: nil,
+                diagnosticCaptureFailure: nil
+            )
         default:
             return nil
         }
@@ -702,9 +715,19 @@ extension TheFence {
     private func playbackFailure(operation: PlaybackOperation, error: Error) -> PlaybackFailure {
         let failedStep = PlaybackFailure.FailedStep(command: operation.commandName, target: operation.target)
         if let fenceError = error as? FenceError {
-            return .fenceError(step: failedStep, message: fenceError.displayMessage, interface: nil)
+            return .fenceError(
+                step: failedStep,
+                message: fenceError.displayMessage,
+                interface: nil,
+                diagnosticCaptureFailure: nil
+            )
         }
-        return .thrown(step: failedStep, error: error.displayMessage, interface: nil)
+        return .thrown(
+            step: failedStep,
+            error: error.displayMessage,
+            interface: nil,
+            diagnosticCaptureFailure: nil
+        )
     }
 
     /// Capture a live interface snapshot for failure diagnostics.
