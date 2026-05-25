@@ -713,8 +713,8 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertNotNil(reencodedJson["accessibilityTrace"])
     }
 
-    func testResponseEnvelopeDropsObsoleteBackgroundDeltaField() throws {
-        let oldShape: [String: Any] = [
+    func testResponseEnvelopeRejectsObsoleteBackgroundDeltaField() throws {
+        let obsoleteShape: [String: Any] = [
             "buttonHeistVersion": TheScore.buttonHeistVersion,
             "requestId": "old-delta",
             "type": "pong",
@@ -729,16 +729,14 @@ final class ServerMessageTests: XCTestCase {
                 "edits": ["removed": ["old"]],
             ],
         ]
-        let data = try JSONSerialization.data(withJSONObject: oldShape)
+        let data = try JSONSerialization.data(withJSONObject: obsoleteShape)
 
-        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-        XCTAssertEqual(decoded.requestId, "old-delta")
-        XCTAssertNil(decoded.accessibilityTrace)
-
-        let reencoded = try JSONEncoder().encode(decoded)
-        let reencodedJson = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])
-        XCTAssertNil(reencodedJson["backgroundAccessibilityDelta"])
-        XCTAssertNil(reencodedJson["accessibilityTrace"])
+        XCTAssertThrowsError(try JSONDecoder().decode(ResponseEnvelope.self, from: data)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("backgroundAccessibilityDelta"),
+                "Expected obsolete envelope field in error, got \(error)"
+            )
+        }
     }
 
     func testResponseEnvelopeAccessibilityTraceOnlyShapeRoundTrips() throws {
