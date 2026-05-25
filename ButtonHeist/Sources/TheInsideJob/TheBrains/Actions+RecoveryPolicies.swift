@@ -58,13 +58,30 @@ struct LiveActionTargetRecoveryPolicy {
             ))
         }
         let liveTargetResolution = stash.resolveLiveActionTarget(for: resolved)
-        guard case .resolved(let liveTarget) = liveTargetResolution else {
-            return activationRefreshFailure(
-                for: liveTargetResolution,
-                resolved: resolved
+        switch liveTargetResolution {
+        case .resolved(let liveTarget):
+            return .resolved(resolvedTarget: resolved, liveTarget: liveTarget)
+        case .objectUnavailable:
+            let traitNames = ActionCapabilityDiagnostic.traitNames(resolved.element.traits)
+            let message = ActivateFailureDiagnostic.build(
+                element: resolved.element,
+                traitNames: traitNames,
+                activateOutcome: .objectDeallocated,
+                tapAttempted: false,
+                tapReceiver: nil,
+                screenBounds: ScreenMetrics.current.bounds
             )
+            return .failure(.failure(.activate, message: message))
+        case .geometryUnavailable:
+            return .failure(.failure(
+                .activate,
+                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
+                    method: .activate,
+                    element: resolved.screenElement,
+                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
+                )
+            ))
         }
-        return .resolved(resolvedTarget: resolved, liveTarget: liveTarget)
     }
 
     @MainActor
@@ -179,37 +196,6 @@ struct LiveActionTargetRecoveryPolicy {
                 isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
             )
         )
-    }
-
-    @MainActor
-    private func activationRefreshFailure(
-        for resolution: TheStash.LiveActionTargetResolution,
-        resolved: TheStash.ResolvedTarget
-    ) -> ActivationPolicy.RefreshResult {
-        switch resolution {
-        case .objectUnavailable:
-            let traitNames = ActionCapabilityDiagnostic.traitNames(resolved.element.traits)
-            let message = ActivateFailureDiagnostic.build(
-                element: resolved.element,
-                traitNames: traitNames,
-                activateOutcome: .objectDeallocated,
-                tapAttempted: false,
-                tapReceiver: nil,
-                screenBounds: ScreenMetrics.current.bounds
-            )
-            return .failure(.failure(.activate, message: message))
-        case .geometryUnavailable:
-            return .failure(.failure(
-                .activate,
-                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: .activate,
-                    element: resolved.screenElement,
-                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
-                )
-            ))
-        case .resolved:
-            return .failure(.failure(.activate, message: "activate failed"))
-        }
     }
 
     @MainActor

@@ -20,6 +20,11 @@ struct ActivationPolicy {
         case failure(TheSafecracker.InteractionResult)
     }
 
+    enum SyntheticTapRecoveryOutcome: Equatable {
+        case succeeded
+        case failed(tapReceiver: TheSafecracker.TapReceiverDiagnostic?)
+    }
+
     var activate: @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome
     var refreshAndResolve: @MainActor () async -> RefreshResult
     var syntheticTap: @MainActor (CGPoint) async -> Bool
@@ -52,22 +57,31 @@ struct ActivationPolicy {
         }
 
         let tapPoint = retryLiveTarget.activationPoint
-        if await syntheticTap(tapPoint) {
+        switch await attemptSyntheticTapRecovery(at: tapPoint) {
+        case .succeeded:
             showFingerprint(tapPoint)
             return .success(method: .syntheticTap)
+        case .failed(let tapReceiver):
+            return finalDiagnosticFailure(
+                resolvedTarget: resolvedTarget,
+                tapReceiver: tapReceiver,
+                activateOutcome: retryOutcome
+            )
         }
+    }
 
-        return finalDiagnosticFailure(
-            resolvedTarget: resolvedTarget,
-            tapPoint: tapPoint,
-            activateOutcome: retryOutcome
-        )
+    @MainActor
+    func attemptSyntheticTapRecovery(at point: CGPoint) async -> SyntheticTapRecoveryOutcome {
+        guard await syntheticTap(point) else {
+            return .failed(tapReceiver: tapReceiverDiagnostic(point))
+        }
+        return .succeeded
     }
 
     @MainActor
     private func finalDiagnosticFailure(
         resolvedTarget: TheStash.ResolvedTarget,
-        tapPoint: CGPoint,
+        tapReceiver: TheSafecracker.TapReceiverDiagnostic?,
         activateOutcome: TheStash.ActivateOutcome
     ) -> TheSafecracker.InteractionResult {
         let traitNames = ActionCapabilityDiagnostic.traitNames(resolvedTarget.element.traits)
@@ -76,7 +90,7 @@ struct ActivationPolicy {
             traitNames: traitNames,
             activateOutcome: activateOutcome,
             tapAttempted: true,
-            tapReceiver: tapReceiverDiagnostic(tapPoint),
+            tapReceiver: tapReceiver,
             screenBounds: screenBounds()
         )
         return .failure(.activate, message: message)

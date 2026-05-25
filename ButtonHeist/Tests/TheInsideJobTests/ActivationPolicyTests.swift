@@ -98,7 +98,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertTrue(fingerprintPoints.isEmpty)
     }
 
-    func testSyntheticTapFallbackCanSucceed() async {
+    func testSyntheticTapRecoveryCanSucceed() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let retryTarget = makeLiveTarget(heistId: "retry", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
@@ -125,6 +125,40 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(activateCount, 2)
         XCTAssertEqual(tappedPoints, [CGPoint(x: 30, y: 40)])
         XCTAssertEqual(fingerprintPoints, [CGPoint(x: 30, y: 40)])
+    }
+
+    func testSyntheticTapRecoveryFailureCarriesTapReceiverObservation() async {
+        let point = CGPoint(x: 12, y: 34)
+        let tapReceiver = TheSafecracker.TapReceiverDiagnostic(
+            receiverClass: "UIButton",
+            receiverAxLabel: "Retry",
+            receiverAxIdentifier: nil,
+            interactionDisabledInChain: false,
+            hiddenInChain: false,
+            windowLevel: 0,
+            isSwiftUIGestureContainer: false
+        )
+        var tappedPoints: [CGPoint] = []
+        var receiverPoints: [CGPoint] = []
+
+        let outcome = await makePolicy(
+            activate: { _ in .refused },
+            refreshAndResolve: {
+                .failure(.failure(.activate, message: "unexpected refresh"))
+            },
+            syntheticTap: { point in
+                tappedPoints.append(point)
+                return false
+            },
+            tapReceiverDiagnostic: { point in
+                receiverPoints.append(point)
+                return tapReceiver
+            }
+        ).attemptSyntheticTapRecovery(at: point)
+
+        XCTAssertEqual(outcome, .failed(tapReceiver: tapReceiver))
+        XCTAssertEqual(tappedPoints, [point])
+        XCTAssertEqual(receiverPoints, [point])
     }
 
     func testFinalDiagnosticFailureUsesRetryTargetAndTapObservation() async {
