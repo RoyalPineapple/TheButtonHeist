@@ -8,7 +8,7 @@ typealias CLIRequestParameters = [FenceParameterKey: HeistValue]
 ///
 /// Command identity is intentionally not a protocol requirement: concrete CLI
 /// command types should not own or override Fence command identity.
-protocol CLICommandContract {}
+protocol CLICommandContract: ParsableCommand {}
 
 protocol GestureCLICommandContract: CLICommandContract {}
 
@@ -20,11 +20,11 @@ struct CLICommandAdapter {
         fenceDescriptor?.command
     }
 
-    static func fence(
-        _ commandType: ParsableCommand.Type,
-        _ fenceCommand: TheFence.Command
-    ) -> Self {
-        Self(commandType: commandType, fenceDescriptor: fenceCommand.descriptor)
+    static func fence(_ commandType: CLICommandContract.Type) -> Self {
+        Self(
+            commandType: commandType,
+            fenceDescriptor: CLICommandAdapterCatalog.descriptor(for: commandType)
+        )
     }
 
     static func cliOnly(_ commandType: ParsableCommand.Type) -> Self {
@@ -33,63 +33,132 @@ struct CLICommandAdapter {
 }
 
 enum CLICommandAdapterCatalog {
-    static let adapters: [CLICommandAdapter] = [
-        .fence(ListCommand.self, .listDevices),
-        .fence(PingCommand.self, .ping),
-        .fence(GetInterfaceCommand.self, .getInterface),
-        .fence(ActivateCommand.self, .activate),
-        .fence(RotorCommand.self, .rotor),
-        .fence(TypeCommand.self, .typeText),
-        .fence(ScreenshotCommand.self, .getScreen),
-        .fence(ScrollCommand.self, .scroll),
-        .fence(SwipeSubcommand.self, .swipe),
-        .cliOnly(SessionCommand.self),
-        .fence(ConnectCommand.self, .connect),
-
-        .fence(ScrollToVisibleCommand.self, .scrollToVisible),
-        .fence(ElementSearchCommand.self, .elementSearch),
-        .fence(ScrollToEdgeCommand.self, .scrollToEdge),
-
-        .fence(EditActionCommand.self, .editAction),
-        .fence(DismissKeyboardCommand.self, .dismissKeyboard),
-
-        .fence(TapSubcommand.self, .oneFingerTap),
-        .fence(LongPressSubcommand.self, .longPress),
-        .fence(DragSubcommand.self, .drag),
-        .fence(PinchSubcommand.self, .pinch),
-        .fence(RotateSubcommand.self, .rotate),
-        .fence(TwoFingerTapSubcommand.self, .twoFingerTap),
-        .fence(DrawPathCommand.self, .drawPath),
-        .fence(DrawBezierCommand.self, .drawBezier),
-
-        .fence(SetPasteboardCommand.self, .setPasteboard),
-        .fence(GetPasteboardCommand.self, .getPasteboard),
-
-        .fence(RecordCommand.self, .startRecording),
-        .fence(StopRecordingCommand.self, .stopRecording),
-        .fence(WaitForChangeCommand.self, .waitForChange),
-        .fence(WaitForCommand.self, .waitFor),
-
-        .fence(SessionLogCommand.self, .getSessionLog),
-        .fence(ArchiveSessionCommand.self, .archiveSession),
-        .fence(GetSessionStateCommand.self, .getSessionState),
-        .fence(ListTargetsCommand.self, .listTargets),
-        .fence(RunBatchCommand.self, .runBatch),
-
-        .fence(StartHeistCommand.self, .startHeist),
-        .fence(StopHeistCommand.self, .stopHeist),
-        .fence(PlayHeistCommand.self, .playHeist),
+    private static let directCommandTypesByDescriptorOrder: [CLICommandContract.Type] = [
+        PingCommand.self,
+        ListCommand.self,
+        GetInterfaceCommand.self,
+        ScreenshotCommand.self,
+        WaitForChangeCommand.self,
+        TapSubcommand.self,
+        LongPressSubcommand.self,
+        SwipeSubcommand.self,
+        DragSubcommand.self,
+        PinchSubcommand.self,
+        RotateSubcommand.self,
+        TwoFingerTapSubcommand.self,
+        DrawPathCommand.self,
+        DrawBezierCommand.self,
+        ScrollCommand.self,
+        ScrollToVisibleCommand.self,
+        ElementSearchCommand.self,
+        ScrollToEdgeCommand.self,
+        ActivateCommand.self,
+        RotorCommand.self,
+        TypeCommand.self,
+        EditActionCommand.self,
+        SetPasteboardCommand.self,
+        GetPasteboardCommand.self,
+        WaitForCommand.self,
+        DismissKeyboardCommand.self,
+        RecordCommand.self,
+        StopRecordingCommand.self,
+        RunBatchCommand.self,
+        GetSessionStateCommand.self,
+        ConnectCommand.self,
+        ListTargetsCommand.self,
+        SessionLogCommand.self,
+        ArchiveSessionCommand.self,
+        StartHeistCommand.self,
+        StopHeistCommand.self,
+        PlayHeistCommand.self,
     ]
+
+    private static let subcommandTypes: [ParsableCommand.Type] = [
+        ListCommand.self,
+        PingCommand.self,
+        GetInterfaceCommand.self,
+        ActivateCommand.self,
+        RotorCommand.self,
+        TypeCommand.self,
+        ScreenshotCommand.self,
+        ScrollCommand.self,
+        SwipeSubcommand.self,
+        SessionCommand.self,
+        ConnectCommand.self,
+
+        ScrollToVisibleCommand.self,
+        ElementSearchCommand.self,
+        ScrollToEdgeCommand.self,
+
+        EditActionCommand.self,
+        DismissKeyboardCommand.self,
+
+        TapSubcommand.self,
+        LongPressSubcommand.self,
+        DragSubcommand.self,
+        PinchSubcommand.self,
+        RotateSubcommand.self,
+        TwoFingerTapSubcommand.self,
+        DrawPathCommand.self,
+        DrawBezierCommand.self,
+
+        SetPasteboardCommand.self,
+        GetPasteboardCommand.self,
+
+        RecordCommand.self,
+        StopRecordingCommand.self,
+        WaitForChangeCommand.self,
+        WaitForCommand.self,
+
+        SessionLogCommand.self,
+        ArchiveSessionCommand.self,
+        GetSessionStateCommand.self,
+        ListTargetsCommand.self,
+        RunBatchCommand.self,
+
+        StartHeistCommand.self,
+        StopHeistCommand.self,
+        PlayHeistCommand.self,
+    ]
+
+    static let adapters: [CLICommandAdapter] = subcommandTypes.map { commandType in
+        if let fenceCommandType = commandType as? CLICommandContract.Type {
+            return .fence(fenceCommandType)
+        }
+        return .cliOnly(commandType)
+    }
 
     static var subcommands: [ParsableCommand.Type] {
         adapters.map(\.commandType)
     }
 
-    static func fenceCommand(for commandType: CLICommandContract.Type) -> TheFence.Command? {
-        adapters.first { adapter in
-            ObjectIdentifier(adapter.commandType) == ObjectIdentifier(commandType)
-        }?.fenceCommand
+    static func descriptor(for commandType: CLICommandContract.Type) -> FenceCommandDescriptor? {
+        descriptorsByCommandType[ObjectIdentifier(commandType)]
     }
+
+    static func fenceCommand(for commandType: CLICommandContract.Type) -> TheFence.Command? {
+        descriptor(for: commandType)?.command
+    }
+
+    private static let descriptorsByCommandType: [ObjectIdentifier: FenceCommandDescriptor] = {
+        let descriptors = TheFence.Command.descriptors.filter { descriptor in
+            descriptor.cliExposure == .directCommand
+        }
+        precondition(
+            descriptors.count == directCommandTypesByDescriptorOrder.count,
+            """
+            Direct CLI command adapter count must match direct Fence command descriptors. \
+            Update CLICommandAdapterCatalog.directCommandTypesByDescriptorOrder when the \
+            Fence catalog direct CLI exposure changes.
+            """
+        )
+
+        return Dictionary(
+            uniqueKeysWithValues: zip(directCommandTypesByDescriptorOrder, descriptors).map { commandType, descriptor in
+                (ObjectIdentifier(commandType), descriptor)
+            }
+        )
+    }()
 }
 
 extension CLICommandContract {

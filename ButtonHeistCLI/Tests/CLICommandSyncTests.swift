@@ -113,6 +113,20 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testCLIAdapterCatalogDoesNotPairTypesWithCommandCases() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLICommandContract.swift")
+        let pairedCasePattern = #"\.fence\([^,\n]+,\s*\.[A-Za-z0-9_]+\)"#
+
+        XCTAssertNil(
+            source.range(of: pairedCasePattern, options: .regularExpression),
+            "CLI adapter catalog should bind command types to Fence descriptors from the catalog, not paired command cases"
+        )
+        XCTAssertTrue(
+            source.contains("TheFence.Command.descriptors"),
+            "CLI adapter catalog should project command identity from FenceCommandDescriptor"
+        )
+    }
+
     func testTopLevelFenceCommandAdaptersRenderNamesFromCanonicalContract() {
         let cliOnlyCommands: Set<String> = ["session"]
 
