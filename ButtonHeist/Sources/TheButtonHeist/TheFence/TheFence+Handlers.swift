@@ -154,10 +154,10 @@ extension TheFence {
             )
         case .increment(let target, let count):
             let count = try accessibilityAdjustmentCount(count)
-            return try await sendRepeatedAdjustment(.increment(target), actionName: Command.increment.rawValue, count: count)
+            return try await sendRepeatedAdjustment(.increment(target), count: count)
         case .decrement(let target, let count):
             let count = try accessibilityAdjustmentCount(count)
-            return try await sendRepeatedAdjustment(.decrement(target), actionName: Command.decrement.rawValue, count: count)
+            return try await sendRepeatedAdjustment(.decrement(target), count: count)
         case .performCustomAction(let target, let count):
             return try await handleNamedAccessibilityAction(
                 target: target,
@@ -201,10 +201,10 @@ extension TheFence {
         switch actionName {
         case Command.increment.rawValue:
             let count = try accessibilityAdjustmentCount(count)
-            return try await sendRepeatedAdjustment(.increment(target), actionName: actionName, count: count)
+            return try await sendRepeatedAdjustment(.increment(target), count: count)
         case Command.decrement.rawValue:
             let count = try accessibilityAdjustmentCount(count)
-            return try await sendRepeatedAdjustment(.decrement(target), actionName: actionName, count: count)
+            return try await sendRepeatedAdjustment(.decrement(target), count: count)
         default:
             try rejectCount(count)
             return try await sendAction(.performCustomAction(
@@ -235,21 +235,22 @@ extension TheFence {
 
     private func sendRepeatedAdjustment(
         _ message: ClientMessage,
-        actionName: String,
         count: Int
     ) async throws -> FenceResponse {
-        var finalResult: ActionResult?
-        for repetition in 1...count {
+        let firstResult = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
+        recordCompletedAction(firstResult)
+        if !firstResult.success || count == 1 {
+            return .action(result: firstResult)
+        }
+
+        var finalResult = firstResult
+        for _ in 2...count {
             let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
             recordCompletedAction(result)
             finalResult = result
-            if !result.success && repetition < count {
-                let detail = result.message.map { ": \($0)" } ?? ""
-                return .error("\(actionName) repetition \(repetition) of \(count) failed\(detail)")
+            if !result.success {
+                return .action(result: result)
             }
-        }
-        guard let finalResult else {
-            return .error("\(actionName) count produced no action result")
         }
         return .action(result: finalResult)
     }
