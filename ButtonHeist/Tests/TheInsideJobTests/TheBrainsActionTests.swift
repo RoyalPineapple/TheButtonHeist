@@ -570,6 +570,39 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
+    func testElementActionNormalizedHeistIdDoesNotExecuteFromSourceOnlyMatch() async {
+        let sourceElement = makeElement(
+            label: "Quantity",
+            value: "0",
+            identifier: "quantity_stepper",
+            traits: .adjustable
+        )
+        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+        let currentElement = makeElement(label: "Checkout", traits: .button)
+        let currentObject = AdjustableGeometryView(
+            frame: CGRect(x: 80, y: 180, width: 180, height: 44),
+            activationPoint: CGPoint(x: 170, y: 202)
+        )
+        brains.stash.currentScreen = .makeForTests(
+            elements: [(currentElement, "checkout_button")],
+            objects: ["checkout_button": currentObject]
+        )
+
+        let result = await brains.actions.executeIncrement(
+            .heistId("quantity_0"),
+            recordedScreen: sourceScreen
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(currentObject.incrementCount, 0)
+        XCTAssertDiagnostic(result.message, contains: [
+            "No match for",
+            "quantity_stepper",
+            "Source heistId: quantity_0",
+        ])
+    }
+
     func testElementActionNormalizedHeistIdFailsCleanlyWhenLiveGeometryIsMissing() async {
         let sourceElement = makeElement(
             label: "Quantity",

@@ -379,10 +379,7 @@ extension Navigation {
 
         let knownScreen = recordedScreen ?? stash.currentScreen
         let normalizedTarget = stash.normalizeTarget(elementTarget, in: knownScreen)
-        let ensureResult = await ensureOnScreen(
-            for: normalizedTarget,
-            allowSourceScreenFallback: recordedScreen != nil
-        )
+        let ensureResult = await ensureOnScreen(for: normalizedTarget)
         guard ensureResult.succeeded else {
             return .failure(
                 .scrollToVisible,
@@ -452,7 +449,7 @@ extension Navigation {
             )
         }
 
-        if case .notFound = resolvePositioningTarget(normalizedTarget) {
+        if case .notFound = stash.resolveTarget(normalizedTarget.executableTarget) {
             // Unknown targets still use iterative search below.
         } else {
             let direct = await executeScrollToVisible(
@@ -750,23 +747,16 @@ extension Navigation {
         recordedScreen: Screen? = nil
     ) async -> EnsureOnScreenResult {
         let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
-        return await ensureOnScreen(for: normalizedTarget, allowSourceScreenFallback: recordedScreen != nil)
+        return await ensureOnScreen(for: normalizedTarget)
     }
 
     func ensureOnScreen(for normalizedTarget: TheStash.NormalizedTarget) async -> EnsureOnScreenResult {
-        await ensureOnScreen(for: normalizedTarget, allowSourceScreenFallback: false)
-    }
-
-    private func ensureOnScreen(
-        for normalizedTarget: TheStash.NormalizedTarget,
-        allowSourceScreenFallback: Bool
-    ) async -> EnsureOnScreenResult {
         let target = normalizedTarget.executableTarget
         if stash.activePendingRotorResult(for: normalizedTarget.originalTarget) != nil {
             return .operationLocalRotorResult
         }
 
-        switch resolvePositioningTarget(normalizedTarget, allowSourceScreenFallback: allowSourceScreenFallback) {
+        switch stash.resolveTarget(normalizedTarget.executableTarget) {
         case .resolved(let semanticTarget):
             let inflation = stash.inflateTarget(semanticTarget.screenElement)
             if case .failed = inflation {
@@ -793,18 +783,6 @@ extension Navigation {
         case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
             return .failed(.elementNotFound(normalizedTarget.diagnostics(diagnostics)))
         }
-    }
-
-    private func resolvePositioningTarget(
-        _ normalizedTarget: TheStash.NormalizedTarget,
-        allowSourceScreenFallback: Bool = false
-    ) -> TheStash.TargetResolution {
-        let currentResolution = stash.resolveTarget(normalizedTarget.executableTarget)
-        guard case .notFound = currentResolution,
-              allowSourceScreenFallback || normalizedTarget.didNormalizeHeistId else {
-            return currentResolution
-        }
-        return stash.resolveTarget(normalizedTarget.executableTarget, in: normalizedTarget.sourceScreen)
     }
 
     func ensureFirstResponderOnScreen() async {

@@ -125,6 +125,14 @@ final class CLICommandSyncTests: XCTestCase {
             source.contains("TheFence.Command.descriptors"),
             "CLI adapter catalog should project command identity from FenceCommandDescriptor"
         )
+        XCTAssertFalse(
+            source.contains("directCommandTypesByDescriptorOrder"),
+            "CLI adapter catalog should not rely on command-type order matching descriptor order"
+        )
+        XCTAssertFalse(
+            source.contains("subcommandTypes"),
+            "CLI adapter catalog should derive subcommand order from FenceCommandDescriptor exposure"
+        )
     }
 
     func testTopLevelFenceCommandAdaptersRenderNamesFromCanonicalContract() {
