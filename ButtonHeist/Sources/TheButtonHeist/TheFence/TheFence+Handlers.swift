@@ -389,16 +389,13 @@ extension TheFence {
 
         do {
             try await start()
-        } catch {
-            let connectionFailure = error as? FenceError
-            let connectionFailureDetails = connectionFailure?.failureDetails
-            let connectionFailureMessage = connectionFailure?.coreMessage ?? error.displayMessage
+        } catch let connectionFailure as FenceError {
             handoff.disableAutoReconnect()
             handoff.stopDiscovery()
-            clearClientSessionState(error: connectionFailure ?? FenceError.notConnected)
+            clearClientSessionState(error: connectionFailure)
             return .error(
-                "Connect failed; disconnected from previous target: \(connectionFailureMessage)",
-                details: connectionFailureDetails
+                "Connect failed; disconnected from previous target: \(connectionFailure.coreMessage)",
+                details: connectionFailure.failureDetails
             )
         }
 
