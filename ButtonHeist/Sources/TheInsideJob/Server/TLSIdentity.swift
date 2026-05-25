@@ -57,18 +57,14 @@ actor TLSIdentity {
         let fp = computeFingerprint(derBytes: derBytes)
         let expiry = try certificateExpiryDate(derBytes: derBytes)
 
-        do {
-            let secIdentity = try storeInKeychain(privateKey: privateKey, certificate: secCert, label: label)
-            logger.info("TLS identity stored in Keychain: \(fp)")
-            return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp, expiryDate: expiry)
-        } catch {
-            logger.warning("Keychain storage failed, using ephemeral identity: \(error)")
-            return try createEphemeral()
-        }
+        let secIdentity = try storeInKeychain(privateKey: privateKey, certificate: secCert, label: label)
+        logger.info("TLS identity stored in Keychain: \(fp)")
+        return TLSIdentity(identity: secIdentity, certificate: secCert, fingerprint: fp, expiryDate: expiry)
     }
 
-    /// Create an ephemeral identity by temporarily storing items in the Keychain
-    /// for `SecIdentity` creation, then immediately removing them.
+    /// Create an explicitly requested ephemeral identity by temporarily storing
+    /// items in the Keychain for `SecIdentity` creation, then immediately
+    /// removing them.
     static func createEphemeral() throws -> TLSIdentity {
         let (privateKey, derBytes) = try generateCertificate()
         let secCert = try makeSecCertificate(derBytes: derBytes)
