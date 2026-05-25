@@ -56,6 +56,7 @@
 		1E800F3E60921774EFC6A9EB /* FenceRecordingLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB6BB03911DA4236C7798B8E /* FenceRecordingLifecycle.swift */; };
 		1EE02082C48CC453AF6FC940 /* SocketClientAuthentication.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60A0A3DDE7FEBEB9CB0A908 /* SocketClientAuthentication.swift */; };
 		1F11B76D2ED18F20EE37A037 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
+		20EA410F4C1E228B2602E8F1 /* TheFence+CommandPresentation+Adapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D9C421EACCD36A3A4230D1D /* TheFence+CommandPresentation+Adapters.swift */; };
 		2312C069D1EE6B826E92F58B /* TheFence+RequestPayload+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C596A428359DBBB2B251A3 /* TheFence+RequestPayload+Session.swift */; };
 		23383C5DDB478FF24AC6A933 /* SyntheticTouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505ED717985FBDFE68196CEB /* SyntheticTouch.swift */; };
 		237F2622077D5EABF6530F6D /* WaitForChangeState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1029BAF460114CE9E9ABC7AF /* WaitForChangeState.swift */; };
@@ -513,6 +514,7 @@
 		0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPolicyTests.swift; sourceTree = "<group>"; };
 		0B5C52071043D7EF9CA490A6 /* SocketClientLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClientLifecycle.swift; sourceTree = "<group>"; };
 		0D3F91DEF9C362AA29DD1446 /* BatchExecutionPlanTargetSemanticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExecutionPlanTargetSemanticsTests.swift; sourceTree = "<group>"; };
+		0D9C421EACCD36A3A4230D1D /* TheFence+CommandPresentation+Adapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandPresentation+Adapters.swift"; sourceTree = "<group>"; };
 		0F6A4B7485D71E57F9ED1123 /* TheTripwire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheTripwire.swift; sourceTree = "<group>"; };
 		1029BAF460114CE9E9ABC7AF /* WaitForChangeState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitForChangeState.swift; sourceTree = "<group>"; };
 		10D4AA78D802F6F18119E5F4 /* Interactivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Interactivity.swift; sourceTree = "<group>"; };
@@ -1004,6 +1006,7 @@
 				B52DC7DFD3B9768E788237C8 /* TheFence+CommandArguments.swift */,
 				FEEFEEE99B850E0AD80B6397 /* TheFence+CommandCatalog.swift */,
 				E2AF1DB1AFE33B9BE284CC9E /* TheFence+CommandPresentation.swift */,
+				0D9C421EACCD36A3A4230D1D /* TheFence+CommandPresentation+Adapters.swift */,
 				CCEE06A9E4663B82413E6729 /* TheFence+CommandPresentation+Interaction.swift */,
 				4D9DD5422CA6D65CA30D5967 /* TheFence+CommandPresentation+Observation.swift */,
 				66C9E1D1730C02AB6C40F98B /* TheFence+CommandPresentation+Session.swift */,
@@ -1976,6 +1979,7 @@
 				426FC537EAF1DAACB13285DC /* TheFence+BookKeeperLogging.swift in Sources */,
 				E1C21596B113413BBFE23F51 /* TheFence+CommandArguments.swift in Sources */,
 				D1866FC1E2D5639B2DCA6A27 /* TheFence+CommandCatalog.swift in Sources */,
+				20EA410F4C1E228B2602E8F1 /* TheFence+CommandPresentation+Adapters.swift in Sources */,
 				DAD1A2A9AAFD844F75DBDF7F /* TheFence+CommandPresentation+Interaction.swift in Sources */,
 				029BEF605C60D8D3B3D6A107 /* TheFence+CommandPresentation+Observation.swift in Sources */,
 				E697246EFA942D8649CD623D /* TheFence+CommandPresentation+Session.swift in Sources */,
