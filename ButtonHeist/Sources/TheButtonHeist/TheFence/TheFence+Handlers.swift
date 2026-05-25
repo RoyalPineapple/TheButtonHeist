@@ -314,9 +314,6 @@ extension TheFence {
 
     func handleStartRecording(_ config: RecordingConfig) async throws -> FenceResponse {
         guard handoff.isConnected else { throw FenceError.notConnected }
-        guard !isRecording else {
-            return .error("Recording already in progress — use stop_recording first")
-        }
         try await startRecordingAndWait(config: config, timeout: Timeouts.actionSeconds)
         return .ok(message: "Recording started — use stop_recording to retrieve the video")
     }
