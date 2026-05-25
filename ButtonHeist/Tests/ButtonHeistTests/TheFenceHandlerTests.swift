@@ -4184,6 +4184,49 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPlayHeistMapsServerErrorResponseToCommandFailure() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+        ])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                return .interface(Interface(timestamp: Date(), tree: []))
+            case .activate:
+                return .error(ServerError(kind: .general, message: "server exploded"))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path,
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 0)
+        XCTAssertEqual(failedIndex, 0)
+
+        guard case .fenceError(let step, let message, _) = failure else {
+            return XCTFail("Expected typed fenceError playback failure, got \(String(describing: failure))")
+        }
+        XCTAssertEqual(step.command, "activate")
+        XCTAssertTrue(message.contains("server exploded"))
+
+        guard case .failed(let reportMessage, let errorKind) = report?.steps.first?.outcome else {
+            return XCTFail("Expected failed playback report step, got \(String(describing: report?.steps.first))")
+        }
+        XCTAssertEqual(reportMessage, message)
+        XCTAssertEqual(errorKind, .commandError)
+    }
+
+    @ButtonHeistActor
     func testPlaybackDoesNotUseRecordedHeistIdAsAuthority() async throws {
         let operation = try TheFence.PlaybackOperation(
             evidence: HeistEvidence(

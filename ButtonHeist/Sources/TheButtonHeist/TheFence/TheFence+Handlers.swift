@@ -451,7 +451,7 @@ extension TheFence {
                     payload: recording,
                     options: responseOptions
                 )
-                if let oversizedResponseError = validateExpandedRecordingResponseSize(response) {
+                if let oversizedResponseError = try validateExpandedRecordingResponseSize(response) {
                     return oversizedResponseError
                 }
                 return response
@@ -489,21 +489,8 @@ extension TheFence {
         return nil
     }
 
-    private func validateExpandedRecordingResponseSize(_ response: FenceResponse) -> FenceResponse? {
-        let data: Data
-        do {
-            data = try response.jsonData(outputFormatting: [.sortedKeys])
-        } catch {
-            return .error(
-                "Failed to encode expanded recording response",
-                details: FailureDetails(
-                    errorCode: "recording.expanded_response_encoding_failed",
-                    phase: .client,
-                    retryable: false,
-                    hint: "Omit inlineData or includeInteractionLog and retry."
-                )
-            )
-        }
+    private func validateExpandedRecordingResponseSize(_ response: FenceResponse) throws -> FenceResponse? {
+        let data = try response.jsonData(outputFormatting: [.sortedKeys])
         guard data.count <= DecodeLimits.maxExpandedRecordingResponseBytes else {
             return .error(
                 "Expanded recording response is too large: \(data.count) bytes exceeds " +
@@ -608,8 +595,7 @@ extension TheFence {
                 let response = try await execute(playback: operation)
                 stepFailure = playbackFailure(operation: operation, response: response)
             } catch {
-                let failedStep = PlaybackFailure.FailedStep(command: operation.commandName, target: operation.target)
-                stepFailure = .thrown(step: failedStep, error: error.localizedDescription, interface: nil)
+                stepFailure = playbackFailure(operation: operation, error: error)
             }
 
             let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
@@ -699,6 +685,14 @@ extension TheFence {
         default:
             return nil
         }
+    }
+
+    private func playbackFailure(operation: PlaybackOperation, error: Error) -> PlaybackFailure {
+        let failedStep = PlaybackFailure.FailedStep(command: operation.commandName, target: operation.target)
+        if let fenceError = error as? FenceError {
+            return .fenceError(step: failedStep, message: fenceError.displayMessage, interface: nil)
+        }
+        return .thrown(step: failedStep, error: error.displayMessage, interface: nil)
     }
 
     /// Capture a live interface snapshot for failure diagnostics.
