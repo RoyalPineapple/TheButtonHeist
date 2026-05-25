@@ -2283,6 +2283,28 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testStartRecordingAlreadyRecordingThrowsInvalidRequest() async throws {
+        let (fence, _) = makeConnectedFence()
+        try await fence.start()
+        fence.handoff.onRecordingEvent?(.started)
+
+        do {
+            _ = try await fence.execute(request: ["command": "start_recording"])
+            XCTFail("Expected start_recording conflict while recording")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(
+                message.contains("Recording already in progress"),
+                "Expected already recording conflict, got: \(message)"
+            )
+        } catch {
+            XCTFail("Expected FenceError.invalidRequest, got \(error)")
+        }
+    }
+
+    @ButtonHeistActor
     func testStoppedKeepsCompletionWaitUntilPayload() async throws {
         let fence = TheFence(configuration: .init())
         fence.handoff.onRecordingEvent?(.started)
