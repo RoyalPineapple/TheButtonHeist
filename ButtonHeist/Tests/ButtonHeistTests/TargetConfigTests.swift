@@ -488,11 +488,14 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testConnectWithoutTargetOrDeviceReturnsError() async throws {
         let fence = TheFence(configuration: .init())
-        let response = try await fence.execute(request: ["command": "connect"])
-        if case .error(let message, _) = response {
+        do {
+            _ = try await fence.execute(request: ["command": "connect"])
+            XCTFail("Expected invalid request")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
             XCTAssertTrue(message.contains("Must specify"))
-        } else {
-            XCTFail("Expected error response, got \(response)")
         }
     }
 
@@ -503,23 +506,29 @@ final class TargetConfigTests: XCTestCase {
             defaultTarget: "sim1"
         )
         let fence = TheFence(configuration: .init(fileConfig: config))
-        let response = try await fence.execute(request: ["command": "connect", "target": "nonexistent"])
-        if case .error(let message, _) = response {
+        do {
+            _ = try await fence.execute(request: ["command": "connect", "target": "nonexistent"])
+            XCTFail("Expected invalid request")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
             XCTAssertTrue(message.contains("Unknown target"))
             XCTAssertTrue(message.contains("sim1"))
-        } else {
-            XCTFail("Expected error response, got \(response)")
         }
     }
 
     @ButtonHeistActor
     func testConnectWithNoConfigFileReturnsError() async throws {
         let fence = TheFence(configuration: .init())
-        let response = try await fence.execute(request: ["command": "connect", "target": "sim1"])
-        if case .error(let message, _) = response {
+        do {
+            _ = try await fence.execute(request: ["command": "connect", "target": "sim1"])
+            XCTFail("Expected invalid request")
+        } catch let error as FenceError {
+            guard case .invalidRequest(let message) = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
             XCTAssertTrue(message.contains("No config file"))
-        } else {
-            XCTFail("Expected error response, got \(response)")
         }
     }
 
