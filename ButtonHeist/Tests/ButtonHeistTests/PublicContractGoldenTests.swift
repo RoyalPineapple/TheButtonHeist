@@ -387,7 +387,7 @@ final class PublicContractGoldenTests: XCTestCase {
                 #"{"errorCode":"request.missing_target","hint":"get_interface()","#,
                 #""message":"activate request contract failed: missing target; requires heistId, ordinal, or at least one matcher field "#,
                 #"(label, identifier, value, traits, or excludeTraits). Next: get_interface() to inspect the current app accessibility "#,
-                #"state, then retry activate with a heistId, exact matcher, or ordinal fallback.","phase":"request","#,
+                #"state, then retry activate with a heistId, exact matcher, or ordinal selector.","phase":"request","#,
                 #""retryable":false,"status":"error"}"#
             )
         )

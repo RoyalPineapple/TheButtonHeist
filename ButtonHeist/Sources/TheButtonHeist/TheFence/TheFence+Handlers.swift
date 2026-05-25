@@ -294,7 +294,7 @@ extension TheFence {
         let contract = "requires heistId, ordinal, or at least one matcher field (label, identifier, value, traits, or excludeTraits)"
         let next = "get_interface()"
         let message = "\(command) request contract failed: missing target; \(contract). " +
-            "Next: \(next) to inspect the current app accessibility state, then retry \(command) with a heistId, exact matcher, or ordinal fallback."
+            "Next: \(next) to inspect the current app accessibility state, then retry \(command) with a heistId, exact matcher, or ordinal selector."
         return .error(
             message,
             details: FailureDetails(

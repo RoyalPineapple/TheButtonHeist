@@ -8,7 +8,7 @@ extension TheFence {
     struct BatchTargetResolver {
         func executionTarget(
             from request: ParsedRequest,
-            fallback target: ElementTarget?
+            commandTarget target: ElementTarget?
         ) -> BatchExecutionTarget? {
             let argumentTarget = request.routedBatchTarget
             if argumentTarget != nil { return argumentTarget }
@@ -17,16 +17,16 @@ extension TheFence {
 
         func optionalTarget(
             from request: ParsedRequest,
-            fallback target: ElementTarget?
+            commandTarget target: ElementTarget?
         ) throws -> BatchExecutionTarget? {
-            try optionalExecutionTarget(executionTarget(from: request, fallback: target))
+            try optionalExecutionTarget(executionTarget(from: request, commandTarget: target))
         }
 
         func requiredTarget(
             from request: ParsedRequest,
-            fallback target: ElementTarget?
+            commandTarget target: ElementTarget?
         ) throws -> BatchExecutionTarget {
-            try requiredExecutionTarget(executionTarget(from: request, fallback: target))
+            try requiredExecutionTarget(executionTarget(from: request, commandTarget: target))
         }
 
         func optionalExecutionTarget(_ target: BatchExecutionTarget?) throws -> BatchExecutionTarget? {
@@ -36,7 +36,7 @@ extension TheFence {
 
         func requiredExecutionTarget(_ target: BatchExecutionTarget?) throws -> BatchExecutionTarget {
             guard let target else {
-                throw BatchStepPlanBuildError(message: "typed batch target requires matcher predicates or ordinal fallback")
+                throw BatchStepPlanBuildError(message: "typed batch target requires matcher predicates or an ordinal selector")
             }
             return try executionTarget(target)
         }
@@ -45,11 +45,11 @@ extension TheFence {
             guard target.matcher.hasPredicates || target.ordinal != nil else {
                 if let sourceHeistId = target.sourceHeistId {
                     throw BatchStepPlanBuildError(
-                        message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates or ordinal fallback; heistId is source metadata only"
+                        message: "run_batch target \"\(sourceHeistId)\" needs matcher predicates or an ordinal selector; heistId is source metadata only"
                     )
                 }
                 throw BatchStepPlanBuildError(
-                    message: "typed batch target requires matcher predicates or ordinal fallback; heistId is source metadata only"
+                    message: "typed batch target requires matcher predicates or an ordinal selector; heistId is source metadata only"
                 )
             }
             return target

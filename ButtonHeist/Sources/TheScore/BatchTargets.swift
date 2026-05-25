@@ -62,7 +62,7 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: .matcher,
                 in: container,
-                debugDescription: "BatchExecutionTarget requires matcher predicates or an ordinal fallback; sourceHeistId is metadata only"
+                debugDescription: "BatchExecutionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
             )
         }
     }
@@ -71,7 +71,7 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
         guard matcher.hasPredicates || ordinal != nil else {
             throw EncodingError.invalidValue(self, .init(
                 codingPath: encoder.codingPath,
-                debugDescription: "BatchExecutionTarget requires matcher predicates or an ordinal fallback; sourceHeistId is metadata only"
+                debugDescription: "BatchExecutionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
             ))
         }
         var container = encoder.container(keyedBy: CodingKeys.self)
