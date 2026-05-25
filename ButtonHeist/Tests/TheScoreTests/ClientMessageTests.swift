@@ -173,15 +173,26 @@ final class ClientMessageTests: XCTestCase {
         )
     }
 
-    func testBatchExecutionTargetTreatsMatcherHeistIdAsSourceMetadata() {
+    func testBatchExecutionTargetDoesNotPromoteMatcherHeistIdToSourceMetadata() {
         let target = BatchExecutionTarget(
             matcher: ElementMatcher(heistId: "button_save", label: "Save", traits: [.button])
         )
 
-        XCTAssertEqual(target.sourceHeistId, "button_save")
+        XCTAssertNil(target.sourceHeistId)
         XCTAssertNil(target.matcher.heistId)
         XCTAssertEqual(target.matcher.label, "Save")
         XCTAssertNil(target.ordinal)
+    }
+
+    func testBatchExecutionTargetRejectsMatcherHeistIdWirePayload() {
+        let json = #"{"matcher":{"heistId":"button_save","label":"Save"}}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(BatchExecutionTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("sourceHeistId"),
+                "Expected sourceHeistId guidance in error, got \(error)"
+            )
+        }
     }
 
     func testBatchExecutionTargetRejectsSourceHeistIdOnlyWirePayload() {
