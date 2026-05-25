@@ -642,7 +642,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - BatchPlan
 
     func testBatchActionCanonicalNamesMatchEncodedWireTypes() throws {
-        let target = BatchExecutionTarget(matcher: ElementMatcher(label: "Target", traits: [.button]))
+        let target = SemanticActionTarget(matcher: ElementMatcher(label: "Target", traits: [.button]))
         let cases: [Action] = [
             .activate(target),
             .increment(target),
@@ -692,7 +692,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let plan = BatchPlan(
             steps: [
                 .action(
-                    .activate(BatchExecutionTarget(
+                    .activate(SemanticActionTarget(
                         sourceHeistId: "settings_button_previous",
                         matcher: ElementMatcher(label: "Settings", traits: [.button]),
                         ordinal: 1

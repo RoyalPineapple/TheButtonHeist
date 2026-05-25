@@ -50,7 +50,7 @@ final class ActionContractTests: XCTestCase {
     }
 
     func testWaitActionDescriptorsOwnDynamicDefaults() {
-        let target = batchTarget(identifier: "transient-toast")
+        let target = semanticTarget(identifier: "transient-toast")
         let absent = Action.waitForElement(BatchWaitForTarget(
             target: target,
             absent: true,
@@ -85,9 +85,9 @@ final class ActionContractTests: XCTestCase {
     }
 
     private func actionFixtures() -> [Action] {
-        let target = batchTarget(label: "Save")
-        let scrollTarget = batchTarget(label: "Scroll area")
-        let waitTarget = batchTarget(identifier: "result-row")
+        let target = semanticTarget(label: "Save")
+        let scrollTarget = semanticTarget(label: "Scroll area")
+        let waitTarget = semanticTarget(identifier: "result-row")
 
         return accessibilityFixtures(target: target)
             + touchFixtures(target: target)
@@ -96,7 +96,7 @@ final class ActionContractTests: XCTestCase {
     }
 
     private func accessibilityFixtures(
-        target: BatchExecutionTarget
+        target: SemanticActionTarget
     ) -> [Action] {
         [
             .activate(target),
@@ -108,7 +108,7 @@ final class ActionContractTests: XCTestCase {
     }
 
     private func touchFixtures(
-        target: BatchExecutionTarget
+        target: SemanticActionTarget
     ) -> [Action] {
         [
             .touchTap(BatchTouchTapTarget(target: target, pointX: 1, pointY: 2)),
@@ -133,8 +133,8 @@ final class ActionContractTests: XCTestCase {
     }
 
     private func inputAndScrollFixtures(
-        target: BatchExecutionTarget,
-        scrollTarget: BatchExecutionTarget
+        target: SemanticActionTarget,
+        scrollTarget: SemanticActionTarget
     ) -> [Action] {
         [
             .typeText(BatchTypeTextTarget(text: "hello", target: target)),
@@ -148,7 +148,7 @@ final class ActionContractTests: XCTestCase {
     }
 
     private func waitAndSystemFixtures(
-        waitTarget: BatchExecutionTarget
+        waitTarget: SemanticActionTarget
     ) -> [Action] {
         [
             .waitForIdle(WaitForIdleTarget(timeout: 0.5)),
@@ -159,11 +159,11 @@ final class ActionContractTests: XCTestCase {
         ]
     }
 
-    private func batchTarget(
+    private func semanticTarget(
         label: String? = nil,
         identifier: String? = nil
-    ) -> BatchExecutionTarget {
-        BatchExecutionTarget(
+    ) -> SemanticActionTarget {
+        SemanticActionTarget(
             sourceHeistId: "source-\(label ?? identifier ?? "element")",
             matcher: ElementMatcher(label: label, identifier: identifier)
         )

@@ -1,11 +1,11 @@
 import Foundation
 
-/// Semantic element target used by batch execution plans.
+/// Semantic element target used by action execution plans.
 ///
 /// `sourceHeistId` is diagnostic source metadata from the capture that produced
 /// the matcher. It is never the executable identity. Execution should resolve
 /// `matcher` and `ordinal` against fresh live geometry.
-public struct BatchExecutionTarget: Codable, Sendable, Equatable {
+public struct SemanticActionTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case sourceHeistId, matcher, ordinal
     }
@@ -47,7 +47,7 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: .matcher,
                 in: container,
-                debugDescription: "BatchExecutionTarget matcher must not carry heistId; use top-level sourceHeistId for metadata"
+                debugDescription: "SemanticActionTarget matcher must not carry heistId; use top-level sourceHeistId for metadata"
             )
         }
         if let ordinal, ordinal < 0 {
@@ -62,7 +62,7 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: .matcher,
                 in: container,
-                debugDescription: "BatchExecutionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
+                debugDescription: "SemanticActionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
             )
         }
     }
@@ -71,7 +71,7 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
         guard matcher.hasPredicates || ordinal != nil else {
             throw EncodingError.invalidValue(self, .init(
                 codingPath: encoder.codingPath,
-                debugDescription: "BatchExecutionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
+                debugDescription: "SemanticActionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
             ))
         }
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -81,9 +81,9 @@ public struct BatchExecutionTarget: Codable, Sendable, Equatable {
     }
 }
 
-extension BatchExecutionTarget: CustomStringConvertible {
+extension SemanticActionTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("batchTarget", [
+        ScoreDescription.call("semanticTarget", [
             ScoreDescription.stringField("sourceHeistId", sourceHeistId),
             matcher.description,
             ScoreDescription.valueField("ordinal", ordinal),
@@ -92,12 +92,12 @@ extension BatchExecutionTarget: CustomStringConvertible {
 }
 
 public struct BatchCustomActionTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let containerTarget: ContainerMatcher?
     public let containerOrdinal: Int?
     public let actionName: String
 
-    public init(target: BatchExecutionTarget, actionName: String) {
+    public init(target: SemanticActionTarget, actionName: String) {
         self.target = target
         self.containerTarget = nil
         self.containerOrdinal = nil
@@ -148,7 +148,7 @@ extension BatchCustomActionTarget {
             )
         }
         if hasElementTarget {
-            target = try container.decode(BatchExecutionTarget.self, forKey: .target)
+            target = try container.decode(SemanticActionTarget.self, forKey: .target)
             containerTarget = nil
             containerOrdinal = nil
         } else {
@@ -193,7 +193,7 @@ extension BatchCustomActionTarget {
 }
 
 public struct BatchRotorTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget
+    public let target: SemanticActionTarget
     public let rotor: String?
     public let rotorIndex: Int?
     public let direction: RotorDirection?
@@ -201,7 +201,7 @@ public struct BatchRotorTarget: Codable, Sendable {
     public let currentTextRange: TextRangeReference?
 
     public init(
-        target: BatchExecutionTarget,
+        target: SemanticActionTarget,
         rotor: String? = nil,
         rotorIndex: Int? = nil,
         direction: RotorDirection? = nil,
@@ -231,11 +231,11 @@ extension BatchRotorTarget: CustomStringConvertible {
 }
 
 public struct BatchTouchTapTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let pointX: Double?
     public let pointY: Double?
 
-    public init(target: BatchExecutionTarget? = nil, pointX: Double? = nil, pointY: Double? = nil) {
+    public init(target: SemanticActionTarget? = nil, pointX: Double? = nil, pointY: Double? = nil) {
         self.target = target
         self.pointX = pointX
         self.pointY = pointY
@@ -253,13 +253,13 @@ extension BatchTouchTapTarget: CustomStringConvertible {
 }
 
 public struct BatchLongPressTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let pointX: Double?
     public let pointY: Double?
     public let duration: Double
 
     public init(
-        target: BatchExecutionTarget? = nil,
+        target: SemanticActionTarget? = nil,
         pointX: Double? = nil,
         pointY: Double? = nil,
         duration: Double = 0.5
@@ -283,7 +283,7 @@ extension BatchLongPressTarget: CustomStringConvertible {
 }
 
 public struct BatchSwipeTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let startX: Double?
     public let startY: Double?
     public let endX: Double?
@@ -294,7 +294,7 @@ public struct BatchSwipeTarget: Codable, Sendable {
     public let end: UnitPoint?
 
     public init(
-        target: BatchExecutionTarget? = nil,
+        target: SemanticActionTarget? = nil,
         startX: Double? = nil,
         startY: Double? = nil,
         endX: Double? = nil,
@@ -333,7 +333,7 @@ extension BatchSwipeTarget: CustomStringConvertible {
 }
 
 public struct BatchDragTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let startX: Double?
     public let startY: Double?
     public let endX: Double
@@ -341,7 +341,7 @@ public struct BatchDragTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        target: BatchExecutionTarget? = nil,
+        target: SemanticActionTarget? = nil,
         startX: Double? = nil,
         startY: Double? = nil,
         endX: Double,
@@ -371,7 +371,7 @@ extension BatchDragTarget: CustomStringConvertible {
 }
 
 public struct BatchPinchTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let centerX: Double?
     public let centerY: Double?
     public let scale: Double
@@ -379,7 +379,7 @@ public struct BatchPinchTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        target: BatchExecutionTarget? = nil,
+        target: SemanticActionTarget? = nil,
         centerX: Double? = nil,
         centerY: Double? = nil,
         scale: Double,
@@ -409,7 +409,7 @@ extension BatchPinchTarget: CustomStringConvertible {
 }
 
 public struct BatchRotateTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let centerX: Double?
     public let centerY: Double?
     public let angle: Double
@@ -417,7 +417,7 @@ public struct BatchRotateTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        target: BatchExecutionTarget? = nil,
+        target: SemanticActionTarget? = nil,
         centerX: Double? = nil,
         centerY: Double? = nil,
         angle: Double,
@@ -447,13 +447,13 @@ extension BatchRotateTarget: CustomStringConvertible {
 }
 
 public struct BatchTwoFingerTapTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let centerX: Double?
     public let centerY: Double?
     public let spread: Double?
 
     public init(
-        target: BatchExecutionTarget? = nil,
+        target: SemanticActionTarget? = nil,
         centerX: Double? = nil,
         centerY: Double? = nil,
         spread: Double? = nil
@@ -478,9 +478,9 @@ extension BatchTwoFingerTapTarget: CustomStringConvertible {
 
 public struct BatchTypeTextTarget: Codable, Sendable {
     public let text: String
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
 
-    public init(text: String, target: BatchExecutionTarget? = nil) {
+    public init(text: String, target: SemanticActionTarget? = nil) {
         self.text = text
         self.target = target
     }
@@ -496,10 +496,10 @@ extension BatchTypeTextTarget: CustomStringConvertible {
 }
 
 public struct BatchScrollTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let direction: ScrollDirection
 
-    public init(target: BatchExecutionTarget? = nil, direction: ScrollDirection) {
+    public init(target: SemanticActionTarget? = nil, direction: ScrollDirection) {
         self.target = target
         self.direction = direction
     }
@@ -515,9 +515,9 @@ extension BatchScrollTarget: CustomStringConvertible {
 }
 
 public struct BatchScrollToVisibleTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
 
-    public init(target: BatchExecutionTarget? = nil) {
+    public init(target: SemanticActionTarget? = nil) {
         self.target = target
     }
 }
@@ -531,10 +531,10 @@ extension BatchScrollToVisibleTarget: CustomStringConvertible {
 }
 
 public struct BatchElementSearchTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let direction: ScrollSearchDirection?
 
-    public init(target: BatchExecutionTarget? = nil, direction: ScrollSearchDirection? = nil) {
+    public init(target: SemanticActionTarget? = nil, direction: ScrollSearchDirection? = nil) {
         self.target = target
         self.direction = direction
     }
@@ -550,10 +550,10 @@ extension BatchElementSearchTarget: CustomStringConvertible {
 }
 
 public struct BatchScrollToEdgeTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget?
+    public let target: SemanticActionTarget?
     public let edge: ScrollEdge
 
-    public init(target: BatchExecutionTarget? = nil, edge: ScrollEdge) {
+    public init(target: SemanticActionTarget? = nil, edge: ScrollEdge) {
         self.target = target
         self.edge = edge
     }
@@ -569,11 +569,11 @@ extension BatchScrollToEdgeTarget: CustomStringConvertible {
 }
 
 public struct BatchWaitForTarget: Codable, Sendable {
-    public let target: BatchExecutionTarget
+    public let target: SemanticActionTarget
     public let absent: Bool?
     public let timeout: Double?
 
-    public init(target: BatchExecutionTarget, absent: Bool? = nil, timeout: Double? = nil) {
+    public init(target: SemanticActionTarget, absent: Bool? = nil, timeout: Double? = nil) {
         self.target = target
         self.absent = absent
         self.timeout = timeout

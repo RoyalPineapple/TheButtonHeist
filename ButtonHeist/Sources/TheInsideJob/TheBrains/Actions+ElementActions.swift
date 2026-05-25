@@ -55,7 +55,7 @@ extension Actions {
         await executeActivate(target as any SemanticElementTarget, recordedScreen: recordedScreen)
     }
 
-    func executeActivate(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+    func executeActivate(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         await executeActivate(target as any SemanticElementTarget, recordedScreen: recordedScreen)
     }
 
@@ -82,7 +82,7 @@ extension Actions {
         await executeIncrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
     }
 
-    func executeIncrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+    func executeIncrement(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         await executeIncrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
     }
 
@@ -117,7 +117,7 @@ extension Actions {
         await executeDecrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
     }
 
-    func executeDecrement(_ target: BatchExecutionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+    func executeDecrement(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
         await executeDecrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
     }
 

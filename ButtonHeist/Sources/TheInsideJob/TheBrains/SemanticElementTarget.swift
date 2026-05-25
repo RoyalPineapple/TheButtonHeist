@@ -40,7 +40,7 @@ extension ElementTarget: SemanticElementTarget {
     }
 }
 
-extension BatchExecutionTarget: SemanticElementTarget {
+extension SemanticActionTarget: SemanticElementTarget {
     var exactHeistId: HeistId? { nil }
     var semanticMatcher: ElementMatcher? { matcher }
     var semanticOrdinal: Int? { ordinal }

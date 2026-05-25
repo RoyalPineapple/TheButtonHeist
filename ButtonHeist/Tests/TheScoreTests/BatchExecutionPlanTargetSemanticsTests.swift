@@ -11,7 +11,7 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         ])
         let minimumMatcher = MinimumMatcher.build(element: targetElement, in: capture)
 
-        let target = BatchExecutionTarget(minimumMatcher)
+        let target = SemanticActionTarget(minimumMatcher)
 
         XCTAssertEqual(target.sourceHeistId, "checkout_total_$12")
         XCTAssertEqual(target.matcher, ElementMatcher(label: "Total"))
@@ -20,7 +20,7 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
     }
 
     func testValueChangingActionTargetUsesMatcherIdentityAfterRoundTrip() throws {
-        let target = BatchExecutionTarget(
+        let target = SemanticActionTarget(
             sourceHeistId: "stepper_count_1",
             matcher: ElementMatcher(label: "Count", traits: [.adjustable])
         )
@@ -46,7 +46,7 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         let plan = BatchPlan(
             steps: [
                 .action(
-                    .activate(BatchExecutionTarget(
+                    .activate(SemanticActionTarget(
                         sourceHeistId: "settings_button_old",
                         matcher: ElementMatcher(label: "Settings", traits: [.button])
                     )),
