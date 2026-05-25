@@ -55,11 +55,14 @@ public struct ActionDescriptor: Sendable, Equatable {
     }
 
     public let kind: Kind
-    public let canonicalName: String
     public let actionMethod: ActionMethod
     public let fulfillsOwnExpectation: Bool
     public let defaultExpectation: ActionExpectation
     public let defaultDeadline: Deadline
+
+    public var canonicalName: String {
+        kind.rawValue
+    }
 
     public init(kind: Kind) {
         let contract = ActionContract.required(for: kind)
@@ -87,7 +90,6 @@ public struct ActionDescriptor: Sendable, Equatable {
 private extension ActionDescriptor {
     init(kind: Kind, actionMethod: ActionMethod, fulfillsOwnExpectation: Bool, defaultExpectation: ActionExpectation, defaultDeadline: Deadline) {
         self.kind = kind
-        self.canonicalName = kind.rawValue
         self.actionMethod = actionMethod
         self.fulfillsOwnExpectation = fulfillsOwnExpectation
         self.defaultExpectation = defaultExpectation
