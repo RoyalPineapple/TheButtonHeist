@@ -329,7 +329,8 @@ final class TheBrainsScrollTests: XCTestCase {
 
     private func installScreenWithKnownOffscreen(
         visible: (AccessibilityElement, String),
-        offscreen: (AccessibilityElement, String, CGPoint, UIScrollView)
+        offscreen: (AccessibilityElement, String, CGPoint, UIScrollView),
+        includeLiveScrollAncestor: Bool = true
     ) {
         let visibleEntry = Screen.ScreenElement(
             heistId: visible.1,
@@ -354,6 +355,9 @@ final class TheBrainsScrollTests: XCTestCase {
             hierarchy: [.element(visible.0, traversalIndex: 0)],
             containerStableIds: [scrollContainer: scrollStableId],
             heistIdByElement: [visible.0: visible.1],
+            elementRefs: includeLiveScrollAncestor ? [
+                offscreenEntry.heistId: .init(object: nil, scrollView: offscreen.3)
+            ] : [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [
                 scrollContainer: .init(view: offscreen.3)
@@ -404,6 +408,29 @@ final class TheBrainsScrollTests: XCTestCase {
         let expectedOffset = TheStash.scrollTargetOffset(for: contentOrigin, in: scrollView)
         XCTAssertEqual(scrollView.contentOffset.x, expectedOffset.x, accuracy: 0.01)
         XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
+    }
+
+    func testTargetInflationFailsWithoutProvenLiveScrollAncestor() throws {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        let visible = makeElement(label: "Visible")
+        let offscreen = makeElement(label: "Settings")
+        installScreenWithKnownOffscreen(
+            visible: (visible, "visible_element"),
+            offscreen: (offscreen, "settings_button", CGPoint(x: 0, y: 1_200), scrollView),
+            includeLiveScrollAncestor: false
+        )
+
+        let entry = try XCTUnwrap(
+            brains.stash.currentScreen.findElement(heistId: "settings_button")
+        )
+        let result = brains.stash.inflateTarget(entry)
+
+        guard case .failed(.noLiveScrollableAncestor) = result else {
+            return XCTFail("Expected missing live scroll ancestor failure, got \(result)")
+        }
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
+        XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
     func testScrollToVisibleUnknownTargetUsesRecordedScreenDiagnostics() async {
@@ -851,11 +878,15 @@ final class TheBrainsScrollTests: XCTestCase {
             hierarchy: [],
             containerStableIds: [scrollContainer: "known_scroll"],
             heistIdByElement: [:],
+            elementRefs: [
+                knownEntry.heistId: .init(object: nil, scrollView: scrollView)
+            ],
             firstResponderHeistId: nil,
             scrollableContainerViews: [
                 scrollContainer: .init(view: scrollView)
             ]
         )
+        brains.stash.currentScreen = knownScreen
 
         let result = await brains.navigation.executeScrollToVisible(
             ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Jump Target"))),
