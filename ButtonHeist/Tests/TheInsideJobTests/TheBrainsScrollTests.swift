@@ -1073,26 +1073,32 @@ final class TheBrainsScrollTests: XCTestCase {
 
     // MARK: - safeSwipeFrame
 
-    func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() {
+    func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() throws {
         // A frame sitting comfortably inside the safe area passes through
         // intersected with itself, which is the frame.
         let screen = UIScreen.main.bounds
         let inner = screen.insetBy(dx: 80, dy: 120)
-        XCTAssertEqual(brains.navigation.safeSwipeFrame(from: inner), inner)
+        let result = try XCTUnwrap(brains.navigation.safeSwipeFrame(from: inner))
+        XCTAssertEqual(result, inner)
     }
 
-    func testSafeSwipeFrameZeroWidthReturnsOriginal() {
-        // Degenerate input has no intersection with anything, so the function
-        // returns the original frame.
+    func testSafeSwipeFrameZeroWidthReturnsNil() {
+        // Degenerate input has no targetable on-screen geometry, so command
+        // execution must fail instead of swiping the stale original frame.
         let input = CGRect(x: 0, y: 0, width: 0, height: 100)
-        XCTAssertEqual(brains.navigation.safeSwipeFrame(from: input), input)
+        XCTAssertNil(brains.navigation.safeSwipeFrame(from: input))
     }
 
-    func testSafeSwipeFrameOversizedFrameClampsWithinScreen() {
+    func testSafeSwipeFrameFullyOffscreenReturnsNil() {
+        let input = CGRect(x: -500, y: -500, width: 100, height: 100)
+        XCTAssertNil(brains.navigation.safeSwipeFrame(from: input))
+    }
+
+    func testSafeSwipeFrameOversizedFrameClampsWithinScreen() throws {
         // A frame larger than any iPhone screen must clamp to the safe
         // region and stay within the current screen bounds.
         let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
-        let result = brains.navigation.safeSwipeFrame(from: huge)
+        let result = try XCTUnwrap(brains.navigation.safeSwipeFrame(from: huge))
         let screenBounds = UIScreen.main.bounds
         XCTAssertTrue(
             screenBounds.contains(result),
@@ -1100,7 +1106,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testSafeSwipeFrameClampsAboveTabBarContainer() {
+    func testSafeSwipeFrameClampsAboveTabBarContainer() throws {
         // A .tabBar container in the accessibility hierarchy defines the
         // bottom clear line. A swipe rectangle that overlaps the tab bar
         // must be clipped to end at its top edge.
@@ -1112,7 +1118,9 @@ final class TheBrainsScrollTests: XCTestCase {
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )
-        let result = brains.navigation.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
+        let result = try XCTUnwrap(
+            brains.navigation.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
+        )
         XCTAssertEqual(
             result.maxY, tabBarFrame.minY,
             "Swipe area must end at the tab bar's top edge"
