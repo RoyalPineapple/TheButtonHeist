@@ -278,7 +278,7 @@ extension ElementEdits: Codable {
 // MARK: - AccessibilityTrace.Delta Codable
 
 extension AccessibilityTrace.Delta: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case kind
         case elementCount
         case captureEdge
@@ -288,6 +288,7 @@ extension AccessibilityTrace.Delta: Codable {
     }
 
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownDeltaKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let kind = try container.decode(AccessibilityTrace.DeltaKind.self, forKey: .kind)
         let elementCount = try container.decode(Int.self, forKey: .elementCount)
@@ -353,5 +354,32 @@ extension AccessibilityTrace.Delta: Codable {
                 try container.encode(payload.transient, forKey: .transient)
             }
         }
+    }
+
+    private static func rejectUnknownDeltaKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: DeltaUnknownKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown accessibility delta field \"\(unknownKey.stringValue)\""
+        ))
+    }
+}
+
+private struct DeltaUnknownKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }

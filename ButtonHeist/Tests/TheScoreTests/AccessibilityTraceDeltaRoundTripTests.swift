@@ -107,8 +107,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     }
 
     func testElementsChangedRejectsLegacyFlatShape() {
-        // The pre-9.0 layout flattened ElementEdits keys to the top level.
-        // The new shape nests under `edits` — flat fields must not decode.
+        // The current shape nests ElementEdits under `edits`; flat fields fail fast.
         let element = """
             {"heistId":"x","description":"X","label":"X","traits":["button"],\
             "frameX":0,"frameY":0,"frameWidth":0,"frameHeight":0,\
@@ -117,15 +116,12 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         let payload = """
             {"kind":"elementsChanged","elementCount":1,"added":[\(element)]}
             """
-        let delta = try? decoder.decode(AccessibilityTrace.Delta.self, from: Data(payload.utf8))
-        // Decoding succeeds (the discriminator and elementCount are valid),
-        // but the legacy `added` field at the top level must not populate
-        // `payload.edits`.
-        guard case .elementsChanged(let unwrapped) = delta else {
-            return XCTFail("Expected .elementsChanged, got \(String(describing: delta))")
+        XCTAssertThrowsError(try decoder.decode(AccessibilityTrace.Delta.self, from: Data(payload.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("added"),
+                "Expected flat delta field in error, got \(error)"
+            )
         }
-        XCTAssertTrue(unwrapped.edits.isEmpty,
-                      "Legacy flat `added` key at top level must be ignored")
     }
 
     func testElementsChangedFullRoundTrip() throws {
