@@ -615,8 +615,20 @@ extension TheFence {
 
         // Capture the live interface at time of failure for diagnostics
         if let currentFailure = failure {
-            let interface = await captureInterfaceSnapshot()
-            failure = currentFailure.withInterface(interface)
+            do {
+                let interface = try await captureInterfaceSnapshot()
+                failure = currentFailure.withInterface(interface)
+            } catch let fenceError as FenceError {
+                if case .invalidRequest = fenceError {
+                    throw fenceError
+                } else {
+                    logger.error(
+                        "Failed to capture interface for playback diagnostics: \(fenceError.displayMessage)"
+                    )
+                }
+            } catch {
+                logger.error("Failed to capture interface for playback diagnostics: \(error.displayMessage)")
+            }
         }
 
         let totalTimeSeconds = CFAbsoluteTimeGetCurrent() - playbackStart
@@ -696,16 +708,12 @@ extension TheFence {
     }
 
     /// Capture a live interface snapshot for failure diagnostics.
-    private func captureInterfaceSnapshot() async -> Interface? {
-        do {
-            let response = try await execute(parsed: defaultGetInterfaceParsedRequest())
-            if case .interface(let snapshot, _) = response {
-                return snapshot
-            }
-        } catch {
-            logger.error("Failed to capture interface for playback diagnostics: \(error.localizedDescription)")
+    private func captureInterfaceSnapshot() async throws -> Interface {
+        let response = try await execute(parsed: defaultGetInterfaceParsedRequest())
+        guard case .interface(let snapshot, _) = response else {
+            throw FenceError.invalidRequest("Expected get_interface response while capturing playback diagnostics")
         }
-        return nil
+        return snapshot
     }
 
 }

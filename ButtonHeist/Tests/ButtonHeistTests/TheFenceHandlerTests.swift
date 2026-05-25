@@ -4227,6 +4227,71 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPlayHeistPreservesPlaybackFailureWhenDiagnosticInterfaceCaptureFails() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [
+            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+        ])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, mockConn) = makeConnectedFence()
+        var interfaceRequestCount = 0
+        mockConn.autoResponse = { message in
+            switch message {
+            case .requestInterface:
+                interfaceRequestCount += 1
+                guard interfaceRequestCount > 1 else {
+                    return .interface(Interface(timestamp: Date(), tree: []))
+                }
+                return .error(ServerError(
+                    kind: .general,
+                    message: "diagnostic interface unavailable"
+                ))
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: false,
+                    method: .elementNotFound,
+                    message: "missing",
+                    errorKind: .elementNotFound
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(request: [
+            "command": "play_heist", "input": heistURL.path,
+        ])
+
+        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(completedSteps, 0)
+        XCTAssertEqual(failedIndex, 0)
+
+        guard case .actionFailed(let step, let result, _, let interface) = failure else {
+            return XCTFail("Expected actionFailed playback failure, got \(String(describing: failure))")
+        }
+        XCTAssertEqual(step.command, "activate")
+        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.message, "missing")
+        XCTAssertNil(interface)
+
+        guard case .failed(let reportMessage, let errorKind) = report?.steps.first?.outcome else {
+            return XCTFail("Expected failed playback report step, got \(String(describing: report?.steps.first))")
+        }
+        XCTAssertEqual(reportMessage, "missing")
+        XCTAssertEqual(errorKind, .action(.elementNotFound))
+
+        XCTAssertEqual(interfaceRequestCount, 2)
+        let activateMessages = mockConn.sent.filter { message, _ in
+            if case .activate = message { return true }
+            return false
+        }
+        XCTAssertEqual(activateMessages.count, 1)
+    }
+
+    @ButtonHeistActor
     func testPlaybackDoesNotUseRecordedHeistIdAsAuthority() async throws {
         let operation = try TheFence.PlaybackOperation(
             evidence: HeistEvidence(
