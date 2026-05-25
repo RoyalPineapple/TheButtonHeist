@@ -378,6 +378,21 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(expect?[.type] as? String, "elements_changed")
     }
 
+    func testHumanParserRejectsUnknownExpectationShortcutBeforeDispatch() {
+        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: "change expect=layout_changed")) { error in
+            let message = CLIRequestBuilder.diagnosticMessage(for: error)
+
+            XCTAssertTrue(
+                message.contains("Invalid expectation 'layout_changed' for wait_for_change"),
+                "Expected command-specific expectation parse failure, got: \(message)"
+            )
+            XCTAssertTrue(
+                message.contains("Expected expectation shorthand"),
+                "Expected valid expectation shape guidance, got: \(message)"
+            )
+        }
+    }
+
     func testRunBatchSerializesStepsBeforeSending() throws {
         let steps = try RunBatchCommand.serializedBatchSteps(
             inline: #"[{"command":"activate","heistId":"button-login"}]"#,

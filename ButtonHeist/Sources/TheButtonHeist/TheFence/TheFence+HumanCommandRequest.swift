@@ -180,11 +180,25 @@ private struct FenceHumanRequestDraft {
     }
 
     private mutating func normalizeExpectationArgument() throws {
-        guard case .string(let rawExpectation)? = self[.expect],
-              let expectation = try? TheFence.parseExpectationArgument(rawExpectation) else {
+        guard case .string(let rawExpectation)? = self[.expect] else {
             return
         }
-        self[.expect] = expectation
+        do {
+            self[.expect] = try TheFence.parseExpectationArgument(rawExpectation)
+        } catch {
+            throw FenceHumanCommandParsingError(
+                "Invalid expectation '\(rawExpectation)' for \(descriptor.canonicalName): " +
+                    Self.errorDescription(for: error)
+            )
+        }
+    }
+
+    private static func errorDescription(for error: Error) -> String {
+        if let description = (error as? LocalizedError)?.errorDescription, !description.isEmpty {
+            return description
+        }
+        let description = String(describing: error)
+        return description.isEmpty ? error.localizedDescription : description
     }
 
     private mutating func applyGenericTargetOrCoordinates(_ tokens: [String]) {
