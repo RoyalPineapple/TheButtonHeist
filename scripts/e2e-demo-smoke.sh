@@ -176,6 +176,21 @@ expect_screen_title() {
     fi
 }
 
+expect_element_label() {
+    local expected="$1"
+    if ! jq -e --arg expected "$expected" '
+        .. | objects | .element? | select(.label == $expected)
+    ' >/dev/null; then
+        fail "expected element with label '$expected'"
+    fi
+}
+
+scrollable_stable_id() {
+    jq -er '
+        [.. | objects | .container? | select(.type == "scrollable") | .stableId | select(. != null)][0]
+    ' || fail "expected a scrollable container stableId"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keep-simulator)
@@ -466,6 +481,44 @@ log "Verifying root interface"
 ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_JSON" | json_expect_ok "root get_interface"
 printf '%s' "$ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+ROOT_SCROLLABLE="$(printf '%s' "$ROOT_JSON" | scrollable_stable_id)"
+
+log "Verifying root scroll"
+ROOT_SCROLL_JSON="$(run_cli_json scroll --stable-id "$ROOT_SCROLLABLE" --direction down)"
+printf '%s' "$ROOT_SCROLL_JSON" | json_expect_ok "scroll root list"
+SCROLLED_ROOT_JSON="$(run_cli_json get_interface)"
+printf '%s' "$SCROLLED_ROOT_JSON" | json_expect_ok "scrolled root get_interface"
+printf '%s' "$SCROLLED_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
+ROOT_BOTTOM_JSON="$(run_cli_json scroll_to_edge --stable-id "$ROOT_SCROLLABLE" --edge bottom)"
+printf '%s' "$ROOT_BOTTOM_JSON" | json_expect_ok "scroll root to bottom"
+ROOT_BOTTOM_INTERFACE_JSON="$(run_cli_json get_interface)"
+printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | json_expect_ok "root bottom get_interface"
+printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_screen_title "ButtonHeist Demo"
+printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | expect_element_label "Custom Rotors"
+
+log "Verifying custom rotor"
+ROTORS_ACTION_JSON="$(run_cli_json activate --label "Custom Rotors" --traits button --timeout 15)"
+printf '%s' "$ROTORS_ACTION_JSON" | json_expect_ok "activate Custom Rotors"
+ROTORS_JSON="$(run_cli_json get_interface)"
+printf '%s' "$ROTORS_JSON" | json_expect_ok "Custom Rotors get_interface"
+printf '%s' "$ROTORS_JSON" | expect_screen_title "Custom Rotors"
+printf '%s' "$ROTORS_JSON" | expect_element_label "Rotor Host"
+ROTOR_JSON="$(run_cli_json rotor --label "Rotor Host" --rotor "Errors" --timeout 15)"
+printf '%s' "$ROTOR_JSON" | json_expect_ok "rotor Errors"
+# The expected label comes from TestApp/Sources/RotorsDemo.swift's UIKit rotor result view.
+ROTOR_RESULT_LABEL="$(printf '%s' "$ROTOR_JSON" | jq -r '.rotor.foundElement.label // ""')"
+[[ "$ROTOR_RESULT_LABEL" == "Rotor Result: Missing amount" ]] \
+    || fail "expected rotor result label 'Rotor Result: Missing amount', got '$ROTOR_RESULT_LABEL'"
+
+log "Returning to root after rotor"
+ROOT_FROM_ROTOR_JSON="$(run_cli_json activate --label "ButtonHeist Demo" --traits button backButton --timeout 15)"
+printf '%s' "$ROOT_FROM_ROTOR_JSON" | json_expect_ok "activate back to ButtonHeist Demo"
+ROOT_AFTER_ROTOR_JSON="$(run_cli_json get_interface)"
+printf '%s' "$ROOT_AFTER_ROTOR_JSON" | json_expect_ok "root after rotor get_interface"
+printf '%s' "$ROOT_AFTER_ROTOR_JSON" | expect_screen_title "ButtonHeist Demo"
+ROOT_SCROLLABLE="$(printf '%s' "$ROOT_AFTER_ROTOR_JSON" | scrollable_stable_id)"
+ROOT_TOP_JSON="$(run_cli_json scroll_to_edge --stable-id "$ROOT_SCROLLABLE" --edge top)"
+printf '%s' "$ROOT_TOP_JSON" | json_expect_ok "scroll root to top"
 
 log "Navigating to Controls Demo"
 CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
@@ -473,6 +526,31 @@ printf '%s' "$CONTROLS_ACTION_JSON" | json_expect_ok "activate Controls Demo"
 CONTROLS_JSON="$(run_cli_json get_interface)"
 printf '%s' "$CONTROLS_JSON" | json_expect_ok "Controls Demo get_interface"
 printf '%s' "$CONTROLS_JSON" | expect_screen_title "Controls Demo"
+
+log "Verifying tap and custom action"
+BUTTONS_ACTION_JSON="$(run_cli_json activate --label "Buttons & Actions" --traits button --timeout 15)"
+printf '%s' "$BUTTONS_ACTION_JSON" | json_expect_ok "activate Buttons & Actions"
+BUTTONS_JSON="$(run_cli_json get_interface)"
+printf '%s' "$BUTTONS_JSON" | json_expect_ok "Buttons & Actions get_interface"
+printf '%s' "$BUTTONS_JSON" | expect_screen_title "Buttons & Actions"
+# This intentionally uses the raw gesture path against a simple button so the smoke covers tap geometry.
+TAP_JSON="$(run_cli_json one_finger_tap --label "Primary Button" --traits button)"
+printf '%s' "$TAP_JSON" | json_expect_ok "tap Primary Button"
+TAPPED_JSON="$(run_cli_json get_interface)"
+printf '%s' "$TAPPED_JSON" | json_expect_ok "Buttons & Actions after tap get_interface"
+printf '%s' "$TAPPED_JSON" | expect_element_label "Tap count: 1"
+CUSTOM_ACTION_JSON="$(run_cli_json activate --label "Swipe actions item" --action "Favorite" --timeout 15)"
+printf '%s' "$CUSTOM_ACTION_JSON" | json_expect_ok "custom action Favorite"
+CUSTOM_ACTION_STATE_JSON="$(run_cli_json get_interface)"
+printf '%s' "$CUSTOM_ACTION_STATE_JSON" | json_expect_ok "Buttons & Actions after custom action get_interface"
+printf '%s' "$CUSTOM_ACTION_STATE_JSON" | expect_element_label "Last action: Custom action: Favorite"
+
+log "Navigating back to Controls Demo after actions"
+CONTROLS_FROM_ACTIONS_JSON="$(run_cli_json activate --label "Controls Demo" --traits button backButton --timeout 15)"
+printf '%s' "$CONTROLS_FROM_ACTIONS_JSON" | json_expect_ok "activate back to Controls Demo after actions"
+CONTROLS_AFTER_ACTIONS_JSON="$(run_cli_json get_interface)"
+printf '%s' "$CONTROLS_AFTER_ACTIONS_JSON" | json_expect_ok "Controls Demo after actions get_interface"
+printf '%s' "$CONTROLS_AFTER_ACTIONS_JSON" | expect_screen_title "Controls Demo"
 
 log "Navigating to Display"
 DISPLAY_ACTION_JSON="$(run_cli_json activate --label "Display" --traits button --timeout 15)"
