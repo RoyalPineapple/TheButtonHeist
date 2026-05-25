@@ -29,7 +29,7 @@ struct ButtonHeistMCPServer {
 
     static var instructions: String {
         let matcherKeys = inlineList(TheFence.Command.activate.descriptor.elementTargetParameterKeys)
-        let expectationKey = parameterKey(.expect, in: .activate)
+        let expectationKey = TheFence.Command.activate.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue
         return """
             Button Heist drives iOS apps through the accessibility layer — the same interface \
             VoiceOver uses. Target elements with schema matcher fields: \(matcherKeys), not \
@@ -55,13 +55,6 @@ struct ButtonHeistMCPServer {
 
     private static func inlineToolName(for command: TheFence.Command) -> String {
         inlineCode(toolName(for: command))
-    }
-
-    private static func parameterKey(
-        _ key: FenceParameterKey,
-        in command: TheFence.Command
-    ) -> String {
-        command.parameters.first { $0.key == key.rawValue }?.key ?? key.rawValue
     }
 
     private static func inlineList(_ values: [String]) -> String {

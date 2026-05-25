@@ -626,8 +626,13 @@ final class CLICommandSyncTests: XCTestCase {
             encoding: .utf8
         )
 
+        XCTAssertTrue(
+            source.contains("TheFence.Command.humanCommandAliases"),
+            "REPL alias help should render from the canonical alias projection"
+        )
         XCTAssertFalse(source.contains("commandAliases:"), "REPL command aliases should live in TheFence.Command.humanCommandAliases")
         XCTAssertFalse(source.contains("compoundAliases:"), "REPL compound aliases should live in TheFence.Command.humanCommandAliases")
+        XCTAssertFalse(source.contains("descriptor.humanAliases"), "REPL should not rescan descriptor alias fields")
     }
 
     func testSessionReplDoesNotDeclareCommandSpecificPositionalTables() throws {
