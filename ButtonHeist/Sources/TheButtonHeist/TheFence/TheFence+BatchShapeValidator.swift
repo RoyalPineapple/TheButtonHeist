@@ -84,7 +84,7 @@ extension TheFence {
             }
         }
 
-        func action(target: BatchExecutionTarget) -> TheScore.Action {
+        func action(target: SemanticActionTarget) -> TheScore.Action {
             switch kind {
             case .activate:
                 return .activate(target)

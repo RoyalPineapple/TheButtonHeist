@@ -411,11 +411,11 @@ extension BatchStep: Codable {
 }
 
 /// A batch-executable action primitive. Targeted variants use
-/// `BatchExecutionTarget`, so heistId can only appear as source metadata.
+/// `SemanticActionTarget`, so heistId can only appear as source metadata.
 public enum Action: Sendable {
-    case activate(BatchExecutionTarget)
-    case increment(BatchExecutionTarget)
-    case decrement(BatchExecutionTarget)
+    case activate(SemanticActionTarget)
+    case increment(SemanticActionTarget)
+    case decrement(SemanticActionTarget)
     case performCustomAction(BatchCustomActionTarget)
     case rotor(BatchRotorTarget)
     case touchTap(BatchTouchTapTarget)

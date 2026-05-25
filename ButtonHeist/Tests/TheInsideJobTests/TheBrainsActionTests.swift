@@ -610,7 +610,7 @@ final class TheBrainsActionTests: XCTestCase {
     func testBatchMatcherTargetedHelpersMatchSingleMatcherFailures() async {
         let matcher = ElementMatcher(identifier: "missing_target")
         let singleTarget = ElementTarget.matcher(matcher)
-        let batchTarget = BatchExecutionTarget(
+        let semanticTarget = SemanticActionTarget(
             sourceHeistId: "old_missing_target",
             matcher: matcher
         )
@@ -618,7 +618,7 @@ final class TheBrainsActionTests: XCTestCase {
         assertSameInteraction(
             "activate",
             single: await brains.actions.executeActivate(singleTarget),
-            batch: await brains.actions.executeActivate(batchTarget)
+            batch: await brains.actions.executeActivate(semanticTarget)
         )
         assertSameInteraction(
             "custom action",
@@ -627,7 +627,7 @@ final class TheBrainsActionTests: XCTestCase {
                 actionName: "Archive"
             )),
             batch: await brains.actions.executeCustomAction(BatchCustomActionTarget(
-                target: batchTarget,
+                target: semanticTarget,
                 actionName: "Archive"
             ))
         )
@@ -638,14 +638,14 @@ final class TheBrainsActionTests: XCTestCase {
                 rotor: "Links"
             )),
             batch: await brains.actions.executeRotor(BatchRotorTarget(
-                target: batchTarget,
+                target: semanticTarget,
                 rotor: "Links"
             ))
         )
         assertSameInteraction(
             "tap",
             single: await brains.actions.executeTap(TouchTapTarget(elementTarget: singleTarget)),
-            batch: await brains.actions.executeTap(BatchTouchTapTarget(target: batchTarget))
+            batch: await brains.actions.executeTap(BatchTouchTapTarget(target: semanticTarget))
         )
         assertSameInteraction(
             "swipe",
@@ -654,7 +654,7 @@ final class TheBrainsActionTests: XCTestCase {
                 direction: .left
             )),
             batch: await brains.actions.executeSwipe(BatchSwipeTarget(
-                target: batchTarget,
+                target: semanticTarget,
                 direction: .left
             ))
         )
@@ -666,7 +666,7 @@ final class TheBrainsActionTests: XCTestCase {
             )),
             batch: await brains.actions.executeTypeText(BatchTypeTextTarget(
                 text: "hello",
-                target: batchTarget
+                target: semanticTarget
             ))
         )
         assertSameInteraction(
@@ -676,7 +676,7 @@ final class TheBrainsActionTests: XCTestCase {
                 direction: .down
             )),
             batch: await brains.navigation.executeScroll(BatchScrollTarget(
-                target: batchTarget,
+                target: semanticTarget,
                 direction: .down
             ))
         )
@@ -686,7 +686,7 @@ final class TheBrainsActionTests: XCTestCase {
             timeout: 0.01
         ))
         let batchWait = await brains.performWaitFor(target: BatchWaitForTarget(
-            target: batchTarget,
+            target: semanticTarget,
             timeout: 0.01
         ))
         assertSameActionResult("wait", single: singleWait, batch: batchWait, normalizingTimeoutDuration: true)

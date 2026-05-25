@@ -393,7 +393,7 @@ private extension TheScore.Action {
     }
 }
 
-private extension BatchExecutionTarget {
+private extension SemanticActionTarget {
     var testElementTarget: ElementTarget {
         .matcher(matcher, ordinal: ordinal)
     }

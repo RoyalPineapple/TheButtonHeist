@@ -656,7 +656,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testCommandTargetRejectsNegativeOrdinal() async {
+    func testRequestTargetRejectsNegativeOrdinal() async {
         await assertValidationError(
             ["command": "activate", "label": "Save", "ordinal": -1],
             equals: "schema validation failed for ordinal: observed integer -1; expected integer >= 0"

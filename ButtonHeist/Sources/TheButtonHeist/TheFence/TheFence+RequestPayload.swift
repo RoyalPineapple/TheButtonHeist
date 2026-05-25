@@ -422,7 +422,7 @@ extension TheFence {
         let payload: RequestPayload
         let expectationPayload: ExpectationPayload
         /// Element target metadata decoded at the public request edge for batch lowering.
-        let routedBatchTarget: BatchExecutionTarget?
+        let routedSemanticTarget: SemanticActionTarget?
         /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
         let immediateResponse: FenceResponse?
 
@@ -431,14 +431,14 @@ extension TheFence {
             requestId: String,
             payload: RequestPayload,
             expectationPayload: ExpectationPayload,
-            routedBatchTarget: BatchExecutionTarget? = nil,
+            routedSemanticTarget: SemanticActionTarget? = nil,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
             self.payload = payload
             self.expectationPayload = expectationPayload
-            self.routedBatchTarget = routedBatchTarget
+            self.routedSemanticTarget = routedSemanticTarget
             self.immediateResponse = immediateResponse
         }
     }
@@ -454,15 +454,15 @@ extension TheFence {
 
         func string(_ key: String) -> String? { arguments.string(key) }
 
-        func batchExecutionTarget() throws -> BatchExecutionTarget? {
-            try Self.batchExecutionTarget(from: arguments)
+        func semanticActionTarget() throws -> SemanticActionTarget? {
+            try Self.semanticActionTarget(from: arguments)
         }
 
         func argumentEnvelopeForRequestDecoding() -> CommandArgumentEnvelope {
             arguments
         }
 
-        private static func batchExecutionTarget(from arguments: CommandArgumentEnvelope) throws -> BatchExecutionTarget? {
+        private static func semanticActionTarget(from arguments: CommandArgumentEnvelope) throws -> SemanticActionTarget? {
             let sourceHeistId = try arguments.schemaString("heistId")
             let ordinal = try arguments.schemaNonNegativeInteger("ordinal")
             let matcher = ElementMatcher(
@@ -479,7 +479,7 @@ extension TheFence {
                 )
             )
             guard sourceHeistId != nil || matcher.hasPredicates || ordinal != nil else { return nil }
-            return BatchExecutionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
+            return SemanticActionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
         }
 
     }
@@ -531,7 +531,7 @@ extension TheFence {
         command: Command,
         arguments: CommandArgumentEnvelope,
         expectationPayload typedExpectationPayload: ExpectationPayload?,
-        routedBatchTarget: BatchExecutionTarget? = nil
+        routedSemanticTarget: SemanticActionTarget? = nil
     ) throws -> ParsedRequest {
         try validateRequestKeys(command: command, arguments: arguments)
         if let immediate = handleImmediateCommand(command) {
@@ -556,7 +556,7 @@ extension TheFence {
             requestId: requestId,
             payload: payload,
             expectationPayload: expectationPayload,
-            routedBatchTarget: routedBatchTarget,
+            routedSemanticTarget: routedSemanticTarget,
             immediateResponse: nil
         )
     }
@@ -567,7 +567,7 @@ extension TheFence {
             command: operation.command,
             arguments: request.argumentEnvelopeForRequestDecoding(),
             expectationPayload: request.expectationPayload,
-            routedBatchTarget: try request.batchExecutionTarget()
+            routedSemanticTarget: try request.semanticActionTarget()
         )
     }
 
