@@ -2099,8 +2099,11 @@ final class TheFenceTests: XCTestCase {
     func testExecuteGetSessionLogReturnsErrorWhenIdle() async throws {
         let fence = TheFence(configuration: .init())
         let response = try await fence.execute(request: ["command": "get_session_log"])
-        if case .error(let message, _) = response {
+        if case .error(let message, let details) = response {
             XCTAssertTrue(message.contains("No active session"))
+            XCTAssertEqual(details?.errorCode, "request.invalid")
+            XCTAssertEqual(details?.phase, .request)
+            XCTAssertFalse(details?.retryable ?? true)
         } else {
             XCTFail("Expected error response when no session active, got \(response)")
         }
