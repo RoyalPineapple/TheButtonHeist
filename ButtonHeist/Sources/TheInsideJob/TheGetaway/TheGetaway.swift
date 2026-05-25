@@ -6,9 +6,63 @@ import os.log
 import TheScore
 
 struct BackgroundChangeState: Sendable, Equatable {
-    private(set) var latestGeneration: UInt64 = 0
-    private(set) var parsedThroughGeneration: UInt64 = 0
+    private var progress: ChangeProgress = .caughtUp(generation: 0)
     private(set) var phase: Phase = .idle
+
+    /// Encodes whether background parsing is caught up; `.pending` is only
+    /// used when `parsedThroughGeneration < latestGeneration`.
+    private enum ChangeProgress: Sendable, Equatable {
+        case caughtUp(generation: UInt64)
+        case pending(latestGeneration: UInt64, parsedThroughGeneration: UInt64)
+
+        init(latestGeneration: UInt64, parsedThroughGeneration: UInt64) {
+            if parsedThroughGeneration >= latestGeneration {
+                self = .caughtUp(generation: latestGeneration)
+            } else {
+                self = .pending(
+                    latestGeneration: latestGeneration,
+                    parsedThroughGeneration: parsedThroughGeneration
+                )
+            }
+        }
+
+        var latestGeneration: UInt64 {
+            switch self {
+            case .caughtUp(let generation):
+                return generation
+            case .pending(let latestGeneration, _):
+                return latestGeneration
+            }
+        }
+
+        var parsedThroughGeneration: UInt64 {
+            switch self {
+            case .caughtUp(let generation):
+                return generation
+            case .pending(_, let parsedThroughGeneration):
+                return parsedThroughGeneration
+            }
+        }
+
+        var hasPendingSettledChange: Bool {
+            if case .pending = self { return true }
+            return false
+        }
+
+        mutating func noteChange() {
+            self = ChangeProgress(
+                latestGeneration: latestGeneration &+ 1,
+                parsedThroughGeneration: parsedThroughGeneration
+            )
+        }
+
+        mutating func markObserved(through generation: UInt64) {
+            self = ChangeProgress(
+                latestGeneration: latestGeneration,
+                parsedThroughGeneration: max(parsedThroughGeneration, min(generation, latestGeneration))
+            )
+        }
+    }
 
     enum Phase: Sendable, Equatable {
         case idle
@@ -16,8 +70,16 @@ struct BackgroundChangeState: Sendable, Equatable {
         case settledParse(claimedGeneration: UInt64, commandCount: Int)
     }
 
+    var latestGeneration: UInt64 {
+        progress.latestGeneration
+    }
+
+    var parsedThroughGeneration: UInt64 {
+        progress.parsedThroughGeneration
+    }
+
     var hasPendingSettledChange: Bool {
-        latestGeneration > parsedThroughGeneration
+        progress.hasPendingSettledChange
     }
 
     var canBeginSettledParse: Bool {
@@ -39,11 +101,11 @@ struct BackgroundChangeState: Sendable, Equatable {
     }
 
     mutating func noteChange() {
-        latestGeneration &+= 1
+        progress.noteChange()
     }
 
     mutating func markObserved(through generation: UInt64) {
-        parsedThroughGeneration = max(parsedThroughGeneration, min(generation, latestGeneration))
+        progress.markObserved(through: generation)
     }
 
     mutating func beginCommand() {
@@ -81,7 +143,7 @@ struct BackgroundChangeState: Sendable, Equatable {
               currentClaim == claimedGeneration else {
             return
         }
-        parsedThroughGeneration = max(parsedThroughGeneration, claimedGeneration)
+        progress.markObserved(through: claimedGeneration)
         if commandCount > 0 {
             phase = .command(count: commandCount)
         } else {
@@ -90,8 +152,7 @@ struct BackgroundChangeState: Sendable, Equatable {
     }
 
     mutating func reset() {
-        latestGeneration = 0
-        parsedThroughGeneration = 0
+        progress = .caughtUp(generation: 0)
         phase = .idle
     }
 }

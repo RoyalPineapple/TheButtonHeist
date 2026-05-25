@@ -360,6 +360,17 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertTrue(state.hasPendingSettledChange)
     }
 
+    func testObservedLatestGenerationClearsPendingBackgroundChange() {
+        var state = BackgroundChangeState()
+        state.noteChange()
+
+        state.markObserved(through: state.latestGeneration)
+
+        XCTAssertEqual(state.parsedThroughGeneration, state.latestGeneration)
+        XCTAssertFalse(state.hasPendingSettledChange)
+        XCTAssertFalse(state.canBeginSettledParse)
+    }
+
     func testCommandDuringSettledParseKeepsParserBlockedUntilCommandFinishes() throws {
         var state = BackgroundChangeState()
         state.noteChange()
