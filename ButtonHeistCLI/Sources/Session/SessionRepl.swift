@@ -218,7 +218,7 @@ nonisolated extension ReplSession {
         return value + String(repeating: " ", count: width - value.count)
     }
 
-    static func parseHumanInput(_ line: String) -> [String: Any] {
-        CLIRequestBuilder.parseHumanInput(line)
+    static func parseHumanInput(_ line: String) throws -> [String: Any] {
+        try CLIRequestBuilder.parseHumanInput(line)
     }
 }
