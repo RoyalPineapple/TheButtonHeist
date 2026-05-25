@@ -192,6 +192,34 @@ final class TheTripwireTests: XCTestCase {
         }
     }
 
+    private func pulseReading(tripwireSignal: TheTripwire.TripwireSignal) -> TheTripwire.PulseReading {
+        TheTripwire.PulseReading(
+            tick: 1,
+            timestamp: CFAbsoluteTimeGetCurrent(),
+            layoutPending: false,
+            fingerprint: .init(positionXSum: 100, positionYSum: 200, opacitySum: 5, layerCount: 5),
+            hasRelevantAnimations: false,
+            topmostVC: tripwireSignal.topmostVC,
+            tripwireSignal: tripwireSignal,
+            windowCount: 1,
+            quietFrames: 2
+        )
+    }
+
+    private func tripwireSignal(navigationDepth: Int) -> TheTripwire.TripwireSignal {
+        TheTripwire.TripwireSignal(
+            topmostVC: nil,
+            navigation: TheTripwire.NavigationSignal(
+                navigationDepth: navigationDepth,
+                title: nil,
+                backButtonTitle: nil,
+                selectedTabIndex: nil,
+                presentedViewController: nil
+            ),
+            windowStack: .empty
+        )
+    }
+
     // MARK: - Pulse Lifecycle
 
     func testStartPulseSetsRunningState() {
@@ -211,6 +239,28 @@ final class TheTripwireTests: XCTestCase {
         tripwire.startPulse()
         XCTAssertTrue(tripwire.isPulseRunning)
         // No crash, no double-registration
+    }
+
+    func testFirstTickBaselineDoesNotEmitTripwireTransition() {
+        let reading = pulseReading(tripwireSignal: tripwireSignal(navigationDepth: 1))
+
+        let transitions = TheTripwire.PulseTickBaseline(previous: nil).transitions(to: reading)
+
+        XCTAssertTrue(transitions.isEmpty, "First tick establishes baseline without reporting a synthetic transition")
+    }
+
+    func testObservedBaselineEmitsTripwireTransition() {
+        let previous = pulseReading(tripwireSignal: tripwireSignal(navigationDepth: 1))
+        let current = pulseReading(tripwireSignal: tripwireSignal(navigationDepth: 2))
+
+        let transitions = TheTripwire.PulseTickBaseline(previous: previous).transitions(to: current)
+
+        guard case .tripwireTriggered(let from, let to)? = transitions.first else {
+            XCTFail("Expected tripwire transition from observed baseline")
+            return
+        }
+        XCTAssertEqual(from, previous.tripwireSignal)
+        XCTAssertEqual(to, current.tripwireSignal)
     }
 
     // MARK: - PresentationFingerprint.matches (pure value type)

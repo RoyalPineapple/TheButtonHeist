@@ -46,7 +46,65 @@ final class TheTripwire {
     enum PulseTransition {
         case settled
         case unsettled
-        case tripwireTriggered(from: TripwireSignal?, to: TripwireSignal)
+        case tripwireTriggered(from: TripwireSignal, to: TripwireSignal)
+    }
+
+    enum PulseTickBaseline {
+        case firstTick
+        case observed(PulseReading)
+
+        init(previous: PulseReading?) {
+            if let previous {
+                self = .observed(previous)
+            } else {
+                self = .firstTick
+            }
+        }
+
+        func isQuiet(scan: LayerScan, fingerprint: PresentationFingerprint) -> Bool {
+            guard !scan.hasPendingLayout, !scan.hasRelevantAnimations else { return false }
+            switch self {
+            case .firstTick:
+                return true
+            case .observed(let previous):
+                return previous.fingerprint.matches(fingerprint)
+            }
+        }
+
+        func quietFrames(afterQuiet quiet: Bool) -> Int {
+            guard quiet else { return 0 }
+            switch self {
+            case .firstTick:
+                return 1
+            case .observed(let previous):
+                return previous.quietFrames + 1
+            }
+        }
+
+        func transitions(to reading: PulseReading) -> [PulseTransition] {
+            switch self {
+            case .firstTick:
+                return []
+            case .observed(let previous):
+                return observedTransitions(from: previous, to: reading)
+            }
+        }
+
+        private func observedTransitions(
+            from previous: PulseReading,
+            to reading: PulseReading
+        ) -> [PulseTransition] {
+            var transitions: [PulseTransition] = []
+            if reading.tripwireSignal != previous.tripwireSignal {
+                transitions.append(.tripwireTriggered(from: previous.tripwireSignal, to: reading.tripwireSignal))
+            }
+            if reading.isSettled && !previous.isSettled {
+                transitions.append(.settled)
+            } else if !reading.isSettled && previous.isSettled {
+                transitions.append(.unsettled)
+            }
+            return transitions
+        }
     }
 
     /// Cheap UIKit-side identity used to decide whether to re-check the
@@ -324,7 +382,7 @@ final class TheTripwire {
         guard let context = runningContext else { return }
         context.tickCount += 1
         let now = CFAbsoluteTimeGetCurrent()
-        let prev = context.latestReading
+        let baseline = PulseTickBaseline(previous: context.latestReading)
 
         // Flush pending implicit transactions so SwiftUI's deferred
         // layout commits before we scan.
@@ -333,9 +391,7 @@ final class TheTripwire {
         let scan = scanLayers()
         let fingerprint = scan.fingerprint
 
-        let isQuiet = !scan.hasPendingLayout
-            && !scan.hasRelevantAnimations
-            && (prev?.fingerprint.matches(fingerprint) ?? true)
+        let isQuiet = baseline.isQuiet(scan: scan, fingerprint: fingerprint)
 
         let tripwireSignal = tripwireSignal()
         let vcId = tripwireSignal.topmostVC
@@ -349,18 +405,12 @@ final class TheTripwire {
             topmostVC: vcId,
             tripwireSignal: tripwireSignal,
             windowCount: scan.windowCount,
-            quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
+            quietFrames: baseline.quietFrames(afterQuiet: isQuiet)
         )
         context.latestReading = reading
 
-        // Diff against previous reading and fire transitions.
-        if tripwireSignal != prev?.tripwireSignal {
-            onTransition?(.tripwireTriggered(from: prev?.tripwireSignal, to: tripwireSignal))
-        }
-        if reading.isSettled && !(prev?.isSettled ?? false) {
-            onTransition?(.settled)
-        } else if !reading.isSettled && (prev?.isSettled ?? false) {
-            onTransition?(.unsettled)
+        for transition in baseline.transitions(to: reading) {
+            onTransition?(transition)
         }
 
         resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
