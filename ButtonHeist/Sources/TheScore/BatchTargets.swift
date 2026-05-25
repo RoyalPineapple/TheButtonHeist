@@ -283,6 +283,8 @@ extension BatchLongPressTarget: CustomStringConvertible {
 }
 
 public struct BatchSwipeTarget: Codable, Sendable {
+    public static let defaultDuration = SwipeTarget.defaultDuration
+
     public let target: SemanticActionTarget?
     public let startX: Double?
     public let startY: Double?
@@ -314,6 +316,8 @@ public struct BatchSwipeTarget: Codable, Sendable {
         self.start = start
         self.end = end
     }
+
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension BatchSwipeTarget: CustomStringConvertible {
@@ -333,6 +337,8 @@ extension BatchSwipeTarget: CustomStringConvertible {
 }
 
 public struct BatchDragTarget: Codable, Sendable {
+    public static let defaultDuration = DragTarget.defaultDuration
+
     public let target: SemanticActionTarget?
     public let startX: Double?
     public let startY: Double?
@@ -355,6 +361,8 @@ public struct BatchDragTarget: Codable, Sendable {
         self.endY = endY
         self.duration = duration
     }
+
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension BatchDragTarget: CustomStringConvertible {
@@ -371,6 +379,9 @@ extension BatchDragTarget: CustomStringConvertible {
 }
 
 public struct BatchPinchTarget: Codable, Sendable {
+    public static let defaultSpread = PinchTarget.defaultSpread
+    public static let defaultDuration = PinchTarget.defaultDuration
+
     public let target: SemanticActionTarget?
     public let centerX: Double?
     public let centerY: Double?
@@ -393,6 +404,9 @@ public struct BatchPinchTarget: Codable, Sendable {
         self.spread = spread
         self.duration = duration
     }
+
+    public var resolvedSpread: Double { spread ?? Self.defaultSpread }
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension BatchPinchTarget: CustomStringConvertible {
@@ -409,6 +423,9 @@ extension BatchPinchTarget: CustomStringConvertible {
 }
 
 public struct BatchRotateTarget: Codable, Sendable {
+    public static let defaultRadius = RotateTarget.defaultRadius
+    public static let defaultDuration = RotateTarget.defaultDuration
+
     public let target: SemanticActionTarget?
     public let centerX: Double?
     public let centerY: Double?
@@ -431,6 +448,9 @@ public struct BatchRotateTarget: Codable, Sendable {
         self.radius = radius
         self.duration = duration
     }
+
+    public var resolvedRadius: Double { radius ?? Self.defaultRadius }
+    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 }
 
 extension BatchRotateTarget: CustomStringConvertible {
@@ -447,6 +467,8 @@ extension BatchRotateTarget: CustomStringConvertible {
 }
 
 public struct BatchTwoFingerTapTarget: Codable, Sendable {
+    public static let defaultSpread = TwoFingerTapTarget.defaultSpread
+
     public let target: SemanticActionTarget?
     public let centerX: Double?
     public let centerY: Double?
@@ -463,6 +485,8 @@ public struct BatchTwoFingerTapTarget: Codable, Sendable {
         self.centerY = centerY
         self.spread = spread
     }
+
+    public var resolvedSpread: Double { spread ?? Self.defaultSpread }
 }
 
 extension BatchTwoFingerTapTarget: CustomStringConvertible {

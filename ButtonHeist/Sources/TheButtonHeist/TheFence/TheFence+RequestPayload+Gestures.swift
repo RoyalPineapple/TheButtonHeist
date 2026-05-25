@@ -385,7 +385,7 @@ extension TheFence {
             minimum: DecodeLimits.minDrawBezierSamplesPerSegment,
             maximum: DecodeLimits.maxDrawBezierSamplesPerSegment
         )
-        let resolvedSamplesPerSegment = samplesPerSegment ?? 20
+        let resolvedSamplesPerSegment = samplesPerSegment ?? DrawBezierTarget.defaultSamplesPerSegment
         let generatedPointCount = segments.count * (resolvedSamplesPerSegment - 1) + 1
         guard generatedPointCount <= DecodeLimits.maxDrawBezierGeneratedPathPoints else {
             throw SchemaValidationError(

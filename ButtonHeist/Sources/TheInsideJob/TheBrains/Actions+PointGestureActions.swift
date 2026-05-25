@@ -108,7 +108,7 @@ extension Actions {
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
-            let duration = clampDuration(target.duration ?? 0.15)
+            let duration = clampDuration(target.resolvedDuration)
             return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
         }
 
@@ -152,7 +152,7 @@ extension Actions {
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
-            let duration = clampDuration(target.duration ?? 0.15)
+            let duration = clampDuration(target.resolvedDuration)
             return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
         }
     }
@@ -189,7 +189,7 @@ extension Actions {
         if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }
-        let duration = clampDuration(target.duration ?? 0.5)
+        let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             elementTarget: target.dragElementTarget, pointX: target.startX, pointY: target.startY,
             method: .syntheticDrag,
@@ -203,8 +203,8 @@ extension Actions {
         _ target: some PinchExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        let spread = target.spread ?? 100.0
-        let duration = clampDuration(target.duration ?? 0.5)
+        let spread = target.resolvedSpread
+        let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             elementTarget: target.pinchElementTarget, pointX: target.centerX, pointY: target.centerY,
             method: .syntheticPinch,
@@ -221,8 +221,8 @@ extension Actions {
         _ target: some RotateExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        let radius = target.radius ?? 100.0
-        let duration = clampDuration(target.duration ?? 0.5)
+        let radius = target.resolvedRadius
+        let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             elementTarget: target.rotateElementTarget, pointX: target.centerX, pointY: target.centerY,
             method: .syntheticRotate,
@@ -239,7 +239,7 @@ extension Actions {
         _ target: some TwoFingerTapExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        let spread = target.spread ?? 40.0
+        let spread = target.resolvedSpread
         return await performPointAction(
             elementTarget: target.twoFingerTapElementTarget, pointX: target.centerX, pointY: target.centerY,
             method: .syntheticTwoFingerTap,
@@ -271,7 +271,7 @@ extension Actions {
         guard !target.segments.isEmpty else {
             return .failure(.syntheticDrawPath, message: "Bezier path requires at least 1 segment")
         }
-        let samplesPerSegment = min(target.samplesPerSegment ?? 20, 1000)
+        let samplesPerSegment = target.resolvedSamplesPerSegment
         let pathPoints = TheSafecracker.BezierSampler.sampleBezierPath(
             startPoint: target.startPoint,
             segments: target.segments,
