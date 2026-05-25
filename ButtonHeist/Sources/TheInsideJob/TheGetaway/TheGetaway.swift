@@ -551,7 +551,7 @@ final class TheGetaway {
 
     // MARK: - Encode / Decode
 
-    struct ResponseEncodingFailure: Error, Sendable, CustomStringConvertible {
+    struct ResponseEncodingFailure: Error, Sendable, Equatable, CustomStringConvertible {
         let requestId: String?
         let underlyingDescription: String
 
@@ -572,6 +572,23 @@ final class TheGetaway {
 
         var serverError: ServerError {
             ServerError(kind: .general, message: "Malformed message — could not decode")
+        }
+    }
+
+    enum BroadcastDeliveryFailure: Error, Sendable, Equatable, CustomStringConvertible {
+        case screenshotPayloadRefused
+        case responseEncodingFailed(ResponseEncodingFailure)
+        case transportUnavailable
+
+        var description: String {
+            switch self {
+            case .screenshotPayloadRefused:
+                return "Refusing to broadcast screenshot payload; screenshots must be requested explicitly"
+            case .responseEncodingFailed(let failure):
+                return failure.description
+            case .transportUnavailable:
+                return "Failed to broadcast response envelope: no transport is wired"
+            }
         }
     }
 
@@ -606,12 +623,13 @@ final class TheGetaway {
 
     // MARK: - Send / Broadcast
 
+    @discardableResult
     func sendMessage(
         _ message: ServerMessage,
         requestId: String? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         respond: @escaping (Data) -> Void
-    ) {
+    ) -> Result<Void, ResponseEncodingFailure> {
         switch encodeEnvelope(
             message,
             requestId: requestId,
@@ -620,8 +638,10 @@ final class TheGetaway {
         case .success(let data):
             insideJobLogger.debug("Sending \(data.count) bytes")
             respond(data)
+            return .success(())
         case .failure(let failure):
             logEncodingFailure(failure)
+            return .failure(failure)
         }
     }
 
@@ -630,10 +650,12 @@ final class TheGetaway {
     /// Awaits the transport so two back-to-back `broadcastToAll` calls from
     /// the same caller deliver in FIFO order. The previous sync shape used
     /// fire-and-forget Tasks under the hood, which made no FIFO guarantee.
-    func broadcastToAll(_ message: ServerMessage) async {
+    @discardableResult
+    func broadcastToAll(_ message: ServerMessage) async -> Result<Void, BroadcastDeliveryFailure> {
         guard !message.isScreenshot else {
-            insideJobLogger.error("Refusing to broadcast screenshot payload; screenshots must be requested explicitly")
-            return
+            let failure = BroadcastDeliveryFailure.screenshotPayloadRefused
+            insideJobLogger.error("\(failure.description)")
+            return .failure(failure)
         }
         let data: Data
         switch encodeEnvelope(message) {
@@ -641,12 +663,17 @@ final class TheGetaway {
             data = envelopeData
         case .failure(let failure):
             logEncodingFailure(failure)
-            return
+            return .failure(.responseEncodingFailed(failure))
         }
         // Capture the Sendable SimpleSocketServer actor across the hop —
         // ServerTransport itself is NSObject and non-Sendable.
-        guard let server = transport?.server else { return }
+        guard let server = transport?.server else {
+            let failure = BroadcastDeliveryFailure.transportUnavailable
+            insideJobLogger.error("\(failure.description)")
+            return .failure(failure)
+        }
         await server.broadcastToAll(data)
+        return .success(())
     }
 
     // MARK: - Response Helpers

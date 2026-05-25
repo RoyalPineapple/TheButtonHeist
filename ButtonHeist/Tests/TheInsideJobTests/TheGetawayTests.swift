@@ -229,10 +229,14 @@ final class TheGetawayTests: XCTestCase {
             screenHeight: 100
         )
 
-        getaway.sendMessage(.info(payload), requestId: "bad-info") { data in
+        let result = getaway.sendMessage(.info(payload), requestId: "bad-info") { data in
             responses.append(data)
         }
 
+        guard case .failure(let failure) = result else {
+            return XCTFail("Expected encoding failure, got \(result)")
+        }
+        XCTAssertEqual(failure.requestId, "bad-info")
         XCTAssertTrue(
             responses.isEmpty,
             "Encoding failure should not send a guessed fallback response for a payload that never reached the wire"
@@ -243,13 +247,16 @@ final class TheGetawayTests: XCTestCase {
         let (getaway, _, _) = await makeGetaway()
         var responseData: Data?
 
-        getaway.sendMessage(
+        let result = getaway.sendMessage(
             .error(ServerError(kind: .general, message: "Explicit failure")),
             requestId: "explicit-error"
         ) { data in
             responseData = data
         }
 
+        guard case .success = result else {
+            return XCTFail("Expected explicit error response to encode, got \(result)")
+        }
         let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
         XCTAssertEqual(envelope.requestId, "explicit-error")
         guard case .error(let error) = envelope.message else {
@@ -257,6 +264,17 @@ final class TheGetawayTests: XCTestCase {
         }
         XCTAssertEqual(error.kind, .general)
         XCTAssertEqual(error.message, "Explicit failure")
+    }
+
+    func testBroadcastWithoutTransportReturnsTypedFailure() async {
+        let (getaway, _, _) = await makeGetaway()
+        await getaway.tearDown()
+
+        let result = await getaway.broadcastToAll(.recordingStopped)
+
+        guard case .failure(.transportUnavailable) = result else {
+            return XCTFail("Expected missing transport broadcast failure, got \(result)")
+        }
     }
 
     // MARK: - Stale Targeted Actions
