@@ -1801,12 +1801,13 @@ final class TheFenceHandlerTests: XCTestCase {
             "count": 3,
         ])
 
-        guard case .error(let message, _) = response else {
-            return XCTFail("Expected error response, got \(response)")
+        guard case .action(let result, _) = response else {
+            return XCTFail("Expected action failure response, got \(response)")
         }
         XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 2)
-        XCTAssertTrue(message.contains("increment repetition 2 of 3 failed"))
-        XCTAssertTrue(message.contains("adjustment failed"))
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(result.message, "adjustment failed")
     }
 
     @ButtonHeistActor
