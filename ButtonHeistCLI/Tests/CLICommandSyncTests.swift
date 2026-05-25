@@ -838,6 +838,51 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(rotorSource.contains("var direction: String = RotorDirection.next.rawValue"))
     }
 
+    func testCLIChoiceHelpProjectsFromFenceParameterSpecs() {
+        XCTAssertTrue(
+            normalizedHelp(ScrollCommand.helpMessage()).contains(
+                "Scroll direction: \(catalogEnumValues(.scroll, .direction)) (default: \(catalogStringDefault(.scroll, .direction)))"
+            )
+        )
+        XCTAssertTrue(
+            normalizedHelp(ScrollToEdgeCommand.helpMessage()).contains(
+                "Edge to scroll to: \(catalogEnumValues(.scrollToEdge, .edge)) (default: \(catalogStringDefault(.scrollToEdge, .edge)))"
+            )
+        )
+        XCTAssertTrue(
+            normalizedHelp(RotorCommand.helpMessage()).contains(
+                "Direction: \(catalogEnumValues(.rotor, .direction)) (default: \(catalogStringDefault(.rotor, .direction)))"
+            )
+        )
+        XCTAssertTrue(
+            normalizedHelp(EditActionCommand.helpMessage()).contains("Edit action: \(catalogEnumValues(.editAction, .action))")
+        )
+    }
+
+    func testCLIChoiceValidationDoesNotMirrorCatalogEnumCasesInSources() throws {
+        let mirroredEnums = [
+            "ScrollDirection",
+            "ScrollSearchDirection",
+            "ScrollEdge",
+            "RotorDirection",
+            "SwipeDirection",
+            "EditAction.allCases",
+            "TheFence.BatchPolicy.allCases",
+        ]
+        let sourceFiles = try swiftSourceFiles(under: "ButtonHeistCLI/Sources/Commands")
+            + swiftSourceFiles(under: "ButtonHeistCLI/Sources/Support")
+
+        for file in sourceFiles {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for mirror in mirroredEnums {
+                XCTAssertFalse(
+                    source.contains(mirror),
+                    "\(relativePath(file)) should project choice values from FenceParameterSpec instead of \(mirror)"
+                )
+            }
+        }
+    }
+
     func testHumanParserMapsCoordinateTapAlias() throws {
         let request = try ReplSession.parseHumanInput("tap 100 200")
 
@@ -860,6 +905,10 @@ final class CLICommandSyncTests: XCTestCase {
             .first(where: { !$0.isEmpty }) ?? ""
     }
 
+    private func normalizedHelp(_ help: String) -> String {
+        help.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
     private func topLevelCommandNames() -> [String] {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
@@ -877,6 +926,19 @@ final class CLICommandSyncTests: XCTestCase {
             return ""
         }
         return value
+    }
+
+    private func catalogEnumValues(
+        _ command: TheFence.Command,
+        _ key: FenceParameterKey,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> String {
+        guard let values = command.parameter(named: key)?.enumValues else {
+            XCTFail("Missing catalog enum values for \(command.rawValue).\(key.rawValue)", file: file, line: line)
+            return ""
+        }
+        return values.joined(separator: ", ")
     }
 
     private var descriptorParameterKeys: Set<String> {

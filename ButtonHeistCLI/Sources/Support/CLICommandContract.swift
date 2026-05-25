@@ -115,6 +115,30 @@ extension CLICommandContract {
         }
         return value
     }
+
+    static func catalogAllowedValues(for key: FenceParameterKey) -> [String] {
+        guard let values = fenceCommand.parameter(named: key)?.enumValues else {
+            fatalError("No enum values registered for \(fenceCommand.rawValue).\(key.rawValue)")
+        }
+        return values
+    }
+
+    static func catalogAllowedValuesDescription(for key: FenceParameterKey) -> String {
+        catalogAllowedValues(for: key).joined(separator: ", ")
+    }
+
+    static func catalogCanonicalStringValue(
+        _ value: String,
+        for key: FenceParameterKey,
+        caseInsensitive: Bool = true
+    ) -> String? {
+        let values = catalogAllowedValues(for: key)
+        if caseInsensitive {
+            let normalizedValue = value.lowercased()
+            return values.first { $0.lowercased() == normalizedValue }
+        }
+        return values.contains(value) ? value : nil
+    }
 }
 
 extension TheFence.Command {

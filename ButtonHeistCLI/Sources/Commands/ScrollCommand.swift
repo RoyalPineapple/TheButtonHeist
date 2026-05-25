@@ -23,7 +23,10 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
     @Option(name: .customLong("stable-id"), help: "Scrollable container stableId from get_interface")
     var stableId: String?
 
-    @Option(name: .shortAndLong, help: "Scroll direction: up, down, left, right, next, previous (default: down)")
+    @Option(
+        name: .shortAndLong,
+        help: "Scroll direction: \(Self.catalogAllowedValuesDescription(for: .direction))"
+    )
     var direction: String = Self.catalogDefaultString(for: .direction)
 
     @OptionGroup var connection: ConnectionOptions
@@ -32,12 +35,12 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard let scrollDirection = ScrollDirection(rawValue: direction.lowercased()) else {
-            throw ValidationError("Invalid direction '\(direction)'. Valid: \(ScrollDirection.allCases.map(\.rawValue).joined(separator: ", "))")
+        guard let scrollDirection = Self.catalogCanonicalStringValue(direction, for: .direction) else {
+            throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
 
         var request = Self.fenceRequest([
-            .direction: .string(scrollDirection.rawValue),
+            .direction: .string(scrollDirection),
             .timeout: .double(timeoutOption.timeout),
         ])
         if let stableId { request.set(.stableId, stableId) }

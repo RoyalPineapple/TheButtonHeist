@@ -41,10 +41,10 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
 
         var request = Self.fenceRequest([.steps: .array(batchSteps.map(\.value))])
         if let policy {
-            guard let parsedPolicy = TheFence.BatchPolicy(rawValue: policy) else {
-                throw ValidationError("Invalid policy '\(policy)'. Valid: \(TheFence.BatchPolicy.allCases.map(\.rawValue).joined(separator: ", "))")
+            guard let parsedPolicy = Self.catalogCanonicalStringValue(policy, for: .policy, caseInsensitive: false) else {
+                throw ValidationError("Invalid policy '\(policy)'. Valid: \(Self.catalogAllowedValuesDescription(for: .policy))")
             }
-            request.set(.policy, .string(parsedPolicy.rawValue))
+            request.set(.policy, .string(parsedPolicy))
         }
         try await CLIRunner.run(
             connection: connection,

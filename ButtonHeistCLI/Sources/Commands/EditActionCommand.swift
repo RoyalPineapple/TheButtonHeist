@@ -17,24 +17,20 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
             """
     )
 
-    @Argument(help: "Edit action: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
+    @Argument(help: "Edit action: \(Self.catalogAllowedValuesDescription(for: .action))")
     var action: String
 
     @OptionGroup var connection: ConnectionOptions
     @OptionGroup var output: OutputOptions
 
     func validate() throws {
-        guard EditAction(rawValue: action) != nil else {
-            throw ValidationError("Unknown edit action: \(action). Valid: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
-        }
+        _ = try Self.canonicalAction(action)
     }
 
     @ButtonHeistActor
     mutating func run() async throws {
-        guard let editAction = EditAction(rawValue: action) else {
-            throw ValidationError("Unknown edit action: \(action). Valid: \(EditAction.allCases.map(\.rawValue).joined(separator: ", "))")
-        }
-        let request = Self.fenceRequest([.action: .string(editAction.rawValue)])
+        let editAction = try Self.canonicalAction(action)
+        let request = Self.fenceRequest([.action: .string(editAction)])
 
         try await CLIRunner.run(
             connection: connection,
@@ -42,5 +38,12 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
             request: request,
             statusMessage: "Sending \(action)..."
         )
+    }
+
+    private static func canonicalAction(_ action: String) throws -> String {
+        guard let editAction = Self.catalogCanonicalStringValue(action, for: .action, caseInsensitive: false) else {
+            throw ValidationError("Unknown edit action: \(action). Valid: \(Self.catalogAllowedValuesDescription(for: .action))")
+        }
+        return editAction
     }
 }
