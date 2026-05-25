@@ -28,41 +28,7 @@ struct ButtonHeistMCPServer {
     }
 
     static var instructions: String {
-        let matcherKeys = inlineList(TheFence.Command.activate.descriptor.elementTargetParameterKeys)
-        let expectationKey = TheFence.Command.activate.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue
-        return """
-            Button Heist drives iOS apps through the accessibility layer — the same interface \
-            VoiceOver uses. Target elements with schema matcher fields: \(matcherKeys), not \
-            by screen coordinates. The core loop is: \(inlineToolName(for: .getInterface)) \
-            to read the app accessibility state, then \(inlineToolName(for: .activate))/\
-            \(inlineToolName(for: .typeText))/\(inlineToolName(for: .scroll))/\
-            \(inlineToolName(for: .swipe)) to act with an \(inlineCode(expectationKey)) \
-            attached. Every response carries a \
-            `[while_idle: ...]` block describing what changed since your last call — read it \
-            before deciding to re-fetch. When an action produces a transient state (spinner, \
-            loading overlay), call \(inlineToolName(for: .waitForChange)) with the same \
-            expectation to ride through intermediate states. Use \
-            \(inlineToolName(for: .runBatch)) for multi-step sequences with per-step \
-            expectations. Use \(inlineToolName(for: .startHeist))/\
-            \(inlineToolName(for: .stopHeist)) to record replayable .heist files. \
-            Full guide: docs/MCP-AGENT-GUIDE.md.
-            """
-    }
-
-    private static func toolName(for command: TheFence.Command) -> String {
-        TheFence.Command.mcpToolContracts.first { $0.commands.contains(command) }?.name ?? command.canonicalName
-    }
-
-    private static func inlineToolName(for command: TheFence.Command) -> String {
-        inlineCode(toolName(for: command))
-    }
-
-    private static func inlineList(_ values: [String]) -> String {
-        values.map { inlineCode($0) }.joined(separator: ", ")
-    }
-
-    private static func inlineCode(_ value: String) -> String {
-        "`\(value)`"
+        TheFence.Command.mcpServerInstructions
     }
 
     @ButtonHeistActor

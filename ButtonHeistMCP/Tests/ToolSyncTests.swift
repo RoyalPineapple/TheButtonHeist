@@ -612,6 +612,10 @@ struct ToolSyncTests {
     @Test("MCP server entry point does not hard-code catalog literals")
     func mcpServerEntryPointDoesNotHardCodeCatalogLiterals() throws {
         let source = try readRepositoryFile("ButtonHeistMCP/Sources/main.swift")
+        let sourceWithoutInstructionProjection = source.replacingOccurrences(
+            of: "TheFence.Command.mcpServerInstructions",
+            with: ""
+        )
         let sourceForLiteralScan = Self.removingLineComments(from: source)
         let literalCounts = Self.stringLiteralCounts(in: sourceForLiteralScan)
         let literalMirrors = Set(literalCounts.keys).intersection(Self.fenceCatalogLiterals)
@@ -628,12 +632,12 @@ struct ToolSyncTests {
             "main.swift should not route through an untyped Any conversion helper"
         )
         #expect(
-            source.contains("parameter(named:"),
-            "main.swift should use the descriptor parameter lookup API for instruction keys"
+            source.contains("TheFence.Command.mcpServerInstructions"),
+            "main.swift should project server instructions from the Fence-owned command presentation"
         )
         #expect(
-            !source.contains("parameters.first"),
-            "main.swift should not open-code descriptor parameter scans"
+            !sourceWithoutInstructionProjection.contains("TheFence.Command."),
+            "main.swift should not reference command cases outside the Fence-owned instruction projection"
         )
     }
 

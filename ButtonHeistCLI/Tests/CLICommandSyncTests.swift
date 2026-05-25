@@ -256,8 +256,16 @@ final class CLICommandSyncTests: XCTestCase {
         let source = try readRepositoryFile("ButtonHeistCLI/Sources/Session/SessionRepl.swift")
 
         XCTAssertTrue(
-            source.contains("descriptor.cliName != nil"),
-            "REPL help should use FenceCommandDescriptor.cliName as the CLI exposure projection"
+            source.contains("TheFence.Command.cliSessionHelp"),
+            "REPL help should project through the Fence-owned CLI help renderer"
+        )
+        XCTAssertFalse(
+            source.contains("TheFence.Command.descriptors"),
+            "REPL help should not scan command descriptors itself"
+        )
+        XCTAssertFalse(
+            source.contains("descriptor.cliName"),
+            "REPL help should not own CLI exposure projection"
         )
         XCTAssertFalse(
             source.contains("descriptor.cliExposure"),
@@ -654,10 +662,8 @@ final class CLICommandSyncTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(
-            source.contains("TheFence.Command.humanCommandAliases"),
-            "REPL alias help should render from the canonical alias projection"
-        )
+        XCTAssertTrue(source.contains("TheFence.Command.cliSessionHelp"), "REPL alias help should render from the Fence-owned CLI help projection")
+        XCTAssertFalse(source.contains("TheFence.Command.humanCommandAliases"), "REPL alias help should not read alias tables directly")
         XCTAssertFalse(source.contains("commandAliases:"), "REPL command aliases should live in TheFence.Command.humanCommandAliases")
         XCTAssertFalse(source.contains("compoundAliases:"), "REPL compound aliases should live in TheFence.Command.humanCommandAliases")
         XCTAssertFalse(source.contains("descriptor.humanAliases"), "REPL should not rescan descriptor alias fields")

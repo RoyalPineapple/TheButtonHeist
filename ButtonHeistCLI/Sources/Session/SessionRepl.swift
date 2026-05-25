@@ -160,62 +160,7 @@ final class ReplSession {
 nonisolated extension ReplSession {
 
     static var humanHelp: String {
-        let commandLines = descriptorHelpLines()
-        let aliasLines = aliasHelpLines()
-        let aliasSection = aliasLines.isEmpty ? "" : """
-
-            Aliases:
-        \(aliasLines.joined(separator: "\n"))
-        """
-
-        return """
-        Commands (type a command, or use JSON for full control):
-
-        Commands:
-        \(commandLines.joined(separator: "\n"))
-        \(aliasSection)
-
-        Bare words are looked up as current heistId handles (from get_interface).
-        Key=value pairs work for any parameter: tap identifier=btn x=100 y=200
-        JSON input still works: {"command":"activate","heistId":"button_save"}
-        """
-    }
-
-    private static func descriptorHelpLines() -> [String] {
-        let descriptors = TheFence.Command.descriptors
-            .filter { descriptor in descriptor.cliName != nil }
-            .sorted { $0.canonicalName < $1.canonicalName }
-        let width = descriptors.map(\.canonicalName.count).max() ?? 0
-
-        return descriptors.map { descriptor in
-            "  \(padded(descriptor.canonicalName, to: width))  \(oneLineDescription(descriptor.description))"
-        }
-    }
-
-    private static func aliasHelpLines() -> [String] {
-        var aliases = TheFence.Command.humanCommandAliases.map { entry in
-            (alias: entry.key, command: entry.value.command.canonicalName)
-        }
-        aliases.sort { lhs, rhs in
-            lhs.alias == rhs.alias ? lhs.command < rhs.command : lhs.alias < rhs.alias
-        }
-
-        let width = aliases.map(\.alias.count).max() ?? 0
-        return aliases.map { alias in
-            "  \(padded(alias.alias, to: width))  -> \(alias.command)"
-        }
-    }
-
-    private static func oneLineDescription(_ description: String) -> String {
-        description
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first(where: { !$0.isEmpty }) ?? ""
-    }
-
-    private static func padded(_ value: String, to width: Int) -> String {
-        guard value.count < width else { return value }
-        return value + String(repeating: " ", count: width - value.count)
+        TheFence.Command.cliSessionHelp
     }
 
     static func parseHumanInput(_ line: String) throws -> [String: Any] {
