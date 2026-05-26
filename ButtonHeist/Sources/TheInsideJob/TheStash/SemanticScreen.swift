@@ -17,8 +17,17 @@ import AccessibilitySnapshotParser
 /// `LiveCapture` for each operation.
 struct SemanticScreen: Equatable {
     let elements: [HeistId: Element]
+    let containers: [TreePath: Container]
 
-    static let empty = SemanticScreen(elements: [:])
+    static let empty = SemanticScreen(elements: [:], containers: [:])
+
+    init(
+        elements: [HeistId: Element],
+        containers: [TreePath: Container] = [:]
+    ) {
+        self.elements = elements
+        self.containers = containers
+    }
 
     var heistIds: Set<HeistId> {
         Set(elements.keys)
@@ -102,6 +111,20 @@ struct SemanticScreen: Equatable {
             guard let origin, let scrollContainer else { return nil }
             return ScrollContentLocation(origin: origin, scrollContainer: scrollContainer)
         }
+    }
+
+    // MARK: - Container Entry
+
+    /// Durable semantic container identity and content-space evidence.
+    ///
+    /// The path and content frame are capture-local semantic evidence used to
+    /// derive a reveal plan. UIKit object refs and live activation geometry
+    /// remain in `LiveCapture` and are acquired only at dispatch time.
+    struct Container: Equatable {
+        let container: AccessibilityContainer
+        let path: TreePath
+        let stableId: HeistContainer?
+        let contentFrame: CGRect?
     }
 
     // MARK: - Fingerprint

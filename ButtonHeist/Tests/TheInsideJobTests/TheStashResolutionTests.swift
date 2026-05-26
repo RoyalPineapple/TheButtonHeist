@@ -89,6 +89,41 @@ final class TheStashResolutionTests: XCTestCase {
         )
     }
 
+    func testContainerTargetResolutionUsesCommittedSemanticContainers() {
+        let path = TreePath([0, 1])
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            frame: AccessibilityRect(CGRect(x: 0, y: 900, width: 240, height: 80)),
+            customActions: [.init(name: "Archive")]
+        )
+        bagman.currentScreen = Screen(
+            semantic: SemanticScreen(
+                elements: [:],
+                containers: [
+                    path: .init(
+                        container: container,
+                        path: path,
+                        stableId: "semantic_actions__actions",
+                        contentFrame: CGRect(x: 0, y: 900, width: 240, height: 80)
+                    ),
+                ]
+            ),
+            liveCapture: .empty
+        )
+
+        switch bagman.resolveContainerTarget(
+            ContainerMatcher(stableId: "semantic_actions__actions"),
+            ordinal: nil
+        ) {
+        case .resolved(let resolved):
+            XCTAssertEqual(resolved.path, path)
+            XCTAssertEqual(resolved.stableId, "semantic_actions__actions")
+            XCTAssertEqual(resolved.contentFrame?.origin.y, 900)
+        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
+            XCTFail("Expected semantic container resolution, got \(diagnostics)")
+        }
+    }
+
     // MARK: - heistId Resolution
 
     func testHeistIdResolvesPresented() {
@@ -652,7 +687,6 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(resolved.screenElement.heistId, "below_fold_button")
         XCTAssertNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
-        XCTAssertNil(bagman.liveGeometry(for: resolved.screenElement))
         guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Known-only target should not have a live action target")
             return
@@ -678,7 +712,6 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(bagman.increment(liveTarget))
-        XCTAssertNotNil(bagman.liveGeometry(for: refreshed.screenElement))
     }
 
     func testLiveGeometryRejectsNonFiniteActivationPoint() {
@@ -708,7 +741,6 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected visible target to resolve")
             return
         }
-        XCTAssertNil(bagman.liveGeometry(for: resolved.screenElement))
         guard case .geometryUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Expected non-finite activation point to be rejected as missing live geometry")
             return

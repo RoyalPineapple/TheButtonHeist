@@ -1026,6 +1026,35 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found \(heistId)") ?? false)
     }
 
+    func testExecuteRotorUsesOnscreenAccessibilityGeometryAtViewportEdge() async {
+        let heistId = "edge_rotor_host"
+        let frame = CGRect(x: 20, y: -20, width: 180, height: 44)
+        let element = AccessibilityElement.make(
+            label: "Edge Rotor Host",
+            identifier: heistId,
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: CGPoint(x: frame.midX, y: 2),
+            customRotors: [.init(name: "Live Rotor")]
+        )
+        let liveObject = UIView()
+        liveObject.accessibilityFrame = frame
+        liveObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Live Rotor") { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: liveObject, targetRange: nil)
+            },
+        ]
+        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(elementTarget: .heistId(heistId), rotor: "Live Rotor")
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "rotor failed")
+        XCTAssertEqual(result.method, .rotor)
+        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found \(heistId)") ?? false)
+    }
+
     func testExecuteRotorNotFoundReportsAvailableRotorsAndNextStep() async {
         let heistId = "rotor_host"
         let liveObject = UIView()

@@ -30,16 +30,6 @@ struct LiveActionTargetRecoveryPolicy {
 
     @MainActor
     func resolve(_ request: Request) async -> Resolution {
-        if let preflight = request.preflight {
-            switch navigation.stash.resolveTarget(request.normalizedTarget.executableTarget) {
-            case .resolved(let resolved):
-                if let failure = preflight(resolved) {
-                    return .failure(failure)
-                }
-            case .notFound, .ambiguous:
-                break
-            }
-        }
         switch await navigation.makeActionable(
             for: request.normalizedTarget,
             method: request.method,

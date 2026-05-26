@@ -133,6 +133,21 @@ final class TheBrainsScrollTests: XCTestCase {
                                     "Offset should respect top content inset")
     }
 
+    func testScrollTargetOffsetCentersWithinAdjustedVisibleRect() {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        scrollView.contentSize = CGSize(width: 3000, height: 5000)
+        scrollView.contentInset = UIEdgeInsets(top: 100, left: 20, bottom: 50, right: 60)
+
+        let origin = CGPoint(x: 1000, y: 1800)
+        let offset = TheStash.semanticRevealTargetOffset(for: origin, in: scrollView)
+
+        let insets = scrollView.adjustedContentInset
+        let visibleWidth = scrollView.bounds.width - insets.left - insets.right
+        let visibleHeight = scrollView.bounds.height - insets.top - insets.bottom
+        XCTAssertEqual(offset.x + insets.left + visibleWidth / 2, origin.x, accuracy: 0.01)
+        XCTAssertEqual(offset.y + insets.top + visibleHeight / 2, origin.y, accuracy: 0.01)
+    }
+
     func testScrollTargetOffsetHorizontalClamping() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
         scrollView.contentSize = CGSize(width: 2000, height: 667)
@@ -582,6 +597,50 @@ final class TheBrainsScrollTests: XCTestCase {
 
         guard case .failed(let failure) = result else {
             return XCTFail("Expected geometry-not-actionable failure, got \(result)")
+        }
+        XCTAssertEqual(failure.failedStep, .geometryNotActionable)
+        XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))
+    }
+
+    func testActionabilityRequiresActivationPointOnScreenWhenFrameIntersectsViewport() async {
+        let elementFrame = CGRect(x: 24, y: -24, width: 180, height: 44)
+        let object = UIButton(type: .system)
+        object.accessibilityLabel = "Escaped"
+        object.accessibilityFrame = elementFrame
+        object.accessibilityActivationPoint = CGPoint(x: elementFrame.midX, y: -4)
+        let element = AccessibilityElement.make(
+            label: "Escaped",
+            traits: .button,
+            shape: .frame(AccessibilityRect(elementFrame)),
+            activationPoint: object.accessibilityActivationPoint
+        )
+        let entry = Screen.ScreenElement(
+            heistId: "escaped_button",
+            contentSpaceOrigin: nil,
+            element: element
+        )
+        brains.stash.currentScreen = Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [.element(element, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [element: entry.heistId],
+            elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let normalized = brains.stash.normalizeTarget(
+            ElementTarget.heistId("escaped_button"),
+            in: brains.stash.currentScreen
+        )
+        let result = await brains.navigation.makeActionable(
+            for: normalized,
+            method: .scrollToVisible,
+            deallocatedBoundary: "test actionability"
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected not-actionable failure, got \(result)")
         }
         XCTAssertEqual(failure.failedStep, .geometryNotActionable)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))

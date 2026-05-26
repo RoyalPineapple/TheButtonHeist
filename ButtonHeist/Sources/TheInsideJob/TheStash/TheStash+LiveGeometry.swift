@@ -45,12 +45,6 @@ extension TheStash {
         }
     }
 
-    struct LiveGeometry {
-        let frame: CGRect
-        let activationPoint: CGPoint
-        let scrollView: UIScrollView
-    }
-
     /// Dispatch-only action target.
     ///
     /// The `resolvedTarget` is semantic identity; `object`, `frame`, and
@@ -89,17 +83,6 @@ extension TheStash {
         case resolved(LiveContainerTarget)
         case objectUnavailable
         case geometryUnavailable
-    }
-
-    func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
-        guard let object = dispatchObject(for: screenElement),
-              let scrollView = liveScrollView(for: screenElement),
-              let geometry = LiveElementGeometry(object: object) else { return nil }
-        return LiveGeometry(
-            frame: geometry.frame,
-            activationPoint: geometry.activationPoint,
-            scrollView: scrollView
-        )
     }
 
     func resolveLiveActionTarget(for resolvedTarget: ResolvedTarget) -> LiveActionTargetResolution {
