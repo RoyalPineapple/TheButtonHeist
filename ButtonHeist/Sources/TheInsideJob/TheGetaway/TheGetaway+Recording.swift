@@ -290,14 +290,19 @@ extension TheGetaway {
                 // authenticated-set read and the send, we keep the cached
                 // payload so a subsequent `stop_recording` (or `tearDown`) can
                 // still resolve it — never drop a recording into the void.
-                let deliveryOutcome = await muscle.sendData(payloadData, toClient: owner)
-                if deliveryOutcome.didEnqueue {
+                let deliveryOutcome = await sendEncodedData(payloadData, toClient: owner)
+                if deliveryOutcome.didDeliver {
                     replaceRecordingRouteState(.idle)
+                } else {
+                    insideJobLogger.error("\(deliveryOutcome.description)")
                 }
                 switch encodeEnvelope(.recordingStopped) {
                 case .success(let stoppedData):
                     for otherClient in authenticated where otherClient != owner {
-                        _ = await muscle.sendData(stoppedData, toClient: otherClient)
+                        let stoppedDelivery = await sendEncodedData(stoppedData, toClient: otherClient)
+                        if !stoppedDelivery.didDeliver {
+                            insideJobLogger.error("\(stoppedDelivery.description)")
+                        }
                     }
                 case .failure(let failure):
                     logEncodingFailure(failure)
