@@ -196,31 +196,23 @@ extension Actions {
         ordinal: Int?,
         actionName: String
     ) async -> TheSafecracker.InteractionResult {
-        let containerTarget: TheStash.ResolvedContainerTarget
-        switch stash.resolveContainerTarget(matcher, ordinal: ordinal) {
-        case .resolved(let resolved):
-            containerTarget = resolved
-        case .notFound(let diagnostics):
-            return Navigation.SemanticActionabilityFailure
-                .notFound("custom action container target could not be made actionable: \(diagnostics)")
-                .interactionResult(commandMethod: .customAction)
-        case .ambiguous(_, let diagnostics):
-            return Navigation.SemanticActionabilityFailure
-                .ambiguous("custom action container target is ambiguous: \(diagnostics)")
-                .interactionResult(commandMethod: .customAction)
+        let containerTarget: Navigation.SemanticContainerActionableTarget
+        switch await navigation.makeContainerActionable(
+            matcher: matcher,
+            ordinal: ordinal,
+            method: .customAction
+        ) {
+        case .actionable(let actionableTarget):
+            containerTarget = actionableTarget
+        case .failed(let failure):
+            return failure.interactionResult(commandMethod: .customAction)
         }
-        let liveTargetResolution = stash.resolveLiveContainerTarget(for: containerTarget)
-        guard case .resolved(let liveContainerTarget) = liveTargetResolution else {
-            return Navigation.SemanticActionabilityFailure.staleRefresh(
-                "custom action container target became stale before dispatch",
-                method: .customAction
-            ).interactionResult(commandMethod: .customAction)
-        }
+        let liveContainerTarget = containerTarget.liveTarget
         switch stash.performCustomAction(named: actionName, on: liveContainerTarget) {
         case .deallocated:
             return .failure(.customAction, message: "custom action failed: container object deallocated")
         case .noSuchAction:
-            let available = containerTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
+            let available = containerTarget.resolvedTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
             let suffix = available.isEmpty ? "" : "; available custom actions: \(available.map { "\"\($0)\"" }.joined(separator: ", "))"
             return .failure(
                 .customAction,
@@ -232,10 +224,7 @@ extension Actions {
                 message: "custom action failed: requestedAction=\"\(actionName)\" declined by container handler"
             )
         case .succeeded:
-            safecracker.showFingerprint(at: CGPoint(
-                x: containerTarget.container.frame.origin.x + containerTarget.container.frame.size.width / 2,
-                y: containerTarget.container.frame.origin.y + containerTarget.container.frame.size.height / 2
-            ))
+            safecracker.showFingerprint(at: liveContainerTarget.activationPoint)
             return .success(method: .customAction)
         }
     }

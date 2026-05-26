@@ -76,6 +76,8 @@ extension TheStash {
     struct LiveContainerTarget {
         let resolvedTarget: ResolvedContainerTarget
         let object: NSObject
+        let frame: CGRect
+        let activationPoint: CGPoint
 
         var container: AccessibilityContainer { resolvedTarget.container }
     }
@@ -83,6 +85,7 @@ extension TheStash {
     enum LiveContainerTargetResolution {
         case resolved(LiveContainerTarget)
         case objectUnavailable
+        case geometryUnavailable
     }
 
     func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
@@ -115,7 +118,15 @@ extension TheStash {
         guard let object = currentScreen.liveInterface.containerObject(forPath: resolvedTarget.path) else {
             return .objectUnavailable
         }
-        return .resolved(LiveContainerTarget(resolvedTarget: resolvedTarget, object: object))
+        guard let geometry = LiveElementGeometry(object: object) else {
+            return .geometryUnavailable
+        }
+        return .resolved(LiveContainerTarget(
+            resolvedTarget: resolvedTarget,
+            object: object,
+            frame: geometry.frame,
+            activationPoint: geometry.activationPoint
+        ))
     }
 
     func liveObject(for screenElement: ScreenElement) -> NSObject? {

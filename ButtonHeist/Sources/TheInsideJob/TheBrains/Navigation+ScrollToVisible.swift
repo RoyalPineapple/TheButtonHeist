@@ -34,6 +34,11 @@ extension Navigation {
         let liveTarget: TheStash.LiveActionTarget
     }
 
+    struct SemanticContainerActionableTarget {
+        let resolvedTarget: TheStash.ResolvedContainerTarget
+        let liveTarget: TheStash.LiveContainerTarget
+    }
+
     enum SemanticActionabilityResult {
         case actionable(SemanticActionableTarget)
         case failed(SemanticActionabilityFailure)
@@ -42,6 +47,11 @@ extension Navigation {
             if case .failed(let failure) = self { return failure }
             return nil
         }
+    }
+
+    enum SemanticContainerActionabilityResult {
+        case actionable(SemanticContainerActionableTarget)
+        case failed(SemanticActionabilityFailure)
     }
 
     enum SemanticActionabilityFailureStep: String {
@@ -333,6 +343,37 @@ extension Navigation {
                 ),
                 method: method
             ))
+        }
+    }
+
+    func makeContainerActionable(
+        matcher: ContainerMatcher,
+        ordinal: Int?,
+        method: ActionMethod
+    ) async -> SemanticContainerActionabilityResult {
+        switch stash.resolveContainerTarget(matcher, ordinal: ordinal) {
+        case .resolved(let resolvedTarget):
+            switch stash.resolveLiveContainerTarget(for: resolvedTarget) {
+            case .resolved(let liveTarget):
+                return .actionable(SemanticContainerActionableTarget(
+                    resolvedTarget: resolvedTarget,
+                    liveTarget: liveTarget
+                ))
+            case .objectUnavailable:
+                return .failed(.staleRefresh(
+                    "container target became stale before dispatch",
+                    method: method
+                ))
+            case .geometryUnavailable:
+                return .failed(.geometryNotActionable(
+                    "container target has no fresh actionable geometry",
+                    method: method
+                ))
+            }
+        case .notFound(let diagnostics):
+            return .failed(.notFound("container target could not be made actionable: \(diagnostics)"))
+        case .ambiguous(_, let diagnostics):
+            return .failed(.ambiguous("container target is ambiguous: \(diagnostics)"))
         }
     }
 
