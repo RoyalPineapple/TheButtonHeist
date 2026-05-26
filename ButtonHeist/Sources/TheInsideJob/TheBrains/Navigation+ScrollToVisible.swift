@@ -345,14 +345,36 @@ extension Navigation {
     }
 
     private func alignVisibleResolvedTarget(_ resolved: TheStash.ResolvedTarget) async -> SemanticVisibilityResult {
-        guard let geometry = stash.liveGeometry(for: resolved.screenElement),
-              !ScreenMetrics.current.bounds.contains(geometry.frame),
-              !Self.interactionComfortZone.contains(geometry.activationPoint) else {
+        let liveTarget: TheStash.LiveActionTarget
+        switch stash.resolveLiveActionTarget(for: resolved) {
+        case .resolved(let target):
+            liveTarget = target
+        case .objectUnavailable:
+            return .failed(.staleRefresh(
+                "visible target \(Self.describeScrollTarget(resolved.screenElement)) has no live dispatch object",
+                method: .elementDeallocated
+            ))
+        case .geometryUnavailable:
+            return .failed(.geometryNotActionable(
+                "visible target \(Self.describeScrollTarget(resolved.screenElement)) has no usable live geometry"
+            ))
+        }
+
+        if ScreenMetrics.current.bounds.contains(liveTarget.frame)
+            || Self.interactionComfortZone.contains(liveTarget.activationPoint) {
             return .alreadyUsable
         }
+
+        guard let scrollView = stash.liveScrollView(for: resolved.screenElement) else {
+            return .failed(.noRevealPath(
+                "visible target \(Self.describeScrollTarget(resolved.screenElement)) "
+                    + "has no live scrollable ancestor to make actionable"
+            ))
+        }
+
         guard safecracker.scrollToMakeVisible(
-            geometry.frame,
-            in: geometry.scrollView,
+            liveTarget.frame,
+            in: scrollView,
             comfortMarginFraction: Self.comfortMarginFraction
         ) else {
             return .failed(.geometryNotActionable(

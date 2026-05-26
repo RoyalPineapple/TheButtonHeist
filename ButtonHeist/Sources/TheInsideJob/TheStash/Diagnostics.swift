@@ -28,7 +28,7 @@ extension TheStash {
     /// Diagnostic for an heistId that isn't in the committed semantic screen.
     /// By the time we land here, semantic actionability has already tried to reveal
     /// it, so the id is either stale (the hierarchy changed since the agent's
-    /// last `get_interface`) or it never existed.
+    /// last semantic observation) or it never existed.
     static func heistIdNotFound(
         _ heistId: HeistId,
         knownIds: some Collection<String>,
@@ -39,14 +39,15 @@ extension TheStash {
         if similar.isEmpty {
             return """
                 Element not found: "\(heistId)" — likely stale or the hierarchy \
-                changed since your last get_interface (\(knownCount) known \
-                elements now); refetch via get_interface, or target by \
-                label/identifier with a matcher.
+                changed since the handle was captured (\(knownCount) known \
+                elements now); target by exact label/identifier with a matcher, \
+                or wait for the target to appear.
                 """
         }
         return """
             Element not found: "\(heistId)" — did you mean: \
-            \(similar.joined(separator: ", "))? If not, refetch via get_interface.
+            \(similar.joined(separator: ", "))? If not, target by exact \
+            label/identifier with a matcher.
             """
     }
 
@@ -201,7 +202,7 @@ extension TheStash {
         if screenElements.isEmpty {
             return """
                 \(resolutionScope) hierarchy is empty (0 elements)
-                Next: call get_interface() or wait for the target to appear, then retry with an exact label, identifier, heistId, or ordinal.
+                Next: wait for the target to appear, then retry with an exact label, identifier, heistId, or ordinal.
                 """
         }
         let noun = screenElements.count == 1 ? "element" : "elements"
@@ -224,7 +225,7 @@ extension TheStash {
         }
         lines.append(
             "Next: target one listed element by exact label, identifier, heistId, or ordinal; "
-                + "call get_interface() if the target may be offscreen."
+                + "if the target is absent, wait for it to appear."
         )
         return lines.joined(separator: "\n")
     }

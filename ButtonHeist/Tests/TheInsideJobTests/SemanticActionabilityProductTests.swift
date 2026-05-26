@@ -98,6 +98,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
             "no live scrollable ancestor",
         ])
         XCTAssertFalse(result.message?.localizedCaseInsensitiveContains("scroll first") ?? false)
+        XCTAssertFalse(result.message?.contains("get_interface") ?? false)
         XCTAssertFalse(result.message?.contains("element_search") ?? false)
     }
 

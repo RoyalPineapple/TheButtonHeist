@@ -487,7 +487,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("Element not found") == true)
         XCTAssertTrue(result.message?.contains("missing_button") == true)
         XCTAssertTrue(result.message?.contains("1 known element") == true)
-        XCTAssertTrue(result.message?.contains("get_interface") == true)
+        XCTAssertFalse(result.message?.contains("get_interface") == true)
     }
 
     func testSemanticActionabilityNamesNoRevealPathFailure() async {
@@ -527,6 +527,47 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(result.method, .scrollToVisible)
         XCTAssertTrue(result.message?.contains("semantic actionability failed [noRevealPath]") == true)
         XCTAssertTrue(result.message?.contains("no live scrollable ancestor") == true)
+    }
+
+    func testVisibleTargetOutsideViewportWithoutLiveScrollParentFailsNoRevealPath() async {
+        let elementFrame = CGRect(
+            x: 24,
+            y: ScreenMetrics.current.bounds.maxY + 80,
+            width: 180,
+            height: 44
+        )
+        let object = UIButton(type: .system)
+        object.accessibilityLabel = "Escaped"
+        object.accessibilityFrame = elementFrame
+        object.accessibilityActivationPoint = CGPoint(x: elementFrame.midX, y: elementFrame.midY)
+        let element = makeElement(
+            label: "Escaped",
+            traits: .button,
+            shape: .frame(AccessibilityRect(elementFrame))
+        )
+        let entry = Screen.ScreenElement(
+            heistId: "escaped_button",
+            contentSpaceOrigin: nil,
+            element: element
+        )
+        brains.stash.currentScreen = Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [.element(element, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [element: entry.heistId],
+            elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let result = await brains.navigation.makeSemanticallyVisible(for: .heistId("escaped_button"))
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected no reveal path failure, got \(result)")
+        }
+        XCTAssertEqual(failure.failedStep, .noRevealPath)
+        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
+        XCTAssertTrue(failure.message.contains("no live scrollable ancestor"))
     }
 
     func testElementActionsConsumeSemanticActionabilityFailureBeforeDispatch() async {

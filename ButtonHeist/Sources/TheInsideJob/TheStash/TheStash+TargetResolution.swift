@@ -357,7 +357,7 @@ private extension TheStash {
             guard ordinal >= 0 else {
                 return .notFound(diagnostics: """
                     ordinal must be non-negative, got \(ordinal)
-                    Next: remove ordinal, or use ordinal 0 after get_interface shows the exact candidate order.
+                    Next: remove ordinal, or use ordinal 0 after the target query resolves candidates.
                     """)
             }
             let matches = matchScreenElements(matcher, limit: ordinal + 1, in: screen)
@@ -365,7 +365,7 @@ private extension TheStash {
                 let total = matches.count
                 let nextMove: String
                 if total == 0 {
-                    nextMove = "Next: retry with an exact label, identifier, or heistId from get_interface()."
+                    nextMove = "Next: retry with an exact label, identifier, or current heistId."
                 } else {
                     nextMove = "Next: use ordinal 0...\(total - 1), omit ordinal to inspect ambiguity, "
                         + "or target a listed element by exact label, identifier, or heistId."
