@@ -10,9 +10,10 @@ extension TheBurglar {
 
     // MARK: - Container Content-Frame Building
 
-    /// Walk the hierarchy tree to compute each container's frame expressed in
-    /// the nearest enclosing scrollable's content space. Top-level containers
-    /// (no enclosing scrollable) keep their screen-space frame.
+    /// Walk the hierarchy tree to compute each container's accessibility frame
+    /// and whether it is nested under a scrollable ancestor. Container identity
+    /// is semantic parser evidence; live scroll-view conversion is dispatch
+    /// evidence and must not feed stable ids or interface hashes.
     struct ContainerIdentityContext {
         let contentFrames: [AccessibilityContainer: CGRect]
         let contentFramesByPath: [TreePath: CGRect]
@@ -60,9 +61,8 @@ extension TheBurglar {
 
         let frame = container.frame.cgRect
         let contentFrame: CGRect
-        if let scrollView = parentScrollView, !frame.isNull, !frame.isEmpty {
-            let origin = scrollView.convert(frame.origin, from: nil)
-            contentFrame = CGRect(origin: origin, size: frame.size)
+        if parentScrollView != nil {
+            contentFrame = CGRect(origin: .zero, size: frame.size)
             nestedInScrollView.insert(container)
         } else {
             contentFrame = frame

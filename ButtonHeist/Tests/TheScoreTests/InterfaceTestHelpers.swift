@@ -97,6 +97,18 @@ func makeTestAccessibilityElement(_ element: HeistElement) -> AccessibilityEleme
     )
 }
 
+func defaultActivationPoint(
+    frameX: Double,
+    frameY: Double,
+    frameWidth: Double,
+    frameHeight: Double
+) -> (x: Double, y: Double) {
+    (
+        x: frameX + frameWidth / 2,
+        y: frameY + frameHeight / 2
+    )
+}
+
 func makeTestAccessibilityContainer(
     type: AccessibilityContainer.ContainerType = .semanticGroup(label: nil, value: nil, identifier: nil),
     frameX: Double = 0,
