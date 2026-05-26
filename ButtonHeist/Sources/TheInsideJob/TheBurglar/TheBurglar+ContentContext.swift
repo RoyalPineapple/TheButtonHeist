@@ -97,8 +97,14 @@ extension TheBurglar {
 
     struct ElementContext {
         let contentSpaceOrigin: CGPoint?
+        let scrollContainerPath: TreePath?
         weak var scrollView: UIScrollView?
         weak var object: NSObject?
+    }
+
+    private struct ScrollContext {
+        let view: UIScrollView
+        let containerPath: TreePath
     }
 
     private struct ElementObjectIndex {
@@ -149,7 +155,7 @@ extension TheBurglar {
             collectElementContexts(
                 node: node,
                 path: TreePath([index]),
-                parentScrollView: nil,
+                parentScrollContext: nil,
                 scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                 objectIndex: objectIndex,
@@ -163,7 +169,7 @@ extension TheBurglar {
     private static func collectElementContexts(
         node: AccessibilityHierarchy,
         path: TreePath,
-        parentScrollView: UIScrollView?,
+        parentScrollContext: ScrollContext?,
         scrollableContainerViews: [AccessibilityContainer: UIView],
         scrollableContainerViewsByPath: [TreePath: UIView],
         objectIndex: ElementObjectIndex,
@@ -172,34 +178,35 @@ extension TheBurglar {
     ) {
         switch node {
         case .element(let element, _):
-            let origin: CGPoint? = parentScrollView.flatMap { scrollView in
+            let origin: CGPoint? = parentScrollContext.flatMap { context in
                 let frame = element.shape.frame
                 return (!frame.isNull && !frame.isEmpty)
-                    ? scrollView.convert(frame.origin, from: nil)
+                    ? context.view.convert(frame.origin, from: nil)
                     : nil
             }
             let context = ElementContext(
                 contentSpaceOrigin: origin,
-                scrollView: parentScrollView,
+                scrollContainerPath: parentScrollContext?.containerPath,
+                scrollView: parentScrollContext?.view,
                 object: objectIndex.object(for: element, path: path)
             )
             contexts[element] = context
             contextsByPath[path] = context
         case .container(let container, let children):
-            let childScrollView: UIScrollView?
+            let childScrollContext: ScrollContext?
             if let scrollView = scrollableContainerViewsByPath[path] as? UIScrollView
                 ?? scrollableContainerViews[container] as? UIScrollView,
                !scrollView.bhIsUnsafeForProgrammaticScrolling {
-                childScrollView = scrollView
+                childScrollContext = ScrollContext(view: scrollView, containerPath: path)
             } else {
-                childScrollView = parentScrollView
+                childScrollContext = parentScrollContext
             }
 
             for (index, child) in children.enumerated() {
                 collectElementContexts(
                     node: child,
                     path: path.appending(index),
-                    parentScrollView: childScrollView,
+                    parentScrollContext: childScrollContext,
                     scrollableContainerViews: scrollableContainerViews,
                     scrollableContainerViewsByPath: scrollableContainerViewsByPath,
                     objectIndex: objectIndex,

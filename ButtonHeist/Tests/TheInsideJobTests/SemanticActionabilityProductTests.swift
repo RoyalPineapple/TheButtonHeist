@@ -85,7 +85,11 @@ final class SemanticActionabilityProductTests: XCTestCase {
             label: "Submit Order"
         )
         defer { fixture.cleanup() }
-        try seedKnownOffscreenTarget(fixture, includeScrollView: false)
+        try seedKnownOffscreenTarget(
+            fixture,
+            includeScrollView: false,
+            scrollContainerOverride: "missing_scroll"
+        )
 
         let result = await brains.executeCommand(.activate(
             .matcher(ElementMatcher(identifier: "unrevealable_submit", traits: [.button]))
@@ -276,7 +280,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
     private func seedKnownOffscreenTarget(
         _ fixture: SemanticRevealFixture,
         in targetBrains: TheBrains? = nil,
-        includeScrollView: Bool = true
+        includeScrollView: Bool = true,
+        scrollContainerOverride: HeistContainer? = nil
     ) throws {
         let targetBrains = targetBrains ?? brains!
         let screen = try XCTUnwrap(targetBrains.refresh())
@@ -291,6 +296,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: fixture.knownHeistId,
             contentSpaceOrigin: fixture.contentOrigin,
+            scrollContainerStableId: scrollContainerOverride ?? firstScrollableStableId(in: screen),
             element: element
         )
         var elements = screen.elements

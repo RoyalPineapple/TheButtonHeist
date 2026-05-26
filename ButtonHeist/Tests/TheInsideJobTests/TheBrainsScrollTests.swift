@@ -378,6 +378,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let offscreenEntry = Screen.ScreenElement(
             heistId: offscreen.1,
             contentSpaceOrigin: offscreen.2,
+            scrollContainerStableId: scrollStableId,
             element: offscreen.0
         )
         brains.stash.currentScreen = Screen(
@@ -392,9 +393,9 @@ final class TheBrainsScrollTests: XCTestCase {
                 offscreenEntry.heistId: .init(object: nil, scrollView: offscreen.3)
             ] : [:],
             firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                scrollContainer: .init(view: offscreen.3)
-            ]
+            scrollableContainerViews: includeLiveScrollAncestor
+                ? [scrollContainer: .init(view: offscreen.3)]
+                : [:]
         )
     }
 
@@ -404,6 +405,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let visibleEntry = Screen.ScreenElement(
             heistId: "visible_element",
             contentSpaceOrigin: CGPoint(x: 0, y: 120),
+            scrollContainerStableId: "visible_scroll",
             element: makeElement(label: "Visible")
         )
         installLiveScrollTarget(visibleEntry, scrollView: scrollView, stableId: "visible_scroll")
@@ -529,7 +531,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("no live scrollable ancestor") == true)
     }
 
-    func testVisibleTargetOutsideViewportWithoutLiveScrollParentFailsNoRevealPath() async {
+    func testVisibleTargetOutsideViewportWithoutLiveScrollParentFailsGeometryNotActionable() async {
         let elementFrame = CGRect(
             x: 24,
             y: ScreenMetrics.current.bounds.maxY + 80,
@@ -563,11 +565,11 @@ final class TheBrainsScrollTests: XCTestCase {
         let result = await brains.navigation.makeSemanticallyVisible(for: .heistId("escaped_button"))
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected no reveal path failure, got \(result)")
+            return XCTFail("Expected geometry-not-actionable failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, .noRevealPath)
-        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
-        XCTAssertTrue(failure.message.contains("no live scrollable ancestor"))
+        XCTAssertEqual(failure.failedStep, .geometryNotActionable)
+        XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))
+        XCTAssertTrue(failure.message.contains("no usable live geometry"))
     }
 
     func testElementActionsConsumeSemanticActionabilityFailureBeforeDispatch() async {
@@ -952,6 +954,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let knownEntry = TheStash.ScreenElement(
             heistId: "known_reveal_target",
             contentSpaceOrigin: CGPoint(x: 40, y: 900),
+            scrollContainerStableId: "known_scroll",
             element: knownElement
         )
         let scrollContainer = makeScrollableContainer(

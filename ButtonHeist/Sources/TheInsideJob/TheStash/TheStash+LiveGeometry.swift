@@ -1,7 +1,10 @@
 #if canImport(UIKit)
 #if DEBUG
 import AccessibilitySnapshotModel
+import AccessibilitySnapshotParser
 import UIKit
+
+import TheScore
 
 // MARK: - Live Geometry Resolution
 
@@ -135,6 +138,20 @@ extension TheStash {
 
     func liveScrollView(for screenElement: ScreenElement) -> UIScrollView? {
         currentScreen.liveInterface.scrollView(for: screenElement)
+    }
+
+    func liveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
+        var ancestorIndices = path.indices
+        while !ancestorIndices.isEmpty {
+            ancestorIndices.removeLast()
+            guard !ancestorIndices.isEmpty else { break }
+            let ancestorPath = TreePath(ancestorIndices)
+            let scrollView = currentScreen.liveInterface.scrollableContainerViewsByPath[ancestorPath]?.view as? UIScrollView
+            if let scrollView {
+                return scrollView
+            }
+        }
+        return nil
     }
 
     private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {

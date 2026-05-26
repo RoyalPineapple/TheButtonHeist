@@ -27,6 +27,7 @@ final class ScreenTests: XCTestCase {
         Screen.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: contentSpaceOrigin,
+            scrollContainerStableId: contentSpaceOrigin.map { _ in "test_scroll" },
             element: makeElement(label: label ?? heistId)
         )
     }
@@ -508,6 +509,7 @@ final class ScreenTests: XCTestCase {
                 "button_scrolled_away": Screen.ScreenElement(
                     heistId: "button_scrolled_away",
                     contentSpaceOrigin: CGPoint(x: 0, y: 1_000),
+                    scrollContainerStableId: "test_scroll",
                     element: scrolledAway
                 ),
                 "button_visible": Screen.ScreenElement(

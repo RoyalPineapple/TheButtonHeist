@@ -302,8 +302,14 @@ private struct BatchExpectationReceipt {
 
 extension TheScore.Action {
     var pendingRotorResultTargetHeistId: HeistId? {
-        guard case .rotor(let target) = self else { return nil }
-        return target.currentSourceHeistId
+        switch self {
+        case .rotor(let target):
+            return target.currentSourceHeistId
+        case .scrollToVisible(let target):
+            return target.target?.sourceHeistId
+        default:
+            return nil
+        }
     }
 }
 

@@ -753,12 +753,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
             "semantic actionability failed [geometryNotActionable]",
-            "gesture target unavailable",
-            "method=increment",
-            "phase=targeting",
-            "heistId=\"geometry_missing_slider\"",
-            "visible=true",
-            "fresh live geometry from semantic actionability",
+            "visible target \"Geometry Missing\"",
+            "heistId: geometry_missing_slider",
+            "no usable live geometry",
         ])
     }
 

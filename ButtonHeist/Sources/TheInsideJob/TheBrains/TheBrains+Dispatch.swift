@@ -518,6 +518,8 @@ private extension ClientMessage {
             return target.elementTarget?.exactHeistId
         case .typeText(let target):
             return target.elementTarget?.exactHeistId
+        case .scrollToVisible(let target):
+            return target.elementTarget?.exactHeistId
         case .clientHello,
              .authenticate,
              .requestInterface,
@@ -527,7 +529,6 @@ private extension ClientMessage {
              .touchDrawBezier,
              .editAction,
              .scroll,
-             .scrollToVisible,
              .elementSearch,
              .scrollToEdge,
              .resignFirstResponder,

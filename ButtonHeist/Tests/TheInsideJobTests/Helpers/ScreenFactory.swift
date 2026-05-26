@@ -21,12 +21,19 @@ extension Screen {
     struct OffViewportEntry {
         let element: AccessibilityElement
         let heistId: HeistId
-        let contentSpaceOrigin: CGPoint?
+        let scrollContentLocation: ScrollContentLocation?
 
-        init(_ element: AccessibilityElement, heistId: HeistId, contentSpaceOrigin: CGPoint? = nil) {
+        init(
+            _ element: AccessibilityElement,
+            heistId: HeistId,
+            contentSpaceOrigin: CGPoint? = nil,
+            scrollContainer: HeistContainer = "test_scroll"
+        ) {
             self.element = element
             self.heistId = heistId
-            self.contentSpaceOrigin = contentSpaceOrigin
+            self.scrollContentLocation = contentSpaceOrigin.map {
+                ScrollContentLocation(origin: $0, scrollContainer: scrollContainer)
+            }
         }
     }
 
@@ -59,7 +66,7 @@ extension Screen {
         for entry in offViewport {
             screenElements[entry.heistId] = ScreenElement(
                 heistId: entry.heistId,
-                contentSpaceOrigin: entry.contentSpaceOrigin,
+                scrollContentLocation: entry.scrollContentLocation,
                 element: entry.element
             )
         }

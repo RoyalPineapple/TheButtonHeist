@@ -675,6 +675,7 @@ final class TheStashResolutionTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: "below_fold_button",
             contentSpaceOrigin: CGPoint(x: 0, y: 2_000),
+            scrollContainerStableId: "test_scroll",
             element: offScreen
         )
 
