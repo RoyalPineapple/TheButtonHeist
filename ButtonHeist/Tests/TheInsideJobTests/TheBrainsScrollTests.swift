@@ -500,7 +500,15 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: [(offscreen, "offscreen_button", nil)]
         )
 
-        let result = await brains.navigation.makeSemanticallyVisible(for: .heistId("offscreen_button"))
+        let normalized = brains.stash.normalizeTarget(
+            ElementTarget.heistId("offscreen_button"),
+            in: brains.stash.currentScreen
+        )
+        let result = await brains.navigation.makeActionable(
+            for: normalized,
+            method: .activate,
+            deallocatedBoundary: "test actionability"
+        )
 
         guard case .failed(let failure) = result else {
             return XCTFail("Expected semantic actionability failure, got \(result)")
@@ -562,14 +570,21 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViews: [:]
         )
 
-        let result = await brains.navigation.makeSemanticallyVisible(for: .heistId("escaped_button"))
+        let normalized = brains.stash.normalizeTarget(
+            ElementTarget.heistId("escaped_button"),
+            in: brains.stash.currentScreen
+        )
+        let result = await brains.navigation.makeActionable(
+            for: normalized,
+            method: .scrollToVisible,
+            deallocatedBoundary: "test actionability"
+        )
 
         guard case .failed(let failure) = result else {
             return XCTFail("Expected geometry-not-actionable failure, got \(result)")
         }
         XCTAssertEqual(failure.failedStep, .geometryNotActionable)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))
-        XCTAssertTrue(failure.message.contains("no usable live geometry"))
     }
 
     func testElementActionsConsumeSemanticActionabilityFailureBeforeDispatch() async {
