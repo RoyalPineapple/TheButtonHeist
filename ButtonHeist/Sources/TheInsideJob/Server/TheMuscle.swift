@@ -64,6 +64,7 @@ actor TheMuscle {
     // MARK: - Session Lock State
 
     private var sessionLease: SessionLease
+    private var sessionReleaseTimer: Task<Void, Never>?
     var sessionToken: String { sessionTokenSource.token }
 
     // Computed accessors — preserve the external read interface.
@@ -149,8 +150,9 @@ actor TheMuscle {
     /// Resets the session inactivity timer if the client belongs to the active session.
     func noteClientActivity(_ clientId: Int) {
         guard activeSessionConnections.contains(clientId) else { return }
-        let releaseTimeout = sessionLease.releaseTimeout
-        sessionLease.resetInactivityTimer { makeReleaseTimer(releaseTimeout: releaseTimeout) }
+        if sessionLease.resetInactivityTimer() != nil {
+            replaceSessionReleaseTimer()
+        }
     }
 
     /// Send an already-encoded envelope to a single client.
@@ -366,7 +368,7 @@ actor TheMuscle {
         clientRegistry.removeAll()
         delayedDisconnectTasks.cancelAll()
         pendingAlertTasks.cancelAll()
-        sessionLease.cancelTimerIfDraining()
+        cancelSessionReleaseTimer()
         await releaseSession()
         await dismissAlert()
     }
@@ -404,7 +406,10 @@ actor TheMuscle {
     /// Attempt to acquire the session for a client.
     private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) async -> Bool {
         switch sessionLease.acquire(driverIdentity: driverIdentity, clientId: clientId) {
-        case .accepted(let notifyActiveChanged):
+        case .accepted(let notifyActiveChanged, let cancelReleaseTimer):
+            if cancelReleaseTimer {
+                cancelSessionReleaseTimer()
+            }
             if notifyActiveChanged {
                 logger.info("Session claimed by client \(clientId)")
                 _ = await delivery.sessionActiveChanged(true)
@@ -430,6 +435,7 @@ actor TheMuscle {
     }
 
     private func releaseSession() async {
+        cancelSessionReleaseTimer()
         if sessionLease.release() {
             logger.info("Session released")
             _ = await delivery.sessionActiveChanged(false)
@@ -438,11 +444,23 @@ actor TheMuscle {
 
     /// Remove a client from the active session. Transitions to draining if no connections remain.
     private func removeSessionConnection(_ clientId: Int) {
-        let releaseTimeout = sessionLease.releaseTimeout
-        let releaseTimer = makeReleaseTimer(releaseTimeout: releaseTimeout)
-        if sessionLease.removeConnection(clientId, releaseTimer: releaseTimer) {
+        switch sessionLease.removeConnection(clientId) {
+        case .draining:
+            replaceSessionReleaseTimer()
             logger.info("All session connections gone, starting \(self.sessionLease.releaseTimeout)s release timer")
+        case .active, .unchanged:
+            break
         }
+    }
+
+    private func replaceSessionReleaseTimer() {
+        cancelSessionReleaseTimer()
+        sessionReleaseTimer = makeReleaseTimer(releaseTimeout: sessionLease.releaseTimeout)
+    }
+
+    private func cancelSessionReleaseTimer() {
+        sessionReleaseTimer?.cancel()
+        sessionReleaseTimer = nil
     }
 
     /// Create a release timer task that fires after `sessionReleaseTimeout`.
