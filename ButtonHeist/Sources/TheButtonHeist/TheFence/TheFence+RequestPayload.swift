@@ -545,7 +545,7 @@ extension TheFence {
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
-        let payload: RequestPayload = if command == .waitForChange {
+        let payload: RequestPayload = if command.requestPayloadKind == .waitForChange {
             .waitForChange(expectationPayload)
         } else {
             try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
@@ -594,23 +594,18 @@ extension TheFence {
         arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> RequestPayload {
-        switch command {
-        case .help, .status, .ping, .quit, .exit, .listDevices, .getPasteboard,
-             .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
+        switch command.requestPayloadKind {
+        case .none:
             return .none
-        case .getInterface, .getScreen, .stopRecording:
+        case .observation:
             return try decodeObservationPayload(command: command, arguments: arguments, requestId: requestId)
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
-        case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
-             .twoFingerTap, .drawPath, .drawBezier:
+        case .gesture:
             return try decodeGestureRequestPayload(command: command, arguments: arguments)
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-             .activate, .increment, .decrement, .performCustomAction,
-             .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
+        case .elementAction:
             return try decodeElementActionPayload(command: command, arguments: arguments)
-        case .startRecording, .runBatch, .connect, .archiveSession, .startHeist,
-             .stopHeist, .playHeist:
+        case .session:
             return try decodeSessionPayload(command: command, arguments: arguments)
         }
     }

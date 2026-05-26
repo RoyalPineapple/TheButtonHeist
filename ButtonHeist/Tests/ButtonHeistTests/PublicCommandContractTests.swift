@@ -55,6 +55,20 @@ final class PublicCommandContractTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testEveryPublicCommandParsesThroughDescriptorPayloadKind() async throws {
+        let fence = TheFence(configuration: .init())
+
+        for sample in allPublicCommandSamples() {
+            let parsed = try fence.parseRequest(command: sample.command, request: sample.request)
+            XCTAssertEqual(
+                payloadKind(of: parsed.payload),
+                sample.command.descriptor.requestPayloadKind,
+                "\(sample.command.rawValue) should parse through its descriptor-owned request payload kind"
+            )
+        }
+    }
+
     func testCommandDescriptorPresentationMatchesRenderedToolContracts() {
         for command in TheFence.Command.allCases {
             let descriptor = command.descriptor
@@ -148,6 +162,23 @@ final class PublicCommandContractTests: XCTestCase {
             + textAndPasteboardCommandSamples()
             + recordingAndSessionCommandSamples()
             + heistCommandSamples()
+    }
+
+    private func payloadKind(of payload: TheFence.RequestPayload) -> FenceRequestPayloadKind {
+        switch payload {
+        case .none:
+            return .none
+        case .getInterface, .screen, .artifact:
+            return .observation
+        case .waitForChange:
+            return .waitForChange
+        case .gesture:
+            return .gesture
+        case .scroll, .accessibility, .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
+            return .elementAction
+        case .startRecording, .connect, .runBatch, .archiveSession, .startHeist, .stopHeist, .playHeist:
+            return .session
+        }
     }
 
     private func lifecycleCommandSamples() -> [PublicCommandSample] {
