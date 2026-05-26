@@ -189,6 +189,12 @@ final class TheMuscleTests: XCTestCase {
     /// for call-site stability; remove once all tests are inlined.
     private func flushCallbacks() async {}
 
+    private func yieldScheduler() async {
+        for _ in 0..<5 {
+            await Task.yield()
+        }
+    }
+
     // MARK: - Encoding
 
     func testEnvelopeEncodingFailureDoesNotInventFallbackMessage() async {
@@ -539,6 +545,38 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(payload.message.contains("owner driver id: driver-a"))
         XCTAssertTrue(payload.message.contains("active connections: 0"))
         XCTAssertTrue(payload.message.contains("remaining timeout:"))
+    }
+
+    func testDisconnectingNonSessionClientDoesNotStartReleaseTimer() async throws {
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: "test-token", sessionReleaseTimeout: 0)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: true)
+
+        try await authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
+        await muscle.registerClientAddress(2, address: "127.0.0.1")
+
+        await muscle.handleClientDisconnected(2)
+        await yieldScheduler()
+
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(1))
+        XCTAssertEqual(sink.sessionChanges, [true])
+    }
+
+    func testLastSessionConnectionStartsReleaseTimer() async throws {
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: "test-token", sessionReleaseTimeout: 0)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: true)
+
+        try await authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
+        await muscle.handleClientDisconnected(1)
+        await yieldScheduler()
+
+        let driverId = await muscle.activeSessionDriverId
+        XCTAssertNil(driverId)
+        XCTAssertEqual(sink.sessionChanges, [true, false])
     }
 
     func testTokenBackedSessionLockDoesNotExposeTokenAsOwner() async throws {

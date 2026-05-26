@@ -7,12 +7,18 @@ struct SessionLease {
     enum Phase {
         case idle
         case active(driverId: String, connections: Set<Int>)
-        case draining(driverId: String, releaseTimer: Task<Void, Never>, releaseDeadline: Date)
+        case draining(driverId: String, releaseDeadline: Date)
     }
 
     enum Acquisition {
-        case accepted(notifyActiveChanged: Bool)
+        case accepted(notifyActiveChanged: Bool, cancelReleaseTimer: Bool)
         case rejected(SessionLockDiagnostic)
+    }
+
+    enum ConnectionRemoval {
+        case unchanged
+        case active
+        case draining(releaseDeadline: Date)
     }
 
     struct SessionLockDiagnostic: Equatable, Sendable {
@@ -48,7 +54,7 @@ struct SessionLease {
     var activeSessionDriverId: String? {
         switch phase {
         case .idle: return nil
-        case .active(let driverId, _), .draining(let driverId, _, _): return driverId
+        case .active(let driverId, _), .draining(let driverId, _): return driverId
         }
     }
 
@@ -68,9 +74,8 @@ struct SessionLease {
     mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
         switch phase {
         case .idle:
-            cancelTimerIfDraining()
             phase = .active(driverId: driverIdentity, connections: [clientId])
-            return .accepted(notifyActiveChanged: true)
+            return .accepted(notifyActiveChanged: true, cancelReleaseTimer: false)
 
         case .active(let activeId, let connections) where driverIdentity == activeId:
             return .rejected(diagnostic(
@@ -79,15 +84,14 @@ struct SessionLease {
                 activeConnections: connections.count
             ))
 
-        case .draining(let activeId, let timer, _) where driverIdentity == activeId:
-            timer.cancel()
+        case .draining(let activeId, _) where driverIdentity == activeId:
             phase = .active(driverId: activeId, connections: [clientId])
-            return .accepted(notifyActiveChanged: false)
+            return .accepted(notifyActiveChanged: false, cancelReleaseTimer: true)
 
         case .active(let driverId, let connections):
             return .rejected(diagnostic(ownerDriverId: driverId, activeConnections: connections.count))
 
-        case .draining(let driverId, _, let releaseDeadline):
+        case .draining(let driverId, let releaseDeadline):
             return .rejected(diagnostic(
                 ownerDriverId: driverId,
                 activeConnections: 0,
@@ -98,38 +102,29 @@ struct SessionLease {
 
     mutating func release() -> Bool {
         let hadSession = isSessionActive
-        cancelTimerIfDraining()
         phase = .idle
         return hadSession
     }
 
-    mutating func removeConnection(_ clientId: Int, releaseTimer: Task<Void, Never>) -> Bool {
+    mutating func removeConnection(_ clientId: Int) -> ConnectionRemoval {
         guard case .active(let driverId, var connections) = phase else {
-            releaseTimer.cancel()
-            return false
+            return .unchanged
         }
         connections.remove(clientId)
         if connections.isEmpty {
             let releaseDeadline = Date().addingTimeInterval(releaseTimeout)
-            phase = .draining(driverId: driverId, releaseTimer: releaseTimer, releaseDeadline: releaseDeadline)
-            return true
+            phase = .draining(driverId: driverId, releaseDeadline: releaseDeadline)
+            return .draining(releaseDeadline: releaseDeadline)
         }
-        releaseTimer.cancel()
         phase = .active(driverId: driverId, connections: connections)
-        return false
+        return .active
     }
 
-    mutating func resetInactivityTimer(makeReleaseTimer: () -> Task<Void, Never>) {
-        guard case .draining(let driverId, let oldTimer, _) = phase else { return }
-        oldTimer.cancel()
+    mutating func resetInactivityTimer() -> Date? {
+        guard case .draining(let driverId, _) = phase else { return nil }
         let releaseDeadline = Date().addingTimeInterval(releaseTimeout)
-        phase = .draining(driverId: driverId, releaseTimer: makeReleaseTimer(), releaseDeadline: releaseDeadline)
-    }
-
-    mutating func cancelTimerIfDraining() {
-        if case .draining(_, let timer, _) = phase {
-            timer.cancel()
-        }
+        phase = .draining(driverId: driverId, releaseDeadline: releaseDeadline)
+        return releaseDeadline
     }
 
     func uiApprovalUnavailableDiagnostic() -> SessionLockDiagnostic? {
@@ -140,7 +135,7 @@ struct SessionLease {
                 ownerDriverId: driverId,
                 activeConnections: connections.count
             )
-        case .draining(let driverId, _, let releaseDeadline):
+        case .draining(let driverId, let releaseDeadline):
             return diagnostic(
                 baseMessage: "UI approval is unavailable while a ButtonHeist session is draining",
                 ownerDriverId: driverId,

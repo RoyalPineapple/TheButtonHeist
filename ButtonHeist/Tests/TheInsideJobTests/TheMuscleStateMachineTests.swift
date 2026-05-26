@@ -44,14 +44,14 @@ final class TheMuscleStateMachineTests: XCTestCase {
     func testSessionLeaseDrainingRejectionUsesOneStructuredDiagnostic() {
         var lease = SessionLease(releaseTimeout: 30)
 
-        guard case .accepted(let claimed) = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
+        guard case .accepted(let claimed, _) = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
             return XCTFail("Expected first driver to claim the session")
         }
         XCTAssertTrue(claimed)
 
-        let releaseTimer = Task<Void, Never> {}
-        XCTAssertTrue(lease.removeConnection(1, releaseTimer: releaseTimer))
-        defer { releaseTimer.cancel() }
+        guard case .draining = lease.removeConnection(1) else {
+            return XCTFail("Expected final connection removal to start draining")
+        }
 
         guard case .rejected(let diagnostic) = lease.acquire(driverIdentity: "driver:beta", clientId: 2) else {
             return XCTFail("Expected different driver to be rejected while draining")
@@ -63,6 +63,23 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(payload.message.contains("owner driver id: alpha"))
         XCTAssertTrue(payload.message.contains("active connections: 0"))
         XCTAssertTrue(payload.message.contains("remaining timeout:"))
+    }
+
+    func testSessionLeaseOnlyStartsDrainingAfterFinalSessionConnection() {
+        var lease = SessionLease(releaseTimeout: 30)
+
+        guard case .accepted = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
+            return XCTFail("Expected first driver to claim the session")
+        }
+
+        guard case .active = lease.removeConnection(2) else {
+            return XCTFail("Disconnecting a non-session client must not request a release timer")
+        }
+        XCTAssertEqual(lease.activeSessionConnections, [1])
+
+        guard case .draining = lease.removeConnection(1) else {
+            return XCTFail("Expected final session connection removal to start draining")
+        }
     }
 
     func testClientDeliveryReportsUnwiredFailuresAsTypedOutcomes() async {
