@@ -709,7 +709,7 @@ public extension AccessibilityTraits {
     ]
 
     static var knownTraitNames: Set<String> {
-        Set(heistKnownTraits.map(\.name))
+        Set(heistKnownTraits.map { $0.name })
     }
 
     static func fromNames(_ names: [String]) -> AccessibilityTraits {

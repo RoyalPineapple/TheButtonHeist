@@ -215,7 +215,7 @@ extension Actions {
         case .deallocated:
             return .failure(.customAction, message: "custom action failed: container object deallocated")
         case .noSuchAction:
-            let available = containerTarget.container.customActions.map(\.name).filter { !$0.isEmpty }
+            let available = containerTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
             let suffix = available.isEmpty ? "" : "; available custom actions: \(available.map { "\"\($0)\"" }.joined(separator: ", "))"
             return .failure(
                 .customAction,

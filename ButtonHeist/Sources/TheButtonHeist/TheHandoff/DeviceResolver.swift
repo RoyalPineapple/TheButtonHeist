@@ -62,7 +62,7 @@ struct DeviceResolver {
                 if filter == nil, reachable.count > 1 {
                     throw TheHandoff.ConnectionError.noMatchingDevice(
                         filter: "(none)",
-                        available: reachable.map(\.name)
+                        available: reachable.map { $0.name }
                     )
                 }
             }
@@ -86,14 +86,14 @@ struct DeviceResolver {
         if filter == nil, reachable.count > 1 {
             throw TheHandoff.ConnectionError.noMatchingDevice(
                 filter: "(none)",
-                available: reachable.map(\.name)
+                available: reachable.map { $0.name }
             )
         }
 
         if let filter {
             throw TheHandoff.ConnectionError.noMatchingDevice(
                 filter: filter,
-                available: reachable.map(\.name)
+                available: reachable.map { $0.name }
             )
         }
 

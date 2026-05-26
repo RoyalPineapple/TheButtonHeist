@@ -31,7 +31,7 @@ extension SimpleSocketServer {
                 )
                 return nil
             }
-            let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map(\.name)
+            let interfaceNameList = (connection.currentPath?.availableInterfaces ?? []).map { $0.name }
             let scope = ConnectionScope.classify(host: host, interfaceNames: interfaceNameList)
             let hostDescription = "\(host)"
             let interfaceNames = interfaceNameList.joined(separator: ", ")

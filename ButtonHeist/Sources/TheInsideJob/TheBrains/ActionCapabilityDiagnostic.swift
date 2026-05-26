@@ -216,9 +216,9 @@ import AccessibilitySnapshotParser
             names.append(ElementAction.increment.description)
             names.append(ElementAction.decrement.description)
         }
-        appendUnique(element.customActions.map(\.name).filter { !$0.isEmpty }, to: &names)
+        appendUnique(element.customActions.map { $0.name }.filter { !$0.isEmpty }, to: &names)
         let liveNames = liveObject?.accessibilityCustomActions?
-            .map(\.name)
+            .map { $0.name }
             .filter { !$0.isEmpty } ?? []
         appendUnique(liveNames, to: &names)
         return names
@@ -232,9 +232,9 @@ import AccessibilitySnapshotParser
         for screenElement: TheStash.ScreenElement,
         liveObject: NSObject? = nil
     ) -> [String] {
-        var names = screenElement.element.customActions.map(\.name).filter { !$0.isEmpty }
+        var names = screenElement.element.customActions.map { $0.name }.filter { !$0.isEmpty }
         let liveNames = liveObject?.accessibilityCustomActions?
-            .map(\.name)
+            .map { $0.name }
             .filter { !$0.isEmpty } ?? []
         appendUnique(liveNames, to: &names)
         return names
@@ -244,7 +244,7 @@ import AccessibilitySnapshotParser
         for screenElement: TheStash.ScreenElement,
         liveObject: NSObject? = nil
     ) -> [String] {
-        var names = screenElement.element.customRotors.map(\.name).filter { !$0.isEmpty }
+        var names = screenElement.element.customRotors.map { $0.name }.filter { !$0.isEmpty }
         let liveNames = liveObject?.accessibilityCustomRotors?
             .map { $0.bhInvocableName(locale: liveObject?.accessibilityLanguage) }
             .filter { !$0.isEmpty } ?? []

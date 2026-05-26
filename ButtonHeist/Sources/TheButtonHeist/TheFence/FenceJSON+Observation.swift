@@ -180,7 +180,7 @@ struct PublicElement: Encodable {
         self.traits = element.traits.map(\.rawValue)
         let meaningfulActions = FenceResponse.meaningfulActions(element)
         self.actions = meaningfulActions.isEmpty ? nil : meaningfulActions.map(\.description)
-        self.rotors = element.rotors?.isEmpty == false ? element.rotors?.map(\.name) : nil
+        self.rotors = element.rotors?.isEmpty == false ? element.rotors?.map { $0.name } : nil
         self.label = element.label
         self.value = element.value
         self.identifier = element.identifier

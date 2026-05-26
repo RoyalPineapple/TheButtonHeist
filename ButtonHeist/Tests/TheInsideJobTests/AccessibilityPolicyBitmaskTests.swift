@@ -50,7 +50,7 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
     // MARK: - Synthesis priority pairs
 
     func testSynthesisPriorityWithMasksMatchesOrdering() {
-        let masksNames = AccessibilityPolicy.synthesisPriorityWithMasks.map(\.name)
+        let masksNames = AccessibilityPolicy.synthesisPriorityWithMasks.map { $0.name }
         let traitNames = AccessibilityPolicy.synthesisPriority.map(\.rawValue)
         XCTAssertEqual(masksNames, traitNames,
                        "synthesisPriorityWithMasks must preserve synthesisPriority ordering")

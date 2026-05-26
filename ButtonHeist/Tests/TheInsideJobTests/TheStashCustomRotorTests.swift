@@ -162,7 +162,7 @@ final class TheStashRotorTests: XCTestCase {
         let liveHost = try XCTUnwrap(liveTarget(for: resolvedHost))
 
         XCTAssertEqual(rotorHost.accessibilityCustomRotors?.first?.name, "")
-        XCTAssertEqual(resolvedHost.element.customRotors.map(\.name), ["Links"])
+        XCTAssertEqual(resolvedHost.element.customRotors.map { $0.name }, ["Links"])
 
         let outcome = stash.performRotor(
             rotor: "Links",

@@ -10,7 +10,7 @@ extension ConnectionScope {
     /// - `anpi` interface (Apple Network Private Interface) → `.usb` (CoreDevice tunnel)
     /// - Everything else → `.network`
     ///
-    /// Pass `interfaceNames` from `NWConnection.currentPath?.availableInterfaces.map(\.name)`
+    /// Pass `interfaceNames` from `NWConnection.currentPath?.availableInterfaces.map { $0.name }`
     /// after the connection reaches `.ready` for precise classification.
     static func classify(host: NWEndpoint.Host, interfaceNames: [String] = []) -> ConnectionScope {
         // Loopback address = simulator
