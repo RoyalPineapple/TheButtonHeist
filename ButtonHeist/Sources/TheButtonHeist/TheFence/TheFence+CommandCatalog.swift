@@ -197,8 +197,16 @@ public extension TheFence.Command {
         allCases.map(descriptor(for:))
     }
 
+    static var cliDirectCommandDescriptors: [FenceCommandDescriptor] {
+        descriptors.filter { $0.cliExposure == .directCommand }
+    }
+
     var canonicalName: String {
         descriptor.canonicalName
+    }
+
+    var cliCommandName: String {
+        descriptor.cliName ?? canonicalName
     }
 
     var cliExposure: CLIExposure {

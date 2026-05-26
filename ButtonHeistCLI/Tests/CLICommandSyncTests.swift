@@ -140,8 +140,12 @@ final class CLICommandSyncTests: XCTestCase {
             "CLI adapter catalog should project command semantics from FenceCommandDescriptor"
         )
         XCTAssertTrue(
-            source.contains("TheFence.Command.descriptors"),
-            "CLI adapter catalog should project command identity from FenceCommandDescriptor"
+            source.contains("TheFence.Command.cliDirectCommandDescriptors"),
+            "CLI adapter catalog should consume the Fence-owned direct CLI descriptor projection"
+        )
+        XCTAssertFalse(
+            projectionSource.contains(".cliExposure == .directCommand"),
+            "CLI adapter catalog should not reinterpret descriptor exposure policy locally"
         )
         XCTAssertFalse(
             source.contains("directCommandTypesByDescriptorOrder"),
@@ -322,6 +326,21 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(
             source.contains("descriptor.cliExposure"),
             "REPL help should not reinterpret CLIExposure cases"
+        )
+    }
+
+    func testSessionPromptsProjectFromFencePresentation() throws {
+        XCTAssertEqual(ReplSession.startupPrompt, TheFence.Command.cliSessionStartupPrompt)
+        XCTAssertEqual(ReplSession.unknownCommandMessage, TheFence.Command.cliSessionUnknownCommandMessage)
+
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Session/SessionRepl.swift")
+        XCTAssertFalse(
+            source.contains("TheFence.Command.help"),
+            "REPL prompt text should be a Fence-owned presentation projection, not a direct command-case mirror"
+        )
+        XCTAssertFalse(
+            source.contains("TheFence.Command.quit"),
+            "REPL prompt text should be a Fence-owned presentation projection, not a direct command-case mirror"
         )
     }
 

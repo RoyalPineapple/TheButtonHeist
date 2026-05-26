@@ -160,12 +160,11 @@ final class ReplSession {
 nonisolated extension ReplSession {
 
     static var startupPrompt: String {
-        "Session started. Type '\(TheFence.Command.help.canonicalName)' for commands, " +
-            "'\(TheFence.Command.quit.canonicalName)' to exit."
+        TheFence.Command.cliSessionStartupPrompt
     }
 
     static var unknownCommandMessage: String {
-        "Unknown command. Type '\(TheFence.Command.help.canonicalName)' for available commands."
+        TheFence.Command.cliSessionUnknownCommandMessage
     }
 
     static var humanHelp: String {
