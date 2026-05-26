@@ -1,4 +1,5 @@
 #if canImport(UIKit)
+import AVFoundation
 import XCTest
 @testable import TheInsideJob
 import TheScore
@@ -38,6 +39,43 @@ final class TheStakeoutTests: XCTestCase {
         }
     }
 
+    private static func makeLifecycleRecording(id: UUID = UUID()) throws -> TheStakeout.ActiveRecording {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stakeout-lifecycle-\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+        let writer = try AVAssetWriter(url: url, fileType: .mp4)
+        let input = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: 2,
+                AVVideoHeightKey: 2,
+            ]
+        )
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: nil
+        )
+        return TheStakeout.ActiveRecording(
+            id: id,
+            writer: TheStakeout.ActiveWriterResources(
+                assetWriter: writer,
+                videoInput: input,
+                pixelBufferAdaptor: adaptor
+            ),
+            output: TheStakeout.RecordingOutput(
+                screenBounds: CGRect(x: 0, y: 0, width: 2, height: 2),
+                fps: 1
+            ),
+            timing: TheStakeout.RecordingTiming(maxDuration: 60),
+            evidence: TheStakeout.RecordingEvidenceState(caps: []),
+            startedAt: Date(),
+            capture: TheStakeout.CaptureLifecycle(task: Task<Void, Never> {}, frameCount: 0),
+            activity: .notTracked,
+            interactions: TheStakeout.ActiveInteractionLog()
+        )
+    }
+
     // MARK: - Initial State
 
     func testInitialStateIsIdle() async {
@@ -63,6 +101,37 @@ final class TheStakeoutTests: XCTestCase {
         let elapsed = await stakeout.recordingElapsed
         XCTAssertTrue(isRecording)
         XCTAssertGreaterThan(elapsed, 0)
+    }
+
+    func testLifecycleRejectsOverlappingStartWithoutReplacingRecording() throws {
+        var lifecycle = StakeoutLifecycle()
+        let firstID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
+        let secondID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000002"))
+        let first = try Self.makeLifecycleRecording(id: firstID)
+        let second = try Self.makeLifecycleRecording(id: secondID)
+        defer {
+            try? FileManager.default.removeItem(at: first.writer.assetWriter.outputURL)
+            try? FileManager.default.removeItem(at: second.writer.assetWriter.outputURL)
+        }
+
+        try lifecycle.start(first)
+        XCTAssertEqual(lifecycle.currentRecordingID, first.id)
+
+        XCTAssertThrowsError(try lifecycle.start(second)) { error in
+            guard case TheStakeout.TheStakeoutError.alreadyRecording = error else {
+                return XCTFail("Expected alreadyRecording, got \(error)")
+            }
+        }
+        XCTAssertEqual(lifecycle.currentRecordingID, first.id)
+        XCTAssertEqual(
+            lifecycle.snapshot,
+            .recording(
+                activity: .notTracked,
+                frameCount: 0,
+                interactionCount: 0,
+                droppedInteractionCount: 0
+            )
+        )
     }
 
     func testStartRecordingUsesUntrackedActivityWhenInactivityTimeoutIsOmitted() async throws {

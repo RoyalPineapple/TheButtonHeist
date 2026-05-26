@@ -13,166 +13,13 @@ private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category:
 ///
 /// Isolation: actor-isolated. The single MainActor escape hatch is `captureFrame`,
 /// the closure that produces a UIImage by snapshotting the window hierarchy. Every
-/// other piece of state (the `stakeoutPhase` state machine, AVAssetWriter, sample
+/// other piece of state (the `StakeoutLifecycle` state machine, AVAssetWriter, sample
 /// buffers) lives inside the actor — AVAssetWriter and its pixel-buffer adaptor are
 /// thread-safe and do not require MainActor isolation. The AVAssetWriter
 /// `finishWriting` completion handler bridges back into the actor with
 /// `Task { await self.handleFinalize(...) }` rather than the previous
 /// `Task { @MainActor in ... }` shape called out in the concurrency audit.
 actor TheStakeout {
-
-    // MARK: - Nested Types
-
-    enum StakeoutPhase {
-        case idle
-        case recording(ActiveRecording)
-        case finalizing(FinalizingRecording)
-    }
-
-    enum ActivityTrackingSnapshot: Equatable, Sendable {
-        case notTracked
-        case tracking(timeout: TimeInterval)
-    }
-
-    enum LifecycleSnapshot: Equatable, Sendable {
-        case idle
-        case recording(
-            activity: ActivityTrackingSnapshot,
-            frameCount: Int,
-            interactionCount: Int,
-            droppedInteractionCount: Int
-        )
-        case finalizing(
-            frameCount: Int,
-            interactionCount: Int,
-            droppedInteractionCount: Int
-        )
-    }
-
-    struct ActiveRecording {
-        /// Identity token for this recording. Captured by the capture timer
-        /// and inactivity monitor so a Task scheduled for one recording can
-        /// detect if it's woken up after a new recording has already started.
-        let id: UUID
-        let writer: ActiveWriterResources
-        let output: RecordingOutput
-        let timing: RecordingTiming
-        let evidence: RecordingEvidenceState
-        let startedAt: Date
-        var capture: CaptureLifecycle
-        var activity: ActivityLifecycle
-        var interactions: ActiveInteractionLog
-
-        func cancelRuntimeTasks() {
-            capture.task.cancel()
-            activity.cancel()
-        }
-
-        func finalizing() -> FinalizingRecording {
-            FinalizingRecording(
-                assetWriter: writer.assetWriter,
-                output: output,
-                startedAt: startedAt,
-                frameCount: capture.frameCount,
-                interactions: interactions.finalized(),
-                evidence: evidence
-            )
-        }
-    }
-
-    struct FinalizingRecording {
-        let assetWriter: AVAssetWriter
-        let output: RecordingOutput
-        let startedAt: Date
-        let frameCount: Int
-        let interactions: FinalizedInteractionLog
-        let evidence: RecordingEvidenceState
-    }
-
-    struct ActiveWriterResources {
-        let assetWriter: AVAssetWriter
-        let videoInput: AVAssetWriterInput
-        let pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor
-    }
-
-    struct RecordingOutput {
-        let screenBounds: CGRect
-        let fps: Int
-    }
-
-    struct RecordingTiming {
-        let maxDuration: TimeInterval
-    }
-
-    struct RecordingEvidenceState {
-        let caps: [RecordedInputCap]
-    }
-
-    struct CaptureLifecycle {
-        let task: Task<Void, Never>
-        var frameCount: Int
-    }
-
-    enum ActivityLifecycle {
-        case notTracked
-        case tracking(MonitoredActivity)
-
-        var snapshot: ActivityTrackingSnapshot {
-            switch self {
-            case .notTracked:
-                return .notTracked
-            case .tracking(let activity):
-                return .tracking(timeout: activity.timeout)
-            }
-        }
-
-        mutating func noteActivity(at date: Date) -> Bool {
-            guard case .tracking(var activity) = self else { return false }
-            activity.lastActivityAt = date
-            self = .tracking(activity)
-            return true
-        }
-
-        func inactivityDeadline(now: Date) -> (elapsed: TimeInterval, timeout: TimeInterval)? {
-            guard case .tracking(let activity) = self else { return nil }
-            return (now.timeIntervalSince(activity.lastActivityAt), activity.timeout)
-        }
-
-        func cancel() {
-            guard case .tracking(let activity) = self else { return }
-            activity.task.cancel()
-        }
-    }
-
-    struct MonitoredActivity {
-        let timeout: TimeInterval
-        var lastActivityAt: Date
-        let task: Task<Void, Never>
-    }
-
-    struct ActiveInteractionLog {
-        var events: [InteractionEvent] = []
-        var droppedCount = 0
-
-        mutating func append(_ event: InteractionEvent, limit: Int) -> Bool {
-            guard events.count < limit else {
-                let shouldLogCapWarning = droppedCount == 0
-                droppedCount += 1
-                return shouldLogCapWarning
-            }
-            events.append(event)
-            return false
-        }
-
-        func finalized() -> FinalizedInteractionLog {
-            FinalizedInteractionLog(events: events, droppedCount: droppedCount)
-        }
-    }
-
-    struct FinalizedInteractionLog {
-        let events: [InteractionEvent]
-        let droppedCount: Int
-    }
 
     /// Screen metrics captured on MainActor and passed into the actor at startRecording.
     /// Avoids reaching back through MainActor for layout values that don't change for
@@ -221,7 +68,7 @@ actor TheStakeout {
     /// Use ``setOnRecordingComplete(_:)`` to assign.
     private var onRecordingComplete: (@MainActor @Sendable (Result<RecordingPayload, Error>) -> Void)?
 
-    private var stakeoutPhase: StakeoutPhase = .idle
+    private var lifecycle = StakeoutLifecycle()
 
     /// Maximum number of interaction events to record. Beyond this, events are silently dropped
     /// and the log is capped to prevent unbounded memory growth in long recordings.
@@ -230,53 +77,29 @@ actor TheStakeout {
     private static let maxVideoDataBytes = 7_000_000
 
     var isRecording: Bool {
-        if case .recording = stakeoutPhase { return true }
-        return false
+        lifecycle.isRecording
     }
 
     var isFinalizing: Bool {
-        if case .finalizing = stakeoutPhase { return true }
-        return false
+        lifecycle.isFinalizing
     }
 
     var isIdle: Bool {
-        if case .idle = stakeoutPhase { return true }
-        return false
+        lifecycle.isIdle
     }
 
     /// Interaction log — only meaningful during recording.
     var interactionLog: [InteractionEvent] {
-        switch stakeoutPhase {
-        case .idle: return []
-        case .recording(let session): return session.interactions.events
-        case .finalizing(let session): return session.interactions.events
-        }
+        lifecycle.interactionLog
     }
 
     /// Elapsed time since recording started, in seconds.
     var recordingElapsed: Double {
-        guard case .recording(let session) = stakeoutPhase else { return 0 }
-        return Date().timeIntervalSince(session.startedAt)
+        lifecycle.recordingElapsed()
     }
 
     var lifecycleSnapshot: LifecycleSnapshot {
-        switch stakeoutPhase {
-        case .idle:
-            return .idle
-        case .recording(let session):
-            return .recording(
-                activity: session.activity.snapshot,
-                frameCount: session.capture.frameCount,
-                interactionCount: session.interactions.events.count,
-                droppedInteractionCount: session.interactions.droppedCount
-            )
-        case .finalizing(let session):
-            return .finalizing(
-                frameCount: session.frameCount,
-                interactionCount: session.interactions.events.count,
-                droppedInteractionCount: session.interactions.droppedCount
-            )
-        }
+        lifecycle.snapshot
     }
 
     private static func clampInt(
@@ -438,9 +261,7 @@ actor TheStakeout {
     // MARK: - Recording Lifecycle
 
     func startRecording(config: RecordingConfig, screen: ScreenInfo) throws {
-        guard case .idle = stakeoutPhase else {
-            throw TheStakeoutError.alreadyRecording
-        }
+        try lifecycle.requireIdle()
 
         let setup = Self.makeRecordingSetup(config: config, screen: screen)
 
@@ -508,7 +329,7 @@ actor TheStakeout {
             interactions: ActiveInteractionLog()
         )
 
-        stakeoutPhase = .recording(session)
+        try lifecycle.start(session)
 
         logger.info(
             "Recording started: \(setup.evenWidth)x\(setup.evenHeight) @ \(setup.fps)fps, effectiveScale=\(setup.effectiveScale)"
@@ -519,49 +340,35 @@ actor TheStakeout {
     }
 
     func stopRecording(reason: RecordingPayload.StopReason = .manual) async {
-        guard case .recording(let session) = stakeoutPhase else { return }
-
-        logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(session.capture.frameCount)")
-
-        session.cancelRuntimeTasks()
-        session.writer.videoInput.markAsFinished()
-
-        let finalizingSession = session.finalizing()
-        stakeoutPhase = .finalizing(finalizingSession)
+        guard let finalizingSession = lifecycle.beginFinalizing() else { return }
+        logger.info("Stopping recording: reason=\(reason.rawValue), frames=\(finalizingSession.frameCount)")
 
         await finalizeRecording(session: finalizingSession, reason: reason)
     }
 
     /// Call this whenever client activity occurs (commands received, etc.)
     func noteActivity() {
-        guard case .recording(var session) = stakeoutPhase else { return }
-        guard session.activity.noteActivity(at: Date()) else { return }
-        stakeoutPhase = .recording(session)
+        _ = lifecycle.noteTrackedActivity(at: Date())
     }
 
     /// Call this whenever a screen change is detected (hierarchy hash change)
     func noteScreenChange() {
-        guard case .recording(var session) = stakeoutPhase else { return }
-        guard session.activity.noteActivity(at: Date()) else { return }
-        stakeoutPhase = .recording(session)
+        _ = lifecycle.noteTrackedActivity(at: Date())
     }
 
     /// Capture an extra frame outside the regular timer cadence.
     /// Used to ensure actions are represented in the recording.
     func captureActionFrame() async {
-        guard case .recording = stakeoutPhase else { return }
+        guard lifecycle.isRecording else { return }
         await captureAndAppendFrame()
     }
 
     /// Append an interaction event to the recording log.
     /// Silently drops events beyond `maxInteractionCount` to prevent unbounded growth.
     func recordInteraction(event: InteractionEvent) {
-        guard case .recording(var session) = stakeoutPhase else { return }
-        let shouldLogCapWarning = session.interactions.append(event, limit: Self.maxInteractionCount)
-        if shouldLogCapWarning {
+        if lifecycle.recordInteraction(event: event, limit: Self.maxInteractionCount) == true {
             logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
         }
-        stakeoutPhase = .recording(session)
     }
 
     /// Atomically record an interaction if the stakeout is currently in the
@@ -572,10 +379,13 @@ actor TheStakeout {
     ///
     /// No-ops gracefully when the stakeout is `.idle` or `.finalizing`.
     func recordInteractionIfRecording(command: ClientMessage, result: ActionResult) {
-        guard case .recording(let session) = stakeoutPhase else { return }
-        let elapsed = Date().timeIntervalSince(session.startedAt)
-        let event = InteractionEvent(timestamp: elapsed, command: command, result: result)
-        recordInteraction(event: event)
+        if lifecycle.recordInteractionIfRecording(
+            command: command,
+            result: result,
+            limit: Self.maxInteractionCount
+        ) == true {
+            logger.warning("Interaction log capped at \(Self.maxInteractionCount) events; further events will be dropped")
+        }
     }
 
     // MARK: - Frame Capture
@@ -593,10 +403,7 @@ actor TheStakeout {
     }
 
     private func captureAndAppendFrame() async {
-        guard case .recording(let startingSession) = stakeoutPhase,
-              startingSession.writer.videoInput.isReadyForMoreMediaData else {
-            return
-        }
+        guard let startingSession = lifecycle.frameCaptureSession() else { return }
         let sessionID = startingSession.id
 
         // Hop to MainActor only for the UI snapshot itself.
@@ -604,9 +411,7 @@ actor TheStakeout {
 
         // After the await, the phase may have changed — re-check that we're
         // still in the same recording session before appending.
-        guard case .recording(var session) = stakeoutPhase, session.id == sessionID else {
-            return
-        }
+        guard let session = lifecycle.activeRecording(matching: sessionID) else { return }
 
         // Check file size guard (7MB raw = ~9.3MB base64, under 10MB buffer limit)
         // If we can't read the file size, skip the check and continue recording
@@ -636,8 +441,7 @@ actor TheStakeout {
 
         let frameTime = CMTime(value: Int64(session.capture.frameCount), timescale: Int32(session.output.fps))
         if session.writer.pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: frameTime) {
-            session.capture.frameCount += 1
-            stakeoutPhase = .recording(session)
+            _ = lifecycle.noteFrameAppended(for: sessionID)
         }
     }
 
@@ -710,10 +514,7 @@ actor TheStakeout {
     }
 
     private func inactivityDeadline(sessionID: UUID) -> (elapsed: TimeInterval, timeout: TimeInterval)? {
-        guard case .recording(let session) = stakeoutPhase, session.id == sessionID else {
-            return nil
-        }
-        return session.activity.inactivityDeadline(now: Date())
+        lifecycle.inactivityDeadline(sessionID: sessionID)
     }
 
     // MARK: - Finalization
@@ -727,7 +528,7 @@ actor TheStakeout {
         // by the concurrency audit. `AVAssetWriter` is non-Sendable so it
         // cannot be captured into the `@Sendable` completion closure of
         // `finishWriting`; instead `handleFinalize` re-reads the finalizing
-        // session from `stakeoutPhase`. The `.finalizing` phase is exclusive:
+        // session from `StakeoutLifecycle`. The `.finalizing` phase is exclusive:
         // `startRecording` only accepts `.idle`, so no second finalizing session
         // can replace the current one while this writer is finishing.
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -741,7 +542,7 @@ actor TheStakeout {
     }
 
     private func handleFinalize(reason: RecordingPayload.StopReason) async {
-        guard case .finalizing(let session) = stakeoutPhase else { return }
+        guard let session = lifecycle.finalizingSession else { return }
 
         defer { cleanup(outputURL: session.assetWriter.outputURL) }
 
@@ -791,8 +592,7 @@ actor TheStakeout {
     /// if the current session ID no longer matches the one captured at
     /// task spawn, the task bails rather than acting on a fresh session.
     private var currentSessionID: UUID? {
-        if case .recording(let session) = stakeoutPhase { return session.id }
-        return nil
+        lifecycle.currentRecordingID
     }
 
     private static func writerSetupFailure(from error: Error?) -> TheStakeoutError {
@@ -821,7 +621,7 @@ actor TheStakeout {
     }
 
     private func cleanup(outputURL: URL) {
-        stakeoutPhase = .idle
+        lifecycle.markIdle()
 
         // Clean up temp file
         do {
