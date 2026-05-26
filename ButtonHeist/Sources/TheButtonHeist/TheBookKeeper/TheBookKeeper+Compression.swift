@@ -15,19 +15,28 @@ extension TheBookKeeper {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try await Self.runProcess(process)
+        try await Self.runProcess(process, failureContext: "gzip") { failure in
+            BookKeeperError.compressionFailed(.process(failure))
+        }
 
         guard process.terminationStatus == 0 else {
-            throw BookKeeperError.compressionFailed(
-                "gzip exited with status \(process.terminationStatus)"
-            )
+            throw BookKeeperError.compressionFailed(.process(.exited(
+                context: "gzip",
+                status: process.terminationStatus,
+                detail: nil
+            )))
         }
         guard FileManager.default.fileExists(atPath: compressedPath.path) else {
-            throw BookKeeperError.compressionFailed(
-                "Expected compressed file not found at \(compressedPath.path)"
-            )
+            throw BookKeeperError.compressionFailed(.outputMissing(path: compressedPath.path))
         }
-        try Self.restrictPrivateFilePermissions(at: compressedPath)
+        do {
+            try Self.restrictPrivateFilePermissions(at: compressedPath)
+        } catch {
+            throw BookKeeperError.compressionFailed(.permissionUpdateFailed(
+                path: compressedPath.path,
+                reason: String(describing: error)
+            ))
+        }
         return compressedPath
     }
 
@@ -44,19 +53,28 @@ extension TheBookKeeper {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        try await Self.runProcess(process)
+        try await Self.runProcess(process, failureContext: "tar czf") { failure in
+            BookKeeperError.archiveFailed(.process(failure))
+        }
 
         guard process.terminationStatus == 0 else {
-            throw BookKeeperError.archiveFailed(
-                "tar exited with status \(process.terminationStatus)"
-            )
+            throw BookKeeperError.archiveFailed(.process(.exited(
+                context: "tar czf",
+                status: process.terminationStatus,
+                detail: nil
+            )))
         }
         guard FileManager.default.fileExists(atPath: archivePath.path) else {
-            throw BookKeeperError.archiveFailed(
-                "Expected archive not found at \(archivePath.path)"
-            )
+            throw BookKeeperError.archiveFailed(.outputMissing(path: archivePath.path))
         }
-        try Self.restrictPrivateFilePermissions(at: archivePath)
+        do {
+            try Self.restrictPrivateFilePermissions(at: archivePath)
+        } catch {
+            throw BookKeeperError.archiveFailed(.permissionUpdateFailed(
+                path: archivePath.path,
+                reason: String(describing: error)
+            ))
+        }
         return archivePath
     }
 
@@ -64,7 +82,11 @@ extension TheBookKeeper {
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
-    private nonisolated static func runProcess(_ process: Process) async throws {
+    private nonisolated static func runProcess(
+        _ process: Process,
+        failureContext: String,
+        failure: @escaping @Sendable (BookKeeperProcessFailure) -> BookKeeperError
+    ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             process.terminationHandler = { _ in
                 continuation.resume()
@@ -72,7 +94,10 @@ extension TheBookKeeper {
             do {
                 try process.run()
             } catch {
-                continuation.resume(throwing: error)
+                continuation.resume(throwing: failure(.launchFailed(
+                    context: failureContext,
+                    reason: String(describing: error)
+                )))
             }
         }
     }

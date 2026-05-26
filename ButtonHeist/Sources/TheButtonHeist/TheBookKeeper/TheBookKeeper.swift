@@ -1,9 +1,6 @@
 import Foundation
-import os.log
 
 import TheScore
-
-private let logger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "heist")
 
 // MARK: - Session Phase State Machine
 
@@ -69,12 +66,8 @@ struct ClosingSession: Sendable {
         manifest.startTime
     }
 
-    var endTime: Date {
-        guard let endTime = manifest.endTime else {
-            logger.error("Closing session manifest is missing endTime; using startTime")
-            return manifest.startTime
-        }
-        return endTime
+    var endTime: Date? {
+        manifest.endTime
     }
 }
 
@@ -104,12 +97,8 @@ struct CompressingSession: Sendable {
         manifest.startTime
     }
 
-    var endTime: Date {
-        guard let endTime = manifest.endTime else {
-            logger.error("Compressing session manifest is missing endTime; using startTime")
-            return manifest.startTime
-        }
-        return endTime
+    var endTime: Date? {
+        manifest.endTime
     }
 }
 
@@ -126,12 +115,8 @@ struct ClosedSession: Sendable {
         manifest.startTime
     }
 
-    var endTime: Date {
-        guard let endTime = manifest.endTime else {
-            logger.error("Closed session manifest is missing endTime; using startTime")
-            return manifest.startTime
-        }
-        return endTime
+    var endTime: Date? {
+        manifest.endTime
     }
 }
 
@@ -143,44 +128,8 @@ struct ArchivedSession: Sendable {
         manifest.startTime
     }
 
-    var endTime: Date {
-        guard let endTime = manifest.endTime else {
-            logger.error("Archived session manifest is missing endTime; using startTime")
-            return manifest.startTime
-        }
-        return endTime
-    }
-}
-
-// MARK: - BookKeeper Errors
-
-/// Errors thrown by TheBookKeeper during session and artifact operations.
-enum BookKeeperError: Error, LocalizedError {
-    case invalidPhase(expected: String, actual: String)
-    case unsafePath(String)
-    case base64DecodingFailed
-    case compressionFailed(String)
-    case archiveFailed(String)
-    case noStepsRecorded
-    case notRecordingHeist
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidPhase(let expected, let actual):
-            return "Invalid session phase: expected \(expected), currently \(actual)"
-        case .unsafePath(let path):
-            return "Unsafe output path: \(path)"
-        case .base64DecodingFailed:
-            return "Failed to decode base64 data"
-        case .compressionFailed(let reason):
-            return "Compression failed: \(reason)"
-        case .archiveFailed(let reason):
-            return "Archive failed: \(reason)"
-        case .noStepsRecorded:
-            return "No steps were recorded during the heist session"
-        case .notRecordingHeist:
-            return "No heist recording is in progress"
-        }
+    var endTime: Date? {
+        manifest.endTime
     }
 }
 
@@ -252,12 +201,8 @@ final class TheBookKeeper {
 
         let logPath = directory.appendingPathComponent("session.jsonl")
         try Self.createPrivateFile(at: logPath)
-        let logHandle = try FileHandle(forWritingTo: logPath)
-
-        try appendLogLine(HeaderLogEntry(
-            formatVersion: SessionFormatVersion.current,
-            sessionId: sessionId
-        ), to: logHandle)
+        let logHandle = try openSessionLog(at: logPath)
+        try writeSessionHeader(sessionId: sessionId, to: logHandle, logPath: logPath)
 
         let startTime = Date()
         let manifest = SessionManifest(sessionId: sessionId, startTime: startTime)
@@ -375,7 +320,7 @@ final class TheBookKeeper {
         let snapshot = try sessionLogSnapshot(manifest: session.manifest, archivePath: archivePath)
 
         if deleteSource {
-            try FileManager.default.removeItem(at: session.directory)
+            try deleteSessionSourceDirectory(session.directory)
         }
 
         phase = .archived(ArchivedSession(
@@ -411,200 +356,6 @@ final class TheBookKeeper {
             durationMilliseconds: durationMilliseconds,
             error: error
         ), to: session.logHandle)
-    }
-
-    // MARK: - Heist Recording
-
-    var isRecordingHeist: Bool {
-        guard case .active(let session) = phase,
-              case .recording = session.heistRecording else { return false }
-        return true
-    }
-
-    func startHeistRecording(app: String) throws {
-        guard case .active(var session) = phase else {
-            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
-        }
-        guard case .idle = session.heistRecording else {
-            throw BookKeeperError.invalidPhase(expected: "not recording heist", actual: "recording heist")
-        }
-
-        let heistPath = session.directory.appendingPathComponent("heist.jsonl")
-        try Self.createPrivateFile(at: heistPath)
-        let heistHandle = try FileHandle(forWritingTo: heistPath)
-
-        session.heistRecording = .recording(HeistRecording(
-            app: app,
-            startTime: Date(),
-            fileHandle: heistHandle,
-            filePath: heistPath
-        ))
-        phase = .active(session)
-    }
-
-    func stopHeistRecording() throws -> HeistPlayback {
-        guard case .active(var session) = phase else {
-            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
-        }
-        guard case .recording(let recording) = session.heistRecording else {
-            throw BookKeeperError.notRecordingHeist
-        }
-
-        recording.fileHandle.closeFile()
-        defer {
-            session.heistRecording = .idle
-            phase = .active(session)
-        }
-
-        let steps = try readEvidenceFromFile(recording.filePath)
-        guard !steps.isEmpty else {
-            throw BookKeeperError.noStepsRecorded
-        }
-
-        return HeistPlayback(
-            recorded: recording.startTime,
-            app: recording.app,
-            steps: steps
-        )
-    }
-
-    /// Read HeistEvidence entries from a JSONL file.
-    ///
-    /// Malformed lines are logged and skipped rather than discarding the whole
-    /// recording. A single corrupt entry shouldn't destroy the other N-1 steps
-    /// captured during the heist.
-    private func readEvidenceFromFile(_ path: URL) throws -> [HeistEvidence] {
-        let data = try Data(contentsOf: path)
-        let lines = data.split(separator: 0x0A)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return lines.enumerated().compactMap { index, lineData in
-            do {
-                return try decoder.decode(HeistEvidence.self, from: Data(lineData))
-            } catch {
-                logger.warning(
-                    "Skipping malformed heist line \(index) in \(path.lastPathComponent): \(error.localizedDescription)"
-                )
-                return nil
-            }
-        }
-    }
-
-    /// Record a successfully executed command for heist playback.
-    /// Only records commands that succeeded — failed actions are skipped.
-    /// - Parameters:
-    ///   - actionResult: The command's result envelope payload. Failed results are skipped.
-    ///   - expectation: Final expectation evidence for the command. Failed expectations are skipped.
-    ///   - targetCapture: Capture containing the target at command time. The
-    ///     recorder resolves `heistId` arguments only against this capture so
-    ///     matchers are derived from durable capture evidence, not cache state.
-    func recordHeistEvidence(
-        _ request: TheFence.ParsedRequest,
-        actionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil,
-        targetCapture: AccessibilityTrace.Capture?
-    ) {
-        guard case .active(let session) = phase,
-              case .recording(let recording) = session.heistRecording else { return }
-        guard request.command.isHeistRecordable else { return }
-        guard actionResult?.success != false else { return }
-        guard expectation?.met != false else { return }
-
-        let step = buildStep(
-            request: request,
-            targetCapture: targetCapture,
-            actionResult: actionResult,
-            expectation: expectation
-        )
-
-        // Write evidence to durable file (append-only JSONL)
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
-        do {
-            var lineData = try encoder.encode(step)
-            lineData.append(contentsOf: [0x0A])
-            recording.fileHandle.write(lineData)
-        } catch {
-            logger.error(
-                "Failed to encode heist evidence for \(request.command.rawValue): \(error.localizedDescription)"
-            )
-            return
-        }
-    }
-
-    // MARK: - Heist Step Construction
-
-    private func buildStep(
-        request: TheFence.ParsedRequest,
-        targetCapture: AccessibilityTrace.Capture?,
-        actionResult: ActionResult?,
-        expectation: ExpectationResult?
-    ) -> HeistEvidence {
-        let elementTarget = request.payload.bookKeeperElementTarget
-        var target: ElementMatcher?
-        var ordinal: Int?
-        var recordedHeistId: HeistId?
-        var recordedFrame: RecordedFrame?
-        var coordinateOnly: Bool?
-
-        if case .heistId(let heistId)? = elementTarget,
-           let targetCapture,
-           let element = targetCapture.interface.elements.last(where: { $0.heistId == heistId }) {
-            let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
-            target = minimumMatcher.matcher
-            ordinal = minimumMatcher.ordinal
-            recordedHeistId = heistId
-            recordedFrame = RecordedFrame(
-                x: element.frameX, y: element.frameY,
-                width: element.frameWidth, height: element.frameHeight
-            )
-        } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
-            target = matcher
-            ordinal = matchedOrdinal
-        } else if request.payload.bookKeeperCoordinateOnly {
-            coordinateOnly = true
-        }
-
-        let accessibilityTrace = actionResult?.accessibilityTrace
-        let recorded = recordedHeistId != nil ||
-            recordedFrame != nil ||
-            coordinateOnly != nil ||
-            accessibilityTrace != nil ||
-            expectation != nil
-            ? RecordedMetadata(
-                heistId: recordedHeistId,
-                frame: recordedFrame,
-                coordinateOnly: coordinateOnly,
-                accessibilityTrace: accessibilityTrace,
-                expectation: expectation
-            )
-            : nil
-
-        return HeistEvidence(
-            command: request.command.rawValue,
-            target: target,
-            ordinal: ordinal,
-            arguments: request.heistEvidenceArguments,
-            recorded: recorded
-        )
-    }
-
-    // MARK: - Heist File I/O
-
-    static func writeHeist(_ script: HeistPlayback, to path: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(script)
-        try writePrivateData(data, to: path)
-    }
-
-    static func readHeist(from path: URL) throws -> HeistPlayback {
-        let data = try Data(contentsOf: path)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(HeistPlayback.self, from: data)
     }
 
     // MARK: - Path Safety
@@ -663,85 +414,4 @@ final class TheBookKeeper {
         return formatter.string(from: Date())
     }
 
-    nonisolated private static func createPrivateDirectory(at directory: URL) throws {
-        let fileManager = FileManager.default
-        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
-        try fileManager.createDirectory(
-            at: directory,
-            withIntermediateDirectories: true,
-            attributes: attributes
-        )
-        try fileManager.setAttributes(attributes, ofItemAtPath: directory.path)
-    }
-
-    nonisolated private static func createPrivateFile(at url: URL, contents: Data? = nil) throws {
-        let fileManager = FileManager.default
-        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
-        if fileManager.fileExists(atPath: url.path) {
-            try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
-            if let contents {
-                let handle = try FileHandle(forWritingTo: url)
-                defer { try? handle.close() }
-                try handle.truncate(atOffset: 0)
-                try handle.write(contentsOf: contents)
-            }
-            return
-        }
-
-        guard fileManager.createFile(
-            atPath: url.path,
-            contents: contents,
-            attributes: attributes
-        ) else {
-            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: url.path])
-        }
-        try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
-    }
-
-    nonisolated private static func writePrivateData(_ data: Data, to url: URL) throws {
-        let fileManager = FileManager.default
-        let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
-        let temporaryURL = url.deletingLastPathComponent()
-            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
-        try createPrivateFile(at: temporaryURL, contents: data)
-        do {
-            if fileManager.fileExists(atPath: url.path) {
-                try fileManager.removeItem(at: url)
-            }
-            try fileManager.moveItem(at: temporaryURL, to: url)
-            try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
-        } catch {
-            try? fileManager.removeItem(at: temporaryURL)
-            throw error
-        }
-    }
-
-    private func flushManifest(manifest: SessionManifest, directory: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(manifest)
-        let manifestPath = directory.appendingPathComponent("manifest.json")
-        try Self.writePrivateData(data, to: manifestPath)
-    }
-
-    private func sessionLogSnapshot(manifest: SessionManifest, directory: URL) throws -> SessionLogSnapshot {
-        let projection = try sessionLogProjection(in: directory)
-        return SessionLogSnapshot(
-            manifest: manifest,
-            counts: projection.counts,
-            artifacts: projection.artifacts,
-            projectionStatus: projection.status
-        )
-    }
-
-    private func sessionLogSnapshot(manifest: SessionManifest, archivePath: URL) throws -> SessionLogSnapshot {
-        let projection = try sessionLogProjection(inArchive: archivePath)
-        return SessionLogSnapshot(
-            manifest: manifest,
-            counts: projection.counts,
-            artifacts: projection.artifacts,
-            projectionStatus: projection.status
-        )
-    }
 }

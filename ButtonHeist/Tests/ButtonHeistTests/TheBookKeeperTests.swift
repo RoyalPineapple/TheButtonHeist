@@ -104,7 +104,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(try posixPermissions(at: closedSession.compressedLogPath), 0o600)
 
         let (archivePath, _) = try await bookKeeper.archiveSession(deleteSource: false)
-        defer { try? FileManager.default.removeItem(at: archivePath) }
+        defer { removeArchiveIfPresent(at: archivePath) }
         XCTAssertEqual(try posixPermissions(at: archivePath), 0o600)
     }
 
@@ -160,7 +160,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertHasNoStoredPhaseIdentityMirrors(session)
     }
 
-    func testTerminalSessionEndTimeFallsBackToStartTimeWhenManifestIsMalformed() {
+    func testTerminalSessionEndTimeRepresentsMalformedManifestAsInvalidData() {
         let startTime = Date(timeIntervalSince1970: 1_000_000)
         let manifest = SessionManifest(
             sessionId: "malformed",
@@ -189,10 +189,16 @@ final class TheBookKeeperTests: XCTestCase {
             manifest: manifest
         )
 
-        XCTAssertEqual(closing.endTime, startTime)
-        XCTAssertEqual(compressing.endTime, startTime)
-        XCTAssertEqual(closed.endTime, startTime)
-        XCTAssertEqual(archived.endTime, startTime)
+        XCTAssertNil(closing.endTime)
+        XCTAssertNil(compressing.endTime)
+        XCTAssertNil(closed.endTime)
+        XCTAssertNil(archived.endTime)
+        XCTAssertThrowsError(try manifest.requireClosedEndTime()) { error in
+            guard case BookKeeperError.manifest(.invalidData("malformed", _)) = error else {
+                XCTFail("Expected invalid manifest data, got \(error)")
+                return
+            }
+        }
     }
 
     func testCompressingSessionCarriesRequiredCompressionTask() async throws {
@@ -298,8 +304,7 @@ final class TheBookKeeperTests: XCTestCase {
         } else {
             XCTFail("Expected archived phase")
         }
-        // Clean up archive
-        try? FileManager.default.removeItem(at: archivePath)
+        removeArchiveIfPresent(at: archivePath)
     }
 
     @ButtonHeistActor
@@ -1052,7 +1057,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(archiveSnapshot.counts.commandCount, 1)
         let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
         XCTAssertEqual(snapshot.counts.commandCount, 1)
-        try? FileManager.default.removeItem(at: archivePath)
+        removeArchiveIfPresent(at: archivePath)
     }
 
     @ButtonHeistActor
@@ -1083,7 +1088,7 @@ final class TheBookKeeperTests: XCTestCase {
 
         try await bookKeeper.closeSession()
         let (archivePath, archiveSnapshot) = try await bookKeeper.archiveSession(deleteSource: false)
-        defer { try? FileManager.default.removeItem(at: archivePath) }
+        defer { removeArchiveIfPresent(at: archivePath) }
 
         XCTAssertEqual(archiveSnapshot.artifacts.count, 1)
         XCTAssertEqual(archiveSnapshot.artifacts.first?.path, "screenshots/001-get_screen.png")
@@ -1276,4 +1281,13 @@ private func posixPermissions(at url: URL) throws -> Int {
     let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
     let permissions = try XCTUnwrap(attributes[.posixPermissions] as? NSNumber)
     return permissions.intValue & 0o777
+}
+
+private func removeArchiveIfPresent(at url: URL, file: StaticString = #filePath, line: UInt = #line) {
+    guard FileManager.default.fileExists(atPath: url.path) else { return }
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        XCTFail("Failed to clean archive at \(url.path): \(error)", file: file, line: line)
+    }
 }
