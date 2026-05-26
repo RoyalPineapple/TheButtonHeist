@@ -710,7 +710,7 @@ public enum FenceResponse {
             output += "       Actions: \(element.actions.map(\.description).joined(separator: ", "))\n"
         }
         if let rotors = element.rotors, !rotors.isEmpty {
-            output += "       Rotors: \(rotors.map(\.name).joined(separator: ", "))\n"
+            output += "       Rotors: \(rotors.map { $0.name }.joined(separator: ", "))\n"
         }
         output += "       Frame: (\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))×\(Int(element.frameHeight))\n"
         return output

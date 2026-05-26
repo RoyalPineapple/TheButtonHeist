@@ -683,5 +683,5 @@ private func formatCustomContent(_ content: [HeistCustomContent]?) -> String? {
 
 private func formatRotors(_ rotors: [HeistRotor]?) -> String? {
     guard let rotors, !rotors.isEmpty else { return nil }
-    return rotors.map(\.name).joined(separator: ", ")
+    return rotors.map { $0.name }.joined(separator: ", ")
 }

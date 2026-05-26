@@ -121,7 +121,7 @@ extension TheStash {
                     actual: { element in
                         AccessibilityTraits.knownTraits
                             .filter { element.traits.contains($0.trait) }
-                            .map(\.name).joined(separator: ", ")
+                            .map { $0.name }.joined(separator: ", ")
                     }
                 )
             },
@@ -214,7 +214,7 @@ extension TheStash {
             if let value = element.value, !value.isEmpty { parts.append("value=\"\(value)\"") }
             let traitNames = AccessibilityTraits.knownTraits
                 .filter { element.traits.contains($0.trait) }
-                .map(\.name)
+                .map { $0.name }
             if !traitNames.isEmpty { parts.append("[\(traitNames.joined(separator: ","))]") }
             parts.append(availabilityDescription(for: entry, visibleHeistIds: visibleHeistIds))
             lines.append("  \(parts.joined(separator: " "))")

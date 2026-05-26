@@ -152,7 +152,7 @@ private extension HeistElement {
             return customContent?.formattedCurrentStateValue
         case .rotors:
             guard let rotors, !rotors.isEmpty else { return nil }
-            return rotors.map(\.name).joined(separator: ", ")
+            return rotors.map { $0.name }.joined(separator: ", ")
         }
     }
 }

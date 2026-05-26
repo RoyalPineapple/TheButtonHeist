@@ -88,7 +88,7 @@ extension TheStash {
             ? [.increment, .decrement]
             : []
         let custom = element.customActions
-            .map(\.name)
+            .map { $0.name }
             .filter { !$0.isEmpty }
             .map(ElementAction.custom)
         return activate + adjustable + custom
@@ -96,10 +96,10 @@ extension TheStash {
 
     static func buildActions(for container: AccessibilityContainer, object: NSObject? = nil) -> [ElementAction] {
         var names = container.customActions
-            .map(\.name)
+            .map { $0.name }
             .filter { !$0.isEmpty }
         let liveNames = object?.accessibilityCustomActions?
-            .map(\.name)
+            .map { $0.name }
             .filter { !$0.isEmpty } ?? []
         for name in liveNames where !names.contains(name) {
             names.append(name)

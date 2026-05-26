@@ -450,7 +450,7 @@ struct Screen: Equatable {
             traits: element.traits.namesIncludingUnknownBits,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: customContent,
-            rotors: element.customRotors.map(\.name).filter { !$0.isEmpty }
+            rotors: element.customRotors.map { $0.name }.filter { !$0.isEmpty }
         )
     }
 

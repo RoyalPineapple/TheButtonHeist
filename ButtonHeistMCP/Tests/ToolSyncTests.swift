@@ -17,7 +17,7 @@ struct ToolSyncTests {
 
     @Test("Every externally exposed command has an MCP tool")
     func allExposedCommandsHaveMCPTools() {
-        let mcpToolNames = Set(ToolDefinitions.all.map(\.name))
+        let mcpToolNames = Set(ToolDefinitions.all.map { $0.name })
 
         for command in TheFence.Command.allCases {
             switch command.mcpExposure {
@@ -78,13 +78,13 @@ struct ToolSyncTests {
         // Tools that are purely grouped (no matching direct command name)
         let purelyGroupedToolNames = Set(
             TheFence.Command.mcpToolContracts
-                .map(\.name)
+                .map { $0.name }
                 .filter { TheFence.Command(rawValue: $0) == nil }
         )
 
         let directToolNames = Set(
             ToolDefinitions.all
-                .map(\.name)
+                .map { $0.name }
                 .filter { !purelyGroupedToolNames.contains($0) }
         )
         let directCommands = Set(
@@ -114,7 +114,7 @@ struct ToolSyncTests {
                 }
             }
         )
-        let actualToolNames = Set(ToolDefinitions.all.map(\.name))
+        let actualToolNames = Set(ToolDefinitions.all.map { $0.name })
 
         #expect(
             actualToolNames == expectedToolNames,
@@ -560,7 +560,7 @@ struct ToolSyncTests {
         let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
         let contracts = TheFence.Command.mcpToolContracts
 
-        #expect(Set(toolsByName.keys) == Set(contracts.map(\.name)))
+        #expect(Set(toolsByName.keys) == Set(contracts.map { $0.name }))
 
         for contract in contracts {
             guard let tool = toolsByName[contract.name] else {
@@ -836,7 +836,7 @@ struct ToolSyncTests {
 
     private static var fenceCatalogLiterals: Set<String> {
         var literals = Set(TheFence.Command.allCases.map(\.rawValue))
-        literals.formUnion(TheFence.Command.mcpToolContracts.map(\.name))
+        literals.formUnion(TheFence.Command.mcpToolContracts.map { $0.name })
 
         for command in TheFence.Command.allCases {
             collectParameterKeys(from: command.parameters, into: &literals)

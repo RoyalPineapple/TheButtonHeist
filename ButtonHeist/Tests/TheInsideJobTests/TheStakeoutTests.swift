@@ -376,7 +376,7 @@ final class TheStakeoutTests: XCTestCase {
         XCTAssertEqual(payload.evidence?.interactionLogLimit, 500)
         XCTAssertEqual(payload.evidence?.droppedInteractionCount, 3)
         XCTAssertEqual(payload.evidence?.fileSizeLimitBytes, 7_000_000)
-        XCTAssertEqual(payload.evidence?.caps?.map(\.name).sorted(), ["fps", "inactivityTimeout", "maxDuration", "scale"])
+        XCTAssertEqual(payload.evidence?.caps?.map { $0.name }.sorted(), ["fps", "inactivityTimeout", "maxDuration", "scale"])
     }
 
     func testRecordInteractionWhenIdleIsNoOp() async {
