@@ -244,6 +244,12 @@
 		9C5A844A6040C6C5A5073D35 /* Mocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B12846943603FCF34BBBFCA /* Mocks.swift */; };
 		9CB361ED5426774B8FED8E9C /* FenceOperationCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9457CF49D9F2CA016C02EEA0 /* FenceOperationCatalog.swift */; };
 		9DCE9BE10551898572049300 /* ServerExposure.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D821DB2C74E8F2E8866E2B /* ServerExposure.swift */; };
+		A10000000000000000000011 /* InsideJobExposureRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* InsideJobExposureRuntime.swift */; };
+		A10000000000000000000012 /* InsideJobLifecycleState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* InsideJobLifecycleState.swift */; };
+		A10000000000000000000013 /* InsideJobObservationLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* InsideJobObservationLifecycle.swift */; };
+		A10000000000000000000014 /* InsideJobRuntimeConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* InsideJobRuntimeConfiguration.swift */; };
+		A10000000000000000000015 /* InsideJobStartupError.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* InsideJobStartupError.swift */; };
+		A10000000000000000000016 /* InsideJobTransportRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* InsideJobTransportRuntime.swift */; };
 		9E99BF1161B91DBAB5B1D76B /* SocketClientRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEBDFC5B6B8AF85D9ECA7648 /* SocketClientRegistry.swift */; };
 		9F55FB76EA9BB48746F2889B /* WireTypeRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5881244EEF340C6489BA715 /* WireTypeRoundTripTests.swift */; };
 		9FF63CDD02DCDB75E448C6CB /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 004C9D8BE8908EDDA621C569 /* Diagnostics.swift */; };
@@ -525,6 +531,12 @@
 		09696C328969BE17BA4BC22D /* TheStash+AccessibilityActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+AccessibilityActions.swift"; sourceTree = "<group>"; };
 		09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThePlantAutoStart.h; sourceTree = "<group>"; };
 		0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheInsideJob.swift; sourceTree = "<group>"; };
+		A10000000000000000000001 /* InsideJobExposureRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobExposureRuntime.swift; sourceTree = "<group>"; };
+		A10000000000000000000002 /* InsideJobLifecycleState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobLifecycleState.swift; sourceTree = "<group>"; };
+		A10000000000000000000003 /* InsideJobObservationLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobObservationLifecycle.swift; sourceTree = "<group>"; };
+		A10000000000000000000004 /* InsideJobRuntimeConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobRuntimeConfiguration.swift; sourceTree = "<group>"; };
+		A10000000000000000000005 /* InsideJobStartupError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobStartupError.swift; sourceTree = "<group>"; };
+		A10000000000000000000006 /* InsideJobTransportRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobTransportRuntime.swift; sourceTree = "<group>"; };
 		0AA2EF2A00A15CE746169F2E /* TheBookKeeper+Artifacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBookKeeper+Artifacts.swift"; sourceTree = "<group>"; };
 		0AB999A39F6788A19B1F2865 /* SocketConnectionAdmission.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketConnectionAdmission.swift; sourceTree = "<group>"; };
 		0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPolicyTests.swift; sourceTree = "<group>"; };
@@ -1164,6 +1176,12 @@
 				6017364A6AB3C529ECE13184 /* AccessibilityContainer+Matching.swift */,
 				90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */,
 				684B1D4DC1EC65626B3028AC /* AccessibilityHierarchy+TreeOperations.swift */,
+				A10000000000000000000001 /* InsideJobExposureRuntime.swift */,
+				A10000000000000000000002 /* InsideJobLifecycleState.swift */,
+				A10000000000000000000003 /* InsideJobObservationLifecycle.swift */,
+				A10000000000000000000004 /* InsideJobRuntimeConfiguration.swift */,
+				A10000000000000000000005 /* InsideJobStartupError.swift */,
+				A10000000000000000000006 /* InsideJobTransportRuntime.swift */,
 				0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */,
 			);
 			path = TheInsideJob;
@@ -1954,6 +1972,12 @@
 				DFCE8370EC7B903472089A1C /* TheGetaway+Transport.swift in Sources */,
 				003150556B493105EF69E5CD /* TheGetaway+WireEncoding.swift in Sources */,
 				CB9EF56672ACCA277A091C9A /* TheGetaway.swift in Sources */,
+				A10000000000000000000011 /* InsideJobExposureRuntime.swift in Sources */,
+				A10000000000000000000012 /* InsideJobLifecycleState.swift in Sources */,
+				A10000000000000000000013 /* InsideJobObservationLifecycle.swift in Sources */,
+				A10000000000000000000014 /* InsideJobRuntimeConfiguration.swift in Sources */,
+				A10000000000000000000015 /* InsideJobStartupError.swift in Sources */,
+				A10000000000000000000016 /* InsideJobTransportRuntime.swift in Sources */,
 				D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */,
 				1DE3ACC5C1D8BC396A3F4F16 /* KeyboardBridge.swift in Sources */,
 				DE851FFADFCAC1719EC060DC /* ObjCRuntime.swift in Sources */,
