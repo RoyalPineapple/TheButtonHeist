@@ -53,6 +53,8 @@ extension FenceResponse {
     }
 
     private static func quotedString(_ value: String) -> String {
+        // Boundary try?: compact presentation escapes strings for display only;
+        // failed JSON encoding falls back to a deterministic local escape.
         if let data = try? JSONEncoder().encode(value),
            let encoded = String(data: data, encoding: .utf8) {
             return encoded

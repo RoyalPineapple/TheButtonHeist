@@ -3100,7 +3100,7 @@ final class TheFenceHandlerTests: XCTestCase {
             .actionResult(ActionResult(
                 success: false,
                 method: .activate,
-                message: "Action skipped because target became stale after a screen change; retry against the current interface.",
+                message: "activate failed: target could not be made actionable",
                 errorKind: .actionFailed,
                 accessibilityDelta: delta
             ))
@@ -3132,7 +3132,7 @@ final class TheFenceHandlerTests: XCTestCase {
         )
         XCTAssertEqual(batch.summaries.count, 2)
         XCTAssertEqual(batch.summaries[0].deltaKind, "screenChanged")
-        XCTAssertEqual(batch.summaries[0].error, "Action skipped because target became stale after a screen change; retry against the current interface.")
+        XCTAssertEqual(batch.summaries[0].error, "activate failed: target could not be made actionable")
         XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 

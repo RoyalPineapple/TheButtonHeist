@@ -20,7 +20,7 @@ extension AccessibilityElement {
         let identifier: String?
         let value: String?
         let traits: AccessibilityTraits
-        let fallbackFrame: CGRect?
+        let geometryDisambiguationFrame: CGRect?
     }
 
     private var hasSemanticIdentity: Bool {
@@ -36,7 +36,7 @@ extension AccessibilityElement {
             identifier: identifier,
             value: value,
             traits: traits,
-            fallbackFrame: frame
+            geometryDisambiguationFrame: frame
         )
     }
 }

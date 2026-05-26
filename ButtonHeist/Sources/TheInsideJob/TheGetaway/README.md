@@ -4,7 +4,7 @@ The getaway driver — runs all comms between the wire and the crew.
 
 ## Files
 
-**`TheGetaway.swift`** — `@MainActor final class`. Does not own any crew members — receives references to TheMuscle and TheBrains from TheInsideJob at init. Owns the central client-message dispatch switch and delegates encoding, transport, delivery, status, stale-target, and recording details to focused extensions.
+**`TheGetaway.swift`** — `@MainActor final class`. Does not own any crew members — receives references to TheMuscle and TheBrains from TheInsideJob at init. Owns the central client-message dispatch switch and delegates encoding, transport, delivery, status, and recording details to focused extensions.
 
 **`TheGetaway+Transport.swift`** — wires ServerTransport to TheMuscle, consumes ordered transport events, and maps terminal client delivery failures through the disconnect lifecycle.
 
@@ -13,8 +13,6 @@ The getaway driver — runs all comms between the wire and the crew.
 **`TheGetaway+Broadcast.swift`** — owns authenticated-client broadcast delivery, including typed delivery failures and the "no screenshots over broadcast" session contract.
 
 **`TheGetaway+Status.swift`** — builds server identity, status, and cached pong payloads from runtime process/device state.
-
-**`TheGetaway+StaleTargetedAction.swift`** — owns the stale targeted-action guard used before executing element-scoped commands.
 
 **`BackgroundChangeState.swift`** — tracks settled background parse progress and command/parser phase transitions.
 
@@ -30,7 +28,7 @@ The getaway driver — runs all comms between the wire and the crew.
 2. **Observation level** — requestScreen, waitForIdle (`brains.executeWaitForIdle`), waitForChange (`brains.executeWaitForChange`)
 3. **Action level** — recording start/stop, or `brains.executeCommand(message)` for all action commands
 
-Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()` — if the screen changed while the agent was thinking and the command targets a specific element, fails before execution and returns the current accessibility trace plus its derived delta.
+Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()` so the response can include background accessibility context. Element-scoped commands still dispatch through TheBrains; semantic targeting owns viewport inflation and live geometry acquisition.
 
 ### Encode / decode / send
 

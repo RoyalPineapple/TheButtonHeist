@@ -2,6 +2,8 @@ import Foundation
 
 enum ScoreDescription {
     static func quoted(_ value: String) -> String {
+        // Boundary try?: display-only JSON string escaping, with a local
+        // deterministic escape path when Foundation encoding cannot help.
         if let data = try? JSONEncoder().encode(value),
            let encoded = String(data: data, encoding: .utf8) {
             return encoded
