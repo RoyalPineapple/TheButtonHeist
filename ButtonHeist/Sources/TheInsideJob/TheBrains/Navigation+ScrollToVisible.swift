@@ -216,8 +216,15 @@ extension Navigation {
 
     func makeSemanticallyVisible(for normalizedTarget: TheStash.NormalizedTarget) async -> SemanticVisibilityResult {
         let target = normalizedTarget.executableTarget
-        if stash.activePendingRotorResult(for: normalizedTarget.originalTarget) != nil {
-            return .operationLocalRotorResult
+        if let pendingRotorResult = stash.activePendingRotorResult(for: normalizedTarget.originalTarget) {
+            let ensureResult = await alignVisibleResolvedTarget(.init(screenElement: pendingRotorResult))
+            guard ensureResult.succeeded else { return ensureResult }
+            switch ensureResult {
+            case .alreadyUsable:
+                return .operationLocalRotorResult
+            default:
+                return ensureResult
+            }
         }
 
         // Source screens only derive `executableTarget`. Positioning authority
