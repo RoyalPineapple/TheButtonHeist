@@ -225,11 +225,13 @@ Because recordings are semantic, the same flow can run across device sizes and o
 
 The job does not disappear into tool-call history. It comes back as a replayable test.
 
-## The Accessibility Contract
+## Accessibility is a Contract
 
-Button Heist does not treat accessibility as metadata to scrape and discard. It makes the Accessibility Contract the control surface.
+Button Heist does not treat accessibility as metadata to scrape and discard. It makes that contract the control surface.
 
 That matters. A coordinate tool can tap a button with no label and report success. Button Heist cannot pretend the app is accessible when the semantic interface is missing or wrong. If an agent cannot find the control by label, trait, value, or action, that is signal.
+
+If VoiceOver can reach it, the agent can reach it. Labels. Traits. Values. Custom actions. Custom rotors. Custom content. The interface they share is the interface Button Heist runs on. What the agent can't do, no screen reader user can do either.
 
 One contract. Three payoffs: agents move faster, tests get stronger, VoiceOver users get the interface they were promised.
 
