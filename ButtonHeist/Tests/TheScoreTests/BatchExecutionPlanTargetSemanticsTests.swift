@@ -97,8 +97,8 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
 
         XCTAssertThrowsError(try JSONDecoder().decode(BatchPlan.self, from: Data(json.utf8))) { error in
             XCTAssertTrue(
-                "\(error)".contains("not batch-executable"),
-                "Expected batch-executable rejection, got \(error)"
+                "\(error)".contains("cannot be a nested batch execution plan"),
+                "Expected nested batch rejection, got \(error)"
             )
         }
     }

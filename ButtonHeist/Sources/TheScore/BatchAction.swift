@@ -18,7 +18,7 @@ extension Deadline: CustomStringConvertible {
     }
 }
 
-/// One executable non-read command in a batch plan.
+/// One command in an ordered batch plan.
 public struct BatchStep: Sendable {
     public let command: ClientMessage
     public let expectation: ActionExpectation
@@ -70,19 +70,19 @@ extension BatchStep: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let commandHeader = try container.nestedContainer(keyedBy: CommandCodingKeys.self, forKey: .command)
         let commandType = try commandHeader.decode(ClientWireMessageType.self, forKey: .type)
-        guard commandType.isBatchExecutableCommand else {
+        guard commandType != .batchExecutionPlan else {
             throw DecodingError.dataCorruptedError(
                 forKey: .command,
                 in: container,
-                debugDescription: "BatchStep command \"\(commandType.rawValue)\" is not batch-executable"
+                debugDescription: "BatchStep command \"\(commandType.rawValue)\" cannot be a nested batch execution plan"
             )
         }
         let command = try container.decode(ClientMessage.self, forKey: .command)
-        guard command.isBatchExecutableCommand else {
+        guard !command.isNestedBatchExecutionPlan else {
             throw DecodingError.dataCorruptedError(
                 forKey: .command,
                 in: container,
-                debugDescription: "BatchStep command \"\(command.canonicalName)\" is not batch-executable"
+                debugDescription: "BatchStep command \"\(command.canonicalName)\" cannot be a nested batch execution plan"
             )
         }
         self.init(
@@ -95,10 +95,10 @@ extension BatchStep: Codable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        guard command.isBatchExecutableCommand else {
+        guard !command.isNestedBatchExecutionPlan else {
             throw EncodingError.invalidValue(command, .init(
                 codingPath: encoder.codingPath,
-                debugDescription: "BatchStep command \"\(command.canonicalName)\" is not batch-executable"
+                debugDescription: "BatchStep command \"\(command.canonicalName)\" cannot be a nested batch execution plan"
             ))
         }
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -108,93 +108,12 @@ extension BatchStep: Codable {
     }
 }
 
-extension ClientWireMessageType {
-    var isBatchExecutableCommand: Bool {
-        switch self {
-        case .activate,
-             .increment,
-             .decrement,
-             .performCustomAction,
-             .rotor,
-             .touchTap,
-             .touchLongPress,
-             .touchSwipe,
-             .touchDrag,
-             .touchPinch,
-             .touchRotate,
-             .touchTwoFingerTap,
-             .touchDrawPath,
-             .touchDrawBezier,
-             .typeText,
-             .editAction,
-             .setPasteboard,
-             .scroll,
-             .scrollToVisible,
-             .elementSearch,
-             .scrollToEdge,
-             .waitForIdle,
-             .waitFor,
-             .waitForChange,
-             .explore,
-             .resignFirstResponder:
-            return true
-        case .clientHello,
-             .authenticate,
-             .requestInterface,
-             .ping,
-             .status,
-             .getPasteboard,
-             .batchExecutionPlan,
-             .requestScreen,
-             .startRecording,
-             .stopRecording:
-            return false
-        }
-    }
-}
-
 extension ClientMessage {
-    public var isBatchExecutableCommand: Bool {
-        switch self {
-        case .activate,
-             .increment,
-             .decrement,
-             .performCustomAction,
-             .rotor,
-             .touchTap,
-             .touchLongPress,
-             .touchSwipe,
-             .touchDrag,
-             .touchPinch,
-             .touchRotate,
-             .touchTwoFingerTap,
-             .touchDrawPath,
-             .touchDrawBezier,
-             .typeText,
-             .editAction,
-             .setPasteboard,
-             .scroll,
-             .scrollToVisible,
-             .elementSearch,
-             .scrollToEdge,
-             .waitForIdle,
-             .waitFor,
-             .waitForChange,
-             .explore,
-             .resignFirstResponder:
+    fileprivate var isNestedBatchExecutionPlan: Bool {
+        if case .batchExecutionPlan = self {
             return true
-        case .clientHello,
-             .authenticate,
-             .requestInterface,
-             .ping,
-             .status,
-             .getPasteboard,
-             .batchExecutionPlan,
-             .requestScreen,
-             .startRecording,
-             .stopRecording:
-            return false
         }
+        return false
     }
 
     public var fulfillsOwnBatchExpectation: Bool {

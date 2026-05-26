@@ -4,33 +4,26 @@ import XCTest
 
 final class ActionContractTests: XCTestCase {
 
-    func testBatchExecutableCommandsDeclareDefaults() {
+    func testBatchStepCommandsDeclareDefaults() {
         for command in commandFixtures() {
-            XCTAssertTrue(command.isBatchExecutableCommand)
             XCTAssertFalse(command.canonicalName.isEmpty)
             _ = command.defaultBatchExpectation
             _ = command.defaultBatchDeadline
         }
     }
 
-    func testReadAndControlMessagesAreNotBatchExecutable() {
+    func testBatchStepRejectsNestedPlanOnEncode() throws {
         let plan = BatchPlan(steps: [
             .command(.setPasteboard(SetPasteboardTarget(text: "ready"))),
         ])
-        let rejected: [ClientMessage] = [
-            .clientHello,
-            .authenticate(AuthenticatePayload(token: "token")),
-            .requestInterface(InterfaceQuery()),
-            .ping,
-            .status,
-            .getPasteboard,
-            .batchExecutionPlan(plan),
-            .requestScreen,
-            .startRecording(RecordingConfig()),
-            .stopRecording,
-        ]
+        let step = BatchStep.command(.batchExecutionPlan(plan))
 
-        XCTAssertTrue(rejected.allSatisfy { !$0.isBatchExecutableCommand })
+        XCTAssertThrowsError(try JSONEncoder().encode(step)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("cannot be a nested batch execution plan"),
+                "Expected nested batch rejection, got \(error)"
+            )
+        }
     }
 
     func testWaitCommandsOwnDynamicBatchDefaults() {

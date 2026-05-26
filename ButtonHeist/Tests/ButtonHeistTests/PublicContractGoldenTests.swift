@@ -280,6 +280,26 @@ final class PublicContractGoldenTests: XCTestCase {
         }
     }
 
+    func testBatchEligibilityIsFenceCatalogOwned() throws {
+        let batchAction = try sourceFile("ButtonHeist/Sources/TheScore/BatchAction.swift")
+        XCTAssertFalse(
+            batchAction.contains("isBatchExecutableCommand"),
+            "TheScore batch steps should not mirror Fence batch eligibility."
+        )
+        XCTAssertFalse(
+            batchAction.contains("not batch-executable"),
+            "Batch eligibility failures should come from Fence command descriptors."
+        )
+
+        let operationCatalog = try sourceFile(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/FenceOperationCatalog.swift"
+        )
+        XCTAssertTrue(
+            operationCatalog.contains("isExecutable: \\.isBatchExecutable"),
+            "run_batch routing should validate eligibility through Fence command descriptors."
+        )
+    }
+
     func testGetInterfacePublicJSONGolden() throws {
         let interface = makeReceiptTestInterface([
             makeReceiptTestElement(heistId: "pay_button", label: "Pay", traits: [.button]),
