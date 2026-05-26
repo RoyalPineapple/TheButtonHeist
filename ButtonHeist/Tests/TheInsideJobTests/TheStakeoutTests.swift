@@ -126,6 +126,17 @@ final class TheStakeoutTests: XCTestCase {
         XCTAssertTrue(isRecording)
     }
 
+    func testStakeoutErrorsHaveTypedNoUnderlyingErrorCases() {
+        XCTAssertEqual(
+            TheStakeout.TheStakeoutError.writerSetupFailedWithoutUnderlyingError.localizedDescription,
+            "Failed to set up video writer without an underlying AVFoundation error"
+        )
+        XCTAssertEqual(
+            TheStakeout.TheStakeoutError.finalizationFailedWithoutUnderlyingError.localizedDescription,
+            "Failed to finalize recording without an underlying AVFoundation error"
+        )
+    }
+
     // MARK: - stopRecording
 
     func testStopRecordingTransitionsToFinalizing() async throws {

@@ -741,7 +741,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("second_scroll") == true)
     }
 
-    func testElementSearchKnownTargetRoutesThroughScrollToVisible() async {
+    func testElementSearchKnownTargetUsesPageSearchWithoutPositioning() async {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -755,7 +755,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ElementSearchTarget(elementTarget: .heistId("settings_button"))
         )
 
-        XCTAssertTrue(result.success, "Expected known element_search target to use direct visibility: \(String(describing: result.message))")
+        XCTAssertTrue(result.success, "Expected known element_search target to be found by paging: \(String(describing: result.message))")
         XCTAssertEqual(result.method, .elementSearch)
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
     }

@@ -132,7 +132,7 @@ final class PingFastPathTests: XCTestCase {
             effectiveInstanceId: "test",
             tlsActive: false
         )
-        let getaway = TheGetaway(muscle: muscle, brains: brains, tripwire: tripwire, identity: identity)
+        let getaway = TheGetaway(muscle: muscle, brains: brains, identity: identity)
         let transport = ServerTransport()
         await getaway.wireTransport(transport)
 
@@ -188,7 +188,7 @@ final class PingFastPathTests: XCTestCase {
             effectiveInstanceId: "test",
             tlsActive: false
         )
-        let getaway = TheGetaway(muscle: muscle, brains: brains, tripwire: tripwire, identity: identity)
+        let getaway = TheGetaway(muscle: muscle, brains: brains, identity: identity)
         let transport = ServerTransport()
         await getaway.wireTransport(transport)
 
