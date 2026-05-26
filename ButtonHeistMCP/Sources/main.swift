@@ -170,6 +170,8 @@ struct ButtonHeistMCPServer {
     }
 
     private static func jsonText(_ response: FenceResponse) -> String? {
+        // Boundary try?: MCP presentation can fall back to compact text when
+        // expanded JSON cannot be encoded for display-only content.
         guard let data = try? response.jsonData() else { return nil }
         return String(data: data, encoding: .utf8)
     }

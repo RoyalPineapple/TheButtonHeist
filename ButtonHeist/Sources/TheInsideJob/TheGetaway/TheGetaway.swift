@@ -193,17 +193,6 @@ final class TheGetaway {
                 let observedBackgroundGeneration = backgroundChangeState.latestGeneration
                 let backgroundTrace = await brains.computeBackgroundAccessibilityTrace()
 
-                if let actionResult = staleTargetedActionFailure(for: message, backgroundTrace: backgroundTrace) {
-                    await recordAndRespond(
-                        command: message,
-                        actionResult: actionResult,
-                        requestId: requestId,
-                        observedBackgroundGeneration: observedBackgroundGeneration,
-                        respond: respond
-                    )
-                    return
-                }
-
                 let actionResult = await withCommandParseInFlight {
                     await brains.executeCommand(message)
                 }
