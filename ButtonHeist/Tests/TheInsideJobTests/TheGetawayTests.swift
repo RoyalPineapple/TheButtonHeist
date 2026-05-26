@@ -233,7 +233,7 @@ final class TheGetawayTests: XCTestCase {
             responses.append(data)
         }
 
-        guard case .failure(let failure) = result else {
+        guard case .failed(.responseEncodingFailed(let failure)) = result else {
             return XCTFail("Expected encoding failure, got \(result)")
         }
         XCTAssertEqual(failure.requestId, "bad-info")
@@ -254,7 +254,7 @@ final class TheGetawayTests: XCTestCase {
             responseData = data
         }
 
-        guard case .success = result else {
+        guard case .delivered = result else {
             return XCTFail("Expected explicit error response to encode, got \(result)")
         }
         let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
@@ -272,7 +272,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = await getaway.broadcastToAll(.recordingStopped)
 
-        guard case .failure(.connectionUnavailable(clientId: nil)) = result else {
+        guard case .transportUnavailable(clientId: nil) = result else {
             return XCTFail("Expected missing connection broadcast failure, got \(result)")
         }
     }
@@ -293,7 +293,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = await getaway.broadcastToAll(.recording(payload))
 
-        guard case .failure(.responseEncodingFailed(let failure)) = result else {
+        guard case .failed(.responseEncodingFailed(let failure)) = result else {
             return XCTFail("Expected broadcast encode failure, got \(result)")
         }
         XCTAssertNil(failure.requestId)
@@ -315,7 +315,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = await getaway.broadcastToAll(.recordingStopped)
 
-        guard case .failure(.sendFailed(let clientId, let failure)) = result else {
+        guard case .failed(.sendFailed(let clientId, let failure)) = result else {
             return XCTFail("Expected broadcast send failure, got \(result)")
         }
         XCTAssertEqual(clientId, 7)
@@ -344,7 +344,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = await getaway.broadcastToAll(.recordingStopped)
 
-        guard case .failure(.sendFailed(let clientId, let failure)) = result else {
+        guard case .failed(.sendFailed(let clientId, let failure)) = result else {
             return XCTFail("Expected broadcast send failure, got \(result)")
         }
         XCTAssertEqual(clientId, 7)
@@ -366,7 +366,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = await getaway.broadcastToAll(.recordingStopped)
 
-        guard case .failure(.connectionClosed(clientId: 7)) = result else {
+        guard case .failed(.connectionClosed(clientId: 7)) = result else {
             return XCTFail("Expected closed connection broadcast failure, got \(result)")
         }
     }
@@ -376,7 +376,7 @@ final class TheGetawayTests: XCTestCase {
 
         let result = await getaway.broadcastToAll(.screen(ScreenPayload(pngData: "AAAA", width: 10, height: 20)))
 
-        guard case .failure(.sessionContractViolation(let message)) = result else {
+        guard case .refused(.sessionContractViolation(let message)) = result else {
             return XCTFail("Expected session contract broadcast failure, got \(result)")
         }
         XCTAssertTrue(message.contains("screenshots must be requested explicitly"))

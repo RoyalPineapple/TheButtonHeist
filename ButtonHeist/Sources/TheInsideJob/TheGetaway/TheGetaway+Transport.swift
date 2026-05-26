@@ -105,8 +105,8 @@ extension TheGetaway {
             await muscle.noteClientActivity(clientId)
 
         case .sendFailed(let clientId, let failure):
-            let deliveryFailure = BroadcastDeliveryFailure(clientId: clientId, sendFailure: failure)
-            insideJobLogger.error("\(deliveryFailure.description)")
+            let deliveryResult = DeliveryResult(clientId: clientId, sendFailure: failure)
+            insideJobLogger.error("\(deliveryResult.description)")
             await handleClientDeliveryTerminated(clientId: clientId)
         }
     }

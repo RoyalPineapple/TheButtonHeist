@@ -8,7 +8,7 @@ The getaway driver — runs all comms between the wire and the crew.
 
 **`TheGetaway+Transport.swift`** — wires ServerTransport to TheMuscle, consumes ordered transport events, and maps terminal client delivery failures through the disconnect lifecycle.
 
-**`TheGetaway+WireEncoding.swift`** — owns the ResponseEnvelope/RequestEnvelope encode/decode contract and the invariant that response encoding failures do not synthesize alternate wire shapes.
+**`TheGetaway+WireEncoding.swift`** — owns the ResponseEnvelope/RequestEnvelope encode/decode contract, typed delivery results, and the invariant that response encoding failures do not synthesize alternate wire shapes.
 
 **`TheGetaway+Broadcast.swift`** — owns authenticated-client broadcast delivery, including typed delivery failures and the "no screenshots over broadcast" session contract.
 
@@ -36,8 +36,8 @@ Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()
 
 - `encodeEnvelope(_:requestId:accessibilityTrace:)` — wraps `ServerMessage` in `ResponseEnvelope`, JSON-encodes
 - `decodeRequest(_:)` — JSON-decodes `RequestEnvelope`
-- `sendMessage(_:requestId:accessibilityTrace:respond:)` — encode + respond; encoding failures do not synthesize alternate response shapes
-- `broadcastToAll(_:)` — encode once, send lightweight recording notifications to all authenticated clients
+- `sendMessage(_:requestId:accessibilityTrace:respond:)` — encode + respond with `DeliveryResult`; encoding failures do not synthesize alternate response shapes
+- `broadcastToAll(_:)` — encode once, send lightweight recording notifications to all authenticated clients with the same `DeliveryResult` contract
 
 ### Recording
 
