@@ -13,6 +13,9 @@ protocol CLICommandContract {}
 protocol GestureCLICommandContract: CLICommandContract {}
 
 struct CLICommandAdapter {
+    /// The CLI adapter table is transport/type routing only: it connects
+    /// ArgumentParser command types to catalog descriptors so the executable can
+    /// dispatch them. User-facing command truth still lives in TheFence.
     let commandType: ParsableCommand.Type
     let fenceDescriptor: FenceCommandDescriptor?
 
@@ -114,6 +117,17 @@ extension CLICommandContract {
             fatalError("No string default registered for \(fenceCommand.rawValue).\(key.rawValue)")
         }
         return value
+    }
+
+    static func catalogEnumValues(for key: FenceParameterKey) -> [String] {
+        guard let values = fenceCommand.parameter(named: key)?.enumValues else {
+            fatalError("No enum values registered for \(fenceCommand.rawValue).\(key.rawValue)")
+        }
+        return values
+    }
+
+    static func catalogEnumValuesDescription(for key: FenceParameterKey) -> String {
+        catalogEnumValues(for: key).joined(separator: ", ")
     }
 }
 

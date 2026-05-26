@@ -29,7 +29,7 @@ struct ButtonHeistMCPServer {
 
     static var instructions: String {
         let matcherKeys = inlineList(TheFence.Command.activate.descriptor.elementTargetParameterKeys)
-        let expectationKey = TheFence.Command.activate.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue
+        let expectationKey = parameterKey(.expect, for: .activate)
         return """
             Button Heist drives iOS apps through the accessibility layer — the same interface \
             VoiceOver uses. Target elements with schema matcher fields: \(matcherKeys), not \
@@ -50,7 +50,20 @@ struct ButtonHeistMCPServer {
     }
 
     private static func toolName(for command: TheFence.Command) -> String {
-        TheFence.Command.mcpToolContracts.first { $0.commands.contains(command) }?.name ?? command.canonicalName
+        guard let contract = TheFence.Command.mcpToolContracts.first(where: { $0.commands.contains(command) }) else {
+            fatalError("No MCP tool contract registered for \(command.canonicalName)")
+        }
+        return contract.name
+    }
+
+    private static func parameterKey(
+        _ key: FenceParameterKey,
+        for command: TheFence.Command
+    ) -> String {
+        guard let parameter = command.parameter(named: key) else {
+            fatalError("No parameter \(key.rawValue) registered for \(command.canonicalName)")
+        }
+        return parameter.key
     }
 
     private static func inlineToolName(for command: TheFence.Command) -> String {

@@ -177,7 +177,7 @@ nonisolated extension ReplSession {
 
         Bare words are looked up as current heistId handles (from get_interface).
         Key=value pairs work for any parameter: tap identifier=btn x=100 y=200
-        JSON input still works: {"command":"activate","heistId":"button_save"}
+        JSON input still works: \(jsonExample(command: .activate, targetValue: "button_save"))
         """
     }
 
@@ -216,6 +216,17 @@ nonisolated extension ReplSession {
     private static func padded(_ value: String, to width: Int) -> String {
         guard value.count < width else { return value }
         return value + String(repeating: " ", count: width - value.count)
+    }
+
+    private static func jsonExample(command: TheFence.Command, targetValue: String) -> String {
+        let descriptor = command.descriptor
+        guard let targetKey = descriptor.elementTargetParameterKeys.first else {
+            fatalError("No target parameter registered for \(descriptor.canonicalName)")
+        }
+
+        return """
+        {"\(FenceParameterKey.command.rawValue)":"\(descriptor.canonicalName)","\(targetKey)":"\(targetValue)"}
+        """
     }
 
     static func parseHumanInput(_ line: String) -> [String: Any] {

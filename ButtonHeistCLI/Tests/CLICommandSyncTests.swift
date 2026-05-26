@@ -113,6 +113,19 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
+    func testCLIAdapterCatalogDocumentsTransportRoutingBoundary() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLICommandContract.swift")
+
+        XCTAssertTrue(
+            source.contains("transport/type routing only"),
+            "CLI adapter maps should be documented as type routing, not command product truth"
+        )
+        XCTAssertTrue(
+            source.contains("User-facing command truth still lives in TheFence"),
+            "CLI adapter maps should point command semantics back at the Fence catalog"
+        )
+    }
+
     func testTopLevelFenceCommandAdaptersRenderNamesFromCanonicalContract() {
         let cliOnlyCommands: Set<String> = ["session"]
 
@@ -262,6 +275,24 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(
             source.contains("descriptor.cliExposure"),
             "REPL help should not reinterpret CLIExposure cases"
+        )
+    }
+
+    func testSessionHelpJSONExampleProjectsFromDescriptorMetadata() throws {
+        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Session/SessionRepl.swift")
+        let descriptor = TheFence.Command.activate.descriptor
+        let targetKey = try XCTUnwrap(descriptor.elementTargetParameterKeys.first)
+        let expectedExample = """
+        {"\(FenceParameterKey.command.rawValue)":"\(descriptor.canonicalName)","\(targetKey)":"button_save"}
+        """
+
+        XCTAssertTrue(
+            ReplSession.humanHelp.contains(expectedExample),
+            "REPL JSON example should render through descriptor command and target keys"
+        )
+        XCTAssertFalse(
+            source.contains(#"{"command":"activate","heistId":"button_save"}"#),
+            "REPL help should not hard-code command or matcher key examples"
         )
     }
 
@@ -807,6 +838,21 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(
             try RotorCommand.parse(["button"]).direction,
             catalogStringDefault(.rotor, .direction)
+        )
+    }
+
+    func testCLICommandContractProjectsEnumValuesFromFenceParameterSpecs() {
+        XCTAssertEqual(
+            ScrollCommand.catalogEnumValues(for: .direction),
+            TheFence.Command.scroll.parameter(named: .direction)?.enumValues
+        )
+        XCTAssertEqual(
+            ScrollToEdgeCommand.catalogEnumValuesDescription(for: .edge),
+            TheFence.Command.scrollToEdge.parameter(named: .edge)?.enumValues?.joined(separator: ", ")
+        )
+        XCTAssertEqual(
+            EditActionCommand.catalogEnumValues(for: .action),
+            TheFence.Command.editAction.parameter(named: .action)?.enumValues
         )
     }
 

@@ -635,6 +635,14 @@ struct ToolSyncTests {
             !source.contains("parameters.first"),
             "main.swift should not open-code descriptor parameter scans"
         )
+        #expect(
+            !source.contains("?? FenceParameterKey.expect.rawValue"),
+            "main.swift should not fall back to adapter-local expectation keys"
+        )
+        #expect(
+            !source.contains("?? command.canonicalName"),
+            "main.swift should not infer MCP tool names outside MCPToolContract"
+        )
     }
 
     @Test("MCP server instructions render descriptor-backed tool names")
