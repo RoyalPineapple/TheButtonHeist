@@ -17,12 +17,15 @@ extension Actions {
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
         let normalizedTarget = elementTarget.map {
-            stash.normalizeTarget($0, in: recordedScreen ?? stash.currentScreen)
+            normalizePointGestureTarget($0, recordedScreen: recordedScreen)
         }
         if let normalizedTarget {
             let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-            if let failure = positioning.failure {
-                return .failure(failure.method ?? method, message: failure.message)
+            switch PreActionPositioningPolicy(commandMethod: method).evaluate(positioning) {
+            case .ready:
+                break
+            case .failed(let failure):
+                return failure
             }
         }
         switch resolveGesturePoint(from: normalizedTarget, pointX: pointX, pointY: pointY, method: method) {
@@ -85,10 +88,13 @@ extension Actions {
                         + "try providing elementTarget or use absolute startX/startY/endX/endY."
                 )
             }
-            let normalizedTarget = stash.normalizeTarget(elementTarget, in: recordedScreen ?? stash.currentScreen)
+            let normalizedTarget = normalizePointGestureTarget(elementTarget, recordedScreen: recordedScreen)
             let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-            if let failure = positioning.failure {
-                return .failure(failure.method ?? .syntheticSwipe, message: failure.message)
+            switch PreActionPositioningPolicy(commandMethod: .syntheticSwipe).evaluate(positioning) {
+            case .ready:
+                break
+            case .failed(let failure):
+                return failure
             }
             let frame: CGRect
             switch resolveGestureFrame(for: normalizedTarget, method: .syntheticSwipe) {
@@ -114,12 +120,15 @@ extension Actions {
 
         // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
         let normalizedTarget = target.swipeElementTarget.map {
-            stash.normalizeTarget($0, in: recordedScreen ?? stash.currentScreen)
+            normalizePointGestureTarget($0, recordedScreen: recordedScreen)
         }
         if let normalizedTarget {
             let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-            if let failure = positioning.failure {
-                return .failure(failure.method ?? .syntheticSwipe, message: failure.message)
+            switch PreActionPositioningPolicy(commandMethod: .syntheticSwipe).evaluate(positioning) {
+            case .ready:
+                break
+            case .failed(let failure):
+                return failure
             }
         }
         switch resolveGesturePoint(
@@ -247,6 +256,20 @@ extension Actions {
         ) { center in
             await self.safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
         }
+    }
+
+    private func normalizePointGestureTarget(
+        _ target: any SemanticElementTarget,
+        recordedScreen: Screen?
+    ) -> TheStash.NormalizedTarget {
+        stash.normalizeTarget(target, in: pointGestureSourceScreen(recordedScreen))
+    }
+
+    private func pointGestureSourceScreen(_ recordedScreen: Screen?) -> Screen {
+        if let recordedScreen {
+            return recordedScreen
+        }
+        return stash.currentScreen
     }
 
     func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult {

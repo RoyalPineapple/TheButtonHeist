@@ -10,6 +10,40 @@ extension Actions {
     }
 }
 
+/// Converts pre-action positioning into a command failure without inline rescue chains.
+struct PreActionPositioningPolicy {
+    enum Outcome {
+        case ready
+        case failed(TheSafecracker.InteractionResult)
+    }
+
+    let commandMethod: ActionMethod
+
+    func evaluate(_ result: Navigation.EnsureOnScreenResult) -> Outcome {
+        switch result {
+        case .alreadyUsable, .adjustedVisibleTarget, .recoveredKnownOffscreen, .operationLocalRotorResult:
+            return .ready
+        case .failed(let failure):
+            return .failed(failure.interactionResult(commandMethod: commandMethod))
+        }
+    }
+}
+
+extension Navigation.EnsureOnScreenFailure {
+    func interactionResult(commandMethod: ActionMethod) -> TheSafecracker.InteractionResult {
+        .failure(interactionMethod(commandMethod: commandMethod), message: message)
+    }
+
+    private func interactionMethod(commandMethod: ActionMethod) -> ActionMethod {
+        switch method {
+        case .some(let method):
+            return method
+        case .none:
+            return commandMethod
+        }
+    }
+}
+
 /// Resolves a live action target, refreshing once on recoverable stale-object failures.
 struct LiveActionTargetRecoveryPolicy {
     struct Request {
@@ -47,8 +81,11 @@ struct LiveActionTargetRecoveryPolicy {
     ) async -> ActivationPolicy.RefreshResult {
         navigation.refresh()
         let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-        if let failure = positioning.failure {
-            return .failure(.failure(failure.method ?? .activate, message: failure.message))
+        switch PreActionPositioningPolicy(commandMethod: .activate).evaluate(positioning) {
+        case .ready:
+            break
+        case .failed(let failure):
+            return .failure(failure)
         }
         let resolution = stash.resolveTarget(normalizedTarget.executableTarget)
         guard let resolved = resolution.resolved else {
@@ -233,7 +270,12 @@ struct LiveActionTargetRecoveryDiagnostic: Equatable {
         recoveryObservation: String?,
         method: ActionMethod
     ) -> LiveActionTargetRecoveryDiagnostic {
-        let initialMessage = initialFailure.message ?? "\(method.rawValue) failed"
+        let initialMessage: String
+        if let message = initialFailure.message, !message.isEmpty {
+            initialMessage = message
+        } else {
+            initialMessage = "\(method.rawValue) failed without diagnostic message"
+        }
         let observed: String
         if let recoveryObservation, !recoveryObservation.isEmpty {
             observed = recoveryObservation
