@@ -200,6 +200,18 @@ final class TheTripwire {
         }
     }
 
+    private enum LayerSamplingTarget {
+        case presentation(CALayer)
+        case model(CALayer)
+
+        var layer: CALayer {
+            switch self {
+            case .presentation(let layer), .model(let layer):
+                return layer
+            }
+        }
+    }
+
     /// Walk every layer once, collecting fingerprint + animations + layout.
     func scanLayers() -> LayerScan {
         var scan = LayerScan()
@@ -208,10 +220,10 @@ final class TheTripwire {
         for (window, _) in windows {
             var stack: [CALayer] = [window.layer]
             while let layer = stack.popLast() {
-                let presentationLayer = layer.presentation() ?? layer
-                scan.positionXSum += presentationLayer.position.x
-                scan.positionYSum += presentationLayer.position.y
-                scan.opacitySum += CGFloat(presentationLayer.opacity)
+                let sampledLayer = Self.layerSamplingTarget(for: layer).layer
+                scan.positionXSum += sampledLayer.position.x
+                scan.positionYSum += sampledLayer.position.y
+                scan.opacitySum += CGFloat(sampledLayer.opacity)
                 scan.layerCount += 1
 
                 if layer.needsLayout() {
@@ -230,6 +242,13 @@ final class TheTripwire {
             }
         }
         return scan
+    }
+
+    private static func layerSamplingTarget(for layer: CALayer) -> LayerSamplingTarget {
+        if let presentationLayer = layer.presentation() {
+            return .presentation(presentationLayer)
+        }
+        return .model(layer)
     }
 
     // MARK: - Pulse State
@@ -492,23 +511,69 @@ final class TheTripwire {
     static func navigationSignal(for viewController: UIViewController?) -> NavigationSignal {
         guard let viewController else { return .empty }
 
-        let navigationController = (viewController as? UINavigationController)
-            ?? viewController.navigationController
-        let tabBarController = (viewController as? UITabBarController)
-            ?? viewController.tabBarController
+        let navigationController = resolvedNavigationController(for: viewController)
+        let tabBarController = resolvedTabBarController(for: viewController)
         let navigationItem = viewController.navigationItem
         let topNavigationItem = navigationController?.navigationBar.topItem
 
         return NavigationSignal(
             navigationDepth: navigationController?.viewControllers.count,
-            title: navigationItem.title ?? viewController.title ?? topNavigationItem?.title,
-            backButtonTitle: navigationItem.backButtonTitle
-                ?? navigationItem.backBarButtonItem?.title
-                ?? topNavigationItem?.backButtonTitle
-                ?? topNavigationItem?.backBarButtonItem?.title,
+            title: resolvedTitle(
+                navigationItem: navigationItem,
+                viewController: viewController,
+                topNavigationItem: topNavigationItem
+            ),
+            backButtonTitle: resolvedBackButtonTitle(
+                navigationItem: navigationItem,
+                topNavigationItem: topNavigationItem
+            ),
             selectedTabIndex: tabBarController?.selectedIndex,
             presentedViewController: viewController.presentedViewController.map(ObjectIdentifier.init)
         )
+    }
+
+    private static func resolvedNavigationController(for viewController: UIViewController) -> UINavigationController? {
+        if let navigationController = viewController as? UINavigationController {
+            return navigationController
+        }
+        return viewController.navigationController
+    }
+
+    private static func resolvedTabBarController(for viewController: UIViewController) -> UITabBarController? {
+        if let tabBarController = viewController as? UITabBarController {
+            return tabBarController
+        }
+        return viewController.tabBarController
+    }
+
+    private static func resolvedTitle(
+        navigationItem: UINavigationItem,
+        viewController: UIViewController,
+        topNavigationItem: UINavigationItem?
+    ) -> String? {
+        if let title = navigationItem.title {
+            return title
+        }
+        if let title = viewController.title {
+            return title
+        }
+        return topNavigationItem?.title
+    }
+
+    private static func resolvedBackButtonTitle(
+        navigationItem: UINavigationItem,
+        topNavigationItem: UINavigationItem?
+    ) -> String? {
+        if let title = navigationItem.backButtonTitle {
+            return title
+        }
+        if let title = navigationItem.backBarButtonItem?.title {
+            return title
+        }
+        if let title = topNavigationItem?.backButtonTitle {
+            return title
+        }
+        return topNavigationItem?.backBarButtonItem?.title
     }
 
     /// Windows that can be handed to the accessibility parser.
@@ -567,7 +632,12 @@ final class TheTripwire {
         guard !windows.isEmpty else { return [] }
 
         let appWindows = windows.filter { !isPassthrough($0.window) }
-        return appWindows.map { accessibleRootEntry($0) ?? $0 }
+        return appWindows.map { entry in
+            if let accessibleEntry = accessibleRootEntry(entry) {
+                return accessibleEntry
+            }
+            return entry
+        }
     }
 
     /// Return the view that should anchor accessibility parsing for a window.

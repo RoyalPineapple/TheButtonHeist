@@ -157,14 +157,14 @@ extension Navigation {
                 let proof = await scrollOnePageAndSettle(
                     scrollTarget, direction: toLeading, animated: false
                 )
-                if proof.moved, let parsed = stash.parse() {
+                if proof.result == .moved, let parsed = stash.parse() {
                     // Page-only commit: visible termination compares page-to-page;
                     // the union accumulator becomes semantic memory only at the
                     // end of exploration.
                     stash.currentScreen = parsed
                     union = union.merging(parsed)
                 }
-                if !proof.moved || stash.visibleIds == proof.previousVisibleIds {
+                if proof.result == .unchanged || stash.visibleIds == proof.previousVisibleIds {
                     break
                 }
             }
@@ -180,7 +180,7 @@ extension Navigation {
             let proof = await scrollOnePageAndSettle(
                 scrollTarget, direction: direction, animated: false
             )
-            guard proof.moved else { break }
+            guard proof.result == .moved else { break }
             manifest.scrollCount += 1
             if let parsed = stash.parse() {
                 // Page-only commit: reconciliation reads the visible page;

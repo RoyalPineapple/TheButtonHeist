@@ -1,168 +1,14 @@
 #if canImport(UIKit)
 #if DEBUG
 import UIKit
-import os.log
 
 import TheScore
 
-struct BackgroundChangeState: Sendable, Equatable {
-    private var progress: ChangeProgress = .caughtUp(generation: 0)
-    private(set) var phase: Phase = .idle
-
-    /// Encodes whether background parsing is caught up; `.pending` is only
-    /// used when `parsedThroughGeneration < latestGeneration`.
-    private enum ChangeProgress: Sendable, Equatable {
-        case caughtUp(generation: UInt64)
-        case pending(latestGeneration: UInt64, parsedThroughGeneration: UInt64)
-
-        init(latestGeneration: UInt64, parsedThroughGeneration: UInt64) {
-            if parsedThroughGeneration >= latestGeneration {
-                self = .caughtUp(generation: latestGeneration)
-            } else {
-                self = .pending(
-                    latestGeneration: latestGeneration,
-                    parsedThroughGeneration: parsedThroughGeneration
-                )
-            }
-        }
-
-        var latestGeneration: UInt64 {
-            switch self {
-            case .caughtUp(let generation):
-                return generation
-            case .pending(let latestGeneration, _):
-                return latestGeneration
-            }
-        }
-
-        var parsedThroughGeneration: UInt64 {
-            switch self {
-            case .caughtUp(let generation):
-                return generation
-            case .pending(_, let parsedThroughGeneration):
-                return parsedThroughGeneration
-            }
-        }
-
-        var hasPendingSettledChange: Bool {
-            if case .pending = self { return true }
-            return false
-        }
-
-        mutating func noteChange() {
-            self = ChangeProgress(
-                latestGeneration: latestGeneration &+ 1,
-                parsedThroughGeneration: parsedThroughGeneration
-            )
-        }
-
-        mutating func markObserved(through generation: UInt64) {
-            self = ChangeProgress(
-                latestGeneration: latestGeneration,
-                parsedThroughGeneration: max(parsedThroughGeneration, min(generation, latestGeneration))
-            )
-        }
-    }
-
-    enum Phase: Sendable, Equatable {
-        case idle
-        case command(count: Int)
-        case settledParse(claimedGeneration: UInt64, commandCount: Int)
-    }
-
-    var latestGeneration: UInt64 {
-        progress.latestGeneration
-    }
-
-    var parsedThroughGeneration: UInt64 {
-        progress.parsedThroughGeneration
-    }
-
-    var hasPendingSettledChange: Bool {
-        progress.hasPendingSettledChange
-    }
-
-    var canBeginSettledParse: Bool {
-        phase == .idle && hasPendingSettledChange
-    }
-
-    var isCommandInFlight: Bool {
-        switch phase {
-        case .command(let count), .settledParse(_, let count):
-            return count > 0
-        case .idle:
-            return false
-        }
-    }
-
-    var isSettledParseInFlight: Bool {
-        if case .settledParse = phase { return true }
-        return false
-    }
-
-    mutating func noteChange() {
-        progress.noteChange()
-    }
-
-    mutating func markObserved(through generation: UInt64) {
-        progress.markObserved(through: generation)
-    }
-
-    mutating func beginCommand() {
-        switch phase {
-        case .idle:
-            phase = .command(count: 1)
-        case .command(let count):
-            phase = .command(count: count + 1)
-        case .settledParse(let claimedGeneration, let commandCount):
-            phase = .settledParse(claimedGeneration: claimedGeneration, commandCount: commandCount + 1)
-        }
-    }
-
-    mutating func finishCommand() {
-        switch phase {
-        case .idle:
-            return
-        case .command(let count):
-            phase = count > 1 ? .command(count: count - 1) : .idle
-        case .settledParse(let claimedGeneration, let commandCount):
-            guard commandCount > 0 else { return }
-            phase = .settledParse(claimedGeneration: claimedGeneration, commandCount: commandCount - 1)
-        }
-    }
-
-    mutating func beginSettledParse() -> UInt64? {
-        guard phase == .idle, hasPendingSettledChange else { return nil }
-        let claim = latestGeneration
-        phase = .settledParse(claimedGeneration: claim, commandCount: 0)
-        return claim
-    }
-
-    mutating func finishSettledParse(claimedGeneration: UInt64) {
-        guard case .settledParse(let currentClaim, let commandCount) = phase,
-              currentClaim == claimedGeneration else {
-            return
-        }
-        progress.markObserved(through: claimedGeneration)
-        if commandCount > 0 {
-            phase = .command(count: commandCount)
-        } else {
-            phase = .idle
-        }
-    }
-
-    mutating func reset() {
-        progress = .caughtUp(generation: 0)
-        phase = .idle
-    }
-}
-
 /// The getaway driver — runs comms between the wire and the crew.
 ///
-/// TheGetaway owns all message routing, encoding, broadcasting, and transport
-/// wiring. It does not own any crew members — it receives references to
-/// TheMuscle, TheBrains, and TheTripwire from TheInsideJob and routes
-/// messages between them and the network.
+/// TheGetaway owns message routing between the transport and crew members.
+/// Transport wiring, encoding, broadcast, and status construction live in
+/// focused extension files so this root stays a coordinator.
 @MainActor
 final class TheGetaway {
 
@@ -170,7 +16,6 @@ final class TheGetaway {
 
     let muscle: TheMuscle
     let brains: TheBrains
-    let tripwire: TheTripwire
 
     /// Identity info provided by TheInsideJob for ServerInfo responses.
     struct ServerIdentity {
@@ -190,18 +35,18 @@ final class TheGetaway {
     private(set) var backgroundChangeState = BackgroundChangeState()
 
     /// Current transport — set by `wireTransport`, cleared on teardown.
-    private(set) weak var transport: ServerTransport?
+    weak var transport: ServerTransport?
 
     /// Single long-lived consumer Task for `transport.events`. Cancelled on
     /// `tearDown()`; the for-await loop also exits when the transport finishes
     /// its event continuation in `stop()`.
-    private var eventConsumerTask: Task<Void, Never>?
+    var eventConsumerTask: Task<Void, Never>?
 
     /// Pending Tasks spawned to bridge MainActor-bound recording callbacks
     /// back into TheGetaway. There is at most one in-flight delivery per
     /// recording session, but storing the handle in a tracker keeps the
     /// lifecycle-tracking pattern uniform with the rest of TheGetaway.
-    private let pendingRecordingTasks = TaskTracker()
+    let pendingRecordingTasks = TaskTracker()
 
     var stakeout: TheStakeout? {
         recordingRouteState.activeStakeout
@@ -250,167 +95,21 @@ final class TheGetaway {
         backgroundChangeState.noteChange()
     }
 
+    func resetBackgroundChangeState() {
+        backgroundChangeState.reset()
+    }
+
     var hasPendingBackgroundChange: Bool {
         backgroundChangeState.hasPendingSettledChange
     }
 
     // MARK: - Init
 
-    init(muscle: TheMuscle, brains: TheBrains, tripwire: TheTripwire, identity: ServerIdentity) {
+    init(muscle: TheMuscle, brains: TheBrains, identity: ServerIdentity) {
         self.muscle = muscle
         self.brains = brains
-        self.tripwire = tripwire
         self.identity = identity
         self.pongPayload = Self.makePongPayload(identity: identity)
-    }
-
-    // MARK: - Transport Wiring
-
-    /// Wire a transport to the crew.
-    ///
-    /// Async because `muscle.installCallbacks(...)` must complete *before* any
-    /// transport event consumer starts. The previous shape kicked off an
-    /// unstructured `Task { await muscle.installCallbacks(...) }` and returned
-    /// synchronously; the caller then immediately ran `transport.start(...)`
-    /// and the event consumer began accepting `.clientConnected` events. Task
-    /// submission onto an actor's mailbox is not FIFO across separately-rooted
-    /// Tasks, so the first `.clientConnected` could race ahead of the install
-    /// — `sendToClient` was still nil — and the serverHello was silently
-    /// dropped. Awaiting `installCallbacks` inline closes that race for both
-    /// `start()` and `resume()`. See finding PR #352 (High) and #359 M1.
-    func wireTransport(_ transport: ServerTransport) async {
-        self.transport = transport
-
-        // Install actor-isolated callbacks on TheMuscle. Each callback is
-        // `@Sendable`. We capture the inner `SimpleSocketServer` actor (which
-        // is Sendable) rather than the `ServerTransport` wrapper (NSObject,
-        // non-Sendable) so the closures don't drag a non-Sendable type into
-        // actor-isolated storage. `onSessionActiveChanged` updates Bonjour
-        // TXT state — which is `@MainActor` on the transport — so it hops to
-        // MainActor and keeps `[weak transport]` (the hop makes the capture
-        // safe). `handleClientConnected` is `@MainActor`, so the
-        // onClientAuthenticated bridge hops through an unstructured Task too.
-        let server = transport.server
-        // These closures are awaited inline at every TheMuscle call site so
-        // back-to-back sends/disconnects from one logical operation execute
-        // in FIFO order on the SimpleSocketServer actor. The previous
-        // fire-and-forget `Task { await server.foo(...) }` shape relied on
-        // Swift's unstructured-Task scheduling, which makes no FIFO
-        // guarantee — the cross-cutting audit's Finding 5.
-        let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
-            await server.send(data, to: clientId)
-        }
-        let markAuth: @Sendable (Int) async -> Void = { clientId in
-            await server.markAuthenticated(clientId)
-        }
-        let markApprovalPending: @Sendable (Int) async -> Void = { clientId in
-            await server.markApprovalPending(clientId)
-        }
-        let disconnect: @Sendable (Int) async -> Void = { clientId in
-            await server.disconnect(clientId: clientId)
-        }
-        let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
-            self?.handleClientConnected(clientId, respond: respond)
-        }
-        let onSessionActiveChanged: @MainActor @Sendable (Bool) async -> Void = { [weak self] isActive in
-            self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
-            if !isActive {
-                // Session released — drop any cached recording payload so a
-                // future driver can't pick up a video the previous driver
-                // started. Pending stop waiters are also cleared; their
-                // transport is dead anyway.
-                await self?.invalidateRecordingForSessionRelease()
-            }
-        }
-        // Awaited inline: the event consumer below must not see a
-        // `.clientConnected` before `sendToClient` and friends are installed.
-        // There is no prior install Task to cancel — every call to
-        // `wireTransport` simply awaits and reinstalls cleanly, so re-wiring
-        // on `resume()` is safe by construction.
-        await muscle.installCallbacks(
-            sendToClient: sendToClient,
-            markClientAuthenticated: markAuth,
-            markClientAwaitingApproval: markApprovalPending,
-            disconnectClient: disconnect,
-            onClientAuthenticated: onAuthenticated,
-            onSessionActiveChanged: onSessionActiveChanged
-        )
-
-        // Keepalives must be answered even when the main actor is wedged on a
-        // long parse/settle/explore. The interceptor decodes and replies on
-        // the network queue before the message ever enters the event stream;
-        // a `.fastPathHandled` event is yielded so we can still note client
-        // activity in order with everything else.
-        let pongPayload = self.pongPayload
-        transport.setSyncDataInterceptor { _, data in
-            PingFastPath.encodedPong(for: data, payload: pongPayload)
-        }
-
-        // `wireTransport` is idempotent: re-wiring cancels any prior
-        // consumer Task so the new transport's events flow without contention.
-        eventConsumerTask?.cancel()
-        eventConsumerTask = Task { @MainActor [weak self, events = transport.events] in
-            for await event in events {
-                guard let self else { return }
-                await self.handleTransportEvent(event)
-            }
-        }
-    }
-
-    /// Dispatch a single transport event on the main actor.
-    ///
-    /// The consumer awaits this method per event, so `clientConnected` always
-    /// completes before the first `dataReceived` for that client and message
-    /// N+1 cannot start before message N finishes. The previous per-event
-    /// `Task { @MainActor in ... }` bridge could lose ordering: a slow
-    /// connect Task and a fast first-message Task were independently
-    /// scheduled, and the message could observe an unregistered client
-    /// address.
-    func handleTransportEvent(_ event: TransportEvent) async {
-        switch event {
-        case .clientConnected(let clientId, let remoteAddress):
-            insideJobLogger.info("Client \(clientId) connected from \(remoteAddress ?? "unknown"), awaiting hello")
-            if let remoteAddress {
-                await muscle.registerClientAddress(clientId, address: remoteAddress)
-            }
-            await muscle.sendServerHello(clientId: clientId)
-
-        case .clientDisconnected(let clientId):
-            insideJobLogger.info("Client \(clientId) disconnected")
-            await invalidateRecordingForDisconnect(clientId: clientId)
-            await muscle.handleClientDisconnected(clientId)
-
-        case .dataReceived(let clientId, let data, let respond):
-            await handleClientMessage(clientId, data: data, respond: respond)
-
-        case .unauthenticatedData(let clientId, let data, let respond):
-            await muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
-
-        case .rateLimited(_, let respond):
-            let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
-            sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
-
-        case .fastPathHandled(let clientId):
-            await muscle.noteClientActivity(clientId)
-
-        case .sendFailed(let clientId, let failure):
-            insideJobLogger.error("Send to client \(clientId) failed: \(failure.localizedDescription)")
-        }
-    }
-
-    func tearDown() async {
-        eventConsumerTask?.cancel()
-        eventConsumerTask = nil
-        await invalidateRecordingForSessionRelease()
-        pendingRecordingTasks.cancelAll()
-        transport = nil
-        backgroundChangeState.reset()
-        replaceRecordingRouteState(.idle)
-    }
-
-    func tearDownIfWired(to expectedTransport: ServerTransport) async {
-        guard transport === expectedTransport else { return }
-        await tearDown()
     }
 
     /// Insert a Task into `pendingRecordingTasks` and prune already-completed
@@ -526,256 +225,6 @@ final class TheGetaway {
         return await operation()
     }
 
-    func staleTargetedActionFailure(for message: ClientMessage, backgroundTrace: AccessibilityTrace?) -> ActionResult? {
-        guard let backgroundTrace,
-              let backgroundDelta = backgroundTrace.backgroundDelta,
-              backgroundDelta.isScreenChanged,
-              brains.screenChangedSinceLastSent,
-              message.isStaleSensitiveTargetedAction else {
-            return nil
-        }
-
-        let lastScreen = brains.lastSentScreenId ?? "unknown"
-        let currentScreen = brains.screenId ?? "unknown"
-        var builder = ActionResultBuilder(
-            method: TheBrains.diagnosticMethod(for: message),
-            screenName: brains.screenName,
-            screenId: brains.screenId
-        )
-        builder.message = "Action skipped because target became stale after a screen change; "
-            + "retry against the current interface. Screen changed while you were thinking "
-            + "(\(lastScreen) -> \(currentScreen))."
-        builder.accessibilityTrace = backgroundTrace
-        return builder.failure(errorKind: .actionFailed)
-    }
-
-    // MARK: - Encode / Decode
-
-    struct ResponseEncodingFailure: Error, Sendable, Equatable, CustomStringConvertible {
-        let requestId: String?
-        let underlyingDescription: String
-
-        var description: String {
-            if let requestId {
-                return "Failed to encode response envelope for request \(requestId): \(underlyingDescription)"
-            }
-            return "Failed to encode response envelope: \(underlyingDescription)"
-        }
-    }
-
-    struct RequestDecodeFailure: Error, Sendable, CustomStringConvertible {
-        let underlyingDescription: String
-
-        var description: String {
-            "Failed to decode client message: \(underlyingDescription)"
-        }
-
-        var serverError: ServerError {
-            ServerError(kind: .general, message: "Malformed message — could not decode")
-        }
-    }
-
-    enum BroadcastDeliveryFailure: Error, Sendable, Equatable, CustomStringConvertible {
-        case sessionContractViolation(String)
-        case responseEncodingFailed(ResponseEncodingFailure)
-        case connectionUnavailable(clientId: Int?)
-        case connectionClosed(clientId: Int)
-        case sendFailed(clientId: Int, ServerSendFailure)
-
-        var description: String {
-            switch self {
-            case .sessionContractViolation(let message):
-                return "Session contract failure while broadcasting response envelope: \(message)"
-            case .responseEncodingFailed(let failure):
-                return failure.description
-            case .connectionUnavailable(let clientId):
-                if let clientId {
-                    return "Connection failure while broadcasting response envelope to client \(clientId): transport is unavailable"
-                }
-                return "Connection failure while broadcasting response envelope: no transport is wired"
-            case .connectionClosed(let clientId):
-                return "Connection failure while broadcasting response envelope to client \(clientId): client is no longer connected"
-            case .sendFailed(let clientId, let failure):
-                return "Send failure while broadcasting response envelope to client \(clientId): \(failure.localizedDescription)"
-            }
-        }
-
-        init(clientId: Int, sendFailure: ServerSendFailure) {
-            switch sendFailure {
-            case .clientNotFound:
-                self = .connectionClosed(clientId: clientId)
-            case .transportUnavailable:
-                self = .connectionUnavailable(clientId: clientId)
-            case .transportFailed, .payloadTooLarge, .sendBufferFull:
-                self = .sendFailed(clientId: clientId, sendFailure)
-            }
-        }
-    }
-
-    func encodeEnvelope(
-        _ message: ServerMessage,
-        requestId: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil
-    ) -> Result<Data, ResponseEncodingFailure> {
-        do {
-            let envelopeData = try ResponseEnvelope(
-                requestId: requestId,
-                message: message,
-                accessibilityTrace: accessibilityTrace
-            ).encoded()
-            return .success(envelopeData)
-        } catch {
-            return .failure(.init(requestId: requestId, underlyingDescription: String(describing: error)))
-        }
-    }
-
-    func decodeRequest(_ data: Data) -> Result<RequestEnvelope, RequestDecodeFailure> {
-        do {
-            return .success(try RequestEnvelope.decoded(from: data))
-        } catch {
-            return .failure(.init(underlyingDescription: String(describing: error)))
-        }
-    }
-
-    func logEncodingFailure(_ failure: ResponseEncodingFailure) {
-        insideJobLogger.error("\(failure.description)")
-    }
-
-    // MARK: - Send / Broadcast
-
-    @discardableResult
-    func sendMessage(
-        _ message: ServerMessage,
-        requestId: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        respond: @escaping (Data) -> Void
-    ) -> Result<Void, ResponseEncodingFailure> {
-        switch encodeEnvelope(
-            message,
-            requestId: requestId,
-            accessibilityTrace: accessibilityTrace
-        ) {
-        case .success(let data):
-            insideJobLogger.debug("Sending \(data.count) bytes")
-            respond(data)
-            return .success(())
-        case .failure(let failure):
-            logEncodingFailure(failure)
-            return .failure(failure)
-        }
-    }
-
-    /// Broadcast a server message to every authenticated client.
-    ///
-    /// Awaits the transport so two back-to-back `broadcastToAll` calls from
-    /// the same caller deliver in FIFO order. The previous sync shape used
-    /// fire-and-forget Tasks under the hood, which made no FIFO guarantee.
-    @discardableResult
-    func broadcastToAll(_ message: ServerMessage) async -> Result<Void, BroadcastDeliveryFailure> {
-        guard !message.isScreenshot else {
-            let failure = BroadcastDeliveryFailure.sessionContractViolation(
-                "screenshots must be requested explicitly"
-            )
-            insideJobLogger.error("\(failure.description)")
-            return .failure(failure)
-        }
-        let data: Data
-        switch encodeEnvelope(message) {
-        case .success(let envelopeData):
-            data = envelopeData
-        case .failure(let failure):
-            logEncodingFailure(failure)
-            return .failure(.responseEncodingFailed(failure))
-        }
-        guard transport != nil else {
-            let failure = BroadcastDeliveryFailure.connectionUnavailable(clientId: nil)
-            insideJobLogger.error("\(failure.description)")
-            return .failure(failure)
-        }
-        var firstFailure: BroadcastDeliveryFailure?
-        for clientId in await muscle.authenticatedClientIDs.sorted() {
-            switch await muscle.sendData(data, toClient: clientId) {
-            case .enqueued:
-                continue
-            case .failed(let sendFailure):
-                let failure = BroadcastDeliveryFailure(clientId: clientId, sendFailure: sendFailure)
-                insideJobLogger.error("\(failure.description)")
-                if firstFailure == nil {
-                    firstFailure = failure
-                }
-            }
-        }
-        if let firstFailure {
-            return .failure(firstFailure)
-        }
-        return .success(())
-    }
-
-    // MARK: - Response Helpers
-
-    private func handleClientConnected(_ clientId: Int, respond: @escaping (Data) -> Void) {
-        sendServerInfo(respond: respond)
-    }
-
-    private func sendServerInfo(respond: @escaping (Data) -> Void) {
-        let screenBounds = ScreenMetrics.current.bounds
-        let info = ServerInfo(
-            appName: Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App",
-            bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
-            deviceName: UIDevice.current.name,
-            systemVersion: UIDevice.current.systemVersion,
-            screenWidth: screenBounds.width,
-            screenHeight: screenBounds.height,
-            instanceId: identity.sessionId.uuidString,
-            instanceIdentifier: identity.effectiveInstanceId,
-            listeningPort: transport?.listeningPort,
-            simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
-            vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString,
-            tlsActive: identity.tlsActive
-        )
-        sendMessage(.info(info), respond: respond)
-    }
-
-    private func makeStatusPayload() async -> StatusPayload {
-        let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
-        let bundleId = Bundle.main.bundleIdentifier ?? ""
-        let appBuild = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
-
-        let identity = StatusIdentity(
-            appName: appName,
-            bundleIdentifier: bundleId,
-            appBuild: appBuild,
-            deviceName: UIDevice.current.name,
-            systemVersion: UIDevice.current.systemVersion,
-            buttonHeistVersion: buttonHeistVersion
-        )
-
-        let isActive = await muscle.isSessionActive
-        let connectionCount = await muscle.activeSessionConnectionCount
-        let session = StatusSession(
-            active: isActive,
-            watchersAllowed: false,
-            activeConnections: connectionCount
-        )
-
-        return StatusPayload(identity: identity, session: session)
-    }
-
-    private static func makePongPayload(identity: ServerIdentity) -> PongPayload {
-        let info = Bundle.main.infoDictionary ?? [:]
-        let appName = (info["CFBundleDisplayName"] as? String)
-            ?? (info["CFBundleName"] as? String)
-            ?? ProcessInfo.processInfo.processName
-        return PongPayload(
-            buttonHeistVersion: buttonHeistVersion,
-            appName: appName,
-            bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
-            appVersion: info["CFBundleShortVersionString"] as? String,
-            appBuild: info["CFBundleVersion"] as? String,
-            serverInstanceIdentifier: identity.effectiveInstanceId
-        )
-    }
-
     private func recordAndRespond(
         command: ClientMessage,
         actionResult: ActionResult,
@@ -872,71 +321,6 @@ final class TheGetaway {
         sendMessage(.screen(payload), requestId: requestId, respond: respond)
         backgroundChangeState.markObserved(through: observedGeneration)
         insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
-    }
-}
-
-private extension ServerMessage {
-    var isScreenshot: Bool {
-        if case .screen = self { return true }
-        return false
-    }
-}
-
-private extension ClientMessage {
-    var isStaleSensitiveTargetedAction: Bool {
-        switch self {
-        case .activate,
-             .increment,
-             .decrement,
-             .rotor:
-            return true
-        case .touchTap(let target):
-            return target.elementTarget != nil
-        case .touchLongPress(let target):
-            return target.elementTarget != nil
-        case .touchSwipe(let target):
-            return target.elementTarget != nil
-        case .touchDrag(let target):
-            return target.elementTarget != nil
-        case .touchPinch(let target):
-            return target.elementTarget != nil
-        case .touchRotate(let target):
-            return target.elementTarget != nil
-        case .touchTwoFingerTap(let target):
-            return target.elementTarget != nil
-        case .typeText(let target):
-            return target.elementTarget != nil
-        case .scroll(let target):
-            return target.elementTarget != nil || target.containerTarget != nil
-        case .scrollToVisible(let target):
-            return target.elementTarget != nil
-        case .elementSearch(let target):
-            return target.elementTarget != nil
-        case .scrollToEdge(let target):
-            return target.elementTarget != nil || target.containerTarget != nil
-        case .performCustomAction(let target):
-            return target.elementTarget != nil || target.containerTarget != nil
-        case .clientHello,
-             .authenticate,
-             .requestInterface,
-             .ping,
-             .status,
-             .touchDrawPath,
-             .touchDrawBezier,
-             .editAction,
-             .setPasteboard,
-             .getPasteboard,
-             .resignFirstResponder,
-             .waitForIdle,
-             .waitFor,
-             .waitForChange,
-             .batchExecutionPlan,
-             .requestScreen,
-             .explore,
-             .startRecording,
-             .stopRecording:
-            return false
-        }
     }
 }
 

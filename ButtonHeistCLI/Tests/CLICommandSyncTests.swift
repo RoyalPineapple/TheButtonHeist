@@ -113,13 +113,31 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testCLIAdapterCatalogDoesNotPairTypesWithCommandCases() throws {
+    func testCLIAdapterCatalogSeparatesAdapterWiringFromCommandSemantics() throws {
         let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLICommandContract.swift")
         let pairedCasePattern = #"\.fence\([^,\n]+,\s*\.[A-Za-z0-9_]+\)"#
+        let wiringSource = try sourceSection(
+            in: source,
+            startingAt: "// MARK: - Pure Adapter Wiring",
+            endingBefore: "// MARK: - Catalog Projection"
+        )
+        let projectionSource = source.replacingOccurrences(of: wiringSource, with: "")
 
         XCTAssertNil(
             source.range(of: pairedCasePattern, options: .regularExpression),
             "CLI adapter catalog should bind command types to Fence descriptors from the catalog, not paired command cases"
+        )
+        XCTAssertTrue(
+            wiringSource.contains("commandTypesByFenceCommand"),
+            "CLI adapter command type bindings are pure adapter wiring and should stay isolated from catalog projection code"
+        )
+        XCTAssertFalse(
+            wiringSource.contains(".rawValue"),
+            "Pure CLI adapter wiring should not define command names"
+        )
+        XCTAssertTrue(
+            source.contains("FenceCommandDescriptor"),
+            "CLI adapter catalog should project command semantics from FenceCommandDescriptor"
         )
         XCTAssertTrue(
             source.contains("TheFence.Command.descriptors"),
@@ -132,6 +150,18 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertFalse(
             source.contains("subcommandTypes"),
             "CLI adapter catalog should derive subcommand order from FenceCommandDescriptor exposure"
+        )
+
+        let commandCaseReferencesOutsideWiring = Set(
+            captureGroupMatches(
+                in: projectionSource,
+                pattern: #"TheFence\.Command\.([A-Za-z0-9_]+)"#
+            )
+        ).intersection(Set(TheFence.Command.allCases.map { String(describing: $0) }))
+        XCTAssertTrue(
+            commandCaseReferencesOutsideWiring.isEmpty,
+            "Product command-case references outside pure adapter wiring should come from "
+                + "descriptors/catalog projection: \(commandCaseReferencesOutsideWiring.sorted())"
         )
     }
 
@@ -999,6 +1029,24 @@ final class CLICommandSyncTests: XCTestCase {
             return ""
         }
         return contents
+    }
+
+    private func sourceSection(
+        in contents: String,
+        startingAt startMarker: String,
+        endingBefore endMarker: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> String {
+        guard let start = contents.range(of: startMarker) else {
+            XCTFail("Missing source marker \(startMarker)", file: file, line: line)
+            return ""
+        }
+        guard let end = contents.range(of: endMarker, range: start.upperBound..<contents.endIndex) else {
+            XCTFail("Missing source marker \(endMarker)", file: file, line: line)
+            return ""
+        }
+        return String(contents[start.lowerBound..<end.lowerBound])
     }
 
     private func captureGroupMatches(in contents: String, pattern: String) -> [String] {

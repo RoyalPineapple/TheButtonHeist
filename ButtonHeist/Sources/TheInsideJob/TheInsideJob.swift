@@ -326,7 +326,7 @@ public final class TheInsideJob {
         self.installationId = Self.loadInstallationId()
         self.brains = TheBrains(tripwire: self.tripwire)
         self.getaway = TheGetaway(
-            muscle: self.muscle, brains: self.brains, tripwire: self.tripwire,
+            muscle: self.muscle, brains: self.brains,
             identity: TheGetaway.ServerIdentity(
                 sessionId: self.sessionId,
                 effectiveInstanceId: instanceId ?? String(self.sessionId.uuidString.prefix(8)).lowercased(),

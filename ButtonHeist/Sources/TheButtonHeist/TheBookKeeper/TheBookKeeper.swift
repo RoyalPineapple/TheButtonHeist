@@ -406,211 +406,6 @@ final class TheBookKeeper {
         ), to: session.logHandle)
     }
 
-    // MARK: - Artifact Storage
-
-    func writeScreenshot(
-        base64Data: String,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: ScreenshotMetadata
-    ) throws -> URL {
-        try writeSessionArtifact(
-            base64Data: base64Data,
-            requestId: requestId,
-            command: command,
-            type: .screenshot,
-            subdirectoryName: "screenshots",
-            fileExtension: "png",
-            metadata: ["width": metadata.width, "height": metadata.height]
-        )
-    }
-
-    func writeRecording(
-        base64Data: String,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: RecordingMetadata
-    ) throws -> URL {
-        try writeSessionArtifact(
-            base64Data: base64Data,
-            requestId: requestId,
-            command: command,
-            type: .recording,
-            subdirectoryName: "recordings",
-            fileExtension: "mp4",
-            metadata: [
-                "width": Double(metadata.width),
-                "height": Double(metadata.height),
-                "duration": metadata.duration,
-                "fps": Double(metadata.fps),
-                "frameCount": Double(metadata.frameCount),
-            ]
-        )
-    }
-
-    private func writeSessionArtifact(
-        base64Data: String,
-        requestId: String,
-        command: TheFence.Command,
-        type: ArtifactType,
-        subdirectoryName: String,
-        fileExtension: String,
-        metadata: [String: Double]
-    ) throws -> URL {
-        guard case .active(var session) = phase else {
-            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
-        }
-        guard let data = Data(base64Encoded: base64Data) else {
-            throw BookKeeperError.base64DecodingFailed
-        }
-
-        let sequenceNumber = session.nextSequenceNumber
-        session.nextSequenceNumber += 1
-        let filename = String(format: "%03d-%@.%@", sequenceNumber, command.rawValue, fileExtension)
-        let subdirectory = session.directory.appendingPathComponent(subdirectoryName)
-        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
-        let fileURL = subdirectory.appendingPathComponent(filename)
-        try data.write(to: fileURL)
-
-        try appendLogLine(ArtifactLogEntry(
-            t: iso8601Now(),
-            artifactType: type,
-            path: "\(subdirectoryName)/\(filename)",
-            size: data.count,
-            requestId: requestId,
-            command: command.rawValue,
-            metadata: metadata.isEmpty ? nil : metadata
-        ), to: session.logHandle)
-        phase = .active(session)
-
-        return fileURL
-    }
-
-    func writeToPath(_ data: Data, outputPath: String) throws -> URL {
-        guard let resolvedURL = validateOutputPath(outputPath) else {
-            throw BookKeeperError.unsafePath(outputPath)
-        }
-        try data.write(to: resolvedURL)
-        return resolvedURL
-    }
-
-    /// Write a screenshot to whichever sink is available, or return `nil` if
-    /// neither a session is active nor an explicit outputPath was supplied.
-    ///
-    /// Resolution rules:
-    /// - `outputPath` supplied → write raw bytes to that path via
-    ///   `writeToPath` (no session log artifact event).
-    /// - No `outputPath`, session active → write via `writeScreenshot` into
-    ///   the session's artifact directory and append an artifact event.
-    /// - No `outputPath`, no session → return `nil`; caller is expected to
-    ///   return the in-memory payload (e.g. `.screenshotData`).
-    func writeScreenshotIfSinkAvailable(
-        base64Data: String,
-        outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: ScreenshotMetadata
-    ) throws -> URL? {
-        if let outputPath {
-            guard let data = Data(base64Encoded: base64Data) else {
-                throw BookKeeperError.base64DecodingFailed
-            }
-            return try writeToPath(data, outputPath: outputPath)
-        }
-        guard case .active = phase else {
-            return nil
-        }
-        return try writeScreenshot(
-            base64Data: base64Data, requestId: requestId,
-            command: command, metadata: metadata
-        )
-    }
-
-    /// Write a screenshot to an explicit path, the active session artifact
-    /// directory, or a standalone artifact directory when no session exists.
-    func writeScreenshotArtifact(
-        base64Data: String,
-        outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: ScreenshotMetadata
-    ) throws -> URL {
-        if let url = try writeScreenshotIfSinkAvailable(
-            base64Data: base64Data,
-            outputPath: outputPath,
-            requestId: requestId,
-            command: command,
-            metadata: metadata
-        ) {
-            return url
-        }
-        guard let data = Data(base64Encoded: base64Data) else {
-            throw BookKeeperError.base64DecodingFailed
-        }
-
-        let subdirectory = baseDirectory.appendingPathComponent("screenshots")
-        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
-        let filename = "\(Self.timestampString())-\(UUID().uuidString)-\(command.rawValue).png"
-        let fileURL = subdirectory.appendingPathComponent(filename)
-        try data.write(to: fileURL)
-        return fileURL
-    }
-
-    /// Write a recording to whichever sink is available. Resolution rules
-    /// match `writeScreenshotIfSinkAvailable` — outputPath wins, then session,
-    /// then nil.
-    func writeRecordingIfSinkAvailable(
-        base64Data: String,
-        outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: RecordingMetadata
-    ) throws -> URL? {
-        if let outputPath {
-            guard let data = Data(base64Encoded: base64Data) else {
-                throw BookKeeperError.base64DecodingFailed
-            }
-            return try writeToPath(data, outputPath: outputPath)
-        }
-        guard case .active = phase else {
-            return nil
-        }
-        return try writeRecording(
-            base64Data: base64Data, requestId: requestId,
-            command: command, metadata: metadata
-        )
-    }
-
-    /// Write a recording to an explicit path, the active session artifact
-    /// directory, or a standalone artifact directory when no session exists.
-    func writeRecordingArtifact(
-        base64Data: String,
-        outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: RecordingMetadata
-    ) throws -> URL {
-        if let url = try writeRecordingIfSinkAvailable(
-            base64Data: base64Data,
-            outputPath: outputPath,
-            requestId: requestId,
-            command: command,
-            metadata: metadata
-        ) {
-            return url
-        }
-        guard let data = Data(base64Encoded: base64Data) else {
-            throw BookKeeperError.base64DecodingFailed
-        }
-
-        let subdirectory = baseDirectory.appendingPathComponent("recordings")
-        try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
-        let filename = "\(Self.timestampString())-\(UUID().uuidString)-\(command.rawValue).mp4"
-        let fileURL = subdirectory.appendingPathComponent(filename)
-        try data.write(to: fileURL)
-        return fileURL
-    }
-
     // MARK: - Heist Recording
 
     var isRecordingHeist: Bool {
@@ -813,7 +608,7 @@ final class TheBookKeeper {
 
     // MARK: - Phase / Directory / Manifest Helpers
 
-    private var phaseName: String {
+    var phaseName: String {
         switch phase {
         case .idle: return "idle"
         case .active: return "active"
@@ -821,6 +616,24 @@ final class TheBookKeeper {
         case .closed: return "closed"
         case .archived: return "archived"
         }
+    }
+
+    var artifactBaseDirectory: URL {
+        baseDirectory
+    }
+
+    var hasActiveSession: Bool {
+        guard case .active = phase else { return false }
+        return true
+    }
+
+    func mutateActiveSession<T>(_ body: (inout ActiveSession) throws -> T) throws -> T {
+        guard case .active(var session) = phase else {
+            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
+        }
+        let result = try body(&session)
+        phase = .active(session)
+        return result
     }
 
     private static func resolveBaseDirectory() -> URL {
@@ -836,7 +649,7 @@ final class TheBookKeeper {
             .appendingPathComponent(".local/share/buttonheist/sessions")
     }
 
-    private static func timestampString() -> String {
+    static func timestampString() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
         formatter.timeZone = TimeZone.current

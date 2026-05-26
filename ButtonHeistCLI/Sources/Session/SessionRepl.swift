@@ -38,7 +38,7 @@ final class ReplSession {
 
         let isTTY = isatty(STDIN_FILENO) != 0
         if isTTY {
-            logStatus("Session started. Type 'help' for commands, 'quit' to exit.")
+            logStatus(Self.startupPrompt)
             if sessionTimeout > 0 {
                 logStatus("Idle timeout: \(Int(sessionTimeout))s")
             }
@@ -110,7 +110,7 @@ final class ReplSession {
 
         let request = parsedRequest.request
         guard request[.command] is String else {
-            return (.error("Unknown command. Type 'help' for available commands."), nil)
+            return (.error(Self.unknownCommandMessage), nil)
         }
 
         // Enhanced help for human mode
@@ -158,6 +158,15 @@ final class ReplSession {
 // MARK: - Human-Friendly Help
 
 nonisolated extension ReplSession {
+
+    static var startupPrompt: String {
+        "Session started. Type '\(TheFence.Command.help.canonicalName)' for commands, " +
+            "'\(TheFence.Command.quit.canonicalName)' to exit."
+    }
+
+    static var unknownCommandMessage: String {
+        "Unknown command. Type '\(TheFence.Command.help.canonicalName)' for available commands."
+    }
 
     static var humanHelp: String {
         TheFence.Command.cliSessionHelp

@@ -2,9 +2,21 @@
 
 The getaway driver — runs all comms between the wire and the crew.
 
-## The one file
+## Files
 
-**`TheGetaway.swift`** — `@MainActor final class`. Does not own any crew members — receives references to TheMuscle, TheBrains, and TheTripwire from TheInsideJob at init.
+**`TheGetaway.swift`** — `@MainActor final class`. Does not own any crew members — receives references to TheMuscle and TheBrains from TheInsideJob at init. Owns the central client-message dispatch switch and delegates encoding, transport, delivery, status, stale-target, and recording details to focused extensions.
+
+**`TheGetaway+Transport.swift`** — wires ServerTransport to TheMuscle, consumes ordered transport events, and maps terminal client delivery failures through the disconnect lifecycle.
+
+**`TheGetaway+WireEncoding.swift`** — owns the ResponseEnvelope/RequestEnvelope encode/decode contract and the invariant that response encoding failures do not synthesize alternate wire shapes.
+
+**`TheGetaway+Broadcast.swift`** — owns authenticated-client broadcast delivery, including typed delivery failures and the "no screenshots over broadcast" session contract.
+
+**`TheGetaway+Status.swift`** — builds server identity, status, and cached pong payloads from runtime process/device state.
+
+**`TheGetaway+StaleTargetedAction.swift`** — owns the stale targeted-action guard used before executing element-scoped commands.
+
+**`BackgroundChangeState.swift`** — tracks settled background parse progress and command/parser phase transitions.
 
 ### Transport wiring
 

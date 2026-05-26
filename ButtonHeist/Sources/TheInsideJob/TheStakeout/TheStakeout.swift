@@ -196,13 +196,17 @@ actor TheStakeout {
     enum TheStakeoutError: Error, LocalizedError {
         case alreadyRecording
         case writerSetupFailed(String)
+        case writerSetupFailedWithoutUnderlyingError
         case finalizationFailed(String)
+        case finalizationFailedWithoutUnderlyingError
 
         var errorDescription: String? {
             switch self {
             case .alreadyRecording: return "Recording is already in progress"
             case .writerSetupFailed(let message): return "Failed to set up video writer: \(message)"
+            case .writerSetupFailedWithoutUnderlyingError: return "Failed to set up video writer without an underlying AVFoundation error"
             case .finalizationFailed(let message): return "Failed to finalize recording: \(message)"
+            case .finalizationFailedWithoutUnderlyingError: return "Failed to finalize recording without an underlying AVFoundation error"
             }
         }
     }
@@ -283,7 +287,13 @@ actor TheStakeout {
         reason: String,
         caps: inout [RecordedInputCap]
     ) -> Int {
-        let value = requested ?? defaultValue
+        let value: Int
+        switch requested {
+        case .some(let requestedValue):
+            value = requestedValue
+        case .none:
+            value = defaultValue
+        }
         let applied = min(max(value, range.lowerBound), range.upperBound)
         if let requested, requested != applied {
             caps.append(RecordedInputCap(
@@ -307,7 +317,13 @@ actor TheStakeout {
         reason: String,
         caps: inout [RecordedInputCap]
     ) -> Double {
-        let value = requested ?? defaultValue
+        let value: Double
+        switch requested {
+        case .some(let requestedValue):
+            value = requestedValue
+        case .none:
+            value = defaultValue
+        }
         var applied = max(value, minimum)
         if let maximum {
             applied = min(applied, maximum)
@@ -362,8 +378,9 @@ actor TheStakeout {
 
         let nativeWidth = screen.bounds.width * screen.scale
         let nativeHeight = screen.bounds.height * screen.scale
-        let effectiveScale: CGFloat = if let requestedScale = config.scale {
-            CGFloat(clampDouble(
+        let effectiveScale: CGFloat
+        if let requestedScale = config.scale {
+            effectiveScale = CGFloat(clampDouble(
                 name: "scale",
                 requested: requestedScale,
                 defaultValue: Double(1.0 / screen.scale),
@@ -373,7 +390,7 @@ actor TheStakeout {
                 caps: &caps
             ))
         } else {
-            1.0 / screen.scale
+            effectiveScale = 1.0 / screen.scale
         }
         let width = Int(nativeWidth * effectiveScale)
         let height = Int(nativeHeight * effectiveScale)
@@ -461,7 +478,7 @@ actor TheStakeout {
 
         writer.add(input)
         guard writer.startWriting() else {
-            throw TheStakeoutError.writerSetupFailed(writer.error?.localizedDescription ?? "Unknown error")
+            throw Self.writerSetupFailure(from: writer.error)
         }
         writer.startSession(atSourceTime: .zero)
 
@@ -731,7 +748,7 @@ actor TheStakeout {
         let writerStatus = session.assetWriter.status
         let writerError = session.assetWriter.error
         if writerStatus == .failed {
-            await deliverError(.finalizationFailed(writerError?.localizedDescription ?? "Unknown"))
+            await deliverError(Self.finalizationFailure(from: writerError))
             return
         }
 
@@ -776,6 +793,20 @@ actor TheStakeout {
     private var currentSessionID: UUID? {
         if case .recording(let session) = stakeoutPhase { return session.id }
         return nil
+    }
+
+    private static func writerSetupFailure(from error: Error?) -> TheStakeoutError {
+        if let error {
+            return .writerSetupFailed(error.localizedDescription)
+        }
+        return .writerSetupFailedWithoutUnderlyingError
+    }
+
+    private static func finalizationFailure(from error: Error?) -> TheStakeoutError {
+        if let error {
+            return .finalizationFailed(error.localizedDescription)
+        }
+        return .finalizationFailedWithoutUnderlyingError
     }
 
     private func deliverError(_ error: TheStakeoutError) async {

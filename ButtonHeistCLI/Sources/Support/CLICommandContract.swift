@@ -33,6 +33,12 @@ struct CLICommandAdapter {
 }
 
 enum CLICommandAdapterCatalog {
+    // MARK: - Pure Adapter Wiring
+    //
+    // This table binds catalog-owned command identities to concrete
+    // ArgumentParser adapter types. It must not carry product command
+    // semantics: public names, aliases, defaults, parameters, and help all
+    // project from FenceCommandDescriptor/FenceParameterSpec below.
     private static let commandTypesByFenceCommand: [TheFence.Command: CLICommandContract.Type] = [
         .ping: PingCommand.self,
         .listDevices: ListCommand.self,
@@ -72,6 +78,8 @@ enum CLICommandAdapterCatalog {
         .stopHeist: StopHeistCommand.self,
         .playHeist: PlayHeistCommand.self,
     ]
+
+    // MARK: - Catalog Projection
 
     private static let cliOnlyAdapters: [CLICommandAdapter] = [
         .cliOnly(SessionCommand.self),
@@ -139,14 +147,14 @@ extension CLICommandContract {
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {
         guard case .string(let value)? = fenceCommand.defaultArgumentValue(for: key) else {
-            fatalError("No string default registered for \(fenceCommand.rawValue).\(key.rawValue)")
+            fatalError("No string default registered for \(fenceCommand.canonicalName).\(key.rawValue)")
         }
         return value
     }
 
     static func catalogAllowedValues(for key: FenceParameterKey) -> [String] {
         guard let values = fenceCommand.parameter(named: key)?.enumValues else {
-            fatalError("No enum values registered for \(fenceCommand.rawValue).\(key.rawValue)")
+            fatalError("No enum values registered for \(fenceCommand.canonicalName).\(key.rawValue)")
         }
         return values
     }

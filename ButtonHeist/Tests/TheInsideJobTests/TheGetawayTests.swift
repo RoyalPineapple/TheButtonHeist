@@ -27,7 +27,7 @@ final class TheGetawayTests: XCTestCase {
             effectiveInstanceId: "test",
             tlsActive: false
         )
-        let getaway = TheGetaway(muscle: muscle, brains: brains, tripwire: tripwire, identity: identity)
+        let getaway = TheGetaway(muscle: muscle, brains: brains, identity: identity)
         let transport = ServerTransport()
         await getaway.wireTransport(transport)
         return (getaway, muscle, transport)
@@ -380,6 +380,38 @@ final class TheGetawayTests: XCTestCase {
             return XCTFail("Expected session contract broadcast failure, got \(result)")
         }
         XCTAssertTrue(message.contains("screenshots must be requested explicitly"))
+    }
+
+    func testTransportSendFailureUsesDisconnectLifecycle() async {
+        let (getaway, muscle, _) = await makeGetaway()
+        await muscle.installAuthenticatedClientForTest(7)
+        let payload = RecordingPayload(
+            videoData: "AAAA",
+            width: 100,
+            height: 200,
+            duration: 1.0,
+            frameCount: 8,
+            fps: 8,
+            startTime: Date(),
+            endTime: Date(),
+            stopReason: .maxDuration
+        )
+        getaway.installRecordingRouteStateForTest(.completed(.init(
+            outcome: .succeeded(payload),
+            cachePolicy: .originatorOnly(7)
+        )))
+
+        await getaway.handleTransportEvent(.sendFailed(
+            clientId: 7,
+            failure: .transportFailed(clientId: 7, message: "socket write failed")
+        ))
+
+        let authenticated = await muscle.authenticatedClientIDs
+        XCTAssertFalse(authenticated.contains(7))
+        XCTAssertNil(getaway.recordingOriginatorClientId)
+        if case .none = getaway.completedRecording {} else {
+            XCTFail("Send failure should clear originator-owned recording cache, got \(getaway.completedRecording)")
+        }
     }
 
     // MARK: - Stale Targeted Actions
