@@ -26,6 +26,7 @@ extension TheInsideJob {
     }
 
     /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
+    @MainActor
     final class LifecycleBoundaryTasks {
         private var tasks: [UInt64: Task<Void, Never>] = [:]
         private var nextTaskId: UInt64 = 0

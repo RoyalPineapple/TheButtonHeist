@@ -149,7 +149,8 @@ actor TheMuscle {
     /// Resets the session inactivity timer if the client belongs to the active session.
     func noteClientActivity(_ clientId: Int) {
         guard activeSessionConnections.contains(clientId) else { return }
-        sessionLease.resetInactivityTimer { makeReleaseTimer() }
+        let releaseTimeout = sessionLease.releaseTimeout
+        sessionLease.resetInactivityTimer { makeReleaseTimer(releaseTimeout: releaseTimeout) }
     }
 
     /// Send an already-encoded envelope to a single client.
@@ -437,14 +438,15 @@ actor TheMuscle {
 
     /// Remove a client from the active session. Transitions to draining if no connections remain.
     private func removeSessionConnection(_ clientId: Int) {
-        if sessionLease.removeConnection(clientId, makeReleaseTimer: { makeReleaseTimer() }) {
+        let releaseTimeout = sessionLease.releaseTimeout
+        if sessionLease.removeConnection(clientId, makeReleaseTimer: { makeReleaseTimer(releaseTimeout: releaseTimeout) }) {
             logger.info("All session connections gone, starting \(self.sessionLease.releaseTimeout)s release timer")
         }
     }
 
     /// Create a release timer task that fires after `sessionReleaseTimeout`.
-    private func makeReleaseTimer() -> Task<Void, Never> {
-        Task { [weak self, releaseTimeout = sessionLease.releaseTimeout] in
+    private func makeReleaseTimer(releaseTimeout: TimeInterval) -> Task<Void, Never> {
+        Task { [weak self, releaseTimeout] in
             guard await Task.cancellableSleep(for: .seconds(releaseTimeout)) else { return }
             guard !Task.isCancelled else { return }
             await self?.releaseSession()

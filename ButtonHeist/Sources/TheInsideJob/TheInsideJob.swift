@@ -39,7 +39,10 @@ public final class TheInsideJob {
             return existing
         case .pending(let args):
             let instance = if let configuration = args?.runtimeConfiguration {
-                TheInsideJob(runtimeConfiguration: configuration)
+                TheInsideJob(
+                    runtimeConfiguration: configuration,
+                    tlsIdentityProvider: Self.defaultTLSIdentityProvider
+                )
             } else {
                 TheInsideJob(
                     token: args?.token,
