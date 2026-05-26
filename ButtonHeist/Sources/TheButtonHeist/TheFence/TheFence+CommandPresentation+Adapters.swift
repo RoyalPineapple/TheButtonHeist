@@ -1,6 +1,14 @@
 import Foundation
 
 public extension TheFence.Command {
+    static var cliSessionStartupPrompt: String {
+        "Session started. Type '\(help.canonicalName)' for commands, '\(quit.canonicalName)' to exit."
+    }
+
+    static var cliSessionUnknownCommandMessage: String {
+        "Unknown command. Type '\(help.canonicalName)' for available commands."
+    }
+
     static var mcpServerInstructions: String {
         let matcherKeys = inlineList(activate.descriptor.elementTargetParameterKeys)
         let expectationKey = activate.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue

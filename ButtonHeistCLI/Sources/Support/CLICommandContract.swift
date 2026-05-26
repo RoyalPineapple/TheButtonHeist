@@ -86,7 +86,7 @@ enum CLICommandAdapterCatalog {
     ]
 
     static let adapters: [CLICommandAdapter] = {
-        let directDescriptors = TheFence.Command.descriptors.filter { $0.cliExposure == .directCommand }
+        let directDescriptors = TheFence.Command.cliDirectCommandDescriptors
         let directCommands = Set(directDescriptors.map(\.command))
         precondition(
             Set(commandTypesByFenceCommand.keys) == directCommands,
@@ -178,10 +178,6 @@ extension CLICommandContract {
 }
 
 extension TheFence.Command {
-    var cliCommandName: String {
-        descriptor.cliName ?? rawValue
-    }
-
     func cliRequest(_ parameters: CLIRequestParameters = [:]) -> [String: Any] {
         CLIRequestBuilder.request(command: self, parameters: parameters)
     }
