@@ -19,6 +19,33 @@ import TheScore
 
 extension Navigation {
 
+    enum ScrollTargetDescription: Equatable, CustomStringConvertible {
+        case label(String, heistId: HeistId)
+        case identifier(String, heistId: HeistId)
+        case heistId(HeistId)
+
+        init(_ screenElement: TheStash.ScreenElement) {
+            if let label = screenElement.element.label, !label.isEmpty {
+                self = .label(label, heistId: screenElement.heistId)
+            } else if let identifier = screenElement.element.identifier, !identifier.isEmpty {
+                self = .identifier(identifier, heistId: screenElement.heistId)
+            } else {
+                self = .heistId(screenElement.heistId)
+            }
+        }
+
+        var description: String {
+            switch self {
+            case .label(let label, let heistId):
+                return "\"\(label)\" (heistId: \(heistId))"
+            case .identifier(let identifier, let heistId):
+                return "identifier \"\(identifier)\" (heistId: \(heistId))"
+            case .heistId(let heistId):
+                return "heistId \(heistId)"
+            }
+        }
+    }
+
     // MARK: - Scroll Axis Detection
 
     static func scrollableAxis(of container: AccessibilityContainer) -> ScrollAxis {
@@ -86,13 +113,7 @@ extension Navigation {
     }
 
     nonisolated static func describeScrollTarget(_ screenElement: TheStash.ScreenElement) -> String {
-        if let label = screenElement.element.label, !label.isEmpty {
-            return "\"\(label)\" (heistId: \(screenElement.heistId))"
-        }
-        if let identifier = screenElement.element.identifier, !identifier.isEmpty {
-            return "identifier \"\(identifier)\" (heistId: \(screenElement.heistId))"
-        }
-        return "heistId \(screenElement.heistId)"
+        ScrollTargetDescription(screenElement).description
     }
 }
 

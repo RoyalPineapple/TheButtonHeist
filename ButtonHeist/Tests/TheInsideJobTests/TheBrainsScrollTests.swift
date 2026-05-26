@@ -190,6 +190,39 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.previous), .previous)
     }
 
+    // MARK: - Scroll Target Description
+
+    func testScrollTargetDescriptionUsesNamedPriority() {
+        let labeled = TheStash.ScreenElement(
+            heistId: "labeled_item",
+            contentSpaceOrigin: nil,
+            element: AccessibilityElement.make(label: "Labeled", identifier: "labeled_id")
+        )
+        let identified = TheStash.ScreenElement(
+            heistId: "identified_item",
+            contentSpaceOrigin: nil,
+            element: AccessibilityElement.make(identifier: "identified_id")
+        )
+        let anonymous = TheStash.ScreenElement(
+            heistId: "anonymous_item",
+            contentSpaceOrigin: nil,
+            element: AccessibilityElement.make()
+        )
+
+        XCTAssertEqual(
+            Navigation.ScrollTargetDescription(labeled),
+            .label("Labeled", heistId: "labeled_item")
+        )
+        XCTAssertEqual(
+            Navigation.ScrollTargetDescription(identified),
+            .identifier("identified_id", heistId: "identified_item")
+        )
+        XCTAssertEqual(
+            Navigation.ScrollTargetDescription(anonymous),
+            .heistId("anonymous_item")
+        )
+    }
+
     // MARK: - Scroll Search Target Selection
 
     func testScrollSearchCandidatesFilterToRequiredAxis() {
