@@ -65,6 +65,7 @@ struct Screen: Equatable {
                 heistIdByElementPath: [:],
                 elementRefs: elementRefs,
                 containerRefsByPath: [:],
+                containerContentFramesByPath: [:],
                 firstResponderHeistId: firstResponderHeistId,
                 scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath
@@ -82,6 +83,7 @@ struct Screen: Equatable {
         heistIdByElementPath: [TreePath: HeistId] = [:],
         elementRefs: [HeistId: ElementRef] = [:],
         containerRefsByPath: [TreePath: ContainerRef] = [:],
+        containerContentFramesByPath: [TreePath: CGRect] = [:],
         firstResponderHeistId: HeistId?,
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
@@ -96,6 +98,7 @@ struct Screen: Equatable {
                 heistIdByElementPath: heistIdByElementPath,
                 elementRefs: elementRefs,
                 containerRefsByPath: containerRefsByPath,
+                containerContentFramesByPath: containerContentFramesByPath,
                 firstResponderHeistId: firstResponderHeistId,
                 scrollableContainerViews: scrollableContainerViews,
                 scrollableContainerViewsByPath: scrollableContainerViewsByPath,
@@ -144,24 +147,67 @@ struct Screen: Equatable {
 
     // MARK: - Element Entry
 
+    /// Semantic content-space location derived while walking the hierarchy.
+    /// This is durable semantic evidence: the element's content origin and the
+    /// scroll container that owns that coordinate space. It deliberately does
+    /// not carry a UIKit object, frame, or activation point.
+    struct ScrollContentLocation: Sendable, Equatable {
+        let origin: CGPoint
+        let scrollContainer: HeistContainer
+    }
+
     // An element entry for the current screen. Holds the parsed
-    // `AccessibilityElement`, the assigned heistId, and the content-space
-    // origin for scroll-target maths.
+    // `AccessibilityElement`, the assigned heistId, and optional scroll
+    // content location for semantic reveal planning.
     //
     // `@unchecked Sendable` rationale: contains `AccessibilityElement`, whose
     // parser model is used only behind the main-actor stash at runtime.
     // swiftlint:disable:next agent_unchecked_sendable_no_comment
     struct ScreenElement: @unchecked Sendable, Equatable {
         let heistId: HeistId
-        /// Content-space position within nearest scrollable container.
-        /// nil if not inside a scrollable.
-        let contentSpaceOrigin: CGPoint?
+        let scrollContentLocation: ScrollContentLocation?
         /// Parsed accessibility element (refreshed on every parse).
         let element: AccessibilityElement
 
+        var contentSpaceOrigin: CGPoint? {
+            scrollContentLocation?.origin
+        }
+
+        init(
+            heistId: HeistId,
+            scrollContentLocation: ScrollContentLocation?,
+            element: AccessibilityElement
+        ) {
+            self.heistId = heistId
+            self.scrollContentLocation = scrollContentLocation
+            self.element = element
+        }
+
+        init(
+            heistId: HeistId,
+            contentSpaceOrigin: CGPoint?,
+            scrollContainerStableId: HeistContainer? = nil,
+            element: AccessibilityElement
+        ) {
+            self.heistId = heistId
+            self.scrollContentLocation = Self.scrollContentLocation(
+                origin: contentSpaceOrigin,
+                scrollContainer: scrollContainerStableId
+            )
+            self.element = element
+        }
+
+        private static func scrollContentLocation(
+            origin: CGPoint?,
+            scrollContainer: HeistContainer?
+        ) -> ScrollContentLocation? {
+            guard let origin, let scrollContainer else { return nil }
+            return ScrollContentLocation(origin: origin, scrollContainer: scrollContainer)
+        }
+
         static func == (lhs: ScreenElement, rhs: ScreenElement) -> Bool {
             lhs.heistId == rhs.heistId
-                && lhs.contentSpaceOrigin == rhs.contentSpaceOrigin
+                && lhs.scrollContentLocation == rhs.scrollContentLocation
                 && lhs.element == rhs.element
         }
     }
@@ -225,7 +271,7 @@ struct Screen: Equatable {
         }
     }
 
-    /// Latest inflated parse used for geometry, live object dispatch,
+    /// Latest live parse used for geometry, live object dispatch,
     /// scrolling, and wire-tree construction. This is viewport-shaped: known
     /// off-screen elements are retained in `KnownInterface`, but their live
     /// UIKit refs are intentionally absent until a new parse inflates them.
@@ -237,6 +283,7 @@ struct Screen: Equatable {
         let heistIdByElementPath: [TreePath: HeistId]
         let elementRefs: [HeistId: ElementRef]
         let containerRefsByPath: [TreePath: ContainerRef]
+        let containerContentFramesByPath: [TreePath: CGRect]
         let firstResponderHeistId: HeistId?
         let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
         let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
@@ -250,6 +297,7 @@ struct Screen: Equatable {
             heistIdByElementPath: [TreePath: HeistId] = [:],
             elementRefs: [HeistId: ElementRef],
             containerRefsByPath: [TreePath: ContainerRef] = [:],
+            containerContentFramesByPath: [TreePath: CGRect] = [:],
             firstResponderHeistId: HeistId?,
             scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
             scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
@@ -262,6 +310,7 @@ struct Screen: Equatable {
             self.heistIdByElementPath = heistIdByElementPath
             self.elementRefs = elementRefs
             self.containerRefsByPath = containerRefsByPath
+            self.containerContentFramesByPath = containerContentFramesByPath
             self.firstResponderHeistId = firstResponderHeistId
             self.scrollableContainerViews = scrollableContainerViews
             self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
@@ -275,6 +324,7 @@ struct Screen: Equatable {
             heistIdByElementPath: [:],
             elementRefs: [:],
             containerRefsByPath: [:],
+            containerContentFramesByPath: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )
@@ -311,8 +361,13 @@ struct Screen: Equatable {
             containerRefsByPath[path]?.object
         }
 
+        func containerContentFrame(forPath path: TreePath) -> CGRect? {
+            containerContentFramesByPath[path]
+        }
+
         func scrollView(for element: ScreenElement) -> UIScrollView? {
             scrollView(for: element.heistId)
+                ?? element.scrollContentLocation.map { $0.scrollContainer }.flatMap(scrollView(forContainer:))
         }
     }
 
@@ -479,7 +534,7 @@ struct Screen: Equatable {
     /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
     /// observation is the source of truth.
     ///
-    /// `liveInterface` takes `other`'s. It is the latest inflated parse, not
+    /// `liveInterface` takes `other`'s. It is the latest live parse, not
     /// a unionable tree — accumulating it across scrolled pages would keep
     /// stale UIKit refs and geometry alive. Code that needs the "all elements
     /// ever seen on this screen" view reads `knownInterface`, not the live

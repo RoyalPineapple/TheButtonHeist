@@ -382,7 +382,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(diagnostics.contains("<empty matcher>"))
         XCTAssertTrue(diagnostics.contains("Next:"))
-        XCTAssertTrue(diagnostics.contains("get_interface"))
+        XCTAssertTrue(diagnostics.contains("exact label"))
     }
 
     // MARK: - TargetResolution Convenience Properties
@@ -675,6 +675,7 @@ final class TheStashResolutionTests: XCTestCase {
         let entry = Screen.ScreenElement(
             heistId: "below_fold_button",
             contentSpaceOrigin: CGPoint(x: 0, y: 2_000),
+            scrollContainerStableId: "test_scroll",
             element: offScreen
         )
 

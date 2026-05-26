@@ -20,7 +20,7 @@ extension Actions {
     }
 
     /// Unified pipeline for actions that target an element:
-    /// ensureOnScreen → resolve → check interactivity → perform action.
+    /// semantic selector → reveal plan → fresh live geometry → actionable target.
     func performElementAction(
         target: any SemanticElementTarget,
         method: ActionMethod,
@@ -31,10 +31,6 @@ extension Actions {
         action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
         let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
-        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-        if let failure = positioning.failure {
-            return .failure(failure.method ?? method, message: failure.message)
-        }
         switch await liveActionTargetRecoveryPolicy.resolve(.init(
             normalizedTarget: normalizedTarget,
             method: method,
@@ -56,7 +52,7 @@ extension Actions {
     }
 
     func executeActivate(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeActivate(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+        await executeActivate(BatchSemanticElementTarget(target), recordedScreen: recordedScreen)
     }
 
     private func executeActivate(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
@@ -83,7 +79,7 @@ extension Actions {
     }
 
     func executeIncrement(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+        await executeIncrement(BatchSemanticElementTarget(target), recordedScreen: recordedScreen)
     }
 
     private func executeIncrement(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
@@ -118,7 +114,7 @@ extension Actions {
     }
 
     func executeDecrement(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+        await executeDecrement(BatchSemanticElementTarget(target), recordedScreen: recordedScreen)
     }
 
     private func executeDecrement(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
@@ -153,7 +149,7 @@ extension Actions {
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         if let containerTarget = target.actionContainerTarget {
-            return executeContainerCustomAction(
+            return await executeContainerCustomAction(
                 containerTarget,
                 ordinal: target.actionContainerOrdinal,
                 actionName: target.actionName
@@ -199,23 +195,24 @@ extension Actions {
         _ matcher: ContainerMatcher,
         ordinal: Int?,
         actionName: String
-    ) -> TheSafecracker.InteractionResult {
-        let resolution = stash.resolveContainerTarget(matcher, ordinal: ordinal)
-        guard case .resolved(let containerTarget) = resolution else {
-            return .failure(
-                .customAction,
-                message: "custom action failed: \(resolution.diagnostics); try get_interface to inspect container stableIds."
-            )
+    ) async -> TheSafecracker.InteractionResult {
+        let containerTarget: Navigation.SemanticContainerActionableTarget
+        switch await navigation.makeContainerActionable(
+            matcher: matcher,
+            ordinal: ordinal,
+            method: .customAction
+        ) {
+        case .actionable(let actionableTarget):
+            containerTarget = actionableTarget
+        case .failed(let failure):
+            return failure.interactionResult(commandMethod: .customAction)
         }
-        let liveTargetResolution = stash.resolveLiveContainerTarget(for: containerTarget)
-        guard case .resolved(let liveContainerTarget) = liveTargetResolution else {
-            return .failure(.customAction, message: "custom action failed: container object deallocated")
-        }
+        let liveContainerTarget = containerTarget.liveTarget
         switch stash.performCustomAction(named: actionName, on: liveContainerTarget) {
         case .deallocated:
             return .failure(.customAction, message: "custom action failed: container object deallocated")
         case .noSuchAction:
-            let available = containerTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
+            let available = containerTarget.resolvedTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
             let suffix = available.isEmpty ? "" : "; available custom actions: \(available.map { "\"\($0)\"" }.joined(separator: ", "))"
             return .failure(
                 .customAction,
@@ -227,10 +224,7 @@ extension Actions {
                 message: "custom action failed: requestedAction=\"\(actionName)\" declined by container handler"
             )
         case .succeeded:
-            safecracker.showFingerprint(at: CGPoint(
-                x: containerTarget.container.frame.origin.x + containerTarget.container.frame.size.width / 2,
-                y: containerTarget.container.frame.origin.y + containerTarget.container.frame.size.height / 2
-            ))
+            safecracker.showFingerprint(at: liveContainerTarget.activationPoint)
             return .success(method: .customAction)
         }
     }

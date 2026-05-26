@@ -19,10 +19,10 @@ final class DiagnosticsTests: XCTestCase {
         )
         XCTAssertTrue(message.contains("missing-button"))
         XCTAssertTrue(message.contains("3 known elements"))
-        // When there's no near-miss, the message should hint at the stale-id
-        // case and point at the recovery moves.
+        // When there's no near-miss, the message should classify stale semantic
+        // identity without asking callers to reason about the viewport.
         XCTAssertTrue(message.contains("stale"))
-        XCTAssertTrue(message.contains("get_interface"))
+        XCTAssertFalse(message.contains("get_interface"))
         XCTAssertTrue(message.contains("matcher"))
     }
 
@@ -36,9 +36,9 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertTrue(message.contains("submit-button"))
         XCTAssertTrue(message.contains("cancel-button"))
         XCTAssertFalse(message.contains("header"))
-        // The "did you mean" branch still offers a refetch recovery hint in case
-        // none of the suggestions is what the agent meant.
-        XCTAssertTrue(message.contains("get_interface"))
+        // The "did you mean" branch still offers a semantic retargeting hint in
+        // case none of the suggestions is what the agent meant.
+        XCTAssertFalse(message.contains("get_interface"))
         // The near-miss branch already gives concrete heistIds, so the
         // "or target by label/identifier with a matcher" recovery hint is omitted.
         XCTAssertFalse(message.contains("matcher"))

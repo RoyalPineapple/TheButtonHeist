@@ -64,6 +64,7 @@ extension TheStash {
         let container: AccessibilityContainer
         let path: TreePath
         let stableId: HeistContainer?
+        let contentFrame: CGRect?
     }
 
     enum ContainerTargetResolution {
@@ -145,7 +146,8 @@ extension TheStash {
             return ResolvedContainerTarget(
                 container: item.container,
                 path: item.path,
-                stableId: annotation.stableId
+                stableId: annotation.stableId,
+                contentFrame: currentScreen.liveInterface.containerContentFrame(forPath: item.path)
             )
         }
         if let ordinal {
@@ -316,16 +318,6 @@ private extension TheStash {
         }
     }
 
-    static func containerCandidateSummary(_ target: ResolvedContainerTarget) -> String {
-        [
-            target.stableId.map { "stableId=\"\($0)\"" },
-            "type=\(target.container.typeName.rawValue)",
-            target.container.containerIdentifier.map { "identifier=\"\($0)\"" },
-            target.container.containerLabel.map { "label=\"\($0)\"" },
-            target.container.containerValue.map { "value=\"\($0)\"" },
-        ].compactMap { $0 }.joined(separator: " ")
-    }
-
     func minimumMatcher(for sourceElement: ScreenElement, in sourceScreen: Screen) -> MinimumMatcher {
         let entries = selectElements(in: sourceScreen)
         let tree = entries.enumerated().map { index, entry in
@@ -357,7 +349,7 @@ private extension TheStash {
             guard ordinal >= 0 else {
                 return .notFound(diagnostics: """
                     ordinal must be non-negative, got \(ordinal)
-                    Next: remove ordinal, or use ordinal 0 after get_interface shows the exact candidate order.
+                    Next: remove ordinal, or use ordinal 0 after the target query resolves candidates.
                     """)
             }
             let matches = matchScreenElements(matcher, limit: ordinal + 1, in: screen)
@@ -365,7 +357,7 @@ private extension TheStash {
                 let total = matches.count
                 let nextMove: String
                 if total == 0 {
-                    nextMove = "Next: retry with an exact label, identifier, or heistId from get_interface()."
+                    nextMove = "Next: retry with an exact label, identifier, or current heistId."
                 } else {
                     nextMove = "Next: use ordinal 0...\(total - 1), omit ordinal to inspect ambiguity, "
                         + "or target a listed element by exact label, identifier, or heistId."
@@ -424,6 +416,19 @@ private extension TheStash {
             lines.append("  ... and more")
         }
         return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
+    }
+}
+
+extension TheStash {
+
+    static func containerCandidateSummary(_ target: ResolvedContainerTarget) -> String {
+        [
+            target.stableId.map { "stableId=\"\($0)\"" },
+            "type=\(target.container.typeName.rawValue)",
+            target.container.containerIdentifier.map { "identifier=\"\($0)\"" },
+            target.container.containerLabel.map { "label=\"\($0)\"" },
+            target.container.containerValue.map { "value=\"\($0)\"" },
+        ].compactMap { $0 }.joined(separator: " ")
     }
 }
 

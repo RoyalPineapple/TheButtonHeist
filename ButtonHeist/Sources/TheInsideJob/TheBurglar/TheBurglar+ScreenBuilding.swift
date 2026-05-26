@@ -30,6 +30,12 @@ extension TheBurglar {
             scrollableContainerViews: result.scrollViews,
             scrollableContainerViewsByPath: result.scrollViewsByPath
         )
+        let containerStableIdIndex = buildContainerStableIdIndex(
+            hierarchy: result.hierarchy,
+            identityContext: identityContext
+        )
+        let containerStableIds = containerStableIdIndex.byContainer
+        let containerStableIdsByPath = containerStableIdIndex.byPath
 
         let baseHeistIds = TheStash.IdAssignment.assign(elements)
         let resolvedHeistIds = resolveHeistIds(
@@ -50,7 +56,9 @@ extension TheBurglar {
             let context = contextsByPath[path]
             let entry = Screen.ScreenElement(
                 heistId: heistId,
-                contentSpaceOrigin: context?.contentSpaceOrigin,
+                scrollContentLocation: context.flatMap {
+                    scrollContentLocation(for: $0, containerStableIdsByPath: containerStableIdsByPath)
+                },
                 element: parsedElement
             )
             screenElements[heistId] = entry
@@ -69,13 +77,6 @@ extension TheBurglar {
             insideJobLogger.warning("Multiple first responders detected: \(firstResponders.map(\.1).joined(separator: ", "))")
         }
 
-        let containerStableIdIndex = buildContainerStableIdIndex(
-            hierarchy: result.hierarchy,
-            identityContext: identityContext
-        )
-        let containerStableIds = containerStableIdIndex.byContainer
-        let containerStableIdsByPath = containerStableIdIndex.byPath
-
         let scrollableViewRefs = result.scrollViews.mapValues { Screen.ScrollableViewRef(view: $0) }
         let scrollableViewRefsByPath = result.scrollViewsByPath.mapValues {
             Screen.ScrollableViewRef(view: $0)
@@ -92,9 +93,24 @@ extension TheBurglar {
             heistIdByElementPath: heistIdByElementPath,
             elementRefs: elementRefs,
             containerRefsByPath: containerRefsByPath,
+            containerContentFramesByPath: identityContext.contentFramesByPath,
             firstResponderHeistId: firstResponders.first?.1,
             scrollableContainerViews: scrollableViewRefs,
             scrollableContainerViewsByPath: scrollableViewRefsByPath
+        )
+    }
+
+    private static func scrollContentLocation(
+        for context: ElementContext,
+        containerStableIdsByPath: [TreePath: HeistContainer]
+    ) -> Screen.ScrollContentLocation? {
+        guard let origin = context.contentSpaceOrigin,
+              let scrollContainerPath = context.scrollContainerPath,
+              let scrollContainer = containerStableIdsByPath[scrollContainerPath]
+        else { return nil }
+        return Screen.ScrollContentLocation(
+            origin: origin,
+            scrollContainer: scrollContainer
         )
     }
 

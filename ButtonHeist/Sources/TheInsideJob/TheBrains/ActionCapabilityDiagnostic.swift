@@ -28,7 +28,7 @@ import AccessibilitySnapshotParser
             includeLiveState: true,
             missingLiveObjectState: isInflated ? "deallocated" : "notInflated"
         )
-        return "\(boundary) failed: observed \(observed); try refresh with get_interface before retrying."
+        return "\(boundary) failed: observed \(observed); live target became stale during semantic actionability."
     }
 
     static func unsupportedElementAction(
@@ -45,7 +45,7 @@ import AccessibilitySnapshotParser
     ) -> String {
         let customActions = availableCustomActions(for: element)
         let suggestion = customActions.isEmpty
-            ? "refresh with get_interface or target an element exposing custom actions"
+            ? "target an element exposing custom actions"
             : "use one of custom actions \(formatQuotedList(customActions))"
         return "custom action failed: observed requestedAction=\(quote(requestedAction)) on \(formatElement(element)); "
             + "try \(suggestion)."
@@ -57,7 +57,7 @@ import AccessibilitySnapshotParser
     ) -> String {
         let alternatives = availableCustomActions(for: element).filter { $0 != requestedAction }
         let suggestion = alternatives.isEmpty
-            ? "refresh with get_interface before retrying"
+            ? "wait for the handler state to permit the requested action"
             : "use another custom action \(formatQuotedList(alternatives))"
         return "custom action failed: observed requestedAction=\(quote(requestedAction)) declined by handler on "
             + "\(formatElement(element)); try \(suggestion)."
@@ -102,7 +102,7 @@ import AccessibilitySnapshotParser
     ) -> String {
         "gesture dispatch failed: observed method=\(method.rawValue) phase=dispatch "
             + "\(formatPointObservation(point: point, receiver: receiver)); "
-            + "try target a visible element or choose a point inside an app window."
+            + "try target a semantic element that can be made actionable, or choose a point inside an app window."
     }
 
     static func gestureTargetUnavailable(
@@ -112,8 +112,7 @@ import AccessibilitySnapshotParser
     ) -> String {
         "gesture target unavailable: observed method=\(method.rawValue) phase=targeting "
             + "\(formatElement(element)) visible=\(isVisible); "
-            + "element-derived gesture points require a live reachable element after positioning; "
-            + "try scroll_to_visible, element_search, or refresh with get_interface before retrying."
+            + "element-derived gesture points require fresh live geometry from semantic actionability."
     }
 
     // MARK: - Private Helpers

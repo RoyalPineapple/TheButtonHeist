@@ -294,6 +294,62 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(virtualResult.activationCount, 1)
     }
 
+    func testOutOfTreeRotorResultElementCanBeScrolledToVisibleByReturnedHeistId() async throws {
+        let windowScene = try requireForegroundWindowScene()
+        let viewController = UIViewController()
+        viewController.view.backgroundColor = .white
+
+        let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
+        rotorHost.isAccessibilityElement = true
+        rotorHost.accessibilityLabel = "Virtual Scroll Results"
+        rotorHost.accessibilityIdentifier = "virtual_scroll_rotor_host"
+
+        let virtualResult = RotorActivationAccessibilityElement(accessibilityContainer: viewController.view as Any)
+        virtualResult.accessibilityLabel = "Reveal virtual result"
+        virtualResult.accessibilityTraits = .button
+        virtualResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
+
+        rotorHost.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Reveal Result") { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: virtualResult, targetRange: nil)
+            },
+        ]
+
+        viewController.view.addSubview(rotorHost)
+
+        let window = UIWindow(windowScene: windowScene)
+        window.windowLevel = .alert + 34
+        window.rootViewController = viewController
+        window.frame = UIScreen.main.bounds
+        window.isHidden = false
+        defer {
+            window.isHidden = true
+        }
+
+        let brains = TheBrains(tripwire: TheTripwire())
+        let searchResult = await brains.executeCommand(.rotor(
+            RotorTarget(
+                elementTarget: .matcher(ElementMatcher(identifier: "virtual_scroll_rotor_host")),
+                rotor: "Reveal Result"
+            )
+        ))
+
+        XCTAssertTrue(searchResult.success, searchResult.message ?? "rotor failed")
+        guard case .rotor(let rotorResult)? = searchResult.payload,
+              let foundElement = rotorResult.foundElement else {
+            XCTFail("Expected rotor to return a found element")
+            return
+        }
+
+        let scrollResult = await brains.executeCommand(.scrollToVisible(
+            ScrollToVisibleTarget(elementTarget: .heistId(foundElement.heistId))
+        ))
+
+        XCTAssertTrue(scrollResult.success, scrollResult.message ?? "scroll_to_visible failed")
+        XCTAssertEqual(scrollResult.method, .scrollToVisible)
+        XCTAssertEqual(virtualResult.activationCount, 0)
+    }
+
     func testRotorResultUsesKnownObjectIdentityWhenCached() async throws {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()

@@ -99,7 +99,7 @@ final class Navigation {
     ///    that animations and layout have flushed.
     /// 4. `TheTripwire.yieldFrames(_:)` / `yieldRealFrames(_:)` — fixed-count
     ///    waits with no termination signal. Empirically calibrated budgets
-    ///    for known animation timings (post-inflation SPI scrolls, etc.).
+    ///    for known animation timings (post-reveal SPI scrolls, etc.).
     ///
     /// This loop cannot be folded into (2) or (3): (2) doesn't expose a
     /// `moved` latch and runs its own polling cadence; (3) never reads the

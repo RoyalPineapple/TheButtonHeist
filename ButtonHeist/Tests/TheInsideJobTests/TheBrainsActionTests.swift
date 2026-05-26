@@ -210,7 +210,7 @@ final class TheBrainsActionTests: XCTestCase {
             "label=\"Volume\"",
             "traits=[adjustable]",
             "liveObject=deallocated",
-            "try refresh with get_interface",
+            "live target became stale during semantic actionability",
         ])
     }
 
@@ -232,7 +232,7 @@ final class TheBrainsActionTests: XCTestCase {
             "label=\"Brightness\"",
             "traits=[adjustable]",
             "liveObject=deallocated",
-            "try refresh with get_interface",
+            "live target became stale during semantic actionability",
         ])
     }
 
@@ -301,7 +301,7 @@ final class TheBrainsActionTests: XCTestCase {
             "heistId=\"options_button\"",
             "label=\"Options\"",
             "liveObject=deallocated",
-            "try refresh with get_interface",
+            "live target became stale during semantic actionability",
         ])
     }
 
@@ -401,6 +401,8 @@ final class TheBrainsActionTests: XCTestCase {
             customActions: [.init(name: "Archive")]
         )
         let liveObject = UIView(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
+        liveObject.accessibilityFrame = CGRect(x: 0, y: 0, width: 200, height: 80)
+        liveObject.accessibilityActivationPoint = CGPoint(x: 100, y: 40)
         let customActionTarget = CustomActionTargetObject()
         liveObject.accessibilityCustomActions = [
             UIAccessibilityCustomAction(
@@ -752,12 +754,11 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(liveObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
-            "gesture target unavailable",
+            "semantic actionability failed [geometryNotActionable]",
             "method=increment",
-            "phase=targeting",
             "heistId=\"geometry_missing_slider\"",
-            "visible=true",
-            "refresh with get_interface",
+            "label=\"Geometry Missing\"",
+            "fresh live geometry from semantic actionability",
         ])
     }
 
@@ -978,11 +979,10 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertNil(dispatchedPoint, "Known-only targets must not dispatch their stored activation point")
         XCTAssertDiagnostic(result.message, contains: [
-            "ensure_on_screen failed",
+            "semantic actionability failed [noRevealPath]",
             "known target \"Below Fold\"",
             "heistId: below_fold_button",
             "no content-space position",
-            "use element_search",
         ])
     }
 

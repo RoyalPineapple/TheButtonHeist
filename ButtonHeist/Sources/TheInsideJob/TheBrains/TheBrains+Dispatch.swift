@@ -132,9 +132,9 @@ extension TheBrains {
     }
 
     /// Standard interaction with an operation-local semantic snapshot preserved
-    /// across the live refresh. Targeted actions use the snapshot only when the
-    /// fresh visible parse still matches it, so offscreen recovery never reaches
-    /// through stale hierarchy memory.
+    /// across the live refresh. Targeted actions may derive a selector from the
+    /// snapshot, but semantic reveal and live geometry acquisition stay inside
+    /// Navigation.makeActionable against current UI state.
     func performInteraction(
         command: ClientMessage,
         interaction: (Screen?) async -> TheSafecracker.InteractionResult
@@ -197,7 +197,7 @@ extension TheBrains {
         method: ActionMethod
     ) async -> ActionResult {
         await performElementSearch(
-            elementTarget: target.target,
+            elementTarget: target.target.map(BatchSemanticElementTarget.init),
             direction: target.direction,
             method: method
         )
@@ -244,7 +244,7 @@ extension TheBrains {
 
     func performWaitFor(target: BatchWaitForTarget) async -> ActionResult {
         await performWaitFor(
-            elementTarget: target.target,
+            elementTarget: BatchSemanticElementTarget(target.target),
             absent: target.absent,
             timeout: target.timeout
         )
@@ -518,6 +518,8 @@ private extension ClientMessage {
             return target.elementTarget?.exactHeistId
         case .typeText(let target):
             return target.elementTarget?.exactHeistId
+        case .scrollToVisible(let target):
+            return target.elementTarget?.exactHeistId
         case .clientHello,
              .authenticate,
              .requestInterface,
@@ -527,7 +529,6 @@ private extension ClientMessage {
              .touchDrawBezier,
              .editAction,
              .scroll,
-             .scrollToVisible,
              .elementSearch,
              .scrollToEdge,
              .resignFirstResponder,

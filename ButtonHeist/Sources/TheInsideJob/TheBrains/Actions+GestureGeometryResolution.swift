@@ -7,6 +7,29 @@ import TheScore
 extension Actions {
 
     func resolveGesturePoint(
+        from actionableTarget: Navigation.SemanticActionableTarget?,
+        pointX: Double?,
+        pointY: Double?,
+        method: ActionMethod
+    ) -> PointResolution {
+        guard let actionableTarget else {
+            guard let xCoord = pointX, let yCoord = pointY else {
+                return .failure(.failure(.elementNotFound, message: "No target specified"))
+            }
+            let point = CGPoint(x: xCoord, y: yCoord)
+            if let failure = geometryFailure(method: method, field: "point", point: point) {
+                return .failure(failure)
+            }
+            return .success(point)
+        }
+        let point = actionableTarget.liveTarget.activationPoint
+        if let failure = geometryFailure(method: method, field: "activationPoint", point: point) {
+            return .failure(failure)
+        }
+        return .success(point)
+    }
+
+    func resolveGesturePoint(
         from normalizedTarget: TheStash.NormalizedTarget?,
         pointX: Double?,
         pointY: Double?,
@@ -48,6 +71,21 @@ extension Actions {
     enum GestureFrameResolution {
         case success(CGRect)
         case failure(TheSafecracker.InteractionResult)
+    }
+
+    func resolveGestureFrame(
+        for actionableTarget: Navigation.SemanticActionableTarget,
+        method: ActionMethod
+    ) -> GestureFrameResolution {
+        let frame = actionableTarget.liveTarget.frame
+        if let message = GeometryValidation.validateRect(frame, field: "frame") {
+            return .failure(.failure(
+                method,
+                message: "\(method.rawValue) failed: \(message)",
+                failureKind: .inputValidation
+            ))
+        }
+        return .success(frame)
     }
 
     func resolveGestureFrame(

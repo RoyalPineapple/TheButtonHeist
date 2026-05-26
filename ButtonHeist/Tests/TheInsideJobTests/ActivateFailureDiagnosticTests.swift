@@ -72,7 +72,7 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             tapReceiver: receiver,
             screenBounds: screenBounds
         )
-        XCTAssertTrue(message.contains("tryNext: retarget from a fresh get_interface snapshot"))
+        XCTAssertTrue(message.contains("tryNext: retry with a semantic selector"))
     }
 
     func testDeallocatedOutcomeIncludesLiveObjectLine() {
@@ -97,8 +97,8 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             tapReceiver: makeReceiver(),
             screenBounds: screenBounds
         )
-        XCTAssertTrue(message.contains("tryNext: refetch with get_interface"))
-        XCTAssertTrue(message.contains("retarget the refreshed element"))
+        XCTAssertTrue(message.contains("tryNext: live target became stale during activation"))
+        XCTAssertTrue(message.contains("retry the same semantic target"))
     }
 
     // MARK: - Receiver Line
@@ -156,7 +156,7 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
         )
 
         XCTAssertTrue(message.contains("tryNext: wait for the target to become enabled"))
-        XCTAssertTrue(message.contains("refetch with get_interface"))
+        XCTAssertTrue(message.contains("retry the same semantic target"))
     }
 
     func testHiddenFlagOnlyAppearsWhenTrue() {
@@ -185,8 +185,8 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             screenBounds: screenBounds
         )
 
-        XCTAssertTrue(message.contains("tryNext: wait for the target to become visible"))
-        XCTAssertTrue(message.contains("refetch with get_interface"))
+        XCTAssertTrue(message.contains("tryNext: wait for semantic actionability to expose a visible receiver"))
+        XCTAssertTrue(message.contains("retry the same target"))
     }
 
     func testSwiftUIGestureContainerNoteAppearsOnlyForSwiftUI() {
@@ -239,8 +239,8 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             tapReceiver: nil,
             screenBounds: screenBounds
         )
-        XCTAssertTrue(message.contains("tryNext: wait for a visible app window"))
-        XCTAssertTrue(message.contains("refetch with get_interface"))
+        XCTAssertTrue(message.contains("tryNext: wait for a targetable app window"))
+        XCTAssertTrue(message.contains("retry the same semantic target"))
     }
 
     func testNoSyntheticTapLineWhenTapNotAttempted() {
@@ -294,8 +294,8 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             tapReceiver: makeReceiver(),
             screenBounds: screenBounds
         )
-        XCTAssertTrue(message.contains("tryNext: scroll the element into view"))
-        XCTAssertTrue(message.contains("refetch with get_interface"))
+        XCTAssertTrue(message.contains("tryNext: semantic actionability did not produce an on-screen activation frame"))
+        XCTAssertTrue(message.contains("retry the same semantic target"))
     }
 
     // MARK: - Frame and Activation Point

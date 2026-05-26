@@ -13,7 +13,7 @@ import TheScore
 //
 // - `Navigation+PageScroll.swift`: one-page and edge scroll commands.
 // - `Navigation+ScrollToVisible.swift`: reveal/position a target for action.
-// - `Navigation+ElementSearch.swift`: search by paging, never by positioning.
+// - `Navigation+ElementSearch.swift`: search by paging, never by semantic actionability.
 // - `Navigation+ScrollSettleProof.swift`: the explicit moved/unchanged proof.
 // - `Navigation+ScrollContainers.swift`: live container resolution.
 
