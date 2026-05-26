@@ -79,6 +79,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public var canonicalName: String { command.rawValue }
     /// The server action method that unambiguously projects back to this public command.
     public let actionResultMethod: ActionMethod?
+    public let requestPayloadKind: FenceRequestPayloadKind
     public let humanAliases: [String: FenceCommandAlias]
     public let cliName: String?
     public let cliExposure: CLIExposure
@@ -103,6 +104,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public init(
         command: TheFence.Command,
         actionResultMethod: ActionMethod? = nil,
+        requestPayloadKind: FenceRequestPayloadKind,
         humanAliases: [String: FenceCommandAlias] = [:],
         cliName: String? = nil,
         cliExposure: CLIExposure,
@@ -115,6 +117,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     ) {
         self.command = command
         self.actionResultMethod = actionResultMethod
+        self.requestPayloadKind = requestPayloadKind
         self.humanAliases = humanAliases
         self.cliName = cliName ?? Self.defaultCLIName(for: command, exposure: cliExposure)
         self.cliExposure = cliExposure
@@ -139,6 +142,20 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
             return nil
         }
     }
+}
+
+/// Catalog-owned request payload family for a Fence command.
+///
+/// This keeps request parsing routed by command metadata instead of a separate
+/// switch in request decoding. The individual family decoders still own field
+/// validation for their typed payloads.
+public enum FenceRequestPayloadKind: Sendable, Equatable {
+    case none
+    case observation
+    case waitForChange
+    case gesture
+    case elementAction
+    case session
 }
 
 /// Catalog-owned positional grammar for the CLI's human command parser.
@@ -219,6 +236,10 @@ public extension TheFence.Command {
 
     var parameters: [FenceParameterSpec] {
         descriptor.parameters
+    }
+
+    var requestPayloadKind: FenceRequestPayloadKind {
+        descriptor.requestPayloadKind
     }
 
     func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
@@ -357,6 +378,7 @@ extension TheFence.Command {
         FenceCommandDescriptor(
             command: command,
             actionResultMethod: command.catalogActionResultMethod,
+            requestPayloadKind: command.catalogRequestPayloadKind,
             humanAliases: command.catalogHumanAliases,
             cliExposure: command.catalogCLIExposure,
             mcpExposure: command.catalogMCPExposure,
@@ -425,6 +447,28 @@ extension TheFence.Command {
              .getSessionLog, .archiveSession,
              .startHeist, .stopHeist, .playHeist:
             return nil
+        }
+    }
+
+    var catalogRequestPayloadKind: FenceRequestPayloadKind {
+        switch self {
+        case .help, .status, .ping, .quit, .exit, .listDevices, .getPasteboard,
+             .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
+            return .none
+        case .getInterface, .getScreen, .stopRecording:
+            return .observation
+        case .waitForChange:
+            return .waitForChange
+        case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
+             .twoFingerTap, .drawPath, .drawBezier:
+            return .gesture
+        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
+             .activate, .increment, .decrement, .performCustomAction,
+             .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
+            return .elementAction
+        case .startRecording, .runBatch, .connect, .archiveSession, .startHeist,
+             .stopHeist, .playHeist:
+            return .session
         }
     }
 

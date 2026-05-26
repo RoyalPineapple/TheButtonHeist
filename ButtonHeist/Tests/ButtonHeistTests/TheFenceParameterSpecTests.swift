@@ -57,6 +57,7 @@ final class TheFenceParameterSpecTests: XCTestCase {
             XCTAssertEqual(descriptor.command, command)
             XCTAssertEqual(descriptor.canonicalName, command.rawValue)
             XCTAssertEqual(descriptor.parameters, command.parameters)
+            XCTAssertEqual(descriptor.requestPayloadKind, command.requestPayloadKind)
             XCTAssertEqual(descriptor.cliExposure, command.cliExposure)
             XCTAssertEqual(descriptor.mcpExposure, command.mcpExposure)
             XCTAssertEqual(descriptor.isBatchExecutable, command.isBatchExecutable)
@@ -68,6 +69,43 @@ final class TheFenceParameterSpecTests: XCTestCase {
             )
             XCTAssertFalse(descriptor.description.isEmpty)
         }
+    }
+
+    func testRequestPayloadFamiliesAreDescriptorOwned() {
+        let commandsByKind = Dictionary(grouping: TheFence.Command.allCases, by: \.requestPayloadKind)
+
+        XCTAssertEqual(
+            Set(commandsByKind[.none] ?? []),
+            [
+                .help, .status, .ping, .quit, .exit, .listDevices,
+                .getPasteboard, .dismissKeyboard, .getSessionState,
+                .listTargets, .getSessionLog,
+            ]
+        )
+        XCTAssertEqual(Set(commandsByKind[.observation] ?? []), [.getInterface, .getScreen, .stopRecording])
+        XCTAssertEqual(Set(commandsByKind[.waitForChange] ?? []), [.waitForChange])
+        XCTAssertEqual(
+            Set(commandsByKind[.gesture] ?? []),
+            [
+                .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
+                .twoFingerTap, .drawPath, .drawBezier,
+            ]
+        )
+        XCTAssertEqual(
+            Set(commandsByKind[.elementAction] ?? []),
+            [
+                .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
+                .activate, .increment, .decrement, .performCustomAction,
+                .rotor, .typeText, .editAction, .setPasteboard, .waitFor,
+            ]
+        )
+        XCTAssertEqual(
+            Set(commandsByKind[.session] ?? []),
+            [
+                .startRecording, .runBatch, .connect, .archiveSession,
+                .startHeist, .stopHeist, .playHeist,
+            ]
+        )
     }
 
     func testCommandExecutionEligibilityIsDescriptorOwned() {
