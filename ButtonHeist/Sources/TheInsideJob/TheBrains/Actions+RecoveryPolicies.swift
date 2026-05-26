@@ -10,12 +10,6 @@ extension Actions {
     }
 }
 
-extension Navigation.SemanticActionabilityFailure {
-    func interactionResult(commandMethod: ActionMethod) -> TheSafecracker.InteractionResult {
-        .failure(method ?? commandMethod, message: message)
-    }
-}
-
 /// Resolves a semantic actionability target, refreshing once on recoverable
 /// stale-object failures.
 struct LiveActionTargetRecoveryPolicy {

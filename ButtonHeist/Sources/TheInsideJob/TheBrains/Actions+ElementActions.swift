@@ -196,7 +196,7 @@ extension Actions {
         ordinal: Int?,
         actionName: String
     ) async -> TheSafecracker.InteractionResult {
-        let containerTarget: ResolvedContainerTarget
+        let containerTarget: TheStash.ResolvedContainerTarget
         switch stash.resolveContainerTarget(matcher, ordinal: ordinal) {
         case .resolved(let resolved):
             containerTarget = resolved
