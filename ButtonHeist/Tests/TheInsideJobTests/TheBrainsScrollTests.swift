@@ -596,10 +596,10 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected geometry-not-actionable failure, got \(result)")
+            return XCTFail("Expected no-reveal-path failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, .geometryNotActionable)
-        XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))
+        XCTAssertEqual(failure.failedStep, .noRevealPath)
+        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
     }
 
     func testActionabilityRequiresActivationPointOnScreenWhenFrameIntersectsViewport() async {

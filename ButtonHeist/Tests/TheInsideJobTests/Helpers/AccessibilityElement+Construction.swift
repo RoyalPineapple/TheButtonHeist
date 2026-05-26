@@ -25,14 +25,15 @@ extension AccessibilityElement {
         hint: String? = nil,
         traits: UIAccessibilityTraits = .none,
         shape: Shape = .frame(.zero),
-        activationPoint: CGPoint = .zero,
-        usesDefaultActivationPoint: Bool = true,
+        activationPoint: CGPoint? = nil,
+        usesDefaultActivationPoint: Bool? = nil,
         customActions: [CustomAction] = [],
         customContent: [CustomContent] = [],
         customRotors: [CustomRotor] = [],
         respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
-        AccessibilityElement(
+        let hasExplicitActivationPoint = activationPoint != nil
+        return AccessibilityElement(
             description: description ?? label ?? "",
             label: label,
             value: value,
@@ -41,8 +42,8 @@ extension AccessibilityElement {
             hint: hint,
             userInputLabels: nil,
             shape: shape,
-            activationPoint: AccessibilityPoint(activationPoint),
-            usesDefaultActivationPoint: usesDefaultActivationPoint,
+            activationPoint: AccessibilityPoint(activationPoint ?? .zero),
+            usesDefaultActivationPoint: usesDefaultActivationPoint ?? !hasExplicitActivationPoint,
             customActions: customActions,
             customContent: customContent,
             customRotors: customRotors,
@@ -61,8 +62,8 @@ extension AccessibilityElement {
         identifier: String? = nil,
         heistTraits: [HeistTrait],
         shape: Shape = .frame(.zero),
-        activationPoint: CGPoint = .zero,
-        usesDefaultActivationPoint: Bool = true,
+        activationPoint: CGPoint? = nil,
+        usesDefaultActivationPoint: Bool? = nil,
         customActions: [CustomAction] = [],
         customContent: [CustomContent] = [],
         customRotors: [CustomRotor] = [],

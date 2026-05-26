@@ -124,6 +124,7 @@
 		3B77ADFA2877DBF64C911BA1 /* Actions+ElementActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEBB6B59046741597C045AB /* Actions+ElementActions.swift */; };
 		3B7BBA07D33040DF70EECCEF /* TheBookKeeper+Artifacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AA2EF2A00A15CE746169F2E /* TheBookKeeper+Artifacts.swift */; };
 		3CDB64482D830F2220EA28E1 /* AccessibilityHierarchy+Reconciliation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */; };
+		3D7C92420F54B3658F88148A /* AccessibilityElement+Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B7C5DBF4910F197506A5F8 /* AccessibilityElement+Geometry.swift */; };
 		3E0DF1F21AED8674F1FBE844 /* BookKeeperHeistTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71B881BAC0E71A88ED33B2A /* BookKeeperHeistTests.swift */; };
 		3E2B0CCA00AD1652BD9523A4 /* _CertificateInternals.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0174AFB9CF315CBB34A5BBF1 /* _CertificateInternals.framework */; };
 		3EB1B7099693FEACF46E8F37 /* SessionLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1809F7EF8AE66B295A3EFFA3 /* SessionLockTests.swift */; };
@@ -791,6 +792,7 @@
 		8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPayloadTests.swift; sourceTree = "<group>"; };
 		8F2A56B947CB11F8C462EC56 /* ClientMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientMessages.swift; sourceTree = "<group>"; };
 		90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityHierarchy+Reconciliation.swift"; sourceTree = "<group>"; };
+		A4B7C5DBF4910F197506A5F8 /* AccessibilityElement+Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityElement+Geometry.swift"; sourceTree = "<group>"; };
 		91C0C9633BA718D904E3FD52 /* SemanticActionabilityProductTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticActionabilityProductTests.swift; sourceTree = "<group>"; };
 		9433DDF2A1AA0533161A52E2 /* HandoffReconnectController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandoffReconnectController.swift; sourceTree = "<group>"; };
 		9457CF49D9F2CA016C02EEA0 /* FenceOperationCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FenceOperationCatalog.swift; sourceTree = "<group>"; };
@@ -1268,6 +1270,7 @@
 				36091E6D756F95ADED66DE7B /* TheStash */,
 				14BEF40AE51C8E4D6901F007 /* TheTripwire */,
 				6017364A6AB3C529ECE13184 /* AccessibilityContainer+Matching.swift */,
+				A4B7C5DBF4910F197506A5F8 /* AccessibilityElement+Geometry.swift */,
 				90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */,
 				684B1D4DC1EC65626B3028AC /* AccessibilityHierarchy+TreeOperations.swift */,
 				F38D815953121AF8392D5175 /* InsideJobExposureRuntime.swift */,
@@ -2053,6 +2056,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A963BAD3BB20FC75003B51CB /* AccessibilityContainer+Matching.swift in Sources */,
+				3D7C92420F54B3658F88148A /* AccessibilityElement+Geometry.swift in Sources */,
 				3CDB64482D830F2220EA28E1 /* AccessibilityHierarchy+Reconciliation.swift in Sources */,
 				276E01C107AB4FDE2E7A141D /* AccessibilityHierarchy+TreeOperations.swift in Sources */,
 				C54E213694B1990DAE41D068 /* InsideJobExposureRuntime.swift in Sources */,

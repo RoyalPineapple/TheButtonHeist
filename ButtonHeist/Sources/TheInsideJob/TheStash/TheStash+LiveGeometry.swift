@@ -21,8 +21,8 @@ extension TheStash {
         let activationPoint: CGPoint
 
         init?(element: AccessibilityElement) {
-            let frame = element.shape.frame
-            let activationPoint = element.activationPoint.cgPoint
+            let frame = element.bhFrame
+            let activationPoint = element.bhResolvedActivationPoint
             guard Self.isUsableFrame(frame),
                   Self.isUsablePoint(activationPoint) else {
                 return nil

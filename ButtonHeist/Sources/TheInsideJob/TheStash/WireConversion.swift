@@ -50,8 +50,9 @@ extension TheStash {
 
     // MARK: - Element Conversion
 
-    static func convert(_ element: AccessibilityElement, heistId: HeistId = "", object: NSObject? = nil) -> HeistElement {
-        let frame = element.shape.frame
+    static func convert(_ element: AccessibilityElement, heistId: HeistId = "") -> HeistElement {
+        let frame = element.bhFrame
+        let activationPoint = element.bhResolvedActivationPoint
         return HeistElement(
             heistId: heistId,
             description: element.description,
@@ -64,8 +65,8 @@ extension TheStash {
             frameY: frame.origin.y.sanitizedForJSON,
             frameWidth: frame.size.width.sanitizedForJSON,
             frameHeight: frame.size.height.sanitizedForJSON,
-            activationPointX: element.activationPoint.x.sanitizedForJSON,
-            activationPointY: element.activationPoint.y.sanitizedForJSON,
+            activationPointX: activationPoint.x.sanitizedForJSON,
+            activationPointY: activationPoint.y.sanitizedForJSON,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: {
                 let valid = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
@@ -77,12 +78,12 @@ extension TheStash {
                 let valid = element.customRotors.filter { !$0.name.isEmpty }
                 return valid.isEmpty ? nil : valid.map { HeistRotor(name: $0.name) }
             }(),
-            actions: buildActions(for: element, object: object)
+            actions: buildActions(for: element)
         )
     }
 
-    static func buildActions(for element: AccessibilityElement, object: NSObject? = nil) -> [ElementAction] {
-        let isInteractive = Interactivity.isInteractive(element: element, object: object)
+    static func buildActions(for element: AccessibilityElement) -> [ElementAction] {
+        let isInteractive = Interactivity.isInteractive(element: element)
         let activate: [ElementAction] = isInteractive ? [.activate] : []
         let adjustable: [ElementAction] = (isInteractive && element.traits.contains(.adjustable))
             ? [.increment, .decrement]
@@ -94,16 +95,10 @@ extension TheStash {
         return activate + adjustable + custom
     }
 
-    static func buildActions(for container: AccessibilityContainer, object: NSObject? = nil) -> [ElementAction] {
-        var names = container.customActions
+    static func buildActions(for container: AccessibilityContainer) -> [ElementAction] {
+        let names = container.customActions
             .map { $0.name }
             .filter { !$0.isEmpty }
-        let liveNames = object?.accessibilityCustomActions?
-            .map { $0.name }
-            .filter { !$0.isEmpty } ?? []
-        for name in liveNames where !names.contains(name) {
-            names.append(name)
-        }
         return names.map(ElementAction.custom)
     }
 
@@ -152,7 +147,7 @@ extension TheStash {
             return InterfaceElementAnnotation(
                 path: path,
                 heistId: heistId,
-                actions: buildActions(for: element, object: screen.liveInterface.object(for: heistId))
+                actions: buildActions(for: element)
             )
         }
     }
@@ -164,10 +159,7 @@ extension TheStash {
                 path: path,
                 stableId: screen.liveInterface.containerStableIdsByPath[path]
                     ?? screen.liveInterface.containerStableIds[container],
-                actions: buildActions(
-                    for: container,
-                    object: screen.liveInterface.containerObject(forPath: path)
-                )
+                actions: buildActions(for: container)
             )
         }
     }
