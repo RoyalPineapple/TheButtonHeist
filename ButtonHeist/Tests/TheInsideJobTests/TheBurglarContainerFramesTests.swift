@@ -235,6 +235,33 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertTrue(screen.liveInterface.scrollView(forContainer: stableIds[1]) === secondScrollView)
     }
 
+    func testCaptureLocalContainerHashHandlesNonFiniteParserGeometry() {
+        let container = AccessibilityContainer(
+            type: .list,
+            frame: AccessibilityRect(x: .nan, y: .infinity, width: -.infinity, height: 400)
+        )
+        let node = AccessibilityHierarchy.container(
+            container,
+            children: [.element(makeElement(label: "Row"), traversalIndex: 0)]
+        )
+
+        let stableId = TheBurglar.captureLocalContainerId(
+            readableName: "list_0_0_0_50",
+            node: node,
+            path: TreePath([0])
+        )
+
+        XCTAssertTrue(stableId.hasPrefix("list_0_0_0_50-"))
+        XCTAssertEqual(
+            stableId,
+            TheBurglar.captureLocalContainerId(
+                readableName: "list_0_0_0_50",
+                node: node,
+                path: TreePath([0])
+            )
+        )
+    }
+
     func testNestedDuplicateScrollableFrameIdsGetCaptureLocalHashes() {
         let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
         let pagerFrame = CGRect(x: 0, y: 0, width: 960, height: 400)

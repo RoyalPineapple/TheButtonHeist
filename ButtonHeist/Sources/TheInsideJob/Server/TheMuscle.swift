@@ -439,7 +439,8 @@ actor TheMuscle {
     /// Remove a client from the active session. Transitions to draining if no connections remain.
     private func removeSessionConnection(_ clientId: Int) {
         let releaseTimeout = sessionLease.releaseTimeout
-        if sessionLease.removeConnection(clientId, makeReleaseTimer: { makeReleaseTimer(releaseTimeout: releaseTimeout) }) {
+        let releaseTimer = makeReleaseTimer(releaseTimeout: releaseTimeout)
+        if sessionLease.removeConnection(clientId, releaseTimer: releaseTimer) {
             logger.info("All session connections gone, starting \(self.sessionLease.releaseTimeout)s release timer")
         }
     }

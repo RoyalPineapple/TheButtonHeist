@@ -1,0 +1,382 @@
+#if canImport(UIKit)
+#if DEBUG
+import UIKit
+
+extension TheTripwire {
+
+    // MARK: - Pulse Reading
+
+    /// Snapshot of all monitored UI signals at a single tick.
+    struct PulseReading {
+        let tick: UInt64
+        let timestamp: CFAbsoluteTime
+
+        let layoutPending: Bool
+        let fingerprint: PresentationFingerprint
+        let hasRelevantAnimations: Bool
+        let topmostVC: ObjectIdentifier?
+        let tripwireSignal: TripwireSignal
+        let windowCount: Int
+
+        // Derived settle state
+        let quietFrames: Int
+
+        /// The UI is settled when no layout is pending, no animations
+        /// are running, and the fingerprint has been stable for 2+ frames.
+        var isSettled: Bool {
+            !layoutPending && !hasRelevantAnimations && quietFrames >= 2
+        }
+    }
+
+    /// State transitions detected by the pulse.
+    enum PulseTransition {
+        case settled
+        case unsettled
+        case tripwireTriggered(from: TripwireSignal, to: TripwireSignal)
+    }
+
+    struct PulseTickBaseline {
+        let previous: PulseReading?
+
+        func transitions(to reading: PulseReading) -> [PulseTransition] {
+            guard let previous else { return [] }
+
+            var transitions: [PulseTransition] = []
+            if reading.tripwireSignal != previous.tripwireSignal {
+                transitions.append(.tripwireTriggered(from: previous.tripwireSignal, to: reading.tripwireSignal))
+            }
+            if reading.isSettled && !previous.isSettled {
+                transitions.append(.settled)
+            } else if !reading.isSettled && previous.isSettled {
+                transitions.append(.unsettled)
+            }
+            return transitions
+        }
+    }
+
+    // MARK: - Presentation Layer Fingerprinting
+
+    /// Fingerprint of all presentation layer positions in the window hierarchy.
+    /// Summing positions is cheap and catches any layer movement — if anything
+    /// shifts, the sum shifts.
+    struct PresentationFingerprint {
+        let positionXSum: CGFloat
+        let positionYSum: CGFloat
+        let opacitySum: CGFloat
+        let layerCount: Int
+
+        private static let posTolerance: CGFloat = 0.5
+        private static let opacityTolerance: CGFloat = 0.05
+
+        func matches(_ other: PresentationFingerprint) -> Bool {
+            layerCount == other.layerCount
+                && abs(positionXSum - other.positionXSum) < Self.posTolerance
+                && abs(positionYSum - other.positionYSum) < Self.posTolerance
+                && abs(opacitySum - other.opacitySum) < Self.opacityTolerance
+        }
+    }
+
+    // MARK: - Combined Layer Scan
+
+    /// Result of a single layer-tree walk that collects fingerprint,
+    /// animation, and layout data in one pass.
+    struct LayerScan {
+        var positionXSum: CGFloat = 0
+        var positionYSum: CGFloat = 0
+        var opacitySum: CGFloat = 0
+        var layerCount: Int = 0
+        var hasRelevantAnimations = false
+        var hasPendingLayout = false
+        var windowCount: Int = 0
+
+        var fingerprint: PresentationFingerprint {
+            PresentationFingerprint(
+                positionXSum: positionXSum,
+                positionYSum: positionYSum,
+                opacitySum: opacitySum,
+                layerCount: layerCount
+            )
+        }
+    }
+
+    /// Walk every layer once, collecting fingerprint + animations + layout.
+    func scanLayers() -> LayerScan {
+        var scan = LayerScan()
+        let windows = getTraversableWindows()
+        scan.windowCount = windows.count
+        for (window, _) in windows {
+            var stack: [CALayer] = [window.layer]
+            while let layer = stack.popLast() {
+                let presentationLayer = layer.presentation() ?? layer
+                scan.positionXSum += presentationLayer.position.x
+                scan.positionYSum += presentationLayer.position.y
+                scan.opacitySum += CGFloat(presentationLayer.opacity)
+                scan.layerCount += 1
+
+                if layer.needsLayout() {
+                    scan.hasPendingLayout = true
+                }
+
+                if !scan.hasRelevantAnimations, let keys = layer.animationKeys() {
+                    scan.hasRelevantAnimations = keys.contains { key in
+                        !Self.ignoredAnimationKeyPrefixes.contains { key.hasPrefix($0) }
+                    }
+                }
+
+                if let sublayers = layer.sublayers {
+                    stack.append(contentsOf: sublayers)
+                }
+            }
+        }
+        return scan
+    }
+
+    // MARK: - Pulse State
+
+    /// Mutable context that exists only while the pulse is running.
+    /// Reference type so tick mutations don't require enum reconstruction.
+    final class RunningContext {
+        let link: CADisplayLink
+        let target: PulseTick
+        var latestReading: PulseReading?
+        var tickCount: UInt64 = 0
+        var settleWaiters: [SettleWaiter] = []
+
+        init(link: CADisplayLink, target: PulseTick) {
+            self.link = link
+            self.target = target
+        }
+    }
+
+    enum PulsePhase {
+        case idle
+        case running(RunningContext)
+    }
+
+    /// The latest pulse reading, if the pulse is running.
+    private(set) var latestReading: PulseReading? {
+        get { runningContext?.latestReading }
+        set { runningContext?.latestReading = newValue }
+    }
+
+    struct SettleWaiter {
+        var quietFrames: Int
+        let requiredQuietFrames: Int
+        let deadline: CFAbsoluteTime
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
+    // MARK: - Pulse Lifecycle
+
+    var isPulseRunning: Bool { runningContext != nil }
+
+    func startPulse() {
+        guard case .idle = pulsePhase else { return }
+        let target = PulseTick(tripwire: self)
+        let link = CADisplayLink(target: target, selector: #selector(PulseTick.handleTick))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 8, maximum: 12, preferred: 10)
+        link.add(to: .main, forMode: .common)
+        pulsePhase = .running(RunningContext(link: link, target: target))
+    }
+
+    func stopPulse() {
+        guard let context = runningContext else { return }
+        context.link.invalidate()
+
+        for waiter in context.settleWaiters {
+            waiter.continuation.resume(returning: false)
+        }
+
+        pulsePhase = .idle
+    }
+
+    // MARK: - Settle Waiting
+
+    /// Wait for the UI to settle — no animations, no pending layout,
+    /// stable fingerprint for `requiredQuietFrames` consecutive ticks.
+    ///
+    /// Each waiter tracks its own quiet-frame count from the moment of
+    /// registration, so post-action animations are captured even if the
+    /// pulse was already settled.
+    ///
+    /// Returns true if settled before timeout, false if timed out.
+    func waitForSettle(timeout: TimeInterval = 1.0, requiredQuietFrames: Int = 2) async -> Bool {
+        startPulse()
+        guard let context = runningContext else { return false }
+        return await withCheckedContinuation { continuation in
+            context.settleWaiters.append(SettleWaiter(
+                quietFrames: 0,
+                requiredQuietFrames: requiredQuietFrames,
+                deadline: CFAbsoluteTimeGetCurrent() + timeout,
+                continuation: continuation
+            ))
+        }
+    }
+
+    /// Wait for the interface to become all clear.
+    ///
+    /// Delegates to `waitForSettle` — the persistent pulse handles monitoring.
+    /// Returns true if settled before timeout, false if timed out.
+    ///
+    /// **Settle signal boundary.** This is the layer-level settle path: it
+    /// watches CALayer fingerprint, animations, and pending layout, and
+    /// never reads the AX tree. Use it when the caller only needs "the UI
+    /// has stopped moving" — post-jump SPI animations, broadcast pacing,
+    /// wait-for-idle, wait-for-change polling. For post-action correctness
+    /// (where AX-tree fingerprint stability is the load-bearing signal)
+    /// use `SettleSession` instead; for per-frame swipe motion detection
+    /// (where the viewport heistId set is the signal) use the swipe-settle
+    /// loop in `Navigation+Scroll.swift`. The boundary is intentional —
+    /// layer quiet and AX-tree quiet disagree on every spinner.
+    func waitForAllClear(timeout: TimeInterval = 1.0) async -> Bool {
+        await waitForSettle(timeout: timeout)
+    }
+
+    /// Yield to the main run loop for N display frames. Each iteration
+    /// flushes pending Core Animation transactions and gives layout a
+    /// chance to run — enough for lazy containers to materialise content
+    /// without waiting for animations to finish.
+    ///
+    /// **Settle signal boundary.** Fixed-count yields are not a settle
+    /// signal — they are empirically calibrated waits for known animation
+    /// timings. Use this when the caller needs to advance a known number
+    /// of layout passes (post-scroll CATransaction flush, intra-swipe
+    /// frame stepping) without subscribing to the persistent pulse. For
+    /// signal-driven waits, see `waitForAllClear` (layer) or `SettleSession`
+    /// (AX tree).
+    func yieldFrames(_ count: Int) async {
+        for _ in 0..<count {
+            CATransaction.flush()
+            await Task.yield()
+        }
+    }
+
+    /// Yield frames with real wall-clock time between each.
+    /// Unlike `yieldFrames` (which uses `Task.yield()`), this uses
+    /// `Task.sleep` to give CADisplayLink animations time to process.
+    /// Required for accessibility SPI scroll methods that queue animated
+    /// scrolls — `Task.yield()` alone doesn't advance the animation.
+    ///
+    /// Same fixed-count contract as `yieldFrames(_:)` — see that doc for
+    /// the four-implementation settle-signal boundary.
+    func yieldRealFrames(_ count: Int, intervalMs: UInt64 = 16) async {
+        for _ in 0..<count {
+            CATransaction.flush()
+            guard await Task.cancellableSleep(for: .milliseconds(intervalMs)) else { break }
+        }
+    }
+
+    // MARK: - Tick Handler
+
+    func onTick() {
+        guard let context = runningContext else { return }
+        context.tickCount += 1
+        let now = CFAbsoluteTimeGetCurrent()
+        let prev = context.latestReading
+
+        // Flush pending implicit transactions so SwiftUI's deferred
+        // layout commits before we scan.
+        CATransaction.flush()
+
+        let scan = scanLayers()
+        let fingerprint = scan.fingerprint
+
+        let isQuiet = !scan.hasPendingLayout
+            && !scan.hasRelevantAnimations
+            && (prev?.fingerprint.matches(fingerprint) ?? true)
+
+        let tripwireSignal = tripwireSignal()
+        let vcId = tripwireSignal.topmostVC
+
+        let reading = PulseReading(
+            tick: context.tickCount,
+            timestamp: now,
+            layoutPending: scan.hasPendingLayout,
+            fingerprint: fingerprint,
+            hasRelevantAnimations: scan.hasRelevantAnimations,
+            topmostVC: vcId,
+            tripwireSignal: tripwireSignal,
+            windowCount: scan.windowCount,
+            quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
+        )
+        context.latestReading = reading
+
+        for transition in PulseTickBaseline(previous: prev).transitions(to: reading) {
+            onTransition?(transition)
+        }
+
+        resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
+    }
+
+    private func resolveSettleWaiters(context: RunningContext, now: CFAbsoluteTime, isQuiet: Bool) {
+        for index in context.settleWaiters.indices {
+            if isQuiet {
+                context.settleWaiters[index].quietFrames += 1
+            } else {
+                context.settleWaiters[index].quietFrames = 0
+            }
+        }
+
+        for index in context.settleWaiters.indices.reversed() {
+            let waiter = context.settleWaiters[index]
+            if waiter.quietFrames >= waiter.requiredQuietFrames {
+                waiter.continuation.resume(returning: true)
+                context.settleWaiters.remove(at: index)
+            } else if now >= waiter.deadline {
+                waiter.continuation.resume(returning: false)
+                context.settleWaiters.remove(at: index)
+            }
+        }
+    }
+
+    // MARK: - Standalone Queries
+
+    /// Walk every layer in the traversable windows, sum their presentation positions.
+    func takePresentationFingerprint() -> PresentationFingerprint {
+        scanLayers().fingerprint
+    }
+
+    /// Are any layers in the window tree waiting for a layout pass?
+    func hasPendingLayout() -> Bool {
+        scanLayers().hasPendingLayout
+    }
+
+    /// Is the interface all clear? When the pulse is running, returns the
+    /// latest reading's settle state (requires 2 consecutive quiet frames).
+    /// Otherwise falls back to a synchronous scan checking both pending layout
+    /// and active animations — stricter than the pre-pulse check which only
+    /// looked at animations.
+    func allClear() -> Bool {
+        switch pulsePhase {
+        case .running(let context):
+            return context.latestReading?.isSettled ?? false
+        case .idle:
+            let scan = scanLayers()
+            return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+        }
+    }
+}
+
+// MARK: - CADisplayLink Target
+
+/// Weak-referencing target for the persistent CADisplayLink.
+/// Auto-invalidates the link if TheTripwire is deallocated.
+@MainActor
+final class PulseTick: NSObject {
+    weak var tripwire: TheTripwire?
+
+    init(tripwire: TheTripwire) {
+        self.tripwire = tripwire
+    }
+
+    @objc func handleTick(_ link: CADisplayLink) {
+        guard let tripwire else {
+            link.invalidate()
+            return
+        }
+        tripwire.onTick()
+    }
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)

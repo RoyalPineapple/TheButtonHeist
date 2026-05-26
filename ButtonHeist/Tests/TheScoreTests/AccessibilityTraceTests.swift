@@ -49,6 +49,30 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertNotEqual(stable.transition, withTransition.transition)
     }
 
+    func testCaptureHashHandlesNonFiniteParserGeometry() throws {
+        let element = HeistElement(
+            heistId: "picker-row",
+            description: "Picker Row",
+            label: "Picker Row",
+            value: nil,
+            identifier: nil,
+            traits: [.button],
+            frameX: .nan,
+            frameY: .infinity,
+            frameWidth: -.infinity,
+            frameHeight: 44,
+            activationPointX: .nan,
+            activationPointY: .infinity,
+            actions: [.activate]
+        )
+        let interface = makeTestInterface(elements: [element])
+
+        let capture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
+
+        XCTAssertTrue(capture.hash.hasPrefix("sha256:"))
+        XCTAssertEqual(capture.hash, AccessibilityTrace.Capture(sequence: 2, interface: interface).hash)
+    }
+
     func testTraceCanLookupCaptureByHash() throws {
         let first = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Home"))
         let second = AccessibilityTrace.Capture(sequence: 2, interface: makeInterface(label: "Settings"), parentHash: first.hash)

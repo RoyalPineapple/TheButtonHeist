@@ -103,14 +103,18 @@ struct SessionLease {
         return hadSession
     }
 
-    mutating func removeConnection(_ clientId: Int, makeReleaseTimer: () -> Task<Void, Never>) -> Bool {
-        guard case .active(let driverId, var connections) = phase else { return false }
+    mutating func removeConnection(_ clientId: Int, releaseTimer: Task<Void, Never>) -> Bool {
+        guard case .active(let driverId, var connections) = phase else {
+            releaseTimer.cancel()
+            return false
+        }
         connections.remove(clientId)
         if connections.isEmpty {
             let releaseDeadline = Date().addingTimeInterval(releaseTimeout)
-            phase = .draining(driverId: driverId, releaseTimer: makeReleaseTimer(), releaseDeadline: releaseDeadline)
+            phase = .draining(driverId: driverId, releaseTimer: releaseTimer, releaseDeadline: releaseDeadline)
             return true
         }
+        releaseTimer.cancel()
         phase = .active(driverId: driverId, connections: connections)
         return false
     }
