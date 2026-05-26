@@ -32,12 +32,15 @@ enum HeistRecordingPhase: @unchecked Sendable { // swiftlint:disable:this agent_
 /// confined to the `@ButtonHeistActor`-isolated `TheBookKeeper` that owns
 /// the value.
 struct ActiveSession: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    let sessionId: String
     let directory: URL
     let logHandle: FileHandle
     let manifest: SessionManifest
     var nextSequenceNumber: Int
     var heistRecording: HeistRecordingPhase = .idle
+
+    var sessionId: String {
+        manifest.sessionId
+    }
 
     var startTime: Date {
         manifest.startTime
@@ -55,9 +58,12 @@ struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unc
 }
 
 struct ClosingSession: Sendable {
-    let sessionId: String
     let directory: URL
     let manifest: SessionManifest
+
+    var sessionId: String {
+        manifest.sessionId
+    }
 
     var startTime: Date {
         manifest.startTime
@@ -73,21 +79,22 @@ struct ClosingSession: Sendable {
 }
 
 struct CompressingSession: Sendable {
-    let sessionId: String
     let directory: URL
     let manifest: SessionManifest
     let compressionTask: Task<URL, Error>
 
     init(closingSession: ClosingSession, compressionTask: Task<URL, Error>) {
-        self.sessionId = closingSession.sessionId
         self.directory = closingSession.directory
         self.manifest = closingSession.manifest
         self.compressionTask = compressionTask
     }
 
+    var sessionId: String {
+        manifest.sessionId
+    }
+
     var retryableSession: ClosingSession {
         ClosingSession(
-            sessionId: sessionId,
             directory: directory,
             manifest: manifest
         )
@@ -107,10 +114,13 @@ struct CompressingSession: Sendable {
 }
 
 struct ClosedSession: Sendable {
-    let sessionId: String
     let directory: URL
     let compressedLogPath: URL
     let manifest: SessionManifest
+
+    var sessionId: String {
+        manifest.sessionId
+    }
 
     var startTime: Date {
         manifest.startTime
@@ -252,7 +262,6 @@ final class TheBookKeeper {
         let startTime = Date()
         let manifest = SessionManifest(sessionId: sessionId, startTime: startTime)
         phase = .active(ActiveSession(
-            sessionId: sessionId,
             directory: directory,
             logHandle: logHandle,
             manifest: manifest,
@@ -293,7 +302,6 @@ final class TheBookKeeper {
         try flushManifest(manifest: closedManifest, directory: session.directory)
 
         let closingSession = ClosingSession(
-            sessionId: session.sessionId,
             directory: session.directory,
             manifest: closedManifest
         )
@@ -344,7 +352,6 @@ final class TheBookKeeper {
         }
 
         phase = .closed(ClosedSession(
-            sessionId: closingSession.sessionId,
             directory: closingSession.directory,
             compressedLogPath: compressedPath,
             manifest: closingSession.manifest

@@ -51,6 +51,41 @@ actor TheMuscle {
     /// Rate-limiting state per remote address. Absent = clean (no failures).
     private var addressAuthStates: [String: AddressAuthPhase] = [:]
 
+    /// Session token source. A configured token authenticates only by exact
+    /// token match. A generated token may also be returned to an approved UI
+    /// approval client. This replaces the old token plus approval-payload
+    /// mirror fields with one owner for the token lifecycle.
+    private enum SessionTokenSource {
+        case configured(String)
+        case generated(String)
+
+        var token: String {
+            switch self {
+            case .configured(let token), .generated(let token): return token
+            }
+        }
+
+        var uiApprovalPayload: String? {
+            switch self {
+            case .configured: return nil
+            case .generated(let token): return token
+            }
+        }
+
+        var allowsUIApproval: Bool {
+            uiApprovalPayload != nil
+        }
+
+        var invalidTokenMessage: String {
+            switch self {
+            case .configured:
+                return "Invalid token. Retry with the configured token."
+            case .generated:
+                return "Invalid token. Retry without a token to request a fresh session."
+            }
+        }
+    }
+
     /// Per-client lifecycle state machine.
     /// Each client traverses: connected → helloValidated → pendingApproval | authenticated.
     /// Disconnection removes the entry entirely.
@@ -92,7 +127,7 @@ actor TheMuscle {
     /// Single source of truth for all per-client state. Absent = no such client.
     private var clients: [Int: ClientPhase] = [:]
 
-    private(set) var sessionToken: String
+    private let sessionTokenSource: SessionTokenSource
     private let alerts: AlertPresenter
 
     /// Outstanding "wait then disconnect" tasks. Each entry fires
@@ -168,7 +203,7 @@ actor TheMuscle {
     private var sessionPhase: SessionPhase = .idle
     /// Timeout before releasing a session after all connections disconnect or go idle
     private let sessionReleaseTimeout: TimeInterval
-    private let approvalTokenPayload: String?
+    var sessionToken: String { sessionTokenSource.token }
 
     // Computed accessors — preserve the external read interface.
 
@@ -197,7 +232,7 @@ actor TheMuscle {
     }
 
     private var canRequestUIApproval: Bool {
-        guard approvalTokenPayload != nil, !hasPendingApproval else { return false }
+        guard sessionTokenSource.allowsUIApproval, !hasPendingApproval else { return false }
         if case .idle = sessionPhase { return true }
         return false
     }
@@ -230,9 +265,11 @@ actor TheMuscle {
         sessionReleaseTimeout: TimeInterval? = nil,
         alerts: AlertPresenter? = nil
     ) {
-        let resolvedToken = explicitToken ?? UUID().uuidString
-        self.sessionToken = resolvedToken
-        self.approvalTokenPayload = explicitToken == nil ? resolvedToken : nil
+        if let explicitToken {
+            self.sessionTokenSource = .configured(explicitToken)
+        } else {
+            self.sessionTokenSource = .generated(UUID().uuidString)
+        }
         self.alerts = alerts ?? AlertPresenter()
         self.sessionReleaseTimeout = sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
     }
@@ -398,7 +435,7 @@ actor TheMuscle {
         }
 
         if payload.token.isEmpty {
-            guard approvalTokenPayload != nil else {
+            guard sessionTokenSource.allowsUIApproval else {
                 sendMessage(
                     .error(ServerError(
                         kind: .authFailure,
@@ -424,10 +461,8 @@ actor TheMuscle {
             return
         }
 
-        guard constantTimeEqual(payload.token, sessionToken) else {
-            let retryMessage = approvalTokenPayload == nil
-                ? "Invalid token. Retry with the configured token."
-                : "Invalid token. Retry without a token to request a fresh session."
+        guard constantTimeEqual(payload.token, sessionTokenSource.token) else {
+            let retryMessage = sessionTokenSource.invalidTokenMessage
             let attempts = recordFailedAttempt(address: address)
             if attempts >= TheMuscle.maxFailedAttempts {
                 logger.warning("Address \(address) locked out after \(attempts) failed attempts")
@@ -440,7 +475,7 @@ actor TheMuscle {
 
         // Token matches → authenticate and acquire session
         clearFailedAttempts(address: address)
-        let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: payload.token)
+        let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: sessionTokenSource.token)
         if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
             return
         }
@@ -501,7 +536,7 @@ actor TheMuscle {
     func approveClient(_ clientId: Int) async {
         guard case .pendingApproval(let address, let respond, let driverId) = clients[clientId] else { return }
 
-        let driverIdentity = effectiveDriverId(driverId: driverId, token: sessionToken)
+        let driverIdentity = effectiveDriverId(driverId: driverId, token: sessionTokenSource.token)
         if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
             return
         }
@@ -509,7 +544,7 @@ actor TheMuscle {
         clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
         await markClientAuthenticated?(clientId)
         logger.info("Client \(clientId) approved via UI")
-        sendMessage(.authApproved(AuthApprovedPayload(token: approvalTokenPayload)), respond: respond)
+        sendMessage(.authApproved(AuthApprovedPayload(token: sessionTokenSource.uiApprovalPayload)), respond: respond)
         await onClientAuthenticated?(clientId, respond)
     }
 
