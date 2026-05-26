@@ -7,31 +7,8 @@ import os
 import TheScore
 
 /// Manages client authentication, session token validation, and UI-based connection approval.
-///
-/// The session token is a coordination primitive — it keeps agents from stepping on each
-/// other's sessions, not a security credential. Anyone with debug access to the device
-/// can approve an empty-token connection and receive the generated token for reconnects.
-///
-/// Token resolution order:
-/// 1. Explicit token (from API, INSIDEJOB_TOKEN env var, or InsideJobToken plist key)
-/// 2. New auto-generated UUID (fresh each launch, surfaced to the connector)
-///
-/// Auth behavior is determined per-connection by the incoming token:
-/// - Token matches → authenticated immediately (no UI prompt)
-/// - Empty token with a generated token and no active session → UI approval prompt
-/// - Empty token with an explicit token or active session → rejected with structured guidance
-/// - Wrong token with generated-token auth → rejected with hint to retry without a token for a fresh session
-/// - Wrong token with explicit-token auth → rejected with hint to retry with the configured token
-/// - Any connection while a session is active from a different driver → busy signal
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
-/// Isolation: `actor`. All auth state — `clients`, `addressAuthStates`,
-/// `sessionPhase`, `delayedDisconnectTasks` — is mutated exclusively on TheMuscle's
-/// own actor. UI alert presentation lives in a `@MainActor AlertPresenter`
-/// companion (see `AlertPresenter.swift`); callbacks installed by TheGetaway
-/// (`sendToClient`, `markClientAuthenticated`, `markClientAwaitingApproval`,
-/// `disconnectClient`, `onClientAuthenticated`, `onSessionActiveChanged`) are `@Sendable` and
-/// hop to the appropriate context inside their implementations.
 actor TheMuscle {
 
     private static let disconnectGracePeriod: Duration = .milliseconds(100)
@@ -40,245 +17,101 @@ actor TheMuscle {
 
     // MARK: - Properties
 
-    /// Per-address rate limiting state machine for brute-force protection.
-    private enum AddressAuthPhase {
-        /// Accumulating failures, not yet locked out.
-        case failing(attempts: Int)
-        /// Locked out after exceeding maxFailedAttempts.
-        case lockedOut(until: Date, attempts: Int)
-    }
-
-    /// Rate-limiting state per remote address. Absent = clean (no failures).
-    private var addressAuthStates: [String: AddressAuthPhase] = [:]
-
-    /// Session token source. A configured token authenticates only by exact
-    /// token match. A generated token may also be returned to an approved UI
-    /// approval client. This replaces the old token plus approval-payload
-    /// mirror fields with one owner for the token lifecycle.
-    private enum SessionTokenSource {
-        case configured(String)
-        case generated(String)
-
-        var token: String {
-            switch self {
-            case .configured(let token), .generated(let token): return token
-            }
-        }
-
-        var uiApprovalPayload: String? {
-            switch self {
-            case .configured: return nil
-            case .generated(let token): return token
-            }
-        }
-
-        var allowsUIApproval: Bool {
-            uiApprovalPayload != nil
-        }
-
-        var invalidTokenMessage: String {
-            switch self {
-            case .configured:
-                return "Invalid token. Retry with the configured token."
-            case .generated:
-                return "Invalid token. Retry without a token to request a fresh session."
-            }
-        }
-    }
-
-    /// Per-client lifecycle state machine.
-    /// Each client traverses: connected → helloValidated → pendingApproval | authenticated.
-    /// Disconnection removes the entry entirely.
-    private enum ClientPhase {
-        case connected(address: String)
-        case helloValidated(address: String)
-        case pendingApproval(address: String, respond: @Sendable (Data) -> Void, driverId: String?)
-        case authenticated(address: String, driverIdentity: String)
-
-        var address: String {
-            switch self {
-            case .connected(let address), .helloValidated(let address),
-                 .pendingApproval(let address, _, _),
-                 .authenticated(let address, _):
-                return address
-            }
-        }
-
-        var isAuthenticated: Bool {
-            switch self {
-            case .authenticated: return true
-            default: return false
-            }
-        }
-
-        var hasCompletedHello: Bool {
-            switch self {
-            case .connected: return false
-            default: return true
-            }
-        }
-
-        var driverIdentity: String? {
-            if case .authenticated(_, let identity) = self { return identity }
-            return nil
-        }
-    }
-
-    /// Single source of truth for all per-client state. Absent = no such client.
-    private var clients: [Int: ClientPhase] = [:]
+    /// Single source of truth for all per-client auth state. Absent = no such client.
+    private var clientRegistry = TheMuscleClientRegistry()
 
     private let sessionTokenSource: SessionTokenSource
+    private var admission: SessionAdmission
     private let alerts: AlertPresenter
+    private var delivery: ClientDelivery = .unwired
 
-    /// Outstanding "wait then disconnect" tasks. Each entry fires
-    /// `disconnectClient` after `disconnectGracePeriod`; `tearDown()` cancels
-    /// all pending disconnects so a torn-down TheMuscle never targets a stale
-    /// client ID.
+    /// Outstanding "wait then disconnect" tasks.
     private let delayedDisconnectTasks = TaskTracker()
 
-    /// Tasks spawned by `showApprovalAlert` to hop between actor isolation
-    /// and the MainActor-bound `AlertPresenter`. Tracked so `tearDown()` can
-    /// cancel both the alert-presentation hop and any pending Allow/Deny
-    /// callback hop before the actor is torn down. The tracker is lock-backed
-    /// because inserts happen from both actor-isolated context (the
-    /// present-hop) and the non-isolated alert button callback (the
-    /// approve/deny hops).
+    /// Tasks spawned by `showApprovalAlert` across actor/MainActor isolation.
     private let pendingAlertTasks = TaskTracker()
 
     /// Test seam: how many delayed-disconnect Tasks are currently tracked.
-    /// Used by lifetime tests to assert that `tearDown()` cancelled and
-    /// drained every outstanding lockout Task before returning.
     var pendingLockoutTaskCount: Int { delayedDisconnectTasks.taskCountForTesting }
 
-    /// Test seam: install an authenticated client phase without driving the
-    /// full hello/authenticate handshake. Lets recording-routing tests
-    /// exercise the "originator is still authenticated" branch in
-    /// `TheGetaway.deliverRecordingResult` without standing up real
-    /// transports. Production code never calls this — there is no public
-    /// entry point that bypasses the handshake.
+    /// Test seam: install an authenticated client without a real transport handshake.
     func installAuthenticatedClientForTest(_ clientId: Int, address: String = "127.0.0.1", driverIdentity: String = "test-driver") {
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
+        clientRegistry.installAuthenticatedForTest(clientId, address: address, driverIdentity: driverIdentity)
     }
 
-    /// Test seam: drop the `sendToClient` transport closure to simulate
-    /// the "transport torn down between authenticated-set read and send"
-    /// race. Lets `TheGetaway.deliverRecordingResult` tests verify the
-    /// cache-preservation contract when `sendData(_:toClient:)` fails.
-    /// Production code never calls this — `tearDown` does not
-    /// clear the closure (TheMuscle assumes one-shot wiring at init).
+    /// Test seam: drop transport wiring to simulate a targeted-send race.
     func clearSendToClientForTest() {
-        self.sendToClient = nil
+        self.delivery.clearForTesting()
     }
 
     // MARK: - Computed Client Accessors
 
     /// IDs of all authenticated clients.
     var authenticatedClientIDs: Set<Int> {
-        Set(clients.lazy.filter { $0.value.isAuthenticated }.map(\.key))
+        clientRegistry.authenticatedClientIDs
     }
 
     /// Count of authenticated clients.
     var authenticatedClientCount: Int {
-        clients.values.lazy.filter(\.isAuthenticated).count
+        clientRegistry.authenticatedClientCount
     }
 
     /// IDs of all clients that have completed the hello handshake (any phase past connected).
     var helloValidatedClients: Set<Int> {
-        Set(clients.lazy.filter { $0.value.hasCompletedHello }.map(\.key))
+        clientRegistry.helloValidatedClients
     }
 
     // MARK: - Session Lock State
 
-    /// Explicit state machine for the session lifecycle.
-    /// Idle → active (driver claims) → draining (all connections gone, timer running) → idle.
-    private enum SessionPhase {
-        /// No active session — any driver may claim.
-        case idle
-        /// A driver owns the session with at least one live connection.
-        case active(driverId: String, connections: Set<Int>)
-        /// All connections disconnected; session will release when the timer fires.
-        case draining(driverId: String, releaseTimer: Task<Void, Never>, releaseDeadline: Date)
-    }
-
-    private var sessionPhase: SessionPhase = .idle
-    /// Timeout before releasing a session after all connections disconnect or go idle
-    private let sessionReleaseTimeout: TimeInterval
+    private var sessionLease: SessionLease
     var sessionToken: String { sessionTokenSource.token }
 
     // Computed accessors — preserve the external read interface.
 
     /// Driver identity that currently holds the session (nil = no active session).
     var activeSessionDriverId: String? {
-        switch sessionPhase {
-        case .idle: return nil
-        case .active(let driverId, _): return driverId
-        case .draining(let driverId, _, _): return driverId
-        }
+        sessionLease.activeSessionDriverId
     }
 
     /// Client IDs belonging to the active session.
     var activeSessionConnections: Set<Int> {
-        switch sessionPhase {
-        case .active(_, let connections): return connections
-        case .idle, .draining: return []
-        }
+        sessionLease.activeSessionConnections
     }
 
     private var hasPendingApproval: Bool {
-        clients.values.contains { phase in
-            if case .pendingApproval = phase { return true }
-            return false
-        }
+        clientRegistry.hasPendingApproval
     }
 
     private var canRequestUIApproval: Bool {
         guard sessionTokenSource.allowsUIApproval, !hasPendingApproval else { return false }
-        if case .idle = sessionPhase { return true }
-        return false
+        return !sessionLease.isSessionActive
     }
-
-    // MARK: - Callbacks (set by TheInsideJob)
-
-    private var sendToClient: (@Sendable (_ data: Data, _ clientId: Int) async -> ServerSendOutcome)?
-    private var markClientAuthenticated: (@Sendable (_ clientId: Int) async -> Void)?
-    private var markClientAwaitingApproval: (@Sendable (_ clientId: Int) async -> Void)?
-    private var disconnectClient: (@Sendable (_ clientId: Int) async -> Void)?
-    /// Invoked on `@MainActor` after a client completes authentication. The
-    /// isolation is encoded in the closure type so callers can satisfy the
-    /// hop with a single `await` rather than a fire-and-forget bridge Task.
-    private var onClientAuthenticated: (@MainActor @Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
-    /// Invoked on `@MainActor` when the session-active state changes
-    /// (true = session claimed, false = released). MainActor-isolated for the
-    /// same reason as `onClientAuthenticated`: the production handler mutates
-    /// Bonjour TXT state, which is MainActor-bound.
-    private var onSessionActiveChanged: (@MainActor @Sendable (_ isActive: Bool) async -> Void)?
 
     // MARK: - Init
 
-    /// Caller must be on `@MainActor` (the alert presenter is `@MainActor`-isolated
-    /// and is constructed eagerly when none is provided). Both production
-    /// (`TheInsideJob.init`) and the tests today satisfy this. Pass a custom
-    /// presenter when you need to construct from outside MainActor.
+    /// Caller must be on `@MainActor` because `AlertPresenter` is MainActor-isolated.
     @MainActor
     init(
         explicitToken: String?,
         sessionReleaseTimeout: TimeInterval? = nil,
         alerts: AlertPresenter? = nil
     ) {
-        if let explicitToken {
-            self.sessionTokenSource = .configured(explicitToken)
-        } else {
-            self.sessionTokenSource = .generated(UUID().uuidString)
-        }
+        let tokenSource = SessionTokenSource(explicitToken: explicitToken)
+        self.sessionTokenSource = tokenSource
+        self.admission = SessionAdmission(
+            tokenSource: tokenSource,
+            maxFailedAttempts: TheMuscle.maxFailedAttempts,
+            lockoutDuration: TheMuscle.lockoutDuration
+        )
         self.alerts = alerts ?? AlertPresenter()
-        self.sessionReleaseTimeout = sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
+        self.sessionLease = SessionLease(
+            releaseTimeout: sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
+        )
     }
 
     // MARK: - Callback Wiring
 
     /// Install transport-facing callbacks. Called once by `TheGetaway.wireTransport`.
-    /// Bundles assignment into a single actor hop so the consumer doesn't pay
-    /// five `await`s.
     func installCallbacks(
         sendToClient: @escaping @Sendable (Data, Int) async -> ServerSendOutcome,
         markClientAuthenticated: @escaping @Sendable (Int) async -> Void,
@@ -287,51 +120,45 @@ actor TheMuscle {
         onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
         onSessionActiveChanged: @escaping @MainActor @Sendable (Bool) async -> Void
     ) {
-        self.sendToClient = sendToClient
-        self.markClientAuthenticated = markClientAuthenticated
-        self.markClientAwaitingApproval = markClientAwaitingApproval
-        self.disconnectClient = disconnectClient
-        self.onClientAuthenticated = onClientAuthenticated
-        self.onSessionActiveChanged = onSessionActiveChanged
+        delivery.install(ClientDelivery.Callbacks(
+            sendToClient: sendToClient,
+            markClientAuthenticated: markClientAuthenticated,
+            markClientAwaitingApproval: markClientAwaitingApproval,
+            disconnectClient: disconnectClient,
+            onClientAuthenticated: onClientAuthenticated,
+            onSessionActiveChanged: onSessionActiveChanged
+        ))
     }
 
     // MARK: - Public API
 
     /// Register the remote address for a client (called when TCP connection is established).
     func registerClientAddress(_ clientId: Int, address: String) {
-        clients[clientId] = .connected(address: address)
+        clientRegistry.registerAddress(clientId, address: address)
     }
 
-    func sendServerHello(clientId: Int) async {
-        guard let data = encodeEnvelope(.serverHello) else { return }
-        _ = await sendToClient?(data, clientId)
+    @discardableResult
+    func sendServerHello(clientId: Int) async -> ServerSendOutcome {
+        guard let data = encodeEnvelope(.serverHello) else {
+            return .failed(.transportFailed(clientId: clientId, message: "Failed to encode serverHello"))
+        }
+        return await delivery.send(data, toClient: clientId)
     }
 
     /// Called when a ping is received from an authenticated client.
     /// Resets the session inactivity timer if the client belongs to the active session.
     func noteClientActivity(_ clientId: Int) {
         guard activeSessionConnections.contains(clientId) else { return }
-        resetInactivityTimer()
+        sessionLease.resetInactivityTimer { makeReleaseTimer() }
     }
 
     /// Send an already-encoded envelope to a single client.
-    ///
-    /// Used by TheGetaway to route auto-finish recording payloads to the
-    /// originating `start_recording` client without broadcasting the video
-    /// to every authenticated peer.
-    ///
-    /// Returns `.enqueued` only if the target client still exists and the
-    /// transport accepted the bytes. Callers that need delivery confirmation
-    /// must preserve cached state for any `.failed` outcome.
     @discardableResult
     func sendData(_ data: Data, toClient clientId: Int) async -> ServerSendOutcome {
-        guard clients[clientId] != nil else {
+        guard clientRegistry.contains(clientId) else {
             return .failed(.clientNotFound(clientId))
         }
-        guard let sendToClient else {
-            return .failed(.transportUnavailable)
-        }
-        return await sendToClient(data, clientId)
+        return await delivery.send(data, toClient: clientId)
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {
@@ -355,7 +182,7 @@ actor TheMuscle {
 
         switch envelope.message {
         case .clientHello:
-            guard let phase = clients[clientId] else {
+            guard clientRegistry.markHelloValidated(clientId) != nil else {
                 rejectUnauthenticatedMessage(
                     clientId,
                     message: "Connection is not registered; reconnect before starting the auth handshake.",
@@ -364,11 +191,10 @@ actor TheMuscle {
                 )
                 return
             }
-            clients[clientId] = .helloValidated(address: phase.address)
             sendMessage(.authRequired, respond: respond)
             return
         case .authenticate(let payload):
-            guard clients[clientId]?.hasCompletedHello == true else {
+            guard clientRegistry.phase(for: clientId)?.hasCompletedHello == true else {
                 rejectUnauthenticatedMessage(
                     clientId,
                     message: "Authentication requires client_hello first.",
@@ -420,32 +246,23 @@ actor TheMuscle {
     }
 
     private func processAuthentication(_ clientId: Int, payload: AuthenticatePayload, respond: @escaping @Sendable (Data) -> Void) async {
-        guard let phase = clients[clientId] else {
+        guard let phase = clientRegistry.phase(for: clientId) else {
             logger.warning("Client \(clientId) has no registered address, rejecting auth")
             sendMessage(.error(ServerError(kind: .authFailure, message: "Connection rejected.")), respond: respond)
             scheduleDelayedDisconnect(clientId)
             return
         }
         let address = phase.address
-        if isLockedOut(address: address) {
-            sendMessage(.error(ServerError(kind: .authFailure, message: "Too many failed attempts. Try again later.")), respond: respond)
-            logger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
-            scheduleDelayedDisconnect(clientId)
-            return
-        }
 
         if payload.token.isEmpty {
-            guard sessionTokenSource.allowsUIApproval else {
-                sendMessage(
-                    .error(ServerError(
-                        kind: .authFailure,
-                        message: "UI approval is available only when InsideJob generated the session token. Retry with the configured token."
-                    )),
-                    respond: respond
-                )
+            switch admission.decideEmptyToken() {
+            case .rejectExplicitTokenRequired(let error):
+                sendMessage(.error(error), respond: respond)
                 logger.warning("Client \(clientId) requested UI approval while an explicit token is configured")
                 scheduleDelayedDisconnect(clientId)
                 return
+            case .requestUIApproval:
+                break
             }
 
             guard canRequestUIApproval else {
@@ -454,79 +271,67 @@ actor TheMuscle {
             }
 
             logger.info("Client \(clientId) requesting UI approval (no token)")
-            clients[clientId] = .pendingApproval(address: address, respond: respond, driverId: payload.driverId)
-            await markClientAwaitingApproval?(clientId)
+            clientRegistry.beginApproval(clientId, address: address, respond: respond, driverId: payload.driverId)
+            _ = await delivery.markAwaitingApproval(clientId)
             sendMessage(.authApprovalPending(AuthApprovalPendingPayload()), respond: respond)
             showApprovalAlert(clientId: clientId)
             return
         }
 
-        guard constantTimeEqual(payload.token, sessionTokenSource.token) else {
-            let retryMessage = sessionTokenSource.invalidTokenMessage
-            let attempts = recordFailedAttempt(address: address)
-            if attempts >= TheMuscle.maxFailedAttempts {
+        switch admission.decideToken(payload.token, driverId: payload.driverId, address: address) {
+        case .lockedOut(let error):
+            sendMessage(.error(error), respond: respond)
+            logger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
+            scheduleDelayedDisconnect(clientId)
+            return
+
+        case .rejected(let retryMessage, let attempts, let lockedOut):
+            if lockedOut {
                 logger.warning("Address \(address) locked out after \(attempts) failed attempts")
             }
             sendMessage(.error(ServerError(kind: .authFailure, message: retryMessage)), respond: respond)
             logger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
             scheduleDelayedDisconnect(clientId)
             return
-        }
 
-        // Token matches → authenticate and acquire session
-        clearFailedAttempts(address: address)
-        let driverIdentity = effectiveDriverId(driverId: payload.driverId, token: sessionTokenSource.token)
-        if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
-            return
-        }
+        case .accepted(let driverIdentity):
+            if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
+                return
+            }
 
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
-        await markClientAuthenticated?(clientId)
-        logger.info("Client \(clientId) authenticated with token")
-        await onClientAuthenticated?(clientId, respond)
+            clientRegistry.authenticate(clientId, address: address, driverIdentity: driverIdentity)
+            _ = await delivery.markAuthenticated(clientId)
+            logger.info("Client \(clientId) authenticated with token")
+            _ = await delivery.clientAuthenticated(clientId, respond: respond)
+        }
     }
 
     private func rejectUnavailableUIApprovalRequest(
         _ clientId: Int,
         respond: @escaping @Sendable (Data) -> Void
     ) {
-        switch sessionPhase {
-        case .active(let driverId, let connections):
+        if let diagnostic = sessionLease.uiApprovalUnavailableDiagnostic() {
             rejectClientForSessionLock(
                 clientId,
-                payload: sessionLockPayload(
-                    baseMessage: "UI approval is unavailable while a ButtonHeist session is active",
-                    ownerDriverId: exposedDriverId(from: driverId),
-                    activeConnections: connections.count
-                ),
+                diagnostic: diagnostic,
                 respond: respond
             )
-        case .draining(let driverId, _, let releaseDeadline):
-            rejectClientForSessionLock(
-                clientId,
-                payload: sessionLockPayload(
-                    baseMessage: "UI approval is unavailable while a ButtonHeist session is draining",
-                    ownerDriverId: exposedDriverId(from: driverId),
-                    activeConnections: 0,
-                    remainingTimeoutSeconds: max(0, releaseDeadline.timeIntervalSince(Date()))
-                ),
-                respond: respond
-            )
-        case .idle:
-            sendMessage(
-                .error(ServerError(
-                    kind: .authFailure,
-                    message: "UI approval is available only when no approval request is already active."
-                )),
-                respond: respond
-            )
-            logger.warning("Client \(clientId) requested UI approval while approval is already pending")
-            scheduleDelayedDisconnect(clientId)
+            return
         }
+
+        sendMessage(
+            .error(ServerError(
+                kind: .authFailure,
+                message: "UI approval is available only when no approval request is already active."
+            )),
+            respond: respond
+        )
+        logger.warning("Client \(clientId) requested UI approval while approval is already pending")
+        scheduleDelayedDisconnect(clientId)
     }
 
     func handleClientDisconnected(_ clientId: Int) async {
-        let removed = clients.removeValue(forKey: clientId)
+        let removed = clientRegistry.remove(clientId)
         if case .pendingApproval = removed {
             await dismissAlert()
         }
@@ -534,48 +339,40 @@ actor TheMuscle {
     }
 
     func approveClient(_ clientId: Int) async {
-        guard case .pendingApproval(let address, let respond, let driverId) = clients[clientId] else { return }
+        guard case .pendingApproval(let address, let respond, let driverId) = clientRegistry.phase(for: clientId) else { return }
 
-        let driverIdentity = effectiveDriverId(driverId: driverId, token: sessionTokenSource.token)
+        let driverIdentity = sessionTokenSource.effectiveDriverId(driverId: driverId)
         if !(await acquireSession(driverIdentity: driverIdentity, clientId: clientId, respond: respond)) {
             return
         }
 
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
-        await markClientAuthenticated?(clientId)
+        clientRegistry.authenticate(clientId, address: address, driverIdentity: driverIdentity)
+        _ = await delivery.markAuthenticated(clientId)
         logger.info("Client \(clientId) approved via UI")
         sendMessage(.authApproved(AuthApprovedPayload(token: sessionTokenSource.uiApprovalPayload)), respond: respond)
-        await onClientAuthenticated?(clientId, respond)
+        _ = await delivery.clientAuthenticated(clientId, respond: respond)
     }
 
     func denyClient(_ clientId: Int) {
-        guard case .pendingApproval(let address, let respond, _) = clients[clientId] else { return }
-        clients[clientId] = .helloValidated(address: address)
+        guard case .pendingApproval(let address, let respond, _) = clientRegistry.phase(for: clientId) else { return }
+        clientRegistry.restoreHelloValidated(clientId, address: address)
         sendMessage(.error(ServerError(kind: .authFailure, message: "Connection denied by user")), respond: respond)
         logger.info("Client \(clientId) denied via UI")
         scheduleDelayedDisconnect(clientId)
     }
 
     func tearDown() async {
-        clients.removeAll()
+        clientRegistry.removeAll()
         delayedDisconnectTasks.cancelAll()
         pendingAlertTasks.cancelAll()
-        // Cancel the release timer (if draining) explicitly before tearing down
-        // the rest of the session so a fired timer can't see a half-released
-        // TheMuscle. `releaseSession()` also calls this, but stating it here
-        // documents the intent at the shutdown boundary.
-        cancelTimerIfDraining()
+        sessionLease.cancelTimerIfDraining()
         await releaseSession()
         await dismissAlert()
     }
 
     // MARK: - Delayed Disconnect
 
-    /// Schedule a `disconnectClient` callback for `clientId` after
-    /// `disconnectGracePeriod` so the recipient can flush a final error
-    /// payload before the connection is torn down. The handle is retained
-    /// until the body completes (or `tearDown()` cancels it), so a torn-down
-    /// TheMuscle never fires a stale disconnect.
+    /// Schedule a delayed disconnect so the recipient can flush the final error payload.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
         delayedDisconnectTasks.spawn { [weak self] in
             guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
@@ -586,247 +383,77 @@ actor TheMuscle {
     /// Called from the delayed-disconnect Task body to actually fire the
     /// `disconnectClient` callback while inside actor isolation.
     private func fireDisconnect(_ clientId: Int) async {
-        await disconnectClient?(clientId)
+        _ = await delivery.disconnect(clientId)
     }
 
     // MARK: - Status Accessors
 
     /// Whether a driver session is currently active on this Inside Job instance.
     var isSessionActive: Bool {
-        activeSessionDriverId != nil
+        sessionLease.isSessionActive
     }
 
     /// Number of active connections participating in the session.
     var activeSessionConnectionCount: Int {
-        activeSessionConnections.count
+        sessionLease.activeSessionConnectionCount
     }
 
     // MARK: - Session Lock
 
-    /// Resolve the effective driver identity for session locking.
-    /// Uses driverId if provided, falls back to token.
-    private func effectiveDriverId(driverId: String?, token: String) -> String {
-        if let driverId, !driverId.isEmpty {
-            return "driver:\(driverId)"
-        }
-        return "token:\(token)"
-    }
-
-    /// Attempt to acquire the session for a client. Returns true if acquired, false if rejected.
-    ///
-    /// Session rules:
-    /// - No active session → claim it
-    /// - Active session → busy signal (only one active client is allowed)
-    /// - Draining session, same driver → rejoin (cancel release timer)
+    /// Attempt to acquire the session for a client.
     private func acquireSession(driverIdentity: String, clientId: Int, respond: @escaping @Sendable (Data) -> Void) async -> Bool {
-        switch sessionPhase {
-        case .idle:
-            await claimSession(driverIdentity: driverIdentity, clientId: clientId)
+        switch sessionLease.acquire(driverIdentity: driverIdentity, clientId: clientId) {
+        case .accepted(let notifyActiveChanged):
+            if notifyActiveChanged {
+                logger.info("Session claimed by client \(clientId)")
+                _ = await delivery.sessionActiveChanged(true)
+            } else {
+                logger.info("Client \(clientId) rejoined session during grace period")
+            }
             return true
-
-        case .active(let activeId, let connections) where driverIdentity == activeId:
-            rejectClientForSessionLock(
-                clientId,
-                payload: sessionLockPayload(
-                    baseMessage: "Session is already active for this driver",
-                    ownerDriverId: exposedDriverId(from: activeId),
-                    activeConnections: connections.count
-                ),
-                respond: respond
-            )
-            return false
-
-        case .draining(let activeId, let timer, _) where driverIdentity == activeId:
-            timer.cancel()
-            sessionPhase = .active(driverId: activeId, connections: [clientId])
-            logger.info("Client \(clientId) rejoined session during grace period")
-            return true
-
-        case .active(let driverId, let connections):
-            rejectClientForSessionLock(
-                clientId,
-                payload: sessionLockPayload(ownerDriverId: exposedDriverId(from: driverId), activeConnections: connections.count),
-                respond: respond
-            )
-            return false
-
-        case .draining(let driverId, _, let releaseDeadline):
-            let remainingTimeoutSeconds = max(0, releaseDeadline.timeIntervalSince(Date()))
-            rejectClientForSessionLock(
-                clientId,
-                payload: sessionLockPayload(
-                    ownerDriverId: exposedDriverId(from: driverId),
-                    activeConnections: 0,
-                    remainingTimeoutSeconds: remainingTimeoutSeconds
-                ),
-                respond: respond
-            )
+        case .rejected(let diagnostic):
+            rejectClientForSessionLock(clientId, diagnostic: diagnostic, respond: respond)
             return false
         }
     }
 
     private func rejectClientForSessionLock(
         _ clientId: Int,
-        payload: SessionLockedPayload,
+        diagnostic: SessionLease.SessionLockDiagnostic,
         respond: @escaping @Sendable (Data) -> Void
     ) {
+        let payload = diagnostic.payload()
         sendMessage(.sessionLocked(payload), respond: respond)
         logger.warning("Client \(clientId) rejected - \(payload.message, privacy: .public)")
         scheduleDelayedDisconnect(clientId)
     }
 
-    private func sessionLockPayload(
-        baseMessage: String = "Session is locked by another driver",
-        ownerDriverId: String?,
-        activeConnections: Int,
-        remainingTimeoutSeconds: TimeInterval? = nil
-    ) -> SessionLockedPayload {
-        SessionLockedPayload(
-            message: sessionLockMessage(
-                baseMessage: baseMessage,
-                ownerDriverId: ownerDriverId,
-                activeConnections: activeConnections,
-                remainingTimeoutSeconds: remainingTimeoutSeconds
-            ),
-            activeConnections: activeConnections
-        )
-    }
-
-    private func sessionLockMessage(
-        baseMessage: String,
-        ownerDriverId: String?,
-        activeConnections: Int,
-        remainingTimeoutSeconds: TimeInterval? = nil
-    ) -> String {
-        var details = [baseMessage]
-        if let ownerDriverId, !ownerDriverId.isEmpty {
-            details.append("owner driver id: \(ownerDriverId)")
-        }
-        details.append("active connections: \(activeConnections)")
-        if let remainingTimeoutSeconds {
-            details.append("remaining timeout: \(Int(max(remainingTimeoutSeconds, 0).rounded(.up)))s")
-        }
-        return details.joined(separator: "; ") + "."
-    }
-
-    /// Extract the user-facing driver ID, or nil for token-backed sessions so auth tokens never leak.
-    private func exposedDriverId(from driverIdentity: String) -> String? {
-        let prefix = "driver:"
-        guard driverIdentity.hasPrefix(prefix) else { return nil }
-        return String(driverIdentity.dropFirst(prefix.count))
-    }
-
-    private func claimSession(driverIdentity: String, clientId: Int) async {
-        cancelTimerIfDraining()
-        sessionPhase = .active(driverId: driverIdentity, connections: [clientId])
-        logger.info("Session claimed by client \(clientId)")
-        await onSessionActiveChanged?(true)
-    }
-
     private func releaseSession() async {
-        let hadSession = switch sessionPhase {
-        case .idle: false
-        case .active, .draining: true
-        }
-        cancelTimerIfDraining()
-        sessionPhase = .idle
-        if hadSession {
+        if sessionLease.release() {
             logger.info("Session released")
-            await onSessionActiveChanged?(false)
+            _ = await delivery.sessionActiveChanged(false)
         }
     }
 
     /// Remove a client from the active session. Transitions to draining if no connections remain.
     private func removeSessionConnection(_ clientId: Int) {
-        guard case .active(let driverId, var connections) = sessionPhase else { return }
-        connections.remove(clientId)
-        if connections.isEmpty {
-            logger.info("All session connections gone, starting \(self.sessionReleaseTimeout)s release timer")
-            let releaseDeadline = Date().addingTimeInterval(sessionReleaseTimeout)
-            let timer = makeReleaseTimer()
-            sessionPhase = .draining(driverId: driverId, releaseTimer: timer, releaseDeadline: releaseDeadline)
-        } else {
-            sessionPhase = .active(driverId: driverId, connections: connections)
-        }
-    }
-
-    /// Cancel the release timer if currently draining.
-    private func cancelTimerIfDraining() {
-        if case .draining(_, let timer, _) = sessionPhase {
-            timer.cancel()
+        if sessionLease.removeConnection(clientId, makeReleaseTimer: { makeReleaseTimer() }) {
+            logger.info("All session connections gone, starting \(self.sessionLease.releaseTimeout)s release timer")
         }
     }
 
     /// Create a release timer task that fires after `sessionReleaseTimeout`.
     private func makeReleaseTimer() -> Task<Void, Never> {
-        Task { [weak self, sessionReleaseTimeout] in
-            guard await Task.cancellableSleep(for: .seconds(sessionReleaseTimeout)) else { return }
+        Task { [weak self, releaseTimeout = sessionLease.releaseTimeout] in
+            guard await Task.cancellableSleep(for: .seconds(releaseTimeout)) else { return }
             guard !Task.isCancelled else { return }
             await self?.releaseSession()
         }
     }
 
-    /// Reset the inactivity timer (called on heartbeat/ping from active session client).
-    private func resetInactivityTimer() {
-        switch sessionPhase {
-        case .idle:
-            return
-        case .active:
-            // Connections exist — no timer needed; timer starts on last disconnect
-            return
-        case .draining(let driverId, let oldTimer, _):
-            oldTimer.cancel()
-            let releaseDeadline = Date().addingTimeInterval(sessionReleaseTimeout)
-            let timer = makeReleaseTimer()
-            sessionPhase = .draining(driverId: driverId, releaseTimer: timer, releaseDeadline: releaseDeadline)
-        }
-    }
-
-    // MARK: - Rate Limiting Helpers
-
-    /// Check if an address is currently locked out. Clears expired lockouts automatically.
-    /// Returns true if locked out (caller should reject).
-    private func isLockedOut(address: String) -> Bool {
-        guard case .lockedOut(let expiry, _) = addressAuthStates[address] else { return false }
-        if Date() < expiry {
-            return true
-        }
-        addressAuthStates.removeValue(forKey: address)
-        return false
-    }
-
-    /// Record a failed auth attempt for an address. Returns the new attempt count.
-    @discardableResult
-    private func recordFailedAttempt(address: String) -> Int {
-        let currentAttempts = switch addressAuthStates[address] {
-        case .failing(let count): count
-        case .lockedOut(_, let count): count
-        case nil: 0
-        }
-        let newAttempts = currentAttempts + 1
-        if newAttempts >= TheMuscle.maxFailedAttempts {
-            addressAuthStates[address] = .lockedOut(
-                until: Date().addingTimeInterval(TheMuscle.lockoutDuration),
-                attempts: newAttempts
-            )
-        } else {
-            addressAuthStates[address] = .failing(attempts: newAttempts)
-        }
-        return newAttempts
-    }
-
-    /// Clear rate-limiting state for an address after successful auth.
-    private func clearFailedAttempts(address: String) {
-        addressAuthStates.removeValue(forKey: address)
-    }
-
     // MARK: - Alert Presentation
 
-    /// Present the connection-approval UI for `clientId`. Three Tasks are
-    /// spawned across the approval lifecycle (present-on-MainActor, then
-    /// either approve-back-on-actor or deny-back-on-actor); each is
-    /// inserted into `pendingAlertTasks` so `tearDown()` can cancel work
-    /// in flight.
+    /// Present the connection-approval UI for `clientId`.
     private func showApprovalAlert(clientId: Int) {
         let presenter = alerts
         let presentTask = Task { @MainActor [weak self] in
@@ -847,11 +474,7 @@ actor TheMuscle {
         recordAlertTask(presentTask)
     }
 
-    /// Spawn a tracked Task that hops back to actor isolation to run an
-    /// allow/deny handler. Called from `@MainActor` (alert button taps); the
-    /// closure body runs on TheMuscle's actor. The handle is stashed in the
-    /// lock-protected `pendingAlertTasks` set synchronously, so `tearDown`
-    /// can cancel it even if the actor hop hasn't yet started executing.
+    /// Spawn a tracked Task that hops back to actor isolation to run an allow/deny handler.
     nonisolated private func scheduleApprovalCallback(_ body: @escaping @Sendable (TheMuscle) async -> Void) {
         let task = Task { [weak self] in
             guard let self else { return }
@@ -873,9 +496,7 @@ actor TheMuscle {
     // MARK: - Helpers
 
     func clientIDs(for driverIdentity: String) -> [Int] {
-        clients.compactMap { clientId, phase in
-            phase.driverIdentity == driverIdentity ? clientId : nil
-        }
+        clientRegistry.clientIDs(for: driverIdentity)
     }
 
     func encodeEnvelope(_ message: ServerMessage, requestId: String? = nil) -> Data? {
@@ -900,17 +521,6 @@ actor TheMuscle {
         if let data = encodeEnvelope(message, requestId: requestId) {
             respond(data)
         }
-    }
-    /// Constant-time comparison for equal-length strings. Returns early on length mismatch (acceptable per AUTH.md threat model).
-    private func constantTimeEqual(_ a: String, _ b: String) -> Bool {
-        let aBytes = Array(a.utf8)
-        let bBytes = Array(b.utf8)
-        guard aBytes.count == bBytes.count else { return false }
-        var result: UInt8 = 0
-        for (lhs, rhs) in zip(aBytes, bBytes) {
-            result |= lhs ^ rhs
-        }
-        return result == 0
     }
 }
 #endif // DEBUG
