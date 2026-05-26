@@ -23,6 +23,15 @@ private final class RotorActivationAccessibilityElement: UIAccessibilityElement 
     }
 }
 
+private final class RotorCustomActionHandler: NSObject {
+    private(set) var actionCount = 0
+
+    @objc func archive(_ action: UIAccessibilityCustomAction) -> Bool {
+        actionCount += 1
+        return true
+    }
+}
+
 @MainActor
 final class TheStashRotorTests: XCTestCase {
 
@@ -238,7 +247,7 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(resultView.activationCount, 1)
     }
 
-    func testOutOfTreeRotorResultElementCanBeActivatedByReturnedHeistId() async throws {
+    func testOutOfTreeRotorResultDoesNotBypassSemanticActionability() async throws {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
@@ -252,6 +261,14 @@ final class TheStashRotorTests: XCTestCase {
         virtualResult.accessibilityLabel = "Open virtual result"
         virtualResult.accessibilityTraits = .button
         virtualResult.accessibilityFrameInContainerSpace = CGRect(x: 20, y: 120, width: 280, height: 44)
+        let customActionHandler = RotorCustomActionHandler()
+        virtualResult.accessibilityCustomActions = [
+            UIAccessibilityCustomAction(
+                name: "Archive",
+                target: customActionHandler,
+                selector: #selector(RotorCustomActionHandler.archive(_:))
+            )
+        ]
 
         rotorHost.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Primary Action") { _ in
@@ -271,30 +288,55 @@ final class TheStashRotorTests: XCTestCase {
         }
 
         let brains = TheBrains(tripwire: TheTripwire())
-        let searchResult = await brains.executeCommand(.rotor(
-            RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "virtual_activation_rotor_host")),
-                rotor: "Primary Action"
-            )
-        ))
 
-        XCTAssertTrue(searchResult.success, searchResult.message ?? "rotor failed")
-        guard case .rotor(let rotorResult)? = searchResult.payload,
-              let foundElement = rotorResult.foundElement else {
-            XCTFail("Expected rotor to return a found element")
-            return
+        func nextOutOfTreeRotorElement() async throws -> HeistElement {
+            let searchResult = await brains.executeCommand(.rotor(
+                RotorTarget(
+                    elementTarget: .matcher(ElementMatcher(identifier: "virtual_activation_rotor_host")),
+                    rotor: "Primary Action"
+                )
+            ))
+
+            XCTAssertTrue(searchResult.success, searchResult.message ?? "rotor failed")
+            guard case .rotor(let rotorResult)? = searchResult.payload else {
+                let missing: HeistElement? = nil
+                return try XCTUnwrap(missing, "Expected rotor payload")
+            }
+            let foundElement = try XCTUnwrap(rotorResult.foundElement, "Expected rotor to return a found element")
+            XCTAssertEqual(foundElement.label, "Open virtual result")
+            XCTAssertTrue(foundElement.heistId.hasPrefix("rotor_result_"))
+            return foundElement
         }
 
-        XCTAssertEqual(foundElement.label, "Open virtual result")
-        XCTAssertTrue(foundElement.heistId.hasPrefix("rotor_result_"))
+        let commands: [(String, (HeistId) -> ClientMessage)] = [
+            ("activate", { .activate(.heistId($0)) }),
+            ("custom action", {
+                .performCustomAction(CustomActionTarget(elementTarget: .heistId($0), actionName: "Archive"))
+            }),
+            ("tap", { .touchTap(TouchTapTarget(elementTarget: .heistId($0))) }),
+            ("long press", { .touchLongPress(LongPressTarget(elementTarget: .heistId($0))) }),
+            ("type text", { .typeText(TypeTextTarget(text: "hello", elementTarget: .heistId($0))) }),
+            ("scroll to visible", {
+                .scrollToVisible(ScrollToVisibleTarget(elementTarget: .heistId($0)))
+            }),
+        ]
 
-        let activateResult = await brains.executeCommand(.activate(.heistId(foundElement.heistId)))
+        for (label, makeCommand) in commands {
+            let foundElement = try await nextOutOfTreeRotorElement()
+            let result = await brains.executeCommand(makeCommand(foundElement.heistId))
 
-        XCTAssertTrue(activateResult.success, activateResult.message ?? "activate failed")
-        XCTAssertEqual(virtualResult.activationCount, 1)
+            XCTAssertFalse(result.success, "\(label) unexpectedly succeeded")
+            XCTAssertTrue(
+                result.message?.contains("semantic actionability failed [notFound]") == true,
+                "\(label) should fail before using the retained rotor result, got: \(result.message ?? "<nil>")"
+            )
+        }
+
+        XCTAssertEqual(virtualResult.activationCount, 0)
+        XCTAssertEqual(customActionHandler.actionCount, 0)
     }
 
-    func testOutOfTreeRotorResultElementCanBeScrolledToVisibleByReturnedHeistId() async throws {
+    func testOutOfTreeRotorResultElementCannotBeScrolledToVisibleByReturnedHeistId() async throws {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
@@ -345,12 +387,13 @@ final class TheStashRotorTests: XCTestCase {
             ScrollToVisibleTarget(elementTarget: .heistId(foundElement.heistId))
         ))
 
-        XCTAssertTrue(scrollResult.success, scrollResult.message ?? "scroll_to_visible failed")
+        XCTAssertFalse(scrollResult.success)
         XCTAssertEqual(scrollResult.method, .scrollToVisible)
+        XCTAssertTrue(scrollResult.message?.contains("semantic actionability failed [notFound]") == true)
         XCTAssertEqual(virtualResult.activationCount, 0)
     }
 
-    func testRotorResultUsesKnownObjectIdentityWhenCached() async throws {
+    func testRotorResultUsesCachedSemanticHeistIdWithoutActionabilityBypass() async throws {
         let windowScene = try requireForegroundWindowScene()
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
@@ -421,8 +464,9 @@ final class TheStashRotorTests: XCTestCase {
 
         let activate = await brains.executeCommand(.activate(.heistId(cachedHeistId)))
 
-        XCTAssertTrue(activate.success, activate.message ?? "activate failed")
-        XCTAssertEqual(cachedResult.activationCount, 1)
+        XCTAssertFalse(activate.success)
+        XCTAssertTrue(activate.message?.contains("semantic actionability failed [noRevealPath]") == true)
+        XCTAssertEqual(cachedResult.activationCount, 0)
     }
 
     func testOutOfTreeRotorCanContinueNextAndPreviousFromReturnedHeistId() async throws {
@@ -567,10 +611,17 @@ final class TheStashRotorTests: XCTestCase {
         let unrelatedResult = await brains.executeCommand(.increment(.heistId("not_the_rotor_result")))
         XCTAssertFalse(unrelatedResult.success)
 
-        let activateResult = await brains.executeCommand(.activate(.heistId(foundElement.heistId)))
+        let nextSearch = await brains.executeCommand(.rotor(
+            RotorTarget(
+                elementTarget: .matcher(ElementMatcher(identifier: "expiring_virtual_activation_rotor_host")),
+                rotor: "Primary Action",
+                currentHeistId: foundElement.heistId
+            )
+        ))
 
-        XCTAssertFalse(activateResult.success)
-        XCTAssertEqual(activateResult.errorKind, .elementNotFound)
+        XCTAssertFalse(nextSearch.success)
+        XCTAssertEqual(nextSearch.errorKind, .elementNotFound)
+        XCTAssertTrue(nextSearch.message?.contains("currentHeistId=\"\(foundElement.heistId)\" is not available") == true)
         XCTAssertEqual(virtualResult.activationCount, 0)
     }
 
@@ -644,10 +695,13 @@ final class TheStashRotorTests: XCTestCase {
 
     func testRotorReportsMissingRotorName() throws {
         let host = UIAccessibilityElement(accessibilityContainer: NSObject())
-        host.accessibilityFrame = CGRect(x: 20, y: 40, width: 280, height: 44)
+        let frame = CGRect(x: 20, y: 40, width: 280, height: 44)
+        host.accessibilityFrame = frame
         let element = AccessibilityElement.make(
             label: "Validation Results",
             identifier: "rotor_host",
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: CGPoint(x: frame.midX, y: frame.midY),
             customRotors: [.init(name: "Warnings", resultMarkers: [], limit: .none)]
         )
         let screenElement = Screen.ScreenElement(

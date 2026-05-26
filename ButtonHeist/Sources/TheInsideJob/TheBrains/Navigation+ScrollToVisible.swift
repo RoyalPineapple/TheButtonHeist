@@ -175,19 +175,15 @@ extension Navigation {
         }
 
         let resolved: TheStash.ResolvedTarget
-        if let pendingRotorResult = stash.activePendingRotorResult(for: normalizedTarget.originalTarget) {
-            resolved = TheStash.ResolvedTarget(screenElement: pendingRotorResult)
-        } else {
-            switch stash.resolveVisibleTarget(normalizedTarget.executableTarget) {
-            case .resolved(let target):
-                resolved = target
-            case .notFound(let diagnostics):
-                return .failed(.staleRefresh(
-                    normalizedTarget.diagnostics("target was not found in fresh live geometry: \(diagnostics)")
-                ))
-            case .ambiguous(_, let diagnostics):
-                return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
-            }
+        switch stash.resolveVisibleTarget(normalizedTarget.executableTarget) {
+        case .resolved(let target):
+            resolved = target
+        case .notFound(let diagnostics):
+            return .failed(.staleRefresh(
+                normalizedTarget.diagnostics("target was not found in fresh live geometry: \(diagnostics)")
+            ))
+        case .ambiguous(_, let diagnostics):
+            return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
         }
 
         switch stash.resolveLiveActionTarget(for: resolved) {
@@ -305,10 +301,6 @@ extension Navigation {
     private func prepareActionability(
         for normalizedTarget: TheStash.NormalizedTarget
     ) async -> SemanticActionabilityFailure? {
-        guard stash.activePendingRotorResult(for: normalizedTarget.originalTarget) == nil else {
-            return nil
-        }
-
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
         switch stash.resolveTarget(normalizedTarget.executableTarget) {
@@ -373,12 +365,6 @@ extension Navigation {
                     method: method
                 ))
             }
-            guard let contentFrame = resolvedTarget.contentFrame else {
-                return .failed(.noRevealPath(
-                    "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
-                        + "has no content-space position to make actionable"
-                ))
-            }
             guard let scrollView = stash.liveScrollView(forContainerPath: resolvedTarget.path) else {
                 if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
                     return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
@@ -389,16 +375,31 @@ extension Navigation {
                 ))
             }
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
+                if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                    return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
+                }
                 return .failed(.geometryNotActionable(
                     "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
                         + "is inside a scroll view that is unsafe for programmatic semantic reveal",
                     method: method
                 ))
             }
-            scrollView.setContentOffset(
-                TheStash.semanticRevealTargetOffset(for: contentFrame.origin, in: scrollView),
-                animated: false
-            )
+            guard safecracker.scrollToMakeActivationPointVisible(
+                liveTarget.activationPoint,
+                in: scrollView,
+                animated: false,
+                preferredScreenRect: Self.interactionComfortZone,
+                minimumScreenRect: ScreenMetrics.current.bounds
+            ) else {
+                if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                    return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
+                }
+                return .failed(.geometryNotActionable(
+                    "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
+                        + "activation point could not be brought on-screen",
+                    method: method
+                ))
+            }
             await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             refresh()
             return await makeActionable(

@@ -67,26 +67,42 @@ struct ToolRoutingTests {
         )
     }
 
-    @Test("scroll modes route to concrete commands")
+    @Test("scroll modes route to concrete commands and scrub irrelevant arguments")
     func scrollModesRouteToConcreteCommands() throws {
-        let cases: [(mode: String?, command: String)] = [
-            (nil, TheFence.Command.scroll.rawValue),
-            (ScrollMode.page.rawValue, TheFence.Command.scroll.rawValue),
-            (ScrollMode.toVisible.rawValue, TheFence.Command.scrollToVisible.rawValue),
-            (ScrollMode.search.rawValue, TheFence.Command.elementSearch.rawValue),
-            (ScrollMode.toEdge.rawValue, TheFence.Command.scrollToEdge.rawValue),
+        let cases: [
+            (
+                mode: String?,
+                command: TheFence.Command,
+                expectedDirection: String?,
+                expectedEdge: String?,
+                expectedStableId: String?
+            )
+        ] = [
+            (nil, .scroll, "down", nil, "scroll-container"),
+            (ScrollMode.page.rawValue, .scroll, "down", nil, "scroll-container"),
+            (ScrollMode.toVisible.rawValue, .scrollToVisible, nil, nil, nil),
+            (ScrollMode.search.rawValue, .elementSearch, "down", nil, nil),
+            (ScrollMode.toEdge.rawValue, .scrollToEdge, nil, "bottom", "scroll-container"),
         ]
 
         for routeCase in cases {
-            var arguments: [String: Argument] = ["direction": .string("down")]
+            var arguments: [String: Argument] = [
+                "direction": .string("down"),
+                "edge": .string("bottom"),
+                "heistId": .string("element-1"),
+                "stableId": .string("scroll-container"),
+            ]
             if let mode = routeCase.mode {
                 arguments["mode"] = .string(mode)
             }
             let operation = try routed(TheFence.Command.scroll.rawValue, arguments)
 
-            #expect(operation.command.rawValue == routeCase.command)
+            #expect(operation.command == routeCase.command)
             #expect(operation.stringArgument("mode") == nil)
-            #expect(operation.stringArgument("direction") == "down")
+            #expect(operation.stringArgument("direction") == routeCase.expectedDirection)
+            #expect(operation.stringArgument("edge") == routeCase.expectedEdge)
+            #expect(operation.stringArgument("heistId") == "element-1")
+            #expect(operation.stringArgument("stableId") == routeCase.expectedStableId)
         }
     }
 

@@ -482,32 +482,24 @@ private extension ClientMessage {
 
     var pendingRotorResultTargetHeistId: HeistId? {
         switch self {
-        case .activate(let target),
-             .increment(let target),
-             .decrement(let target):
-            return target.exactHeistId
-        case .performCustomAction(let target):
-            return target.elementTarget?.exactHeistId
         case .rotor(let target):
+            // Retained out-of-tree rotor results are cursor state only. They
+            // may seed the next rotor predicate, but never semantic actions.
             return target.currentHeistId
-        case .touchTap(let target):
-            return target.elementTarget?.exactHeistId
-        case .touchLongPress(let target):
-            return target.elementTarget?.exactHeistId
-        case .touchSwipe(let target):
-            return target.elementTarget?.exactHeistId
-        case .touchDrag(let target):
-            return target.elementTarget?.exactHeistId
-        case .touchPinch(let target):
-            return target.elementTarget?.exactHeistId
-        case .touchRotate(let target):
-            return target.elementTarget?.exactHeistId
-        case .touchTwoFingerTap(let target):
-            return target.elementTarget?.exactHeistId
-        case .typeText(let target):
-            return target.elementTarget?.exactHeistId
-        case .scrollToVisible(let target):
-            return target.elementTarget?.exactHeistId
+        case .activate,
+             .increment,
+             .decrement,
+             .performCustomAction,
+             .touchTap,
+             .touchLongPress,
+             .touchSwipe,
+             .touchDrag,
+             .touchPinch,
+             .touchRotate,
+             .touchTwoFingerTap,
+             .typeText,
+             .scrollToVisible:
+            return nil
         case .clientHello,
              .authenticate,
              .requestInterface,

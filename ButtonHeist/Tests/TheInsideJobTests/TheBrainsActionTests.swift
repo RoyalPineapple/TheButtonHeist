@@ -505,18 +505,19 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
     }
 
-    func testElementActionUsesFreshLiveGeometryAfterLayoutMovement() async {
+    func testElementActionUsesCurrentAccessibilityCaptureGeometry() async {
         let heistId = "moving_slider"
-        let stalePoint = CGPoint(x: 20, y: 20)
-        let livePoint = CGPoint(x: 190, y: 302)
-        let liveFrame = CGRect(x: 150, y: 280, width: 80, height: 44)
+        let staleObjectPoint = CGPoint(x: 20, y: 20)
+        let staleObjectFrame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        let capturePoint = CGPoint(x: 190, y: 302)
+        let captureFrame = CGRect(x: 150, y: 280, width: 80, height: 44)
         let element = AccessibilityElement.make(
             label: "Moving",
             traits: .adjustable,
-            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 40, height: 40))),
-            activationPoint: stalePoint
+            shape: .frame(AccessibilityRect(captureFrame)),
+            activationPoint: capturePoint
         )
-        let liveObject = AdjustableGeometryView(frame: liveFrame, activationPoint: livePoint)
+        let liveObject = AdjustableGeometryView(frame: staleObjectFrame, activationPoint: staleObjectPoint)
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
@@ -528,9 +529,9 @@ final class TheBrainsActionTests: XCTestCase {
             liveTarget = nil
         }
 
-        XCTAssertEqual(liveTarget?.frame, liveFrame)
-        XCTAssertEqual(liveTarget?.activationPoint, livePoint)
-        XCTAssertNotEqual(liveTarget?.activationPoint, stalePoint)
+        XCTAssertEqual(liveTarget?.frame, captureFrame)
+        XCTAssertEqual(liveTarget?.activationPoint, capturePoint)
+        XCTAssertNotEqual(liveTarget?.activationPoint, staleObjectPoint)
 
         let result = await brains.actions.executeIncrement(.heistId(heistId))
 

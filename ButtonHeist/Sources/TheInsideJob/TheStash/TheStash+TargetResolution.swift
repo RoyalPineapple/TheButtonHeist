@@ -116,21 +116,21 @@ extension TheStash {
     /// `currentScreen.knownInterface`, resolution fails with a near-miss
     /// suggestion. Live coordinate revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: currentScreen, includePendingRotor: true, resolutionScope: .known)
+        resolveTarget(target, in: currentScreen, resolutionScope: .known)
     }
 
     /// Resolve a target against a supplied screen value. Used by callers that
     /// intentionally preserved a known semantic snapshot across a fresh visible
     /// parse.
     func resolveTarget(_ target: ElementTarget, in screen: Screen) -> TargetResolution {
-        resolveTarget(target, in: screen, includePendingRotor: false, resolutionScope: .provided)
+        resolveTarget(target, in: screen, resolutionScope: .provided)
     }
 
     /// Resolve a target only against the latest live hierarchy. This preserves
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
     func resolveVisibleTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: currentScreen.visibleOnly, includePendingRotor: false, resolutionScope: .visible)
+        resolveTarget(target, in: currentScreen.visibleOnly, resolutionScope: .visible)
     }
 
     func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
@@ -299,14 +299,10 @@ private extension TheStash {
     func resolveTarget(
         _ target: ElementTarget,
         in screen: Screen,
-        includePendingRotor: Bool,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            if includePendingRotor, let pending = activePendingRotorResult(heistId: heistId) {
-                return .resolved(ResolvedTarget(screenElement: pending))
-            }
             guard let entry = screen.findElement(heistId: heistId) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,
