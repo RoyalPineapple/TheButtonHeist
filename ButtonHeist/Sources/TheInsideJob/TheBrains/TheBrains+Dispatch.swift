@@ -197,7 +197,7 @@ extension TheBrains {
         method: ActionMethod
     ) async -> ActionResult {
         await performElementSearch(
-            elementTarget: target.target,
+            elementTarget: target.target.map(BatchSemanticElementTarget.init),
             direction: target.direction,
             method: method
         )
@@ -244,7 +244,7 @@ extension TheBrains {
 
     func performWaitFor(target: BatchWaitForTarget) async -> ActionResult {
         await performWaitFor(
-            elementTarget: target.target,
+            elementTarget: BatchSemanticElementTarget(target.target),
             absent: target.absent,
             timeout: target.timeout
         )

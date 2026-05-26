@@ -46,8 +46,8 @@ extension TheStash {
         }
         return """
             Element not found: "\(heistId)" — did you mean: \
-            \(similar.joined(separator: ", "))? If not, target by exact \
-            label/identifier with a matcher.
+            \(similar.joined(separator: ", "))? If not, retarget by exact \
+            label or identifier.
             """
     }
 

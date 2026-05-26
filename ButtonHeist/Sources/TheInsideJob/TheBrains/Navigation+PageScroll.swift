@@ -18,7 +18,7 @@ extension Navigation {
 
     func executeScroll(_ target: BatchScrollTarget) async -> TheSafecracker.InteractionResult {
         await executeScroll(
-            elementTarget: target.target,
+            elementTarget: target.target.map(BatchSemanticElementTarget.init),
             direction: target.direction
         )
     }
@@ -58,7 +58,7 @@ extension Navigation {
 
     func executeScrollToEdge(_ target: BatchScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
         await executeScrollToEdge(
-            elementTarget: target.target,
+            elementTarget: target.target.map(BatchSemanticElementTarget.init),
             edge: target.edge
         )
     }

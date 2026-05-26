@@ -239,7 +239,7 @@ final class ActivateFailureDiagnosticTests: XCTestCase {
             tapReceiver: nil,
             screenBounds: screenBounds
         )
-        XCTAssertTrue(message.contains("tryNext: wait for a visible app window"))
+        XCTAssertTrue(message.contains("tryNext: wait for a targetable app window"))
         XCTAssertTrue(message.contains("retry the same semantic target"))
     }
 

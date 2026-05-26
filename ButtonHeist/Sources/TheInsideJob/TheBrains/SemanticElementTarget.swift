@@ -40,7 +40,21 @@ extension ElementTarget: SemanticElementTarget {
     }
 }
 
-extension SemanticActionTarget: SemanticElementTarget {
+struct BatchSemanticElementTarget: SemanticElementTarget {
+    let sourceHeistId: HeistId?
+    let semanticMatcher: ElementMatcher?
+    let semanticOrdinal: Int?
+
+    var exactHeistId: HeistId? { nil }
+
+    init(_ target: SemanticActionTarget) {
+        self.sourceHeistId = target.sourceHeistId
+        self.semanticMatcher = target.matcher
+        self.semanticOrdinal = target.ordinal
+    }
+}
+
+extension SemanticActionTarget {
     var exactHeistId: HeistId? { nil }
     var semanticMatcher: ElementMatcher? { matcher }
     var semanticOrdinal: Int? { ordinal }
@@ -61,6 +75,13 @@ extension TheStash {
             sourceHeistId: target.sourceHeistId,
             sourceScreen: sourceScreen ?? currentScreen
         )
+    }
+
+    func normalizeTarget(
+        _ target: SemanticActionTarget,
+        in sourceScreen: Screen? = nil
+    ) -> NormalizedTarget {
+        normalizeTarget(BatchSemanticElementTarget(target), in: sourceScreen)
     }
 
     func semanticElementTarget(for target: any SemanticElementTarget) -> ElementTarget {

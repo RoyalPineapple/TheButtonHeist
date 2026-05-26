@@ -18,7 +18,7 @@ extension Navigation {
 
     func executeElementSearch(_ target: BatchElementSearchTarget) async -> TheSafecracker.InteractionResult {
         await executeElementSearch(
-            elementTarget: target.target,
+            elementTarget: target.target.map(BatchSemanticElementTarget.init),
             direction: target.direction
         )
     }

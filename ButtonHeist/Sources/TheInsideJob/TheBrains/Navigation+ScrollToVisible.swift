@@ -153,7 +153,7 @@ extension Navigation {
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         await executeScrollToVisible(
-            elementTarget: target.target,
+            elementTarget: target.target.map(BatchSemanticElementTarget.init),
             recordedScreen: recordedScreen
         )
     }
@@ -277,9 +277,18 @@ extension Navigation {
         deallocatedBoundary: String,
         allowingStaleRefresh: Bool = true
     ) async -> SemanticActionabilityResult {
-        let visibility = await makeSemanticallyVisible(for: normalizedTarget)
-        if let failure = visibility.failure {
-            return .failed(failure)
+        if stash.activePendingRotorResult(for: normalizedTarget.originalTarget) == nil {
+            switch stash.resolveVisibleTarget(normalizedTarget.executableTarget) {
+            case .resolved:
+                break
+            case .ambiguous(_, let diagnostics):
+                return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
+            case .notFound:
+                let visibility = await makeSemanticallyVisible(for: normalizedTarget)
+                if let failure = visibility.failure {
+                    return .failed(failure)
+                }
+            }
         }
 
         let resolved: TheStash.ResolvedTarget
@@ -327,7 +336,8 @@ extension Navigation {
                 return refreshed
             }
             return .failed(.staleRefresh(
-                "live target became stale during \(method.rawValue); refresh observed "
+                message
+                    + "\nrefresh observed: "
                     + (refreshed.failure?.message ?? "unknown"),
                 method: .elementDeallocated
             ))

@@ -401,6 +401,8 @@ final class TheBrainsActionTests: XCTestCase {
             customActions: [.init(name: "Archive")]
         )
         let liveObject = UIView(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
+        liveObject.accessibilityFrame = CGRect(x: 0, y: 0, width: 200, height: 80)
+        liveObject.accessibilityActivationPoint = CGPoint(x: 100, y: 40)
         let customActionTarget = CustomActionTargetObject()
         liveObject.accessibilityCustomActions = [
             UIAccessibilityCustomAction(
@@ -753,9 +755,10 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
             "semantic actionability failed [geometryNotActionable]",
-            "visible target \"Geometry Missing\"",
-            "heistId: geometry_missing_slider",
-            "no usable live geometry",
+            "method=increment",
+            "heistId=\"geometry_missing_slider\"",
+            "label=\"Geometry Missing\"",
+            "fresh live geometry from semantic actionability",
         ])
     }
 

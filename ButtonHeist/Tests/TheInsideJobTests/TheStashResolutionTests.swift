@@ -382,7 +382,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(diagnostics.contains("<empty matcher>"))
         XCTAssertTrue(diagnostics.contains("Next:"))
-        XCTAssertTrue(diagnostics.contains("get_interface"))
+        XCTAssertTrue(diagnostics.contains("exact label"))
     }
 
     // MARK: - TargetResolution Convenience Properties

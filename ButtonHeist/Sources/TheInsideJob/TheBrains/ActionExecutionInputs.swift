@@ -88,7 +88,7 @@ extension CustomActionTarget: CustomActionExecutionInput {
 }
 
 extension BatchCustomActionTarget: CustomActionExecutionInput {
-    var actionElementTarget: (any SemanticElementTarget)? { target }
+    var actionElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
     var actionContainerTarget: ContainerMatcher? { containerTarget }
     var actionContainerOrdinal: Int? { containerOrdinal }
 }
@@ -98,7 +98,7 @@ extension RotorTarget: RotorExecutionInput {
 }
 
 extension BatchRotorTarget: RotorExecutionInput {
-    var rotorElementTarget: any SemanticElementTarget { target }
+    var rotorElementTarget: any SemanticElementTarget { BatchSemanticElementTarget(target) }
     var currentHeistId: HeistId? { currentSourceHeistId }
 }
 
@@ -107,7 +107,7 @@ extension TouchTapTarget: TapExecutionInput {
 }
 
 extension BatchTouchTapTarget: TapExecutionInput {
-    var tapElementTarget: (any SemanticElementTarget)? { target }
+    var tapElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 
 extension LongPressTarget: LongPressExecutionInput {
@@ -115,7 +115,7 @@ extension LongPressTarget: LongPressExecutionInput {
 }
 
 extension BatchLongPressTarget: LongPressExecutionInput {
-    var tapElementTarget: (any SemanticElementTarget)? { target }
+    var tapElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 
 extension SwipeTarget: SwipeExecutionInput {
@@ -123,7 +123,7 @@ extension SwipeTarget: SwipeExecutionInput {
 }
 
 extension BatchSwipeTarget: SwipeExecutionInput {
-    var swipeElementTarget: (any SemanticElementTarget)? { target }
+    var swipeElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 
 extension DragTarget: DragExecutionInput {
@@ -131,7 +131,7 @@ extension DragTarget: DragExecutionInput {
 }
 
 extension BatchDragTarget: DragExecutionInput {
-    var dragElementTarget: (any SemanticElementTarget)? { target }
+    var dragElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 
 extension PinchTarget: PinchExecutionInput {
@@ -139,7 +139,7 @@ extension PinchTarget: PinchExecutionInput {
 }
 
 extension BatchPinchTarget: PinchExecutionInput {
-    var pinchElementTarget: (any SemanticElementTarget)? { target }
+    var pinchElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 
 extension RotateTarget: RotateExecutionInput {
@@ -147,7 +147,7 @@ extension RotateTarget: RotateExecutionInput {
 }
 
 extension BatchRotateTarget: RotateExecutionInput {
-    var rotateElementTarget: (any SemanticElementTarget)? { target }
+    var rotateElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 
 extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
@@ -155,7 +155,7 @@ extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
 }
 
 extension BatchTwoFingerTapTarget: TwoFingerTapExecutionInput {
-    var twoFingerTapElementTarget: (any SemanticElementTarget)? { target }
+    var twoFingerTapElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 
 extension TypeTextTarget: TypeTextExecutionInput {
@@ -163,7 +163,7 @@ extension TypeTextTarget: TypeTextExecutionInput {
 }
 
 extension BatchTypeTextTarget: TypeTextExecutionInput {
-    var typeTextElementTarget: (any SemanticElementTarget)? { target }
+    var typeTextElementTarget: (any SemanticElementTarget)? { target.map(BatchSemanticElementTarget.init) }
 }
 #endif // DEBUG
 #endif // canImport(UIKit)
