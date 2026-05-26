@@ -90,8 +90,8 @@ final class BookKeeperHeistTests: XCTestCase {
         recording.fileHandle.write(Data("not-json\n".utf8))
 
         XCTAssertThrowsError(try bookKeeper.stopHeistRecording()) { error in
-            guard case BookKeeperError.noStepsRecorded = error else {
-                return XCTFail("Expected noStepsRecorded, got \(error)")
+            guard case BookKeeperError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected heistRecording(.noValidSteps), got \(error)")
             }
         }
     }
@@ -763,7 +763,7 @@ private func parsedRequest(
 private func appendEvidenceLine(_ evidence: HeistEvidence, to bookKeeper: TheBookKeeper) throws {
     guard case .active(let session) = bookKeeper.phase,
           case .recording(let recording) = session.heistRecording else {
-        throw BookKeeperError.notRecordingHeist
+        throw BookKeeperError.heistRecording(.notRecording)
     }
 
     let encoder = JSONEncoder()
