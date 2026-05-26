@@ -55,6 +55,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(session.startTime, session.manifest.startTime)
         XCTAssertNil(session.manifest.endTime)
         XCTAssertHasNoStoredPhaseTimingMirrors(session)
+        XCTAssertHasNoStoredPhaseIdentityMirrors(session)
     }
 
     @ButtonHeistActor
@@ -156,6 +157,7 @@ final class TheBookKeeperTests: XCTestCase {
         )
         XCTAssertEqual(snapshot.manifest, session.manifest)
         XCTAssertHasNoStoredPhaseTimingMirrors(session)
+        XCTAssertHasNoStoredPhaseIdentityMirrors(session)
     }
 
     func testTerminalSessionEndTimeFallsBackToStartTimeWhenManifestIsMalformed() {
@@ -167,7 +169,6 @@ final class TheBookKeeperTests: XCTestCase {
         )
 
         let closing = ClosingSession(
-            sessionId: "malformed",
             directory: tempDirectory,
             manifest: manifest
         )
@@ -179,7 +180,6 @@ final class TheBookKeeperTests: XCTestCase {
             }
         )
         let closed = ClosedSession(
-            sessionId: "malformed",
             directory: tempDirectory,
             compressedLogPath: compressedLogPath,
             manifest: manifest
@@ -202,7 +202,6 @@ final class TheBookKeeperTests: XCTestCase {
             endTime: Date(timeIntervalSince1970: 1_000_001)
         )
         let closing = ClosingSession(
-            sessionId: "compressing",
             directory: tempDirectory,
             manifest: manifest
         )
@@ -214,6 +213,8 @@ final class TheBookKeeperTests: XCTestCase {
         let taskValue = try await compressing.compressionTask.value
 
         XCTAssertEqual(compressing.sessionId, closing.sessionId)
+        XCTAssertHasNoStoredPhaseIdentityMirrors(closing)
+        XCTAssertHasNoStoredPhaseIdentityMirrors(compressing)
         XCTAssertEqual(taskValue, compressedPath)
         XCTAssertEqual(retryable.sessionId, closing.sessionId)
         XCTAssertEqual(retryable.directory, closing.directory)
@@ -1260,6 +1261,15 @@ private func XCTAssertHasNoStoredPhaseTimingMirrors<T>(
     let storedLabels = Set(Mirror(reflecting: value).children.compactMap(\.label))
     XCTAssertFalse(storedLabels.contains("startTime"), file: file, line: line)
     XCTAssertFalse(storedLabels.contains("endTime"), file: file, line: line)
+}
+
+private func XCTAssertHasNoStoredPhaseIdentityMirrors<T>(
+    _ value: T,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    let storedLabels = Set(Mirror(reflecting: value).children.compactMap(\.label))
+    XCTAssertFalse(storedLabels.contains("sessionId"), file: file, line: line)
 }
 
 private func posixPermissions(at url: URL) throws -> Int {

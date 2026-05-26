@@ -328,6 +328,27 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertEqual(payload.token, generatedToken)
     }
 
+    func testApprovalPayloadIsDerivedFromTokenSource() async throws {
+        let explicitResponses = collectResponses()
+        try await authenticate(clientId: 1, token: "", respond: explicitResponses.respond)
+        XCTAssertTrue(authApprovedPayloads(from: explicitResponses.responses()).isEmpty)
+        XCTAssertTrue(markedApprovalPending.isEmpty)
+
+        await muscle.tearDown()
+        muscle = TheMuscle(explicitToken: nil)
+        sink = CallbackSink()
+        await installCallbacks(observeSessionChanges: false)
+
+        let generatedToken = await muscle.sessionToken
+        let generatedResponses = collectResponses()
+        try await authenticate(clientId: 2, token: "", respond: generatedResponses.respond)
+        await muscle.approveClient(2)
+
+        let payload = try XCTUnwrap(authApprovedPayloads(from: generatedResponses.responses()).first)
+        XCTAssertEqual(payload.token, generatedToken)
+        XCTAssertEqual(markedApprovalPending, [2])
+    }
+
     func testGeneratedTokenInvalidTokenSuggestsUIApproval() async throws {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
