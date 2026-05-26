@@ -28,6 +28,7 @@
 		0B727DFA33963386D57AA5BD /* AuthFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABF374ED46E8B26F4A831C2 /* AuthFailureTests.swift */; };
 		0CA864136D868EA899BA754B /* ElementTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9978E2F3476C7F8CBDA303 /* ElementTarget.swift */; };
 		0D0CE63C63F1CC461BD48891 /* swift-crypto_Crypto.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 9FEA3B02F99B93FD31784356 /* swift-crypto_Crypto.bundle */; };
+		0D253E79093D393E37C9C241 /* SemanticScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2483323F7EA275CB4598FFC8 /* SemanticScreen.swift */; };
 		0D49DA362BF032CE96E882CA /* BatchExecutionPlanTargetSemanticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D3F91DEF9C362AA29DD1446 /* BatchExecutionPlanTargetSemanticsTests.swift */; };
 		0D90D9410C8FEB52DBC0341B /* BatchExecutionResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85B2E875026420F5AB06D0A2 /* BatchExecutionResult.swift */; };
 		0DB249CA4805D5D002B7E9FF /* ScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD60080E4BE14A994AC72411 /* ScreenTests.swift */; };
@@ -304,6 +305,7 @@
 		A963BAD3BB20FC75003B51CB /* AccessibilityContainer+Matching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6017364A6AB3C529ECE13184 /* AccessibilityContainer+Matching.swift */; };
 		AA1B8B5F7613FE5A793280A5 /* TheFence+RequestPayload+Gestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D23ED6450908FC41AA710DD /* TheFence+RequestPayload+Gestures.swift */; };
 		AA8B90A0D3D04F788602E0EF /* swift-crypto_Crypto.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 9FEA3B02F99B93FD31784356 /* swift-crypto_Crypto.bundle */; };
+		AAB139401BCC1CF71BC82920 /* LiveCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A819517EB325518F2558C809 /* LiveCapture.swift */; };
 		AAEE8DC63033C8BEC937BAA5 /* AccessibilityPolicy+UIKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99E5190FDA48440D28E474F3 /* AccessibilityPolicy+UIKit.swift */; };
 		ABFAA551D9A60C474DCA5C48 /* ServerStatusPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D53B2D3E81CB69878BE8422 /* ServerStatusPayloads.swift */; };
 		ACB9E24717DABE25E621B111 /* FenceJSON+Observation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E70127C41083C640CE92346 /* FenceJSON+Observation.swift */; };
@@ -615,6 +617,7 @@
 		22FE61852546E4B6F51E7605 /* TheFence+Batch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Batch.swift"; sourceTree = "<group>"; };
 		23AABE85FC77329552681A4C /* TestSentinelTask.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSentinelTask.swift; sourceTree = "<group>"; };
 		23DB65F13BDDBFADD81F3BFA /* ActivateFailureDiagnosticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivateFailureDiagnosticTests.swift; sourceTree = "<group>"; };
+		2483323F7EA275CB4598FFC8 /* SemanticScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SemanticScreen.swift; sourceTree = "<group>"; };
 		2741196FA870A069B295DFFA /* ElementMatcher+Minimum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ElementMatcher+Minimum.swift"; sourceTree = "<group>"; };
 		284A2CE492A275715B63BF0A /* TheFence+Formatting+Compact+Delta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting+Compact+Delta.swift"; sourceTree = "<group>"; };
 		286300664EC22C2386C8F58E /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
@@ -825,6 +828,7 @@
 		A6E66628C74C420C04912FC4 /* TheStashCustomRotorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStashCustomRotorTests.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistTraitTests.swift; sourceTree = "<group>"; };
+		A819517EB325518F2558C809 /* LiveCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCapture.swift; sourceTree = "<group>"; };
 		A99CA156168E01D0C3C6AEAF /* StakeoutTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StakeoutTiming.swift; sourceTree = "<group>"; };
 		AA5E0175CC98C9187ECAEF74 /* AccessibilityTraceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceTests.swift; sourceTree = "<group>"; };
 		AB6BB03911DA4236C7798B8E /* FenceRecordingLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FenceRecordingLifecycle.swift; sourceTree = "<group>"; };
@@ -1296,7 +1300,9 @@
 				004C9D8BE8908EDDA621C569 /* Diagnostics.swift */,
 				BEF65E26EF4959C85C071973 /* IdAssignment.swift */,
 				10D4AA78D802F6F18119E5F4 /* Interactivity.swift */,
+				A819517EB325518F2558C809 /* LiveCapture.swift */,
 				CD54BF184FD9589D4A4A9804 /* Screen.swift */,
+				2483323F7EA275CB4598FFC8 /* SemanticScreen.swift */,
 				951C56AB163FAFB179DFDA9B /* TheStash.swift */,
 				09696C328969BE17BA4BC22D /* TheStash+AccessibilityActions.swift */,
 				CE34C2217F0FC3C805F20ED3 /* TheStash+Capture.swift */,
@@ -2150,7 +2156,9 @@
 				9FF63CDD02DCDB75E448C6CB /* Diagnostics.swift in Sources */,
 				663B7AFA3CFAA5E5C89911F9 /* IdAssignment.swift in Sources */,
 				4E025AADAFC3705425334617 /* Interactivity.swift in Sources */,
+				AAB139401BCC1CF71BC82920 /* LiveCapture.swift in Sources */,
 				09987A8680B07DB479C74267 /* Screen.swift in Sources */,
+				0D253E79093D393E37C9C241 /* SemanticScreen.swift in Sources */,
 				595403EE668F17EC3E9FA856 /* TheStash+AccessibilityActions.swift in Sources */,
 				475C23DE0FA87D9D78D1DB5A /* TheStash+Capture.swift in Sources */,
 				D73AF669F2F4C132C0391CAF /* TheStash+LiveGeometry.swift in Sources */,

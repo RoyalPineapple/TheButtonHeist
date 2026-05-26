@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import CryptoKit
 import UIKit
 
 import TheScore
@@ -15,10 +14,9 @@ import AccessibilitySnapshotParser
 /// replaces the dozen mutable fields previously held on TheStash
 /// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `knownIds`,
 /// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
-/// a single immutable value. The one-state invariant is: a `Screen` has two
-/// named parts: `knownInterface` is targetable semantic state, and
-/// `liveInterface` is the latest parse used for geometry, live object
-/// dispatch, scrolling, and wire-tree projection.
+/// two named values: `semantic` is durable targetable state, and `liveCapture`
+/// is the latest parse used for geometry, live object dispatch, scrolling,
+/// and wire-tree projection.
 ///
 /// Exploration accumulates a local `var union: Screen` in the caller; the
 /// final union is committed by writing it back into `stash.currentScreen`.
@@ -28,19 +26,31 @@ import AccessibilitySnapshotParser
 /// stored — so they cannot drift from the underlying tree.
 struct Screen: Equatable {
 
-    /// HeistId → element entry. This is targetable semantic state, including
-    /// exploration results that are not currently on-screen.
-    let elements: [HeistId: ScreenElement]
+    let semantic: SemanticScreen
+    let liveCapture: LiveCapture
 
-    /// Latest parse used for geometry, live object dispatch, scrolling, and
-    /// wire-tree projection. Viewport-shaped details stay behind this name;
-    /// trace history is gated by `semanticHash`, not by snapshot geometry.
-    let liveInterface: LiveInterface
+    typealias ScrollContentLocation = SemanticScreen.ScrollContentLocation
+    typealias ScreenElement = SemanticScreen.Element
+    typealias KnownInterface = SemanticScreen
+    typealias LiveInterface = LiveCapture
+    typealias ScrollableViewRef = LiveCapture.ScrollableViewRef
+    typealias ElementRef = LiveCapture.ElementRef
+    typealias ContainerRef = LiveCapture.ContainerRef
+
+    /// Compatibility view for callers that still read `Screen.elements`.
+    var elements: [HeistId: ScreenElement] {
+        semantic.elements
+    }
+
+    /// Compatibility view for callers that still read `Screen.liveInterface`.
+    var liveInterface: LiveInterface {
+        liveCapture
+    }
 
     static var empty: Screen {
         Screen(
-            elements: [:],
-            liveInterface: .empty
+            semantic: .empty,
+            liveCapture: .empty
         )
     }
 
@@ -58,7 +68,7 @@ struct Screen: Equatable {
     ) {
         self.init(
             elements: elements,
-            liveInterface: LiveInterface(
+            liveInterface: LiveCapture(
                 hierarchy: hierarchy,
                 containerStableIds: [:],
                 heistIdByElement: [:],
@@ -90,7 +100,7 @@ struct Screen: Equatable {
     ) {
         self.init(
             elements: elements,
-            liveInterface: LiveInterface(
+            liveInterface: LiveCapture(
                 hierarchy: hierarchy,
                 containerStableIds: containerStableIds,
                 containerStableIdsByPath: containerStableIdsByPath,
@@ -101,14 +111,7 @@ struct Screen: Equatable {
                 containerContentFramesByPath: containerContentFramesByPath,
                 firstResponderHeistId: firstResponderHeistId,
                 scrollableContainerViews: scrollableContainerViews,
-                scrollableContainerViewsByPath: scrollableContainerViewsByPath,
-                scrollableViewsByStableId: Self.scrollableViewsByStableId(
-                    hierarchy: hierarchy,
-                    containerStableIds: containerStableIds,
-                    containerStableIdsByPath: containerStableIdsByPath,
-                    scrollableContainerViews: scrollableContainerViews,
-                    scrollableContainerViewsByPath: scrollableContainerViewsByPath
-                )
+                scrollableContainerViewsByPath: scrollableContainerViewsByPath
             )
         )
     }
@@ -117,283 +120,24 @@ struct Screen: Equatable {
         elements: [HeistId: ScreenElement],
         liveInterface: LiveInterface
     ) {
-        self.elements = elements
-        self.liveInterface = liveInterface
-    }
-
-    private static func scrollableViewsByStableId(
-        hierarchy: [AccessibilityHierarchy],
-        containerStableIds: [AccessibilityContainer: HeistContainer],
-        containerStableIdsByPath: [TreePath: HeistContainer],
-        scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
-        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
-    ) -> [HeistContainer: ScrollableViewRef] {
-        var result: [HeistContainer: ScrollableViewRef] = [:]
-        var ambiguousIds = Set<HeistContainer>()
-
-        for (container, path) in hierarchy.containerPaths {
-            guard let ref = scrollableContainerViewsByPath[path] ?? scrollableContainerViews[container] else { continue }
-            guard let stableId = containerStableIdsByPath[path] ?? containerStableIds[container] else { continue }
-            guard !ambiguousIds.contains(stableId) else { continue }
-            if result[stableId] != nil {
-                result[stableId] = nil
-                ambiguousIds.insert(stableId)
-            } else {
-                result[stableId] = ref
-            }
-        }
-        return result
-    }
-
-    // MARK: - Element Entry
-
-    /// Semantic content-space location derived while walking the hierarchy.
-    /// This is durable semantic evidence: the element's content origin and the
-    /// scroll container that owns that coordinate space. It deliberately does
-    /// not carry a UIKit object, frame, or activation point.
-    struct ScrollContentLocation: Sendable, Equatable {
-        let origin: CGPoint
-        let scrollContainer: HeistContainer
-    }
-
-    // An element entry for the current screen. Holds the parsed
-    // `AccessibilityElement`, the assigned heistId, and optional scroll
-    // content location for semantic reveal planning.
-    //
-    // `@unchecked Sendable` rationale: contains `AccessibilityElement`, whose
-    // parser model is used only behind the main-actor stash at runtime.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ScreenElement: @unchecked Sendable, Equatable {
-        let heistId: HeistId
-        let scrollContentLocation: ScrollContentLocation?
-        /// Parsed accessibility element (refreshed on every parse).
-        let element: AccessibilityElement
-
-        var contentSpaceOrigin: CGPoint? {
-            scrollContentLocation?.origin
-        }
-
-        init(
-            heistId: HeistId,
-            scrollContentLocation: ScrollContentLocation?,
-            element: AccessibilityElement
-        ) {
-            self.heistId = heistId
-            self.scrollContentLocation = scrollContentLocation
-            self.element = element
-        }
-
-        init(
-            heistId: HeistId,
-            contentSpaceOrigin: CGPoint?,
-            scrollContainerStableId: HeistContainer? = nil,
-            element: AccessibilityElement
-        ) {
-            self.heistId = heistId
-            self.scrollContentLocation = Self.scrollContentLocation(
-                origin: contentSpaceOrigin,
-                scrollContainer: scrollContainerStableId
-            )
-            self.element = element
-        }
-
-        private static func scrollContentLocation(
-            origin: CGPoint?,
-            scrollContainer: HeistContainer?
-        ) -> ScrollContentLocation? {
-            guard let origin, let scrollContainer else { return nil }
-            return ScrollContentLocation(origin: origin, scrollContainer: scrollContainer)
-        }
-
-        static func == (lhs: ScreenElement, rhs: ScreenElement) -> Bool {
-            lhs.heistId == rhs.heistId
-                && lhs.scrollContentLocation == rhs.scrollContentLocation
-                && lhs.element == rhs.element
-        }
-    }
-
-    // Wrapper around a weak `UIView` so we can store the map in an `Equatable`
-    // value type. Equality compares the live view's object identity; equal if
-    // both are nil.
-    // `@unchecked Sendable` rationale: UIView is non-Sendable but the wrapper
-    // is only touched on `@MainActor`.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ScrollableViewRef: @unchecked Sendable, Equatable {
-        weak var view: UIView?
-
-        static func == (lhs: ScrollableViewRef, rhs: ScrollableViewRef) -> Bool {
-            switch (lhs.view, rhs.view) {
-            case (nil, nil):
-                return true
-            case let (left?, right?):
-                return left === right
-            default:
-                return false
-            }
-        }
-    }
-
-    // `@unchecked Sendable` rationale: weak UIKit refs are only observed
-    // behind TheStash on the main actor.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ElementRef: @unchecked Sendable, Equatable {
-        /// Live UIKit object for action dispatch. Weak — nils on reuse.
-        weak var object: NSObject?
-        /// Nearest live scroll view for coordinate conversion.
-        weak var scrollView: UIScrollView?
-
-        static func == (lhs: ElementRef, rhs: ElementRef) -> Bool {
-            lhs.object === rhs.object && lhs.scrollView === rhs.scrollView
-        }
-    }
-
-    // `@unchecked Sendable` rationale: weak UIKit refs are only observed
-    // behind TheStash on the main actor.
-    // swiftlint:disable:next agent_unchecked_sendable_no_comment
-    struct ContainerRef: @unchecked Sendable, Equatable {
-        weak var object: NSObject?
-
-        static func == (lhs: ContainerRef, rhs: ContainerRef) -> Bool {
-            lhs.object === rhs.object
-        }
-    }
-
-    /// Targetable semantic state retained across exploration.
-    struct KnownInterface: Equatable {
-        let elements: [HeistId: ScreenElement]
-
-        var heistIds: Set<HeistId> {
-            Set(elements.keys)
-        }
-
-        func findElement(heistId: HeistId) -> ScreenElement? {
-            elements[heistId]
-        }
-    }
-
-    /// Latest live parse used for geometry, live object dispatch,
-    /// scrolling, and wire-tree construction. This is viewport-shaped: known
-    /// off-screen elements are retained in `KnownInterface`, but their live
-    /// UIKit refs are intentionally absent until a new parse inflates them.
-    struct LiveInterface: Equatable {
-        let hierarchy: [AccessibilityHierarchy]
-        let containerStableIds: [AccessibilityContainer: HeistContainer]
-        let containerStableIdsByPath: [TreePath: HeistContainer]
-        let heistIdByElement: [AccessibilityElement: HeistId]
-        let heistIdByElementPath: [TreePath: HeistId]
-        let elementRefs: [HeistId: ElementRef]
-        let containerRefsByPath: [TreePath: ContainerRef]
-        let containerContentFramesByPath: [TreePath: CGRect]
-        let firstResponderHeistId: HeistId?
-        let scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef]
-        let scrollableContainerViewsByPath: [TreePath: ScrollableViewRef]
-        private let scrollableViewsByStableId: [HeistContainer: ScrollableViewRef]
-
-        init(
-            hierarchy: [AccessibilityHierarchy],
-            containerStableIds: [AccessibilityContainer: HeistContainer],
-            containerStableIdsByPath: [TreePath: HeistContainer] = [:],
-            heistIdByElement: [AccessibilityElement: HeistId],
-            heistIdByElementPath: [TreePath: HeistId] = [:],
-            elementRefs: [HeistId: ElementRef],
-            containerRefsByPath: [TreePath: ContainerRef] = [:],
-            containerContentFramesByPath: [TreePath: CGRect] = [:],
-            firstResponderHeistId: HeistId?,
-            scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
-            scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:],
-            scrollableViewsByStableId: [HeistContainer: ScrollableViewRef] = [:]
-        ) {
-            self.hierarchy = hierarchy
-            self.containerStableIds = containerStableIds
-            self.containerStableIdsByPath = containerStableIdsByPath
-            self.heistIdByElement = heistIdByElement
-            self.heistIdByElementPath = heistIdByElementPath
-            self.elementRefs = elementRefs
-            self.containerRefsByPath = containerRefsByPath
-            self.containerContentFramesByPath = containerContentFramesByPath
-            self.firstResponderHeistId = firstResponderHeistId
-            self.scrollableContainerViews = scrollableContainerViews
-            self.scrollableContainerViewsByPath = scrollableContainerViewsByPath
-            self.scrollableViewsByStableId = scrollableViewsByStableId
-        }
-
-        static let empty = LiveInterface(
-            hierarchy: [],
-            containerStableIds: [:],
-            heistIdByElement: [:],
-            heistIdByElementPath: [:],
-            elementRefs: [:],
-            containerRefsByPath: [:],
-            containerContentFramesByPath: [:],
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
+        self.init(
+            semantic: SemanticScreen(elements: elements),
+            liveCapture: liveInterface
         )
-
-        var heistIds: Set<HeistId> {
-            Set(heistIdByElement.values).union(heistIdByElementPath.values)
-        }
-
-        func contains(heistId: HeistId) -> Bool {
-            heistIdByElement.values.contains(heistId)
-        }
-
-        func heistId(for element: AccessibilityElement) -> HeistId? {
-            heistIdByElement[element]
-        }
-
-        func heistId(forPath path: TreePath) -> HeistId? {
-            heistIdByElementPath[path]
-        }
-
-        func object(for heistId: HeistId) -> NSObject? {
-            elementRefs[heistId]?.object
-        }
-
-        func scrollView(for heistId: HeistId) -> UIScrollView? {
-            elementRefs[heistId]?.scrollView
-        }
-
-        func scrollView(forContainer stableId: HeistContainer) -> UIScrollView? {
-            scrollableViewsByStableId[stableId]?.view as? UIScrollView
-        }
-
-        func containerObject(forPath path: TreePath) -> NSObject? {
-            containerRefsByPath[path]?.object
-        }
-
-        func containerContentFrame(forPath path: TreePath) -> CGRect? {
-            containerContentFramesByPath[path]
-        }
-
-        func scrollView(for element: ScreenElement) -> UIScrollView? {
-            scrollView(for: element.heistId)
-                ?? element.scrollContentLocation.map { $0.scrollContainer }.flatMap(scrollView(forContainer:))
-        }
     }
 
-    private struct SemanticElementFingerprint: Codable, Hashable {
-        let heistId: HeistId
-        let description: String
-        let label: String?
-        let value: String?
-        let identifier: String?
-        let hint: String?
-        let traits: [String]
-        let respondsToUserInteraction: Bool
-        let customContent: [SemanticCustomContentFingerprint]
-        let rotors: [String]
-    }
-
-    private struct SemanticCustomContentFingerprint: Codable, Hashable {
-        let label: String
-        let value: String
-        let isImportant: Bool
+    init(
+        semantic: SemanticScreen,
+        liveCapture: LiveCapture
+    ) {
+        self.semantic = semantic
+        self.liveCapture = liveCapture
     }
 
     // MARK: - Derived Properties
 
     var knownInterface: KnownInterface {
-        KnownInterface(elements: elements)
+        semantic
     }
 
     /// Derive the screen name from the topmost header element in latest live
@@ -437,27 +181,7 @@ struct Screen: Equatable {
     /// scroll offset so a user can scroll a stable screen without producing
     /// history events.
     var semanticHash: String {
-        let fingerprints = elements.values
-            .map(Self.semanticElementFingerprint)
-            .sorted { $0.heistId < $1.heistId }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.nonConformingFloatEncodingStrategy = .convertToString(
-            positiveInfinity: "Infinity",
-            negativeInfinity: "-Infinity",
-            nan: "NaN"
-        )
-        let data = Self.stableSemanticHashData(fingerprints, encoder: encoder)
-        return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    }
-
-    private static func stableSemanticHashData<T: Encodable>(_ value: T, encoder: JSONEncoder) -> Data {
-        switch Result(catching: { try encoder.encode(value) }) {
-        case .success(let data):
-            return data
-        case .failure(let error):
-            preconditionFailure("Stable semantic screen hash payload failed to encode: \(error)")
-        }
+        semantic.semanticHash
     }
 
     // MARK: - Lookup
@@ -496,31 +220,6 @@ struct Screen: Equatable {
             .sorted { $0.heistId < $1.heistId }
         ordered.append(contentsOf: remaining)
         return ordered
-    }
-
-    private static func semanticElementFingerprint(_ entry: ScreenElement) -> SemanticElementFingerprint {
-        let element = entry.element
-        let customContent = element.customContent
-            .filter { !$0.label.isEmpty || !$0.value.isEmpty }
-            .map {
-                SemanticCustomContentFingerprint(
-                    label: $0.label,
-                    value: $0.value,
-                    isImportant: $0.isImportant
-                )
-            }
-        return SemanticElementFingerprint(
-            heistId: entry.heistId,
-            description: element.description,
-            label: element.label,
-            value: element.value,
-            identifier: element.identifier,
-            hint: element.hint,
-            traits: element.traits.namesIncludingUnknownBits,
-            respondsToUserInteraction: element.respondsToUserInteraction,
-            customContent: customContent,
-            rotors: element.customRotors.map { $0.name }.filter { !$0.isEmpty }
-        )
     }
 
     // MARK: - Merge
