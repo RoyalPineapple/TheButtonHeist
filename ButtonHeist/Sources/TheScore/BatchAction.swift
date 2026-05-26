@@ -62,8 +62,21 @@ extension BatchStep: Codable {
         case command, expect, deadline
     }
 
+    private enum CommandCodingKeys: String, CodingKey {
+        case type
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let commandHeader = try container.nestedContainer(keyedBy: CommandCodingKeys.self, forKey: .command)
+        let commandType = try commandHeader.decode(ClientWireMessageType.self, forKey: .type)
+        guard commandType.isBatchExecutableCommand else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .command,
+                in: container,
+                debugDescription: "BatchStep command \"\(commandType.rawValue)\" is not batch-executable"
+            )
+        }
         let command = try container.decode(ClientMessage.self, forKey: .command)
         guard command.isBatchExecutableCommand else {
             throw DecodingError.dataCorruptedError(
@@ -92,6 +105,51 @@ extension BatchStep: Codable {
         try container.encode(command, forKey: .command)
         try container.encode(expectation, forKey: .expect)
         try container.encode(deadline, forKey: .deadline)
+    }
+}
+
+extension ClientWireMessageType {
+    var isBatchExecutableCommand: Bool {
+        switch self {
+        case .activate,
+             .increment,
+             .decrement,
+             .performCustomAction,
+             .rotor,
+             .touchTap,
+             .touchLongPress,
+             .touchSwipe,
+             .touchDrag,
+             .touchPinch,
+             .touchRotate,
+             .touchTwoFingerTap,
+             .touchDrawPath,
+             .touchDrawBezier,
+             .typeText,
+             .editAction,
+             .setPasteboard,
+             .scroll,
+             .scrollToVisible,
+             .elementSearch,
+             .scrollToEdge,
+             .waitForIdle,
+             .waitFor,
+             .waitForChange,
+             .explore,
+             .resignFirstResponder:
+            return true
+        case .clientHello,
+             .authenticate,
+             .requestInterface,
+             .ping,
+             .status,
+             .getPasteboard,
+             .batchExecutionPlan,
+             .requestScreen,
+             .startRecording,
+             .stopRecording:
+            return false
+        }
     }
 }
 

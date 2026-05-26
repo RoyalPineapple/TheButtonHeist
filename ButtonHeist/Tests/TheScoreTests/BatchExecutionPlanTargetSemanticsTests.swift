@@ -81,6 +81,28 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         XCTAssertEqual(decodedPlan.steps[0].deadline, Deadline(timeout: 2.5))
     }
 
+    func testNestedBatchCommandRejectsBeforePayloadDecode() {
+        let json = """
+        {
+          "steps": [
+            {
+              "command": {
+                "type": "batchExecutionPlan",
+                "payload": {}
+              }
+            }
+          ]
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(BatchPlan.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("not batch-executable"),
+                "Expected batch-executable rejection, got \(error)"
+            )
+        }
+    }
+
     private func jsonObject(_ data: Data) throws -> [String: Any] {
         try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
