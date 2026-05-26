@@ -123,7 +123,7 @@ final class TheTripwire {
     }
 
     /// Public UIKit navigation state sampled from the topmost controller. This
-    /// catches SwiftUI NavigationStack-style changes that remain inside one
+    /// detects SwiftUI NavigationStack-style changes that remain inside one
     /// hosting controller, without walking SwiftUI's private view tree.
     struct NavigationSignal: Equatable {
         static let empty = NavigationSignal(
@@ -158,7 +158,7 @@ final class TheTripwire {
     // MARK: - Presentation Layer Fingerprinting
 
     /// Fingerprint of all presentation layer positions in the window hierarchy.
-    /// Summing positions is cheap and catches any layer movement — if anything
+    /// Summing positions is cheap and detects any layer movement — if anything
     /// shifts, the sum shifts.
     struct PresentationFingerprint {
         let positionXSum: CGFloat
@@ -293,6 +293,23 @@ final class TheTripwire {
         let requiredQuietFrames: Int
         let deadline: CFAbsoluteTime
         let continuation: CheckedContinuation<Bool, Never>
+    }
+
+    private enum AllClearObservation {
+        case pulseReading(PulseReading)
+        case waitingForFirstPulseReading
+        case idleScan(LayerScan)
+
+        var isAllClear: Bool {
+            switch self {
+            case .pulseReading(let reading):
+                return reading.isSettled
+            case .waitingForFirstPulseReading:
+                return false
+            case .idleScan(let scan):
+                return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+            }
+        }
     }
 
     // MARK: - Pulse Lifecycle
@@ -724,13 +741,16 @@ final class TheTripwire {
     /// and active animations — stricter than the pre-pulse check which only
     /// looked at animations.
     func allClear() -> Bool {
+        allClearObservation().isAllClear
+    }
+
+    private func allClearObservation() -> AllClearObservation {
         switch pulsePhase {
         case .running(let context):
-            guard let reading = context.latestReading else { return false }
-            return reading.isSettled
+            guard let reading = context.latestReading else { return .waitingForFirstPulseReading }
+            return .pulseReading(reading)
         case .idle:
-            let scan = scanLayers()
-            return !scan.hasPendingLayout && !scan.hasRelevantAnimations
+            return .idleScan(scanLayers())
         }
     }
 

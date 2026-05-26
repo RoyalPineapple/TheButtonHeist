@@ -458,6 +458,12 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertEqual(result1, result2, "Consecutive allClear calls should be consistent when idle")
     }
 
+    func testAllClearFalseUntilFirstPulseReading() {
+        tripwire.startPulse()
+
+        XCTAssertFalse(tripwire.allClear())
+    }
+
     func testIgnoredAnimationKeyPrefixFiltersParallaxKeys() {
         let layer = CALayer()
 

@@ -9,6 +9,42 @@ final class ActivationPolicyTests: XCTestCase {
 
     private final class ActivationObject: NSObject {}
 
+    func testPreActionPositioningPolicyAcceptsSuccessfulPositioning() {
+        let outcome = PreActionPositioningPolicy(commandMethod: .syntheticTap)
+            .evaluate(.recoveredKnownOffscreen)
+
+        guard case .ready = outcome else {
+            XCTFail("Expected successful positioning to be ready")
+            return
+        }
+    }
+
+    func testPreActionPositioningPolicyMapsActionFailureToCommandMethod() {
+        let outcome = PreActionPositioningPolicy(commandMethod: .syntheticTap)
+            .evaluate(.failed(.actionFailed("target could not be positioned")))
+
+        guard case .failed(let result) = outcome else {
+            XCTFail("Expected action positioning failure")
+            return
+        }
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(result.message, "target could not be positioned")
+    }
+
+    func testPreActionPositioningPolicyPreservesElementNotFoundMethod() {
+        let outcome = PreActionPositioningPolicy(commandMethod: .syntheticTap)
+            .evaluate(.failed(.elementNotFound("no such element")))
+
+        guard case .failed(let result) = outcome else {
+            XCTFail("Expected element-not-found positioning failure")
+            return
+        }
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.message, "no such element")
+    }
+
     func testAccessibilityActivateSuccessStopsPolicy() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         var activateCount = 0
