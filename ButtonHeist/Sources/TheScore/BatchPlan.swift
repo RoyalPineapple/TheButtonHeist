@@ -14,10 +14,9 @@ extension BatchExecutionPolicy: CustomStringConvertible {
 
 /// A typed batch execution plan for InsideJob.
 ///
-/// This is intentionally a domain model, not a list of public command
-/// dictionaries. Element identity in batch targets is semantic: `sourceHeistId`
-/// records where the target came from, while `matcher`/`ordinal` are the
-/// executable selector.
+/// Batch is ordered command orchestration: every step carries the same
+/// `ClientMessage` command the single-command path executes, plus batch-owned
+/// expectation/deadline metadata.
 public struct BatchPlan: Sendable {
     public let steps: [BatchStep]
     public let policy: BatchExecutionPolicy

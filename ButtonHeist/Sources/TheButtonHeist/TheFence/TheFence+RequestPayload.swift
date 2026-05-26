@@ -376,18 +376,18 @@ extension TheFence {
     struct RunBatchPreparedStep {
         let originalIndex: Int
         let commandName: String
-        let action: TheScore.Action
+        let command: ClientMessage
         let expectation: ActionExpectation
         let deadline: TheScore.Deadline
 
         init(
             originalIndex: Int,
             commandName: String,
-            action: TheScore.Action,
+            command: ClientMessage,
             expectation: ActionExpectation,
             deadline: TheScore.Deadline
         ) {
-            self.action = action
+            self.command = command
             self.expectation = expectation
             self.deadline = deadline
             self.originalIndex = originalIndex
@@ -396,7 +396,7 @@ extension TheFence {
 
         var typedStep: TheScore.BatchStep {
             TheScore.BatchStep(
-                action: action,
+                command: command,
                 expectation: expectation,
                 deadline: deadline
             )
@@ -421,8 +421,6 @@ extension TheFence {
         let requestId: String
         let payload: RequestPayload
         let expectationPayload: ExpectationPayload
-        /// Element target metadata decoded at the public request edge for batch lowering.
-        let routedSemanticTarget: SemanticActionTarget?
         /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
         let immediateResponse: FenceResponse?
 
@@ -431,14 +429,12 @@ extension TheFence {
             requestId: String,
             payload: RequestPayload,
             expectationPayload: ExpectationPayload,
-            routedSemanticTarget: SemanticActionTarget? = nil,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
             self.payload = payload
             self.expectationPayload = expectationPayload
-            self.routedSemanticTarget = routedSemanticTarget
             self.immediateResponse = immediateResponse
         }
     }
@@ -454,32 +450,8 @@ extension TheFence {
 
         func string(_ key: String) -> String? { arguments.string(key) }
 
-        func semanticActionTarget() throws -> SemanticActionTarget? {
-            try Self.semanticActionTarget(from: arguments)
-        }
-
         func argumentEnvelopeForRequestDecoding() -> CommandArgumentEnvelope {
             arguments
-        }
-
-        private static func semanticActionTarget(from arguments: CommandArgumentEnvelope) throws -> SemanticActionTarget? {
-            let sourceHeistId = try arguments.schemaString("heistId")
-            let ordinal = try arguments.schemaNonNegativeInteger("ordinal")
-            let matcher = ElementMatcher(
-                label: try arguments.schemaString("label"),
-                identifier: try arguments.schemaString("identifier"),
-                value: try arguments.schemaString("value"),
-                traits: try TheFence.parseTraitNames(
-                    try arguments.schemaStringArray("traits"),
-                    field: arguments.field("traits")
-                ),
-                excludeTraits: try TheFence.parseTraitNames(
-                    try arguments.schemaStringArray("excludeTraits"),
-                    field: arguments.field("excludeTraits")
-                )
-            )
-            guard sourceHeistId != nil || matcher.hasPredicates || ordinal != nil else { return nil }
-            return SemanticActionTarget(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
         }
 
     }
@@ -530,8 +502,7 @@ extension TheFence {
     private func parseRequest(
         command: Command,
         arguments: CommandArgumentEnvelope,
-        expectationPayload typedExpectationPayload: ExpectationPayload?,
-        routedSemanticTarget: SemanticActionTarget? = nil
+        expectationPayload typedExpectationPayload: ExpectationPayload?
     ) throws -> ParsedRequest {
         try validateRequestKeys(command: command, arguments: arguments)
         if let immediate = handleImmediateCommand(command) {
@@ -556,7 +527,6 @@ extension TheFence {
             requestId: requestId,
             payload: payload,
             expectationPayload: expectationPayload,
-            routedSemanticTarget: routedSemanticTarget,
             immediateResponse: nil
         )
     }
@@ -566,8 +536,7 @@ extension TheFence {
         return try parseRequest(
             command: operation.command,
             arguments: request.argumentEnvelopeForRequestDecoding(),
-            expectationPayload: request.expectationPayload,
-            routedSemanticTarget: try request.semanticActionTarget()
+            expectationPayload: request.expectationPayload
         )
     }
 

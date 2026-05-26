@@ -642,89 +642,33 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testBatchMatcherTargetedHelpersMatchSingleMatcherFailures() async {
+    func testBatchCommandsMatchSingleCommandMatcherFailures() async {
         let matcher = ElementMatcher(identifier: "missing_target")
-        let singleTarget = ElementTarget.matcher(matcher)
-        let semanticTarget = SemanticActionTarget(
-            sourceHeistId: "old_missing_target",
-            matcher: matcher
-        )
-
-        assertSameInteraction(
-            "activate",
-            single: await brains.actions.executeActivate(singleTarget),
-            batch: await brains.actions.executeActivate(semanticTarget)
-        )
-        assertSameInteraction(
-            "custom action",
-            single: await brains.actions.executeCustomAction(CustomActionTarget(
-                elementTarget: singleTarget,
+        let target = ElementTarget.matcher(matcher)
+        let commands: [(String, ClientMessage, Bool)] = [
+            ("activate", .activate(target), false),
+            ("custom action", .performCustomAction(CustomActionTarget(
+                elementTarget: target,
                 actionName: "Archive"
-            )),
-            batch: await brains.actions.executeCustomAction(BatchCustomActionTarget(
-                target: semanticTarget,
-                actionName: "Archive"
-            ))
-        )
-        assertSameInteraction(
-            "rotor",
-            single: await brains.actions.executeRotor(RotorTarget(
-                elementTarget: singleTarget,
-                rotor: "Links"
-            )),
-            batch: await brains.actions.executeRotor(BatchRotorTarget(
-                target: semanticTarget,
-                rotor: "Links"
-            ))
-        )
-        assertSameInteraction(
-            "tap",
-            single: await brains.actions.executeTap(TouchTapTarget(elementTarget: singleTarget)),
-            batch: await brains.actions.executeTap(BatchTouchTapTarget(target: semanticTarget))
-        )
-        assertSameInteraction(
-            "swipe",
-            single: await brains.actions.executeSwipe(SwipeTarget(
-                elementTarget: singleTarget,
-                direction: .left
-            )),
-            batch: await brains.actions.executeSwipe(BatchSwipeTarget(
-                target: semanticTarget,
-                direction: .left
-            ))
-        )
-        assertSameInteraction(
-            "type text",
-            single: await brains.actions.executeTypeText(TypeTextTarget(
-                text: "hello",
-                elementTarget: singleTarget
-            )),
-            batch: await brains.actions.executeTypeText(BatchTypeTextTarget(
-                text: "hello",
-                target: semanticTarget
-            ))
-        )
-        assertSameInteraction(
-            "scroll",
-            single: await brains.navigation.executeScroll(ScrollTarget(
-                elementTarget: singleTarget,
-                direction: .down
-            )),
-            batch: await brains.navigation.executeScroll(BatchScrollTarget(
-                target: semanticTarget,
-                direction: .down
-            ))
-        )
+            )), false),
+            ("rotor", .rotor(RotorTarget(elementTarget: target, rotor: "Links")), false),
+            ("tap", .touchTap(TouchTapTarget(elementTarget: target)), false),
+            ("swipe", .touchSwipe(SwipeTarget(elementTarget: target, direction: .left)), false),
+            ("type text", .typeText(TypeTextTarget(text: "hello", elementTarget: target)), false),
+            ("scroll", .scroll(ScrollTarget(elementTarget: target, direction: .down)), false),
+            ("wait", .waitFor(WaitForTarget(elementTarget: target, timeout: 0.01)), true),
+        ]
 
-        let singleWait = await brains.performWaitFor(target: WaitForTarget(
-            elementTarget: singleTarget,
-            timeout: 0.01
-        ))
-        let batchWait = await brains.performWaitFor(target: BatchWaitForTarget(
-            target: semanticTarget,
-            timeout: 0.01
-        ))
-        assertSameActionResult("wait", single: singleWait, batch: batchWait, normalizingTimeoutDuration: true)
+        for (label, command, normalizingTimeoutDuration) in commands {
+            let single = await brains.executeCommand(command)
+            let batch = await batchStepResult(for: command)
+            assertSameActionResult(
+                label,
+                single: single,
+                batch: batch,
+                normalizingTimeoutDuration: normalizingTimeoutDuration
+            )
+        }
     }
 
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
@@ -1347,6 +1291,19 @@ final class TheBrainsActionTests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    private func batchStepResult(for command: ClientMessage) async -> ActionResult {
+        let result = await brains.executeBatchExecutionPlan(BatchPlan(steps: [
+            .command(command),
+        ], policy: .continueOnError))
+        guard case .batchExecution(let batch) = result.payload,
+              let stepResult = batch.steps.first,
+              let actionResult = stepResult.actionResult else {
+            XCTFail("Expected batch execution step result for \(command.canonicalName)")
+            return result
+        }
+        return actionResult
     }
 
     private func normalizedActionMessage(

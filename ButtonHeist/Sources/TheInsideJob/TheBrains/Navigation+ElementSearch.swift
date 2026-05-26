@@ -16,13 +16,6 @@ extension Navigation {
         await executeElementSearch(elementTarget: target.elementTarget, direction: target.direction)
     }
 
-    func executeElementSearch(_ target: BatchElementSearchTarget) async -> TheSafecracker.InteractionResult {
-        await executeElementSearch(
-            elementTarget: target.target.map(BatchSemanticElementTarget.init),
-            direction: target.direction
-        )
-    }
-
     func executeElementSearch(
         elementTarget: (any SemanticElementTarget)?,
         direction: ScrollSearchDirection?

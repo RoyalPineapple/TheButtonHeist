@@ -5,16 +5,16 @@ import TheScore
 extension TheFence {
 
     struct BatchStepActionPlan {
-        let action: TheScore.Action
+        let command: ClientMessage
         let expectation: ActionExpectation?
         let timeout: Double?
 
         init(
-            action: TheScore.Action,
+            command: ClientMessage,
             expectation: ActionExpectation? = nil,
             timeout: Double? = nil
         ) {
-            self.action = action
+            self.command = command
             self.expectation = expectation
             self.timeout = timeout
         }
@@ -35,15 +35,15 @@ extension TheFence {
 
         func plan(_ actionPlan: BatchStepActionPlan) -> RunBatchPreparedStep {
             let stepTimeout = actionPlan.timeout ?? timeout
-            let typedStep = TheScore.BatchStep.action(
-                actionPlan.action,
+            let typedStep = TheScore.BatchStep.command(
+                actionPlan.command,
                 expect: actionPlan.expectation ?? expectation,
                 deadline: stepTimeout.map(TheScore.Deadline.init(timeout:))
             )
             return RunBatchPreparedStep(
                 originalIndex: originalIndex,
                 commandName: request.command.rawValue,
-                action: typedStep.action,
+                command: typedStep.command,
                 expectation: typedStep.expectation,
                 deadline: typedStep.deadline
             )

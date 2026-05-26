@@ -179,14 +179,14 @@ final class MockConnection: TransportReachabilityConnecting {
             if let failedIndex {
                 let skipped = BatchExecutionSkippedStepResult(
                     index: index,
-                    actionName: step.action.canonicalName,
+                    actionName: step.command.canonicalName,
                     expectationName: step.expectation.summaryDescription,
                     reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                     afterFailedIndex: failedIndex
                 )
                 stepResults.append(BatchExecutionStepResult(
                     index: index,
-                    actionName: step.action.canonicalName,
+                    actionName: step.command.canonicalName,
                     expectationName: step.expectation.summaryDescription,
                     durationMs: 0,
                     skipped: skipped
@@ -194,13 +194,13 @@ final class MockConnection: TransportReachabilityConnecting {
                 continue
             }
 
-            let actionResult = actionResult(for: step.action, handler: handler)
+            let actionResult = actionResult(for: step.command, handler: handler)
             let expectation = actionResult.success ? step.expectation.validate(against: actionResult) : nil
             let shouldStop = plan.policy == .stopOnError
                 && (actionResult.success == false || expectation?.met == false)
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: step.action.canonicalName,
+                actionName: step.command.canonicalName,
                 expectationName: step.expectation.summaryDescription,
                 actionResult: actionResult,
                 expectation: expectation,
@@ -227,17 +227,10 @@ final class MockConnection: TransportReachabilityConnecting {
     }
 
     private func actionResult(
-        for action: TheScore.Action,
+        for command: ClientMessage,
         handler: (ClientMessage) -> ServerMessage
     ) -> ActionResult {
-        guard let message = action.testClientMessage else {
-            return ActionResult(
-                success: true,
-                method: .waitForChange,
-                message: action.canonicalName
-            )
-        }
-        switch handler(message) {
+        switch handler(command) {
         case .actionResult(let result):
             return result
         case .error(let error):
@@ -250,152 +243,6 @@ final class MockConnection: TransportReachabilityConnecting {
         default:
             return ActionResult(success: true, method: .activate)
         }
-    }
-}
-
-private extension TheScore.Action {
-    var testClientMessage: ClientMessage? {
-        switch self {
-        case .activate(let target):
-            return .activate(target.testElementTarget)
-        case .increment(let target):
-            return .increment(target.testElementTarget)
-        case .decrement(let target):
-            return .decrement(target.testElementTarget)
-        case .performCustomAction(let target):
-            if let elementTarget = target.target {
-                return .performCustomAction(CustomActionTarget(
-                    elementTarget: elementTarget.testElementTarget,
-                    actionName: target.actionName
-                ))
-            }
-            guard let containerTarget = target.containerTarget else { return nil }
-            return .performCustomAction(CustomActionTarget(
-                containerTarget: containerTarget,
-                ordinal: target.containerOrdinal,
-                actionName: target.actionName
-            ))
-        case .rotor(let target):
-            return .rotor(RotorTarget(
-                elementTarget: target.target.testElementTarget,
-                rotor: target.rotor,
-                rotorIndex: target.rotorIndex,
-                direction: target.direction,
-                currentHeistId: target.currentSourceHeistId,
-                currentTextRange: target.currentTextRange
-            ))
-        case .touchTap(let target):
-            return .touchTap(TouchTapTarget(
-                elementTarget: target.target?.testElementTarget,
-                pointX: target.pointX,
-                pointY: target.pointY
-            ))
-        case .touchLongPress(let target):
-            return .touchLongPress(LongPressTarget(
-                elementTarget: target.target?.testElementTarget,
-                pointX: target.pointX,
-                pointY: target.pointY,
-                duration: target.duration
-            ))
-        case .touchSwipe(let target):
-            return .touchSwipe(SwipeTarget(
-                elementTarget: target.target?.testElementTarget,
-                startX: target.startX,
-                startY: target.startY,
-                endX: target.endX,
-                endY: target.endY,
-                direction: target.direction,
-                duration: target.duration,
-                start: target.start,
-                end: target.end
-            ))
-        case .touchDrag(let target):
-            return .touchDrag(DragTarget(
-                elementTarget: target.target?.testElementTarget,
-                startX: target.startX,
-                startY: target.startY,
-                endX: target.endX,
-                endY: target.endY,
-                duration: target.duration
-            ))
-        case .touchPinch(let target):
-            return .touchPinch(PinchTarget(
-                elementTarget: target.target?.testElementTarget,
-                centerX: target.centerX,
-                centerY: target.centerY,
-                scale: target.scale,
-                spread: target.spread,
-                duration: target.duration
-            ))
-        case .touchRotate(let target):
-            return .touchRotate(RotateTarget(
-                elementTarget: target.target?.testElementTarget,
-                centerX: target.centerX,
-                centerY: target.centerY,
-                angle: target.angle,
-                radius: target.radius,
-                duration: target.duration
-            ))
-        case .touchTwoFingerTap(let target):
-            return .touchTwoFingerTap(TwoFingerTapTarget(
-                elementTarget: target.target?.testElementTarget,
-                centerX: target.centerX,
-                centerY: target.centerY,
-                spread: target.spread
-            ))
-        case .touchDrawPath(let target):
-            return .touchDrawPath(target)
-        case .touchDrawBezier(let target):
-            return .touchDrawBezier(target)
-        case .typeText(let target):
-            return .typeText(TypeTextTarget(
-                text: target.text,
-                elementTarget: target.target?.testElementTarget
-            ))
-        case .editAction(let target):
-            return .editAction(target)
-        case .setPasteboard(let target):
-            return .setPasteboard(target)
-        case .scroll(let target):
-            return .scroll(ScrollTarget(
-                elementTarget: target.target?.testElementTarget,
-                direction: target.direction
-            ))
-        case .scrollToVisible(let target):
-            return .scrollToVisible(ScrollToVisibleTarget(
-                elementTarget: target.target?.testElementTarget
-            ))
-        case .elementSearch(let target):
-            return .elementSearch(ElementSearchTarget(
-                elementTarget: target.target?.testElementTarget,
-                direction: target.direction
-            ))
-        case .scrollToEdge(let target):
-            return .scrollToEdge(ScrollToEdgeTarget(
-                elementTarget: target.target?.testElementTarget,
-                edge: target.edge
-            ))
-        case .waitForIdle(let target):
-            return .waitForIdle(target)
-        case .waitForElement(let target):
-            return .waitFor(WaitForTarget(
-                elementTarget: target.target.testElementTarget,
-                absent: target.absent,
-                timeout: target.timeout
-            ))
-        case .waitForChange(let target):
-            return .waitForChange(target)
-        case .explore:
-            return .explore
-        case .resignFirstResponder:
-            return .resignFirstResponder
-        }
-    }
-}
-
-private extension SemanticActionTarget {
-    var testElementTarget: ElementTarget {
-        .matcher(matcher, ordinal: ordinal)
     }
 }
 

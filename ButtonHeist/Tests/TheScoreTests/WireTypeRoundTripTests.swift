@@ -87,20 +87,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.actionName, "Dismiss")
     }
 
-    func testBatchCustomActionTargetWithContainerOrdinalOnlyRoundTrip() throws {
-        let target = BatchCustomActionTarget(
-            containerTarget: ContainerMatcher(),
-            ordinal: 1,
-            actionName: "Dismiss"
-        )
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(BatchCustomActionTarget.self, from: data)
-        XCTAssertNil(decoded.target)
-        XCTAssertEqual(decoded.containerTarget, ContainerMatcher())
-        XCTAssertEqual(decoded.containerOrdinal, 1)
-        XCTAssertEqual(decoded.actionName, "Dismiss")
-    }
-
     // MARK: - LongPressTarget
 
     func testLongPressTargetRoundTrip() throws {
@@ -170,19 +156,12 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(SwipeTarget(direction: .down).resolvedDuration, 0.15)
-        XCTAssertEqual(BatchSwipeTarget(direction: .down).resolvedDuration, 0.15)
         XCTAssertEqual(DragTarget(endX: 30, endY: 40).resolvedDuration, 0.5)
-        XCTAssertEqual(BatchDragTarget(endX: 30, endY: 40).resolvedDuration, 0.5)
         XCTAssertEqual(PinchTarget(scale: 2).resolvedSpread, 100)
         XCTAssertEqual(PinchTarget(scale: 2).resolvedDuration, 0.5)
-        XCTAssertEqual(BatchPinchTarget(scale: 2).resolvedSpread, 100)
-        XCTAssertEqual(BatchPinchTarget(scale: 2).resolvedDuration, 0.5)
         XCTAssertEqual(RotateTarget(angle: 1).resolvedRadius, 100)
         XCTAssertEqual(RotateTarget(angle: 1).resolvedDuration, 0.5)
-        XCTAssertEqual(BatchRotateTarget(angle: 1).resolvedRadius, 100)
-        XCTAssertEqual(BatchRotateTarget(angle: 1).resolvedDuration, 0.5)
         XCTAssertEqual(TwoFingerTapTarget().resolvedSpread, 40)
-        XCTAssertEqual(BatchTwoFingerTapTarget().resolvedSpread, 40)
         XCTAssertEqual(DrawBezierTarget(startX: 0, startY: 0, segments: []).resolvedSamplesPerSegment, 20)
         XCTAssertEqual(
             DrawBezierTarget(startX: 0, startY: 0, segments: [], samplesPerSegment: 5_000).resolvedSamplesPerSegment,
@@ -663,66 +642,15 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     // MARK: - BatchPlan
 
-    func testBatchActionCanonicalNamesMatchEncodedWireTypes() throws {
-        let target = SemanticActionTarget(matcher: ElementMatcher(label: "Target", traits: [.button]))
-        let cases: [Action] = [
-            .activate(target),
-            .increment(target),
-            .decrement(target),
-            .performCustomAction(BatchCustomActionTarget(target: target, actionName: "Open")),
-            .rotor(BatchRotorTarget(target: target, rotor: "Headings")),
-            .touchTap(BatchTouchTapTarget(pointX: 10, pointY: 20)),
-            .touchLongPress(BatchLongPressTarget(pointX: 10, pointY: 20)),
-            .touchSwipe(BatchSwipeTarget(direction: .down)),
-            .touchDrag(BatchDragTarget(endX: 20, endY: 40)),
-            .touchPinch(BatchPinchTarget(scale: 1.2)),
-            .touchRotate(BatchRotateTarget(angle: 0.5)),
-            .touchTwoFingerTap(BatchTwoFingerTapTarget(centerX: 10, centerY: 20)),
-            .touchDrawPath(DrawPathTarget(points: [
-                PathPoint(x: 0, y: 0),
-                PathPoint(x: 20, y: 20),
-            ])),
-            .touchDrawBezier(DrawBezierTarget(
-                startX: 0,
-                startY: 0,
-                segments: [BezierSegment(cp1X: 5, cp1Y: 5, cp2X: 10, cp2Y: 10, endX: 20, endY: 20)]
-            )),
-            .typeText(BatchTypeTextTarget(text: "hello")),
-            .editAction(EditActionTarget(action: .paste)),
-            .setPasteboard(SetPasteboardTarget(text: "ready")),
-            .scroll(BatchScrollTarget(direction: .down)),
-            .scrollToVisible(BatchScrollToVisibleTarget(target: target)),
-            .elementSearch(BatchElementSearchTarget(target: target, direction: .down)),
-            .scrollToEdge(BatchScrollToEdgeTarget(edge: .top)),
-            .waitForIdle(WaitForIdleTarget(timeout: 0.1)),
-            .waitForElement(BatchWaitForTarget(target: target)),
-            .waitForChange(WaitForChangeTarget(expect: .screenChanged, timeout: 0.1)),
-            .explore,
-            .resignFirstResponder,
-        ]
-
-        for action in cases {
-            let data = try encoder.encode(action)
-            let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-            XCTAssertEqual(payload["type"] as? String, action.canonicalName)
-            let decoded = try decoder.decode(Action.self, from: data)
-            XCTAssertEqual(decoded.canonicalName, action.canonicalName)
-        }
-    }
-
-    func testBatchPlanRoundTripPreservesTypedStepWireShape() throws {
+    func testBatchPlanRoundTripPreservesCommandStepWireShape() throws {
         let plan = BatchPlan(
             steps: [
-                .action(
-                    .activate(SemanticActionTarget(
-                        sourceHeistId: "settings_button_previous",
-                        matcher: ElementMatcher(label: "Settings", traits: [.button]),
-                        ordinal: 1
-                    )),
+                .command(
+                    .activate(.matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1)),
                     expect: .screenChanged,
                     deadline: Deadline(timeout: 2.5)
                 ),
-                .action(.setPasteboard(SetPasteboardTarget(text: "ready"))),
+                .command(.setPasteboard(SetPasteboardTarget(text: "ready"))),
             ],
             policy: .continueOnError
         )
@@ -733,31 +661,26 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(payload["policy"] as? String, "continue_on_error")
         let steps = try XCTUnwrap(payload["steps"] as? [[String: Any]])
         XCTAssertEqual(steps.count, 2)
-        let activate = try XCTUnwrap(steps[0]["action"] as? [String: Any])
+        let activate = try XCTUnwrap(steps[0]["command"] as? [String: Any])
         XCTAssertEqual(activate["type"] as? String, "activate")
-        let target = try XCTUnwrap(activate["target"] as? [String: Any])
-        XCTAssertEqual(target["sourceHeistId"] as? String, "settings_button_previous")
+        let target = try XCTUnwrap(activate["payload"] as? [String: Any])
         XCTAssertEqual(target["ordinal"] as? Int, 1)
-        let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
-        XCTAssertNil(matcher["heistId"])
-        XCTAssertEqual(matcher["label"] as? String, "Settings")
-        XCTAssertEqual(matcher["traits"] as? [String], ["button"])
+        XCTAssertEqual(target["label"] as? String, "Settings")
+        XCTAssertEqual(target["traits"] as? [String], ["button"])
         XCTAssertEqual((steps[0]["expect"] as? [String: Any])?["type"] as? String, "screen_changed")
         XCTAssertEqual((steps[0]["deadline"] as? [String: Any])?["timeout"] as? Double, 2.5)
 
         let decoded = try decoder.decode(BatchPlan.self, from: data)
         XCTAssertEqual(decoded.policy, .continueOnError)
         XCTAssertEqual(decoded.steps.count, 2)
-        guard case .activate(let decodedTarget) = decoded.steps[0].action else {
-            return XCTFail("Expected activate action")
+        guard case .activate(let decodedTarget) = decoded.steps[0].command else {
+            return XCTFail("Expected activate command")
         }
-        XCTAssertEqual(decodedTarget.sourceHeistId, "settings_button_previous")
-        XCTAssertEqual(decodedTarget.matcher, ElementMatcher(label: "Settings", traits: [.button]))
-        XCTAssertEqual(decodedTarget.ordinal, 1)
+        XCTAssertEqual(decodedTarget, .matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1))
         XCTAssertEqual(decoded.steps[0].expectation, .screenChanged)
         XCTAssertEqual(decoded.steps[0].deadline, Deadline(timeout: 2.5))
-        guard case .setPasteboard(let pasteboardTarget) = decoded.steps[1].action else {
-            return XCTFail("Expected set_pasteboard action")
+        guard case .setPasteboard(let pasteboardTarget) = decoded.steps[1].command else {
+            return XCTFail("Expected set_pasteboard command")
         }
         XCTAssertEqual(pasteboardTarget.text, "ready")
         XCTAssertEqual(decoded.steps[1].expectation, .delivery)

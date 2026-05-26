@@ -85,15 +85,12 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - Batch Execution Plan Tests
 
     func testBatchPlanClientMessageRoundTrip() throws {
-        let saveTarget = SemanticActionTarget(
-            sourceHeistId: "button_save",
-            matcher: ElementMatcher(label: "Save", traits: [.button])
-        )
+        let saveTarget = ElementTarget.matcher(ElementMatcher(label: "Save", traits: [.button]))
         let plan = BatchPlan(
             steps: [
-                .action(.activate(saveTarget), expect: .screenChanged),
-                .action(.waitForElement(BatchWaitForTarget(target: saveTarget, absent: false, timeout: 2.5))),
-                .action(
+                .command(.activate(saveTarget), expect: .screenChanged),
+                .command(.waitFor(WaitForTarget(elementTarget: saveTarget, absent: false, timeout: 2.5))),
+                .command(
                     .waitForChange(WaitForChangeTarget(
                         expect: .elementAppeared(ElementMatcher(label: "Done")),
                         timeout: 1.0
@@ -114,24 +111,18 @@ final class ClientMessageTests: XCTestCase {
         }
         XCTAssertEqual(decodedPlan.policy, .continueOnError)
         XCTAssertEqual(decodedPlan.steps.count, 3)
-        guard case .activate(let decodedTarget) = decodedPlan.steps[0].action,
+        guard case .activate(let decodedTarget) = decodedPlan.steps[0].command,
               decodedPlan.steps[0].expectation == .screenChanged else {
-            return XCTFail("Expected activate action with screenChanged expectation")
+            return XCTFail("Expected activate command with screenChanged expectation")
         }
-        XCTAssertEqual(decodedTarget.sourceHeistId, "button_save")
-        XCTAssertEqual(decodedTarget.matcher, ElementMatcher(label: "Save", traits: [.button]))
-        XCTAssertNil(decodedTarget.matcher.heistId)
-        XCTAssertNil(decodedTarget.ordinal)
+        XCTAssertEqual(decodedTarget, saveTarget)
     }
 
     func testBatchPlanEnvelopeRoundTrip() throws {
         let plan = BatchPlan(steps: [
-            .action(.typeText(BatchTypeTextTarget(
+            .command(.typeText(TypeTextTarget(
                 text: "hello",
-                target: SemanticActionTarget(
-                    sourceHeistId: "field_name",
-                    matcher: ElementMatcher(identifier: "nameField")
-                )
+                elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
             ))),
         ])
         let envelope = RequestEnvelope(
@@ -145,60 +136,21 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decoded.requestId, "batch-1")
         guard case .batchExecutionPlan(let decodedPlan) = decoded.message,
               let step = decodedPlan.steps.first,
-              case .typeText(let target) = step.action,
+              case .typeText(let target) = step.command,
               step.expectation == .delivery else {
             return XCTFail("Expected batchExecutionPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(target.text, "hello")
-        XCTAssertEqual(target.target?.sourceHeistId, "field_name")
-        XCTAssertEqual(target.target?.matcher.identifier, "nameField")
+        XCTAssertEqual(target.elementTarget, .matcher(ElementMatcher(identifier: "nameField")))
     }
 
-    func testBatchExecutionDescriptionsMakeHeistIdMetadataExplicit() {
-        let target = SemanticActionTarget(
-            sourceHeistId: "button_save",
-            matcher: ElementMatcher(label: "Save", traits: [.button]),
-            ordinal: 1
-        )
-        let step = BatchStep.action(.activate(target), expect: .screenChanged)
+    func testBatchExecutionDescriptionsUseNormalCommandIdentity() {
+        let step = BatchStep.command(.activate(.heistId("button_save")), expect: .screenChanged)
 
-        XCTAssertEqual(
-            target.description,
-            #"semanticTarget(sourceHeistId="button_save" matcher(label="Save" traits=[button]) ordinal=1)"#
-        )
         XCTAssertEqual(
             step.description,
-            #"step(action=activate(semanticTarget(sourceHeistId="button_save" matcher(label="Save" traits=[button]) ordinal=1))"#
-                + #" expect=screen_changed deadline=deadline(*))"#
+            #"step(command=activate expect=screen_changed deadline=deadline(*))"#
         )
-    }
-
-    func testSemanticActionTargetDoesNotPromoteMatcherHeistIdToSourceMetadata() {
-        let target = SemanticActionTarget(
-            matcher: ElementMatcher(heistId: "button_save", label: "Save", traits: [.button])
-        )
-
-        XCTAssertNil(target.sourceHeistId)
-        XCTAssertNil(target.matcher.heistId)
-        XCTAssertEqual(target.matcher.label, "Save")
-        XCTAssertNil(target.ordinal)
-    }
-
-    func testSemanticActionTargetRejectsMatcherHeistIdWirePayload() {
-        let json = #"{"matcher":{"heistId":"button_save","label":"Save"}}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(SemanticActionTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue(
-                "\(error)".contains("sourceHeistId"),
-                "Expected sourceHeistId guidance in error, got \(error)"
-            )
-        }
-    }
-
-    func testSemanticActionTargetRejectsSourceHeistIdOnlyWirePayload() {
-        let json = #"{"sourceHeistId":"button_save","matcher":{}}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(SemanticActionTarget.self, from: Data(json.utf8)))
     }
 
     func testExistingActivateWireShapeIsUnchanged() throws {

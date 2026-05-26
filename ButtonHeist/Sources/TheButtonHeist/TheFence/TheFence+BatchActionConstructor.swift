@@ -4,84 +4,63 @@ extension TheFence {
 
     @ButtonHeistActor
     struct BatchActionConstructor {
-        private let targetResolver: BatchTargetResolver
-
-        init(targetResolver: BatchTargetResolver) { self.targetResolver = targetResolver }
 
         func construct(context: BatchStepPlanningContext) throws -> BatchStepActionPlan {
             try BatchShapeValidator.rejectUnsupportedShapes(request: context.request)
-            switch context.request.payload {
+            return try BatchStepActionPlan(command: command(from: context.request, context: context))
+        }
+
+        private func command(
+            from request: ParsedRequest,
+            context: BatchStepPlanningContext
+        ) throws -> ClientMessage {
+            switch request.payload {
             case .gesture(let payload):
-                return try BatchStepActionPlan(action: gestureAction(payload, request: context.request))
+                return gestureCommand(payload)
             case .scroll(let payload):
-                return try BatchStepActionPlan(action: scrollAction(payload, request: context.request))
+                return scrollCommand(payload)
             case .accessibility(let payload):
-                return try BatchStepActionPlan(action: accessibilityAction(payload, request: context.request))
+                return try accessibilityCommand(payload, request: request)
             case .rotor(let target):
-                return try BatchStepActionPlan(action: .rotor(BatchRotorTarget(
-                    target: required(context.request, target.elementTarget),
-                    rotor: target.rotor,
-                    rotorIndex: target.rotorIndex,
-                    direction: target.direction,
-                    currentSourceHeistId: target.currentHeistId,
-                    currentTextRange: target.currentTextRange
-                )))
+                return .rotor(target)
             case .typeText(let target):
-                return try BatchStepActionPlan(action: .typeText(BatchTypeTextTarget(
-                    text: target.text,
-                    target: self.target(context.request, target.elementTarget)
-                )))
+                return .typeText(target)
             case .editAction(let target):
-                return BatchStepActionPlan(action: .editAction(target))
+                return .editAction(target)
             case .setPasteboard(let target):
-                return BatchStepActionPlan(action: .setPasteboard(target))
-            case .none where context.request.command == .dismissKeyboard:
-                return BatchStepActionPlan(action: .resignFirstResponder)
+                return .setPasteboard(target)
+            case .none where request.command == .dismissKeyboard:
+                return .resignFirstResponder
             case .waitFor(let target):
-                return try waitForAction(target, context: context)
+                return .waitFor(target)
             case .waitForChange:
-                return BatchStepActionPlan(
-                    action: .waitForChange(WaitForChangeTarget(expect: context.expectation, timeout: context.timeout))
-                )
+                return .waitForChange(WaitForChangeTarget(
+                    expect: context.expectation,
+                    timeout: context.timeout
+                ))
             default:
-                throw BatchStepPlanBuildError(message: "run_batch step command \"\(context.request.command.rawValue)\" is not a non-read batch Action")
+                throw BatchStepPlanBuildError(
+                    message: "run_batch step command \"\(request.command.rawValue)\" is not a non-read batch command"
+                )
             }
         }
 
-        private func gestureAction(_ payload: GesturePayload, request: ParsedRequest) throws -> TheScore.Action {
+        private func gestureCommand(_ payload: GesturePayload) -> ClientMessage {
             switch payload {
             case .oneFingerTap(let payload):
-                return try .touchTap(.init(target: target(request, payload.elementTarget), pointX: payload.pointX, pointY: payload.pointY))
+                return .touchTap(payload.target)
             case .longPress(let payload):
-                let resolved = try target(request, payload.elementTarget)
-                return .touchLongPress(.init(target: resolved, pointX: payload.pointX, pointY: payload.pointY, duration: payload.duration))
+                return .touchLongPress(payload.target)
             case .swipe(let payload):
-                let resolved = try target(request, payload.elementTarget)
-                return .touchSwipe(.init(
-                    target: resolved, startX: payload.startX, startY: payload.startY, endX: payload.endX, endY: payload.endY,
-                    direction: payload.direction, duration: payload.duration, start: payload.start, end: payload.end
-                ))
+                return .touchSwipe(payload.target)
             case .drag(let payload):
-                let resolved = try target(request, payload.elementTarget)
-                return .touchDrag(.init(
-                    target: resolved, startX: payload.startX, startY: payload.startY,
-                    endX: payload.endX, endY: payload.endY, duration: payload.duration
-                ))
+                return .touchDrag(payload.target)
             case .pinch(let payload):
-                let resolved = try target(request, payload.elementTarget)
-                return .touchPinch(.init(
-                    target: resolved, centerX: payload.centerX, centerY: payload.centerY,
-                    scale: payload.scale, spread: payload.spread, duration: payload.duration
-                ))
+                return .touchPinch(payload.target)
             case .rotate(let payload):
-                let resolved = try target(request, payload.elementTarget)
-                return .touchRotate(.init(
-                    target: resolved, centerX: payload.centerX, centerY: payload.centerY,
-                    angle: payload.angle, radius: payload.radius, duration: payload.duration
-                ))
+                return .touchRotate(payload.target)
             case .twoFingerTap(let payload):
-                let resolved = try target(request, payload.elementTarget)
-                return .touchTwoFingerTap(.init(target: resolved, centerX: payload.centerX, centerY: payload.centerY, spread: payload.spread))
+                return .touchTwoFingerTap(payload.target)
             case .drawPath(let payload):
                 return .touchDrawPath(payload.target)
             case .drawBezier(let payload):
@@ -89,61 +68,37 @@ extension TheFence {
             }
         }
 
-        private func scrollAction(_ payload: ScrollPayload, request: ParsedRequest) throws -> TheScore.Action {
+        private func scrollCommand(_ payload: ScrollPayload) -> ClientMessage {
             switch payload {
             case .scroll(let target):
-                return try .scroll(.init(target: self.target(request, target.elementTarget), direction: target.direction))
+                return .scroll(target)
             case .scrollToVisible(let target):
-                return try .scrollToVisible(.init(target: self.target(request, target.elementTarget)))
+                return .scrollToVisible(target)
             case .elementSearch(let target):
-                return try .elementSearch(.init(target: self.target(request, target.elementTarget), direction: target.direction))
+                return .elementSearch(target)
             case .scrollToEdge(let target):
-                return try .scrollToEdge(.init(target: self.target(request, target.elementTarget), edge: target.edge))
+                return .scrollToEdge(target)
             }
         }
 
-        private func accessibilityAction(_ payload: AccessibilityPayload, request: ParsedRequest) throws -> TheScore.Action {
+        private func accessibilityCommand(
+            _ payload: AccessibilityPayload,
+            request: ParsedRequest
+        ) throws -> ClientMessage {
             switch payload {
             case .activate(let target, let actionName, let count):
                 return try BatchAccessibilityActionShape(
                     actionName: actionName,
                     count: count,
                     command: request.command
-                ).action(target: required(request, target))
+                ).command(target: target)
             case .increment(let target, _):
-                return try .increment(required(request, target))
+                return .increment(target)
             case .decrement(let target, _):
-                return try .decrement(required(request, target))
+                return .decrement(target)
             case .performCustomAction(let target, _):
-                return try .performCustomAction(customActionTarget(target, request: request))
+                return .performCustomAction(target)
             }
-        }
-
-        private func customActionTarget(_ target: CustomActionTarget, request: ParsedRequest) throws -> BatchCustomActionTarget {
-            if let elementTarget = target.elementTarget {
-                return try BatchCustomActionTarget(target: required(request, elementTarget), actionName: target.actionName)
-            }
-            guard let containerTarget = target.containerTarget else {
-                throw MissingElementTarget(command: request.command.rawValue)
-            }
-            return BatchCustomActionTarget(containerTarget: containerTarget, ordinal: target.containerOrdinal, actionName: target.actionName)
-        }
-
-        private func waitForAction(_ target: WaitForTarget, context: BatchStepPlanningContext) throws -> BatchStepActionPlan {
-            let semanticTarget = targetResolver.semanticTarget(from: context.request, requestElementTarget: target.elementTarget)
-            return try BatchStepActionPlan(action: .waitForElement(.init(
-                target: targetResolver.requiredSemanticTarget(semanticTarget),
-                absent: target.absent,
-                timeout: target.timeout ?? context.timeout
-            )))
-        }
-
-        private func target(_ request: ParsedRequest, _ target: ElementTarget?) throws -> SemanticActionTarget? {
-            try targetResolver.optionalTarget(from: request, requestElementTarget: target)
-        }
-
-        private func required(_ request: ParsedRequest, _ target: ElementTarget?) throws -> SemanticActionTarget {
-            try targetResolver.requiredTarget(from: request, requestElementTarget: target)
         }
     }
 }
