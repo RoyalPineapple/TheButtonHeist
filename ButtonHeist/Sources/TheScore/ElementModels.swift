@@ -1,0 +1,177 @@
+import Foundation
+import CoreGraphics
+import AccessibilitySnapshotModel
+
+// MARK: - Heist Element
+
+/// A UI element captured from the accessibility hierarchy.
+/// Wraps the parser's AccessibilityElement with all its rich data in a wire-friendly form.
+public struct HeistElement: Codable, Equatable, Hashable, Sendable {
+    /// Stable, deterministic identifier for targeting this element.
+    /// Developer-provided `accessibilityIdentifier` if present, otherwise synthesized
+    /// from traits + label (or value as fallback). Unique within a snapshot.
+    public let heistId: HeistId
+    public let description: String
+    public let label: String?
+    public let value: String?
+    public let identifier: String?
+    /// Read by VoiceOver after the label/value.
+    public let hint: String?
+    public let traits: [HeistTrait]
+    public let frameX: Double
+    public let frameY: Double
+    public let frameWidth: Double
+    public let frameHeight: Double
+    /// Where VoiceOver would tap, in screen coordinates. May fall outside `frame`.
+    public let activationPointX: Double
+    public let activationPointY: Double
+    public let respondsToUserInteraction: Bool
+    public let customContent: [HeistCustomContent]?
+    public let rotors: [HeistRotor]?
+    public let actions: [ElementAction]
+
+    public init(
+        heistId: HeistId = "",
+        description: String,
+        label: String?,
+        value: String?,
+        identifier: String?,
+        hint: String? = nil,
+        traits: [HeistTrait] = [],
+        frameX: Double,
+        frameY: Double,
+        frameWidth: Double,
+        frameHeight: Double,
+        activationPointX: Double = 0,
+        activationPointY: Double = 0,
+        respondsToUserInteraction: Bool = true,
+        customContent: [HeistCustomContent]? = nil,
+        rotors: [HeistRotor]? = nil,
+        actions: [ElementAction]
+    ) {
+        self.heistId = heistId
+        self.description = description
+        self.label = label
+        self.value = value
+        self.identifier = identifier
+        self.hint = hint
+        self.traits = traits
+        self.frameX = frameX
+        self.frameY = frameY
+        self.frameWidth = frameWidth
+        self.frameHeight = frameHeight
+        self.activationPointX = activationPointX
+        self.activationPointY = activationPointY
+        self.respondsToUserInteraction = respondsToUserInteraction
+        self.customContent = customContent
+        self.rotors = rotors
+        self.actions = actions
+    }
+
+}
+
+public extension HeistElement {
+    init(
+        accessibilityElement element: AccessibilityElement,
+        annotation: InterfaceElementAnnotation? = nil
+    ) {
+        let frame = accessibilityFrame(for: element.shape)
+        let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
+        let validRotors = element.customRotors.filter { !$0.name.isEmpty }
+        self.init(
+            heistId: annotation?.heistId ?? "",
+            description: element.description,
+            label: element.label,
+            value: element.value,
+            identifier: element.identifier,
+            hint: element.hint,
+            traits: element.traits.heistTraits,
+            frameX: sanitizedDouble(frame.origin.x),
+            frameY: sanitizedDouble(frame.origin.y),
+            frameWidth: sanitizedDouble(frame.size.width),
+            frameHeight: sanitizedDouble(frame.size.height),
+            activationPointX: sanitizedDouble(element.activationPoint.x),
+            activationPointY: sanitizedDouble(element.activationPoint.y),
+            respondsToUserInteraction: element.respondsToUserInteraction,
+            customContent: validCustomContent.isEmpty ? nil : validCustomContent.map {
+                HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
+            },
+            rotors: validRotors.isEmpty ? nil : validRotors.map { HeistRotor(name: $0.name) },
+            actions: annotation?.actions ?? []
+        )
+    }
+}
+
+private func accessibilityFrame(for shape: AccessibilityShape) -> CGRect {
+    switch shape {
+    case .frame(let rect):
+        return CGRect(
+            x: CGFloat(rect.origin.x),
+            y: CGFloat(rect.origin.y),
+            width: CGFloat(rect.size.width),
+            height: CGFloat(rect.size.height)
+        )
+    case .path(let elements):
+        let path = CGMutablePath()
+        for element in elements {
+            switch element {
+            case .move(let point):
+                path.move(to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
+            case .line(let point):
+                path.addLine(to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)))
+            case .quadCurve(let point, let control):
+                path.addQuadCurve(
+                    to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)),
+                    control: CGPoint(x: CGFloat(control.x), y: CGFloat(control.y))
+                )
+            case .curve(let point, let control1, let control2):
+                path.addCurve(
+                    to: CGPoint(x: CGFloat(point.x), y: CGFloat(point.y)),
+                    control1: CGPoint(x: CGFloat(control1.x), y: CGFloat(control1.y)),
+                    control2: CGPoint(x: CGFloat(control2.x), y: CGFloat(control2.y))
+                )
+            case .closeSubpath:
+                path.closeSubpath()
+            }
+        }
+        let bounds = path.boundingBoxOfPath
+        guard !bounds.isNull,
+              bounds.origin.x.isFinite,
+              bounds.origin.y.isFinite,
+              bounds.size.width.isFinite,
+              bounds.size.height.isFinite else {
+            return .zero
+        }
+        return bounds
+    }
+}
+
+private func sanitizedDouble(_ value: CGFloat) -> Double {
+    value.isFinite ? Double(value) : 0
+}
+
+/// Rotor metadata attached to a HeistElement.
+///
+/// This intentionally describes availability only. Rotor results are discovered
+/// live through a command because rotor movement is contextual and can be
+/// direction-dependent or unbounded.
+public struct HeistRotor: Codable, Equatable, Hashable, Sendable {
+    public let name: String
+
+    public init(name: String) {
+        self.name = name
+    }
+}
+
+/// Custom content attached to a HeistElement (maps to AccessibilityElement.CustomContent)
+public struct HeistCustomContent: Codable, Equatable, Hashable, Sendable {
+    public let label: String
+    public let value: String
+    public let isImportant: Bool
+
+    public init(label: String, value: String, isImportant: Bool) {
+        self.label = label
+        self.value = value
+        self.isImportant = isImportant
+    }
+}
