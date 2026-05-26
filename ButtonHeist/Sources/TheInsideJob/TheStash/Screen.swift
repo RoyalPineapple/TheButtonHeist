@@ -387,8 +387,22 @@ struct Screen: Equatable {
             .sorted { $0.heistId < $1.heistId }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let data = (try? encoder.encode(fingerprints)) ?? Data()
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: "Infinity",
+            negativeInfinity: "-Infinity",
+            nan: "NaN"
+        )
+        let data = Self.stableSemanticHashData(fingerprints, encoder: encoder)
         return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func stableSemanticHashData<T: Encodable>(_ value: T, encoder: JSONEncoder) -> Data {
+        switch Result(catching: { try encoder.encode(value) }) {
+        case .success(let data):
+            return data
+        case .failure(let error):
+            preconditionFailure("Stable semantic screen hash payload failed to encode: \(error)")
+        }
     }
 
     // MARK: - Lookup

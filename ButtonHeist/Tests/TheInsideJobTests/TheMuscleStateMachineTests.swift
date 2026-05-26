@@ -50,7 +50,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(claimed)
 
         let releaseTimer = Task<Void, Never> {}
-        XCTAssertTrue(lease.removeConnection(1) { releaseTimer })
+        XCTAssertTrue(lease.removeConnection(1, releaseTimer: releaseTimer))
         defer { releaseTimer.cancel() }
 
         guard case .rejected(let diagnostic) = lease.acquire(driverIdentity: "driver:beta", clientId: 2) else {

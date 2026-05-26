@@ -65,9 +65,11 @@ public extension AccessibilityTrace {
         }
 
         public var summary: String {
-            let fallback = "\(interface.elements.count) elements"
+            let countSummary = "\(interface.elements.count) elements"
             let description = normalized(interface.screenDescription)
-            return description == fallback ? fallback : "\(description ?? fallback) (\(interface.elements.count) elements)"
+            return description == countSummary
+                ? countSummary
+                : "\(description ?? countSummary) (\(interface.elements.count) elements)"
         }
 
         public static func hash(_ interface: Interface) -> String {
@@ -75,15 +77,34 @@ public extension AccessibilityTrace {
         }
 
         public static func hash(interface: Interface, context: Context) -> String {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.sortedKeys]
+            let encoder = stableHashEncoder()
             let content = StableCaptureContent(
                 tree: interface.tree,
                 annotations: interface.annotations,
                 context: context
             )
-            let data = (try? encoder.encode(content)) ?? Data()
+            let data = stableHashData(content, encoder: encoder)
             return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        }
+
+        private static func stableHashEncoder() -> JSONEncoder {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            encoder.nonConformingFloatEncodingStrategy = .convertToString(
+                positiveInfinity: "Infinity",
+                negativeInfinity: "-Infinity",
+                nan: "NaN"
+            )
+            return encoder
+        }
+
+        private static func stableHashData<T: Encodable>(_ value: T, encoder: JSONEncoder) -> Data {
+            switch Result(catching: { try encoder.encode(value) }) {
+            case .success(let data):
+                return data
+            case .failure(let error):
+                preconditionFailure("Stable accessibility trace hash payload failed to encode: \(error)")
+            }
         }
     }
 
