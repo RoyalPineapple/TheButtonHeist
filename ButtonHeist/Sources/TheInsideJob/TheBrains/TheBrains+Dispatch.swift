@@ -95,6 +95,13 @@ extension TheBrains {
             return await performInteraction(command: message) { await self.navigation.executeScrollToEdge(target) }
         case .waitFor(let target):
             return await performWaitFor(target: target)
+        case .waitForIdle(let target):
+            return await executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
+        case .waitForChange(let target):
+            return await executeWaitForChange(
+                timeout: target.resolvedTimeout,
+                expectation: target.expect
+            )
         case .batchExecutionPlan(let plan):
             return await executeBatchExecutionPlan(plan)
         case .explore:
@@ -193,17 +200,6 @@ extension TheBrains {
     }
 
     func performElementSearch(
-        target: BatchElementSearchTarget,
-        method: ActionMethod
-    ) async -> ActionResult {
-        await performElementSearch(
-            elementTarget: target.target.map(BatchSemanticElementTarget.init),
-            direction: target.direction,
-            method: method
-        )
-    }
-
-    func performElementSearch(
         elementTarget: (any SemanticElementTarget)?,
         direction: ScrollSearchDirection?,
         method: ActionMethod
@@ -237,14 +233,6 @@ extension TheBrains {
     func performWaitFor(target: WaitForTarget) async -> ActionResult {
         await performWaitFor(
             elementTarget: target.elementTarget,
-            absent: target.absent,
-            timeout: target.timeout
-        )
-    }
-
-    func performWaitFor(target: BatchWaitForTarget) async -> ActionResult {
-        await performWaitFor(
-            elementTarget: BatchSemanticElementTarget(target.target),
             absent: target.absent,
             timeout: target.timeout
         )

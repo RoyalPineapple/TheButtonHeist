@@ -198,7 +198,6 @@ final class CodebaseBoundaryGuardTests: XCTestCase {
     private static let allowedLargeModelOrCatalogFiles: Set<String> = [
         "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift",
         "ButtonHeist/Sources/TheScore/AccessibilityTrace+Diff.swift",
-        "ButtonHeist/Sources/TheScore/BatchTargets.swift",
         "ButtonHeist/Sources/TheScore/ClientMessages.swift",
         "ButtonHeist/Sources/TheScore/ElementModels.swift",
         "ButtonHeist/Sources/TheScore/ElementObservationModels.swift",

@@ -2727,12 +2727,10 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(step.commandName, "activate")
         XCTAssertEqual(step.expectation, .elementsChanged)
 
-        guard case .activate(let actionTarget) = step.action else {
-            return XCTFail("Expected activate action, got \(step.action)")
+        guard case .activate(let actionTarget) = step.command else {
+            return XCTFail("Expected activate command, got \(step.command)")
         }
-        XCTAssertNil(actionTarget.sourceHeistId)
-        XCTAssertEqual(actionTarget.matcher.identifier, "save-button")
-        XCTAssertNil(actionTarget.ordinal)
+        XCTAssertEqual(actionTarget, .matcher(ElementMatcher(identifier: "save-button")))
     }
 
     @ButtonHeistActor
@@ -2757,7 +2755,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBatchWaitDefaultsComeFromTypedAction() async throws {
+    func testBatchWaitDefaultsComeFromTypedCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
         let batch = try decodedRunBatch(
@@ -2771,15 +2769,15 @@ final class TheFenceHandlerTests: XCTestCase {
         let steps = plannedBatchSteps(from: batch)
         XCTAssertEqual(steps[0].expectation, .elementAppeared(ElementMatcher(identifier: "toast")))
         XCTAssertEqual(steps[0].deadline, Deadline(timeout: 10.0))
-        guard case .waitForElement(let waitTarget) = steps[0].action else {
-            return XCTFail("Expected wait_for action, got \(steps[0].action)")
+        guard case .waitFor(let waitTarget) = steps[0].command else {
+            return XCTFail("Expected wait_for command, got \(steps[0].command)")
         }
         XCTAssertNil(waitTarget.timeout)
 
         XCTAssertEqual(steps[1].expectation, .screenChanged)
         XCTAssertEqual(steps[1].deadline, Deadline(timeout: 30.0))
-        guard case .waitForChange(let waitChangeTarget) = steps[1].action else {
-            return XCTFail("Expected wait_for_change action, got \(steps[1].action)")
+        guard case .waitForChange(let waitChangeTarget) = steps[1].command else {
+            return XCTFail("Expected wait_for_change command, got \(steps[1].command)")
         }
         XCTAssertNil(waitChangeTarget.expect)
         XCTAssertNil(waitChangeTarget.timeout)
@@ -2801,19 +2799,16 @@ final class TheFenceHandlerTests: XCTestCase {
         let steps = plannedBatchSteps(from: batch)
         XCTAssertEqual(steps.map(\.commandName), ["activate", "wait_for"])
 
-        guard case .activate(let actionTarget) = steps[0].action else {
-            return XCTFail("Expected activate action with source heistId plus matcher target")
+        guard case .activate(let actionTarget) = steps[0].command else {
+            return XCTFail("Expected activate command with heistId target")
         }
-        XCTAssertEqual(actionTarget.sourceHeistId, "leaf-123")
-        XCTAssertNil(actionTarget.matcher.heistId)
-        XCTAssertEqual(actionTarget.matcher.label, "Save")
-        XCTAssertNil(actionTarget.ordinal)
+        XCTAssertEqual(actionTarget, .heistId("leaf-123"))
 
-        XCTAssertEqual(steps[1].expectation, .elementAppeared(ElementMatcher(label: "Done")))
+        XCTAssertEqual(steps[1].expectation, .elementAppeared(ElementMatcher(heistId: "leaf-456")))
     }
 
     @ButtonHeistActor
-    func testBatchPreparationUsesRoutedTargetEnvelope() async throws {
+    func testBatchPreparationUsesNormalCommandTargetEnvelope() async throws {
         let (fence, _) = makeConnectedFence()
 
         let batch = try decodedRunBatch(
@@ -2829,12 +2824,13 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         let steps = plannedBatchSteps(from: batch)
-        guard case .activate(let actionTarget) = steps.first?.action else {
-            return XCTFail("Expected activate action")
+        guard case .activate(let actionTarget) = steps.first?.command else {
+            return XCTFail("Expected activate command")
         }
-        XCTAssertEqual(actionTarget.matcher.traits, [.button])
-        XCTAssertEqual(actionTarget.matcher.excludeTraits, [.header])
-        XCTAssertEqual(actionTarget.ordinal, 1)
+        XCTAssertEqual(actionTarget, .matcher(
+            ElementMatcher(traits: [.button], excludeTraits: [.header]),
+            ordinal: 1
+        ))
     }
 
     @ButtonHeistActor
@@ -3222,8 +3218,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBatchRejectsContainerTargetedScrollBeforeExecution() async throws {
+    func testBatchAllowsContainerTargetedScrollThroughNormalCommandPath() async throws {
         let (fence, mockConn) = makeConnectedFence()
+        mockConn.autoResponse = { _ in
+            .actionResult(ActionResult(success: true, method: .scroll))
+        }
 
         let response = try await fence.execute(request: [
             "command": "run_batch",
@@ -3240,15 +3239,19 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected batch response, got \(response)")
             return
         }
-        XCTAssertTrue(mockConn.sent.isEmpty, "Invalid batch steps should fail before execution")
         XCTAssertEqual(batch.results.count, 1)
-        XCTAssertEqual(batch.failedIndex, 0)
+        XCTAssertNil(batch.failedIndex)
         XCTAssertEqual(batch.summaries.map(\.command), ["scroll"])
-        XCTAssertEqual(
-            batch.summaries[0].error,
-            "run_batch step command \"scroll\" does not support container-targeted scrolling; " +
-                "use an element target in run_batch or call scroll outside run_batch"
-        )
+        let batchPlans = mockConn.sent.compactMap { sent -> BatchPlan? in
+            if case .batchExecutionPlan(let plan) = sent.0 { return plan }
+            return nil
+        }
+        XCTAssertEqual(batchPlans.count, 1)
+        guard case .scroll(let target)? = batchPlans.first?.steps.first?.command else {
+            return XCTFail("Expected scroll command")
+        }
+        XCTAssertEqual(target.containerTarget?.stableId, "main_scroll")
+        XCTAssertEqual(target.direction, .down)
     }
 
     @ButtonHeistActor

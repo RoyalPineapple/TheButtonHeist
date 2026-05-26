@@ -4,10 +4,9 @@ import TheScore
 
 /// Semantic identity for element-targeted execution.
 ///
-/// Direct commands may use a current heistId as executable identity. Batch
-/// commands never do: their source heistId is capture metadata only, while the
-/// matcher and ordinal are resolved against the fresh live hierarchy before
-/// any interaction acquires geometry.
+/// Commands may use a current heistId as executable identity or matcher fields
+/// for semantic lookup. Batch steps carry these same command targets; viewport
+/// recovery and semantic reveal stay inside the normal action pipeline.
 protocol SemanticElementTarget: Sendable {
     var exactHeistId: HeistId? { get }
     var sourceHeistId: HeistId? { get }

@@ -7,10 +7,6 @@ extension TheFence {
     enum BatchShapeValidator {
         static func rejectUnsupportedShapes(request: ParsedRequest) throws {
             switch request.payload {
-            case .scroll(.scroll(let target)):
-                try rejectContainerTargetedScroll(target.containerTarget, command: request.command)
-            case .scroll(.scrollToEdge(let target)):
-                try rejectContainerTargetedScroll(target.containerTarget, command: request.command)
             case .accessibility(.increment(_, let count)):
                 try rejectRepeatedCount(count, command: request.command)
             case .accessibility(.decrement(_, let count)):
@@ -36,16 +32,6 @@ extension TheFence {
             )
         }
 
-        static func rejectContainerTargetedScroll(
-            _ containerTarget: ScrollContainerTarget?,
-            command: Command
-        ) throws {
-            guard containerTarget != nil else { return }
-            throw BatchStepPlanBuildError(
-                message: "run_batch step command \"\(command.rawValue)\" does not support container-targeted scrolling; " +
-                    "use an element target in run_batch or call \(command.rawValue) outside run_batch"
-            )
-        }
     }
 
     private enum BatchAccessibilityActionKind {
@@ -84,7 +70,7 @@ extension TheFence {
             }
         }
 
-        func action(target: SemanticActionTarget) -> TheScore.Action {
+        func command(target: ElementTarget) -> ClientMessage {
             switch kind {
             case .activate:
                 return .activate(target)
@@ -93,7 +79,7 @@ extension TheFence {
             case .decrement:
                 return .decrement(target)
             case .custom(let name):
-                return .performCustomAction(BatchCustomActionTarget(target: target, actionName: name))
+                return .performCustomAction(CustomActionTarget(elementTarget: target, actionName: name))
             }
         }
     }

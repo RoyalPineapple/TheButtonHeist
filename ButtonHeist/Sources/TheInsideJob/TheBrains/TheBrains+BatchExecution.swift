@@ -7,14 +7,14 @@ import TheScore
 extension TheBrains {
 
     struct BatchExecutionRuntime {
-        let execute: @MainActor (TheScore.Action) async -> ActionResult
+        let execute: @MainActor (ClientMessage) async -> ActionResult
         let waitForExpectation: @MainActor (ActionExpectation, TheScore.Deadline) async -> ActionResult
         let settleRefreshRecordBaseline: @MainActor () async -> Void
 
         static func live(_ brains: TheBrains) -> BatchExecutionRuntime {
             BatchExecutionRuntime(
-                execute: { action in
-                    await brains.executeBatchAction(action)
+                execute: { command in
+                    await brains.executeCommand(command)
                 },
                 waitForExpectation: { expectation, deadline in
                     await brains.executeWaitForChange(
@@ -101,7 +101,7 @@ extension TheBrains {
         runtime: BatchExecutionRuntime
     ) async -> BatchExecutionStepResult {
         let start = CFAbsoluteTimeGetCurrent()
-        let actionResult = await runtime.execute(step.action)
+        let actionResult = await runtime.execute(step.command)
         let expectationReceipt = await expectationReceipt(
             for: step,
             actionResult: actionResult,
@@ -110,7 +110,7 @@ extension TheBrains {
 
         return BatchExecutionStepResult(
             index: index,
-            actionName: step.action.canonicalName,
+            actionName: step.command.canonicalName,
             expectationName: step.expectation.summaryDescription,
             actionResult: actionResult,
             expectationActionResult: expectationReceipt?.actionResult,
@@ -133,7 +133,7 @@ extension TheBrains {
                 expectation: immediateExpectation
             )
         }
-        if step.action.fulfillsOwnExpectation {
+        if step.command.fulfillsOwnBatchExpectation {
             return BatchExpectationReceipt(
                 actionResult: actionResult,
                 expectation: ExpectationResult(
@@ -155,103 +155,6 @@ extension TheBrains {
         )
     }
 
-    private func executeBatchAction(_ action: TheScore.Action) async -> ActionResult {
-        let pendingRotorResultToken = stash.preparePendingRotorResult(
-            targetedHeistId: action.pendingRotorResultTargetHeistId
-        )
-        defer {
-            if let pendingRotorResultToken {
-                stash.clearPendingRotorResult(consumedToken: pendingRotorResultToken)
-            }
-        }
-
-        switch action {
-        case .activate(let target):
-            return await performInteraction(method: .activate) { recordedScreen in
-                await self.actions.executeActivate(target, recordedScreen: recordedScreen)
-            }
-        case .increment(let target):
-            return await performInteraction(method: .increment) { recordedScreen in
-                await self.actions.executeIncrement(target, recordedScreen: recordedScreen)
-            }
-        case .decrement(let target):
-            return await performInteraction(method: .decrement) { recordedScreen in
-                await self.actions.executeDecrement(target, recordedScreen: recordedScreen)
-            }
-        case .performCustomAction(let target):
-            return await performInteraction(method: .customAction) { recordedScreen in
-                await self.actions.executeCustomAction(target, recordedScreen: recordedScreen)
-            }
-        case .rotor(let target):
-            return await performInteraction(method: .rotor) { recordedScreen in
-                await self.actions.executeRotor(target, recordedScreen: recordedScreen)
-            }
-        case .touchTap(let target):
-            return await performInteraction(method: .syntheticTap) { recordedScreen in
-                await self.actions.executeTap(target, recordedScreen: recordedScreen)
-            }
-        case .touchLongPress(let target):
-            return await performInteraction(method: .syntheticLongPress) { recordedScreen in
-                await self.actions.executeLongPress(target, recordedScreen: recordedScreen)
-            }
-        case .touchSwipe(let target):
-            return await performInteraction(method: .syntheticSwipe) { recordedScreen in
-                await self.actions.executeSwipe(target, recordedScreen: recordedScreen)
-            }
-        case .touchDrag(let target):
-            return await performInteraction(method: .syntheticDrag) { recordedScreen in
-                await self.actions.executeDrag(target, recordedScreen: recordedScreen)
-            }
-        case .touchPinch(let target):
-            return await performInteraction(method: .syntheticPinch) { recordedScreen in
-                await self.actions.executePinch(target, recordedScreen: recordedScreen)
-            }
-        case .touchRotate(let target):
-            return await performInteraction(method: .syntheticRotate) { recordedScreen in
-                await self.actions.executeRotate(target, recordedScreen: recordedScreen)
-            }
-        case .touchTwoFingerTap(let target):
-            return await performInteraction(method: .syntheticTwoFingerTap) { recordedScreen in
-                await self.actions.executeTwoFingerTap(target, recordedScreen: recordedScreen)
-            }
-        case .touchDrawPath(let target):
-            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawPath(target) }
-        case .touchDrawBezier(let target):
-            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawBezier(target) }
-        case .typeText(let target):
-            return await performInteraction(method: .typeText) { recordedScreen in
-                await self.actions.executeTypeText(target, recordedScreen: recordedScreen)
-            }
-        case .editAction(let target):
-            return await performInteraction(method: .editAction) { await self.actions.executeEditAction(target) }
-        case .setPasteboard(let target):
-            return await performInteraction(method: .setPasteboard) { await self.actions.executeSetPasteboard(target) }
-        case .scroll(let target):
-            return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
-        case .scrollToVisible(let target):
-            return await performInteraction(method: .scrollToVisible) { recordedScreen in
-                await self.navigation.executeScrollToVisible(target, recordedScreen: recordedScreen)
-            }
-        case .elementSearch(let target):
-            return await performElementSearch(target: target, method: .elementSearch)
-        case .scrollToEdge(let target):
-            return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
-        case .waitForIdle(let target):
-            return await executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
-        case .waitForElement(let target):
-            return await performWaitFor(target: target)
-        case .waitForChange(let target):
-            return await executeWaitForChange(
-                timeout: target.resolvedTimeout,
-                expectation: target.expect
-            )
-        case .explore:
-            return await performExplore()
-        case .resignFirstResponder:
-            return await performInteraction(method: .resignFirstResponder) { await self.actions.executeResignFirstResponder() }
-        }
-    }
-
     private func appendSkippedBatchSteps(
         afterFailedIndex failedIndex: Int,
         remainingSteps: ArraySlice<TheScore.BatchStep>,
@@ -261,14 +164,14 @@ extension TheBrains {
             let index = failedIndex + 1 + offset
             let skipped = BatchExecutionSkippedStepResult(
                 index: index,
-                actionName: step.action.canonicalName,
+                actionName: step.command.canonicalName,
                 expectationName: step.expectation.summaryDescription,
                 reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                 afterFailedIndex: failedIndex
             )
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: step.action.canonicalName,
+                actionName: step.command.canonicalName,
                 expectationName: step.expectation.summaryDescription,
                 durationMs: 0,
                 skipped: skipped
@@ -298,19 +201,6 @@ extension TheBrains {
 private struct BatchExpectationReceipt {
     let actionResult: ActionResult
     let expectation: ExpectationResult
-}
-
-extension TheScore.Action {
-    var pendingRotorResultTargetHeistId: HeistId? {
-        switch self {
-        case .rotor(let target):
-            return target.currentSourceHeistId
-        case .scrollToVisible(let target):
-            return target.target?.sourceHeistId
-        default:
-            return nil
-        }
-    }
 }
 
 private extension BatchExecutionStepResult {

@@ -165,12 +165,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
         try seedKnownOffscreenTarget(fixture, in: localBrains)
 
         if batch {
-            let target = SemanticActionTarget(
-                sourceHeistId: fixture.knownHeistId,
-                matcher: ElementMatcher(identifier: identifier, traits: [.button])
-            )
             let plan = BatchPlan(steps: [
-                .action(.activate(target)),
+                .command(.activate(.matcher(ElementMatcher(identifier: identifier, traits: [.button])))),
             ])
             let result = await localBrains.executeBatchExecutionPlan(plan)
             return (result, fixture.target.activationCount)

@@ -3,58 +3,38 @@ import XCTest
 
 final class BatchPlanTargetSemanticsTests: XCTestCase {
 
-    func testMinimumMatcherTargetKeepsSourceHeistIdAsMetadataOnly() throws {
-        let targetElement = makeElement(heistId: "checkout_total_$12", label: "Total", value: "$12.00", traits: [.staticText])
-        let capture = makeCapture([
-            targetElement,
-            makeElement(heistId: "checkout_tax_$1", label: "Tax", value: "$1.00", traits: [.staticText]),
-        ])
-        let minimumMatcher = MinimumMatcher.build(element: targetElement, in: capture)
-
-        let target = SemanticActionTarget(minimumMatcher)
-
-        XCTAssertEqual(target.sourceHeistId, "checkout_total_$12")
-        XCTAssertEqual(target.matcher, ElementMatcher(label: "Total"))
-        XCTAssertNil(target.matcher.heistId)
-        XCTAssertNil(target.ordinal)
-    }
-
-    func testValueChangingActionTargetUsesMatcherIdentityAfterRoundTrip() throws {
-        let target = SemanticActionTarget(
-            sourceHeistId: "stepper_count_1",
-            matcher: ElementMatcher(label: "Count", traits: [.adjustable])
-        )
+    func testBatchStepPreservesNormalCommandTargetAfterRoundTrip() throws {
+        let command = ClientMessage.increment(.matcher(
+            ElementMatcher(label: "Count", traits: [.adjustable])
+        ))
         let plan = BatchPlan(steps: [
-            .action(.increment(target), expect: .elementUpdated(newValue: "2")),
+            .command(command, expect: .elementUpdated(newValue: "2")),
         ])
 
         let data = try JSONEncoder().encode(plan)
         let decoded = try JSONDecoder().decode(BatchPlan.self, from: data)
 
         guard let decodedStep = decoded.steps.first,
-              case .increment(let decodedTarget) = decodedStep.action,
+              case .increment(let decodedTarget) = decodedStep.command,
               decodedStep.expectation == .elementUpdated(newValue: "2") else {
-            return XCTFail("Expected increment action with elementUpdated expectation")
+            return XCTFail("Expected increment command with elementUpdated expectation")
         }
-        XCTAssertEqual(decodedTarget.sourceHeistId, "stepper_count_1")
-        XCTAssertNil(decodedTarget.matcher.heistId)
-        XCTAssertEqual(decodedTarget.matcher, ElementMatcher(label: "Count", traits: [.adjustable]))
-        XCTAssertNil(decodedTarget.ordinal)
+        XCTAssertEqual(
+            decodedTarget,
+            .matcher(ElementMatcher(label: "Count", traits: [.adjustable]))
+        )
     }
 
-    func testBatchPlanClientMessageWireShapeKeepsTypedBatchPayload() throws {
+    func testBatchPlanClientMessageWireShapeCarriesNormalCommands() throws {
         let plan = BatchPlan(
             steps: [
-                .action(
-                    .activate(SemanticActionTarget(
-                        sourceHeistId: "settings_button_old",
-                        matcher: ElementMatcher(label: "Settings", traits: [.button])
-                    )),
+                .command(
+                    .activate(.heistId("settings_button_current")),
                     expect: .screenChanged,
                     deadline: Deadline(timeout: 2.5)
                 ),
-                .action(.waitForIdle(WaitForIdleTarget(timeout: 0.25))),
-                .action(
+                .command(.waitForIdle(WaitForIdleTarget(timeout: 0.25))),
+                .command(
                     .waitForChange(WaitForChangeTarget(expect: .elementsChanged, timeout: 1.5)),
                     expect: .elementsChanged,
                     deadline: Deadline(timeout: 1.5)
@@ -73,26 +53,22 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         let steps = try XCTUnwrap(batchPayload["steps"] as? [[String: Any]])
         XCTAssertEqual(steps.count, 3)
 
-        let actionStep = steps[0]
-        XCTAssertNil(actionStep["kind"])
-        let action = try XCTUnwrap(actionStep["action"] as? [String: Any])
-        XCTAssertEqual(action["type"] as? String, "activate")
-        let target = try XCTUnwrap(action["target"] as? [String: Any])
-        XCTAssertEqual(target["sourceHeistId"] as? String, "settings_button_old")
-        let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
-        XCTAssertNil(matcher["heistId"])
-        XCTAssertEqual(matcher["label"] as? String, "Settings")
-        XCTAssertEqual(matcher["traits"] as? [String], ["button"])
-        XCTAssertEqual((actionStep["expect"] as? [String: Any])?["type"] as? String, "screen_changed")
-        XCTAssertEqual((actionStep["deadline"] as? [String: Any])?["timeout"] as? Double, 2.5)
+        let commandStep = steps[0]
+        XCTAssertNil(commandStep["action"])
+        let command = try XCTUnwrap(commandStep["command"] as? [String: Any])
+        XCTAssertEqual(command["type"] as? String, "activate")
+        let target = try XCTUnwrap(command["payload"] as? [String: Any])
+        XCTAssertEqual(target["heistId"] as? String, "settings_button_current")
+        XCTAssertEqual((commandStep["expect"] as? [String: Any])?["type"] as? String, "screen_changed")
+        XCTAssertEqual((commandStep["deadline"] as? [String: Any])?["timeout"] as? Double, 2.5)
 
-        let waitAction = try XCTUnwrap(steps[1]["action"] as? [String: Any])
-        XCTAssertEqual(waitAction["type"] as? String, "wait_for_idle")
-        XCTAssertEqual(((waitAction["target"] as? [String: Any])?["timeout"] as? Double), 0.25)
+        let waitCommand = try XCTUnwrap(steps[1]["command"] as? [String: Any])
+        XCTAssertEqual(waitCommand["type"] as? String, "waitForIdle")
+        XCTAssertEqual(((waitCommand["payload"] as? [String: Any])?["timeout"] as? Double), 0.25)
         XCTAssertEqual((steps[1]["expect"] as? [String: Any])?["type"] as? String, "delivery")
 
-        let waitChangeAction = try XCTUnwrap(steps[2]["action"] as? [String: Any])
-        XCTAssertEqual(waitChangeAction["type"] as? String, "wait_for_change")
+        let waitChangeCommand = try XCTUnwrap(steps[2]["command"] as? [String: Any])
+        XCTAssertEqual(waitChangeCommand["type"] as? String, "waitForChange")
         XCTAssertEqual((steps[2]["expect"] as? [String: Any])?["type"] as? String, "elements_changed")
         XCTAssertEqual((steps[2]["deadline"] as? [String: Any])?["timeout"] as? Double, 1.5)
 
@@ -105,35 +81,29 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         XCTAssertEqual(decodedPlan.steps[0].deadline, Deadline(timeout: 2.5))
     }
 
+    func testNestedBatchCommandRejectsBeforePayloadDecode() {
+        let json = """
+        {
+          "steps": [
+            {
+              "command": {
+                "type": "batchExecutionPlan",
+                "payload": {}
+              }
+            }
+          ]
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(BatchPlan.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("not batch-executable"),
+                "Expected batch-executable rejection, got \(error)"
+            )
+        }
+    }
+
     private func jsonObject(_ data: Data) throws -> [String: Any] {
         try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-    }
-
-    private func makeCapture(_ elements: [HeistElement]) -> AccessibilityTrace.Capture {
-        AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: makeTestInterface(elements: elements)
-        )
-    }
-
-    private func makeElement(
-        heistId: HeistId,
-        label: String? = nil,
-        value: String? = nil,
-        traits: [HeistTrait] = []
-    ) -> HeistElement {
-        HeistElement(
-            heistId: heistId,
-            description: label ?? heistId,
-            label: label,
-            value: value,
-            identifier: nil,
-            traits: traits,
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 100,
-            frameHeight: 44,
-            actions: []
-        )
     }
 }

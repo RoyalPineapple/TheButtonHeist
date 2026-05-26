@@ -149,16 +149,6 @@ extension Navigation {
     }
 
     func executeScrollToVisible(
-        _ target: BatchScrollToVisibleTarget,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
-        await executeScrollToVisible(
-            elementTarget: target.target.map(BatchSemanticElementTarget.init),
-            recordedScreen: recordedScreen
-        )
-    }
-
-    func executeScrollToVisible(
         elementTarget: (any SemanticElementTarget)?,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {

@@ -13,7 +13,7 @@ extension TheFence {
         private let actionConstructor: BatchActionConstructor
 
         init() {
-            actionConstructor = BatchActionConstructor(targetResolver: BatchTargetResolver())
+            actionConstructor = BatchActionConstructor()
         }
 
         func plan(

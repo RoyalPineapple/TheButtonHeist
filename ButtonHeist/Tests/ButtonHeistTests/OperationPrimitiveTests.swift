@@ -5,14 +5,14 @@ import TheScore
 final class OperationPrimitiveTests: XCTestCase {
 
     func testBatchStepAlwaysCarriesActionExpectationAndDeadline() {
-        let step = BatchStep.action(
+        let step = BatchStep.command(
             .setPasteboard(SetPasteboardTarget(text: "value")),
             expect: .screenChanged,
             deadline: Deadline(timeout: 2.0)
         )
 
-        guard case .setPasteboard(let target) = step.action else {
-            return XCTFail("Expected set_pasteboard action")
+        guard case .setPasteboard(let target) = step.command else {
+            return XCTFail("Expected set_pasteboard command")
         }
         XCTAssertEqual(target.text, "value")
         XCTAssertEqual(step.expectation, .screenChanged)

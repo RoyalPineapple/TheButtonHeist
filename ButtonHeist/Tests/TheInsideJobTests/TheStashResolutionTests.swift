@@ -168,48 +168,6 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(normalized.sourceHeistId, "missing_button")
     }
 
-    func testSemanticActionTargetDoesNotExposeExecutableHeistId() {
-        let target = SemanticActionTarget(
-            sourceHeistId: "quantity_0",
-            matcher: ElementMatcher(identifier: "quantity_stepper"),
-            ordinal: 1
-        )
-
-        XCTAssertNil(target.exactHeistId)
-        XCTAssertEqual(target.sourceHeistId, "quantity_0")
-        XCTAssertEqual(target.semanticMatcher?.identifier, "quantity_stepper")
-        XCTAssertEqual(target.semanticOrdinal, 1)
-    }
-
-    func testNormalizeSemanticActionTargetKeepsSourceHeistIdAsMetadata() {
-        let currentElement = element(
-            label: "Quantity",
-            value: "1",
-            identifier: "quantity_stepper",
-            traits: .adjustable
-        )
-        bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
-        let target = SemanticActionTarget(
-            sourceHeistId: "quantity_0",
-            matcher: ElementMatcher(identifier: "quantity_stepper")
-        )
-
-        let normalized = bagman.normalizeTarget(target)
-
-        guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {
-            XCTFail("Expected semantic action target to remain matcher-backed, got \(normalized.executableTarget)")
-            return
-        }
-        XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
-        XCTAssertEqual(matcher.identifier, "quantity_stepper")
-        XCTAssertNil(matcher.heistId)
-        XCTAssertNil(ordinal)
-        XCTAssertEqual(
-            bagman.resolveTarget(normalized.executableTarget).resolved?.screenElement.heistId,
-            "quantity_1"
-        )
-    }
-
     func testNormalizedReplaySelectorAcquiresFreshLiveGeometry() {
         let sourceFrame = CGRect(x: 10, y: 20, width: 80, height: 44)
         let sourcePoint = CGPoint(x: 50, y: 42)

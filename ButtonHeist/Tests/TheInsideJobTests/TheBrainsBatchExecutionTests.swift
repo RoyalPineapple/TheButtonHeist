@@ -22,8 +22,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
     func testBatchExecutionRunsStepsWaitsForExpectationsAndRecordsBaselineBetweenSteps() async throws {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
-            execute: { action in
-                events.append("action:\(action.canonicalName)")
+            execute: { command in
+                events.append("action:\(command.canonicalName)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
@@ -44,8 +44,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .action(.setPasteboard(SetPasteboardTarget(text: "ready")), expect: .elementsChanged),
-                .action(
+                .command(.setPasteboard(SetPasteboardTarget(text: "ready")), expect: .elementsChanged),
+                .command(
                     .waitForChange(WaitForChangeTarget(expect: .screenChanged, timeout: 0.1)),
                     expect: .screenChanged,
                     deadline: Deadline(timeout: 0.1)
@@ -84,8 +84,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
     func testBatchExecutionStopsLocallyOnFailedStepUnderStopOnError() async throws {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
-            execute: { action in
-                events.append("action:\(action.canonicalName)")
+            execute: { command in
+                events.append("action:\(command.canonicalName)")
                 return ActionResult(
                     success: false,
                     method: .setPasteboard,
@@ -103,9 +103,9 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .action(.setPasteboard(SetPasteboardTarget(text: "first"))),
-                .action(.setPasteboard(SetPasteboardTarget(text: "next"))),
-                .action(.waitForIdle(WaitForIdleTarget(timeout: 0.1))),
+                .command(.setPasteboard(SetPasteboardTarget(text: "first"))),
+                .command(.setPasteboard(SetPasteboardTarget(text: "next"))),
+                .command(.waitForIdle(WaitForIdleTarget(timeout: 0.1))),
             ],
             policy: .stopOnError
         )
@@ -138,8 +138,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             ActionResult(success: true, method: .setPasteboard, message: "second ran"),
         ]
         let runtime = TheBrains.BatchExecutionRuntime(
-            execute: { action in
-                events.append("action:\(action.canonicalName)")
+            execute: { command in
+                events.append("action:\(command.canonicalName)")
                 return results.removeFirst()
             },
             waitForExpectation: { _, _ in
@@ -152,8 +152,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .action(.setPasteboard(SetPasteboardTarget(text: "first"))),
-                .action(.setPasteboard(SetPasteboardTarget(text: "second"))),
+                .command(.setPasteboard(SetPasteboardTarget(text: "first"))),
+                .command(.setPasteboard(SetPasteboardTarget(text: "second"))),
             ],
             policy: .continueOnError
         )
@@ -176,9 +176,9 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
     func testBatchExecutionUsesExplicitActionNamesForCasesWithoutAssociatedValues() async throws {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
-            execute: { action in
-                events.append("action:\(action.canonicalName)")
-                return ActionResult(success: true, method: action.actionMethod)
+            execute: { command in
+                events.append("action:\(command.canonicalName)")
+                return ActionResult(success: true, method: TheBrains.diagnosticMethod(for: command))
             },
             waitForExpectation: { _, _ in
                 XCTFail("Delivery expectation should not wait")
@@ -190,8 +190,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .action(.explore),
-                .action(.resignFirstResponder),
+                .command(.explore),
+                .command(.resignFirstResponder),
             ],
             policy: .continueOnError
         )
@@ -213,8 +213,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
     func testBatchExecutionDoesNotWaitWhenActionAlreadySatisfiesExpectation() async throws {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
-            execute: { action in
-                events.append("action:\(action.canonicalName)")
+            execute: { command in
+                events.append("action:\(command.canonicalName)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
@@ -234,7 +234,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .action(.setPasteboard(SetPasteboardTarget(text: "ready")), expect: .screenChanged),
+                .command(.setPasteboard(SetPasteboardTarget(text: "ready")), expect: .screenChanged),
             ],
             policy: .stopOnError
         )
@@ -249,7 +249,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
 
     func testClientBatchPlanDispatchesToBatchRunner() async throws {
         let plan = TheScore.BatchPlan(steps: [
-            .action(.waitForIdle(WaitForIdleTarget(timeout: 0.01))),
+            .command(.waitForIdle(WaitForIdleTarget(timeout: 0.01))),
         ])
 
         let result = await brains.executeCommand(.batchExecutionPlan(plan))
