@@ -61,7 +61,7 @@ extension Actions {
                 direction: direction,
                 element: element,
                 liveObject: liveObject,
-                suggestion: "refresh with get_interface and retarget the refreshed element"
+                suggestion: "retry the same semantic target after UI settles"
             )
         case .noRotors:
             return rotorFailure(.rotor, observed: "customRotors=[]",
@@ -89,13 +89,13 @@ extension Actions {
                 direction: direction,
                 element: element,
                 liveObject: liveObject,
-                suggestion: "use the heistId returned by the previous rotor result after refetching"
+                suggestion: "use the heistId returned by the previous rotor result"
             )
         case .currentTextRangeUnavailable:
             return rotorFailure(.rotor, observed: "currentTextRange is not available",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
-                                suggestion: "use the text range returned by the previous rotor result after refetching")
+                                suggestion: "use the text range returned by the previous rotor result")
         case .noResult(let rotorName):
             return rotorFailure(
                 .rotor,
@@ -116,7 +116,7 @@ extension Actions {
                 direction: direction,
                 element: element,
                 liveObject: liveObject,
-                suggestion: "refetch with get_interface and retry the rotor from a visible target"
+                suggestion: "retry the rotor from a semantic target that can be made actionable"
             )
         case .resultTargetNotParsed(let rotorName):
             return rotorFailure(
@@ -127,7 +127,7 @@ extension Actions {
                 direction: direction,
                 element: element,
                 liveObject: liveObject,
-                suggestion: "refetch with get_interface before acting on the rotor result"
+                suggestion: "rerun the rotor and act on the returned semantic target after it is parsed"
             )
         }
     }

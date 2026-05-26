@@ -86,11 +86,11 @@ enum ActivateFailureDiagnostic {
         screenBounds: CGRect
     ) -> String {
         if !screenBounds.contains(element.shape.frame) {
-            return "scroll the element into view, then refetch with get_interface before retrying activate"
+            return "semantic actionability did not produce an on-screen activation frame; retry the same semantic target after UI settles"
         }
 
         if activateOutcome == .objectDeallocated {
-            return "refetch with get_interface and retarget the refreshed element before retrying activate"
+            return "live target became stale during activation; retry the same semantic target after UI settles"
         }
 
         guard tapAttempted else {
@@ -98,22 +98,22 @@ enum ActivateFailureDiagnostic {
         }
 
         guard let tapReceiver else {
-            return "wait for a visible app window, then refetch with get_interface before retrying activate"
+            return "wait for a targetable app window, then retry the same semantic target"
         }
 
         if tapReceiver.hiddenInChain {
-            return "wait for the target to become visible, then refetch with get_interface before retrying activate"
+            return "wait for semantic actionability to expose a visible receiver, then retry the same target"
         }
 
         if tapReceiver.interactionDisabledInChain {
-            return "wait for the target to become enabled, then refetch with get_interface before retrying activate"
+            return "wait for the target to become enabled, then retry the same semantic target"
         }
 
         if tapReceiver.isSwiftUIGestureContainer {
             return "retarget the accessible control inside the SwiftUI container before retrying activate"
         }
 
-        return "retarget from a fresh get_interface snapshot before retrying activate"
+        return "retry with a semantic selector that identifies the intended control"
     }
 
     private static func formatReceiverLine(_ receiver: TheSafecracker.TapReceiverDiagnostic) -> String {

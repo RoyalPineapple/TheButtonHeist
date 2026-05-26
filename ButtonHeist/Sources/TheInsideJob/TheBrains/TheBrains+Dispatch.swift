@@ -132,9 +132,9 @@ extension TheBrains {
     }
 
     /// Standard interaction with an operation-local semantic snapshot preserved
-    /// across the live refresh. Targeted actions use the snapshot only when the
-    /// fresh visible parse still matches it, so offscreen recovery never reaches
-    /// through stale hierarchy memory.
+    /// across the live refresh. Targeted actions may derive a selector from the
+    /// snapshot, but semantic reveal and live geometry acquisition stay inside
+    /// Navigation.makeActionable against current UI state.
     func performInteraction(
         command: ClientMessage,
         interaction: (Screen?) async -> TheSafecracker.InteractionResult

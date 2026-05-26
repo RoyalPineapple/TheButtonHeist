@@ -210,7 +210,7 @@ final class TheBrainsActionTests: XCTestCase {
             "label=\"Volume\"",
             "traits=[adjustable]",
             "liveObject=deallocated",
-            "try refresh with get_interface",
+            "live target became stale during semantic actionability",
         ])
     }
 
@@ -232,7 +232,7 @@ final class TheBrainsActionTests: XCTestCase {
             "label=\"Brightness\"",
             "traits=[adjustable]",
             "liveObject=deallocated",
-            "try refresh with get_interface",
+            "live target became stale during semantic actionability",
         ])
     }
 
@@ -301,7 +301,7 @@ final class TheBrainsActionTests: XCTestCase {
             "heistId=\"options_button\"",
             "label=\"Options\"",
             "liveObject=deallocated",
-            "try refresh with get_interface",
+            "live target became stale during semantic actionability",
         ])
     }
 
@@ -752,12 +752,13 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(liveObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
+            "semantic actionability failed [geometryNotActionable]",
             "gesture target unavailable",
             "method=increment",
             "phase=targeting",
             "heistId=\"geometry_missing_slider\"",
             "visible=true",
-            "refresh with get_interface",
+            "fresh live geometry from semantic actionability",
         ])
     }
 
@@ -978,11 +979,10 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertNil(dispatchedPoint, "Known-only targets must not dispatch their stored activation point")
         XCTAssertDiagnostic(result.message, contains: [
-            "ensure_on_screen failed",
+            "semantic actionability failed [noRevealPath]",
             "known target \"Below Fold\"",
             "heistId: below_fold_button",
             "no content-space position",
-            "use element_search",
         ])
     }
 

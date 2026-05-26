@@ -6,45 +6,18 @@ import TheScore
 
 extension Actions {
     var liveActionTargetRecoveryPolicy: LiveActionTargetRecoveryPolicy {
-        LiveActionTargetRecoveryPolicy(stash: stash, navigation: navigation)
+        LiveActionTargetRecoveryPolicy(navigation: navigation)
     }
 }
 
-/// Converts pre-action positioning into a command failure without inline rescue chains.
-struct PreActionPositioningPolicy {
-    enum Outcome {
-        case ready
-        case failed(TheSafecracker.InteractionResult)
-    }
-
-    let commandMethod: ActionMethod
-
-    func evaluate(_ result: Navigation.EnsureOnScreenResult) -> Outcome {
-        switch result {
-        case .alreadyUsable, .adjustedVisibleTarget, .recoveredKnownOffscreen, .operationLocalRotorResult:
-            return .ready
-        case .failed(let failure):
-            return .failed(failure.interactionResult(commandMethod: commandMethod))
-        }
-    }
-}
-
-extension Navigation.EnsureOnScreenFailure {
+extension Navigation.SemanticActionabilityFailure {
     func interactionResult(commandMethod: ActionMethod) -> TheSafecracker.InteractionResult {
-        .failure(interactionMethod(commandMethod: commandMethod), message: message)
-    }
-
-    private func interactionMethod(commandMethod: ActionMethod) -> ActionMethod {
-        switch method {
-        case .some(let method):
-            return method
-        case .none:
-            return commandMethod
-        }
+        .failure(method ?? commandMethod, message: message)
     }
 }
 
-/// Resolves a live action target, refreshing once on recoverable stale-object failures.
+/// Resolves a semantic actionability target, refreshing once on recoverable
+/// stale-object failures.
 struct LiveActionTargetRecoveryPolicy {
     struct Request {
         let normalizedTarget: TheStash.NormalizedTarget
@@ -59,20 +32,20 @@ struct LiveActionTargetRecoveryPolicy {
         case failure(TheSafecracker.InteractionResult)
     }
 
-    let stash: TheStash
     let navigation: Navigation
 
     @MainActor
     func resolve(_ request: Request) async -> Resolution {
-        let target = request.normalizedTarget.executableTarget
-        let firstResolution = stash.resolveTarget(target)
-        guard let firstResolved = firstResolution.resolved else {
-            return .failure(.failure(
-                .elementNotFound,
-                message: request.normalizedTarget.diagnostics(firstResolution.diagnostics)
-            ))
+        switch await navigation.makeActionable(
+            for: request.normalizedTarget,
+            method: request.method,
+            deallocatedBoundary: request.deallocatedBoundary
+        ) {
+        case .actionable(let actionableTarget):
+            return makeContext(request, actionableTarget: actionableTarget)
+        case .failed(let failure):
+            return .failure(failure.interactionResult(commandMethod: request.method))
         }
-        return await makeContext(request, target: target, resolved: firstResolved, allowingRefresh: true)
     }
 
     @MainActor
@@ -80,105 +53,30 @@ struct LiveActionTargetRecoveryPolicy {
         _ normalizedTarget: TheStash.NormalizedTarget
     ) async -> ActivationPolicy.RefreshResult {
         navigation.refresh()
-        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-        switch PreActionPositioningPolicy(commandMethod: .activate).evaluate(positioning) {
-        case .ready:
-            break
-        case .failed(let failure):
-            return .failure(failure)
-        }
-        let resolution = stash.resolveTarget(normalizedTarget.executableTarget)
-        guard let resolved = resolution.resolved else {
-            return .failure(.failure(
-                .elementNotFound,
-                message: normalizedTarget.diagnostics(resolution.diagnostics)
-            ))
-        }
-        let liveTargetResolution = stash.resolveLiveActionTarget(for: resolved)
-        switch liveTargetResolution {
-        case .resolved(let liveTarget):
-            return .resolved(resolvedTarget: resolved, liveTarget: liveTarget)
-        case .objectUnavailable:
-            let traitNames = ActionCapabilityDiagnostic.traitNames(resolved.element.traits)
-            let message = ActivateFailureDiagnostic.build(
-                element: resolved.element,
-                traitNames: traitNames,
-                activateOutcome: .objectDeallocated,
-                tapAttempted: false,
-                tapReceiver: nil,
-                screenBounds: ScreenMetrics.current.bounds
+        switch await navigation.makeActionable(
+            for: normalizedTarget,
+            method: .activate,
+            deallocatedBoundary: "activation retry"
+        ) {
+        case .actionable(let actionableTarget):
+            return .resolved(
+                resolvedTarget: actionableTarget.resolvedTarget,
+                liveTarget: actionableTarget.liveTarget
             )
-            return .failure(.failure(.activate, message: message))
-        case .geometryUnavailable:
-            return .failure(.failure(
-                .activate,
-                message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                    method: .activate,
-                    element: resolved.screenElement,
-                    isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
-                )
-            ))
+        case .failed(let failure):
+            return .failure(failure.interactionResult(commandMethod: .activate))
         }
-    }
-
-    @MainActor
-    private func resolveAfterRefresh(
-        _ request: Request,
-        target: ElementTarget,
-        initialFailure: TheSafecracker.InteractionResult
-    ) async -> Resolution {
-        navigation.refresh()
-        let positioning = await navigation.ensureOnScreen(for: request.normalizedTarget)
-        if let recoveryFailure = positioning.failure {
-            return .failure(LiveActionTargetRecoveryDiagnostic.recoveryFailed(
-                initialFailure: initialFailure,
-                recoveryObservation: recoveryFailure.message,
-                method: request.method
-            ))
-        }
-        let resolution = stash.resolveTarget(target)
-        guard let resolved = resolution.resolved else {
-            return .failure(LiveActionTargetRecoveryDiagnostic.recoveryFailed(
-                initialFailure: initialFailure,
-                recoveryObservation: request.normalizedTarget.diagnostics(resolution.diagnostics),
-                method: request.method
-            ))
-        }
-        return await makeContext(request, target: target, resolved: resolved, allowingRefresh: false)
     }
 
     @MainActor
     private func makeContext(
         _ request: Request,
-        target: ElementTarget,
-        resolved: TheStash.ResolvedTarget,
-        allowingRefresh: Bool
-    ) async -> Resolution {
+        actionableTarget: Navigation.SemanticActionableTarget
+    ) -> Resolution {
+        let resolved = actionableTarget.resolvedTarget
+        let liveTarget = actionableTarget.liveTarget
         if let failure = request.preflight?(resolved) {
             return .failure(failure)
-        }
-        let liveTargetResolution = stash.resolveLiveActionTarget(for: resolved)
-        let liveTarget: TheStash.LiveActionTarget
-        switch liveTargetResolution {
-        case .resolved(let resolvedLiveTarget):
-            liveTarget = resolvedLiveTarget
-        case .objectUnavailable:
-            let failure = objectUnavailableFailure(
-                method: request.method,
-                resolved: resolved,
-                deallocatedBoundary: request.deallocatedBoundary
-            )
-            let annotatedFailure = annotateFailure(failure, with: request.normalizedTarget)
-            guard allowingRefresh else {
-                return .failure(annotatedFailure)
-            }
-            return await resolveAfterRefresh(request, target: target, initialFailure: annotatedFailure)
-        case .geometryUnavailable:
-            let failure = geometryUnavailableFailure(
-                method: request.method,
-                resolved: resolved
-            )
-            return .failure(annotateFailure(failure, with: request.normalizedTarget))
         }
         if request.requireInteractive {
             switch TheStash.Interactivity.checkInteractivity(resolved.element, object: liveTarget.object) {
@@ -198,55 +96,10 @@ struct LiveActionTargetRecoveryPolicy {
             }
         }
         return .success(Actions.LiveElementActionContext(
-            normalizedTarget: request.normalizedTarget,
+            normalizedTarget: actionableTarget.normalizedTarget,
             resolvedTarget: resolved,
             liveTarget: liveTarget
         ))
-    }
-
-    @MainActor
-    private func objectUnavailableFailure(
-        method: ActionMethod,
-        resolved: TheStash.ResolvedTarget,
-        deallocatedBoundary: String
-    ) -> TheSafecracker.InteractionResult {
-        .failure(
-            .elementDeallocated,
-            message: ActionCapabilityDiagnostic.elementDeallocated(
-                boundary: deallocatedBoundary,
-                element: resolved.screenElement,
-                isInflated: stash.visibleIds.contains(resolved.screenElement.heistId)
-            )
-        )
-    }
-
-    @MainActor
-    private func geometryUnavailableFailure(
-        method: ActionMethod,
-        resolved: TheStash.ResolvedTarget
-    ) -> TheSafecracker.InteractionResult {
-        .failure(
-            method,
-            message: ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                method: method,
-                element: resolved.screenElement,
-                isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
-            )
-        )
-    }
-
-    @MainActor
-    private func annotateFailure(
-        _ result: TheSafecracker.InteractionResult,
-        with normalizedTarget: TheStash.NormalizedTarget
-    ) -> TheSafecracker.InteractionResult {
-        guard let message = result.message else { return result }
-        return .failure(
-            result.method,
-            message: normalizedTarget.diagnostics(message),
-            payload: result.payload,
-            failureKind: result.failureKind
-        )
     }
 }
 
@@ -286,7 +139,7 @@ struct LiveActionTargetRecoveryDiagnostic: Equatable {
             initialFailureMessage: initialMessage,
             contractFailed: "live action target must be reachable after refresh",
             knownState: "refresh/re-resolve failed; observed \(observed)",
-            nextValidCommand: "get_interface, then retry \(method.rawValue) against the refreshed element"
+            nextValidCommand: "retry \(method.rawValue) against the same semantic target after UI settles"
         )
     }
 

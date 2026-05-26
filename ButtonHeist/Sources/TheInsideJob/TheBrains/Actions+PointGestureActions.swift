@@ -7,7 +7,7 @@ import TheScore
 extension Actions {
 
     /// Unified pipeline for gestures that target a screen point:
-    /// ensureOnScreen (if element target) → resolve point → perform gesture.
+    /// semantic selector → actionable target (if element target) → point → gesture.
     func performPointAction(
         elementTarget: (any SemanticElementTarget)?,
         pointX: Double?,
@@ -19,16 +19,22 @@ extension Actions {
         let normalizedTarget = elementTarget.map {
             normalizePointGestureTarget($0, recordedScreen: recordedScreen)
         }
+        let actionableTarget: Navigation.SemanticActionableTarget?
         if let normalizedTarget {
-            let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-            switch PreActionPositioningPolicy(commandMethod: method).evaluate(positioning) {
-            case .ready:
-                break
+            switch await navigation.makeActionable(
+                for: normalizedTarget,
+                method: method,
+                deallocatedBoundary: "gesture action"
+            ) {
+            case .actionable(let target):
+                actionableTarget = target
             case .failed(let failure):
-                return failure
+                return failure.interactionResult(commandMethod: method)
             }
+        } else {
+            actionableTarget = nil
         }
-        switch resolveGesturePoint(from: normalizedTarget, pointX: pointX, pointY: pointY, method: method) {
+        switch resolveGesturePoint(from: actionableTarget, pointX: pointX, pointY: pointY, method: method) {
         case .failure(let result):
             return result
         case .success(let point):
@@ -89,15 +95,19 @@ extension Actions {
                 )
             }
             let normalizedTarget = normalizePointGestureTarget(elementTarget, recordedScreen: recordedScreen)
-            let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-            switch PreActionPositioningPolicy(commandMethod: .syntheticSwipe).evaluate(positioning) {
-            case .ready:
-                break
+            let actionableTarget: Navigation.SemanticActionableTarget
+            switch await navigation.makeActionable(
+                for: normalizedTarget,
+                method: .syntheticSwipe,
+                deallocatedBoundary: "gesture action"
+            ) {
+            case .actionable(let target):
+                actionableTarget = target
             case .failed(let failure):
-                return failure
+                return failure.interactionResult(commandMethod: .syntheticSwipe)
             }
             let frame: CGRect
-            switch resolveGestureFrame(for: normalizedTarget, method: .syntheticSwipe) {
+            switch resolveGestureFrame(for: actionableTarget, method: .syntheticSwipe) {
             case .success(let liveFrame):
                 frame = liveFrame
             case .failure(let result):
@@ -122,17 +132,23 @@ extension Actions {
         let normalizedTarget = target.swipeElementTarget.map {
             normalizePointGestureTarget($0, recordedScreen: recordedScreen)
         }
+        let actionableTarget: Navigation.SemanticActionableTarget?
         if let normalizedTarget {
-            let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-            switch PreActionPositioningPolicy(commandMethod: .syntheticSwipe).evaluate(positioning) {
-            case .ready:
-                break
+            switch await navigation.makeActionable(
+                for: normalizedTarget,
+                method: .syntheticSwipe,
+                deallocatedBoundary: "gesture action"
+            ) {
+            case .actionable(let target):
+                actionableTarget = target
             case .failed(let failure):
-                return failure
+                return failure.interactionResult(commandMethod: .syntheticSwipe)
             }
+        } else {
+            actionableTarget = nil
         }
         switch resolveGesturePoint(
-            from: normalizedTarget,
+            from: actionableTarget,
             pointX: target.startX,
             pointY: target.startY,
             method: .syntheticSwipe

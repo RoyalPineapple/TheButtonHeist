@@ -9,40 +9,22 @@ final class ActivationPolicyTests: XCTestCase {
 
     private final class ActivationObject: NSObject {}
 
-    func testPreActionPositioningPolicyAcceptsSuccessfulPositioning() {
-        let outcome = PreActionPositioningPolicy(commandMethod: .syntheticTap)
-            .evaluate(.recoveredKnownOffscreen)
+    func testSemanticActionabilityFailureMapsNoRevealPathToCommandMethod() {
+        let result = Navigation.SemanticActionabilityFailure.noRevealPath("target has no reveal path")
+            .interactionResult(commandMethod: .syntheticTap)
 
-        guard case .ready = outcome else {
-            XCTFail("Expected successful positioning to be ready")
-            return
-        }
-    }
-
-    func testPreActionPositioningPolicyMapsActionFailureToCommandMethod() {
-        let outcome = PreActionPositioningPolicy(commandMethod: .syntheticTap)
-            .evaluate(.failed(.actionFailed("target could not be positioned")))
-
-        guard case .failed(let result) = outcome else {
-            XCTFail("Expected action positioning failure")
-            return
-        }
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .syntheticTap)
-        XCTAssertEqual(result.message, "target could not be positioned")
+        XCTAssertEqual(result.message, "semantic actionability failed [noRevealPath]: target has no reveal path")
     }
 
-    func testPreActionPositioningPolicyPreservesElementNotFoundMethod() {
-        let outcome = PreActionPositioningPolicy(commandMethod: .syntheticTap)
-            .evaluate(.failed(.elementNotFound("no such element")))
+    func testSemanticActionabilityFailurePreservesElementNotFoundMethod() {
+        let result = Navigation.SemanticActionabilityFailure.notFound("no such element")
+            .interactionResult(commandMethod: .syntheticTap)
 
-        guard case .failed(let result) = outcome else {
-            XCTFail("Expected element-not-found positioning failure")
-            return
-        }
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementNotFound)
-        XCTAssertEqual(result.message, "no such element")
+        XCTAssertEqual(result.message, "semantic actionability failed [notFound]: no such element")
     }
 
     func testAccessibilityActivateSuccessStopsPolicy() async {
@@ -117,7 +99,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .failure(.failure(.activate, message: "retry positioning failed"))
+                .failure(.failure(.activate, message: "retry actionability failed"))
             },
             syntheticTap: { point in
                 tappedPoints.append(point)
@@ -128,7 +110,7 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.message, "retry positioning failed")
+        XCTAssertEqual(result.message, "retry actionability failed")
         XCTAssertEqual(activateCount, 1)
         XCTAssertTrue(tappedPoints.isEmpty)
         XCTAssertTrue(fingerprintPoints.isEmpty)
@@ -249,7 +231,7 @@ final class ActivationPolicyTests: XCTestCase {
                 .elementDeallocated,
                 message: "element action failed: observed liveObject=deallocated"
             ),
-            recoveryObservation: "ensure_on_screen failed: known target offscreen",
+            recoveryObservation: "semantic actionability failed [noRevealPath]: known target offscreen",
             method: .customAction
         )
 
@@ -259,11 +241,11 @@ final class ActivationPolicyTests: XCTestCase {
         )
         XCTAssertEqual(
             diagnostic.knownState,
-            "refresh/re-resolve failed; observed ensure_on_screen failed: known target offscreen"
+            "refresh/re-resolve failed; observed semantic actionability failed [noRevealPath]: known target offscreen"
         )
         XCTAssertEqual(
             diagnostic.nextValidCommand,
-            "get_interface, then retry customAction against the refreshed element"
+            "retry customAction against the same semantic target after UI settles"
         )
     }
 
@@ -273,7 +255,7 @@ final class ActivationPolicyTests: XCTestCase {
                 .elementDeallocated,
                 message: "element action failed: observed liveObject=deallocated"
             ),
-            recoveryObservation: "ensure_on_screen failed: known target offscreen",
+            recoveryObservation: "semantic actionability failed [noRevealPath]: known target offscreen",
             method: .customAction
         )
 
@@ -283,8 +265,8 @@ final class ActivationPolicyTests: XCTestCase {
             "element action failed: observed liveObject=deallocated",
             "contractFailed: live action target must be reachable after refresh",
             "knownState: refresh/re-resolve failed",
-            "ensure_on_screen failed: known target offscreen",
-            "nextValidCommand: get_interface, then retry customAction against the refreshed element",
+            "semantic actionability failed [noRevealPath]: known target offscreen",
+            "nextValidCommand: retry customAction against the same semantic target after UI settles",
         ])
     }
 
@@ -299,7 +281,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed",
             "knownState: refresh/re-resolve failed; observed unknown",
-            "nextValidCommand: get_interface, then retry activate against the refreshed element",
+            "nextValidCommand: retry activate against the same semantic target after UI settles",
         ])
     }
 

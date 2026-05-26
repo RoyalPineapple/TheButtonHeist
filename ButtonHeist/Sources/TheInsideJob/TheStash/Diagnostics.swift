@@ -26,7 +26,7 @@ extension TheStash {
     enum Diagnostics {
 
     /// Diagnostic for an heistId that isn't in the committed semantic screen.
-    /// By the time we land here, `ensureOnScreen` has already tried to recover
+    /// By the time we land here, semantic actionability has already tried to reveal
     /// it, so the id is either stale (the hierarchy changed since the agent's
     /// last `get_interface`) or it never existed.
     static func heistIdNotFound(

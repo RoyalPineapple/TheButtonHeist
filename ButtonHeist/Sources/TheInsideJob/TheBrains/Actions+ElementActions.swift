@@ -20,7 +20,7 @@ extension Actions {
     }
 
     /// Unified pipeline for actions that target an element:
-    /// ensureOnScreen → resolve → check interactivity → perform action.
+    /// semantic selector → reveal plan → fresh live geometry → actionable target.
     func performElementAction(
         target: any SemanticElementTarget,
         method: ActionMethod,
@@ -31,10 +31,6 @@ extension Actions {
         action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
         let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
-        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-        if let failure = positioning.failure {
-            return .failure(failure.method ?? method, message: failure.message)
-        }
         switch await liveActionTargetRecoveryPolicy.resolve(.init(
             normalizedTarget: normalizedTarget,
             method: method,
@@ -153,7 +149,7 @@ extension Actions {
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
         if let containerTarget = target.actionContainerTarget {
-            return executeContainerCustomAction(
+            return await executeContainerCustomAction(
                 containerTarget,
                 ordinal: target.actionContainerOrdinal,
                 actionName: target.actionName
@@ -199,17 +195,26 @@ extension Actions {
         _ matcher: ContainerMatcher,
         ordinal: Int?,
         actionName: String
-    ) -> TheSafecracker.InteractionResult {
-        let resolution = stash.resolveContainerTarget(matcher, ordinal: ordinal)
-        guard case .resolved(let containerTarget) = resolution else {
-            return .failure(
-                .customAction,
-                message: "custom action failed: \(resolution.diagnostics); try get_interface to inspect container stableIds."
-            )
+    ) async -> TheSafecracker.InteractionResult {
+        let containerTarget: ResolvedContainerTarget
+        switch stash.resolveContainerTarget(matcher, ordinal: ordinal) {
+        case .resolved(let resolved):
+            containerTarget = resolved
+        case .notFound(let diagnostics):
+            return Navigation.SemanticActionabilityFailure
+                .notFound("custom action container target could not be made actionable: \(diagnostics)")
+                .interactionResult(commandMethod: .customAction)
+        case .ambiguous(_, let diagnostics):
+            return Navigation.SemanticActionabilityFailure
+                .ambiguous("custom action container target is ambiguous: \(diagnostics)")
+                .interactionResult(commandMethod: .customAction)
         }
         let liveTargetResolution = stash.resolveLiveContainerTarget(for: containerTarget)
         guard case .resolved(let liveContainerTarget) = liveTargetResolution else {
-            return .failure(.customAction, message: "custom action failed: container object deallocated")
+            return Navigation.SemanticActionabilityFailure.staleRefresh(
+                "custom action container target became stale before dispatch",
+                method: .customAction
+            ).interactionResult(commandMethod: .customAction)
         }
         switch stash.performCustomAction(named: actionName, on: liveContainerTarget) {
         case .deallocated:

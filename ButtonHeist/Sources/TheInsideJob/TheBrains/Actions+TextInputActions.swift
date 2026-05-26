@@ -110,26 +110,16 @@ extension Actions {
             return nil
         }
 
-        let positioning = await navigation.ensureOnScreen(for: normalizedTarget)
-        if let failure = positioning.failure {
-            return .failure(failure.method ?? .typeText, message: failure.message)
-        }
-        let resolution = stash.resolveTarget(normalizedTarget.executableTarget)
-        guard let resolved = resolution.resolved else {
-            return .failure(.elementNotFound, message: normalizedTarget.diagnostics(resolution.diagnostics))
-        }
-
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: resolved) else {
-            return .failure(
-                .typeText,
-                message: normalizedTarget.diagnostics(
-                    ActionCapabilityDiagnostic.gestureTargetUnavailable(
-                        method: .syntheticTap,
-                        element: resolved.screenElement,
-                        isVisible: stash.visibleIds.contains(resolved.screenElement.heistId)
-                    )
-                )
-            )
+        let liveTarget: TheStash.LiveActionTarget
+        switch await navigation.makeActionable(
+            for: normalizedTarget,
+            method: .typeText,
+            deallocatedBoundary: "text input focus"
+        ) {
+        case .actionable(let actionableTarget):
+            liveTarget = actionableTarget.liveTarget
+        case .failed(let failure):
+            return failure.interactionResult(commandMethod: .typeText)
         }
         let point = liveTarget.activationPoint
         guard await safecracker.tap(at: point) else {

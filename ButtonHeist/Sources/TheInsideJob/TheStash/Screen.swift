@@ -225,7 +225,7 @@ struct Screen: Equatable {
         }
     }
 
-    /// Latest inflated parse used for geometry, live object dispatch,
+    /// Latest live parse used for geometry, live object dispatch,
     /// scrolling, and wire-tree construction. This is viewport-shaped: known
     /// off-screen elements are retained in `KnownInterface`, but their live
     /// UIKit refs are intentionally absent until a new parse inflates them.
@@ -479,7 +479,7 @@ struct Screen: Equatable {
     /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
     /// observation is the source of truth.
     ///
-    /// `liveInterface` takes `other`'s. It is the latest inflated parse, not
+    /// `liveInterface` takes `other`'s. It is the latest live parse, not
     /// a unionable tree — accumulating it across scrolled pages would keep
     /// stale UIKit refs and geometry alive. Code that needs the "all elements
     /// ever seen on this screen" view reads `knownInterface`, not the live

@@ -28,7 +28,7 @@ The getaway driver — runs all comms between the wire and the crew.
 2. **Observation level** — requestScreen, waitForIdle (`brains.executeWaitForIdle`), waitForChange (`brains.executeWaitForChange`)
 3. **Action level** — recording start/stop, or `brains.executeCommand(message)` for all action commands
 
-Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()` so the response can include background accessibility context. Element-scoped commands still dispatch through TheBrains; semantic targeting owns viewport inflation and live geometry acquisition.
+Before dispatching actions, checks `brains.computeBackgroundAccessibilityTrace()` so the response can include background accessibility context. Element-scoped commands still dispatch through TheBrains; semantic targeting owns semantic reveal and live geometry acquisition.
 
 ### Encode / decode / send
 
