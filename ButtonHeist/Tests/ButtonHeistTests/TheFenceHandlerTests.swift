@@ -3275,7 +3275,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(batch.summaries.map(\.command), ["increment"])
         XCTAssertEqual(
             batch.summaries[0].error,
-            "run_batch step command \"increment\" with count > 1 is not supported by typed batch execution"
+            "run_batch step command \"increment\" expands to 2 actions; express repeats as separate ordered steps"
         )
     }
 
