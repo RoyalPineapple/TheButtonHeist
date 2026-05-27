@@ -1,6 +1,6 @@
 # TheGetaway — The Getaway Driver
 
-> **Directory:** `ButtonHeist/Sources/TheInsideJob/TheGetaway/` (`TheGetaway.swift`, `TheGetaway+Recording.swift`, `PingFastPath.swift`)
+> **Directory:** `ButtonHeist/Sources/TheInsideJob/TheGetaway/` (`TheGetaway.swift`, `TheGetaway+Recording.swift`)
 > **Platform:** iOS 17.0+ (UIKit, DEBUG builds only)
 > **Role:** Runs all comms between the wire and the crew — message dispatch, encode/decode, transport wiring, response state, recording lifecycle
 
@@ -69,8 +69,8 @@ The public `recordingPhase` projection collapses that route state to `.idle`, `.
 
 TheGetaway follows the same closure-injection pattern as TheMuscle:
 
-- TheMuscle's closures (`sendToClient`, `markClientAuthenticated`, etc.) are set by TheGetaway in `wireTransport`
-- ServerTransport delivers a single ordered `AsyncStream<TransportEvent>` (`transport.events`); TheGetaway runs one long-lived consumer task that awaits each event and dispatches via `handleTransportEvent(_:)`. The optional synchronous ping fast-path is installed via `transport.setSyncDataInterceptor(_:)` before `start()`.
+- TheMuscle's transport/delivery closures (`sendToClient`, `disconnectClient`, `onClientAuthenticated`, etc.) are set by TheGetaway in `wireTransport`
+- ServerTransport delivers a single ordered `AsyncStream<TransportEvent>` (`transport.events`); TheGetaway runs one long-lived consumer task that awaits each event and first asks TheMuscle to admit raw client data before dispatching it.
 - TheBrains is called directly (same `@MainActor`, synchronous calls)
 - TheInsideJob calls `getaway.noteSettledChangeIfNeeded()` and `getaway.wireTransport(_:)` — those are the only entry points from the job
 

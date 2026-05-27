@@ -4,8 +4,6 @@ import Foundation
 enum ClientDelivery: Sendable {
     struct Callbacks: Sendable {
         var sendToClient: @Sendable (_ data: Data, _ clientId: Int) async -> ServerSendOutcome
-        var markClientAuthenticated: @Sendable (_ clientId: Int) async -> Void
-        var markClientAwaitingApproval: @Sendable (_ clientId: Int) async -> Void
         var disconnectClient: @Sendable (_ clientId: Int) async -> Void
         var onClientAuthenticated: @MainActor @Sendable (
             _ clientId: Int,
@@ -39,24 +37,6 @@ enum ClientDelivery: Sendable {
             return .failed(.transportUnavailable)
         }
         return await callbacks.sendToClient(data, clientId)
-    }
-
-    @discardableResult
-    func markAuthenticated(_ clientId: Int) async -> CallbackOutcome {
-        guard case .wired(let callbacks) = self else {
-            return .failed(.callbacksNotInstalled("markClientAuthenticated"))
-        }
-        await callbacks.markClientAuthenticated(clientId)
-        return .delivered
-    }
-
-    @discardableResult
-    func markAwaitingApproval(_ clientId: Int) async -> CallbackOutcome {
-        guard case .wired(let callbacks) = self else {
-            return .failed(.callbacksNotInstalled("markClientAwaitingApproval"))
-        }
-        await callbacks.markClientAwaitingApproval(clientId)
-        return .delivered
     }
 
     @discardableResult

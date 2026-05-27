@@ -129,7 +129,6 @@ stateDiagram-v2
 | Callback | Set by | Fires when |
 |----------|--------|-----------|
 | `sendToClient` | TheInsideJob | Sending messages to a client |
-| `markClientAuthenticated` | TheInsideJob | Client passes auth |
 | `disconnectClient` | TheInsideJob | Force-disconnecting a client |
 | `onClientAuthenticated` | TheInsideJob | A client completes auth → triggers `sendServerInfo` |
 | `onSessionActiveChanged` | TheInsideJob | Session acquired or released → updates Bonjour TXT `sessionactive` key |

@@ -102,7 +102,7 @@ sequenceDiagram
     Client->>TheInsideJob: clientHello
     TheInsideJob->>Client: authRequired
     Client->>TheInsideJob: authenticate(token)
-    Note right of TheInsideJob: TheMuscle.handleUnauthenticatedMessage<br/>token matches → markAuthenticated
+    Note right of TheInsideJob: TheMuscle.handleUnauthenticatedMessage<br/>token matches → authenticated state
     TheInsideJob->>Client: info
     Note right of TheInsideJob: handleClientConnected → sendServerInfo
     Client->>TheInsideJob: requestInterface
@@ -133,7 +133,7 @@ sequenceDiagram
     Note right of TheInsideJob: User taps Allow
     TheInsideJob->>Client: authApproved(token)
     Note left of Client: Client stores token for reuse
-    Note right of TheInsideJob: TheMuscle.approveClient<br/>→ markAuthenticated
+    Note right of TheInsideJob: TheMuscle.approveClient<br/>→ authenticated state
     TheInsideJob->>Client: info
     Note right of TheInsideJob: handleClientConnected → sendServerInfo
     Client->>TheInsideJob: requestInterface
@@ -277,8 +277,8 @@ The stronger access controls are TLS trust plus the `ConnectionScope` filter tha
 | Component | Role |
 |-----------|------|
 | **TheMuscle** | Token resolution, validation, UI approval, and session locking. Presents `UIAlertController` for Allow/Deny approval. Owns `authToken`, `pendingApprovalClients`, and authenticated client/session state. |
-| **SimpleSocketServer** | Tracks per-client auth state via `ClientPhase` enum (`.unauthenticated` / `.authenticated`). Routes messages to `onDataReceived` (authenticated) or `onUnauthenticatedData` (not yet authenticated). |
-| **TheInsideJob** | Wires TheMuscle callbacks to the socket server. Owns the server lifecycle. |
+| **SimpleSocketServer** | Owns TCP/TLS framing, rate limiting, send buffers, and connection lifecycle. It emits raw framed data and does not own auth state. |
+| **TheInsideJob** | Wires TheMuscle delivery callbacks to the socket server. Owns the server lifecycle. |
 | **DeviceConnection** | Client-side handshake and auth handling. Verifies `buttonHeistVersion`, sends `clientHello` after `serverHello`, sends token on `authRequired`, stores token from `authApproved`, and emits the connected event only after receiving `info` (post-auth). |
 | **TheHandoff** | Passes `token` to DeviceConnection. Stores approved tokens via `onAuthApproved` callback. Tracks `connectionPhase` including auth failures, approval-pending failures, and session-lock failures via `ConnectionError`. |
 

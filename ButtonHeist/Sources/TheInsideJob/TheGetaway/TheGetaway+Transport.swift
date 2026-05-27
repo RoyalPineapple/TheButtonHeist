@@ -32,12 +32,6 @@ extension TheGetaway {
         let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
             await server.send(data, to: clientId)
         }
-        let markAuth: @Sendable (Int) async -> Void = { clientId in
-            await server.markAuthenticated(clientId)
-        }
-        let markApprovalPending: @Sendable (Int) async -> Void = { clientId in
-            await server.markApprovalPending(clientId)
-        }
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             await server.disconnect(clientId: clientId)
         }
@@ -52,17 +46,10 @@ extension TheGetaway {
         }
         await muscle.installCallbacks(
             sendToClient: sendToClient,
-            markClientAuthenticated: markAuth,
-            markClientAwaitingApproval: markApprovalPending,
             disconnectClient: disconnect,
             onClientAuthenticated: onAuthenticated,
             onSessionActiveChanged: onSessionActiveChanged
         )
-
-        let pongPayload = self.pongPayload
-        transport.setSyncDataInterceptor { _, data in
-            PingFastPath.encodedPong(for: data, payload: pongPayload)
-        }
 
         eventConsumerTask?.cancel()
         eventConsumerTask = Task { @MainActor [weak self, events = transport.events] in
@@ -92,17 +79,16 @@ extension TheGetaway {
             await handleClientDeliveryTerminated(clientId: clientId)
 
         case .dataReceived(let clientId, let data, let respond):
-            await handleClientMessage(clientId, data: data, respond: respond)
-
-        case .unauthenticatedData(let clientId, let data, let respond):
-            await muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+            switch await muscle.admitClientMessage(clientId, data: data, respond: respond) {
+            case .admitted(let message):
+                await handleClientMessage(message, respond: respond)
+            case .handled:
+                break
+            }
 
         case .rateLimited(_, let respond):
             let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
             sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
-
-        case .fastPathHandled(let clientId):
-            await muscle.noteClientActivity(clientId)
 
         case .sendFailed(let clientId, let failure):
             let deliveryResult = DeliveryResult(clientId: clientId, sendFailure: failure)

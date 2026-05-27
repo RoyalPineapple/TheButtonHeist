@@ -47,9 +47,7 @@ extension SimpleSocketServer {
             connectionLogger.info("Accepted \(scope.rawValue) connection from \(hostDescription) via [\(interfaceNames)]")
         }
 
-        let clientId = clientRegistry.insert(connection: connection) { clientId in
-            .awaitingAuthentication(deadline: makeAuthDeadline(for: clientId))
-        }
+        let clientId = clientRegistry.insert(connection: connection)
         let remoteAddress = Self.extractRemoteHost(from: connection).map { "\($0)" }
         connectionLogger.info("Client \(clientId) connected")
         clientLifecycle.clientConnected(clientId, address: remoteAddress)

@@ -18,11 +18,11 @@ The getaway driver — runs all comms between the wire and the crew.
 
 ### Transport wiring
 
-`wireTransport(_:)` installs six closures on TheMuscle (sendToClient, markClientAuthenticated, markClientAwaitingApproval, disconnectClient, onClientAuthenticated, onSessionActiveChanged), installs a synchronous ping fast-path on the transport via `setSyncDataInterceptor(_:)`, and starts a single long-lived consumer task that awaits `transport.events` (an ordered `AsyncStream<TransportEvent>`) and dispatches each event via `handleTransportEvent(_:)`. This is the bridge between auth and networking — TheMuscle and ServerTransport never reference each other directly. Routing every event through one stream means `clientConnected` always lands before its first `dataReceived`, the race the prior per-event `Task { @MainActor in ... }` callback bridge could lose.
+`wireTransport(_:)` installs four closures on TheMuscle (sendToClient, disconnectClient, onClientAuthenticated, onSessionActiveChanged), and starts a single long-lived consumer task that awaits `transport.events` (an ordered `AsyncStream<TransportEvent>`) and dispatches each event via `handleTransportEvent(_:)`. This is the bridge between admission and networking — TheMuscle and ServerTransport never reference each other directly. Routing every event through one stream means `clientConnected` always lands before its first `dataReceived`, the race the prior per-event `Task { @MainActor in ... }` callback bridge could lose.
 
 ### Message dispatch
 
-`handleClientMessage(_:data:respond:)` is the two-level switch:
+`handleClientMessage(_:respond:)` accepts only an `AdmittedClientMessage` minted by TheMuscle, then runs the two-level switch:
 
 1. **Protocol level** — clientHello/authenticate (pre-auth, owned by TheMuscle), requestInterface, ping, status.
 2. **Observation level** — requestScreen, waitForIdle (`brains.executeWaitForIdle`), waitForChange (`brains.executeWaitForChange`)

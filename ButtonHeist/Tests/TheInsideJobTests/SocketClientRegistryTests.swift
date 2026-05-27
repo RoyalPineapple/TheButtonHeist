@@ -3,34 +3,19 @@ import Network
 @testable import TheInsideJob
 
 final class SocketClientRegistryTests: XCTestCase {
-    private let inertDeadline: @Sendable () -> Task<Void, Never> = {
-        Task {}
-    }
-
-    func testRegistryOwnsClientIdentityAndAuthentication() {
+    func testRegistryOwnsClientIdentity() {
         var registry = SocketClientRegistry()
 
-        let clientId = registry.insert(
-            connection: makeConnection(),
-            authentication: .awaitingAuthentication(deadline: inertDeadline())
-        )
+        let clientId = registry.insert(connection: makeConnection())
 
         XCTAssertEqual(clientId, 1)
         XCTAssertEqual(registry.count, 1)
-        XCTAssertFalse(registry.isAuthenticated(clientId))
-        XCTAssertTrue(registry.markApprovalPending(clientId))
-        XCTAssertEqual(registry.authentication(for: clientId), .awaitingApproval(deadline: inertDeadline()))
-        XCTAssertTrue(registry.markAuthenticated(clientId))
-        XCTAssertTrue(registry.isAuthenticated(clientId))
-        XCTAssertEqual(registry.authenticatedClientIds, [clientId])
+        XCTAssertNotNil(registry.client(clientId))
     }
 
     func testRegistryOwnsSendBufferReservation() {
         var registry = SocketClientRegistry()
-        let clientId = registry.insert(
-            connection: makeConnection(),
-            authentication: .awaitingAuthentication(deadline: inertDeadline())
-        )
+        let clientId = registry.insert(connection: makeConnection())
 
         guard case .accepted = registry.reserveSend(clientId: clientId, byteCount: 10) else {
             return XCTFail("Expected accepted send reservation")
@@ -48,30 +33,27 @@ final class SocketClientRegistryTests: XCTestCase {
 
     func testRegistryOwnsRateLimitWindowAndNotification() {
         var registry = SocketClientRegistry()
-        let clientId = registry.insert(
-            connection: makeConnection(),
-            authentication: .awaitingAuthentication(deadline: inertDeadline())
-        )
+        let clientId = registry.insert(connection: makeConnection())
         let now = Date()
 
         for _ in 0..<SocketRateLimiter.defaultMaxMessagesPerSecond {
             XCTAssertEqual(
                 registry.recordInboundMessage(clientId: clientId, at: now),
-                .accepted(authenticated: false)
+                .accepted
             )
         }
 
         XCTAssertEqual(
             registry.recordInboundMessage(clientId: clientId, at: now),
-            .rateLimited(authenticated: false, shouldNotify: true)
+            .rateLimited(shouldNotify: true)
         )
         XCTAssertEqual(
             registry.recordInboundMessage(clientId: clientId, at: now),
-            .rateLimited(authenticated: false, shouldNotify: false)
+            .rateLimited(shouldNotify: false)
         )
         XCTAssertEqual(
             registry.recordInboundMessage(clientId: clientId, at: now.addingTimeInterval(1.1)),
-            .accepted(authenticated: false)
+            .accepted
         )
     }
 

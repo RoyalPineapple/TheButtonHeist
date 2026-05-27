@@ -45,13 +45,6 @@ extension SimpleSocketServer {
         return .enqueued
     }
 
-    /// Broadcast data to all authenticated clients.
-    func broadcastToAll(_ data: Data) {
-        for clientId in clientRegistry.authenticatedClientIds {
-            send(data, to: clientId)
-        }
-    }
-
     /// Called when NWConnection finishes processing a send.
     private func completedSend(clientId: Int, byteCount: Int, error: NWError?) {
         clientRegistry.completeSend(clientId: clientId, byteCount: byteCount)

@@ -7,24 +7,9 @@ import os
 import TheScore
 @testable import TheInsideJob
 
-private final class DeadlineCancellationProbe: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
-    private let expectation: XCTestExpectation
-
-    init(_ expectation: XCTestExpectation) {
-        self.expectation = expectation
-    }
-
-    func fulfill() {
-        expectation.fulfill()
-    }
-}
-
 final class SimpleSocketServerIntegrationTests: XCTestCase {
 
     private var server: SimpleSocketServer!
-    private let inertDeadline: @Sendable () -> Task<Void, Never> = {
-        Task {}
-    }
 
     override func setUp() {
         super.setUp()
@@ -58,45 +43,6 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
 
         XCTAssertFalse(admission.assign(7))
         XCTAssertEqual(admission.cancel(), 7)
-    }
-
-    // MARK: - Client authentication lifecycle
-
-    func testClientAuthenticationCarriesDeadlineOnlyWhileAwaiting() {
-        var authentication = SocketClientAuthentication.awaitingAuthentication(deadline: inertDeadline())
-
-        XCTAssertFalse(authentication.isAuthenticated)
-        XCTAssertEqual(authentication, .awaitingAuthentication(deadline: inertDeadline()))
-        XCTAssertTrue(authentication.markApprovalPending())
-        XCTAssertEqual(authentication, .awaitingApproval(deadline: inertDeadline()))
-        XCTAssertTrue(authentication.markAuthenticated())
-        XCTAssertTrue(authentication.isAuthenticated)
-        XCTAssertFalse(authentication.markApprovalPending())
-        XCTAssertEqual(authentication, .authenticated)
-    }
-
-    func testDirectClientAuthenticationSkipsApproval() {
-        var authentication = SocketClientAuthentication.awaitingAuthentication(deadline: inertDeadline())
-
-        XCTAssertTrue(authentication.markAuthenticated())
-        XCTAssertEqual(authentication, .authenticated)
-    }
-
-    func testMarkAuthenticatedCancelsAuthDeadline() async {
-        let deadlineCancelled = expectation(description: "deadline cancelled")
-        let probe = DeadlineCancellationProbe(deadlineCancelled)
-        let deadline = Task {
-            while !Task.isCancelled {
-                await Task.yield()
-            }
-            probe.fulfill()
-        }
-        var authentication = SocketClientAuthentication.awaitingAuthentication(deadline: deadline)
-
-        XCTAssertTrue(authentication.markAuthenticated())
-
-        await fulfillment(of: [deadlineCancelled], timeout: 1.0)
-        XCTAssertEqual(authentication, .authenticated)
     }
 
     // MARK: - ServerPhase transitions
@@ -218,16 +164,22 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(secondPort, 0)
     }
 
-    // MARK: - ClientPhase transitions
+    // MARK: - Client lifecycle
 
-    func testNewClientStartsUnauthenticated() async throws {
+    func testNewClientRoutesFramedDataToRawDataCallback() async throws {
         let capturedClientId = OSAllocatedUnfairLock<Int?>(initialState: nil)
+        let capturedData = OSAllocatedUnfairLock<Data?>(initialState: nil)
         let clientConnected = expectation(description: "client connected")
+        let dataReceived = expectation(description: "data received")
 
         let callbacks = SimpleSocketServer.Callbacks(
             onClientConnected: { clientId, _ in
                 capturedClientId.withLock { $0 = clientId }
                 clientConnected.fulfill()
+            },
+            onDataReceived: { _, data, _ in
+                capturedData.withLock { $0 = data }
+                dataReceived.fulfill()
             }
         )
         let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
@@ -246,77 +198,13 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
 
         let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-        let isAuthenticated = await server.isAuthenticated(clientId)
-        XCTAssertFalse(isAuthenticated, "New client should be unauthenticated")
+        connection.send(content: Data("raw-frame\n".utf8), completion: .contentProcessed { error in
+            XCTAssertNil(error)
+        })
 
-        connection.cancel()
-    }
-
-    func testMarkAuthenticatedTransitionsClient() async throws {
-        let capturedClientId = OSAllocatedUnfairLock<Int?>(initialState: nil)
-        let clientConnected = expectation(description: "client connected")
-
-        let callbacks = SimpleSocketServer.Callbacks(
-            onClientConnected: { clientId, _ in
-                capturedClientId.withLock { $0 = clientId }
-                clientConnected.fulfill()
-            }
-        )
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
-
-        let connection = NWConnection(
-            host: .ipv6(.loopback),
-            port: NWEndpoint.Port(rawValue: port)!,
-            using: .tcp
-        )
-        let clientReady = expectation(description: "client ready")
-        connection.stateUpdateHandler = { state in
-            if case .ready = state { clientReady.fulfill() }
-        }
-        connection.start(queue: .global())
-
-        await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
-
-        let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-        await server.markAuthenticated(clientId)
-
-        let isAuthenticated = await server.isAuthenticated(clientId)
-        XCTAssertTrue(isAuthenticated, "Client should be authenticated after markAuthenticated")
-
-        connection.cancel()
-    }
-
-    func testMarkAuthenticatedOnAlreadyAuthenticatedIsNoOp() async throws {
-        let capturedClientId = OSAllocatedUnfairLock<Int?>(initialState: nil)
-        let clientConnected = expectation(description: "client connected")
-
-        let callbacks = SimpleSocketServer.Callbacks(
-            onClientConnected: { clientId, _ in
-                capturedClientId.withLock { $0 = clientId }
-                clientConnected.fulfill()
-            }
-        )
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
-
-        let connection = NWConnection(
-            host: .ipv6(.loopback),
-            port: NWEndpoint.Port(rawValue: port)!,
-            using: .tcp
-        )
-        let clientReady = expectation(description: "client ready")
-        connection.stateUpdateHandler = { state in
-            if case .ready = state { clientReady.fulfill() }
-        }
-        connection.start(queue: .global())
-
-        await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
-
-        let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-        await server.markAuthenticated(clientId)
-        await server.markAuthenticated(clientId)
-
-        let isAuthenticated = await server.isAuthenticated(clientId)
-        XCTAssertTrue(isAuthenticated)
+        await fulfillment(of: [dataReceived], timeout: 5.0)
+        XCTAssertEqual(capturedData.withLock { $0 }, Data("raw-frame".utf8))
+        XCTAssertGreaterThan(clientId, 0)
 
         connection.cancel()
     }
@@ -355,9 +243,6 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
 
         await fulfillment(of: [clientDisconnected], timeout: 5.0)
 
-        let isAuthenticated = await server.isAuthenticated(clientId)
-        XCTAssertFalse(isAuthenticated, "Disconnected client should not be authenticated")
-
         connection.cancel()
     }
 
@@ -395,66 +280,6 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         await fulfillment(of: [clientConnected], timeout: 0.2)
 
         connection.cancel()
-    }
-
-    func testBroadcastOnlyReachesAuthenticatedClients() async throws {
-        let capturedClientIds = OSAllocatedUnfairLock<[Int]>(initialState: [])
-        let firstConnected = expectation(description: "first client connected")
-        let secondConnected = expectation(description: "second client connected")
-
-        let callbacks = SimpleSocketServer.Callbacks(
-            onClientConnected: { clientId, _ in
-                let count = capturedClientIds.withLock { ids -> Int in
-                    ids.append(clientId)
-                    return ids.count
-                }
-                if count == 1 { firstConnected.fulfill() }
-                if count == 2 { secondConnected.fulfill() }
-            }
-        )
-        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
-
-        let connection1 = NWConnection(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
-        let ready1 = expectation(description: "client 1 ready")
-        connection1.stateUpdateHandler = { state in
-            if case .ready = state { ready1.fulfill() }
-        }
-        connection1.start(queue: .global())
-        await fulfillment(of: [ready1, firstConnected], timeout: 5.0)
-
-        let connection2 = NWConnection(host: .ipv6(.loopback), port: NWEndpoint.Port(rawValue: port)!, using: .tcp)
-        let ready2 = expectation(description: "client 2 ready")
-        connection2.stateUpdateHandler = { state in
-            if case .ready = state { ready2.fulfill() }
-        }
-        connection2.start(queue: .global())
-        await fulfillment(of: [ready2, secondConnected], timeout: 5.0)
-
-        let authenticatedClientId = capturedClientIds.withLock { $0[0] }
-        await server.markAuthenticated(authenticatedClientId)
-
-        let testMessage = Data("broadcast-test\n".utf8)
-        await server.broadcastToAll(testMessage)
-
-        let received = expectation(description: "authenticated client receives broadcast")
-        connection1.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, _, _ in
-            if let content, String(data: content, encoding: .utf8)?.contains("broadcast-test") == true {
-                received.fulfill()
-            }
-        }
-        await fulfillment(of: [received], timeout: 5.0)
-
-        let notReceived = expectation(description: "unauthenticated client does not receive")
-        notReceived.isInverted = true
-        connection2.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, _, _ in
-            if let content, String(data: content, encoding: .utf8)?.contains("broadcast-test") == true {
-                notReceived.fulfill()
-            }
-        }
-        await fulfillment(of: [notReceived], timeout: 0.5)
-
-        connection1.cancel()
-        connection2.cancel()
     }
 
     // MARK: - Helpers

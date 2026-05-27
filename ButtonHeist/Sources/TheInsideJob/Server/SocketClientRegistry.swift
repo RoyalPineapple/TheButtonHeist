@@ -4,19 +4,17 @@ import Network
 /// Actor-owned client table for `SimpleSocketServer`.
 ///
 /// The server decides transport policy; this registry owns per-client mutable
-/// facts: identity allocation, authentication phase, send-buffer accounting,
-/// and rate-limit windows.
+/// facts: identity allocation, send-buffer accounting, and rate-limit windows.
 struct SocketClientRegistry {
     struct Client {
         let connection: NWConnection
-        var authentication: SocketClientAuthentication
         var rateLimiter: SocketRateLimiter
         var sendBuffer: SocketSendBuffer
     }
 
     enum InboundMessageDecision: Equatable, Sendable {
-        case accepted(authenticated: Bool)
-        case rateLimited(authenticated: Bool, shouldNotify: Bool)
+        case accepted
+        case rateLimited(shouldNotify: Bool)
         case missingClient
     }
 
@@ -31,22 +29,11 @@ struct SocketClientRegistry {
 
     var count: Int { clients.count }
 
-    mutating func insert(
-        connection: NWConnection,
-        authentication: SocketClientAuthentication
-    ) -> Int {
-        insert(connection: connection) { _ in authentication }
-    }
-
-    mutating func insert(
-        connection: NWConnection,
-        makeAuthentication: (Int) -> SocketClientAuthentication
-    ) -> Int {
+    mutating func insert(connection: NWConnection) -> Int {
         nextClientId += 1
         let clientId = nextClientId
         clients[nextClientId] = Client(
             connection: connection,
-            authentication: makeAuthentication(clientId),
             rateLimiter: SocketRateLimiter(),
             sendBuffer: SocketSendBuffer()
         )
@@ -67,36 +54,6 @@ struct SocketClientRegistry {
         clients[clientId]
     }
 
-    func authentication(for clientId: Int) -> SocketClientAuthentication? {
-        clients[clientId]?.authentication
-    }
-
-    @discardableResult
-    mutating func markAuthenticated(_ clientId: Int) -> Bool {
-        guard var client = clients[clientId],
-              client.authentication.markAuthenticated() else { return false }
-        clients[clientId] = client
-        return true
-    }
-
-    @discardableResult
-    mutating func markApprovalPending(_ clientId: Int) -> Bool {
-        guard var client = clients[clientId],
-              client.authentication.markApprovalPending() else { return false }
-        clients[clientId] = client
-        return true
-    }
-
-    func isAuthenticated(_ clientId: Int) -> Bool {
-        clients[clientId]?.authentication.isAuthenticated == true
-    }
-
-    var authenticatedClientIds: [Int] {
-        clients.compactMap { clientId, client in
-            client.authentication.isAuthenticated ? clientId : nil
-        }
-    }
-
     mutating func reserveSend(clientId: Int, byteCount: Int) -> SendReservation {
         guard var client = clients[clientId] else { return .missingClient }
         if let rejection = client.sendBuffer.reserve(byteCount: byteCount) {
@@ -114,13 +71,12 @@ struct SocketClientRegistry {
 
     mutating func recordInboundMessage(clientId: Int, at now: Date = Date()) -> InboundMessageDecision {
         guard var client = clients[clientId] else { return .missingClient }
-        let authenticated = client.authentication.isAuthenticated
         if client.rateLimiter.recordMessage(at: now) {
             let shouldNotify = client.rateLimiter.markNotifiedIfNeeded()
             clients[clientId] = client
-            return .rateLimited(authenticated: authenticated, shouldNotify: shouldNotify)
+            return .rateLimited(shouldNotify: shouldNotify)
         }
         clients[clientId] = client
-        return .accepted(authenticated: authenticated)
+        return .accepted
     }
 }
