@@ -9,7 +9,7 @@ extension Actions {
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
-        await navigation.ensureFirstResponderOnScreen()
+        await actionability.ensureFirstResponderOnScreen()
         let success = safecracker.performEditAction(target.action)
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
             target.action,
@@ -22,7 +22,7 @@ extension Actions {
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
-        await navigation.ensureFirstResponderOnScreen()
+        await actionability.ensureFirstResponderOnScreen()
         UIPasteboard.general.string = target.text
         return .success(method: .setPasteboard, payload: .value(target.text))
     }
@@ -37,7 +37,7 @@ extension Actions {
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
-        await navigation.ensureFirstResponderOnScreen()
+        await actionability.ensureFirstResponderOnScreen()
         let success = safecracker.resignFirstResponder()
         if success { return .success(method: .resignFirstResponder) }
         return .failure(
@@ -111,7 +111,7 @@ extension Actions {
         }
 
         let liveTarget: TheStash.LiveActionTarget
-        switch await navigation.makeActionable(
+        switch await actionability.makeActionable(
             for: normalizedTarget,
             method: .typeText,
             deallocatedBoundary: "text input focus"

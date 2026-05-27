@@ -6,7 +6,10 @@ import TheScore
 
 extension Actions {
     var liveActionTargetRecoveryPolicy: LiveActionTargetRecoveryPolicy {
-        LiveActionTargetRecoveryPolicy(navigation: navigation)
+        LiveActionTargetRecoveryPolicy(
+            actionability: actionability,
+            refresh: { [stash] in stash.refresh() }
+        )
     }
 }
 
@@ -26,11 +29,12 @@ struct LiveActionTargetRecoveryPolicy {
         case failure(TheSafecracker.InteractionResult)
     }
 
-    let navigation: Navigation
+    let actionability: SemanticActionability
+    let refresh: @MainActor () -> Screen?
 
     @MainActor
     func resolve(_ request: Request) async -> Resolution {
-        switch await navigation.makeActionable(
+        switch await actionability.makeActionable(
             for: request.normalizedTarget,
             method: request.method,
             deallocatedBoundary: request.deallocatedBoundary
@@ -46,8 +50,8 @@ struct LiveActionTargetRecoveryPolicy {
     func refreshActivationTarget(
         _ normalizedTarget: TheStash.NormalizedTarget
     ) async -> ActivationPolicy.RefreshResult {
-        navigation.refresh()
-        switch await navigation.makeActionable(
+        _ = refresh()
+        switch await actionability.makeActionable(
             for: normalizedTarget,
             method: .activate,
             deallocatedBoundary: "activation retry"
@@ -65,7 +69,7 @@ struct LiveActionTargetRecoveryPolicy {
     @MainActor
     private func makeContext(
         _ request: Request,
-        actionableTarget: Navigation.SemanticActionableTarget
+        actionableTarget: SemanticActionability.SemanticActionableTarget
     ) -> Resolution {
         let resolved = actionableTarget.resolvedTarget
         let liveTarget = actionableTarget.liveTarget
