@@ -163,12 +163,6 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testNormalizeHeistIdKeepsCurrentCaptureHandle() {
-        let sourceElement = element(
-            label: "Quantity",
-            value: "0",
-            identifier: "quantity_stepper",
-            traits: .adjustable
-        )
         let currentElement = element(
             label: "Quantity",
             value: "1",

@@ -98,8 +98,12 @@ final class TheInsideJobStateTests: XCTestCase {
         let lease = runtimeLease(transport: transport)
         lease.activate(on: job, resumePolling: false)
 
-        await lease.release(from: job, policy: .stop).value
-        await lease.release(from: job, policy: .stop).value
+        if let releaseTask = lease.release(from: job, policy: .stop) {
+            await releaseTask.value
+        }
+        if let releaseTask = lease.release(from: job, policy: .stop) {
+            await releaseTask.value
+        }
 
         XCTAssertEqual(stopCount, 1)
     }
@@ -293,7 +297,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testSuspendPausesActivePollingPreservingInterval() async {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverPhase = .running(lease: runtimeLease(transport: transport))
+        runtimeLease(transport: transport).activate(on: job, resumePolling: false)
         job.startPolling(interval: 5.0)
 
         await job.suspend()
