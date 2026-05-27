@@ -78,10 +78,20 @@ private extension TheFence {
 
         @ButtonHeistActor
         func elementTarget(in fence: TheFence) throws -> ElementTarget? {
-            ElementTarget(
-                heistId: try string("heistId"),
-                matcher: try matcher(),
-                ordinal: try ordinal()
+            let heistId = try string("heistId")
+            let matcher = try matcher()
+            let ordinal = try ordinal()
+            if heistId != nil, ordinal != nil || hasMatcherFieldKeys {
+                throw SchemaValidationError(
+                    field: "target",
+                    observed: request.observedDescription,
+                    expected: "either heistId or matcher fields with optional ordinal"
+                )
+            }
+            return ElementTarget(
+                heistId: heistId,
+                matcher: matcher,
+                ordinal: ordinal
             )
         }
 
@@ -148,6 +158,11 @@ private extension TheFence {
 
         var hasElementTargetFields: Bool {
             if request.keys.contains("heistId") { return true }
+            if hasMatcherFieldKeys { return true }
+            return false
+        }
+
+        var hasMatcherFieldKeys: Bool {
             if request.keys.contains("label") { return true }
             if request.keys.contains("identifier") { return true }
             if request.keys.contains("value") { return true }

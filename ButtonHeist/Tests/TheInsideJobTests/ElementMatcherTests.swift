@@ -13,8 +13,7 @@ import XCTest
 /// plumbs through to the same helper.
 ///
 /// `mode: .exact` is the production resolution path. `mode: .substring`
-/// is a legacy mode kept for `selectElements` and diagnostic searches;
-/// one sanity case below keeps it from bit-rotting.
+/// is a diagnostic search mode used by `selectElements`.
 @MainActor
 final class ElementMatcherTests: XCTestCase {
 
@@ -97,12 +96,11 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertTrue(element().matches(ElementMatcher(), mode: .exact))
     }
 
-    // MARK: - Substring-Mode Sanity (legacy diagnostic path)
+    // MARK: - Substring-Mode Sanity
 
     func testSubstringModeSanity() {
-        // `mode: .substring` is the legacy fall-through used by
-        // `selectElements` and diagnostics. One sanity case keeps it from
-        // bit-rotting; production resolution uses `.exact`.
+        // Production resolution uses `.exact`; substring matching is only
+        // for explicit diagnostic search surfaces.
         let element = element(label: "Save Changes")
         XCTAssertTrue(element.matches(ElementMatcher(label: "Save"), mode: .substring))
         XCTAssertTrue(element.matches(ElementMatcher(label: "Changes"), mode: .substring))

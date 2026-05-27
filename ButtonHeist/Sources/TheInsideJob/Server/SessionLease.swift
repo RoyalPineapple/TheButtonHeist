@@ -58,6 +58,10 @@ struct SessionLease {
         }
     }
 
+    var exposedActiveDriverId: String? {
+        activeSessionDriverId.flatMap(exposedDriverId(from:))
+    }
+
     var activeSessionConnections: Set<Int> {
         if case .active(_, let connections) = phase { return connections }
         return []

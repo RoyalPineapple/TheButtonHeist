@@ -96,6 +96,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     private static let reservedKeys: Set<String> = [
         "command", "label", "identifier", "value", "traits", "excludeTraits", "ordinal", "_recorded",
     ]
+    private static let forbiddenArgumentKeys: Set<String> = ["heistId"]
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -126,6 +127,12 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         var extraArguments: [String: HeistValue] = [:]
         for key in dynamicContainer.allKeys {
             guard !Self.reservedKeys.contains(key.stringValue) else { continue }
+            if Self.forbiddenArgumentKeys.contains(key.stringValue) {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: decoder.codingPath + [key],
+                    debugDescription: "Heist playback step must not contain top-level heistId; use matcher fields for durable playback identity and _recorded.heistId for metadata"
+                ))
+            }
             extraArguments[key.stringValue] = try dynamicContainer.decode(
                 HeistValue.self, forKey: key
             )
@@ -134,6 +141,19 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     }
 
     public func encode(to encoder: Encoder) throws {
+        if let forbiddenKey = arguments.keys.sorted().first(where: { Self.forbiddenArgumentKeys.contains($0) }) {
+            throw EncodingError.invalidValue(arguments, .init(
+                codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: forbiddenKey)],
+                debugDescription: "Heist playback step must not contain top-level \(forbiddenKey); use matcher fields for durable playback identity and _recorded.heistId for metadata"
+            ))
+        }
+        if target?.heistId != nil {
+            throw EncodingError.invalidValue(target as Any, .init(
+                codingPath: encoder.codingPath + [CodingKeys.label],
+                debugDescription: "Heist playback target matcher must not contain heistId; use matcher fields for durable playback identity and _recorded.heistId for metadata"
+            ))
+        }
+
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
 

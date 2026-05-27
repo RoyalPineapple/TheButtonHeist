@@ -5,7 +5,8 @@ import Foundation
 /// Target for element actions.
 /// Two resolution strategies: heistId (current-hierarchy token from
 /// get_interface) or matcher (describe the element by accessibility
-/// properties). HeistId takes priority when both are present.
+/// properties). HeistId is a standalone capture-local handle; ordinal only
+/// applies to matcher targets.
 /// Use heistId for immediate follow-up actions in the current capture; use
 /// minimum matchers for durable replay. Matcher fields use case-insensitive
 /// equality with typography folding — exact-or-miss.
@@ -21,10 +22,10 @@ public enum ElementTarget: Sendable, Equatable {
     /// This is a disambiguator for match results, NOT durable identity.
     case matcher(ElementMatcher, ordinal: Int? = nil)
 
-    /// Convenience: build from optional fields. HeistId wins if present.
     /// Returns nil if both matcher and ordinal are empty.
     public init?(heistId: HeistId? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
         if let heistId {
+            guard ordinal == nil, matcher.nonEmpty == nil else { return nil }
             self = .heistId(heistId)
         } else if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)
@@ -80,7 +81,23 @@ extension ElementTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if let ordinal, ordinal < 0 {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "ordinal must be non-negative, got \(ordinal)"
+            ))
+        }
         if let heistId = try container.decodeIfPresent(HeistId.self, forKey: .heistId) {
+            let hasMatcherFields = [
+                CodingKeys.label, .identifier, .value, .traits, .excludeTraits,
+            ].contains { container.contains($0) }
+            if ordinal != nil || hasMatcherFields {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath,
+                    debugDescription: "ElementTarget heistId cannot be combined with matcher fields or ordinal; use either a capture handle or a semantic matcher"
+                ))
+            }
             self = .heistId(heistId)
             return
         }
@@ -91,13 +108,6 @@ extension ElementTarget: Codable {
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
-        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-        if let ordinal, ordinal < 0 {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "ordinal must be non-negative, got \(ordinal)"
-            ))
-        }
         if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)
         } else if ordinal != nil {

@@ -169,7 +169,6 @@ final class TheStashResolutionTests: XCTestCase {
             identifier: "quantity_stepper",
             traits: .adjustable
         )
-        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
         let currentElement = element(
             label: "Quantity",
             value: "1",
@@ -178,7 +177,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
 
-        let normalized = bagman.normalizeTarget(.heistId("quantity_0"), in: sourceScreen)
+        let normalized = bagman.normalizeTarget(.heistId("quantity_0"))
 
         XCTAssertEqual(normalized.executableTarget, .heistId("quantity_0"))
         XCTAssertNil(normalized.sourceHeistId)
@@ -189,9 +188,7 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testNormalizeHeistIdDoesNotAddSourceMetadata() {
-        let screen = Screen.makeForTests()
-
-        let normalized = bagman.normalizeTarget(.heistId("missing_button"), in: screen)
+        let normalized = bagman.normalizeTarget(.heistId("missing_button"))
 
         XCTAssertEqual(normalized.executableTarget, .heistId("missing_button"))
         XCTAssertNil(normalized.sourceHeistId)
@@ -234,7 +231,7 @@ final class TheStashResolutionTests: XCTestCase {
         )
         let sourceWireElement = try XCTUnwrap(capture.interface.elements.first { $0.heistId == "quantity_0" })
         let semanticTarget = SemanticActionTarget(MinimumMatcher.build(element: sourceWireElement, in: capture))
-        let normalized = bagman.normalizeTarget(semanticTarget, in: sourceScreen)
+        let normalized = bagman.normalizeTarget(semanticTarget)
 
         XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
         guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {

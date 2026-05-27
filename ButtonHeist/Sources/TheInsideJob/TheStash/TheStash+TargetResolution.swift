@@ -166,7 +166,7 @@ extension TheStash {
     /// This does not rewrite heistIds. A heistId remains an exact handle into
     /// the current capture; durable replay identity must arrive as matcher
     /// fields produced by recording or SemanticActionTarget creation.
-    func normalizeTarget(_ target: ElementTarget, in _: Screen? = nil) -> NormalizedTarget {
+    func normalizeTarget(_ target: ElementTarget) -> NormalizedTarget {
         NormalizedTarget(
             executableTarget: target,
             sourceHeistId: nil

@@ -78,7 +78,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testStopHeistRejectsFileWithNoValidEvidence() async throws {
+    func testStopHeistRejectsMalformedEvidenceFile() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "invalid-evidence")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -90,9 +90,11 @@ final class BookKeeperHeistTests: XCTestCase {
         recording.fileHandle.write(Data("not-json\n".utf8))
 
         XCTAssertThrowsError(try bookKeeper.stopHeistRecording()) { error in
-            guard case BookKeeperError.heistRecording(.noValidSteps) = error else {
-                return XCTFail("Expected heistRecording(.noValidSteps), got \(error)")
+            guard case BookKeeperError.heistRecording(.evidenceReadFailed(let path, let reason)) = error else {
+                return XCTFail("Expected heistRecording(.evidenceReadFailed), got \(error)")
             }
+            XCTAssertEqual(path, recording.filePath.path)
+            XCTAssertTrue(reason.contains("line 1 is malformed"))
         }
     }
 
@@ -156,18 +158,17 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let script = try bookKeeper.stopHeistRecording()
         let recordedTrace = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace)
+        XCTAssertEqual(recordedTrace.captures.map(\.interface), [beforeInterface, afterInterface])
         XCTAssertEqual(recordedTrace.segments.count, 1)
         XCTAssertEqual(recordedTrace.segments[0].transitions.count, 1)
-        XCTAssertEqual(recordedTrace.captures.map(\.interface), [beforeInterface, afterInterface])
         XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "elementsChanged")
 
         let json = try XCTUnwrap(encodedRecordedTraceJSON(script))
-        XCTAssertNotNil(json["segments"])
-        XCTAssertNil(json["captures"])
-        let segments = try XCTUnwrap(json["segments"] as? [[String: Any]])
-        let firstSegment = try XCTUnwrap(segments.first)
-        XCTAssertNotNil(firstSegment["baseline"])
-        XCTAssertEqual((firstSegment["transitions"] as? [Any])?.count, 1)
+        XCTAssertNotNil(json["captures"])
+        XCTAssertNil(json["segments"])
+        let captures = try XCTUnwrap(json["captures"] as? [[String: Any]])
+        XCTAssertEqual(captures.count, 2)
+        XCTAssertNotNil(captures.first?["interface"])
     }
 
     @ButtonHeistActor
@@ -203,6 +204,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let script = try bookKeeper.stopHeistRecording()
         let recordedTrace = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace)
+        XCTAssertEqual(recordedTrace.captures.map(\.hash), [before.hash, after.hash])
         XCTAssertEqual(recordedTrace.segments.count, 2)
         XCTAssertEqual(recordedTrace.segments.map(\.baseline.hash), [before.hash, after.hash])
         XCTAssertTrue(recordedTrace.segments.allSatisfy(\.transitions.isEmpty))
@@ -247,7 +249,7 @@ final class BookKeeperHeistTests: XCTestCase {
         )
 
         try recordHeistEvidence(bookKeeper, command: .activate,
-            args: ["command": "activate", "heistId": "save", "label": "Stale Save"],
+            args: ["command": "activate", "heistId": "save"],
             actionResult: ActionResult(
                 success: true,
                 method: .activate,
@@ -465,7 +467,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testHeistIdWithNoMatcherPredicatesRecordsOrdinalFallback() async throws {
+    func testHeistIdWithNoMatcherPredicatesRecordsOrdinalSelector() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -626,42 +628,35 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(loaded.steps[1].arguments["text"], .string("test"))
     }
 
-    // MARK: - Malformed evidence resilience
+    // MARK: - Malformed evidence contract
 
     @ButtonHeistActor
-    func testStopHeistSkipsMalformedEvidenceLines() async throws {
+    func testStopHeistRejectsMalformedEvidenceLines() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "malformed-evidence")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        // Write a good step through the normal path
         try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Go"], targetCapture: nil)
 
-        // Inject a malformed line through the BookKeeper's own file handle. A second
-        // FileHandle would track its own offset, and the next recorded step would
-        // overwrite the malformed bytes — then there'd be nothing for the skip path
-        // to exercise.
         guard case .active(let session) = bookKeeper.phase,
               case .recording(let recording) = session.heistRecording else {
             return XCTFail("Expected active heist recording")
         }
         recording.fileHandle.write(Data("this-is-not-json\n".utf8))
 
-        // Record another good step via the book-keeper handle
-        try recordHeistEvidence(bookKeeper, command: .activate, args: ["command": "activate", "label": "Done"], targetCapture: nil)
-
-        // Sanity-check that the malformed bytes survived to disk, so the skip path
-        // is actually exercised when stopHeistRecording reads the file.
         let onDisk = try String(contentsOf: recording.filePath, encoding: .utf8)
         XCTAssertTrue(
             onDisk.contains("this-is-not-json"),
             "Malformed line must still be present when stopHeistRecording reads the file"
         )
 
-        let heist = try bookKeeper.stopHeistRecording()
-        XCTAssertEqual(heist.steps.count, 2, "Malformed line should be skipped, not fail the whole stop")
-        XCTAssertEqual(heist.steps[0].target?.label, "Go")
-        XCTAssertEqual(heist.steps[1].target?.label, "Done")
+        XCTAssertThrowsError(try bookKeeper.stopHeistRecording()) { error in
+            guard case .heistRecording(.evidenceReadFailed(let path, let reason)) = error as? BookKeeperError else {
+                return XCTFail("Expected evidenceReadFailed, got \(error)")
+            }
+            XCTAssertEqual(path, recording.filePath.path)
+            XCTAssertTrue(reason.contains("line 2 is malformed"))
+        }
     }
 
     // MARK: - Close session with open heist recording

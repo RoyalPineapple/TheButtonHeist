@@ -101,14 +101,18 @@ public struct StatusSession: Codable, Sendable {
     public let watchersAllowed: Bool
     /// Number of active connections in the session.
     public let activeConnections: Int
+    /// Driver ID that owns the active session, when the client supplied one.
+    public let activeDriverId: String?
 
     public init(
         active: Bool,
         watchersAllowed: Bool,
-        activeConnections: Int
+        activeConnections: Int,
+        activeDriverId: String? = nil
     ) {
         self.active = active
         self.watchersAllowed = watchersAllowed
         self.activeConnections = activeConnections
+        self.activeDriverId = activeDriverId
     }
 }

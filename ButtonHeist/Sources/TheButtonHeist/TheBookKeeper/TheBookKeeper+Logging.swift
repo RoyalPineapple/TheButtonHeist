@@ -162,15 +162,15 @@ private extension TheFence.GesturePayload {
         case .longPress(let payload):
             return payload.selection.elementTarget
         case .swipe(let payload):
-            return payload.elementTarget
+            return payload.target.elementTarget
         case .drag(let payload):
-            return payload.elementTarget
+            return payload.target.elementTarget
         case .pinch(let payload):
-            return payload.centerSelection.elementTarget
+            return payload.center.elementTarget
         case .rotate(let payload):
-            return payload.centerSelection.elementTarget
+            return payload.center.elementTarget
         case .twoFingerTap(let payload):
-            return payload.centerSelection.elementTarget
+            return payload.center.elementTarget
         case .drawPath, .drawBezier:
             return nil
         }
@@ -183,15 +183,15 @@ private extension TheFence.GesturePayload {
         case .longPress(let payload):
             return payload.selection.screenPoint != nil
         case .swipe(let payload):
-            return payload.elementTarget == nil
+            return payload.target.elementTarget == nil
         case .drag(let payload):
-            return payload.elementTarget == nil
+            return payload.target.elementTarget == nil
         case .pinch(let payload):
-            return payload.centerSelection.elementTarget == nil
+            return payload.center.elementTarget == nil
         case .rotate(let payload):
-            return payload.centerSelection.elementTarget == nil
+            return payload.center.elementTarget == nil
         case .twoFingerTap(let payload):
-            return payload.centerSelection.elementTarget == nil
+            return payload.center.elementTarget == nil
         case .drawPath, .drawBezier:
             return true
         }

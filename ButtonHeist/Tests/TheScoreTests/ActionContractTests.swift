@@ -74,13 +74,21 @@ final class ActionContractTests: XCTestCase {
             .decrement(target),
             .performCustomAction(CustomActionTarget(elementTarget: target, actionName: "Share")),
             .rotor(RotorTarget(elementTarget: target, rotor: "Links")),
-            .touchTap(TouchTapTarget(elementTarget: target)),
-            .touchLongPress(LongPressTarget(elementTarget: target, duration: 0.7)),
-            .touchSwipe(SwipeTarget(elementTarget: target, direction: .left, duration: 0.4)),
-            .touchDrag(DragTarget(elementTarget: target, startX: 1, startY: 2, endX: 3, endY: 4)),
-            .touchPinch(PinchTarget(elementTarget: target, scale: 1.5)),
-            .touchRotate(RotateTarget(elementTarget: target, angle: 0.5)),
-            .touchTwoFingerTap(TwoFingerTapTarget(elementTarget: target, spread: 40)),
+            .touchTap(TouchTapTarget(selection: .element(target))),
+            .touchLongPress(LongPressTarget(selection: .element(target), duration: 0.7)),
+            .touchSwipe(SwipeTarget(
+                selection: .unitElement(
+                    target,
+                    start: SwipeDirection.left.defaultStart,
+                    end: SwipeDirection.left.defaultEnd,
+                    direction: .left
+                ),
+                duration: 0.4
+            )),
+            .touchDrag(DragTarget(start: .element(target), end: ScreenPoint(x: 3, y: 4))),
+            .touchPinch(PinchTarget(center: .element(target), scale: 1.5)),
+            .touchRotate(RotateTarget(center: .element(target), angle: 0.5)),
+            .touchTwoFingerTap(TwoFingerTapTarget(center: .element(target), spread: 40)),
             .touchDrawPath(DrawPathTarget(points: [
                 PathPoint(x: 1, y: 2),
                 PathPoint(x: 3, y: 4),

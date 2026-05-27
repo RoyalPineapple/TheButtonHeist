@@ -61,12 +61,9 @@ extension SemanticActionTarget {
 }
 
 extension TheStash {
-    func normalizeTarget(
-        _ target: any SemanticElementTarget,
-        in sourceScreen: Screen? = nil
-    ) -> NormalizedTarget {
+    func normalizeTarget(_ target: any SemanticElementTarget) -> NormalizedTarget {
         if let elementTarget = target as? ElementTarget {
-            return normalizeTarget(elementTarget, in: sourceScreen)
+            return normalizeTarget(elementTarget)
         }
         let executableTarget = semanticElementTarget(for: target)
         return NormalizedTarget(
@@ -75,11 +72,8 @@ extension TheStash {
         )
     }
 
-    func normalizeTarget(
-        _ target: SemanticActionTarget,
-        in sourceScreen: Screen? = nil
-    ) -> NormalizedTarget {
-        normalizeTarget(BatchSemanticElementTarget(target), in: sourceScreen)
+    func normalizeTarget(_ target: SemanticActionTarget) -> NormalizedTarget {
+        normalizeTarget(BatchSemanticElementTarget(target))
     }
 
     func semanticElementTarget(for target: any SemanticElementTarget) -> ElementTarget {

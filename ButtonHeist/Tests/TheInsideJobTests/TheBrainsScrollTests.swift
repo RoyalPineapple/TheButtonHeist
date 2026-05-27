@@ -483,19 +483,14 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
-    func testScrollToVisibleUnknownTargetUsesRecordedScreenDiagnostics() async {
+    func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async {
         let visible = makeElement(label: "Visible")
-        let recordedScreen = makeScreenWithOffViewportEntry(
-            liveHierarchy: [(visible, "visible_element")],
-            offViewport: []
-        )
         brains.stash.currentScreen = .makeForTests(
             elements: [(visible, "visible_element")]
         )
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("missing_button")),
-            recordedScreen: recordedScreen
+            ScrollToVisibleTarget(elementTarget: .heistId("missing_button"))
         )
 
         XCTAssertFalse(result.success)
@@ -516,8 +511,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let normalized = brains.stash.normalizeTarget(
-            ElementTarget.heistId("offscreen_button"),
-            in: brains.stash.currentScreen
+            ElementTarget.heistId("offscreen_button")
         )
         let result = await brains.navigation.actionability.makeActionable(
             for: normalized,
@@ -541,11 +535,8 @@ final class TheBrainsScrollTests: XCTestCase {
             liveHierarchy: [(visible, "visible_element")],
             offViewport: [(offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200))]
         )
-        let recordedScreen = brains.stash.currentScreen
-
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button")),
-            recordedScreen: recordedScreen
+            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button"))
         )
 
         XCTAssertFalse(result.success)
@@ -701,36 +692,16 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testKnownSemanticRevealIgnoresStaleSemanticScrollView() async {
+    func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
-        let offscreen = makeElement(label: "Offscreen")
-        let recordedScreen = makeScreenWithOffViewportEntry(
-            liveHierarchy: [(visible, "visible_element")],
-            offViewport: [(offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200))]
-        )
-        let staleContainer = makeScrollableContainer(
-            contentSize: staleScrollView.contentSize,
-            frame: staleScrollView.frame
-        )
-        let staleScreen = Screen(
-            elements: recordedScreen.elements,
-            hierarchy: recordedScreen.liveInterface.hierarchy,
-            containerStableIds: [staleContainer: "stale_scroll"],
-            heistIdByElement: recordedScreen.liveInterface.heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                staleContainer: .init(view: staleScrollView)
-            ]
-        )
         brains.stash.currentScreen = .makeForTests(
             elements: [(visible, "visible_element")]
         )
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button")),
-            recordedScreen: staleScreen
+            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button"))
         )
 
         XCTAssertFalse(result.success)
@@ -738,7 +709,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
         XCTAssertFalse(
             result.message?.contains("after semantic reveal") ?? false,
-            "Recorded source screens should not authorize source-only semantic reveal"
+            "Detached scroll views should not authorize semantic reveal"
         )
     }
 
@@ -1049,8 +1020,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.currentScreen = knownScreen
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Jump Target"))),
-            recordedScreen: knownScreen
+            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Jump Target")))
         )
 
         XCTAssertFalse(result.success)

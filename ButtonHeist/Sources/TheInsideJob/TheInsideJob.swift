@@ -114,6 +114,8 @@ public final class TheInsideJob {
     /// it to wait on a foreground resume cycle synchronously.
     var pendingForegroundResumeTask: Task<Void, Never>?
     var idleTimerProtection: IdleTimerProtection = .unmodified
+    var accessibilityObservationActive = false
+    var lifecycleObservationActive = false
 
     // MARK: - Computed State
 
@@ -256,10 +258,6 @@ public final class TheInsideJob {
 
         await muscle.tearDown()
         await getaway.tearDown()
-
-        stopAccessibilityObservation()
-        stopLifecycleObservation()
-        restoreIdleTimerProtection(clearBaseline: true)
 
         insideJobLogger.info("Server stopped")
     }

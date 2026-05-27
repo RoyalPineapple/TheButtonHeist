@@ -58,6 +58,8 @@ extension TheInsideJob {
     // MARK: - Accessibility Observation
 
     func startAccessibilityObservation() {
+        guard !accessibilityObservationActive else { return }
+        accessibilityObservationActive = true
         NotificationCenter.default.addObserver(
             self, selector: #selector(accessibilityDidChange),
             name: UIAccessibility.elementFocusedNotification, object: nil
@@ -69,6 +71,8 @@ extension TheInsideJob {
     }
 
     func stopAccessibilityObservation() {
+        guard accessibilityObservationActive else { return }
+        accessibilityObservationActive = false
         NotificationCenter.default.removeObserver(self, name: UIAccessibility.elementFocusedNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil)
     }
@@ -84,6 +88,8 @@ extension TheInsideJob {
     // MARK: - App Lifecycle
 
     func startLifecycleObservation() {
+        guard !lifecycleObservationActive else { return }
+        lifecycleObservationActive = true
         NotificationCenter.default.addObserver(
             self, selector: #selector(appWillResignActive),
             name: UIApplication.willResignActiveNotification, object: nil
@@ -107,6 +113,8 @@ extension TheInsideJob {
     }
 
     func stopLifecycleObservation() {
+        guard lifecycleObservationActive else { return }
+        lifecycleObservationActive = false
         NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -183,22 +191,20 @@ extension TheInsideJob {
     private func beginSuspension() -> Bool {
         switch serverPhase {
         case .running(let lease):
-            pendingTransportStopTask = lease.transport.stop()
+            pendingTransportStopTask = lease.release(from: self, policy: .suspend)
         case .resuming(_, let task):
             task.cancel()
+            pollingRuntime.pauseIfActive()
+            tripwire.stopPulse()
+            tripwire.onTransition = nil
+            brains.stopKeyboardObservation()
+            stopAccessibilityObservation()
+            restoreIdleTimerProtection(clearBaseline: false)
         case .stopped, .suspended:
             return false
         }
 
-        pollingRuntime.pauseIfActive()
-
-        tripwire.stopPulse()
-        brains.stopKeyboardObservation()
-
-        stopAccessibilityObservation()
-
         brains.clearCache()
-        restoreIdleTimerProtection(clearBaseline: false)
 
         serverPhase = .suspended
 

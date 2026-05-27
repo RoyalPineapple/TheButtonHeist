@@ -22,25 +22,15 @@ extension TheBrains {
 
         switch message {
         case .activate(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeActivate(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeActivate(target) }
         case .increment(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeIncrement(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeIncrement(target) }
         case .decrement(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeDecrement(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeDecrement(target) }
         case .performCustomAction(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeCustomAction(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeCustomAction(target) }
         case .rotor(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeRotor(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeRotor(target) }
         case .editAction(let target):
             return await performInteraction(command: message) { await self.actions.executeEditAction(target) }
         case .setPasteboard(let target):
@@ -48,47 +38,29 @@ extension TheBrains {
         case .resignFirstResponder:
             return await performInteraction(command: message) { await self.actions.executeResignFirstResponder() }
         case .touchTap(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeTap(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeTap(target) }
         case .touchLongPress(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeLongPress(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeLongPress(target) }
         case .touchSwipe(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeSwipe(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeSwipe(target) }
         case .touchDrag(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeDrag(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeDrag(target) }
         case .touchPinch(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executePinch(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executePinch(target) }
         case .touchRotate(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeRotate(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeRotate(target) }
         case .touchTwoFingerTap(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeTwoFingerTap(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeTwoFingerTap(target) }
         case .touchDrawPath(let target):
             return await performInteraction(command: message) { await self.actions.executeDrawPath(target) }
         case .touchDrawBezier(let target):
             return await performInteraction(command: message) { await self.actions.executeDrawBezier(target) }
         case .typeText(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.actions.executeTypeText(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.actions.executeTypeText(target) }
         case .scroll(let target):
             return await performInteraction(command: message) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
-            return await performInteraction(command: message) { recordedScreen in
-                await self.navigation.executeScrollToVisible(target, recordedScreen: recordedScreen)
-            }
+            return await performInteraction(command: message) { await self.navigation.executeScrollToVisible(target) }
         case .elementSearch(let target):
             return await performElementSearch(target: target, command: message)
         case .scrollToEdge(let target):
@@ -133,19 +105,6 @@ extension TheBrains {
         command: ClientMessage,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        await performInteraction(method: Self.diagnosticMethod(for: command)) { _ in
-            await interaction()
-        }
-    }
-
-    /// Standard interaction with an operation-local semantic snapshot preserved
-    /// across the live refresh. Targeted actions may derive a selector from the
-    /// snapshot, but semantic reveal and live geometry acquisition stay inside
-    /// SemanticActionability against current UI state.
-    func performInteraction(
-        command: ClientMessage,
-        interaction: (Screen?) async -> TheSafecracker.InteractionResult
-    ) async -> ActionResult {
         await performInteraction(method: Self.diagnosticMethod(for: command), interaction: interaction)
     }
 
@@ -153,22 +112,11 @@ extension TheBrains {
         method: ActionMethod,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        await performInteraction(method: method) { _ in
-            await interaction()
-        }
-    }
-
-    func performInteraction(
-        method: ActionMethod,
-        interaction: (Screen?) async -> TheSafecracker.InteractionResult
-    ) async -> ActionResult {
-        let screenBeforeRefresh = stash.currentScreen
         guard refresh() != nil else {
             return treeUnavailableResult(method: method)
         }
-        let recordedScreen = recordedScreenIfFreshParseStillMatches(screenBeforeRefresh)
         let before = captureBeforeState()
-        let result = await interaction(recordedScreen)
+        let result = await interaction()
 
         return await actionResultWithDelta(
             success: result.success,
@@ -218,15 +166,6 @@ extension TheBrains {
             errorKind: result.success ? nil : .elementNotFound,
             before: before
         )
-    }
-
-    private func recordedScreenIfFreshParseStillMatches(_ screenBeforeRefresh: Screen) -> Screen? {
-        let currentVisibleIds = stash.currentScreen.liveInterface.heistIds
-        guard !screenBeforeRefresh.elements.isEmpty,
-              currentVisibleIds.isSubset(of: screenBeforeRefresh.knownInterface.heistIds) else {
-            return nil
-        }
-        return screenBeforeRefresh
     }
 
     /// Wait for an element to appear or disappear.

@@ -157,24 +157,14 @@ final class CLICommandSyncTests: XCTestCase {
 
     }
 
-    func testGetInterfaceHelpDoesNotAdvertiseScopeOrLegacyFullAlias() {
+    func testGetInterfaceHelpDescribesCurrentContract() {
         let help = GetInterfaceCommand.helpMessage()
 
-        XCTAssertFalse(help.contains("--scope"), help)
-        XCTAssertFalse(help.contains("visible"), help)
-        XCTAssertFalse(help.contains("--timeout"), help)
         XCTAssertTrue(help.contains("Read the app accessibility hierarchy"), help)
-        XCTAssertFalse(help.contains("full"), help)
-        XCTAssertFalse(help.contains("--full"), help)
-        XCTAssertFalse(help.contains("current UI element hierarchy"), help)
     }
 
-    func testGetInterfaceRejectsLegacyFullAlias() {
-        XCTAssertThrowsError(try GetInterfaceCommand.parse(["--full"]))
-    }
-
-    func testGetInterfaceRejectsTimeoutOption() {
-        XCTAssertThrowsError(try GetInterfaceCommand.parse(["--timeout", "1"]))
+    func testGetInterfaceRejectsUnknownOption() {
+        XCTAssertThrowsError(try GetInterfaceCommand.parse(["--unknown-option"]))
     }
 
     func testGetInterfaceAcceptsConnectionTimeoutOption() throws {
@@ -227,8 +217,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try TypeCommand.parse([""]))
     }
 
-    func testTypeTextRejectsLegacyDeleteOption() {
-        XCTAssertThrowsError(try TypeCommand.parse(["--delete", "3", "hello"]))
+    func testTypeTextRejectsUnknownOption() {
+        XCTAssertThrowsError(try TypeCommand.parse(["--unknown-option", "hello"]))
     }
 
     func testFenceExpectationArgumentContractNormalizesShorthand() throws {

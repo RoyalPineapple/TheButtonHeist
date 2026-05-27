@@ -122,30 +122,23 @@ final class TheGetaway {
 
     func handleClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping (Data) -> Void) async {
         let clientId = admitted.clientId
-        let data = admitted.data
-        let envelope: RequestEnvelope
-        switch decodeRequest(data) {
-        case .success(let decoded):
-            envelope = decoded
-        case .failure(let failure):
-            insideJobLogger.error("\(failure.description)")
-            sendMessage(.error(failure.serverError), respond: respond)
-            return
-        }
-
+        let envelope = admitted.envelope
         let requestId = envelope.requestId
         let message = envelope.message
 
         insideJobLogger.debug("Received from client \(clientId): \(String(describing: message).prefix(40))")
 
         switch message {
-        // Protocol messages: handshake/auth flow is consumed by TheMuscle's
-        // pre-dispatch hook (`TheMuscle.swift` ~ line 331). By the time a
-        // message reaches this switch, those cases have already been handled
-        // and we should not process them again. Breaking here is intentional.
-        // swiftlint:disable:next agent_wire_message_arm_no_op_break
         case .clientHello, .authenticate:
-            break
+            insideJobLogger.fault("Protocol message reached app dispatch after admission")
+            sendMessage(
+                .error(ServerError(
+                    kind: .validationError,
+                    message: "Protocol messages are handled by admission before app dispatch."
+                )),
+                requestId: requestId,
+                respond: respond
+            )
         case .requestInterface(let query):
             insideJobLogger.debug("Interface requested by client \(clientId)")
             await sendInterface(query: query, requestId: requestId, respond: respond)

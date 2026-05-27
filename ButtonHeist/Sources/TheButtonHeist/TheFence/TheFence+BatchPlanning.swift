@@ -4,6 +4,10 @@ import TheScore
 
 extension TheFence {
 
+    struct BatchStepPlanBuildError: Error {
+        let message: String
+    }
+
     func decodeRunBatchRequest(_ arguments: CommandArgumentEnvelope) throws -> RunBatchRequest {
         try Self.validateJSONEnvelope(
             arguments,
@@ -83,7 +87,13 @@ private extension TheFence {
     }
 
     func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
-        let message = try batchClientMessage(for: request)
+        let executionPlan = try clientMessageExecutionPlan(for: request)
+        guard let message = executionPlan.messages.first, executionPlan.messages.count == 1 else {
+            let commandName = executionPlan.messages.first?.canonicalName ?? request.command.rawValue
+            throw BatchStepPlanBuildError(
+                message: "run_batch step command \"\(commandName)\" expands to \(executionPlan.messages.count) actions; express repeats as separate ordered steps"
+            )
+        }
         let typedStep = TheScore.BatchStep.command(
             message,
             expect: request.expectationPayload.expectation,
@@ -92,9 +102,7 @@ private extension TheFence {
         return RunBatchPreparedStep(
             originalIndex: originalIndex,
             commandName: request.command.rawValue,
-            command: typedStep.command,
-            expectation: typedStep.expectation,
-            deadline: typedStep.deadline
+            typedStep: typedStep
         )
     }
 

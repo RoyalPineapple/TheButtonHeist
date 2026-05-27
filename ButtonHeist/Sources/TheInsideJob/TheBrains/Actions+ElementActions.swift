@@ -24,13 +24,12 @@ extension Actions {
     func performElementAction(
         target: any SemanticElementTarget,
         method: ActionMethod,
-        recordedScreen: Screen? = nil,
         requireInteractive: Bool = true,
         deallocatedBoundary: String = "element action",
         preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
-        let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
+        let normalizedTarget = stash.normalizeTarget(target)
         switch await liveActionTargetRecoveryPolicy.resolve(.init(
             normalizedTarget: normalizedTarget,
             method: method,
@@ -47,19 +46,18 @@ extension Actions {
 
     // MARK: - Accessibility Actions
 
-    func executeActivate(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeActivate(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+        await executeActivate(target as any SemanticElementTarget)
     }
 
-    func executeActivate(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeActivate(BatchSemanticElementTarget(target), recordedScreen: recordedScreen)
+    func executeActivate(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
+        await executeActivate(BatchSemanticElementTarget(target))
     }
 
-    private func executeActivate(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+    private func executeActivate(_ target: any SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
-            method: .activate,
-            recordedScreen: recordedScreen
+            method: .activate
         ) { context in
             await ActivationPolicy(
                 activate: stash.activate,
@@ -74,19 +72,18 @@ extension Actions {
         }
     }
 
-    func executeIncrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+        await executeIncrement(target as any SemanticElementTarget)
     }
 
-    func executeIncrement(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(BatchSemanticElementTarget(target), recordedScreen: recordedScreen)
+    func executeIncrement(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
+        await executeIncrement(BatchSemanticElementTarget(target))
     }
 
-    private func executeIncrement(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+    private func executeIncrement(_ target: any SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .increment,
-            recordedScreen: recordedScreen,
             deallocatedBoundary: "adjustable action",
             preflight: { resolved in
                 guard resolved.element.traits.contains(.adjustable) else {
@@ -109,19 +106,18 @@ extension Actions {
         )
     }
 
-    func executeDecrement(_ target: ElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(target as any SemanticElementTarget, recordedScreen: recordedScreen)
+    func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
+        await executeDecrement(target as any SemanticElementTarget)
     }
 
-    func executeDecrement(_ target: SemanticActionTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(BatchSemanticElementTarget(target), recordedScreen: recordedScreen)
+    func executeDecrement(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
+        await executeDecrement(BatchSemanticElementTarget(target))
     }
 
-    private func executeDecrement(_ target: any SemanticElementTarget, recordedScreen: Screen? = nil) async -> TheSafecracker.InteractionResult {
+    private func executeDecrement(_ target: any SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .decrement,
-            recordedScreen: recordedScreen,
             deallocatedBoundary: "adjustable action",
             preflight: { resolved in
                 guard resolved.element.traits.contains(.adjustable) else {
@@ -145,8 +141,7 @@ extension Actions {
     }
 
     func executeCustomAction(
-        _ target: some CustomActionExecutionInput,
-        recordedScreen: Screen? = nil
+        _ target: some CustomActionExecutionInput
     ) async -> TheSafecracker.InteractionResult {
         switch target.customActionSelection {
         case .container(let containerTarget, let ordinal, let actionName):
@@ -159,7 +154,6 @@ extension Actions {
             return await performElementAction(
                 target: elementTarget,
                 method: .customAction,
-                recordedScreen: recordedScreen,
                 deallocatedBoundary: "custom action"
             ) { context in
                 let resolved = context.resolvedTarget

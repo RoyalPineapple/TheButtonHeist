@@ -276,6 +276,103 @@ final class TheGetawayTests: XCTestCase {
         }
     }
 
+    func testPostAuthProtocolMessageIsRejectedByAdmission() async throws {
+        let (getaway, muscle, transport) = await makeGetaway()
+        _ = getaway
+
+        let callbacks = transport.makeCallbacks()
+        let responses = SentBox()
+        let helloData = try JSONEncoder().encode(RequestEnvelope(message: .clientHello))
+        let authData = try JSONEncoder().encode(RequestEnvelope(message: .authenticate(.init(token: "test-token"))))
+        let repeatedHelloData = try JSONEncoder().encode(
+            RequestEnvelope(requestId: "post-auth-hello", message: .clientHello)
+        )
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onClientConnected?(1, "192.168.1.1")
+            callbacks.onDataReceived?(1, helloData) { data in responses.append(data, clientId: 1) }
+            callbacks.onDataReceived?(1, authData) { data in responses.append(data, clientId: 1) }
+        }.value
+
+        try await waitFor {
+            let authenticated = await muscle.authenticatedClientIDs
+            return authenticated.contains(1)
+        }
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onDataReceived?(1, repeatedHelloData) { data in responses.append(data, clientId: 1) }
+        }.value
+
+        try await waitFor {
+            responses.all.contains { entry in
+                let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: entry.0)
+                return envelope?.requestId == "post-auth-hello"
+            }
+        }
+
+        let response = try XCTUnwrap(responses.all.compactMap { entry in
+            try? JSONDecoder().decode(ResponseEnvelope.self, from: entry.0)
+        }.first { $0.requestId == "post-auth-hello" })
+        guard case .error(let error) = response.message else {
+            return XCTFail("Expected admission rejection, got \(response.message)")
+        }
+        XCTAssertEqual(error.kind, .validationError)
+        XCTAssertEqual(error.message, "Protocol message clientHello is not an app command after authentication.")
+    }
+
+    func testStatusReportsActiveDriverId() async throws {
+        let (getaway, muscle, transport) = await makeGetaway()
+        _ = getaway
+
+        let callbacks = transport.makeCallbacks()
+        let responses = SentBox()
+        let helloData = try JSONEncoder().encode(RequestEnvelope(message: .clientHello))
+        let authData = try JSONEncoder().encode(
+            RequestEnvelope(message: .authenticate(.init(token: "test-token", driverId: "driver-a")))
+        )
+        let statusData = try JSONEncoder().encode(RequestEnvelope(requestId: "status-driver", message: .status))
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onClientConnected?(1, "192.168.1.1")
+            callbacks.onDataReceived?(1, helloData) { data in responses.append(data, clientId: 1) }
+            callbacks.onDataReceived?(1, authData) { data in responses.append(data, clientId: 1) }
+        }.value
+
+        try await waitFor {
+            let authenticated = await muscle.authenticatedClientIDs
+            return authenticated.contains(1)
+        }
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onDataReceived?(1, statusData) { data in responses.append(data, clientId: 1) }
+        }.value
+
+        try await waitFor {
+            responses.all.contains { entry in
+                let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: entry.0)
+                return envelope?.requestId == "status-driver"
+            }
+        }
+
+        let response = try XCTUnwrap(responses.all.compactMap { entry in
+            try? JSONDecoder().decode(ResponseEnvelope.self, from: entry.0)
+        }.first { $0.requestId == "status-driver" })
+        guard case .status(let payload) = response.message else {
+            return XCTFail("Expected status, got \(response.message)")
+        }
+        XCTAssertTrue(payload.session.active)
+        XCTAssertEqual(payload.session.activeConnections, 1)
+        XCTAssertEqual(payload.session.activeDriverId, "driver-a")
+    }
+
     func testNormalPingReturnsCachedHealthPayloadWithTimestamp() async throws {
         let (getaway, muscle, _) = await makeGetaway()
         let request = RequestEnvelope(requestId: "health-1", message: .ping)
@@ -300,11 +397,17 @@ final class TheGetawayTests: XCTestCase {
     }
 
     func testMalformedClientMessageReturnsDecodeFailureEnvelope() async throws {
-        let (getaway, muscle, _) = await makeGetaway()
+        let (_, muscle, _) = await makeGetaway()
         let responses = SentBox()
 
-        try await dispatchAuthenticated(getaway, muscle: muscle, data: Data("not-json".utf8)) { data in
+        await muscle.installAuthenticatedClientForTest(1)
+        switch await muscle.admitClientMessage(1, data: Data("not-json".utf8), respond: { data in
             responses.append(data, clientId: 1)
+        }) {
+        case .handled:
+            break
+        case .admitted:
+            XCTFail("Malformed data must not be admitted to app dispatch")
         }
 
         let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responses.all.first?.0))

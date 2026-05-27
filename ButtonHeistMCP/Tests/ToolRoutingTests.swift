@@ -289,7 +289,7 @@ struct ToolRoutingTests {
                 Issue.record("Expected routing failure for \(command.rawValue)")
                 continue
             }
-            #expect(error.message == "run_batch step command \"\(command.rawValue)\" is not batch-executable")
+            #expect(error.message == "run_batch step command \"\(command.rawValue)\" is not supported: descriptor.isBatchExecutable is false")
         }
     }
 

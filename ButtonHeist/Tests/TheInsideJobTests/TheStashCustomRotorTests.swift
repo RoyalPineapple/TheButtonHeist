@@ -313,8 +313,8 @@ final class TheStashRotorTests: XCTestCase {
             ("custom action", {
                 .performCustomAction(CustomActionTarget(elementTarget: .heistId($0), actionName: "Archive"))
             }),
-            ("tap", { .touchTap(TouchTapTarget(elementTarget: .heistId($0))) }),
-            ("long press", { .touchLongPress(LongPressTarget(elementTarget: .heistId($0))) }),
+            ("tap", { .touchTap(TouchTapTarget(selection: .element(.heistId($0)))) }),
+            ("long press", { .touchLongPress(LongPressTarget(selection: .element(.heistId($0)))) }),
             ("type text", { .typeText(TypeTextTarget(text: "hello", elementTarget: .heistId($0))) }),
             ("scroll to visible", {
                 .scrollToVisible(ScrollToVisibleTarget(elementTarget: .heistId($0)))

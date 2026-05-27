@@ -141,7 +141,7 @@ extension TheFence {
         yKey: String,
         field: String,
         missingMessage: String
-    ) throws -> GesturePointIntent {
+    ) throws -> GesturePointSelection {
         let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
         if elementTarget != nil, point != nil {
             throw mixedGestureShape(field: field, expected: "element target or coordinates")
@@ -150,7 +150,7 @@ extension TheFence {
             return .element(elementTarget)
         }
         if let point {
-            return .point(x: point.x, y: point.y)
+            return .coordinate(ScreenPoint(x: point.x, y: point.y))
         }
         throw FenceError.invalidRequest(missingMessage)
     }
@@ -161,7 +161,7 @@ extension TheFence {
         xKey: String,
         yKey: String,
         field: String
-    ) throws -> GesturePointIntent {
+    ) throws -> GesturePointSelection {
         let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
         if elementTarget != nil, point != nil {
             throw mixedGestureShape(field: field, expected: "element target or coordinates")
@@ -170,7 +170,7 @@ extension TheFence {
             return .element(elementTarget)
         }
         if let point {
-            return .point(x: point.x, y: point.y)
+            return .coordinate(ScreenPoint(x: point.x, y: point.y))
         }
         return .unspecified
     }
@@ -199,7 +199,7 @@ extension TheFence {
     }
 
     private func decodeTouchTapGesturePayload(_ request: GestureRequestInput) throws -> TouchTapGesturePayload {
-        let intent = try decodeRequiredPointIntent(
+        let selection = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "x",
@@ -207,11 +207,11 @@ extension TheFence {
             field: "x/y",
             missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
         )
-        return TouchTapGesturePayload(intent: intent)
+        return TouchTapGesturePayload(selection: selection)
     }
 
     private func decodeLongPressGesturePayload(_ request: GestureRequestInput) throws -> LongPressGesturePayload {
-        let intent = try decodeRequiredPointIntent(
+        let selection = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "x",
@@ -219,7 +219,7 @@ extension TheFence {
             field: "x/y",
             missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
         )
-        return LongPressGesturePayload(intent: intent, duration: try request.gestureDuration() ?? 0.5)
+        return LongPressGesturePayload(selection: selection, duration: try request.gestureDuration() ?? 0.5)
     }
 
     private func decodeSwipeGesturePayload(_ request: GestureRequestInput) throws -> SwipeGesturePayload {
@@ -235,9 +235,15 @@ extension TheFence {
         if start != nil || end != nil, request.hasAny("startX", "startY", "endX", "endY") {
             throw mixedGestureShape(field: "start/end", expected: "unit points or absolute coordinates")
         }
+        if start != nil || end != nil, direction != nil {
+            throw mixedGestureShape(field: "start/end", expected: "unit points or direction defaults")
+        }
         if let start, let end {
+            guard let elementTarget else {
+                throw FenceError.invalidRequest("Unit-point swipe requires element target")
+            }
             return SwipeGesturePayload(
-                intent: .unit(elementTarget: elementTarget, start: start, end: end, direction: direction),
+                selection: .unitElement(elementTarget, start: start, end: end, direction: direction),
                 duration: try request.gestureDuration()
             )
         }
@@ -247,27 +253,27 @@ extension TheFence {
         if endPoint != nil, direction != nil {
             throw mixedGestureShape(field: "endX/endY", expected: "end coordinates or direction")
         }
-        let startIntent: GesturePointIntent
+        let startSelection: GesturePointSelection
         if let elementTarget {
-            startIntent = .element(elementTarget)
+            startSelection = .element(elementTarget)
         } else if let startPoint {
-            startIntent = .point(x: startPoint.x, y: startPoint.y)
+            startSelection = .coordinate(ScreenPoint(x: startPoint.x, y: startPoint.y))
         } else {
-            startIntent = .unspecified
+            startSelection = .unspecified
         }
-        let endIntent: SwipeGestureEndIntent
+        let endSelection: SwipeDestinationSelection
         if let direction {
-            endIntent = .direction(direction)
+            endSelection = .direction(direction)
         } else if let endPoint {
-            endIntent = .point(x: endPoint.x, y: endPoint.y)
+            endSelection = .coordinate(ScreenPoint(x: endPoint.x, y: endPoint.y))
         } else {
-            endIntent = .unspecified
+            endSelection = .unspecified
         }
-        let intent = SwipeGestureIntent.absolute(
-            start: startIntent,
-            end: endIntent
+        let selection = SwipeGestureSelection.point(
+            start: startSelection,
+            destination: endSelection
         )
-        let payload = SwipeGesturePayload(intent: intent, duration: try request.gestureDuration())
+        let payload = SwipeGesturePayload(selection: selection, duration: try request.gestureDuration())
         return payload
     }
 
