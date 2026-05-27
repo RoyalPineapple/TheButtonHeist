@@ -15,6 +15,10 @@ final class Actions {
     let tripwire: TheTripwire
     let navigation: Navigation
 
+    var actionability: SemanticActionability {
+        navigation.actionability
+    }
+
     // MARK: - Init
 
     init(

@@ -10,7 +10,7 @@ final class ActivationPolicyTests: XCTestCase {
     private final class ActivationObject: NSObject {}
 
     func testSemanticActionabilityFailureMapsNoRevealPathToCommandMethod() {
-        let result = Navigation.SemanticActionabilityFailure.noRevealPath("target has no reveal path")
+        let result = SemanticActionability.SemanticActionabilityFailure.noRevealPath("target has no reveal path")
             .interactionResult(commandMethod: .syntheticTap)
 
         XCTAssertFalse(result.success)
@@ -19,7 +19,7 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testSemanticActionabilityFailurePreservesElementNotFoundMethod() {
-        let result = Navigation.SemanticActionabilityFailure.notFound("no such element")
+        let result = SemanticActionability.SemanticActionabilityFailure.notFound("no such element")
             .interactionResult(commandMethod: .syntheticTap)
 
         XCTAssertFalse(result.success)

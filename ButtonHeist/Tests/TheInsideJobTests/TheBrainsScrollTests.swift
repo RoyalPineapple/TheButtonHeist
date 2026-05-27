@@ -519,7 +519,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ElementTarget.heistId("offscreen_button"),
             in: brains.stash.currentScreen
         )
-        let result = await brains.navigation.makeActionable(
+        let result = await brains.navigation.actionability.makeActionable(
             for: normalized,
             method: .activate,
             deallocatedBoundary: "test actionability"
@@ -589,7 +589,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ElementTarget.heistId("escaped_button"),
             in: brains.stash.currentScreen
         )
-        let result = await brains.navigation.makeActionable(
+        let result = await brains.navigation.actionability.makeActionable(
             for: normalized,
             method: .scrollToVisible,
             deallocatedBoundary: "test actionability"
@@ -633,7 +633,7 @@ final class TheBrainsScrollTests: XCTestCase {
             ElementTarget.heistId("escaped_button"),
             in: brains.stash.currentScreen
         )
-        let result = await brains.navigation.makeActionable(
+        let result = await brains.navigation.actionability.makeActionable(
             for: normalized,
             method: .scrollToVisible,
             deallocatedBoundary: "test actionability"

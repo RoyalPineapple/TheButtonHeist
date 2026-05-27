@@ -196,8 +196,8 @@ extension Actions {
         ordinal: Int?,
         actionName: String
     ) async -> TheSafecracker.InteractionResult {
-        let containerTarget: Navigation.SemanticContainerActionableTarget
-        switch await navigation.makeActionable(
+        let containerTarget: SemanticActionability.SemanticContainerActionableTarget
+        switch await actionability.makeActionable(
             matcher: matcher,
             ordinal: ordinal,
             method: .customAction

@@ -7,7 +7,7 @@ import TheScore
 extension Actions {
 
     func resolveGesturePoint(
-        from actionableTarget: Navigation.SemanticActionableTarget?,
+        from actionableTarget: SemanticActionability.SemanticActionableTarget?,
         pointX: Double?,
         pointY: Double?,
         method: ActionMethod
@@ -35,7 +35,7 @@ extension Actions {
     }
 
     func resolveGestureFrame(
-        for actionableTarget: Navigation.SemanticActionableTarget,
+        for actionableTarget: SemanticActionability.SemanticActionableTarget,
         method: ActionMethod
     ) -> GestureFrameResolution {
         let frame = actionableTarget.liveTarget.frame

@@ -19,9 +19,9 @@ extension Actions {
         let normalizedTarget = elementTarget.map {
             normalizePointGestureTarget($0, recordedScreen: recordedScreen)
         }
-        let actionableTarget: Navigation.SemanticActionableTarget?
+        let actionableTarget: SemanticActionability.SemanticActionableTarget?
         if let normalizedTarget {
-            switch await navigation.makeActionable(
+            switch await actionability.makeActionable(
                 for: normalizedTarget,
                 method: method,
                 deallocatedBoundary: "gesture action"
@@ -95,8 +95,8 @@ extension Actions {
                 )
             }
             let normalizedTarget = normalizePointGestureTarget(elementTarget, recordedScreen: recordedScreen)
-            let actionableTarget: Navigation.SemanticActionableTarget
-            switch await navigation.makeActionable(
+            let actionableTarget: SemanticActionability.SemanticActionableTarget
+            switch await actionability.makeActionable(
                 for: normalizedTarget,
                 method: .syntheticSwipe,
                 deallocatedBoundary: "gesture action"
@@ -132,9 +132,9 @@ extension Actions {
         let normalizedTarget = target.swipeElementTarget.map {
             normalizePointGestureTarget($0, recordedScreen: recordedScreen)
         }
-        let actionableTarget: Navigation.SemanticActionableTarget?
+        let actionableTarget: SemanticActionability.SemanticActionableTarget?
         if let normalizedTarget {
-            switch await navigation.makeActionable(
+            switch await actionability.makeActionable(
                 for: normalizedTarget,
                 method: .syntheticSwipe,
                 deallocatedBoundary: "gesture action"

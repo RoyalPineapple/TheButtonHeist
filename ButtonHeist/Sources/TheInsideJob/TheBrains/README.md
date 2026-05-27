@@ -2,14 +2,15 @@
 
 Command execution engine. Takes a `ClientMessage`, works it through refresh → action → settle → delta, and returns an `ActionResult`.
 
-TheBrains is the orchestrator. Two internal components handle the heavy lifting:
+TheBrains is the orchestrator. Three internal components handle the heavy lifting:
 
-- **`Navigation`** — scroll orchestration and screen exploration. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, and `lastSwipeDirectionByTarget`. Public entry points are `executeScroll`, `executeScrollToVisible`, `executeScrollToEdge`, `executeElementSearch`, `exploreAndPrune`, `makeActionable`, `ensureFirstResponderOnScreen`.
+- **`SemanticActionability`** — the product path for semantic commands: semantic selector → reveal plan → refresh → fresh accessibility geometry → actionable target or classified failure.
+- **`Navigation`** — viewport movement/search and screen exploration. Owns `ScrollableTarget`, `SettleSwipeLoopState`, `ScreenManifest`, and `lastSwipeDirectionByTarget`. Public entry points are `executeScroll`, `executeScrollToVisible`, `executeScrollToEdge`, `executeElementSearch`, `exploreAndPrune`.
 - **`Actions`** — the 21 `executeXxx` action handlers (activate, increment, decrement, customAction, editAction, setPasteboard, getPasteboard, resignFirstResponder, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, drawPath, drawBezier, typeText, plus the `performElementAction` / `performPointAction` generic pipelines and duration helpers).
 
 Navigation's invariant: visible pages are physical evidence; known state is semantic memory; reconciliation is the only place evidence becomes memory.
 
-Both components are owned by TheBrains (`let navigation: Navigation`, `let actions: Actions`) and share the same TheStash / TheSafecracker / TheTripwire references. They are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Actions holds a reference to Navigation so targeted element/point flows can call `makeActionable(for:)`, and edit, pasteboard, and resign-first-responder commands can call `ensureFirstResponderOnScreen()`.
+These components are owned by TheBrains (`navigation` owns `actionability`; `actions` consumes it) and share the same TheStash / TheSafecracker / TheTripwire references. They are *internal components of TheBrains*, not crew members in their own right — neutral noun-style names. Actions calls SemanticActionability for all semantic element preparation and keeps dispatch logic local.
 
 TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response state, and recording state. It also re-exposes the most-touched Navigation/Actions members via typealiases and forwarding properties so callers can spell them `brains.X` when the original location was less ergonomic; new code should call `brains.navigation.X` / `brains.actions.X` directly.
 
@@ -41,21 +42,23 @@ TheBrains keeps the post-action delta cycle, dispatch, wait handlers, response s
 
 4. **`ActionExecutionInputs.swift`** — Protocol conformances and small input adapters that let batch and single-command execution call the same action methods.
 
-5. **`Actions+ElementActions.swift`** — Element-targeted accessibility actions and the `performElementAction(target:method:action:)` pipeline: semantic selector → `navigation.makeActionable` → interactivity check → action closure with `LiveActionTarget`. Used by activate, increment, decrement, customAction, and rotor.
+5. **`Actions+ElementActions.swift`** — Element-targeted accessibility actions and the `performElementAction(target:method:action:)` pipeline: semantic selector → `actionability.makeActionable` → interactivity check → action closure with `LiveActionTarget`. Used by activate, increment, decrement, customAction, and rotor.
 
 6. **`Actions+PointGestureActions.swift`** and **`Actions+GestureGeometryResolution.swift`** — Point and gesture actions plus the geometry helpers that resolve element-relative or absolute points immediately before dispatch. Used by tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, drawPath, and drawBezier.
 
-7. **`Actions+TextInputActions.swift`** — Text, edit, pasteboard, and first-responder commands. `executeTypeText` handles optional `navigation.makeActionable` + tap-to-focus → poll for active text input → type a non-empty string → refresh → re-resolve for value readback.
+7. **`Actions+TextInputActions.swift`** — Text, edit, pasteboard, and first-responder commands. `executeTypeText` handles optional `actionability.makeActionable` + tap-to-focus → poll for active text input → type a non-empty string → refresh → re-resolve for value readback.
 
 8. **`Actions+RecoveryPolicies.swift`** — Named recovery policies for stale or refused live targets.
 
 9. **`Navigation.swift`** — Type declaration, init, state (`lastSwipeDirectionByTarget`), and the nested types `SettleSwipeProfile`, `SettleSwipeStep`, `SettleSwipeLoopState`, `ScrollableTarget`, `ScrollAxis`, `ScreenManifest`. Plus `refresh()` and `clearCache()` helpers.
 
-10. **`Navigation+Scroll.swift`** — `executeScroll` does one page. `executeScrollToVisible` uses the semantic reveal path: already visible → reveal plan → fresh visible resolution → classified failure. `executeElementSearch` searches only containers matching the requested axis, page-by-page up to 200 scrolls. `makeActionable` is the central semantic actionability path for targeted actions. Direction mapping, axis detection, and `safeSwipeFrame` (tab-bar-aware clip) also live here.
+10. **`SemanticActionability.swift`** — Central semantic actionability owner for `activate`, element gestures, custom actions, rotor, text focus, first-responder preparation, batch/playback semantic steps, and the semantic portion of `scroll_to_visible`. Failures classify the failed step: not found, ambiguous, no reveal path, stale refresh, or geometry not actionable.
 
-11. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `reconcilePage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
+11. **`Navigation+Scroll.swift`** — `executeScroll` does one page. `executeElementSearch` searches only containers matching the requested axis, page-by-page up to 200 scrolls. Direction mapping, axis detection, and `safeSwipeFrame` (tab-bar-aware clip) also live here.
 
-12. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot/capture. Three init paths (from `[ScreenElement]`, `AccessibilityTrace.Capture`, or explicit screenName/Id). Two terminal methods: `success(payload:)` and `failure(errorKind:payload:)`.
+12. **`Navigation+Explore.swift`** — `exploreAndPrune()` builds a local `var union: Screen`, runs `exploreScreen()`, then writes `stash.currentScreen = union`. Per container: scrolls to leading edge → pages through accumulating elements via `reconcilePage` → restores visual origin for `UIScrollView` targets. Exploration uses `ScrollableTarget` so non-`UIScrollView` containers use swipe fallback. `ScreenManifest` bookkeeping lives in `Navigation.swift`.
+
+13. **`ActionResultBuilder.swift`** — Assembles `ActionResult` from method + snapshot/capture. Three init paths (from `[ScreenElement]`, `AccessibilityTrace.Capture`, or explicit screenName/Id). Two terminal methods: `success(payload:)` and `failure(errorKind:payload:)`.
 
 > Full dossier: [`docs/dossiers/13-THEBRAINS.md`](../../../../docs/dossiers/13-THEBRAINS.md)
 
