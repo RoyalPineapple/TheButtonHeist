@@ -505,18 +505,19 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
     }
 
-    func testElementActionUsesFreshLiveGeometryAfterLayoutMovement() async {
+    func testElementActionUsesCurrentAccessibilityCaptureGeometry() async {
         let heistId = "moving_slider"
-        let stalePoint = CGPoint(x: 20, y: 20)
-        let livePoint = CGPoint(x: 190, y: 302)
-        let liveFrame = CGRect(x: 150, y: 280, width: 80, height: 44)
+        let staleObjectPoint = CGPoint(x: 20, y: 20)
+        let staleObjectFrame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        let capturePoint = CGPoint(x: 190, y: 302)
+        let captureFrame = CGRect(x: 150, y: 280, width: 80, height: 44)
         let element = AccessibilityElement.make(
             label: "Moving",
             traits: .adjustable,
-            shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 40, height: 40))),
-            activationPoint: stalePoint
+            shape: .frame(AccessibilityRect(captureFrame)),
+            activationPoint: capturePoint
         )
-        let liveObject = AdjustableGeometryView(frame: liveFrame, activationPoint: livePoint)
+        let liveObject = AdjustableGeometryView(frame: staleObjectFrame, activationPoint: staleObjectPoint)
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
@@ -528,9 +529,9 @@ final class TheBrainsActionTests: XCTestCase {
             liveTarget = nil
         }
 
-        XCTAssertEqual(liveTarget?.frame, liveFrame)
-        XCTAssertEqual(liveTarget?.activationPoint, livePoint)
-        XCTAssertNotEqual(liveTarget?.activationPoint, stalePoint)
+        XCTAssertEqual(liveTarget?.frame, captureFrame)
+        XCTAssertEqual(liveTarget?.activationPoint, capturePoint)
+        XCTAssertNotEqual(liveTarget?.activationPoint, staleObjectPoint)
 
         let result = await brains.actions.executeIncrement(.heistId(heistId))
 
@@ -605,7 +606,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testElementActionNormalizedHeistIdFailsCleanlyWhenLiveGeometryIsMissing() async {
+    func testElementActionNormalizedHeistIdUsesAccessibilityGeometryWhenObjectFrameIsMissing() async {
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
@@ -630,16 +631,9 @@ final class TheBrainsActionTests: XCTestCase {
             recordedScreen: sourceScreen
         )
 
-        XCTAssertFalse(result.success)
+        XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
-        XCTAssertEqual(liveObject.incrementCount, 0)
-        XCTAssertDiagnostic(result.message, contains: [
-            "gesture target unavailable",
-            "method=increment",
-            "heistId=\"quantity_1\"",
-            "visible=true",
-            "Source heistId: quantity_0",
-        ])
+        XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
     func testBatchCommandsMatchSingleCommandMatcherFailures() async {
@@ -676,10 +670,12 @@ final class TheBrainsActionTests: XCTestCase {
         let element = AccessibilityElement.make(
             label: "Geometry Missing",
             traits: .adjustable,
-            shape: .frame(AccessibilityRect(CGRect(x: 20, y: 20, width: 120, height: 44))),
+            shape: .frame(.zero)
+        )
+        let liveObject = AdjustableGeometryView(
+            frame: CGRect(x: 20, y: 20, width: 120, height: 44),
             activationPoint: CGPoint(x: 80, y: 42)
         )
-        let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 80, y: 42))
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
@@ -930,17 +926,18 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testElementTargetedPointActionUsesLiveActivationPoint() async {
-        let stalePoint = CGPoint(x: 10, y: 20)
-        let livePoint = CGPoint(x: 123, y: 456)
+    func testElementTargetedPointActionUsesAccessibilityCaptureActivationPoint() async {
+        let capturePoint = CGPoint(x: 10, y: 20)
+        let objectPoint = CGPoint(x: 123, y: 456)
         let heistId = "live_button"
         let element = AccessibilityElement.make(
             label: "Live",
             traits: .button,
             shape: .frame(AccessibilityRect(CGRect(x: 0, y: 0, width: 40, height: 40))),
-            activationPoint: stalePoint
+            activationPoint: capturePoint,
+            usesDefaultActivationPoint: false
         )
-        let liveObject = ActionGeometryView(activationPoint: livePoint)
+        let liveObject = ActionGeometryView(activationPoint: objectPoint)
         liveObject.accessibilityFrame = CGRect(x: 100, y: 430, width: 46, height: 52)
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
@@ -956,8 +953,8 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(dispatchedPoint, livePoint)
-        XCTAssertNotEqual(dispatchedPoint, stalePoint)
+        XCTAssertEqual(dispatchedPoint, capturePoint)
+        XCTAssertNotEqual(dispatchedPoint, objectPoint)
     }
 
     func testRawCoordinatePointActionDispatchesUnchanged() async {
@@ -1016,6 +1013,35 @@ final class TheBrainsActionTests: XCTestCase {
             element: makeElement(label: "Rotor host", traits: .button),
             object: liveObject
         )
+
+        let result = await brains.actions.executeRotor(
+            RotorTarget(elementTarget: .heistId(heistId), rotor: "Live Rotor")
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "rotor failed")
+        XCTAssertEqual(result.method, .rotor)
+        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found \(heistId)") ?? false)
+    }
+
+    func testExecuteRotorUsesOnscreenAccessibilityGeometryAtViewportEdge() async {
+        let heistId = "edge_rotor_host"
+        let frame = CGRect(x: 20, y: -20, width: 180, height: 44)
+        let element = AccessibilityElement.make(
+            label: "Edge Rotor Host",
+            identifier: heistId,
+            traits: .staticText,
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: CGPoint(x: frame.midX, y: 2),
+            customRotors: [.init(name: "Live Rotor")]
+        )
+        let liveObject = UIView()
+        liveObject.accessibilityFrame = frame
+        liveObject.accessibilityCustomRotors = [
+            UIAccessibilityCustomRotor(name: "Live Rotor") { _ in
+                UIAccessibilityCustomRotorItemResult(targetElement: liveObject, targetRange: nil)
+            },
+        ]
+        installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let result = await brains.actions.executeRotor(
             RotorTarget(elementTarget: .heistId(heistId), rotor: "Live Rotor")

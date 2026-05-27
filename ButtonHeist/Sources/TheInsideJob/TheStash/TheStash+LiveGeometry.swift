@@ -10,19 +10,30 @@ import TheScore
 
 extension TheStash {
 
-    /// Geometry sampled from a UIKit accessibility object at dispatch time.
+    /// Geometry sampled from the current accessibility capture at dispatch time.
     ///
-    /// Invariant: this value is created from the current live object after
-    /// rejecting unusable frames and non-finite activation points. Persisted
-    /// selectors, source heistIds, and replay metadata never provide this data.
+    /// Invariant: this value is created from the current accessibility capture
+    /// after rejecting unusable frames and non-finite activation points.
+    /// Persisted selectors, source heistIds, and replay metadata never provide
+    /// this data.
     struct LiveElementGeometry {
         let frame: CGRect
         let activationPoint: CGPoint
 
-        @MainActor
-        init?(object: NSObject) {
-            let frame = object.accessibilityFrame
-            let activationPoint = object.accessibilityActivationPoint
+        init?(element: AccessibilityElement) {
+            let frame = element.bhFrame
+            let activationPoint = element.bhResolvedActivationPoint
+            guard Self.isUsableFrame(frame),
+                  Self.isUsablePoint(activationPoint) else {
+                return nil
+            }
+            self.frame = frame
+            self.activationPoint = activationPoint
+        }
+
+        init?(container: AccessibilityContainer) {
+            let frame = container.frame.cgRect
+            let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
             guard Self.isUsableFrame(frame),
                   Self.isUsablePoint(activationPoint) else {
                 return nil
@@ -45,16 +56,10 @@ extension TheStash {
         }
     }
 
-    struct LiveGeometry {
-        let frame: CGRect
-        let activationPoint: CGPoint
-        let scrollView: UIScrollView
-    }
-
     /// Dispatch-only action target.
     ///
     /// The `resolvedTarget` is semantic identity; `object`, `frame`, and
-    /// `activationPoint` are live authority freshly sampled by
+    /// `activationPoint` are live accessibility authority freshly sampled by
     /// `resolveLiveActionTarget(for:)`.
     struct LiveActionTarget {
         let resolvedTarget: ResolvedTarget
@@ -91,22 +96,11 @@ extension TheStash {
         case geometryUnavailable
     }
 
-    func liveGeometry(for screenElement: ScreenElement) -> LiveGeometry? {
-        guard let object = dispatchObject(for: screenElement),
-              let scrollView = liveScrollView(for: screenElement),
-              let geometry = LiveElementGeometry(object: object) else { return nil }
-        return LiveGeometry(
-            frame: geometry.frame,
-            activationPoint: geometry.activationPoint,
-            scrollView: scrollView
-        )
-    }
-
     func resolveLiveActionTarget(for resolvedTarget: ResolvedTarget) -> LiveActionTargetResolution {
         guard let object = dispatchObject(for: resolvedTarget.screenElement) else {
             return .objectUnavailable
         }
-        guard let geometry = LiveElementGeometry(object: object) else {
+        guard let geometry = LiveElementGeometry(element: resolvedTarget.element) else {
             return .geometryUnavailable
         }
         return .resolved(LiveActionTarget(
@@ -121,7 +115,7 @@ extension TheStash {
         guard let object = currentScreen.liveInterface.containerObject(forPath: resolvedTarget.path) else {
             return .objectUnavailable
         }
-        guard let geometry = LiveElementGeometry(object: object) else {
+        guard let geometry = LiveElementGeometry(container: resolvedTarget.container) else {
             return .geometryUnavailable
         }
         return .resolved(LiveContainerTarget(
@@ -157,9 +151,6 @@ extension TheStash {
     private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {
         if visibleIds.contains(screenElement.heistId) {
             return currentScreen.liveInterface.object(for: screenElement.heistId)
-        }
-        if let pendingRotorObject = activePendingRotorObject(heistId: screenElement.heistId) {
-            return pendingRotorObject
         }
         if currentScreen.knownInterface.findElement(heistId: screenElement.heistId) == nil {
             return currentScreen.liveInterface.object(for: screenElement.heistId)

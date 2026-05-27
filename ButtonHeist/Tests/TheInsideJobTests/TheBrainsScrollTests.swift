@@ -133,6 +133,21 @@ final class TheBrainsScrollTests: XCTestCase {
                                     "Offset should respect top content inset")
     }
 
+    func testScrollTargetOffsetCentersWithinAdjustedVisibleRect() {
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        scrollView.contentSize = CGSize(width: 3000, height: 5000)
+        scrollView.contentInset = UIEdgeInsets(top: 100, left: 20, bottom: 50, right: 60)
+
+        let origin = CGPoint(x: 1000, y: 1800)
+        let offset = TheStash.semanticRevealTargetOffset(for: origin, in: scrollView)
+
+        let insets = scrollView.adjustedContentInset
+        let visibleWidth = scrollView.bounds.width - insets.left - insets.right
+        let visibleHeight = scrollView.bounds.height - insets.top - insets.bottom
+        XCTAssertEqual(offset.x + insets.left + visibleWidth / 2, origin.x, accuracy: 0.01)
+        XCTAssertEqual(offset.y + insets.top + visibleHeight / 2, origin.y, accuracy: 0.01)
+    }
+
     func testScrollTargetOffsetHorizontalClamping() {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 375, height: 667))
         scrollView.contentSize = CGSize(width: 2000, height: 667)
@@ -500,7 +515,15 @@ final class TheBrainsScrollTests: XCTestCase {
             offViewport: [(offscreen, "offscreen_button", nil)]
         )
 
-        let result = await brains.navigation.makeSemanticallyVisible(for: .heistId("offscreen_button"))
+        let normalized = brains.stash.normalizeTarget(
+            ElementTarget.heistId("offscreen_button"),
+            in: brains.stash.currentScreen
+        )
+        let result = await brains.navigation.makeActionable(
+            for: normalized,
+            method: .activate,
+            deallocatedBoundary: "test actionability"
+        )
 
         guard case .failed(let failure) = result else {
             return XCTFail("Expected semantic actionability failure, got \(result)")
@@ -562,14 +585,65 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViews: [:]
         )
 
-        let result = await brains.navigation.makeSemanticallyVisible(for: .heistId("escaped_button"))
+        let normalized = brains.stash.normalizeTarget(
+            ElementTarget.heistId("escaped_button"),
+            in: brains.stash.currentScreen
+        )
+        let result = await brains.navigation.makeActionable(
+            for: normalized,
+            method: .scrollToVisible,
+            deallocatedBoundary: "test actionability"
+        )
 
         guard case .failed(let failure) = result else {
-            return XCTFail("Expected geometry-not-actionable failure, got \(result)")
+            return XCTFail("Expected no-reveal-path failure, got \(result)")
+        }
+        XCTAssertEqual(failure.failedStep, .noRevealPath)
+        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
+    }
+
+    func testActionabilityRequiresActivationPointOnScreenWhenFrameIntersectsViewport() async {
+        let elementFrame = CGRect(x: 24, y: -24, width: 180, height: 44)
+        let object = UIButton(type: .system)
+        object.accessibilityLabel = "Escaped"
+        object.accessibilityFrame = elementFrame
+        object.accessibilityActivationPoint = CGPoint(x: elementFrame.midX, y: -4)
+        let element = AccessibilityElement.make(
+            label: "Escaped",
+            traits: .button,
+            shape: .frame(AccessibilityRect(elementFrame)),
+            activationPoint: object.accessibilityActivationPoint
+        )
+        let entry = Screen.ScreenElement(
+            heistId: "escaped_button",
+            contentSpaceOrigin: nil,
+            element: element
+        )
+        brains.stash.currentScreen = Screen(
+            elements: [entry.heistId: entry],
+            hierarchy: [.element(element, traversalIndex: 0)],
+            containerStableIds: [:],
+            heistIdByElement: [element: entry.heistId],
+            elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let normalized = brains.stash.normalizeTarget(
+            ElementTarget.heistId("escaped_button"),
+            in: brains.stash.currentScreen
+        )
+        let result = await brains.navigation.makeActionable(
+            for: normalized,
+            method: .scrollToVisible,
+            deallocatedBoundary: "test actionability"
+        )
+
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected not-actionable failure, got \(result)")
         }
         XCTAssertEqual(failure.failedStep, .geometryNotActionable)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))
-        XCTAssertTrue(failure.message.contains("no usable live geometry"))
     }
 
     func testElementActionsConsumeSemanticActionabilityFailureBeforeDispatch() async {
@@ -1195,6 +1269,41 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     // MARK: - safeSwipeFrame
+
+    func testScrollableTargetUsesAccessibilityContainerFrameWhenBackingViewFrameDiffers() throws {
+        let windowScene = try requireForegroundWindowScene()
+        let captureFrame = CGRect(x: 40, y: 120, width: 240, height: 360)
+        let backingViewFrame = CGRect(x: 12, y: 520, width: 80, height: 90)
+        let contentSize = AccessibilitySize(width: 320, height: 2000)
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: contentSize),
+            frame: AccessibilityRect(captureFrame)
+        )
+        let backingView = UIView(frame: backingViewFrame)
+        let window = UIWindow(windowScene: windowScene)
+        window.frame = UIScreen.main.bounds
+        window.addSubview(backingView)
+        window.isHidden = false
+        defer {
+            window.isHidden = true
+        }
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [container: .init(view: backingView)]
+        )
+
+        let target = try XCTUnwrap(brains.navigation.scrollableTarget(for: container, contentSize: contentSize))
+
+        guard case .swipeable(let frame, let resolvedContentSize) = target else {
+            XCTFail("Expected non-UIScrollView container to use swipeable accessibility geometry")
+            return
+        }
+        XCTAssertEqual(frame, captureFrame)
+        XCTAssertEqual(resolvedContentSize, contentSize.cgSize)
+        XCTAssertNotEqual(frame, backingViewFrame)
+    }
 
     func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() throws {
         // A frame sitting comfortably inside the safe area passes through

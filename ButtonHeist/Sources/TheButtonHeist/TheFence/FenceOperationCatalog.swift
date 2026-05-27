@@ -294,8 +294,26 @@ public enum FenceOperationCatalog {
         if selector.consumesValue(rawValue) {
             operationValues.removeValue(forKey: selector.parameter.key)
         }
-        let operationArguments = TheFence.CommandArgumentEnvelope(values: operationValues)
+        operationValues = selectorRoutedOperationValues(
+            operationValues,
+            contract: contract,
+            command: command
+        )
+        let operationArguments = TheFence.CommandArgumentEnvelope(
+            values: operationValues,
+            fieldPrefix: arguments.argumentFieldPrefix
+        )
         return normalizeToolOperation(command: command, arguments: operationArguments)
+    }
+
+    private static func selectorRoutedOperationValues(
+        _ values: [String: TheFence.CommandArgumentValue],
+        contract: MCPToolContract,
+        command: TheFence.Command
+    ) -> [String: TheFence.CommandArgumentValue] {
+        guard contract.name == TheFence.Command.scroll.rawValue else { return values }
+        let allowedKeys = Set(command.parameters.map(\.key))
+        return values.filter { allowedKeys.contains($0.key) }
     }
 
     private static func normalizeToolOperation(

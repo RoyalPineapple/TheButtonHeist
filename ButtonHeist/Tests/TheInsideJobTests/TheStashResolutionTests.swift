@@ -89,6 +89,41 @@ final class TheStashResolutionTests: XCTestCase {
         )
     }
 
+    func testContainerTargetResolutionUsesCommittedSemanticContainers() {
+        let path = TreePath([0, 1])
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            frame: AccessibilityRect(CGRect(x: 0, y: 900, width: 240, height: 80)),
+            customActions: [.init(name: "Archive")]
+        )
+        bagman.currentScreen = Screen(
+            semantic: SemanticScreen(
+                elements: [:],
+                containers: [
+                    path: .init(
+                        container: container,
+                        path: path,
+                        stableId: "semantic_actions__actions",
+                        contentFrame: CGRect(x: 0, y: 900, width: 240, height: 80)
+                    ),
+                ]
+            ),
+            liveCapture: .empty
+        )
+
+        switch bagman.resolveContainerTarget(
+            ContainerMatcher(stableId: "semantic_actions__actions"),
+            ordinal: nil
+        ) {
+        case .resolved(let resolved):
+            XCTAssertEqual(resolved.path, path)
+            XCTAssertEqual(resolved.stableId, "semantic_actions__actions")
+            XCTAssertEqual(resolved.contentFrame?.origin.y, 900)
+        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
+            XCTFail("Expected semantic container resolution, got \(diagnostics)")
+        }
+    }
+
     // MARK: - heistId Resolution
 
     func testHeistIdResolvesPresented() {
@@ -192,8 +227,8 @@ final class TheStashResolutionTests: XCTestCase {
             activationPoint: freshPoint
         )
         let object = UIAccessibilityElement(accessibilityContainer: NSObject())
-        object.accessibilityFrame = freshFrame
-        object.accessibilityActivationPoint = freshPoint
+        object.accessibilityFrame = sourceFrame
+        object.accessibilityActivationPoint = sourcePoint
         bagman.currentScreen = Screen.makeForTests(
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": object]
@@ -218,11 +253,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.screenElement.heistId, "quantity_1")
 
         guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: resolved) else {
-            XCTFail("Expected current live object to provide action geometry")
+            XCTFail("Expected current accessibility capture to provide action geometry")
             return
         }
         XCTAssertEqual(liveTarget.frame, freshFrame)
         XCTAssertEqual(liveTarget.activationPoint, freshPoint)
+        XCTAssertNotEqual(liveTarget.frame, object.accessibilityFrame)
+        XCTAssertNotEqual(liveTarget.activationPoint, object.accessibilityActivationPoint)
         XCTAssertNotEqual(liveTarget.frame, sourceFrame)
         XCTAssertNotEqual(liveTarget.activationPoint, sourcePoint)
     }
@@ -652,7 +689,6 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertEqual(resolved.screenElement.heistId, "below_fold_button")
         XCTAssertNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
-        XCTAssertNil(bagman.liveGeometry(for: resolved.screenElement))
         guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Known-only target should not have a live action target")
             return
@@ -678,14 +714,18 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(bagman.increment(liveTarget))
-        XCTAssertNotNil(bagman.liveGeometry(for: refreshed.screenElement))
     }
 
-    func testLiveGeometryRejectsNonFiniteActivationPoint() {
-        let visible = element(label: "Visible", traits: .button)
+    func testLiveGeometryRejectsUnusableAccessibilityCaptureFrame() {
+        let visible = AccessibilityElement.make(
+            label: "Visible",
+            traits: .button,
+            shape: .frame(.zero),
+            activationPoint: CGPoint(x: 50, y: 22)
+        )
         let object = UIAccessibilityElement(accessibilityContainer: NSObject())
         object.accessibilityFrame = CGRect(x: 0, y: 0, width: 100, height: 44)
-        object.accessibilityActivationPoint = CGPoint(x: CGFloat.infinity, y: 22)
+        object.accessibilityActivationPoint = CGPoint(x: 50, y: 22)
         let scrollView = UIScrollView()
         let entry = Screen.ScreenElement(
             heistId: "button_visible",
@@ -708,9 +748,8 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected visible target to resolve")
             return
         }
-        XCTAssertNil(bagman.liveGeometry(for: resolved.screenElement))
         guard case .geometryUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
-            XCTFail("Expected non-finite activation point to be rejected as missing live geometry")
+            XCTFail("Expected unusable accessibility capture frame to be rejected as missing live geometry")
             return
         }
     }

@@ -200,49 +200,82 @@ final class TheSafecrackerScrollTests: XCTestCase {
                        "Should not scroll when element is already in comfort zone")
     }
 
-    func testScrollToMakeVisibleLargeTargetFallsBackToFullVisibleRect() {
+    func testScrollToMakeVisibleLargeTargetUsesFullVisibleRect() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 600),
             contentSize: CGSize(width: 400, height: 3000),
             contentOffset: CGPoint(x: 0, y: 500)
         )
         // Comfort zone with 1/6 margin: height = 600 * (2/3) = 400.
-        // Target is 450pt tall — exceeds the comfort zone, so the method
-        // should fall back to the full visible rect instead.
+        // Target is 450pt tall, so the method should use the full visible
+        // rect on the oversized axis.
         let targetFrame = CGRect(x: 0, y: 200, width: 400, height: 450)
         let result = safecracker.scrollToMakeVisible(
             targetFrame, in: sv, animated: false,
             comfortMarginFraction: 1.0 / 6.0
         )
         XCTAssertTrue(result)
-        // With full visible rect fallback (500..1100), the target (200..650 in content space)
-        // needs to scroll up. The key assertion is that it scrolled at all — the fallback
-        // to fullVisibleRect allowed the scroll instead of using the too-small comfort zone.
+        // With the full visible rect (500..1100), the target (200..650 in content
+        // space) needs to scroll up. The key assertion is that it scrolled at all.
         XCTAssertLessThan(sv.contentOffset.y, 500,
-                          "Should fall back to full visible rect and scroll for oversized target")
+                          "Should use the full visible rect and scroll for oversized target")
     }
 
-    func testScrollToMakeVisibleLargeTargetOnlyOneAxisExceedsComfortZone() {
+    func testScrollToMakeVisibleKeepsComfortMarginOnAxisThatFits() {
         let sv = makeScrollView(
             frame: CGRect(x: 0, y: 0, width: 400, height: 600),
             contentSize: CGSize(width: 2000, height: 3000),
-            contentOffset: CGPoint(x: 500, y: 500)
+            contentOffset: .zero
         )
-        // Comfort zone: width = 400 * 2/3 ≈ 267, height = 600 * 2/3 = 400.
+        // Comfort zone: width = 400 * 2/3, height = 600 * 2/3 = 400.
         // Target width (300) exceeds comfort width (267) but target height (100) fits.
-        // The fallback is all-or-nothing: both axes lose the margin.
-        let targetFrame = CGRect(x: 200, y: 200, width: 300, height: 100)
+        // Horizontal reveal uses the full visible rect, but vertical reveal should
+        // still use the comfort margin and nudge the target upward.
+        let targetFrame = CGRect(x: 50, y: 490, width: 300, height: 100)
         let result = safecracker.scrollToMakeVisible(
             targetFrame, in: sv, animated: false,
             comfortMarginFraction: 1.0 / 6.0
         )
         XCTAssertTrue(result)
-        // Should use full visible rect (not comfort zone) since one axis exceeds comfort.
-        // Target in content space starts at x: 200+500=700 relative to content,
-        // but the key point is the fallback was applied — no crash, scroll happened.
-        let offsetMoved = sv.contentOffset.x != 500 || sv.contentOffset.y != 500
-        XCTAssertTrue(offsetMoved,
-                      "Should scroll using full visible rect when target exceeds comfort zone on one axis")
+        XCTAssertEqual(sv.contentOffset.x, 0, accuracy: 0.01)
+        XCTAssertEqual(sv.contentOffset.y, 90, accuracy: 0.01,
+                       "The axis that fits the comfort zone should keep its comfort margin")
+    }
+
+    func testScrollToMakeVisibleScrollsOversizedTargetUntilViewportIntersectsIt() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 600),
+            contentSize: CGSize(width: 400, height: 3000),
+            contentOffset: .zero
+        )
+        let targetFrame = CGRect(x: 0, y: 900, width: 400, height: 900)
+
+        let result = safecracker.scrollToMakeVisible(
+            targetFrame, in: sv, animated: false,
+            comfortMarginFraction: 1.0 / 6.0
+        )
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(sv.contentOffset.y, 1200, accuracy: 0.01,
+                       "Oversized targets cannot fit fully, but reveal should still bring the target onto screen")
+    }
+
+    func testScrollToMakeActivationPointVisibleCentersPointInPreferredScreenRect() {
+        let sv = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 1000),
+            contentSize: CGSize(width: 400, height: 3000),
+            contentOffset: .zero
+        )
+        let result = safecracker.scrollToMakeActivationPointVisible(
+            CGPoint(x: 200, y: 888),
+            in: sv,
+            animated: false,
+            preferredScreenRect: CGRect(x: 0, y: 120, width: 400, height: 600),
+            minimumScreenRect: CGRect(x: 0, y: 0, width: 400, height: 874)
+        )
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(sv.contentOffset.y, 468, accuracy: 0.01)
     }
 }
 #endif

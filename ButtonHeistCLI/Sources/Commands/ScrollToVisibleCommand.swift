@@ -4,11 +4,11 @@ import ButtonHeist
 struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Scroll a known element into view",
+        abstract: "Scroll a resolved element into view",
         discussion: """
-            Brings an element from the current hierarchy into view. \
-            The element must have been returned by get_interface or an action delta. \
-            If the element has not been seen yet, use element_search instead.
+            Resolves a semantic element target and brings it into view. \
+            Target with a heistId or matcher fields such as label, identifier, value, \
+            traits, excludeTraits, or ordinal.
 
             Examples:
               buttonheist scroll_to_visible btn_last

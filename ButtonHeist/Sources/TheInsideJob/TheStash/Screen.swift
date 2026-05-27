@@ -121,7 +121,10 @@ struct Screen: Equatable {
         liveInterface: LiveInterface
     ) {
         self.init(
-            semantic: SemanticScreen(elements: elements),
+            semantic: SemanticScreen(
+                elements: elements,
+                containers: Self.semanticContainers(from: liveInterface)
+            ),
             liveCapture: liveInterface
         )
     }
@@ -196,9 +199,13 @@ struct Screen: Equatable {
     /// semantic entries retained from exploration.
     var visibleOnly: Screen {
         let visibleIds = liveInterface.heistIds
+        let visibleContainerPaths = Set(liveInterface.hierarchy.containerPaths.map(\.path))
         return Screen(
-            elements: elements.filter { visibleIds.contains($0.key) },
-            liveInterface: liveInterface
+            semantic: SemanticScreen(
+                elements: elements.filter { visibleIds.contains($0.key) },
+                containers: semantic.containers.filter { visibleContainerPaths.contains($0.key) }
+            ),
+            liveCapture: liveInterface
         )
     }
 
@@ -240,9 +247,13 @@ struct Screen: Equatable {
     /// interface.
     func merging(_ other: Screen) -> Screen {
         let mergedElements = elements.merging(other.elements) { _, new in new }
+        let mergedContainers = semantic.containers.merging(other.semantic.containers) { _, new in new }
         return Screen(
-            elements: mergedElements,
-            liveInterface: other.liveInterface
+            semantic: SemanticScreen(
+                elements: mergedElements,
+                containers: mergedContainers
+            ),
+            liveCapture: other.liveInterface
         )
     }
 
@@ -261,8 +272,28 @@ struct Screen: Equatable {
         }
         let refreshed = merging(visibleRefresh)
         return Screen(
-            elements: refreshed.elements.filter { !disappearedVisibleIds.contains($0.key) },
-            liveInterface: refreshed.liveInterface
+            semantic: SemanticScreen(
+                elements: refreshed.elements.filter { !disappearedVisibleIds.contains($0.key) },
+                containers: refreshed.semantic.containers
+            ),
+            liveCapture: refreshed.liveInterface
+        )
+    }
+
+    private static func semanticContainers(from liveInterface: LiveInterface) -> [TreePath: SemanticScreen.Container] {
+        Dictionary(
+            uniqueKeysWithValues: liveInterface.hierarchy.containerPaths.map { item in
+                (
+                    item.path,
+                    SemanticScreen.Container(
+                        container: item.container,
+                        path: item.path,
+                        stableId: liveInterface.containerStableIdsByPath[item.path]
+                            ?? liveInterface.containerStableIds[item.container],
+                        contentFrame: liveInterface.containerContentFrame(forPath: item.path)
+                    )
+                )
+            }
         )
     }
 }

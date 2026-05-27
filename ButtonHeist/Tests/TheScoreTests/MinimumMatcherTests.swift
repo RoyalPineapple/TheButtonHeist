@@ -241,17 +241,29 @@ final class MinimumMatcherTests: XCTestCase {
         value: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {
-        HeistElement(
+        let frameX = 0.0
+        let frameY = 0.0
+        let frameWidth = 100.0
+        let frameHeight = 44.0
+        let activationPoint = defaultActivationPoint(
+            frameX: frameX,
+            frameY: frameY,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight
+        )
+        return HeistElement(
             heistId: heistId,
             description: label ?? heistId,
             label: label,
             value: value,
             identifier: identifier,
             traits: traits,
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 100,
-            frameHeight: 44,
+            frameX: frameX,
+            frameY: frameY,
+            frameWidth: frameWidth,
+            frameHeight: frameHeight,
+            activationPointX: activationPoint.x,
+            activationPointY: activationPoint.y,
             actions: []
         )
     }

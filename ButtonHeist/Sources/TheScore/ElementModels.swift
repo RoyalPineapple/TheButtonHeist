@@ -76,6 +76,7 @@ public extension HeistElement {
         annotation: InterfaceElementAnnotation? = nil
     ) {
         let frame = accessibilityFrame(for: element.shape)
+        let activationPoint = accessibilityActivationPoint(for: element, frame: frame)
         let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
         let validRotors = element.customRotors.filter { !$0.name.isEmpty }
         self.init(
@@ -90,8 +91,8 @@ public extension HeistElement {
             frameY: sanitizedDouble(frame.origin.y),
             frameWidth: sanitizedDouble(frame.size.width),
             frameHeight: sanitizedDouble(frame.size.height),
-            activationPointX: sanitizedDouble(element.activationPoint.x),
-            activationPointY: sanitizedDouble(element.activationPoint.y),
+            activationPointX: sanitizedDouble(activationPoint.x),
+            activationPointY: sanitizedDouble(activationPoint.y),
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: validCustomContent.isEmpty ? nil : validCustomContent.map {
                 HeistCustomContent(label: $0.label, value: $0.value, isImportant: $0.isImportant)
@@ -100,6 +101,16 @@ public extension HeistElement {
             actions: annotation?.actions ?? []
         )
     }
+}
+
+private func accessibilityActivationPoint(for element: AccessibilityElement, frame: CGRect) -> CGPoint {
+    if element.usesDefaultActivationPoint {
+        return CGPoint(x: frame.midX, y: frame.midY)
+    }
+    return CGPoint(
+        x: CGFloat(element.activationPoint.x),
+        y: CGFloat(element.activationPoint.y)
+    )
 }
 
 private func accessibilityFrame(for shape: AccessibilityShape) -> CGRect {

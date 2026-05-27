@@ -56,7 +56,7 @@ extension TheStash {
         }
     }
 
-    /// Semantic container match selected from the current hierarchy.
+    /// Semantic container match selected from committed screen state.
     ///
     /// The backing UIKit object is intentionally excluded. Container actions
     /// must acquire a `LiveContainerTarget` immediately before dispatch.
@@ -116,40 +116,42 @@ extension TheStash {
     /// `currentScreen.knownInterface`, resolution fails with a near-miss
     /// suggestion. Live coordinate revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: currentScreen, includePendingRotor: true, resolutionScope: .known)
+        resolveTarget(target, in: currentScreen, resolutionScope: .known)
     }
 
     /// Resolve a target against a supplied screen value. Used by callers that
     /// intentionally preserved a known semantic snapshot across a fresh visible
     /// parse.
     func resolveTarget(_ target: ElementTarget, in screen: Screen) -> TargetResolution {
-        resolveTarget(target, in: screen, includePendingRotor: false, resolutionScope: .provided)
+        resolveTarget(target, in: screen, resolutionScope: .provided)
     }
 
     /// Resolve a target only against the latest live hierarchy. This preserves
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
     func resolveVisibleTarget(_ target: ElementTarget) -> TargetResolution {
-        resolveTarget(target, in: currentScreen.visibleOnly, includePendingRotor: false, resolutionScope: .visible)
+        resolveTarget(target, in: currentScreen.visibleOnly, resolutionScope: .visible)
     }
 
     func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
         guard matcher.hasPredicates || ordinal != nil else {
             return .notFound(diagnostics: "container target requires stableId, type, label, value, identifier, or ordinal")
         }
-        let matches = currentScreen.liveInterface.hierarchy.containerPaths.compactMap { item -> ResolvedContainerTarget? in
-            let annotation = InterfaceContainerAnnotation(
-                path: item.path,
-                stableId: currentScreen.liveInterface.containerStableIdsByPath[item.path]
-            )
-            guard item.container.matches(matcher, annotation: annotation) else { return nil }
-            return ResolvedContainerTarget(
-                container: item.container,
-                path: item.path,
-                stableId: annotation.stableId,
-                contentFrame: currentScreen.liveInterface.containerContentFrame(forPath: item.path)
-            )
-        }
+        let matches = currentScreen.semantic.containers.values
+            .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
+            .compactMap { item -> ResolvedContainerTarget? in
+                let annotation = InterfaceContainerAnnotation(
+                    path: item.path,
+                    stableId: item.stableId
+                )
+                guard item.container.matches(matcher, annotation: annotation) else { return nil }
+                return ResolvedContainerTarget(
+                    container: item.container,
+                    path: item.path,
+                    stableId: annotation.stableId,
+                    contentFrame: item.contentFrame
+                )
+            }
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
                 return .notFound(diagnostics: "container target ordinal \(ordinal) is outside \(matches.count) matching container(s)")
@@ -160,7 +162,7 @@ extension TheStash {
         case 1:
             return .resolved(matches[0])
         case 0:
-            return .notFound(diagnostics: "no live container matched \(matcher)")
+            return .notFound(diagnostics: "no semantic container matched \(matcher)")
         default:
             let candidates = matches.map(Self.containerCandidateSummary)
             return .ambiguous(
@@ -297,14 +299,10 @@ private extension TheStash {
     func resolveTarget(
         _ target: ElementTarget,
         in screen: Screen,
-        includePendingRotor: Bool,
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
         switch target {
         case .heistId(let heistId):
-            if includePendingRotor, let pending = activePendingRotorResult(heistId: heistId) {
-                return .resolved(ResolvedTarget(screenElement: pending))
-            }
             guard let entry = screen.findElement(heistId: heistId) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,

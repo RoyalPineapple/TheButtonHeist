@@ -125,13 +125,16 @@ private enum SemanticRevealPlanner {
 
     @MainActor
     static func targetOffset(for contentOrigin: CGPoint, in scrollView: UIScrollView) -> CGPoint {
-        let visibleSize = scrollView.bounds.size
         let insets = scrollView.adjustedContentInset
+        let visibleSize = CGSize(
+            width: max(0, scrollView.bounds.width - insets.left - insets.right),
+            height: max(0, scrollView.bounds.height - insets.top - insets.bottom)
+        )
         let contentSize = scrollView.contentSize
-        let maxX = max(contentSize.width + insets.right - visibleSize.width, -insets.left)
-        let maxY = max(contentSize.height + insets.bottom - visibleSize.height, -insets.top)
-        let targetX = min(max(contentOrigin.x - visibleSize.width / 2, -insets.left), maxX)
-        let targetY = min(max(contentOrigin.y - visibleSize.height / 2, -insets.top), maxY)
+        let maxX = max(contentSize.width + insets.right - scrollView.bounds.width, -insets.left)
+        let maxY = max(contentSize.height + insets.bottom - scrollView.bounds.height, -insets.top)
+        let targetX = min(max(contentOrigin.x - insets.left - visibleSize.width / 2, -insets.left), maxX)
+        let targetY = min(max(contentOrigin.y - insets.top - visibleSize.height / 2, -insets.top), maxY)
         return CGPoint(x: targetX, y: targetY)
     }
 

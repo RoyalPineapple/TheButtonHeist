@@ -4,11 +4,10 @@ import XCTest
 @testable import TheInsideJob
 import TheScore
 
-/// Direct tests for `TheBurglar.buildContainerIdentityContext` — the parent-
-/// scrollable-threading walk that converts each container's screen-space
-/// frame into the nearest enclosing scrollable's content space. Container
-/// stableIds depend on these frames, so a bug in the walker would silently
-/// degrade identity for every nested container.
+/// Direct tests for `TheBurglar.buildContainerIdentityContext` — the
+/// parent-scrollable-threading walk that keeps container identity derived from
+/// hierarchy structure and accessibility size, not live scroll-view coordinate
+/// conversion or moving viewport origin.
 @MainActor
 final class TheBurglarContainerFramesTests: XCTestCase {
 
@@ -72,17 +71,16 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         let innerContent = result.contentFrames[inner]
         XCTAssertNotNil(innerContent)
         XCTAssertEqual(innerContent?.origin.x ?? .nan, 0, accuracy: 0.5)
-        XCTAssertEqual(innerContent?.origin.y ?? .nan, 300, accuracy: 0.5,
-                       "screen-y 200 + contentOffset.y 100 = content-y 300")
+        XCTAssertEqual(innerContent?.origin.y ?? .nan, 0, accuracy: 0.5,
+                       "Nested container identity drops moving viewport origin")
         XCTAssertEqual(innerContent?.size, inner.frame.size.cgSize,
-                       "Size is unchanged by coordinate conversion")
+                       "Size remains parser evidence; origin is capture-local hierarchy evidence")
         XCTAssertTrue(result.nestedInScrollView.contains(inner))
     }
 
     func testNestedContainerScrollIndependence() {
-        // Same inner container, two different parent contentOffsets — the
-        // content-frame must remain anchored to the underlying content,
-        // not the viewport.
+        // Same inner container, two different parent contentOffsets: semantic
+        // container identity must not follow moving viewport origin.
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
         scrollView.contentSize = CGSize(width: 320, height: 5000)
@@ -94,7 +92,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
         )
 
-        // Parse 1: contentOffset 0, inner is at screen-y 200 → content-y 200.
+        // Parse 1: contentOffset 0, inner is at screen-y 200.
         scrollView.contentOffset = .zero
         let innerParse1 = AccessibilityContainer(
             type: .list,
@@ -108,8 +106,8 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         )
 
         // Parse 2: scrolled down by 1000pt. The same logical inner container
-        // — same data behind it — is now at screen-y -800. Content-frame
-        // should still resolve to content-y 200, the same logical anchor.
+        // — same data behind it — is now at screen-y -800. Its identity frame
+        // should still drop origin and keep size.
         scrollView.contentOffset = CGPoint(x: 0, y: 1000)
         let innerParse2 = AccessibilityContainer(
             type: .list,
@@ -122,44 +120,11 @@ final class TheBurglarContainerFramesTests: XCTestCase {
             scrollableContainerViews: [outer: scrollView]
         )
 
-        XCTAssertEqual(result1.contentFrames[innerParse1]?.origin.y ?? .nan, 200, accuracy: 0.5)
-        XCTAssertEqual(result2.contentFrames[innerParse2]?.origin.y ?? .nan, 200, accuracy: 0.5,
-                       "Inner container's content-frame must be invariant under outer scroll")
+        XCTAssertEqual(result1.contentFrames[innerParse1]?.origin.y ?? .nan, 0, accuracy: 0.5)
+        XCTAssertEqual(result2.contentFrames[innerParse2]?.origin.y ?? .nan, 0, accuracy: 0.5,
+                       "Inner container identity must be invariant under outer scroll")
         XCTAssertTrue(result1.nestedInScrollView.contains(innerParse1))
         XCTAssertTrue(result2.nestedInScrollView.contains(innerParse2))
-    }
-
-    // MARK: - heistId synthesis: pathological geometry
-
-    /// `contentPositionHeistId` builds a wire-format heistId fragment from
-    /// `(origin.x, origin.y)`. `Int(_:)` traps on non-finite or finite-but-
-    /// out-of-range inputs, which would crash the parse the first time a
-    /// pathological content-space origin appears. Must use `safeInt`.
-    func testContentPositionHeistIdHandlesPathologicalOrigin() {
-        let base = "button_save"
-
-        let nanOrigin = TheBurglar.contentPositionHeistId(
-            base, origin: CGPoint(x: 1e100, y: .nan)
-        )
-        XCTAssertFalse(nanOrigin.isEmpty)
-        XCTAssertTrue(nanOrigin.hasPrefix("\(base)_at_"))
-
-        // Determinism: same pathological input produces the same id.
-        let nanOriginAgain = TheBurglar.contentPositionHeistId(
-            base, origin: CGPoint(x: 1e100, y: .nan)
-        )
-        XCTAssertEqual(nanOrigin, nanOriginAgain)
-
-        // Non-finite components clamp to 0, finite-but-huge clamp to Int.max/min.
-        let infOrigin = TheBurglar.contentPositionHeistId(
-            base, origin: CGPoint(x: .infinity, y: -.infinity)
-        )
-        XCTAssertEqual(infOrigin, "\(base)_at_0_0")
-
-        let hugeOrigin = TheBurglar.contentPositionHeistId(
-            base, origin: CGPoint(x: 1e100, y: -1e100)
-        )
-        XCTAssertEqual(hugeOrigin, "\(base)_at_\(Int.max)_\(Int.min)")
     }
 
     /// `coarseFrameHash` is a wire-format heistId fragment for container

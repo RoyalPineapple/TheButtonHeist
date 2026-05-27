@@ -320,6 +320,7 @@
 		B54E9C9ABD76E906EAEECFD1 /* DeviceConnectionReceiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D1CD4282C3885E93C6D8CA /* DeviceConnectionReceiveTests.swift */; };
 		B567A9FA76509594564D7D3B /* swift-crypto_CCryptoBoringSSLShims.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 6777391A168B3CB3695C0BCF /* swift-crypto_CCryptoBoringSSLShims.bundle */; };
 		B5B0A72522AEB064B727BEA0 /* OperationPrimitiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C703844740F21EC9905CD4C8 /* OperationPrimitiveTests.swift */; };
+		B62712412CA7726BC7ABCDE5 /* AccessibilityElement+Geometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D1BB785CFAF254933D5C1C /* AccessibilityElement+Geometry.swift */; };
 		B65047B647D7BFD40ADD4316 /* ScrollCommandPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8292AF2F81B2D0A51BF11C1A /* ScrollCommandPayloads.swift */; };
 		B95536B7E5A8E22D64FD70D7 /* TheFenceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14CA15622C9C76309BC21D90 /* TheFenceTestHelpers.swift */; };
 		BAE49213A7F4FAACD9AE1EE0 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
@@ -719,6 +720,7 @@
 		61A7F4435F968A9D7DF4EF0A /* TheFenceBoolArgTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheFenceBoolArgTests.swift; sourceTree = "<group>"; };
 		61A9301459818B5CDACB2165 /* InterfaceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceModels.swift; sourceTree = "<group>"; };
 		61CF90B00E75A4C189F1F508 /* Actions+RecoveryPolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Actions+RecoveryPolicies.swift"; sourceTree = "<group>"; };
+		61D1BB785CFAF254933D5C1C /* AccessibilityElement+Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityElement+Geometry.swift"; sourceTree = "<group>"; };
 		61EDA1A956342901286B448D /* InteractivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractivityTests.swift; sourceTree = "<group>"; };
 		62DD31D9145D6BABD29D286B /* USBDeviceDiscoveryParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscoveryParsingTests.swift; sourceTree = "<group>"; };
 		63AEBA441147E38C0ED98046 /* TheGetaway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheGetaway.swift; sourceTree = "<group>"; };
@@ -1268,6 +1270,7 @@
 				36091E6D756F95ADED66DE7B /* TheStash */,
 				14BEF40AE51C8E4D6901F007 /* TheTripwire */,
 				6017364A6AB3C529ECE13184 /* AccessibilityContainer+Matching.swift */,
+				61D1BB785CFAF254933D5C1C /* AccessibilityElement+Geometry.swift */,
 				90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */,
 				684B1D4DC1EC65626B3028AC /* AccessibilityHierarchy+TreeOperations.swift */,
 				F38D815953121AF8392D5175 /* InsideJobExposureRuntime.swift */,
@@ -2053,6 +2056,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A963BAD3BB20FC75003B51CB /* AccessibilityContainer+Matching.swift in Sources */,
+				B62712412CA7726BC7ABCDE5 /* AccessibilityElement+Geometry.swift in Sources */,
 				3CDB64482D830F2220EA28E1 /* AccessibilityHierarchy+Reconciliation.swift in Sources */,
 				276E01C107AB4FDE2E7A141D /* AccessibilityHierarchy+TreeOperations.swift in Sources */,
 				C54E213694B1990DAE41D068 /* InsideJobExposureRuntime.swift in Sources */,

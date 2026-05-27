@@ -49,14 +49,17 @@ final class WireConverterTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 0,
         frameHeight: Double = 0,
-        activationPointX: Double = 0,
-        activationPointY: Double = 0,
+        activationPointX: Double? = nil,
+        activationPointY: Double? = nil,
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         let frame = CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
-        let activationPoint = CGPoint(x: activationPointX, y: activationPointY)
+        let hasExplicitActivationPoint = activationPointX != nil || activationPointY != nil
+        let activationPoint = hasExplicitActivationPoint
+            ? CGPoint(x: activationPointX ?? 0, y: activationPointY ?? 0)
+            : .zero
         return .make(
             label: label,
             value: value,
@@ -65,7 +68,7 @@ final class WireConverterTests: XCTestCase {
             traits: UIAccessibilityTraits.fromNames(traits.map(\.rawValue)),
             shape: .frame(AccessibilityRect(frame)),
             activationPoint: activationPoint,
-            usesDefaultActivationPoint: activationPointX == 0 && activationPointY == 0,
+            usesDefaultActivationPoint: !hasExplicitActivationPoint,
             customContent: customContent,
             customRotors: customRotors,
             respondsToUserInteraction: respondsToUserInteraction
@@ -83,8 +86,8 @@ final class WireConverterTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 0,
         frameHeight: Double = 0,
-        activationPointX: Double = 0,
-        activationPointY: Double = 0,
+        activationPointX: Double? = nil,
+        activationPointY: Double? = nil,
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true
@@ -323,30 +326,34 @@ final class WireConverterTests: XCTestCase {
 
     // MARK: - Action Conversion
 
-    func testToWireIncludesActivateForActivationOverrideWithoutTraits() {
-        let object = WireActivationOverrideView()
-        let element = makeScreenElement(
-            heistId: "plain_action",
+    func testToInterfaceDoesNotInferElementActionsFromLiveObject() {
+        let element = makeElement(
             label: "Plain action",
             respondsToUserInteraction: false
         )
+        let liveObject = WireActivationOverrideView()
+        let parse = TheBurglar.ParseResult(
+            hierarchy: [.element(element, traversalIndex: 0)],
+            objects: [element: liveObject],
+            scrollViews: [:]
+        )
+        let screen = TheBurglar.buildScreen(from: parse)
 
-        let wire = WireConversion.convert(element.element, heistId: element.heistId, object: object)
+        let annotations = WireConversion.toInterface(from: screen).annotations.elements
 
-        XCTAssertEqual(wire.actions, [.activate])
+        XCTAssertEqual(annotations.first?.actions, [])
     }
 
-    func testToWireOmitsActivateForPlainObjectWithoutActivationSignal() {
-        let object = UIView()
+    func testToWireIncludesActivateFromParsedInteractivity() {
         let element = makeScreenElement(
-            heistId: "plain_label",
-            label: "Plain label",
-            respondsToUserInteraction: false
+            heistId: "button",
+            label: "Button",
+            respondsToUserInteraction: true
         )
 
-        let wire = WireConversion.convert(element.element, heistId: element.heistId, object: object)
+        let wire = WireConversion.convert(element.element, heistId: element.heistId)
 
-        XCTAssertEqual(wire.actions, [])
+        XCTAssertEqual(wire.actions, [.activate])
     }
 
     // MARK: - Tree Conversion
@@ -373,21 +380,17 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(info.isModalBoundary)
     }
 
-    func testToInterfaceAnnotatesContainerCustomActions() {
+    func testToInterfaceAnnotatesParsedContainerCustomActions() {
         let path = TreePath([0])
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
             frame: .zero,
             customActions: [.init(name: "Archive")]
         )
-        let liveObject = UIView()
-        liveObject.accessibilityCustomActions = [
-            UIAccessibilityCustomAction(name: "Share") { _ in true },
-        ]
         let parse = TheBurglar.ParseResult(
             hierarchy: [.container(container, children: [])],
             objects: [:],
-            containerObjectsByPath: [path: liveObject],
+            containerObjectsByPath: [:],
             scrollViews: [:]
         )
         let screen = TheBurglar.buildScreen(from: parse)
@@ -396,7 +399,7 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertEqual(
             annotations[path]?.actions,
-            [.custom("Archive"), .custom("Share")]
+            [.custom("Archive")]
         )
     }
 

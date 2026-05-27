@@ -158,8 +158,9 @@ extension Navigation {
         }.joined(separator: ", ")
     }
 
-    /// Build a ScrollableTarget for a container, preferring the live UIView when attached
-    /// to a window so that frames reflect the current screen position.
+    /// Build a ScrollableTarget for a container. Geometry comes from the current
+    /// accessibility capture; UIKit refs are only dispatch objects for real scroll
+    /// actions, not semantic state authority.
     func scrollableTarget(
         for container: AccessibilityContainer,
         contentSize: AccessibilitySize
@@ -168,15 +169,6 @@ extension Navigation {
         if let scrollView = stash.scrollableContainerViews[container] as? UIScrollView {
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return nil }
             return .uiScrollView(scrollView)
-        }
-        if let view = stash.scrollableContainerViews[container], view.window != nil {
-            if let scrollView = view as? UIScrollView, scrollView.bhIsUnsafeForProgrammaticScrolling {
-                return nil
-            }
-            guard let screenFrame = safeSwipeFrame(from: view.convert(view.bounds, to: nil)) else {
-                return nil
-            }
-            return .swipeable(frame: screenFrame, contentSize: cgContentSize)
         }
         guard let screenFrame = safeSwipeFrame(from: container.frame.cgRect) else {
             return nil

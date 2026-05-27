@@ -10,24 +10,6 @@ extension Navigation {
 
     private static let comfortMarginFraction: CGFloat = 1.0 / 6.0
 
-    enum SemanticVisibilityResult {
-        case alreadyUsable
-        case adjustedVisibleTarget
-        case recoveredKnownOffscreen
-        case operationLocalRotorResult
-        case failed(SemanticActionabilityFailure)
-
-        var succeeded: Bool {
-            if case .failed = self { return false }
-            return true
-        }
-
-        var failure: SemanticActionabilityFailure? {
-            if case .failed(let failure) = self { return failure }
-            return nil
-        }
-    }
-
     struct SemanticActionableTarget {
         let normalizedTarget: TheStash.NormalizedTarget
         let resolvedTarget: TheStash.ResolvedTarget
@@ -162,37 +144,16 @@ extension Navigation {
 
         let knownScreen = recordedScreen ?? stash.currentScreen
         let normalizedTarget = stash.normalizeTarget(elementTarget, in: knownScreen)
-        let ensureResult = await makeSemanticallyVisible(for: normalizedTarget)
-        guard ensureResult.succeeded else {
-            return .failure(
-                .scrollToVisible,
-                message: ensureResult.failure?.message ?? "\(ScrollMode.toVisible.canonicalCommand) failed"
-            )
-        }
-
-        if case .operationLocalRotorResult = ensureResult {
+        switch await makeActionable(
+            for: normalizedTarget,
+            method: .scrollToVisible,
+            deallocatedBoundary: "scroll_to_visible dispatch"
+        ) {
+        case .actionable:
             return .success(method: .scrollToVisible)
+        case .failed(let failure):
+            return .failure(.scrollToVisible, message: failure.message)
         }
-
-        let refreshedResolution = stash.resolveVisibleTarget(normalizedTarget.executableTarget)
-        guard refreshedResolution.resolved != nil else {
-            let suffix = refreshedResolution.diagnostics.isEmpty ? "" : ": \(refreshedResolution.diagnostics)"
-            return .failure(
-                .scrollToVisible,
-                message: SemanticActionabilityFailure.staleRefresh(
-                    normalizedTarget.diagnostics("target disappeared after semantic reveal\(suffix)")
-                ).message
-            )
-        }
-
-        let message: String?
-        switch ensureResult {
-        case .alreadyUsable, .adjustedVisibleTarget:
-            message = "Already visible"
-        case .recoveredKnownOffscreen, .operationLocalRotorResult, .failed:
-            message = nil
-        }
-        return .success(method: .scrollToVisible, message: message)
     }
 
     private static var interactionComfortZone: CGRect {
@@ -203,107 +164,37 @@ extension Navigation {
         )
     }
 
-    func makeSemanticallyVisible(
-        for target: ElementTarget,
-        recordedScreen: Screen? = nil
-    ) async -> SemanticVisibilityResult {
-        await makeSemanticallyVisible(for: target as any SemanticElementTarget, recordedScreen: recordedScreen)
-    }
-
-    func makeSemanticallyVisible(
-        for target: any SemanticElementTarget,
-        recordedScreen: Screen? = nil
-    ) async -> SemanticVisibilityResult {
-        let normalizedTarget = stash.normalizeTarget(target, in: recordedScreen ?? stash.currentScreen)
-        return await makeSemanticallyVisible(for: normalizedTarget)
-    }
-
-    func makeSemanticallyVisible(for normalizedTarget: TheStash.NormalizedTarget) async -> SemanticVisibilityResult {
-        let target = normalizedTarget.executableTarget
-        if let pendingRotorResult = stash.activePendingRotorResult(for: normalizedTarget.originalTarget) {
-            let ensureResult = await alignVisibleResolvedTarget(.init(screenElement: pendingRotorResult))
-            guard ensureResult.succeeded else { return ensureResult }
-            return .operationLocalRotorResult
-        }
-
-        // Source screens only derive `executableTarget`. Positioning authority
-        // comes from the current screen and live UIKit graph below.
-        switch stash.resolveTarget(normalizedTarget.executableTarget) {
-        case .resolved(let semanticTarget):
-            let reveal = stash.executeSemanticRevealPlan(for: semanticTarget.screenElement)
-            if case .failed = reveal {
-                return .failed(.noRevealPath(
-                    semanticRevealPlanFailureMessage(semanticTarget.screenElement)
-                ))
-            }
-            if reveal.didReveal {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                refresh()
-            }
-            let liveResolution = stash.resolveVisibleTarget(target)
-            switch liveResolution {
-            case .resolved(let liveTarget):
-                let ensureResult = await alignVisibleResolvedTarget(liveTarget)
-                guard ensureResult.succeeded else { return ensureResult }
-                return reveal.didReveal ? .recoveredKnownOffscreen : ensureResult
-            case .notFound(let diagnostics):
-                let suffix = diagnostics.isEmpty ? "" : ": \(diagnostics)"
-                return .failed(.staleRefresh(
-                    normalizedTarget.diagnostics("target was not visible after semantic reveal\(suffix)")
-                ))
-            case .ambiguous(_, let diagnostics):
-                return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
-            }
-        case .notFound(let diagnostics):
-            return .failed(.notFound(normalizedTarget.diagnostics(diagnostics)))
-        case .ambiguous(_, let diagnostics):
-            return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
-        }
-    }
-
     func makeActionable(
         for normalizedTarget: TheStash.NormalizedTarget,
         method: ActionMethod,
         deallocatedBoundary: String,
         allowingStaleRefresh: Bool = true
     ) async -> SemanticActionabilityResult {
-        if stash.activePendingRotorResult(for: normalizedTarget.originalTarget) == nil {
-            switch stash.resolveVisibleTarget(normalizedTarget.executableTarget) {
-            case .resolved:
-                break
-            case .ambiguous(_, let diagnostics):
-                return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
-            case .notFound:
-                let visibility = await makeSemanticallyVisible(for: normalizedTarget)
-                if let failure = visibility.failure {
-                    return .failed(failure)
-                }
-            }
+        if let preparationFailure = await prepareActionability(for: normalizedTarget) {
+            return .failed(preparationFailure)
         }
 
         let resolved: TheStash.ResolvedTarget
-        if let pendingRotorResult = stash.activePendingRotorResult(for: normalizedTarget.originalTarget) {
-            resolved = TheStash.ResolvedTarget(screenElement: pendingRotorResult)
-        } else {
-            switch stash.resolveVisibleTarget(normalizedTarget.executableTarget) {
-            case .resolved(let target):
-                resolved = target
-            case .notFound(let diagnostics):
-                return .failed(.staleRefresh(
-                    normalizedTarget.diagnostics("target was not found in fresh live geometry: \(diagnostics)")
-                ))
-            case .ambiguous(_, let diagnostics):
-                return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
-            }
+        switch stash.resolveVisibleTarget(normalizedTarget.executableTarget) {
+        case .resolved(let target):
+            resolved = target
+        case .notFound(let diagnostics):
+            return .failed(.staleRefresh(
+                normalizedTarget.diagnostics("target was not found in fresh live geometry: \(diagnostics)")
+            ))
+        case .ambiguous(_, let diagnostics):
+            return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
         }
 
         switch stash.resolveLiveActionTarget(for: resolved) {
         case .resolved(let liveTarget):
-            return .actionable(SemanticActionableTarget(
+            return await ensureLiveGeometryActionable(
+                liveTarget,
                 normalizedTarget: normalizedTarget,
-                resolvedTarget: resolved,
-                liveTarget: liveTarget
-            ))
+                method: method,
+                deallocatedBoundary: deallocatedBoundary,
+                allowingStaleRefresh: allowingStaleRefresh
+            )
         case .objectUnavailable:
             let message = normalizedTarget.diagnostics(
                 ActionCapabilityDiagnostic.elementDeallocated(
@@ -345,7 +236,92 @@ extension Navigation {
         }
     }
 
-    func makeContainerActionable(
+    private func ensureLiveGeometryActionable(
+        _ liveTarget: TheStash.LiveActionTarget,
+        normalizedTarget: TheStash.NormalizedTarget,
+        method: ActionMethod,
+        deallocatedBoundary: String,
+        allowingStaleRefresh: Bool
+    ) async -> SemanticActionabilityResult {
+        if Self.activationPointHasPreferredPlacement(liveTarget.activationPoint) {
+            return .actionable(Self.actionableTarget(normalizedTarget: normalizedTarget, liveTarget: liveTarget))
+        }
+
+        let resolved = liveTarget.resolvedTarget
+        guard allowingStaleRefresh else {
+            if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                return .actionable(Self.actionableTarget(normalizedTarget: normalizedTarget, liveTarget: liveTarget))
+            }
+            return .failed(.geometryNotActionable(
+                normalizedTarget.diagnostics(
+                    "target \(Self.describeScrollTarget(resolved.screenElement)) "
+                        + "did not become actionable after semantic reveal; "
+                        + Self.liveGeometrySummary(liveTarget)
+                ),
+                method: method
+            ))
+        }
+        guard let scrollView = stash.liveScrollView(for: resolved.screenElement) else {
+            if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                return .actionable(Self.actionableTarget(normalizedTarget: normalizedTarget, liveTarget: liveTarget))
+            }
+            return .failed(.noRevealPath(normalizedTarget.diagnostics(
+                "target \(Self.describeScrollTarget(resolved.screenElement)) "
+                    + "has no live scrollable ancestor to make activation point actionable"
+            )))
+        }
+        guard safecracker.scrollToMakeActivationPointVisible(
+            liveTarget.activationPoint,
+            in: scrollView,
+            animated: false,
+            preferredScreenRect: Self.interactionComfortZone,
+            minimumScreenRect: ScreenMetrics.current.bounds
+        ) else {
+            if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                return .actionable(Self.actionableTarget(normalizedTarget: normalizedTarget, liveTarget: liveTarget))
+            }
+            return .failed(.geometryNotActionable(
+                normalizedTarget.diagnostics(
+                    "target \(Self.describeScrollTarget(resolved.screenElement)) "
+                        + "activation point could not be brought on-screen"
+                ),
+                method: method
+            ))
+        }
+        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+        refresh()
+        return await makeActionable(
+            for: normalizedTarget,
+            method: method,
+            deallocatedBoundary: deallocatedBoundary,
+            allowingStaleRefresh: false
+        )
+    }
+
+    private func prepareActionability(
+        for normalizedTarget: TheStash.NormalizedTarget
+    ) async -> SemanticActionabilityFailure? {
+        // Source screens derive only semantic identity. Reveal and geometry
+        // authority always come from the current live graph.
+        switch stash.resolveTarget(normalizedTarget.executableTarget) {
+        case .resolved(let semanticTarget):
+            let reveal = stash.executeSemanticRevealPlan(for: semanticTarget.screenElement)
+            if case .failed = reveal {
+                return .noRevealPath(semanticRevealPlanFailureMessage(semanticTarget.screenElement))
+            }
+            if reveal.didReveal {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                refresh()
+            }
+            return nil
+        case .notFound(let diagnostics):
+            return .notFound(normalizedTarget.diagnostics(diagnostics))
+        case .ambiguous(_, let diagnostics):
+            return .ambiguous(normalizedTarget.diagnostics(diagnostics))
+        }
+    }
+
+    func makeActionable(
         matcher: ContainerMatcher,
         ordinal: Int?,
         method: ActionMethod,
@@ -353,8 +329,8 @@ extension Navigation {
     ) async -> SemanticContainerActionabilityResult {
         switch stash.resolveContainerTarget(matcher, ordinal: ordinal) {
         case .resolved(let resolvedTarget):
-            return await makeResolvedContainerActionable(
-                resolvedTarget,
+            return await makeActionable(
+                for: resolvedTarget,
                 matcher: matcher,
                 ordinal: ordinal,
                 method: method,
@@ -367,8 +343,8 @@ extension Navigation {
         }
     }
 
-    private func makeResolvedContainerActionable(
-        _ resolvedTarget: TheStash.ResolvedContainerTarget,
+    private func makeActionable(
+        for resolvedTarget: TheStash.ResolvedContainerTarget,
         matcher: ContainerMatcher,
         ordinal: Int?,
         method: ActionMethod,
@@ -376,48 +352,57 @@ extension Navigation {
     ) async -> SemanticContainerActionabilityResult {
         switch stash.resolveLiveContainerTarget(for: resolvedTarget) {
         case .resolved(let liveTarget):
-            if Self.liveGeometryIsAlreadyUsable(
-                frame: liveTarget.frame,
-                activationPoint: liveTarget.activationPoint
-            ) {
-                return .actionable(SemanticContainerActionableTarget(
-                    resolvedTarget: resolvedTarget,
-                    liveTarget: liveTarget
-                ))
+            if Self.activationPointHasPreferredPlacement(liveTarget.activationPoint) {
+                return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
             }
             guard allowingStaleRefresh else {
+                if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                    return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
+                }
                 return .failed(.geometryNotActionable(
                     "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
                         + "did not become actionable after semantic reveal",
                     method: method
                 ))
             }
-            guard let contentFrame = resolvedTarget.contentFrame else {
-                return .failed(.noRevealPath(
-                    "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
-                        + "has no content-space position to make actionable"
-                ))
-            }
             guard let scrollView = stash.liveScrollView(forContainerPath: resolvedTarget.path) else {
+                if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                    return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
+                }
                 return .failed(.noRevealPath(
                     "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
                         + "has no live scrollable ancestor to make actionable"
                 ))
             }
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
+                if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                    return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
+                }
                 return .failed(.geometryNotActionable(
                     "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
                         + "is inside a scroll view that is unsafe for programmatic semantic reveal",
                     method: method
                 ))
             }
-            scrollView.setContentOffset(
-                TheStash.semanticRevealTargetOffset(for: contentFrame.origin, in: scrollView),
-                animated: false
-            )
+            guard safecracker.scrollToMakeActivationPointVisible(
+                liveTarget.activationPoint,
+                in: scrollView,
+                animated: false,
+                preferredScreenRect: Self.interactionComfortZone,
+                minimumScreenRect: ScreenMetrics.current.bounds
+            ) else {
+                if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+                    return .actionable(Self.actionableContainerTarget(resolvedTarget: resolvedTarget, liveTarget: liveTarget))
+                }
+                return .failed(.geometryNotActionable(
+                    "container target \(TheStash.containerCandidateSummary(resolvedTarget)) "
+                        + "activation point could not be brought on-screen",
+                    method: method
+                ))
+            }
             await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             refresh()
-            return await makeContainerActionable(
+            return await makeActionable(
                 matcher: matcher,
                 ordinal: ordinal,
                 method: method,
@@ -431,7 +416,7 @@ extension Navigation {
                 ))
             }
             refresh()
-            return await makeContainerActionable(
+            return await makeActionable(
                 matcher: matcher,
                 ordinal: ordinal,
                 method: method,
@@ -445,7 +430,7 @@ extension Navigation {
                 ))
             }
             refresh()
-            return await makeContainerActionable(
+            return await makeActionable(
                 matcher: matcher,
                 ordinal: ordinal,
                 method: method,
@@ -455,66 +440,70 @@ extension Navigation {
     }
 
     func ensureFirstResponderOnScreen() async {
-        guard let heistId = stash.firstResponderHeistId,
-              let entry = stash.currentScreen.findElement(heistId: heistId),
-              let geometry = stash.liveGeometry(for: entry),
-              !ScreenMetrics.current.bounds.contains(geometry.frame),
-              !Self.interactionComfortZone.contains(geometry.activationPoint) else { return }
-        if safecracker.scrollToMakeVisible(
-            geometry.frame, in: geometry.scrollView,
-            comfortMarginFraction: Self.comfortMarginFraction
+        _ = await makeFirstResponderActionable(method: .editAction)
+    }
+
+    func makeFirstResponderActionable(method: ActionMethod) async -> SemanticActionabilityFailure? {
+        guard let heistId = stash.firstResponderHeistId else { return nil }
+        let normalizedTarget = stash.normalizeTarget(.heistId(heistId), in: stash.currentScreen)
+        switch await makeActionable(
+            for: normalizedTarget,
+            method: method,
+            deallocatedBoundary: "first responder actionability"
         ) {
-            await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-            refresh()
+        case .actionable:
+            return nil
+        case .failed(let failure):
+            return failure
         }
     }
 
-    private static func liveGeometryIsAlreadyUsable(frame: CGRect, activationPoint: CGPoint) -> Bool {
-        ScreenMetrics.current.bounds.contains(frame)
-            || interactionComfortZone.contains(activationPoint)
+    private static func actionableTarget(
+        normalizedTarget: TheStash.NormalizedTarget,
+        liveTarget: TheStash.LiveActionTarget
+    ) -> SemanticActionableTarget {
+        SemanticActionableTarget(
+            normalizedTarget: normalizedTarget,
+            resolvedTarget: liveTarget.resolvedTarget,
+            liveTarget: liveTarget
+        )
     }
 
-    private func alignVisibleResolvedTarget(_ resolved: TheStash.ResolvedTarget) async -> SemanticVisibilityResult {
-        let liveTarget: TheStash.LiveActionTarget
-        switch stash.resolveLiveActionTarget(for: resolved) {
-        case .resolved(let target):
-            liveTarget = target
-        case .objectUnavailable:
-            return .failed(.staleRefresh(
-                "visible target \(Self.describeScrollTarget(resolved.screenElement)) has no live dispatch object",
-                method: .elementDeallocated
-            ))
-        case .geometryUnavailable:
-            return .failed(.geometryNotActionable(
-                "visible target \(Self.describeScrollTarget(resolved.screenElement)) has no usable live geometry"
-            ))
-        }
+    private static func actionableContainerTarget(
+        resolvedTarget: TheStash.ResolvedContainerTarget,
+        liveTarget: TheStash.LiveContainerTarget
+    ) -> SemanticContainerActionableTarget {
+        SemanticContainerActionableTarget(
+            resolvedTarget: resolvedTarget,
+            liveTarget: liveTarget
+        )
+    }
 
-        if ScreenMetrics.current.bounds.contains(liveTarget.frame)
-            || Self.interactionComfortZone.contains(liveTarget.activationPoint) {
-            return .alreadyUsable
-        }
+    private static func activationPointHasPreferredPlacement(_ activationPoint: CGPoint) -> Bool {
+        interactionComfortZone.contains(activationPoint)
+    }
 
-        guard let scrollView = stash.liveScrollView(for: resolved.screenElement) else {
-            return .failed(.noRevealPath(
-                "visible target \(Self.describeScrollTarget(resolved.screenElement)) "
-                    + "has no live scrollable ancestor to make actionable"
-            ))
-        }
+    private static func activationPointIsOnScreen(_ activationPoint: CGPoint) -> Bool {
+        ScreenMetrics.current.bounds.contains(activationPoint)
+    }
 
-        guard safecracker.scrollToMakeVisible(
-            liveTarget.frame,
-            in: scrollView,
-            comfortMarginFraction: Self.comfortMarginFraction
-        ) else {
-            return .failed(.geometryNotActionable(
-                "visible target \(Self.describeScrollTarget(resolved.screenElement)) "
-                    + "could not be scrolled fully on-screen"
-            ))
-        }
-        await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        refresh()
-        return .adjustedVisibleTarget
+    private static func liveGeometrySummary(_ liveTarget: TheStash.LiveActionTarget) -> String {
+        "liveFrame=\(formatRect(liveTarget.frame)) "
+            + "activationPoint=\(formatPoint(liveTarget.activationPoint)) "
+            + "screenBounds=\(formatRect(ScreenMetrics.current.bounds))"
+    }
+
+    private static func formatRect(_ rect: CGRect) -> String {
+        "(x:\(format(rect.origin.x)), y:\(format(rect.origin.y)), "
+            + "w:\(format(rect.size.width)), h:\(format(rect.size.height)))"
+    }
+
+    private static func formatPoint(_ point: CGPoint) -> String {
+        "(x:\(format(point.x)), y:\(format(point.y)))"
+    }
+
+    private static func format(_ value: CGFloat) -> String {
+        String(format: "%.1f", Double(value))
     }
 
     private func semanticRevealPlanFailureMessage(_ entry: Screen.ScreenElement) -> String {

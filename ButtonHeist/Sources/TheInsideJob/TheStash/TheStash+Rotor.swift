@@ -36,15 +36,7 @@ final class RotorContinuationStore {
         return pending.token
     }
 
-    func activeResult(heistId: HeistId) -> TheStash.ScreenElement? {
-        guard case .active(let pendingRotorResult) = state,
-              pendingRotorResult.screenElement.heistId == heistId else {
-            return nil
-        }
-        return pendingRotorResult.screenElement
-    }
-
-    func activeObject(heistId: HeistId) -> NSObject? {
+    func activeCursorObject(heistId: HeistId) -> NSObject? {
         guard case .active(let pendingRotorResult) = state,
               pendingRotorResult.screenElement.heistId == heistId else {
             return nil
@@ -77,10 +69,10 @@ final class RotorContinuationStore {
     private struct PendingRotorResult {
         let token: UUID
         let screenElement: TheStash.ScreenElement
-        /// Strongly retain out-of-tree rotor result objects for exactly one
-        /// follow-up command. `LiveInterface` refs are weak, but VoiceOver-style
-        /// rotor continuation needs the object to remain alive long enough for
-        /// activation or a next/previous step.
+        /// Strongly retain out-of-tree rotor result objects for one rotor
+        /// continuation step. `LiveInterface` refs are weak, but VoiceOver-style
+        /// next/previous needs the current item object as rotor-only cursor
+        /// state.
         let object: NSObject
     }
 
@@ -152,8 +144,7 @@ extension TheStash {
         let predicate = UIAccessibilityCustomRotorSearchPredicate()
         predicate.searchDirection = direction.uiAccessibilityDirection
         if let currentHeistId {
-            guard let current = resolveTarget(.heistId(currentHeistId)).resolved?.screenElement,
-                  let currentObject = liveObject(for: current) else {
+            guard let currentObject = rotorCurrentObject(heistId: currentHeistId) else {
                 return .currentItemUnavailable(currentHeistId)
             }
             let currentRange: UITextRange?
@@ -194,11 +185,6 @@ extension TheStash {
         rotorContinuations.prepare(targetedHeistId: targetedHeistId)
     }
 
-    func activePendingRotorResult(for target: ElementTarget) -> ScreenElement? {
-        guard case .heistId(let heistId) = target else { return nil }
-        return activePendingRotorResult(heistId: heistId)
-    }
-
     func clearPendingRotorResult() {
         rotorContinuations.clear()
     }
@@ -207,12 +193,15 @@ extension TheStash {
         rotorContinuations.clear(consumedToken: consumedToken)
     }
 
-    func activePendingRotorResult(heistId: HeistId) -> ScreenElement? {
-        rotorContinuations.activeResult(heistId: heistId)
-    }
-
-    func activePendingRotorObject(heistId: HeistId) -> NSObject? {
-        rotorContinuations.activeObject(heistId: heistId)
+    func rotorCurrentObject(heistId: HeistId) -> NSObject? {
+        if let pendingObject = rotorContinuations.activeCursorObject(heistId: heistId) {
+            return pendingObject
+        }
+        guard let current = resolveVisibleTarget(.heistId(heistId)).resolved?.screenElement,
+              let currentObject = liveObject(for: current) else {
+            return nil
+        }
+        return currentObject
     }
 }
 
