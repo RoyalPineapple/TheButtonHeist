@@ -1,10 +1,9 @@
 import CoreGraphics
 
-
-public struct TouchTapTarget: Codable, Sendable {
+public struct TapTarget: Codable, Sendable {
     public let selection: GesturePointSelection
 
-    public init(selection: GesturePointSelection = .unspecified) {
+    public init(selection: GesturePointSelection) {
         self.selection = selection
     }
 
@@ -30,7 +29,7 @@ public struct TouchTapTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.selection = try decodeGesturePointSelection(from: decoder)
+        self.selection = try decodeRequiredGesturePointSelection(from: decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -38,7 +37,7 @@ public struct TouchTapTarget: Codable, Sendable {
     }
 }
 
-extension TouchTapTarget: CustomStringConvertible {
+extension TapTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("tap", [
             elementTarget?.description,
@@ -57,7 +56,7 @@ public struct LongPressTarget: Codable, Sendable {
     /// Duration in seconds.
     public let duration: Double
 
-    public init(selection: GesturePointSelection = .unspecified, duration: Double = 0.5) {
+    public init(selection: GesturePointSelection, duration: Double = 0.5) {
         self.selection = selection
         self.duration = duration
     }
@@ -84,7 +83,7 @@ public struct LongPressTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.selection = try decodeGesturePointSelection(from: decoder)
+        self.selection = try decodeRequiredGesturePointSelection(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.duration = try container.decodeIfPresent(Double.self, forKey: .duration) ?? 0.5
     }

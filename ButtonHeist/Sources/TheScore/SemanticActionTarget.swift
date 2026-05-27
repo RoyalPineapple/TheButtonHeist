@@ -62,20 +62,20 @@ public struct SemanticActionTarget: Codable, Sendable, Equatable {
             )
         }
         self.init(sourceHeistId: sourceHeistId, matcher: matcher, ordinal: ordinal)
-        guard self.matcher.hasPredicates || ordinal != nil else {
+        guard self.matcher.hasPredicates else {
             throw DecodingError.dataCorruptedError(
                 forKey: .matcher,
                 in: container,
-                debugDescription: "SemanticActionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
+                debugDescription: "SemanticActionTarget requires matcher predicates; ordinal only disambiguates matcher results"
             )
         }
     }
 
     public func encode(to encoder: Encoder) throws {
-        guard matcher.hasPredicates || ordinal != nil else {
+        guard matcher.hasPredicates else {
             throw EncodingError.invalidValue(self, .init(
                 codingPath: encoder.codingPath,
-                debugDescription: "SemanticActionTarget requires matcher predicates or an ordinal selector; sourceHeistId is metadata only"
+                debugDescription: "SemanticActionTarget requires matcher predicates; ordinal only disambiguates matcher results"
             ))
         }
         var container = encoder.container(keyedBy: CodingKeys.self)

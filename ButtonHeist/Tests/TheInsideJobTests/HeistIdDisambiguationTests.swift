@@ -82,7 +82,7 @@ final class HeistIdDisambiguationTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        for heistId in screen.elements.keys {
+        for heistId in screen.semantic.elements.keys {
             XCTAssertNil(
                 heistId.firstMatch(of: Self.contentPositionSuffixRegex),
                 "buildScreen produced an `_at_X_Y` suffix: \(heistId)",
@@ -103,10 +103,10 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let result = makeScrollableParseResult(elements: [upper, lower])
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.elements.count, 2,
+        XCTAssertEqual(screen.semantic.elements.count, 2,
                        "Both elements should survive disambiguation")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[upper], "row_button_1")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[lower], "row_button_2")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[upper], "row_button_1")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[lower], "row_button_2")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -119,11 +119,11 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let result = makeScrollableParseResult(elements: [first, second, third])
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.elements.count, 3,
+        XCTAssertEqual(screen.semantic.elements.count, 3,
                        "All three same-matcher rows should produce distinct heistIds")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "item_button_1")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "item_button_2")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[third], "item_button_3")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[first], "item_button_1")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[second], "item_button_2")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[third], "item_button_3")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -137,10 +137,10 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let result = makeScrollableParseResult(elements: [first, second])
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.elements.count, 2,
+        XCTAssertEqual(screen.semantic.elements.count, 2,
                        "Phase 2 distinct-ifies before content-position epsilon collapse applies")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "cell_button_1")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "cell_button_2")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[first], "cell_button_1")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[second], "cell_button_2")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -167,10 +167,10 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let result = makeScrollableParseResult(elements: [first, second])
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.elements.count, 2)
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "thing_element_1",
+        XCTAssertEqual(screen.semantic.elements.count, 2)
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[first], "thing_element_1",
                        "Different-matcher collisions resolve via Phase 2 `_N` suffixes")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "thing_element_2")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[second], "thing_element_2")
         assertNoContentPositionSuffix(in: screen)
     }
 }

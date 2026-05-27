@@ -574,7 +574,7 @@ actor TheStakeout {
             startTime: session.startedAt,
             endTime: endTime,
             stopReason: reason,
-            interactionLog: session.interactions.events.isEmpty ? nil : session.interactions.events,
+            interactionLog: session.interactions.events,
             evidence: RecordingPayloadEvidence(
                 caps: session.evidence.caps,
                 interactionLogLimit: Self.maxInteractionCount,

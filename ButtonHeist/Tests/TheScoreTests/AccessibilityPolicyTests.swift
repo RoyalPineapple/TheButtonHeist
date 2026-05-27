@@ -111,9 +111,8 @@ final class AccessibilityPolicyTests: XCTestCase {
     }
 
     /// Locks the current value at `0.4`. Changing this threshold alters
-    /// screen-change semantics consumed by `TheBurglar.isTopologyChanged`
-    /// and downstream delta computation in `TheBrains`. Any change should
-    /// have a clear empirical justification documented in the PR.
+    /// screen-change semantics consumed by trace projection. Any change
+    /// should have a clear empirical justification documented in the PR.
     func testTabSwitchPersistThresholdValueLocked() {
         XCTAssertEqual(AccessibilityPolicy.tabSwitchPersistThreshold, 0.4)
     }

@@ -6,10 +6,8 @@ extension TheFence {
     /// Canonical set of all commands supported by TheFence (CLI and MCP).
     public enum Command: String, CaseIterable, Sendable {
         case help
-        case status
         case ping
         case quit
-        case exit
         case listDevices = "list_devices"
         case getInterface = "get_interface"
         case getScreen = "get_screen"
@@ -28,9 +26,6 @@ extension TheFence {
         case elementSearch = "element_search"
         case scrollToEdge = "scroll_to_edge"
         case activate
-        case increment
-        case decrement
-        case performCustomAction = "perform_custom_action"
         case rotor
         case typeText = "type_text"
         case editAction = "edit_action"
@@ -52,27 +47,10 @@ extension TheFence {
     }
 }
 
-/// Canonical expansion for a user-facing command alias.
-///
-/// Aliases are part of the external command contract: adapters may parse and
-/// transport them, but the command identity and default parameters live here.
-public struct FenceCommandAlias: Sendable, Equatable {
-    public let command: TheFence.Command
-    public let parameters: [FenceParameterKey: HeistValue]
-
-    public init(
-        command: TheFence.Command,
-        parameters: [FenceParameterKey: HeistValue] = [:]
-    ) {
-        self.command = command
-        self.parameters = parameters
-    }
-}
-
 /// Canonical command descriptor for TheFence command surfaces.
 ///
 /// The enum is the stable wire identity. This descriptor owns the contract
-/// projected from that identity: aliases, adapter exposure, batch eligibility,
+/// projected from that identity: adapter exposure, batch eligibility,
 /// parameter shape, and user-facing help text.
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
@@ -80,8 +58,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     /// The server action method that unambiguously projects back to this public command.
     public let actionResultMethod: ActionMethod?
     public let requestPayloadKind: FenceRequestPayloadKind
-    public let humanAliases: [String: FenceCommandAlias]
-    public let cliName: String?
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
     public let isBatchExecutable: Bool
@@ -91,6 +67,10 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
     public let description: String
+
+    public var isPublicRequestContract: Bool {
+        cliExposure != .notExposed || mcpExposure != .notExposed || isBatchExecutable
+    }
 
     /// Parameter keys that identify an element target for this command.
     ///
@@ -105,8 +85,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         command: TheFence.Command,
         actionResultMethod: ActionMethod? = nil,
         requestPayloadKind: FenceRequestPayloadKind,
-        humanAliases: [String: FenceCommandAlias] = [:],
-        cliName: String? = nil,
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
         isBatchExecutable: Bool,
@@ -118,8 +96,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.command = command
         self.actionResultMethod = actionResultMethod
         self.requestPayloadKind = requestPayloadKind
-        self.humanAliases = humanAliases
-        self.cliName = cliName ?? Self.defaultCLIName(for: command, exposure: cliExposure)
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
         self.isBatchExecutable = isBatchExecutable
@@ -127,20 +103,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.humanPositionalSyntax = humanPositionalSyntax
         self.parameters = parameters
         self.description = description
-    }
-
-    private static func defaultCLIName(
-        for command: TheFence.Command,
-        exposure: CLIExposure
-    ) -> String? {
-        switch exposure {
-        case .directCommand, .sessionOnly:
-            return command.rawValue
-        case .groupedUnder(let name):
-            return name
-        case .notExposed:
-            return nil
-        }
     }
 }
 
@@ -173,31 +135,6 @@ public enum FenceHumanPositionalSyntax: Sendable, Equatable {
 }
 
 public extension TheFence.Command {
-    static let gestureMCPToolName = "gesture"
-
-    static func command(for gestureType: GestureType) -> Self {
-        switch gestureType {
-        case .oneFingerTap:
-            return .oneFingerTap
-        case .longPress:
-            return .longPress
-        case .swipe:
-            return .swipe
-        case .drag:
-            return .drag
-        case .pinch:
-            return .pinch
-        case .rotate:
-            return .rotate
-        case .twoFingerTap:
-            return .twoFingerTap
-        case .drawPath:
-            return .drawPath
-        case .drawBezier:
-            return .drawBezier
-        }
-    }
-
     var descriptor: FenceCommandDescriptor {
         Self.descriptor(for: self)
     }
@@ -207,7 +144,19 @@ public extension TheFence.Command {
     }
 
     static func canonicalName(forActionResultMethod method: ActionMethod) -> String {
-        descriptor(forActionResultMethod: method)?.canonicalName ?? method.rawValue
+        switch method {
+        case .increment, .decrement, .customAction:
+            return Self.activate.rawValue
+        case .syntheticTap:
+            return Self.oneFingerTap.rawValue
+        case .syntheticDrawPath:
+            return Self.drawPath.rawValue
+        case .batchExecutionPlan:
+            return Self.runBatch.rawValue
+        default:
+            break
+        }
+        return descriptor(forActionResultMethod: method)?.canonicalName ?? method.rawValue
     }
 
     static var descriptors: [FenceCommandDescriptor] {
@@ -223,7 +172,7 @@ public extension TheFence.Command {
     }
 
     var cliCommandName: String {
-        descriptor.cliName ?? canonicalName
+        canonicalName
     }
 
     var cliExposure: CLIExposure {
@@ -248,37 +197,6 @@ public extension TheFence.Command {
 
     func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
         parameter(named: key)?.defaultValue
-    }
-
-    static func activationAlias(forActionName actionName: String?) -> FenceCommandAlias {
-        switch actionName.flatMap({ TheFence.Command(rawValue: $0.lowercased()) }) {
-        case .increment:
-            return FenceCommandAlias(command: .increment)
-        case .decrement:
-            return FenceCommandAlias(command: .decrement)
-        default:
-            if let actionName {
-                return FenceCommandAlias(
-                    command: .performCustomAction,
-                    parameters: [.action: .string(actionName)]
-                )
-            }
-            return FenceCommandAlias(command: .activate)
-        }
-    }
-
-    /// Human-friendly command aliases accepted by the CLI session parser.
-    static var humanCommandAliases: [String: FenceCommandAlias] {
-        Dictionary(
-            descriptors.flatMap { descriptor in
-                descriptor.humanAliases.map { ($0.key, $0.value) }
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
-    }
-
-    static func humanAlias(named name: String) -> FenceCommandAlias? {
-        humanCommandAliases[name.lowercased()]
     }
 
     var humanPositionalSyntax: FenceHumanPositionalSyntax {
@@ -310,19 +228,6 @@ public extension TheFence.Command {
         batchExecutableCases
     }
 
-    static func command(for scrollMode: ScrollMode) -> Self {
-        switch scrollMode {
-        case .page:
-            return .scroll
-        case .toVisible:
-            return .scrollToVisible
-        case .search:
-            return .elementSearch
-        case .toEdge:
-            return .scrollToEdge
-        }
-    }
-
     /// Commands that are persisted when a heist recording is active.
     var isHeistRecordable: Bool {
         descriptor.isHeistRecordable
@@ -334,36 +239,13 @@ public extension TheFence.Command {
     }
 
     static var mcpToolContracts: [MCPToolContract] {
-        var toolNames: [String] = []
-        var commandsByToolName: [String: [Self]] = [:]
-
-        func append(_ command: Self, to toolName: String) {
-            if commandsByToolName[toolName] == nil {
-                toolNames.append(toolName)
-                commandsByToolName[toolName] = []
-            }
-            commandsByToolName[toolName]?.append(command)
-        }
-
-        for descriptor in descriptors {
-            switch descriptor.mcpExposure {
-            case .directTool:
-                append(descriptor.command, to: descriptor.canonicalName)
-            case .groupedUnder(let toolName):
-                append(descriptor.command, to: toolName)
-            case .notExposed:
-                break
-            }
-        }
-
-        return toolNames.compactMap { toolName in
-            guard let commands = commandsByToolName[toolName] else { return nil }
+        descriptors.compactMap { descriptor in
+            guard descriptor.mcpExposure == .directTool else { return nil }
             return MCPToolContract(
-                name: toolName,
-                commands: commands,
-                selector: mcpSelector(for: toolName),
-                description: presentationDescription(for: toolName),
-                annotations: mcpAnnotations(for: toolName)
+                name: descriptor.canonicalName,
+                command: descriptor.command,
+                description: descriptor.description,
+                annotations: mcpAnnotations(for: descriptor.canonicalName)
             )
         }
     }
@@ -379,7 +261,6 @@ extension TheFence.Command {
             command: command,
             actionResultMethod: command.catalogActionResultMethod,
             requestPayloadKind: command.catalogRequestPayloadKind,
-            humanAliases: command.catalogHumanAliases,
             cliExposure: command.catalogCLIExposure,
             mcpExposure: command.catalogMCPExposure,
             isBatchExecutable: command.catalogBatchExecutable,
@@ -416,12 +297,6 @@ extension TheFence.Command {
             return .scrollToEdge
         case .activate:
             return .activate
-        case .increment:
-            return .increment
-        case .decrement:
-            return .decrement
-        case .performCustomAction:
-            return .customAction
         case .rotor:
             return .rotor
         case .typeText:
@@ -440,7 +315,7 @@ extension TheFence.Command {
             // `syntheticTap` and `syntheticDrawPath` can come from multiple
             // public commands, so keep those action methods diagnostic-only.
             return nil
-        case .help, .status, .ping, .quit, .exit,
+        case .help, .ping, .quit,
              .listDevices, .getInterface, .getScreen,
              .startRecording, .stopRecording, .runBatch,
              .getSessionState, .connect, .listTargets,
@@ -452,7 +327,7 @@ extension TheFence.Command {
 
     var catalogRequestPayloadKind: FenceRequestPayloadKind {
         switch self {
-        case .help, .status, .ping, .quit, .exit, .listDevices, .getPasteboard,
+        case .help, .ping, .quit, .listDevices, .getPasteboard,
              .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
             return .none
         case .getInterface, .getScreen, .stopRecording:
@@ -463,7 +338,7 @@ extension TheFence.Command {
              .twoFingerTap, .drawPath, .drawBezier:
             return .gesture
         case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-             .activate, .increment, .decrement, .performCustomAction,
+             .activate,
              .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
             return .elementAction
         case .startRecording, .runBatch, .connect, .archiveSession, .startHeist,
@@ -474,12 +349,8 @@ extension TheFence.Command {
 
     var catalogCLIExposure: CLIExposure {
         switch self {
-        case .help, .quit, .exit, .status:
+        case .help, .quit:
             return .sessionOnly
-
-        case .increment, .decrement, .performCustomAction:
-            return .groupedUnder(Self.activate.rawValue)
-
         default:
             return .directCommand
         }
@@ -487,22 +358,8 @@ extension TheFence.Command {
 
     var catalogMCPExposure: MCPExposure {
         switch self {
-        case .help, .quit, .exit, .status:
+        case .help, .quit:
             return .notExposed
-
-        case .increment, .decrement, .performCustomAction:
-            return .notExposed
-
-        case .dismissKeyboard:
-            return .groupedUnder(Self.editAction.rawValue)
-
-        case .swipe, .oneFingerTap, .longPress, .drag, .pinch, .rotate, .twoFingerTap,
-             .drawPath, .drawBezier:
-            return .groupedUnder(Self.gestureMCPToolName)
-
-        case .scrollToVisible, .elementSearch, .scrollToEdge:
-            return .groupedUnder(Self.scroll.rawValue)
-
         default:
             return .directTool
         }
@@ -514,11 +371,11 @@ extension TheFence.Command {
              .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
              .twoFingerTap, .drawPath, .drawBezier,
              .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-             .activate, .increment, .decrement, .performCustomAction,
+             .activate,
              .rotor, .typeText, .editAction, .setPasteboard,
              .waitFor, .dismissKeyboard:
             return true
-        case .help, .status, .ping, .quit, .exit,
+        case .help, .ping, .quit,
              .listDevices, .getInterface, .getScreen, .getPasteboard,
              .getSessionState, .connect, .listTargets,
              .getSessionLog, .archiveSession,
@@ -530,7 +387,7 @@ extension TheFence.Command {
 
     var catalogRequiresConnectionBeforeDispatch: Bool {
         switch self {
-        case .status, .ping, .getSessionState, .listDevices, .connect, .listTargets,
+        case .ping, .getSessionState, .listDevices, .connect, .listTargets,
              .getSessionLog, .archiveSession, .startHeist, .stopHeist:
             return false
         default:
@@ -546,104 +403,10 @@ extension TheFence.Command {
             return .firstToken(.action)
         case .scrollToEdge:
             return .leadingEdgeThenTarget(Self.humanScrollEdgeValues)
-        case .performCustomAction:
-            return .targetThenJoinedText(.action)
         case .swipe, .scroll, .rotor:
             return .leadingDirectionThenTarget(Self.humanDirectionValues)
         default:
             return .target
-        }
-    }
-
-    var catalogHumanAliases: [String: FenceCommandAlias] {
-        switch self {
-        case .oneFingerTap:
-            return ["tap": .init(command: self)]
-        case .longPress:
-            return ["press": .init(command: self)]
-        case .getInterface:
-            return ["ui": .init(command: self)]
-        case .getScreen:
-            return [
-                "screen": .init(command: self),
-                "screenshot": .init(command: self),
-            ]
-        case .waitForChange:
-            return [
-                "idle": .init(command: self),
-                "change": .init(command: self),
-            ]
-        case .waitFor:
-            return ["wait": .init(command: self)]
-        case .listDevices:
-            return [
-                "devices": .init(command: self),
-                "list": .init(command: self),
-            ]
-        case .typeText:
-            return ["type": .init(command: self)]
-        case .startRecording:
-            return ["record": .init(command: self)]
-        case .editAction:
-            return [
-                "copy": .init(command: self, parameters: [.action: .string(EditAction.copy.rawValue)]),
-                "paste": .init(command: self, parameters: [.action: .string(EditAction.paste.rawValue)]),
-                "cut": .init(command: self, parameters: [.action: .string(EditAction.cut.rawValue)]),
-                "delete": .init(command: self, parameters: [.action: .string(EditAction.delete.rawValue)]),
-                "select": .init(command: self, parameters: [.action: .string(EditAction.select.rawValue)]),
-                "select_all": .init(command: self, parameters: [.action: .string(EditAction.selectAll.rawValue)]),
-            ]
-        default:
-            return [:]
-        }
-    }
-
-    private static func mcpSelector(for toolName: String) -> MCPToolSelector? {
-        switch toolName {
-        case Self.gestureMCPToolName:
-            return MCPToolSelector(
-                parameter: param(
-                    .type, .string, required: true,
-                    enumValues: fenceEnumValues(GestureType.self)
-                ),
-                commandByValue: Dictionary(
-                    GestureType.allCases.compactMap { gestureType in
-                        Self(rawValue: gestureType.rawValue).map { (gestureType.rawValue, $0) }
-                    },
-                    uniquingKeysWith: { _, newest in newest }
-                )
-            )
-
-        case Self.scroll.rawValue:
-            return MCPToolSelector(
-                parameter: param(
-                    .mode, .string,
-                    enumValues: fenceEnumValues(ScrollMode.self)
-                ),
-                defaultValue: ScrollMode.page.rawValue,
-                commandByValue: Dictionary(
-                    ScrollMode.allCases.map { mode in (mode.rawValue, Self.command(for: mode)) },
-                    uniquingKeysWith: { _, newest in newest }
-                )
-            )
-
-        case Self.editAction.rawValue:
-            let dismissValue = "dismiss"
-            return MCPToolSelector(
-                parameter: param(
-                    .action, .string, required: true,
-                    enumValues: fenceEnumValues(EditAction.self) + [dismissValue]
-                ),
-                commandByValue: Dictionary(
-                    EditAction.allCases.map { ($0.rawValue, Self.editAction) } +
-                        [(dismissValue, Self.dismissKeyboard)],
-                    uniquingKeysWith: { _, newest in newest }
-                ),
-                consumedValues: [dismissValue]
-            )
-
-        default:
-            return nil
         }
     }
 

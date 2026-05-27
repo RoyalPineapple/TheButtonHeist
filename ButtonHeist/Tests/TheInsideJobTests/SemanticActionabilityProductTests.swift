@@ -87,7 +87,6 @@ final class SemanticActionabilityProductTests: XCTestCase {
         defer { fixture.cleanup() }
         try seedKnownOffscreenTarget(
             fixture,
-            includeScrollView: false,
             scrollContainerOverride: "missing_scroll"
         )
 
@@ -280,7 +279,6 @@ final class SemanticActionabilityProductTests: XCTestCase {
     private func seedKnownOffscreenTarget(
         _ fixture: SemanticRevealFixture,
         in targetBrains: TheBrains? = nil,
-        includeScrollView: Bool = true,
         scrollContainerOverride: HeistContainer? = nil
     ) throws {
         let targetBrains = targetBrains ?? brains!
@@ -299,32 +297,31 @@ final class SemanticActionabilityProductTests: XCTestCase {
             scrollContainerStableId: scrollContainerOverride ?? firstScrollableStableId(in: screen),
             element: element
         )
-        var elements = screen.elements
+        var elements = screen.semantic.elements
         elements[entry.heistId] = entry
 
-        var elementRefs = screen.liveInterface.elementRefs
-        if includeScrollView {
-            elementRefs[entry.heistId] = .init(object: nil, scrollView: fixture.scrollView)
-        }
-        let liveInterface = Screen.LiveInterface(
-            hierarchy: screen.liveInterface.hierarchy,
-            containerStableIds: screen.liveInterface.containerStableIds,
-            containerStableIdsByPath: screen.liveInterface.containerStableIdsByPath,
-            heistIdByElement: screen.liveInterface.heistIdByElement,
-            heistIdByElementPath: screen.liveInterface.heistIdByElementPath,
-            elementRefs: elementRefs,
-            containerRefsByPath: screen.liveInterface.containerRefsByPath,
-            firstResponderHeistId: screen.liveInterface.firstResponderHeistId,
-            scrollableContainerViews: screen.liveInterface.scrollableContainerViews,
-            scrollableContainerViewsByPath: screen.liveInterface.scrollableContainerViewsByPath
+        let liveCapture = LiveCapture(
+            hierarchy: screen.liveCapture.hierarchy,
+            containerStableIds: screen.liveCapture.containerStableIds,
+            containerStableIdsByPath: screen.liveCapture.containerStableIdsByPath,
+            heistIdByElement: screen.liveCapture.heistIdByElement,
+            heistIdByElementPath: screen.liveCapture.heistIdByElementPath,
+            elementRefs: screen.liveCapture.elementRefs,
+            containerRefsByPath: screen.liveCapture.containerRefsByPath,
+            firstResponderHeistId: screen.liveCapture.firstResponderHeistId,
+            scrollableContainerViews: screen.liveCapture.scrollableContainerViews,
+            scrollableContainerViewsByPath: screen.liveCapture.scrollableContainerViewsByPath
         )
-        targetBrains.stash.currentScreen = Screen(elements: elements, liveInterface: liveInterface)
+        targetBrains.stash.currentScreen = Screen(
+            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
+            liveCapture: liveCapture
+        )
     }
 
     private func firstScrollableStableId(in screen: Screen) -> HeistContainer? {
-        for item in screen.liveInterface.hierarchy.containerPaths where item.container.isScrollable {
-            if let stableId = screen.liveInterface.containerStableIdsByPath[item.path]
-                ?? screen.liveInterface.containerStableIds[item.container] {
+        for item in screen.liveCapture.hierarchy.containerPaths where item.container.isScrollable {
+            if let stableId = screen.liveCapture.containerStableIdsByPath[item.path]
+                ?? screen.liveCapture.containerStableIds[item.container] {
                 return stableId
             }
         }

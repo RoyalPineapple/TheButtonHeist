@@ -212,11 +212,13 @@ final class RecordingPayloadTests: XCTestCase {
     // MARK: - InteractionEvent
 
     func testInteractionEventActivateRoundTrip() throws {
-        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 5))
+        let before = makeInterface(label: "Login", timestamp: 0)
+        let after = makeInterface(label: "Login", timestamp: 1)
+        let trace = AccessibilityTrace(first: before).appending(after)
         let event = InteractionEvent(
             timestamp: 1.5,
             command: .activate(.matcher(ElementMatcher(identifier: "loginButton"))),
-            result: ActionResult(success: true, method: .activate, accessibilityDelta: delta)
+            result: ActionResult(success: true, method: .activate, accessibilityTrace: trace)
         )
 
         let data = try JSONEncoder().encode(event)
@@ -230,23 +232,17 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertTrue(decoded.result.success)
         XCTAssertEqual(decoded.result.method, .activate)
         XCTAssertEqual(decoded.result.accessibilityDelta?.kindRawValue, "noChange")
-        XCTAssertEqual(decoded.result.accessibilityDelta?.elementCount, 5)
+        XCTAssertEqual(decoded.result.accessibilityDelta?.elementCount, 1)
     }
 
-    func testInteractionEventTouchTapRoundTrip() throws {
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(
-            elementCount: 1,
-            edits: ElementEdits(updated: [
-                ElementUpdate(
-                    heistId: "okBtn",
-                    changes: [PropertyChange(property: .value, old: nil, new: "tapped")]
-                )
-            ])
-        ))
+    func testInteractionEventOneFingerTapRoundTrip() throws {
+        let before = makeButtonInterface(heistId: "okBtn", label: "OK", value: nil, timestamp: 0)
+        let after = makeButtonInterface(heistId: "okBtn", label: "OK", value: "tapped", timestamp: 1)
+        let trace = AccessibilityTrace(first: before).appending(after)
         let event = InteractionEvent(
             timestamp: 3.2,
-            command: .touchTap(TouchTapTarget(selection: .element(.matcher(ElementMatcher(identifier: "okBtn"))))),
-            result: ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
+            command: .oneFingerTap(TapTarget(selection: .element(.matcher(ElementMatcher(identifier: "okBtn"))))),
+            result: ActionResult(success: true, method: .syntheticTap, accessibilityTrace: trace)
         )
 
         let data = try JSONEncoder().encode(event)
@@ -304,14 +300,13 @@ final class RecordingPayloadTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(RecordingPayload.self, from: data)
 
-        XCTAssertNotNil(decoded.interactionLog)
-        XCTAssertEqual(decoded.interactionLog?.count, 1)
-        XCTAssertEqual(decoded.interactionLog?.first?.timestamp, 1.0)
-        XCTAssertEqual(decoded.interactionLog?.first?.result.accessibilityTrace, trace)
-        XCTAssertEqual(decoded.interactionLog?.first?.result.accessibilityDelta, trace.endpointDeltaProjection)
+        XCTAssertEqual(decoded.interactionLog.count, 1)
+        XCTAssertEqual(decoded.interactionLog.first?.timestamp, 1.0)
+        XCTAssertEqual(decoded.interactionLog.first?.result.accessibilityTrace, trace)
+        XCTAssertEqual(decoded.interactionLog.first?.result.accessibilityDelta, trace.endpointDeltaProjection)
     }
 
-    func testRecordingPayloadNilInteractionLog() throws {
+    func testRecordingPayloadEmptyInteractionLog() throws {
         let start = Date()
         let end = start.addingTimeInterval(5.0)
         let payload = RecordingPayload(
@@ -330,11 +325,10 @@ final class RecordingPayloadTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(RecordingPayload.self, from: data)
 
-        XCTAssertNil(decoded.interactionLog)
+        XCTAssertEqual(decoded.interactionLog.count, 0)
     }
 
-    func testRecordingPayloadDecodingWithoutInteractionLog() throws {
-        // interactionLog is optional — absent field decodes as nil
+    func testRecordingPayloadRejectsMissingInteractionLog() throws {
         let json = """
         {
             "videoData": "AAAAIGZ0eXBpc29t",
@@ -349,21 +343,26 @@ final class RecordingPayloadTests: XCTestCase {
         }
         """
         let data = json.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(RecordingPayload.self, from: data)
-
-        XCTAssertEqual(decoded.videoData, "AAAAIGZ0eXBpc29t")
-        XCTAssertEqual(decoded.width, 390)
-        XCTAssertNil(decoded.interactionLog)
+        XCTAssertThrowsError(try JSONDecoder().decode(RecordingPayload.self, from: data))
     }
 
     private func makeInterface(label: String, timestamp: TimeInterval) -> Interface {
+        makeButtonInterface(heistId: label.lowercased(), label: label, value: nil, timestamp: timestamp)
+    }
+
+    private func makeButtonInterface(
+        heistId: HeistId,
+        label: String,
+        value: String?,
+        timestamp: TimeInterval
+    ) -> Interface {
         makeTestInterface(
             elements: [
                 HeistElement(
-                    heistId: label.lowercased(),
+                    heistId: heistId,
                     description: label,
                     label: label,
-                    value: nil,
+                    value: value,
                     identifier: nil,
                     traits: [.button],
                     frameX: 0,

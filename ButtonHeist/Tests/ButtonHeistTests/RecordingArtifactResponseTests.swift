@@ -189,7 +189,7 @@ final class RecordingArtifactResponseTests: XCTestCase {
             startTime: start,
             endTime: start.addingTimeInterval(2.0),
             stopReason: .manual,
-            interactionLog: events.isEmpty ? nil : events
+            interactionLog: events
         )
     }
 

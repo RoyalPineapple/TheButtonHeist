@@ -9,7 +9,7 @@ struct ElementTargetOptions: ParsableArguments {
     @Option(name: .long, help: "Element heistId (from get_interface)")
     var heistId: String?
 
-    @Option(name: [.long, .customLong("id", withSingleDash: true)], help: "Accessibility identifier")
+    @Option(name: .long, help: "Accessibility identifier")
     var identifier: String?
 
     @Option(name: .shortAndLong, help: "Accessibility label")
@@ -52,7 +52,7 @@ struct ElementTargetOptions: ParsableArguments {
 
     func requireTarget() throws -> ElementTarget {
         guard let elementTarget = try parsedTarget() else {
-            throw ValidationError("Must specify a heistId, -id, or -l")
+            throw ValidationError("Must specify a heistId, --identifier, or -l")
         }
         return elementTarget
     }

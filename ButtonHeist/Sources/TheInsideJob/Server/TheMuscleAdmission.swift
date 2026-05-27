@@ -1,3 +1,5 @@
+#if canImport(UIKit)
+#if DEBUG
 import Foundation
 import os
 
@@ -20,66 +22,66 @@ enum ClientAdmission: Sendable {
     case handled
 }
 
+struct MuscleAdmissionEffect {
+    var outputs: [MuscleAdmissionOutput] = []
+    var delayedDisconnectClientId: Int?
+    var approvalPromptClientId: Int?
+    var dismissApprovalPrompt = false
+
+    static let none = MuscleAdmissionEffect()
+
+    static func response(
+        _ message: ServerMessage,
+        requestId: String? = nil,
+        respond: @escaping TheMuscleAdmission.ResponseHandler,
+        disconnect clientId: Int? = nil
+    ) -> MuscleAdmissionEffect {
+        MuscleAdmissionEffect(
+            outputs: [.response(message, requestId: requestId, respond: respond)],
+            delayedDisconnectClientId: clientId
+        )
+    }
+
+    static func client(
+        _ message: ServerMessage,
+        requestId: String? = nil,
+        clientId: Int,
+        disconnect: Bool = false
+    ) -> MuscleAdmissionEffect {
+        MuscleAdmissionEffect(
+            outputs: [.client(message, requestId: requestId, clientId: clientId)],
+            delayedDisconnectClientId: disconnect ? clientId : nil
+        )
+    }
+}
+
+enum MuscleAdmissionOutput {
+    case response(ServerMessage, requestId: String?, respond: TheMuscleAdmission.ResponseHandler)
+    case client(ServerMessage, requestId: String?, clientId: Int)
+}
+
+struct MuscleAuthentication {
+    let clientId: Int
+    let address: String
+    let driverIdentity: String
+    let respond: TheMuscleAdmission.ResponseHandler
+    let source: MuscleAuthenticationSource
+}
+
+enum MuscleAuthenticationSource {
+    case token
+    case uiApproval(approvedToken: String)
+}
+
+enum MuscleAdmissionDecision {
+    case admitted(AdmittedClientMessage)
+    case handled(MuscleAdmissionEffect)
+    case authenticate(MuscleAuthentication)
+}
+
 /// Owns the unauthenticated ButtonHeist handshake and client auth phases.
 struct TheMuscleAdmission {
     typealias ResponseHandler = @Sendable (Data) -> Void
-
-    struct Effect {
-        enum Output {
-            case response(ServerMessage, requestId: String?, respond: ResponseHandler)
-            case client(ServerMessage, requestId: String?, clientId: Int)
-        }
-
-        var outputs: [Output] = []
-        var delayedDisconnectClientId: Int?
-        var approvalPromptClientId: Int?
-        var dismissApprovalPrompt = false
-
-        static let none = Effect()
-
-        static func response(
-            _ message: ServerMessage,
-            requestId: String? = nil,
-            respond: @escaping ResponseHandler,
-            disconnect clientId: Int? = nil
-        ) -> Effect {
-            Effect(
-                outputs: [.response(message, requestId: requestId, respond: respond)],
-                delayedDisconnectClientId: clientId
-            )
-        }
-
-        static func client(
-            _ message: ServerMessage,
-            requestId: String? = nil,
-            clientId: Int,
-            disconnect: Bool = false
-        ) -> Effect {
-            Effect(
-                outputs: [.client(message, requestId: requestId, clientId: clientId)],
-                delayedDisconnectClientId: disconnect ? clientId : nil
-            )
-        }
-    }
-
-    struct Authentication {
-        enum Source {
-            case token
-            case uiApproval(approvedToken: String?)
-        }
-
-        let clientId: Int
-        let address: String
-        let driverIdentity: String
-        let respond: ResponseHandler
-        let source: Source
-    }
-
-    enum Decision {
-        case admitted(AdmittedClientMessage)
-        case handled(Effect)
-        case authenticate(Authentication)
-    }
 
     private var clientRegistry = TheMuscleClientRegistry()
     private var tokenAdmission: SessionAdmission
@@ -131,7 +133,7 @@ struct TheMuscleAdmission {
         data: Data,
         respond: @escaping ResponseHandler,
         uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> Decision {
+    ) -> MuscleAdmissionDecision {
         guard let envelope = decodeRequest(data) else {
             guard clientRegistry.phase(for: clientId)?.isAuthenticated == true else {
                 return .handled(rejectUndecodableUnauthenticatedMessage(clientId, respond: respond))
@@ -161,7 +163,7 @@ struct TheMuscleAdmission {
         data: Data,
         respond: @escaping ResponseHandler,
         uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> Decision {
+    ) -> MuscleAdmissionDecision {
         guard let envelope = decodeRequest(data) else {
             return .handled(rejectUndecodableUnauthenticatedMessage(clientId, respond: respond))
         }
@@ -173,7 +175,7 @@ struct TheMuscleAdmission {
         )
     }
 
-    mutating func completeAuthentication(_ authentication: Authentication) -> Effect {
+    mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> MuscleAdmissionEffect {
         clientRegistry.authenticate(
             authentication.clientId,
             address: authentication.address,
@@ -197,13 +199,13 @@ struct TheMuscleAdmission {
         _ clientId: Int,
         diagnostic: SessionLease.SessionLockDiagnostic,
         respond: @escaping ResponseHandler
-    ) -> Effect {
+    ) -> MuscleAdmissionEffect {
         let payload = diagnostic.payload()
         admissionLogger.warning("Client \(clientId) rejected - \(payload.message, privacy: .public)")
         return .response(.sessionLocked(payload), respond: respond, disconnect: clientId)
     }
 
-    mutating func denyClient(_ clientId: Int) -> Effect {
+    mutating func denyClient(_ clientId: Int) -> MuscleAdmissionEffect {
         guard case .pendingApproval(let address, let respond, _) = clientRegistry.phase(for: clientId) else {
             return .none
         }
@@ -217,29 +219,32 @@ struct TheMuscleAdmission {
         )
     }
 
-    mutating func approvalAuthentication(_ clientId: Int) -> Authentication? {
+    mutating func approvalAuthentication(_ clientId: Int) -> MuscleAuthentication? {
         guard case .pendingApproval(let address, let respond, let driverId) = clientRegistry.phase(for: clientId) else {
             return nil
         }
+        guard let approvedToken = tokenSource.uiApprovalPayload else {
+            return nil
+        }
 
-        return Authentication(
+        return MuscleAuthentication(
             clientId: clientId,
             address: address,
             driverIdentity: tokenSource.effectiveDriverId(driverId: driverId),
             respond: respond,
-            source: .uiApproval(approvedToken: tokenSource.uiApprovalPayload)
+            source: .uiApproval(approvedToken: approvedToken)
         )
     }
 
-    mutating func removeClient(_ clientId: Int) -> Effect {
+    mutating func removeClient(_ clientId: Int) -> MuscleAdmissionEffect {
         let removed = clientRegistry.remove(clientId)
         guard case .pendingApproval = removed else { return .none }
-        var effect = Effect.none
+        var effect = MuscleAdmissionEffect.none
         effect.dismissApprovalPrompt = true
         return effect
     }
 
-    func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> Effect {
+    func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> MuscleAdmissionEffect {
         guard let phase = clientRegistry.phase(for: clientId),
               !phase.isAuthenticated else {
             return .none
@@ -273,7 +278,7 @@ struct TheMuscleAdmission {
         envelope: RequestEnvelope,
         respond: @escaping ResponseHandler,
         uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> Decision {
+    ) -> MuscleAdmissionDecision {
         guard envelope.buttonHeistVersion == buttonHeistVersion else {
             admissionLogger.warning(
                 "Client \(clientId) buttonHeistVersion mismatch: server=\(buttonHeistVersion), client=\(envelope.buttonHeistVersion)"
@@ -304,7 +309,7 @@ struct TheMuscleAdmission {
             guard clientRegistry.phase(for: clientId)?.hasCompletedHello == true else {
                 return .handled(rejectUnauthenticatedMessage(
                     clientId,
-                    message: "Authentication requires client_hello first.",
+                    message: "Authentication requires clientHello first.",
                     requestId: envelope.requestId,
                     respond: respond
                 ))
@@ -331,7 +336,7 @@ struct TheMuscleAdmission {
         payload: AuthenticatePayload,
         respond: @escaping ResponseHandler,
         uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> Decision {
+    ) -> MuscleAdmissionDecision {
         guard let phase = clientRegistry.phase(for: clientId) else {
             admissionLogger.warning("Client \(clientId) has no registered address, rejecting auth")
             return .handled(.response(
@@ -369,7 +374,7 @@ struct TheMuscleAdmission {
 
             admissionLogger.info("Client \(clientId) requesting UI approval (no token)")
             clientRegistry.beginApproval(clientId, address: address, respond: respond, driverId: payload.driverId)
-            var effect = Effect.response(.authApprovalPending(AuthApprovalPendingPayload()), respond: respond)
+            var effect = MuscleAdmissionEffect.response(.authApprovalPending(AuthApprovalPendingPayload()), respond: respond)
             effect.approvalPromptClientId = clientId
             return .handled(effect)
         }
@@ -391,7 +396,7 @@ struct TheMuscleAdmission {
             ))
 
         case .accepted(let driverIdentity):
-            return .authenticate(Authentication(
+            return .authenticate(MuscleAuthentication(
                 clientId: clientId,
                 address: address,
                 driverIdentity: driverIdentity,
@@ -404,7 +409,7 @@ struct TheMuscleAdmission {
     private func rejectUndecodableUnauthenticatedMessage(
         _ clientId: Int,
         respond: @escaping ResponseHandler
-    ) -> Effect {
+    ) -> MuscleAdmissionEffect {
         admissionLogger.warning("Client \(clientId) sent unparsable message before authenticating")
         return .response(
             .error(ServerError(
@@ -422,7 +427,7 @@ struct TheMuscleAdmission {
     private func rejectUndecodableAuthenticatedMessage(
         _ clientId: Int,
         respond: @escaping ResponseHandler
-    ) -> Effect {
+    ) -> MuscleAdmissionEffect {
         admissionLogger.warning("Authenticated client \(clientId) sent unparsable message")
         return .response(
             .error(ServerError(kind: .general, message: "Malformed message — could not decode")),
@@ -434,7 +439,7 @@ struct TheMuscleAdmission {
         _ clientId: Int,
         envelope: RequestEnvelope,
         respond: @escaping ResponseHandler
-    ) -> Effect {
+    ) -> MuscleAdmissionEffect {
         let name = envelope.message.canonicalName
         admissionLogger.warning(
             "Authenticated client \(clientId) sent protocol message \(name, privacy: .public) after admission"
@@ -454,7 +459,7 @@ struct TheMuscleAdmission {
         message: String,
         requestId: String?,
         respond: @escaping ResponseHandler
-    ) -> Effect {
+    ) -> MuscleAdmissionEffect {
         admissionLogger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
         return .response(
             .error(ServerError(kind: .authFailure, message: message)),
@@ -473,3 +478,5 @@ struct TheMuscleAdmission {
         }
     }
 }
+#endif // DEBUG
+#endif // canImport(UIKit)

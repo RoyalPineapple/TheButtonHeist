@@ -37,7 +37,7 @@ enum CLICommandAdapterCatalog {
     //
     // This table binds catalog-owned command identities to concrete
     // ArgumentParser adapter types. It must not carry product command
-    // semantics: public names, aliases, defaults, parameters, and help all
+    // semantics: public names, defaults, parameters, and help all
     // project from FenceCommandDescriptor/FenceParameterSpec below.
     private static let commandTypesByFenceCommand: [TheFence.Command: CLICommandContract.Type] = [
         .ping: PingCommand.self,
@@ -165,14 +165,9 @@ extension CLICommandContract {
 
     static func catalogCanonicalStringValue(
         _ value: String,
-        for key: FenceParameterKey,
-        caseInsensitive: Bool = true
+        for key: FenceParameterKey
     ) -> String? {
         let values = catalogAllowedValues(for: key)
-        if caseInsensitive {
-            let normalizedValue = value.lowercased()
-            return values.first { $0.lowercased() == normalizedValue }
-        }
         return values.contains(value) ? value : nil
     }
 }

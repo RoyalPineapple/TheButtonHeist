@@ -1,6 +1,5 @@
 import CoreGraphics
 
-
 public struct PathPoint: Codable, Sendable, Equatable {
     public let x: Double
     public let y: Double
@@ -33,6 +32,45 @@ public struct DrawPathTarget: Codable, Sendable {
         self.points = points
         self.duration = duration
         self.velocity = velocity
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case points
+        case duration
+        case velocity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+        let velocity = try container.decodeIfPresent(Double.self, forKey: .velocity)
+        try Self.validateTiming(duration: duration, velocity: velocity, codingPath: decoder.codingPath)
+        self.init(
+            points: try container.decode([PathPoint].self, forKey: .points),
+            duration: duration,
+            velocity: velocity
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try Self.validateTiming(duration: duration, velocity: velocity, codingPath: encoder.codingPath)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(points, forKey: .points)
+        try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encodeIfPresent(velocity, forKey: .velocity)
+    }
+
+    private static func validateTiming(
+        duration: Double?,
+        velocity: Double?,
+        codingPath: [CodingKey]
+    ) throws {
+        guard duration == nil || velocity == nil else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath,
+                debugDescription: "Draw timing accepts duration or velocity, not both"
+            ))
+        }
     }
 }
 
@@ -108,6 +146,54 @@ public struct DrawBezierTarget: Codable, Sendable {
         self.samplesPerSegment = samplesPerSegment
         self.duration = duration
         self.velocity = velocity
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case startX
+        case startY
+        case segments
+        case samplesPerSegment
+        case duration
+        case velocity
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+        let velocity = try container.decodeIfPresent(Double.self, forKey: .velocity)
+        try Self.validateTiming(duration: duration, velocity: velocity, codingPath: decoder.codingPath)
+        self.init(
+            startX: try container.decode(Double.self, forKey: .startX),
+            startY: try container.decode(Double.self, forKey: .startY),
+            segments: try container.decode([BezierSegment].self, forKey: .segments),
+            samplesPerSegment: try container.decodeIfPresent(Int.self, forKey: .samplesPerSegment),
+            duration: duration,
+            velocity: velocity
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try Self.validateTiming(duration: duration, velocity: velocity, codingPath: encoder.codingPath)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(startX, forKey: .startX)
+        try container.encode(startY, forKey: .startY)
+        try container.encode(segments, forKey: .segments)
+        try container.encodeIfPresent(samplesPerSegment, forKey: .samplesPerSegment)
+        try container.encodeIfPresent(duration, forKey: .duration)
+        try container.encodeIfPresent(velocity, forKey: .velocity)
+    }
+
+    private static func validateTiming(
+        duration: Double?,
+        velocity: Double?,
+        codingPath: [CodingKey]
+    ) throws {
+        guard duration == nil || velocity == nil else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath,
+                debugDescription: "Draw timing accepts duration or velocity, not both"
+            ))
+        }
     }
 
     public var startPoint: CGPoint {

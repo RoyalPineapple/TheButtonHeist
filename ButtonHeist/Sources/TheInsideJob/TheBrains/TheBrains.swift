@@ -18,7 +18,7 @@ import AccessibilitySnapshotParser
 final class TheBrains {
 
     // Keep this literal in sync with `FenceResponse.accessibilityTreeUnavailableMessage`;
-    // TheFence uses it to enrich wire-compatible `actionFailed` results locally.
+    // TheFence uses it to enrich wire-shaped `actionFailed` results locally.
     static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
 
     let stash: TheStash
@@ -197,7 +197,7 @@ final class TheBrains {
             after: afterSnapshotForClassification
         )
         let isScreenChange = classification.isScreenChange
-        let afterElements = afterScreen?.liveInterface.hierarchy.sortedElements ?? []
+        let afterElements = afterScreen?.liveCapture.hierarchy.sortedElements ?? []
         if isScreenChange && afterElements.isEmpty {
             let repopulated = await repopulateAfterScreenChange(into: &afterScreen)
             if !repopulated { didSettle = false }
@@ -217,7 +217,7 @@ final class TheBrains {
             : SettleSession.transientElements(
                 seenByKey: settleResult.elementsByKey,
                 baseline: before.elements,
-                final: afterScreen?.liveInterface.hierarchy.sortedElements ?? []
+                final: afterScreen?.liveCapture.hierarchy.sortedElements ?? []
             )
         let accessibilityTrace = makeAccessibilityTrace(
             afterInterface: afterInterface,
@@ -271,7 +271,7 @@ final class TheBrains {
         for attempt in 1...10 {
             _ = await tripwire.waitForAllClear(timeout: 0.2)
             afterScreen = stash.parse()
-            if !(afterScreen?.elements.isEmpty ?? true) {
+            if !(afterScreen?.semantic.elements.isEmpty ?? true) {
                 let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
                 insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
                 return true

@@ -87,12 +87,17 @@ extension TheBookKeeper {
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
-        let step = buildStep(
+        guard let step = buildStep(
             request: request,
             targetCapture: targetCapture,
             actionResult: actionResult,
             expectation: expectation
-        )
+        ) else {
+            heistRecordingLogger.error(
+                "Skipped heist evidence for \(request.command.rawValue): target has no durable semantic replay identity"
+            )
+            return
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -131,6 +136,11 @@ extension TheBookKeeper {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode(HeistPlayback.self, from: data)
+        } catch DecodingError.dataCorrupted(let context) {
+            throw BookKeeperError.heistRecording(.scriptReadFailed(
+                path: path.path,
+                reason: context.debugDescription
+            ))
         } catch {
             throw BookKeeperError.heistRecording(.scriptReadFailed(
                 path: path.path,
@@ -172,7 +182,7 @@ extension TheBookKeeper {
         targetCapture: AccessibilityTrace.Capture?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
-    ) -> HeistEvidence {
+    ) -> HeistEvidence? {
         let elementTarget = request.payload.bookKeeperElementTarget
         var target: ElementMatcher?
         var ordinal: Int?
@@ -180,10 +190,11 @@ extension TheBookKeeper {
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
 
-        if case .heistId(let heistId)? = elementTarget,
-           let targetCapture,
-           let element = targetCapture.interface.elements.last(where: { $0.heistId == heistId }) {
-            let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
+        if case .heistId(let heistId)? = elementTarget {
+            guard let targetCapture,
+                  let element = targetCapture.interface.elements.last(where: { $0.heistId == heistId }),
+                  let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
+            else { return nil }
             target = minimumMatcher.matcher
             ordinal = minimumMatcher.ordinal
             recordedHeistId = heistId
@@ -192,6 +203,7 @@ extension TheBookKeeper {
                 width: element.frameWidth, height: element.frameHeight
             )
         } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
+            guard matcher.hasPredicates else { return nil }
             target = matcher
             ordinal = matchedOrdinal
         } else if request.payload.bookKeeperCoordinateOnly {

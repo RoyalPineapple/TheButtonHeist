@@ -37,8 +37,7 @@ public extension FenceCommandDescriptor {
         commandName rawCommandName: String,
         arguments: [String]
     ) throws -> FenceHumanCommandRequest {
-        let commandName = rawCommandName.lowercased()
-        var draft = try FenceHumanRequestDraft(commandName: commandName)
+        var draft = try FenceHumanRequestDraft(commandName: rawCommandName)
 
         var positional: [String] = []
         for argument in arguments {
@@ -56,9 +55,9 @@ public extension FenceCommandDescriptor {
     }
 
     fileprivate static func descriptor(forCLIInputName name: String) -> FenceCommandDescriptor? {
-        let normalizedName = name.lowercased()
         return TheFence.Command.descriptors.first { descriptor in
-            descriptor.canonicalName == normalizedName || descriptor.cliName == normalizedName
+            descriptor.cliExposure != .notExposed
+                && descriptor.canonicalName == name
         }
     }
 
@@ -69,7 +68,7 @@ public extension FenceCommandDescriptor {
 
         switch spec.type {
         case .boolean:
-            switch value.lowercased() {
+            switch value {
             case "true":
                 return .bool(true)
             case "false":
@@ -100,9 +99,7 @@ private struct FenceHumanRequestDraft {
     private var parameters: [FenceParameterKey: HeistValue]
 
     init(commandName: String) throws {
-        if let alias = TheFence.Command.humanAlias(named: commandName) {
-            self.init(descriptor: alias.command.descriptor, parameters: alias.parameters)
-        } else if let descriptor = FenceCommandDescriptor.descriptor(forCLIInputName: commandName) {
+        if let descriptor = FenceCommandDescriptor.descriptor(forCLIInputName: commandName) {
             self.init(descriptor: descriptor)
         } else {
             throw FenceHumanCommandParsingError("Unknown command '\(commandName)'. Type 'help' for available commands.")
@@ -150,8 +147,8 @@ private struct FenceHumanRequestDraft {
 
         case .leadingEdgeThenTarget(let edgeValues):
             var remaining = positional
-            if let first = remaining.first, edgeValues.contains(first.lowercased()) {
-                self[.edge] = .string(first.lowercased())
+            if let first = remaining.first, edgeValues.contains(first) {
+                self[.edge] = .string(first)
                 remaining.removeFirst()
             }
             applyElementTarget(remaining)
@@ -166,8 +163,8 @@ private struct FenceHumanRequestDraft {
 
         case .leadingDirectionThenTarget(let directionValues):
             var remaining = positional
-            if let first = remaining.first, directionValues.contains(first.lowercased()) {
-                self[.direction] = .string(first.lowercased())
+            if let first = remaining.first, directionValues.contains(first) {
+                self[.direction] = .string(first)
                 remaining.removeFirst()
             }
             applyGenericTargetOrCoordinates(remaining)

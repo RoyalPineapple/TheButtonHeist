@@ -70,7 +70,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)    DRY_RUN=true; shift ;;
         --full)       RUN_TESTS=true; shift ;;
-        --skip-tests) shift ;;  # legacy flag, tests skip by default now
+        --skip-tests) echo "Error: --skip-tests is not a supported release flag; local tests already skip by default."; exit 1 ;;
         --tag-current) TAG_CURRENT=true; shift ;;
         --major)      BUMP_TYPE="major"; shift ;;
         --minor)      BUMP_TYPE="minor"; shift ;;

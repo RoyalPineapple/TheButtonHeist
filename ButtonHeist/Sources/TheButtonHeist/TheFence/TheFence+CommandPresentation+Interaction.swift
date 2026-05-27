@@ -24,20 +24,10 @@ extension TheFence.Command {
                 element to focus it first and read back the resulting value.
                 """
 
-        case Self.increment.rawValue:
-            return "Move the matched adjustable element one step up using its accessibility increment action."
-
-        case Self.decrement.rawValue:
-            return "Move the matched adjustable element one step down using its accessibility decrement action."
-
-        case Self.performCustomAction.rawValue:
-            return "Invoke a named custom accessibility action exposed by the matched element or container."
-
         case Self.scroll.rawValue:
             return """
-                Scroll within scroll views. mode=page scrolls one page in 'direction'; \
-                mode=to_visible brings a known element into view; mode=search scrolls until a \
-                matching element is found; mode=to_edge scrolls to a top/bottom/left/right edge.
+                Scroll one page within scroll views in the requested direction. Use scroll_to_visible, \
+                element_search, or scroll_to_edge for those canonical operations.
                 """
 
         case Self.scrollToVisible.rawValue:
@@ -51,13 +41,6 @@ extension TheFence.Command {
 
         case Self.scrollToEdge.rawValue:
             return "Scroll the selected container, or the target's owning scroll ancestor, to a requested edge."
-
-        case Self.gestureMCPToolName:
-            return """
-                Perform a touch gesture. Prefer 'activate' for element interactions — gestures are for \
-                swipes, drags, pinches, rotates, and free-form path drawing. Set 'type' to one of: \
-                swipe, one_finger_tap, drag, long_press, pinch, rotate, two_finger_tap, draw_path, draw_bezier.
-                """
 
         case Self.oneFingerTap.rawValue:
             return "Tap a coordinate or semantic element target after actionability resolution."
@@ -89,7 +72,7 @@ extension TheFence.Command {
         case Self.editAction.rawValue:
             return """
                 Perform an edit or keyboard action on the current first responder. \
-                Actions: copy, paste, cut, select, selectAll, delete, dismiss (dismiss the keyboard).
+                Actions: copy, paste, cut, select, selectAll, delete. Use dismiss_keyboard to dismiss the keyboard.
                 """
 
         case Self.dismissKeyboard.rawValue:

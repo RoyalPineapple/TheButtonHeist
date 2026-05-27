@@ -32,11 +32,14 @@ enum CLIRequestBuilder {
         return request
     }
 
-    static func parsedRequest(from line: String) throws -> CLIParsedRequest {
+    static func parsedRequest(from line: String, acceptsHumanInput: Bool = true) throws -> CLIParsedRequest {
         if line.hasPrefix("{") {
             return try parseMachineRequest(line)
         }
 
+        guard acceptsHumanInput else {
+            throw ValidationError("Expected JSON object input for JSON session mode")
+        }
         return try parseHumanTokens(tokenize(line))
     }
 
@@ -95,14 +98,40 @@ enum CLIRequestBuilder {
         let data = Data(line.utf8)
         let value = try JSONDecoder().decode(HeistValue.self, from: data)
         guard case .object(let object) = value,
-              case .string(let commandName)? = object[FenceParameterKey.command.rawValue] else {
+              case .string(_)? = object[FenceParameterKey.command.rawValue] else {
             throw ValidationError("Expected JSON object with string field 'command'")
         }
+        let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
         return CLIParsedRequest(
             request: object.mapValues(\.cliRawValue),
-            descriptor: FenceCommandDescriptor.descriptor(canonicalName: commandName),
+            descriptor: descriptor,
             mode: .machine
         )
+    }
+
+    @discardableResult
+    static func validateCanonicalCommandObject(
+        _ object: [String: HeistValue],
+        context: String,
+        requireBatchExecutable: Bool = false
+    ) throws -> FenceCommandDescriptor {
+        guard case .string(let commandName)? = object[FenceParameterKey.command.rawValue] else {
+            throw ValidationError("\(context) must include string field 'command'")
+        }
+        guard let descriptor = FenceCommandDescriptor.descriptor(canonicalName: commandName) else {
+            throw ValidationError("Unknown command '\(commandName)'. \(context) requires a canonical command name.")
+        }
+        if requireBatchExecutable, !descriptor.isBatchExecutable {
+            throw ValidationError("\(context) command '\(commandName)' is not supported in run_batch")
+        }
+
+        let allowedKeys = Set([FenceParameterKey.command.rawValue, "id"] + descriptor.parameters.map(\.key))
+        let unsupportedKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
+        if let unsupportedKey = unsupportedKeys.first {
+            throw ValidationError("Unknown parameter '\(unsupportedKey)' for \(commandName)")
+        }
+
+        return descriptor
     }
 
     static func diagnosticMessage(for error: Error) -> String {

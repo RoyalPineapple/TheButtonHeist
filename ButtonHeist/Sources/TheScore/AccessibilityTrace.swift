@@ -11,7 +11,6 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case captures
-        case segments
     }
 
     public init(captures: [Capture]) {
@@ -31,16 +30,15 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        if container.contains(.segments) {
-            // Intentional contract break: prior segment-backed traces are not
-            // durable public artifacts. Captures are now the only stored truth.
-            throw DecodingError.dataCorruptedError(
-                forKey: .segments,
-                in: container,
-                debugDescription: "AccessibilityTrace stores captures; segments are derived projections and are not accepted as trace truth"
-            )
+        let dynamicContainer = try decoder.container(keyedBy: TraceUnknownKey.self)
+        let allowedKeys: Set<String> = [CodingKeys.captures.stringValue]
+        if let unsupportedKey = dynamicContainer.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) {
+            throw DecodingError.dataCorrupted(DecodingError.Context(
+                codingPath: decoder.codingPath + [unsupportedKey],
+                debugDescription: "Unsupported AccessibilityTrace field: \(unsupportedKey.stringValue)"
+            ))
         }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(captures: try container.decode([Capture].self, forKey: .captures))
     }
 
@@ -136,4 +134,17 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         integrityIssues.isEmpty
     }
 
+}
+
+private struct TraceUnknownKey: CodingKey {
+    let stringValue: String
+    let intValue: Int? = nil
+
+    init(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue: Int) {
+        nil
+    }
 }

@@ -31,7 +31,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testScreenChangedMet() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+            traceProjecting: .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         )
         let outcome = ActionExpectation.screenChanged.validate(against: result)
         XCTAssertTrue(outcome.met)
@@ -40,7 +40,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testScreenChangedNotMetByElementsChanged() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         )
         let outcome = ActionExpectation.screenChanged.validate(against: result)
         XCTAssertFalse(outcome.met)
@@ -50,7 +50,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testScreenChangedNotMetByNoChange() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .noChange(.init(elementCount: 5))
+            traceProjecting: .noChange(.init(elementCount: 5))
         )
         let outcome = ActionExpectation.screenChanged.validate(against: result)
         XCTAssertFalse(outcome.met)
@@ -60,7 +60,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let result = ActionResult(success: true, method: .activate)
         let outcome = ActionExpectation.screenChanged.validate(against: result)
         XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "noChange")
+        XCTAssertEqual(outcome.actual, "noTrace")
     }
 
     func testScreenChangedPrefersTraceProjectionOverDecodedDeltaField() {
@@ -94,7 +94,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let result = ActionResult(
             success: true,
             method: .activate,
-            accessibilityDelta: .noChange(.init(elementCount: 0)),
+            traceProjecting: .noChange(.init(elementCount: 0)),
             accessibilityTrace: AccessibilityTrace(captures: [first, last])
         )
 
@@ -108,7 +108,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let result = ActionResult(
             success: true,
             method: .activate,
-            accessibilityDelta: .screenChanged(.init(
+            traceProjecting: .screenChanged(.init(
                 elementCount: 0,
                 newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
             )),
@@ -121,7 +121,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let outcome = ActionExpectation.screenChanged.validate(against: result)
 
         XCTAssertFalse(outcome.met)
-        XCTAssertEqual(outcome.actual, "noChange")
+        XCTAssertEqual(outcome.actual, "noTrace")
     }
 
     // MARK: - elementsChanged (superset rule)
@@ -129,7 +129,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementsChangedMetByElementsChanged() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         )
         let outcome = ActionExpectation.elementsChanged.validate(against: result)
         XCTAssertTrue(outcome.met)
@@ -138,7 +138,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementsChangedMetByScreenChanged() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+            traceProjecting: .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         )
         let outcome = ActionExpectation.elementsChanged.validate(against: result)
         XCTAssertTrue(outcome.met)
@@ -147,7 +147,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementsChangedNotMetByNoChange() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .noChange(.init(elementCount: 5))
+            traceProjecting: .noChange(.init(elementCount: 5))
         )
         let outcome = ActionExpectation.elementsChanged.validate(against: result)
         XCTAssertFalse(outcome.met)
@@ -158,7 +158,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementUpdatedAllFieldsMatch() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                     ElementUpdate(heistId: "btn_1", changes: [
                         PropertyChange(property: .value, old: "OFF", new: "ON"),
                     ]),
@@ -174,7 +174,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementUpdatedNoFilters() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                     ElementUpdate(heistId: "any", changes: [
                         PropertyChange(property: .label, old: "A", new: "B"),
                     ]),
@@ -188,7 +188,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementUpdatedHeistIdMismatch() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                     ElementUpdate(heistId: "btn_2", changes: [
                         PropertyChange(property: .value, old: "A", new: "B"),
                     ]),
@@ -202,7 +202,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementUpdatedNoUpdatesInResult() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         )
         let expectation = ActionExpectation.elementUpdated(heistId: "btn_1")
         let outcome = expectation.validate(against: result)
@@ -213,7 +213,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementUpdatedPropertyMismatch() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
                     ElementUpdate(heistId: "btn_1", changes: [
                         PropertyChange(property: .label, old: "A", new: "B"),
                     ]),
@@ -236,7 +236,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         )
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [addedElement])))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [addedElement])))
         )
         let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "Done"))
         let outcome = expectation.validate(against: result)
@@ -246,7 +246,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementAppearedNoAddedElements() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         )
         let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "Done"))
         let outcome = expectation.validate(against: result)
@@ -264,7 +264,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         )
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [addedElement])))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: [addedElement])))
         )
         let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "Done"))
         let outcome = expectation.validate(against: result)
@@ -286,7 +286,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         ]
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["old_btn"])))
+            traceProjecting: .elementsChanged(.init(elementCount: 3, edits: ElementEdits(removed: ["old_btn"])))
         )
         let expectation = ActionExpectation.elementDisappeared(ElementMatcher(label: "Remove"))
         let outcome = expectation.validate(against: result, preActionElements: preActionElements)
@@ -296,7 +296,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementDisappearedNoRemovedElements() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         )
         let expectation = ActionExpectation.elementDisappeared(ElementMatcher(label: "Remove"))
         let outcome = expectation.validate(against: result)
@@ -307,7 +307,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testElementDisappearedNoPreActionElements() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(removed: ["unknown_id"])))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits(removed: ["unknown_id"])))
         )
         let expectation = ActionExpectation.elementDisappeared(ElementMatcher(label: "Gone"))
         let outcome = expectation.validate(against: result, preActionElements: [:])
@@ -327,7 +327,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
-            accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
+            traceProjecting: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
         )
         let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "No receipt"))
         let outcome = expectation.validate(against: result)
@@ -345,7 +345,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let newInterface = makeTestInterface(elements: [otherElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
-            accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
+            traceProjecting: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
         )
         let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "No receipt"))
         let outcome = expectation.validate(against: result)
@@ -375,7 +375,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let newInterface = makeTestInterface(elements: [newElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
-            accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
+            traceProjecting: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
         )
         let expectation = ActionExpectation.elementDisappeared(
             ElementMatcher(label: "Recording payment")
@@ -404,7 +404,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         let newInterface = makeTestInterface(elements: [sameElement], timestamp: Date())
         let result = ActionResult(
             success: true, method: .waitForChange,
-            accessibilityDelta: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
+            traceProjecting: .screenChanged(.init(elementCount: 1, newInterface: newInterface))
         )
         let expectation = ActionExpectation.elementDisappeared(ElementMatcher(label: "Header"))
         let outcome = expectation.validate(against: result, preActionElements: preActionElements)
@@ -417,7 +417,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testCompoundAllMet() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
+            traceProjecting: .screenChanged(.init(elementCount: 5, newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])))
         )
         let expectation = ActionExpectation.compound([
             .screenChanged,
@@ -430,7 +430,7 @@ final class ActionExpectationValidationTests: XCTestCase {
     func testCompoundPartialFailure() {
         let result = ActionResult(
             success: true, method: .activate,
-            accessibilityDelta: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         )
         let expectation = ActionExpectation.compound([
             .elementsChanged,
@@ -441,14 +441,13 @@ final class ActionExpectationValidationTests: XCTestCase {
         XCTAssertTrue(outcome.actual?.contains("screen_changed") == true)
     }
 
-    func testCompoundEmpty() {
-        let result = ActionResult(success: true, method: .activate)
-        let expectation = ActionExpectation.compound([])
-        let outcome = expectation.validate(against: result)
-        XCTAssertTrue(outcome.met)
-    }
-
     // MARK: - ActionExpectation Codable
+
+    func testCompoundEmptyRejectsConstruction() throws {
+        XCTAssertThrowsError(try NonEmptyActionExpectations([])) { error in
+            XCTAssertTrue("\(error)".contains("at least one expectation"), "\(error)")
+        }
+    }
 
     func testActionExpectationRoundTrip() throws {
         let expectations: [ActionExpectation] = [

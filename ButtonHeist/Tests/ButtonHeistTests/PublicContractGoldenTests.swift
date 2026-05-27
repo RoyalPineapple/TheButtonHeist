@@ -65,7 +65,7 @@ final class PublicContractGoldenTests: XCTestCase {
 
         XCTAssertEqual(
             try jsonString(FenceResponse.action(result: result)),
-            #"{"method":"getPasteboard","screenId":"receipt","screenName":"Receipt","status":"ok","value":"copied"}"#
+            #"{"method":"get_pasteboard","screenId":"receipt","screenName":"Receipt","status":"ok","value":"copied"}"#
         )
     }
 
@@ -143,9 +143,9 @@ final class PublicContractGoldenTests: XCTestCase {
             try jsonString(response),
             golden(
                 #"{"errorCode":"request.missing_target","hint":"get_interface()","#,
-                #""message":"activate request contract failed: missing target; requires heistId, ordinal, or at least one matcher field "#,
+                #""message":"activate request contract failed: missing target; requires heistId or at least one matcher field "#,
                 #"(label, identifier, value, traits, or excludeTraits). Next: get_interface() to inspect the current app accessibility "#,
-                #"state, then retry activate with a heistId, exact matcher, or ordinal selector.","phase":"request","#,
+                #"state, then retry activate with a heistId or exact matcher.","phase":"request","#,
                 #""retryable":false,"status":"error"}"#
             )
         )
@@ -235,7 +235,7 @@ final class PublicContractGoldenTests: XCTestCase {
     func testBatchPublicJSONGolden() throws {
         let response = FenceResponse.batch(
             outcomes: [
-                BatchStepOutcome(command: "status", response: .ok(message: "ready")),
+                BatchStepOutcome(command: "wait_for", response: .ok(message: "ready")),
                 BatchStepOutcome(command: "activate", response: .error("boom"), stopsBatch: true),
                 .skipped(command: "type_text", afterFailedIndex: 1),
             ],
@@ -248,7 +248,7 @@ final class PublicContractGoldenTests: XCTestCase {
                 #"{"completedSteps":2,"failedIndex":1,"results":["#,
                 #"{"message":"ready","status":"ok"},{"message":"boom","status":"error"}],"#,
                 #""status":"partial","stepSummaries":["#,
-                #"{"command":"status","index":0},{"command":"activate","error":"boom","index":1},"#,
+                #"{"command":"wait_for","index":0},{"command":"activate","error":"boom","index":1},"#,
                 #"{"command":"type_text","error":"skipped: stop_on_error stopped batch after step 1","index":2}"#,
                 #"],"totalTimingMs":42}"#
             )

@@ -12,7 +12,12 @@ extension TheFence {
 
         @ButtonHeistActor
         init(contentsOf url: URL) throws {
-            try self.init(wire: TheBookKeeper.readHeist(from: url))
+            do {
+                try self.init(wire: TheBookKeeper.readHeist(from: url))
+            } catch BookKeeperError.heistRecording(.scriptReadFailed(_, let reason))
+                where reason.contains("Unsupported heist file version") {
+                throw FenceError.invalidRequest(reason)
+            }
         }
 
         init(wire playback: HeistPlayback) throws {

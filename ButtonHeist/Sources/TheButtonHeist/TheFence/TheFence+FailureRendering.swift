@@ -17,12 +17,12 @@ extension FenceError: LocalizedError {
         case .connectionTimeout:
             return """
                 Connection timed out
-                  Hint: Is the app running? Check 'buttonheist list' to see available devices.
+                  Hint: Is the app running? Check 'buttonheist list_devices' to see available devices.
                 """
         case .connectionFailed(let message):
             return """
                 Connection failed: \(message)
-                  Hint: Is the app running? Check 'buttonheist list' to see available devices.
+                  Hint: Is the app running? Check 'buttonheist list_devices' to see available devices.
                 """
         case .connectionFailure(let failure):
             return failure.message
@@ -50,7 +50,7 @@ extension FenceError: LocalizedError {
             return """
                 Not connected to device.
                   The previous connection may have closed or timed out.
-                  Hint: Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices.
+                  Hint: Check that the app is running, then retry the command. Use 'buttonheist list_devices' to see available devices.
                 """
         case .actionTimeout:
             return """

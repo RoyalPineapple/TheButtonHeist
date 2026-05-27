@@ -240,6 +240,7 @@ extension HeistElement {
     /// and for action-expectation matchers (`elementAppeared`, `elementDisappeared`).
     /// Unknown traits in `traits` or `excludeTraits` cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
+        guard matcher.hasPredicates else { return false }
         if let matchHeistId = matcher.heistId {
             if matchHeistId.isEmpty { return false }
             guard heistId == matchHeistId else { return false }

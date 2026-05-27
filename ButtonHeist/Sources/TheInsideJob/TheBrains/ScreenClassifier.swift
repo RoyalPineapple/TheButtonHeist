@@ -89,10 +89,10 @@ import TheScore
     static func snapshot(of screen: Screen) -> Snapshot {
         Snapshot(
             signature: signature(
-                hierarchy: screen.liveInterface.hierarchy,
-                elements: screen.liveInterface.hierarchy.sortedElements
+                hierarchy: screen.liveCapture.hierarchy,
+                elements: screen.liveCapture.hierarchy.sortedElements
             ),
-            firstResponderHeistId: screen.liveInterface.firstResponderHeistId
+            firstResponderHeistId: screen.liveCapture.firstResponderHeistId
         )
     }
 

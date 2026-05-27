@@ -8,6 +8,13 @@ extension TheGetaway {
 
     func sendServerInfo(respond: @escaping (Data) -> Void) {
         let screenBounds = ScreenMetrics.current.bounds
+        guard let listeningPort = transport?.listeningPort else {
+            sendMessage(
+                .error(ServerError(kind: .general, message: "Server info contract failed: transport is not listening")),
+                respond: respond
+            )
+            return
+        }
         let info = ServerInfo(
             appName: Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App",
             bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
@@ -17,7 +24,7 @@ extension TheGetaway {
             screenHeight: screenBounds.height,
             instanceId: identity.sessionId.uuidString,
             instanceIdentifier: identity.effectiveInstanceId,
-            listeningPort: transport?.listeningPort,
+            listeningPort: listeningPort,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
             vendorIdentifier: UIDevice.current.identifierForVendor?.uuidString,
             tlsActive: identity.tlsActive

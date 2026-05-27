@@ -526,40 +526,6 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    // MARK: - Unsupported Diagnostics
-
-    func testExecuteCommandUnsupportedIncludesCommandIdentityAndScreenContext() async {
-        seedScreen(elements: [("Home", .header, "home_header")])
-
-        let result = await brains.executeCommand(.ping)
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorKind, .unsupported)
-        XCTAssertEqual(result.method, .unsupportedCommand)
-        XCTAssertNotEqual(result.method, .activate)
-        XCTAssertEqual(result.screenName, "Home")
-        XCTAssertEqual(result.screenId, "home")
-        XCTAssertEqual(result.message, "Unsupported command 'ping' in executeCommand")
-    }
-
-    func testControlDiagnosticsUseUnsupportedCommandMethod() {
-        let messages: [ClientMessage] = [
-            .clientHello,
-            .authenticate(AuthenticatePayload(token: "token")),
-            .requestInterface(InterfaceQuery()),
-            .ping,
-            .status,
-            .requestScreen,
-            .startRecording(RecordingConfig()),
-            .stopRecording,
-        ]
-
-        for message in messages {
-            XCTAssertEqual(TheBrains.diagnosticMethod(for: message), .unsupportedCommand)
-            XCTAssertNotEqual(TheBrains.diagnosticMethod(for: message), .activate)
-        }
-    }
-
     // MARK: - Transient Suppression on Screen Change (PR #330 H2)
 
     /// `SettleSession.elementsByKey` accumulates every element observed
@@ -636,7 +602,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         // reduces to refresh-and-commit, and the seeded entry merges into the
         // live parse rather than being pruned.
         seedScreen(elements: [("Seed", .button, "button_seed")])
-        XCTAssertEqual(brains.stash.currentScreen.elements.count, 1)
+        XCTAssertEqual(brains.stash.currentScreen.semantic.elements.count, 1)
 
         _ = await brains.navigation.exploreAndPrune()
 

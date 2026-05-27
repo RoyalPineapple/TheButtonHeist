@@ -221,7 +221,7 @@ actor TheMuscle {
 
     // MARK: - Admission Orchestration
 
-    private func resolveAdmissionDecision(_ decision: TheMuscleAdmission.Decision) async -> ClientAdmission {
+    private func resolveAdmissionDecision(_ decision: MuscleAdmissionDecision) async -> ClientAdmission {
         switch decision {
         case .admitted(let message):
             return .admitted(message)
@@ -234,7 +234,7 @@ actor TheMuscle {
         }
     }
 
-    private func completeAuthentication(_ authentication: TheMuscleAdmission.Authentication) async {
+    private func completeAuthentication(_ authentication: MuscleAuthentication) async {
         switch session.acquire(
             driverIdentity: authentication.driverIdentity,
             clientId: authentication.clientId
@@ -257,7 +257,7 @@ actor TheMuscle {
         }
     }
 
-    private func applyAdmissionEffect(_ effect: TheMuscleAdmission.Effect) async {
+    private func applyAdmissionEffect(_ effect: MuscleAdmissionEffect) async {
         for output in effect.outputs {
             switch output {
             case .response(let message, let requestId, let respond):

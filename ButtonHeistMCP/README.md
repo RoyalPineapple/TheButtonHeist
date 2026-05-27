@@ -13,11 +13,14 @@ swift build -c release
 ## Tool Surface
 
 ButtonHeistMCP projects its tool surface from `TheFence.Command` via
-`ToolDefinitions`. The MCP server exposes adapter-shaped tools, but command
-identity, parameter names, grouped selector routing, and schemas are owned by
-the Fence command contract.
+`ToolDefinitions`. The MCP server exposes one tool per exposed command; command
+identity, parameter names, and schemas are owned by the Fence command contract.
 
-`gesture`, `scroll`, and `edit_action` are grouped tools — their typed selector parameter routes to a TheFence command. All other tools map 1:1 to a TheFence command name. TheFence command names are the product command contract; wire message discriminators are a lower transport layer and are documented separately in the wire protocol. `run_batch.steps` use batch-executable canonical TheFence command requests and do not accept nested grouped MCP wrapper shapes, nested `run_batch`, or session-only commands (`help`, `status`, `quit`, `exit`).
+Each MCP tool maps 1:1 to a TheFence command name. TheFence command names are
+the product command contract; wire message discriminators are a lower transport
+layer and are documented separately in the wire protocol. `run_batch.steps` use
+batch-executable canonical TheFence command requests and reject nested
+`run_batch` or commands whose descriptors are not batch-executable.
 
 The generated [MCP Tool Reference](../docs/reference/mcp-tools.md) is the
 current tool and schema registry. This README stays at the adapter behavior
@@ -29,7 +32,7 @@ layer.
 - Reuses a single `TheFence` instance and auto-reconnects when the next tool call arrives
 - Resets an idle timeout after every tool call and disconnects when inactive
 - Returns screenshot metadata plus an artifact path by default; pass `inlineData=true` on `get_screen` to opt into capped MCP image content
-- Rejects `inlineData=true` for `get_screen` inside `run_batch` so batched responses stay bounded
+- `get_screen` is not batch-executable; capture screenshots before or after `run_batch`
 - Returns recording artifact paths plus metadata by default; `inlineData` and `includeInteractionLog` are explicit, size-capped expansion flags
 
 ## Environment

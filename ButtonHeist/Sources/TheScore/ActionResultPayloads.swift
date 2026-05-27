@@ -27,6 +27,27 @@ public struct ServerError: Codable, Sendable, Equatable {
     public let message: String
 
     public init(kind: ErrorKind, message: String) {
+        precondition(!message.isEmpty, "ServerError message must not be empty")
+        self.kind = kind
+        self.message = message
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case message
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try container.decode(ErrorKind.self, forKey: .kind)
+        let message = try container.decode(String.self, forKey: .message)
+        guard !message.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .message,
+                in: container,
+                debugDescription: "server error message must not be empty"
+            )
+        }
         self.kind = kind
         self.message = message
     }
@@ -121,7 +142,7 @@ public struct ActionResult: Codable, Sendable {
     /// not a transport-level error (those surface as thrown errors).
     public let success: Bool
     /// Identifies which server-side handler produced this result (e.g.
-    /// `.synthesizedTouch`, `.accessibilityActivate`). Useful when diagnosing
+    /// `.syntheticTap`, `.accessibilityActivate`). Useful when diagnosing
     /// why an action succeeded but had no visible effect.
     public let method: ActionMethod
     public let message: String?
@@ -132,36 +153,28 @@ public struct ActionResult: Codable, Sendable {
     /// Source-of-truth accessibility capture receipt for this action.
     public let accessibilityTrace: AccessibilityTrace?
     /// Compact projection describing what changed in the hierarchy after the
-    /// action. When `accessibilityTrace` is present, this is always derived
-    /// from the trace, even when the trace projects nil.
+    /// action. This is always derived from `accessibilityTrace`; action results
+    /// store captures as truth, not stale compact deltas.
     public var accessibilityDelta: AccessibilityTrace.Delta? {
-        if let accessibilityTrace {
-            return accessibilityTrace.endpointDeltaProjection
-        }
-        return noTraceAccessibilityDelta
+        accessibilityTrace?.endpointDeltaProjection
     }
-    /// Fallback for synthetic/no-trace action results. Real action responses
-    /// should carry `accessibilityTrace`; this field exists only so tests and
-    /// untraced payloads can still render the same compact projection.
-    private let noTraceAccessibilityDelta: AccessibilityTrace.Delta?
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public let animating: Bool?
-    /// Compatibility screen name projection. When `accessibilityTrace` is
-    /// present, constructed and decoded results project this field from the
-    /// final capture.
+    /// Screen name projection. When `accessibilityTrace` is present,
+    /// constructed and decoded results project this field from the final
+    /// capture.
     public let screenName: String?
-    /// Compatibility screen id projection. When `accessibilityTrace` is
-    /// present, constructed and decoded results project this field from the
-    /// final capture context/interface.
+    /// Screen id projection. When `accessibilityTrace` is present, constructed
+    /// and decoded results project this field from the final capture
+    /// context/interface.
     public let screenId: String?
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
     /// the existing repopulation pipeline. False *only* when the hard
     /// settle timeout elapsed while the tree was still changing — the
-    /// snapshot in `accessibilityDelta` may not be a final state. nil for
-    /// older clients / pre-auto-settle responses.
+    /// snapshot in `accessibilityDelta` may not be a final state.
     public let settled: Bool?
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
@@ -173,7 +186,6 @@ public struct ActionResult: Codable, Sendable {
         message: String? = nil,
         errorKind: ErrorKind? = nil,
         payload: ResultPayload? = nil,
-        accessibilityDelta: AccessibilityTrace.Delta? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         animating: Bool? = nil,
         screenName: String? = nil,
@@ -187,7 +199,6 @@ public struct ActionResult: Codable, Sendable {
         self.errorKind = errorKind
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
-        self.noTraceAccessibilityDelta = accessibilityTrace == nil ? accessibilityDelta : nil
         self.animating = animating
         if let accessibilityTrace {
             self.screenName = accessibilityTrace.endpointScreenNameProjection
@@ -200,7 +211,7 @@ public struct ActionResult: Codable, Sendable {
         self.settleTimeMs = settleTimeMs
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case success
         case method
         case message
@@ -215,15 +226,36 @@ public struct ActionResult: Codable, Sendable {
         case settleTimeMs
     }
 
+    private struct UnknownCodingKey: CodingKey {
+        let stringValue: String
+        let intValue: Int?
+
+        init?(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
+    }
+
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard !container.contains(.accessibilityDelta) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "ActionResult stores accessibilityTrace as truth; accessibilityDelta is a derived projection and cannot be decoded"
+            ))
+        }
         self.init(
             success: try container.decode(Bool.self, forKey: .success),
             method: try container.decode(ActionMethod.self, forKey: .method),
             message: try container.decodeIfPresent(String.self, forKey: .message),
             errorKind: try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind),
             payload: try container.decodeIfPresent(ResultPayload.self, forKey: .payload),
-            accessibilityDelta: try container.decodeIfPresent(AccessibilityTrace.Delta.self, forKey: .accessibilityDelta),
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             animating: try container.decodeIfPresent(Bool.self, forKey: .animating),
             screenName: try container.decodeIfPresent(String.self, forKey: .screenName),
@@ -233,6 +265,18 @@ public struct ActionResult: Codable, Sendable {
         )
     }
 
+    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown ActionResult field \"\(unknownKey.stringValue)\""
+        ))
+    }
+
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(success, forKey: .success)
@@ -240,7 +284,6 @@ public struct ActionResult: Codable, Sendable {
         try container.encodeIfPresent(message, forKey: .message)
         try container.encodeIfPresent(errorKind, forKey: .errorKind)
         try container.encodeIfPresent(payload, forKey: .payload)
-        try container.encodeIfPresent(accessibilityDelta, forKey: .accessibilityDelta)
         try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
         try container.encodeIfPresent(animating, forKey: .animating)
         try container.encodeIfPresent(screenName, forKey: .screenName)
@@ -376,7 +419,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case scrollToEdge
     case waitFor
     case explore
-    case unsupportedCommand
     case elementNotFound
     case elementDeallocated
 }

@@ -32,20 +32,9 @@ struct Screen: Equatable {
     typealias ScrollContentLocation = SemanticScreen.ScrollContentLocation
     typealias ScreenElement = SemanticScreen.Element
     typealias KnownInterface = SemanticScreen
-    typealias LiveInterface = LiveCapture
     typealias ScrollableViewRef = LiveCapture.ScrollableViewRef
     typealias ElementRef = LiveCapture.ElementRef
     typealias ContainerRef = LiveCapture.ContainerRef
-
-    /// Compatibility view for callers that still read `Screen.elements`.
-    var elements: [HeistId: ScreenElement] {
-        semantic.elements
-    }
-
-    /// Compatibility view for callers that still read `Screen.liveInterface`.
-    var liveInterface: LiveInterface {
-        liveCapture
-    }
 
     static var empty: Screen {
         Screen(
@@ -66,20 +55,24 @@ struct Screen: Equatable {
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
+        let liveCapture = LiveCapture(
+            hierarchy: hierarchy,
+            containerStableIds: [:],
+            heistIdByElement: [:],
+            heistIdByElementPath: [:],
+            elementRefs: elementRefs,
+            containerRefsByPath: [:],
+            containerContentFramesByPath: [:],
+            firstResponderHeistId: firstResponderHeistId,
+            scrollableContainerViews: scrollableContainerViews,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
+        )
         self.init(
-            elements: elements,
-            liveInterface: LiveCapture(
-                hierarchy: hierarchy,
-                containerStableIds: [:],
-                heistIdByElement: [:],
-                heistIdByElementPath: [:],
-                elementRefs: elementRefs,
-                containerRefsByPath: [:],
-                containerContentFramesByPath: [:],
-                firstResponderHeistId: firstResponderHeistId,
-                scrollableContainerViews: scrollableContainerViews,
-                scrollableContainerViewsByPath: scrollableContainerViewsByPath
-            )
+            semantic: SemanticScreen(
+                elements: elements,
+                containers: Self.semanticContainers(from: liveCapture)
+            ),
+            liveCapture: liveCapture
         )
     }
 
@@ -98,34 +91,25 @@ struct Screen: Equatable {
         scrollableContainerViews: [AccessibilityContainer: ScrollableViewRef],
         scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
     ) {
-        self.init(
-            elements: elements,
-            liveInterface: LiveCapture(
-                hierarchy: hierarchy,
-                containerStableIds: containerStableIds,
-                containerStableIdsByPath: containerStableIdsByPath,
-                heistIdByElement: heistIdByElement,
-                heistIdByElementPath: heistIdByElementPath,
-                elementRefs: elementRefs,
-                containerRefsByPath: containerRefsByPath,
-                containerContentFramesByPath: containerContentFramesByPath,
-                firstResponderHeistId: firstResponderHeistId,
-                scrollableContainerViews: scrollableContainerViews,
-                scrollableContainerViewsByPath: scrollableContainerViewsByPath
-            )
+        let liveCapture = LiveCapture(
+            hierarchy: hierarchy,
+            containerStableIds: containerStableIds,
+            containerStableIdsByPath: containerStableIdsByPath,
+            heistIdByElement: heistIdByElement,
+            heistIdByElementPath: heistIdByElementPath,
+            elementRefs: elementRefs,
+            containerRefsByPath: containerRefsByPath,
+            containerContentFramesByPath: containerContentFramesByPath,
+            firstResponderHeistId: firstResponderHeistId,
+            scrollableContainerViews: scrollableContainerViews,
+            scrollableContainerViewsByPath: scrollableContainerViewsByPath
         )
-    }
-
-    init(
-        elements: [HeistId: ScreenElement],
-        liveInterface: LiveInterface
-    ) {
         self.init(
             semantic: SemanticScreen(
                 elements: elements,
-                containers: Self.semanticContainers(from: liveInterface)
+                containers: Self.semanticContainers(from: liveCapture)
             ),
-            liveCapture: liveInterface
+            liveCapture: liveCapture
         )
     }
 
@@ -147,7 +131,7 @@ struct Screen: Equatable {
     /// traversal order. Not stored — recomputed on access so it cannot drift
     /// from the parser tree.
     var name: String? {
-        liveInterface.hierarchy.sortedElements
+        liveCapture.hierarchy.sortedElements
             .enumerated()
             .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
                 guard element.traits.contains(.header), element.label != nil else { return nil }
@@ -176,7 +160,7 @@ struct Screen: Equatable {
 
     /// The heistId set backed by the latest parsed live hierarchy.
     var visibleIds: Set<HeistId> {
-        liveInterface.heistIds
+        liveCapture.heistIds
     }
 
     /// Hash of the known semantic accessibility state. Deliberately excludes
@@ -195,17 +179,17 @@ struct Screen: Equatable {
     }
 
     /// A pure view of this screen restricted to ids present in the latest live
-    /// hierarchy. This keeps the same live interface and drops known-only
+    /// hierarchy. This keeps the same live capture and drops known-only
     /// semantic entries retained from exploration.
     var visibleOnly: Screen {
-        let visibleIds = liveInterface.heistIds
-        let visibleContainerPaths = Set(liveInterface.hierarchy.containerPaths.map(\.path))
+        let visibleIds = liveCapture.heistIds
+        let visibleContainerPaths = Set(liveCapture.hierarchy.containerPaths.map(\.path))
         return Screen(
             semantic: SemanticScreen(
-                elements: elements.filter { visibleIds.contains($0.key) },
+                elements: semantic.elements.filter { visibleIds.contains($0.key) },
                 containers: semantic.containers.filter { visibleContainerPaths.contains($0.key) }
             ),
-            liveCapture: liveInterface
+            liveCapture: liveCapture
         )
     }
 
@@ -214,14 +198,14 @@ struct Screen: Equatable {
     var orderedElements: [ScreenElement] {
         var seen = Set<String>()
         var ordered: [ScreenElement] = []
-        ordered.reserveCapacity(elements.count)
-        for (element, _) in liveInterface.hierarchy.elements {
-            guard let heistId = liveInterface.heistIdByElement[element],
-                  let entry = elements[heistId],
+        ordered.reserveCapacity(semantic.elements.count)
+        for (element, _) in liveCapture.hierarchy.elements {
+            guard let heistId = liveCapture.heistIdByElement[element],
+                  let entry = semantic.elements[heistId],
                   seen.insert(heistId).inserted else { continue }
             ordered.append(entry)
         }
-        let remaining = elements
+        let remaining = semantic.elements
             .filter { !seen.contains($0.key) }
             .map(\.value)
             .sorted { $0.heistId < $1.heistId }
@@ -240,20 +224,20 @@ struct Screen: Equatable {
     /// to preserve a previously-recorded `contentSpaceOrigin`. The most recent
     /// observation is the source of truth.
     ///
-    /// `liveInterface` takes `other`'s. It is the latest live parse, not
+    /// `liveCapture` takes `other`'s. It is the latest live parse, not
     /// a unionable tree — accumulating it across scrolled pages would keep
     /// stale UIKit refs and geometry alive. Code that needs the "all elements
     /// ever seen on this screen" view reads `knownInterface`, not the live
     /// interface.
     func merging(_ other: Screen) -> Screen {
-        let mergedElements = elements.merging(other.elements) { _, new in new }
+        let mergedElements = semantic.elements.merging(other.semantic.elements) { _, new in new }
         let mergedContainers = semantic.containers.merging(other.semantic.containers) { _, new in new }
         return Screen(
             semantic: SemanticScreen(
                 elements: mergedElements,
                 containers: mergedContainers
             ),
-            liveCapture: other.liveInterface
+            liveCapture: other.liveCapture
         )
     }
 
@@ -273,24 +257,24 @@ struct Screen: Equatable {
         let refreshed = merging(visibleRefresh)
         return Screen(
             semantic: SemanticScreen(
-                elements: refreshed.elements.filter { !disappearedVisibleIds.contains($0.key) },
+                elements: refreshed.semantic.elements.filter { !disappearedVisibleIds.contains($0.key) },
                 containers: refreshed.semantic.containers
             ),
-            liveCapture: refreshed.liveInterface
+            liveCapture: refreshed.liveCapture
         )
     }
 
-    private static func semanticContainers(from liveInterface: LiveInterface) -> [TreePath: SemanticScreen.Container] {
+    private static func semanticContainers(from liveCapture: LiveCapture) -> [TreePath: SemanticScreen.Container] {
         Dictionary(
-            uniqueKeysWithValues: liveInterface.hierarchy.containerPaths.map { item in
+            uniqueKeysWithValues: liveCapture.hierarchy.containerPaths.map { item in
                 (
                     item.path,
                     SemanticScreen.Container(
                         container: item.container,
                         path: item.path,
-                        stableId: liveInterface.containerStableIdsByPath[item.path]
-                            ?? liveInterface.containerStableIds[item.container],
-                        contentFrame: liveInterface.containerContentFrame(forPath: item.path)
+                        stableId: liveCapture.containerStableIdsByPath[item.path]
+                            ?? liveCapture.containerStableIds[item.container],
+                        contentFrame: liveCapture.containerContentFrame(forPath: item.path)
                     )
                 )
             }

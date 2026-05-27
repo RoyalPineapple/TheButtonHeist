@@ -13,15 +13,15 @@ struct SessionCommand: AsyncParsableCommand {
         abstract: "Start a persistent REPL session with an iOS device",
         discussion: """
             Maintains a single connection and accepts commands on stdin.
-            Interactive mode accepts plain-text commands (e.g. 'tap myButton').
-            JSON input is always accepted (e.g. {"command":"one_finger_tap"}).
+            Interactive mode accepts canonical plain-text commands (e.g. 'activate myButton').
+            JSON output mode accepts one JSON object per line (e.g. {"command":"one_finger_tap"}).
             Output is human-readable by default, compact JSON when piped.
 
             Examples:
               buttonheist session
               buttonheist session --device a1b2
               echo '{"command":"get_interface"}' | buttonheist session --format json
-              echo 'tap myButton' | buttonheist session --format json
+              echo '{"command":"activate","heistId":"myButton"}' | buttonheist session --format json
             """
     )
 

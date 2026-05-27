@@ -75,7 +75,7 @@ final class ActionExpectationTests: XCTestCase {
         let action = makeResult(success: true)
         let result = ActionExpectation.screenChanged.validate(against: action)
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "noChange")
+        XCTAssertEqual(result.actual, "noTrace")
     }
 
     // MARK: - Validation: elementsChanged
@@ -387,76 +387,9 @@ final class ActionExpectationTests: XCTestCase {
             method: .syntheticTap,
             message: message,
             payload: value.map { .value($0) },
-            accessibilityDelta: delta
+            traceProjecting: delta
         )
         // Note: animating param omitted (defaults to nil)
-    }
-
-    // MARK: - Wire Format: explicit `type` discriminator
-
-    func testWireFormatScreenChanged() throws {
-        let data = try JSONEncoder().encode(ActionExpectation.screenChanged)
-        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dictionary?["type"] as? String, "screen_changed")
-        XCTAssertEqual(dictionary?.count, 1, "screen_changed carries no payload fields")
-    }
-
-    func testWireFormatElementsChanged() throws {
-        let data = try JSONEncoder().encode(ActionExpectation.elementsChanged)
-        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dictionary?["type"] as? String, "elements_changed")
-        XCTAssertEqual(dictionary?.count, 1)
-    }
-
-    func testWireFormatElementUpdated() throws {
-        let expectation = ActionExpectation.elementUpdated(
-            heistId: "btn-Submit", property: .value, oldValue: "old", newValue: "new"
-        )
-        let data = try JSONEncoder().encode(expectation)
-        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dictionary?["type"] as? String, "element_updated")
-        XCTAssertEqual(dictionary?["heistId"] as? String, "btn-Submit")
-        XCTAssertEqual(dictionary?["property"] as? String, "value")
-        XCTAssertEqual(dictionary?["oldValue"] as? String, "old")
-        XCTAssertEqual(dictionary?["newValue"] as? String, "new")
-    }
-
-    func testWireFormatElementUpdatedOmitsMissingFields() throws {
-        let expectation = ActionExpectation.elementUpdated(newValue: "only")
-        let data = try JSONEncoder().encode(expectation)
-        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dictionary?["type"] as? String, "element_updated")
-        XCTAssertEqual(dictionary?["newValue"] as? String, "only")
-        XCTAssertNil(dictionary?["heistId"])
-        XCTAssertNil(dictionary?["property"])
-        XCTAssertNil(dictionary?["oldValue"])
-    }
-
-    func testWireFormatElementAppeared() throws {
-        let matcher = ElementMatcher(label: "Sign In", traits: [.button])
-        let data = try JSONEncoder().encode(ActionExpectation.elementAppeared(matcher))
-        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dictionary?["type"] as? String, "element_appeared")
-        XCTAssertNotNil(dictionary?["matcher"] as? [String: Any])
-    }
-
-    func testWireFormatElementDisappeared() throws {
-        let matcher = ElementMatcher(identifier: "loading-spinner")
-        let data = try JSONEncoder().encode(ActionExpectation.elementDisappeared(matcher))
-        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dictionary?["type"] as? String, "element_disappeared")
-        XCTAssertNotNil(dictionary?["matcher"] as? [String: Any])
-    }
-
-    func testWireFormatCompound() throws {
-        let expectation = ActionExpectation.compound([.screenChanged, .elementsChanged])
-        let data = try JSONEncoder().encode(expectation)
-        let dictionary = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        XCTAssertEqual(dictionary?["type"] as? String, "compound")
-        let inner = dictionary?["expectations"] as? [[String: Any]]
-        XCTAssertEqual(inner?.count, 2)
-        XCTAssertEqual(inner?[0]["type"] as? String, "screen_changed")
-        XCTAssertEqual(inner?[1]["type"] as? String, "elements_changed")
     }
 
     // MARK: - Round-Trip: associated-value and recursive cases

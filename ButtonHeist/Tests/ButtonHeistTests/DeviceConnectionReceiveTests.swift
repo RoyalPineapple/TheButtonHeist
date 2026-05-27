@@ -201,7 +201,7 @@ final class DeviceConnectionReceiveTests: XCTestCase {
         connection.connectionState = .connected(.init(connection: activeConnection))
 
         let oversizedForOldLimit = String(repeating: "A", count: 10_100_000)
-        let screen = ScreenPayload(pngData: oversizedForOldLimit, width: 1366, height: 1024)
+        let screen = ScreenPayload(pngData: oversizedForOldLimit, width: 1366, height: 1024, interface: Interface(timestamp: Date(), tree: []))
         var envelope = try ResponseEnvelope(requestId: "screen-1", message: .screen(screen)).encoded()
         envelope.append(0x0A)
 

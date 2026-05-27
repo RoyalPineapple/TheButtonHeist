@@ -36,7 +36,8 @@ final class PublicJSONGoldenTests: XCTestCase {
             pngData: "cG5n",
             width: 393,
             height: 852,
-            timestamp: Date(timeIntervalSince1970: 0)
+            timestamp: Date(timeIntervalSince1970: 0),
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         )
 
         try XCTAssertGoldenJSON(

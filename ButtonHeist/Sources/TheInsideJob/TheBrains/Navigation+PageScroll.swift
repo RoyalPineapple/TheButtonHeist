@@ -23,7 +23,7 @@ extension Navigation {
         switch resolveContainerScrollTarget(
             selection: selection,
             axis: axis,
-            commandName: ScrollMode.page.canonicalCommand
+            commandName: "scroll"
         ) {
         case .resolved(let scrollTarget):
             let uiDirection = Self.uiScrollDirection(for: direction)
@@ -53,11 +53,11 @@ extension Navigation {
         switch resolveContainerScrollTarget(
             selection: selection,
             axis: axis,
-            commandName: ScrollMode.toEdge.canonicalCommand
+            commandName: "scroll_to_edge"
         ) {
         case .resolved(let scrollTarget):
             guard case .uiScrollView(let scrollView) = scrollTarget else {
-                return .failure(.scrollToEdge, message: "\(ScrollMode.toEdge.canonicalCommand) failed: selected container has no live UIScrollView")
+                return .failure(.scrollToEdge, message: "scroll_to_edge failed: selected container has no live UIScrollView")
             }
             let moved = safecracker.scrollToEdge(scrollView, edge: edge)
 
@@ -65,7 +65,7 @@ extension Navigation {
                 ? .success(method: .scrollToEdge)
                 : .failure(
                     .scrollToEdge,
-                    message: "\(ScrollMode.toEdge.canonicalCommand) failed: observed target already at requested edge"
+                    message: "scroll_to_edge failed: observed target already at requested edge"
                 )
         case .failed(let message):
             return .failure(.scrollToEdge, message: message)

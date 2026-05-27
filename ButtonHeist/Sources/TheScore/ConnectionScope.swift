@@ -24,11 +24,17 @@ public enum ConnectionScope: String, Sendable, CaseIterable, Codable {
     public static let all: Set<ConnectionScope> = Set(ConnectionScope.allCases)
 
     /// Parse a comma-separated scope string (e.g. "simulator,usb").
-    /// Returns nil for empty/invalid input (caller should fall back to defaults).
+    /// Returns nil for empty or invalid input.
     public static func parse(_ value: String) -> Set<ConnectionScope>? {
-        let scopes = value
-            .split(separator: ",")
-            .compactMap { ConnectionScope(rawValue: $0.trimmingCharacters(in: .whitespaces).lowercased()) }
-        return scopes.isEmpty ? nil : Set(scopes)
+        let rawScopes = value.split(separator: ",", omittingEmptySubsequences: false)
+        guard !rawScopes.isEmpty else { return nil }
+        var scopes = Set<ConnectionScope>()
+        for rawScope in rawScopes {
+            guard let scope = ConnectionScope(rawValue: rawScope.trimmingCharacters(in: .whitespaces).lowercased()) else {
+                return nil
+            }
+            scopes.insert(scope)
+        }
+        return scopes
     }
 }

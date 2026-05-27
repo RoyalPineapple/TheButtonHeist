@@ -9,7 +9,9 @@ extension Actions {
     // MARK: - Edit / Pasteboard / Responder
 
     func executeEditAction(_ target: EditActionTarget) async -> TheSafecracker.InteractionResult {
-        await actionability.ensureFirstResponderOnScreen()
+        if let failure = await actionability.makeFirstResponderActionable(method: .editAction) {
+            return failure.interactionResult(commandMethod: .editAction)
+        }
         let success = safecracker.performEditAction(target.action)
         let message = success ? nil : ActionCapabilityDiagnostic.editActionFailed(
             target.action,
@@ -22,7 +24,9 @@ extension Actions {
     }
 
     func executeSetPasteboard(_ target: SetPasteboardTarget) async -> TheSafecracker.InteractionResult {
-        await actionability.ensureFirstResponderOnScreen()
+        if let failure = await actionability.makeFirstResponderActionable(method: .setPasteboard) {
+            return failure.interactionResult(commandMethod: .setPasteboard)
+        }
         UIPasteboard.general.string = target.text
         return .success(method: .setPasteboard, payload: .value(target.text))
     }
@@ -37,7 +41,9 @@ extension Actions {
     }
 
     func executeResignFirstResponder() async -> TheSafecracker.InteractionResult {
-        await actionability.ensureFirstResponderOnScreen()
+        if let failure = await actionability.makeFirstResponderActionable(method: .resignFirstResponder) {
+            return failure.interactionResult(commandMethod: .resignFirstResponder)
+        }
         let success = safecracker.resignFirstResponder()
         if success { return .success(method: .resignFirstResponder) }
         return .failure(
@@ -72,8 +78,9 @@ extension Actions {
         stash.refresh()
 
         var fieldValue: String?
-        if let normalizedTarget {
-            if let resolved = stash.resolveTarget(normalizedTarget.executableTarget).resolved {
+        if let normalizedTarget,
+           let executableTarget = normalizedTarget.executableTarget {
+            if let resolved = stash.resolveTarget(executableTarget).resolved {
                 fieldValue = resolved.element.value
             }
         }

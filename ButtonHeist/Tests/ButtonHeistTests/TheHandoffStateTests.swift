@@ -183,7 +183,11 @@ final class TheHandoffStateTests: XCTestCase {
                     deviceName: "Simulator",
                     systemVersion: "26.1",
                     screenWidth: 402,
-                    screenHeight: 874
+                    screenHeight: 874,
+                    instanceId: "test-session",
+                    instanceIdentifier: "test",
+                    listeningPort: 49152,
+                    tlsActive: true
                 )
                 reconnected.fulfill()
             }
@@ -634,7 +638,11 @@ final class TheHandoffStateTests: XCTestCase {
                 deviceName: "iPhone 16 Pro",
                 systemVersion: "26.1",
                 screenWidth: 402,
-                screenHeight: 874
+                screenHeight: 874,
+                instanceId: "accessibility-session",
+                instanceIdentifier: "accessibility",
+                listeningPort: 49152,
+                tlsActive: true
             )
             return connection
         }
@@ -678,7 +686,11 @@ final class TheHandoffStateTests: XCTestCase {
                 deviceName: "iPhone 16 Pro",
                 systemVersion: "26.1",
                 screenWidth: 402,
-                screenHeight: 874
+                screenHeight: 874,
+                instanceId: "accessibility-session",
+                instanceIdentifier: "accessibility",
+                listeningPort: 49152,
+                tlsActive: true
             )
             return connection
         }
@@ -908,7 +920,11 @@ final class TheHandoffStateTests: XCTestCase {
             deviceName: "Simulator",
             systemVersion: "26.1",
             screenWidth: 402,
-            screenHeight: 874
+            screenHeight: 874,
+            instanceId: "test-session",
+            instanceIdentifier: "test",
+            listeningPort: 49152,
+            tlsActive: true
         )
         handoff.makeConnection = { _, _, _ in mock }
 
@@ -1204,7 +1220,8 @@ final class TheHandoffStateTests: XCTestCase {
             pngData: "base64png",
             width: 390,
             height: 844,
-            timestamp: Date(timeIntervalSince1970: 200)
+            timestamp: Date(timeIntervalSince1970: 200),
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 200), tree: [])
         )
         mock.onEvent?(.message(
             .screen(screen),

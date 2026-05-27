@@ -91,9 +91,9 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertFalse(element.matches(wrongValue, mode: .exact))
     }
 
-    func testEmptyMatcherMatchesEverything() {
-        XCTAssertTrue(element(label: "Save", traits: .button).matches(ElementMatcher(), mode: .exact))
-        XCTAssertTrue(element().matches(ElementMatcher(), mode: .exact))
+    func testEmptyMatcherMatchesNothing() {
+        XCTAssertFalse(element(label: "Save", traits: .button).matches(ElementMatcher(), mode: .exact))
+        XCTAssertFalse(element().matches(ElementMatcher(), mode: .exact))
     }
 
     // MARK: - Substring-Mode Sanity

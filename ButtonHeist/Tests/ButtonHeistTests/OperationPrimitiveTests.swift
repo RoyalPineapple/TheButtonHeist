@@ -20,18 +20,15 @@ final class OperationPrimitiveTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testReadObservationEntryStaysOutsideOperationPipeline() async throws {
+    func testReadObservationEntryFailsAtBatchDecodeBoundary() async throws {
         let fence = TheFence(configuration: .init())
-        let request = try fence.decodeRunBatchRequest(TheFence.CommandArgumentEnvelope(arguments: [
-            "steps": [
-                ["command": "get_screen"],
-            ],
-        ]))
-
-        guard case .invalid(let commandName, let failure)? = request.steps.first else {
-            return XCTFail("Expected read command to stay outside batch operation pipeline")
+        XCTAssertThrowsError(try fence.decodeRunBatchRequest(TheFence.CommandArgumentEnvelope(arguments: [
+            "steps": [["command": "get_screen"]],
+        ]))) { error in
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertTrue(message.contains("run_batch step command \"get_screen\" is not supported"))
         }
-        XCTAssertEqual(commandName, "get_screen")
-        XCTAssertTrue(failure.message.contains("descriptor.isBatchExecutable is false"))
     }
 }

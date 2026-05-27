@@ -2,8 +2,8 @@ import Foundation
 
 /// Target for custom actions.
 ///
-/// Element targeting keeps the historical `elementTarget` wire field.
-/// Container targeting uses the same `container` selector shape as
+/// Element targeting uses the public `elementTarget` wire field.
+/// Container targeting uses the same `container` target object shape as
 /// `get_interface.subtree`, with `ordinal` as the disambiguator.
 public struct CustomActionTarget: Codable, Sendable {
     public let selection: CustomActionSelection
@@ -100,11 +100,14 @@ extension CustomActionTarget {
         } else {
             let matcher = try container.decode(ContainerMatcher.self, forKey: .container)
             let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-            guard matcher.hasPredicates || ordinal != nil else {
+            guard matcher.hasPredicates else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .container,
                     in: container,
-                    debugDescription: "CustomActionTarget container requires stableId, type, label, value, identifier, isModalBoundary, or ordinal"
+                    debugDescription: """
+                    CustomActionTarget container requires stableId, type, label, value, identifier, \
+                    or isModalBoundary; ordinal only disambiguates a container matcher
+                    """
                 )
             }
             if let ordinal, ordinal < 0 {
@@ -125,6 +128,15 @@ extension CustomActionTarget {
         case .element(let elementTarget, _):
             try container.encode(elementTarget, forKey: .elementTarget)
         case .container(let containerTarget, let containerOrdinal, _):
+            guard containerTarget.hasPredicates else {
+                throw EncodingError.invalidValue(containerTarget, .init(
+                    codingPath: encoder.codingPath + [CodingKeys.container],
+                    debugDescription: """
+                    CustomActionTarget container requires stableId, type, label, value, identifier, \
+                    or isModalBoundary; ordinal only disambiguates a container matcher
+                    """
+                ))
+            }
             try container.encode(containerTarget, forKey: .container)
             try container.encodeIfPresent(containerOrdinal, forKey: .ordinal)
         }
@@ -162,8 +174,8 @@ public struct RotorTarget: Sendable {
     public let rotor: String?
     /// Select a rotor by zero-based index when the name is omitted or ambiguous.
     public let rotorIndex: Int?
-    /// Direction to move. Defaults to `.next`.
-    public let direction: RotorDirection?
+    /// Direction to move.
+    public let direction: RotorDirection
     /// Optional heistId for the current rotor item. Use the previous result's
     /// heistId to continue moving through a rotor like a VoiceOver user.
     public let currentHeistId: HeistId?
@@ -175,7 +187,7 @@ public struct RotorTarget: Sendable {
         elementTarget: ElementTarget,
         rotor: String? = nil,
         rotorIndex: Int? = nil,
-        direction: RotorDirection? = nil,
+        direction: RotorDirection = .next,
         currentHeistId: HeistId? = nil,
         currentTextRange: TextRangeReference? = nil
     ) {
@@ -187,7 +199,7 @@ public struct RotorTarget: Sendable {
         self.currentTextRange = currentTextRange
     }
 
-    public var resolvedDirection: RotorDirection { direction ?? .next }
+    public var resolvedDirection: RotorDirection { direction }
 }
 
 extension RotorTarget: CustomStringConvertible {
@@ -217,7 +229,7 @@ extension RotorTarget: Codable {
         elementTarget = try ElementTarget(from: decoder)
         rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
         rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
-        direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction)
+        direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
         currentHeistId = try container.decodeIfPresent(HeistId.self, forKey: .currentHeistId)
         currentTextRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .currentTextRange)
         if let rotorIndex, rotorIndex < 0 {
@@ -242,7 +254,7 @@ extension RotorTarget: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(rotor, forKey: .rotor)
         try container.encodeIfPresent(rotorIndex, forKey: .rotorIndex)
-        try container.encodeIfPresent(direction, forKey: .direction)
+        try container.encode(direction, forKey: .direction)
         try container.encodeIfPresent(currentHeistId, forKey: .currentHeistId)
         try container.encodeIfPresent(currentTextRange, forKey: .currentTextRange)
     }

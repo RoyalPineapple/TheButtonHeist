@@ -232,24 +232,13 @@ private extension TheFence.AccessibilityPayload {
         case .activate(_, let actionName, let count):
             return AccessibilityEvidenceArguments(action: actionName, count: count.value)
                 .heistEvidenceArguments()
-        case .increment(_, let count),
-             .decrement(_, let count):
-            return AccessibilityEvidenceArguments(action: nil, count: count.value)
-                .heistEvidenceArguments()
-        case .performCustomAction(let target, let count):
-            return AccessibilityEvidenceArguments(action: target.actionName, count: count.value)
-                .heistEvidenceArguments()
         }
     }
 
     var bookKeeperElementTarget: ElementTarget? {
         switch self {
-        case .activate(let target, _, _),
-             .increment(let target, _),
-             .decrement(let target, _):
+        case .activate(let target, _, _):
             return target
-        case .performCustomAction(let target, _):
-            return target.elementTarget
         }
     }
 }

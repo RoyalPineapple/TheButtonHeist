@@ -51,12 +51,12 @@ extension Actions {
         }
     }
 
-    // MARK: - Touch Gestures
+    // MARK: - Synthetic Gesture Dispatch
 
     func executeTap(_ target: some TapExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
-            selection = try target.tapPointSelection()
+            selection = try target.pointSelection()
         } catch {
             return gestureProjectionFailure(error, method: .syntheticTap)
         }
@@ -71,7 +71,7 @@ extension Actions {
     func executeLongPress(_ target: some LongPressExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
-            selection = try target.tapPointSelection()
+            selection = try target.pointSelection()
         } catch {
             return gestureProjectionFailure(error, method: .syntheticLongPress)
         }

@@ -1,6 +1,5 @@
 import CoreGraphics
 
-
 public struct ScreenPoint: Sendable, Equatable, CustomStringConvertible {
     public let x: Double
     public let y: Double
@@ -23,6 +22,8 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
     case partialCoordinate(field: String, xPresent: Bool, yPresent: Bool)
     case mixedCoordinateAndElement(field: String)
     case mixedCoordinateAndDirection(field: String)
+    case missingGesturePoint(field: String)
+    case missingSwipeIntent
     case partialUnitPoints
     case unitPointsRequireElementTarget
 
@@ -34,6 +35,10 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
             return "\(field) accepts either an element target or coordinates, not both"
         case .mixedCoordinateAndDirection(let field):
             return "\(field) accepts either coordinates or direction, not both"
+        case .missingGesturePoint(let field):
+            return "\(field) requires an element target or coordinates"
+        case .missingSwipeIntent:
+            return "swipe requires a start target or point and an end point or direction"
         case .partialUnitPoints:
             return "unit-point swipe requires both start and end unit points"
         case .unitPointsRequireElementTarget:
@@ -63,6 +68,13 @@ public enum GesturePointSelection: Sendable, Equatable, CustomStringConvertible 
 
     public var pointY: Double? {
         screenPoint?.y
+    }
+
+    public var isSpecified: Bool {
+        if case .unspecified = self {
+            return false
+        }
+        return true
     }
 
     public var description: String {
@@ -119,6 +131,14 @@ func decodeGesturePointSelection(from decoder: Decoder) throws -> GesturePointSe
     return try makeGesturePointSelection(elementTarget: elementTarget, x: pointX, y: pointY, field: "point")
 }
 
+func decodeRequiredGesturePointSelection(from decoder: Decoder, field: String = "point") throws -> GesturePointSelection {
+    let selection = try decodeGesturePointSelection(from: decoder)
+    guard selection.isSpecified else {
+        throw GestureProjectionError.missingGesturePoint(field: field)
+    }
+    return selection
+}
+
 func encodeGesturePointSelection(_ selection: GesturePointSelection, to encoder: Encoder) throws {
     switch selection {
     case .element(let target):
@@ -141,6 +161,14 @@ func decodeGestureCenterSelection(from decoder: Decoder) throws -> GesturePointS
         throw GestureProjectionError.mixedCoordinateAndElement(field: "center")
     }
     return try makeGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY, field: "center")
+}
+
+func decodeRequiredGestureCenterSelection(from decoder: Decoder, field: String = "center") throws -> GesturePointSelection {
+    let selection = try decodeGestureCenterSelection(from: decoder)
+    guard selection.isSpecified else {
+        throw GestureProjectionError.missingGesturePoint(field: field)
+    }
+    return selection
 }
 
 func encodeGestureCenterSelection(_ selection: GesturePointSelection, to encoder: Encoder) throws {

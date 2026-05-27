@@ -34,14 +34,8 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertNil(ElementTarget(heistId: "save_button", matcher: ElementMatcher(label: "Save")))
     }
 
-    func testElementTargetMatcherInitializerAcceptsOrdinalOnlySelector() {
-        let target = ElementTarget(matcher: ElementMatcher(), ordinal: 2)
-
-        guard case .matcher(let matcher, let ordinal) = target else {
-            return XCTFail("Expected .matcher")
-        }
-        XCTAssertFalse(matcher.hasPredicates)
-        XCTAssertEqual(ordinal, 2)
+    func testElementTargetMatcherInitializerRejectsOrdinalOnlySelector() {
+        XCTAssertNil(ElementTarget(matcher: ElementMatcher(), ordinal: 2))
     }
 
     func testElementMatcherDescriptionComposesFields() {
@@ -72,15 +66,15 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(target.description, #"target(matcher(label="Save" traits=[button]) ordinal=1)"#)
     }
 
-    func testElementTargetDecodesOrdinalOnlySelector() throws {
+    func testElementTargetRejectsOrdinalOnlySelector() throws {
         let data = Data(#"{"ordinal":1}"#.utf8)
-        let target = try JSONDecoder().decode(ElementTarget.self, from: data)
 
-        guard case .matcher(let matcher, let ordinal) = target else {
-            return XCTFail("Expected .matcher")
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: data)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("ordinal only disambiguates"))
         }
-        XCTAssertFalse(matcher.hasPredicates)
-        XCTAssertEqual(ordinal, 1)
     }
 
     func testElementTargetRejectsHeistIdWithOrdinal() {
@@ -118,7 +112,7 @@ final class ElementMatcherTests: XCTestCase {
     func testEncodeDecodeAllFields() throws {
         let matcher = ElementMatcher(
             label: "Save", identifier: "saveBtn",
-            value: "active", traits: [.button], excludeTraits: [.unknown("disabled")]
+            value: "active", traits: [.button], excludeTraits: [.notEnabled]
         )
         let data = try JSONEncoder().encode(matcher)
         let decoded = try JSONDecoder().decode(ElementMatcher.self, from: data)

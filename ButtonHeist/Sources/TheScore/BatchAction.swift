@@ -101,13 +101,4 @@ extension ClientMessage {
         }
         return false
     }
-
-    public var fulfillsOwnBatchExpectation: Bool {
-        switch self {
-        case .waitFor, .waitForChange:
-            return true
-        default:
-            return false
-        }
-    }
 }

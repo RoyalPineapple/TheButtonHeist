@@ -196,8 +196,8 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertEqual(stableIds.count, 2)
         XCTAssertEqual(Set(stableIds).count, 2)
         XCTAssertTrue(stableIds.allSatisfy { $0.hasPrefix("scrollable_0_0_40_50-") })
-        XCTAssertTrue(screen.liveInterface.scrollView(forContainer: stableIds[0]) === firstScrollView)
-        XCTAssertTrue(screen.liveInterface.scrollView(forContainer: stableIds[1]) === secondScrollView)
+        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: stableIds[0]) === firstScrollView)
+        XCTAssertTrue(screen.liveCapture.scrollView(forContainer: stableIds[1]) === secondScrollView)
     }
 
     func testCaptureLocalContainerHashHandlesNonFiniteParserGeometry() {
@@ -284,7 +284,7 @@ final class TheBurglarContainerFramesTests: XCTestCase {
         XCTAssertEqual(repeatedFrameIds.count, 3)
         XCTAssertEqual(Set(repeatedFrameIds).count, 3)
         XCTAssertTrue(stableIds.contains("scrollable_0_0_120_50"))
-        let repeatedScrollViews = repeatedFrameIds.compactMap { screen.liveInterface.scrollView(forContainer: $0) }
+        let repeatedScrollViews = repeatedFrameIds.compactMap { screen.liveCapture.scrollView(forContainer: $0) }
         XCTAssertEqual(repeatedScrollViews.count, 3)
         XCTAssertEqual(Set(repeatedScrollViews.map(ObjectIdentifier.init)).count, 3)
     }

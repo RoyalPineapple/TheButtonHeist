@@ -3,48 +3,10 @@ import XCTest
 
 final class CommandProjectionTests: XCTestCase {
 
-    func testPointGestureDecodeRejectsMixedSemanticTargetAndCoordinates() {
-        let json = #"{"heistId":"save_button","pointX":10,"pointY":20}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(TouchTapTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertEqual(error as? GestureProjectionError, .mixedCoordinateAndElement(field: "point"))
-        }
-    }
-
     func testPointGestureProjectionUsesCoordinateWhenNoSemanticTargetExists() throws {
-        let target = TouchTapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
+        let target = TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
 
         XCTAssertEqual(target.gesturePointSelection(), GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20)))
-    }
-
-    func testPointGestureDecodeRejectsPartialCoordinate() {
-        let json = #"{"pointX":10}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(TouchTapTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertEqual(
-                error as? GestureProjectionError,
-                .partialCoordinate(field: "point", xPresent: true, yPresent: false)
-            )
-        }
-    }
-
-    func testCenterGestureDecodeRejectsMixedSemanticTargetAndCoordinates() {
-        let json = #"{"heistId":"map","centerX":10,"centerY":20,"scale":2}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(PinchTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertEqual(error as? GestureProjectionError, .mixedCoordinateAndElement(field: "center"))
-        }
-    }
-
-    func testCenterGestureDecodeRejectsPartialCoordinate() {
-        let json = #"{"centerX":10,"scale":2}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(PinchTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertEqual(
-                error as? GestureProjectionError,
-                .partialCoordinate(field: "center", xPresent: true, yPresent: false)
-            )
-        }
     }
 
     func testSwipeProjectionConvertsElementDirectionIntoUnitFrameGesture() throws {
@@ -62,14 +24,6 @@ final class CommandProjectionTests: XCTestCase {
                 direction: .left
             )
         )
-    }
-
-    func testSwipeProjectionRejectsHalfValidUnitPoints() {
-        let json = #"{"heistId":"carousel","start":{"x":0.8,"y":0.5}}"#
-
-        XCTAssertThrowsError(try JSONDecoder().decode(SwipeTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertEqual(error as? GestureProjectionError, .partialUnitPoints)
-        }
     }
 
     func testSwipeProjectionSeparatesStartAndDestination() throws {

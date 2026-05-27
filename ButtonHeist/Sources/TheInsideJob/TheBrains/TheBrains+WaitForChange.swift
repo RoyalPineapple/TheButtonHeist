@@ -5,7 +5,7 @@ import Foundation
 import TheScore
 
 extension TheBrains {
-    /// Install one wait predicate, check current state, then watch settled changes until it matches.
+    /// Install one wait predicate, then watch settled changes until a trace-derived expectation matches.
     func executeWaitForChange(timeout: TimeInterval, expectation: ActionExpectation?) async -> ActionResult {
         let start = CFAbsoluteTimeGetCurrent()
 
@@ -38,14 +38,6 @@ extension TheBrains {
             uniquingKeysWith: { _, newest in newest }
         )
 
-        if let expectation = predicate.expectation,
-           CurrentStateExpectationValidator.validate(expectation, snapshot: initial.snapshot).met {
-            var builder = ActionResultBuilder(method: .waitForChange, snapshot: initial.snapshot)
-            builder.message = "expectation already met by current state (0.0s)"
-            builder.accessibilityTrace = AccessibilityTrace(captures: [initial.capture, initial.capture])
-            return builder.success()
-        }
-
         // Fast path: semantic state already changed since the last response.
         if let sentBaseline {
             let classification = ScreenClassifier.classify(
@@ -58,18 +50,19 @@ extension TheBrains {
                 classification: classification
             ) {
                 let accessibilityTrace = makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
-                let delta = accessibilityTrace.endpointDeltaProjection ?? .noChange(.init(elementCount: initial.snapshot.count))
-                if let result = evaluateWaitForChange(
-                    delta: delta,
-                    accessibilityTrace: accessibilityTrace,
-                    afterSnapshot: initial.snapshot,
-                    expectation: predicate.expectation,
-                    preWaitElements: preWaitElements,
-                    start: start,
-                    round: 0,
-                    message: "already changed (0.0s)"
-                ) {
-                    return result
+                if let delta = accessibilityTrace.endpointDeltaProjection {
+                    if let result = evaluateWaitForChange(
+                        delta: delta,
+                        accessibilityTrace: accessibilityTrace,
+                        afterSnapshot: initial.snapshot,
+                        expectation: predicate.expectation,
+                        preWaitElements: preWaitElements,
+                        start: start,
+                        round: 0,
+                        message: "already changed (0.0s)"
+                    ) {
+                        return result
+                    }
                 }
             }
         }
@@ -91,7 +84,7 @@ extension TheBrains {
         let timeoutAccessibilityTrace = current.map {
             makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
         }
-        let delta = timeoutAccessibilityTrace?.endpointDeltaProjection ?? .noChange(.init(elementCount: 0))
+        let delta = timeoutAccessibilityTrace?.endpointDeltaProjection
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
         builder.message = waitForChangeTimeoutMessage(
             elapsed: elapsed,
@@ -141,7 +134,10 @@ extension TheBrains {
             }
 
             let accessibilityTrace = makeClassifiedAccessibilityTrace(after: current, parent: baseline)
-            let delta = accessibilityTrace.endpointDeltaProjection ?? .noChange(.init(elementCount: current.snapshot.count))
+            guard let delta = accessibilityTrace.endpointDeltaProjection else {
+                settleBaseline = current
+                continue
+            }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateWaitForChange(
@@ -167,14 +163,14 @@ extension TheBrains {
     private func waitForChangeTimeoutMessage(
         elapsed: String,
         expectation: ActionExpectation?,
-        delta: AccessibilityTrace.Delta,
+        delta: AccessibilityTrace.Delta?,
         elementCount: Int
     ) -> String {
         let expected = expectation?.summaryDescription ?? "any settled UI change"
         var parts = [
             "timed out after \(elapsed)s",
             "expected: \(expected)",
-            "observed: \(delta.kindRawValue)",
+            "observed: \(delta?.kindRawValue ?? "noTrace")",
             "known: \(elementCount) elements",
         ]
         if let screenId = stash.lastScreenId {
@@ -210,13 +206,6 @@ extension TheBrains {
 
         guard let expectation else {
             builder.message = message
-            return builder.success()
-        }
-
-        let currentState = CurrentStateExpectationValidator.validate(expectation, snapshot: afterSnapshot)
-        if currentState.met {
-            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-            builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
             return builder.success()
         }
 

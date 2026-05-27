@@ -14,146 +14,26 @@ struct ToolRoutingTests {
         #expect(operation.stringArgument("identifier") == "demo")
     }
 
-    @Test("gesture type routes to command and removes type")
-    func gestureTypeRoutesToCommand() throws {
+    @Test("canonical gesture tools route directly")
+    func canonicalGestureToolsRouteDirectly() throws {
         let operation = try routed(
-            TheFence.Command.gestureMCPToolName,
-            ["type": .string(TheFence.Command.swipe.rawValue), "direction": .string("left")]
+            TheFence.Command.swipe.rawValue,
+            [
+                "heistId": .string("element-1"),
+                "direction": .string("left"),
+            ]
         )
 
         #expect(operation.command == .swipe)
-        #expect(operation.stringArgument("type") == nil)
+        #expect(operation.stringArgument("heistId") == "element-1")
         #expect(operation.stringArgument("direction") == "left")
     }
 
-    @Test("gesture requires type")
-    func gestureRequiresType() {
-        let result = routeToolRequest(
-            name: TheFence.Command.gestureMCPToolName,
-            arguments: envelope()
-        )
-
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        let gestureSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.gestureMCPToolName)!.selector!
-        #expect(
-            error.message == selectorErrorPrefix(
-                toolName: TheFence.Command.gestureMCPToolName,
-                selector: gestureSelector
-            ) + "schema validation failed for \(gestureSelector.parameter.key): observed missing; " +
-                "expected \(SchemaValidationError.expectedEnumValues(gestureSelector.parameter.enumValues!))"
-        )
-    }
-
-    @Test("gesture rejects wrong-shaped type")
-    func gestureRejectsWrongShapedType() {
-        let result = routeToolRequest(
-            name: TheFence.Command.gestureMCPToolName,
-            arguments: envelope(["type": .int(7)])
-        )
-
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        let gestureSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.gestureMCPToolName)!.selector!
-        #expect(
-            error.message == selectorErrorPrefix(
-                toolName: TheFence.Command.gestureMCPToolName,
-                selector: gestureSelector
-            ) + "schema validation failed for \(gestureSelector.parameter.key): observed integer 7; expected string"
-        )
-    }
-
-    @Test("scroll modes route to concrete commands and scrub irrelevant arguments")
-    func scrollModesRouteToConcreteCommands() throws {
-        let cases: [
-            (
-                mode: String?,
-                command: TheFence.Command,
-                expectedDirection: String?,
-                expectedEdge: String?,
-                expectedStableId: String?
-            )
-        ] = [
-            (nil, .scroll, "down", nil, "scroll-container"),
-            (ScrollMode.page.rawValue, .scroll, "down", nil, "scroll-container"),
-            (ScrollMode.toVisible.rawValue, .scrollToVisible, nil, nil, nil),
-            (ScrollMode.search.rawValue, .elementSearch, "down", nil, nil),
-            (ScrollMode.toEdge.rawValue, .scrollToEdge, nil, "bottom", "scroll-container"),
-        ]
-
-        for routeCase in cases {
-            var arguments: [String: Argument] = [
-                "direction": .string("down"),
-                "edge": .string("bottom"),
-                "heistId": .string("element-1"),
-                "stableId": .string("scroll-container"),
-            ]
-            if let mode = routeCase.mode {
-                arguments["mode"] = .string(mode)
-            }
-            let operation = try routed(TheFence.Command.scroll.rawValue, arguments)
-
-            #expect(operation.command == routeCase.command)
-            #expect(operation.stringArgument("mode") == nil)
-            #expect(operation.stringArgument("direction") == routeCase.expectedDirection)
-            #expect(operation.stringArgument("edge") == routeCase.expectedEdge)
-            #expect(operation.stringArgument("heistId") == "element-1")
-            #expect(operation.stringArgument("stableId") == routeCase.expectedStableId)
-        }
-    }
-
-    @Test("scroll rejects unknown mode")
-    func scrollRejectsUnknownMode() {
-        let result = routeToolRequest(
-            name: TheFence.Command.scroll.rawValue,
-            arguments: envelope(["mode": .string("sideways")])
-        )
-
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        let scrollSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.scroll.rawValue)!.selector!
-        #expect(
-            error.message == selectorErrorPrefix(
-                toolName: TheFence.Command.scroll.rawValue,
-                selector: scrollSelector
-            ) + "schema validation failed for \(scrollSelector.parameter.key): " +
-                "observed string \"sideways\"; " +
-                "expected \(SchemaValidationError.expectedEnumValues(scrollSelector.parameter.enumValues!))"
-        )
-    }
-
-    @Test("scroll rejects wrong-shaped mode")
-    func scrollRejectsWrongShapedMode() {
-        let result = routeToolRequest(
-            name: TheFence.Command.scroll.rawValue,
-            arguments: envelope(["mode": .int(7)])
-        )
-
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        let scrollSelector = TheFence.Command.mcpToolContract(named: TheFence.Command.scroll.rawValue)!.selector!
-        #expect(
-            error.message == selectorErrorPrefix(
-                toolName: TheFence.Command.scroll.rawValue,
-                selector: scrollSelector
-            ) + "schema validation failed for \(scrollSelector.parameter.key): observed integer 7; expected string"
-        )
-    }
-
-    @Test("edit_action dismiss routes to dismiss_keyboard")
-    func editActionDismissRoutesToDismissKeyboard() throws {
-        let operation = try routed(TheFence.Command.editAction.rawValue, ["action": .string("dismiss")])
+    @Test("dismiss_keyboard routes directly")
+    func dismissKeyboardRoutesDirectly() throws {
+        let operation = try routed(TheFence.Command.dismissKeyboard.rawValue, [:])
 
         #expect(operation.command == .dismissKeyboard)
-        #expect(operation.stringArgument("action") == nil)
     }
 
     @Test("edit_action keeps standard edit actions")
@@ -164,110 +44,36 @@ struct ToolRoutingTests {
         #expect(operation.stringArgument("action") == "copy")
     }
 
-    @Test("edit_action requires action selector")
-    func editActionRequiresActionSelector() {
-        let result = routeToolRequest(
-            name: TheFence.Command.editAction.rawValue,
-            arguments: envelope()
-        )
-
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        let selector = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!.selector!
-        #expect(
-            error.message == selectorErrorPrefix(
-                toolName: TheFence.Command.editAction.rawValue,
-                selector: selector
-            ) + "schema validation failed for \(selector.parameter.key): observed missing; " +
-                "expected \(SchemaValidationError.expectedEnumValues(selector.parameter.enumValues!))"
-        )
-    }
-
-    @Test("edit_action rejects wrong-shaped action selector")
-    func editActionRejectsWrongShapedActionSelector() {
-        let result = routeToolRequest(
-            name: TheFence.Command.editAction.rawValue,
-            arguments: envelope(["action": .int(7)])
-        )
-
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        let selector = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!.selector!
-        #expect(
-            error.message == selectorErrorPrefix(
-                toolName: TheFence.Command.editAction.rawValue,
-                selector: selector
-            ) + "schema validation failed for \(selector.parameter.key): observed integer 7; expected string"
-        )
-    }
-
     @Test("run_batch still accepts canonical Fence command shapes")
     func runBatchAcceptsCanonicalFenceCommandShapes() throws {
         let steps = try normalizeBatchSteps([
-            ["command": .string(TheFence.Command.swipe.rawValue), "direction": .string("right")],
+            [
+                "command": .string(TheFence.Command.swipe.rawValue),
+                "heistId": .string("element-1"),
+                "direction": .string("right"),
+            ],
             ["command": .string(TheFence.Command.scrollToVisible.rawValue), "heistId": .string("element-1")],
             ["command": .string(TheFence.Command.dismissKeyboard.rawValue)],
         ])
 
         #expect(steps[0].command == .swipe)
+        #expect(steps[0].stringArgument("heistId") == "element-1")
         #expect(steps[0].stringArgument("direction") == "right")
         #expect(steps[1].command == .scrollToVisible)
         #expect(steps[1].stringArgument("heistId") == "element-1")
         #expect(steps[2].command == .dismissKeyboard)
     }
 
-    @Test("run_batch rejects grouped MCP tool shapes")
-    func runBatchRejectsGroupedMCPToolShapes() {
-        let scrollContract = TheFence.Command.mcpToolContract(named: TheFence.Command.scroll.rawValue)!
-        let scrollSelector = scrollContract.selector!
-        let editActionContract = TheFence.Command.mcpToolContract(named: TheFence.Command.editAction.rawValue)!
-        let editActionSelector = editActionContract.selector!
-        let dismissSelectorValue = editActionSelector.consumedValues
-            .first(where: { editActionSelector.command(for: $0) == .dismissKeyboard })!
-        let dismissCommand = editActionSelector.command(for: dismissSelectorValue)!
-
+    @Test("run_batch rejects non-canonical command objects")
+    func runBatchRejectsNonCanonicalCommandObjects() {
         let cases: [(step: [String: Argument], message: String)] = [
-            (
-                [
-                    "command": .string(TheFence.Command.gestureMCPToolName),
-                    "type": .string(TheFence.Command.swipe.rawValue),
-                    "direction": .string("left"),
-                ],
-                "run_batch step command must be a canonical TheFence.Command; " +
-                    "unknown command \"\(TheFence.Command.gestureMCPToolName)\""
-            ),
-            (
-                [
-                    "command": .string(TheFence.Command.scroll.rawValue),
-                    "mode": .string(ScrollMode.search.rawValue),
-                    "label": .string("Done"),
-                ],
-                "run_batch step \"\(TheFence.Command.scroll.rawValue)\" uses the MCP " +
-                    "\(scrollSelector.parameter.key) selector; use canonical Fence commands " +
-                    "\(rawCommandList(scrollContract.commands))."
-            ),
-            (
-                [
-                    "command": .string(TheFence.Command.scroll.rawValue),
-                    "mode": .int(7),
-                    "label": .string("Done"),
-                ],
-                "run_batch step \"\(TheFence.Command.scroll.rawValue)\" uses the MCP " +
-                    "\(scrollSelector.parameter.key) selector; use canonical Fence commands " +
-                    "\(rawCommandList(scrollContract.commands))."
-            ),
+            (["command": .string("not_a_command")],
+             "run_batch step command must be a canonical TheFence.Command; unknown command \"not_a_command\""),
+            (["command": .string(TheFence.Command.scroll.rawValue), "unexpected": .string("value")],
+             "Unknown parameter 'unexpected' for \(TheFence.Command.scroll.rawValue)"),
             (
                 ["command": .string(TheFence.Command.editAction.rawValue), "action": .int(7)],
-                "schema validation failed for \(editActionSelector.parameter.key): observed integer 7; expected string"
-            ),
-            (
-                ["command": .string(TheFence.Command.editAction.rawValue), "action": .string(dismissSelectorValue)],
-                "run_batch step \"\(TheFence.Command.editAction.rawValue)\" uses the MCP " +
-                    "\(dismissSelectorValue) selector; use canonical Fence command \(dismissCommand.rawValue)."
+                "schema validation failed for action: observed integer 7; expected string"
             ),
         ]
 
@@ -281,117 +87,14 @@ struct ToolRoutingTests {
         }
     }
 
-    @Test("run_batch rejects non-batch-executable commands")
-    func runBatchRejectsNonBatchExecutableCommands() {
-        for command in [TheFence.Command.help, .status, .quit, .exit, .runBatch] {
-            let result = normalizeBatchStepResult(["command": .string(command.rawValue)])
-            guard case .failure(let error) = result else {
-                Issue.record("Expected routing failure for \(command.rawValue)")
-                continue
-            }
-            #expect(error.message == "run_batch step command \"\(command.rawValue)\" is not supported: descriptor.isBatchExecutable is false")
+    @Test("run_batch rejects explicit non-batch commands")
+    func runBatchRejectsExplicitNonBatchCommands() {
+        let result = normalizeBatchStepResult(["command": .string(TheFence.Command.getScreen.rawValue)])
+        guard case .failure(let error) = result else {
+            Issue.record("Expected routing failure")
+            return
         }
-    }
-
-    @Test("top-level raw grouped commands report canonical grouped tool shape")
-    func topLevelRawGroupedCommandsReportCanonicalGroupedToolShape() {
-        let cases: [(toolName: String, message: String)] = [
-            (
-                TheFence.Command.swipe.rawValue,
-                "Tool \"\(TheFence.Command.swipe.rawValue)\" is grouped under " +
-                    "\"\(TheFence.Command.gestureMCPToolName)\"; " +
-                    "call \(TheFence.Command.gestureMCPToolName) with type=\"\(TheFence.Command.swipe.rawValue)\"."
-            ),
-            (
-                TheFence.Command.scrollToVisible.rawValue,
-                "Tool \"\(TheFence.Command.scrollToVisible.rawValue)\" is grouped under " +
-                    "\"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) " +
-                    "with mode=\"\(ScrollMode.toVisible.rawValue)\"."
-            ),
-            (
-                TheFence.Command.elementSearch.rawValue,
-                "Tool \"\(TheFence.Command.elementSearch.rawValue)\" is grouped under " +
-                    "\"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) " +
-                    "with mode=\"\(ScrollMode.search.rawValue)\"."
-            ),
-            (
-                TheFence.Command.scrollToEdge.rawValue,
-                "Tool \"\(TheFence.Command.scrollToEdge.rawValue)\" is grouped under " +
-                    "\"\(TheFence.Command.scroll.rawValue)\"; call \(TheFence.Command.scroll.rawValue) " +
-                    "with mode=\"\(ScrollMode.toEdge.rawValue)\"."
-            ),
-            (
-                TheFence.Command.dismissKeyboard.rawValue,
-                "Tool \"\(TheFence.Command.dismissKeyboard.rawValue)\" is grouped under " +
-                    "\"\(TheFence.Command.editAction.rawValue)\"; " +
-                    "call \(TheFence.Command.editAction.rawValue) with action=\"dismiss\"."
-            ),
-        ]
-
-        for routeCase in cases {
-            let result = routeToolRequest(
-                name: routeCase.toolName,
-                arguments: envelope()
-            )
-            guard case .failure(let error) = result else {
-                Issue.record("Expected top-level routing failure for \(routeCase.toolName)")
-                continue
-            }
-            #expect(error.message == routeCase.message)
-        }
-    }
-
-    @Test("raw grouped commands stay accepted in batch")
-    func rawGroupedCommandsStayAcceptedInBatch() throws {
-        let steps = try normalizeBatchSteps([
-            ["command": .string(TheFence.Command.swipe.rawValue), "direction": .string("up")],
-            ["command": .string(TheFence.Command.scrollToVisible.rawValue), "heistId": .string("element-1")],
-            ["command": .string(TheFence.Command.elementSearch.rawValue), "label": .string("Done")],
-            [
-                "command": .string(TheFence.Command.scrollToEdge.rawValue),
-                "heistId": .string("scroll-view"),
-                "edge": .string("bottom"),
-            ],
-            ["command": .string(TheFence.Command.dismissKeyboard.rawValue)],
-        ])
-
-        #expect(steps[0].command == .swipe)
-        #expect(steps[0].stringArgument("direction") == "up")
-        #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].stringArgument("heistId") == "element-1")
-        #expect(steps[2].command == .elementSearch)
-        #expect(steps[2].stringArgument("label") == "Done")
-        #expect(steps[3].command == .scrollToEdge)
-        #expect(steps[3].stringArgument("heistId") == "scroll-view")
-        #expect(steps[3].stringArgument("edge") == "bottom")
-        #expect(steps[4].command == .dismissKeyboard)
-    }
-
-    @Test("all registered tools route through the catalog")
-    func allRegisteredToolsRouteThroughCatalog() throws {
-        for tool in ToolDefinitions.all {
-            let operation = try routed(tool.name, minimalArguments(for: tool.name))
-
-            #expect(!operation.command.rawValue.isEmpty, "\(tool.name) did not produce a command")
-        }
-    }
-
-    @Test("selector-backed MCP tools route every selector value through command contracts")
-    func selectorBackedToolsRouteEverySelectorValueThroughCommandContracts() throws {
-        for contract in TheFence.Command.mcpToolContracts {
-            guard let selector = contract.selector else { continue }
-            for selectorValue in selector.parameter.enumValues ?? [] {
-                let operation = try routed(contract.name, [selector.parameter.key: .string(selectorValue)])
-                let expectedCommand = try #require(selector.command(for: selectorValue))
-
-                #expect(operation.command == expectedCommand)
-                if selector.consumesValue(selectorValue) {
-                    #expect(operation.stringArgument(selector.parameter.key) == nil)
-                } else {
-                    #expect(operation.stringArgument(selector.parameter.key) == selectorValue)
-                }
-            }
-        }
+        #expect(error.message.contains("run_batch step command \"get_screen\" is not supported"))
     }
 
     @Test("unknown tool returns routing error")
@@ -443,39 +146,8 @@ struct ToolRoutingTests {
         FenceOperationCatalog.normalizeBatchStep(TheFence.CommandArgumentObject(values: step, fieldPrefix: nil))
     }
 
-    private func minimalArguments(for toolName: String) -> [String: Argument] {
-        switch toolName {
-        case TheFence.Command.gestureMCPToolName:
-            return ["type": .string(TheFence.Command.swipe.rawValue)]
-        case TheFence.Command.editAction.rawValue:
-            return ["action": .string("copy")]
-        case TheFence.Command.runBatch.rawValue:
-            return ["steps": .array([.object(["command": .string(TheFence.Command.getSessionState.rawValue)])])]
-        default:
-            return [:]
-        }
-    }
-
     private func envelope(_ arguments: [String: Argument] = [:]) -> TheFence.CommandArgumentEnvelope {
         TheFence.CommandArgumentEnvelope(values: arguments)
     }
 
-    private func selectorErrorPrefix(toolName: String, selector: MCPToolSelector) -> String {
-        "\(toolName).\(selector.parameter.key): "
-    }
-
-    /// Mirrors the formatting logic in `FenceOperationCatalog.rawCommandList` for test assertions.
-    private func rawCommandList(_ commands: [TheFence.Command]) -> String {
-        let names = commands.map(\.rawValue)
-        switch names.count {
-        case 0:
-            return ""
-        case 1:
-            return names[0]
-        case 2:
-            return "\(names[0]) or \(names[1])"
-        default:
-            return names.dropLast().joined(separator: ", ") + ", or \(names.last!)"
-        }
-    }
 }

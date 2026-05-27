@@ -24,7 +24,7 @@ A `.heist` file stores durable interaction steps, expected outcomes, and optiona
 | `app` | `String` | Bundle identifier of the app that was running. |
 | `steps` | `[HeistEvidence]` | Ordered list of durable interaction steps. |
 
-Version 2 is intentionally not backward-compatible with the prototype v1 expectation shapes. Re-record old prototypes rather than carrying migration logic in playback.
+Version 2 is the current heist contract. Prototype v1 expectation shapes are rejected; re-record prototype flows.
 
 ## Accessibility Trace Evidence
 
@@ -58,14 +58,7 @@ Each step is a flat JSON object using the same command names and argument fields
   },
   "_recorded": {
     "heistId": "button_review_pr_high_priority",
-    "frame": {"x": 16, "y": 514, "width": 370, "height": 65},
-    "unsupportedArguments": [
-      {
-        "name": "metadata",
-        "valueType": "Data",
-        "reason": "not JSON-compatible; omitted from replay arguments"
-      }
-    ]
+    "frame": {"x": 16, "y": 514, "width": 370, "height": 65}
   }
 }
 ```
@@ -103,7 +96,7 @@ Each step is a flat JSON object using the same command names and argument fields
 | `value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
 | `traits` | `[String]` | No | Element matcher: all listed traits must be present |
 | `excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
-| `ordinal` | `Int` | No | 0-based index among matcher results; can stand alone only when no matcher predicate exists |
+| `ordinal` | `Int` | No | 0-based index among matcher results; only valid with at least one matcher field |
 | `expect` | `Object` | No | Expected outcome — validated on playback |
 | `_recorded` | `Object` | No | Optional recording notes (ignored during playback) |
 | *(other keys)* | varies | No | Command-specific arguments (`text`, `direction`, `duration`, etc.) |
@@ -141,7 +134,7 @@ Matchers describe elements by the least-specific available evidence in the captu
 - **Value** is used only when earlier predicates are still ambiguous
 - **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`, `updatesFrequently`) and `excludeTraits` are used before ordinal
 - **UUID-containing identifiers** (runtime-generated) are detected and skipped in favor of labels
-- **Ordinal** is last resort; when an element has no semantic or state predicates, ordinal can be the only replay selector
+- **Ordinal** only disambiguates a non-empty matcher; anonymous elements without semantic predicates are not replayable
 
 Matching is exact (case-insensitive, typography-folded); the recorder builds the matcher progressively:
 1. Identifier
@@ -151,7 +144,7 @@ Matching is exact (case-insensitive, typography-folded); the recorder builds the
 5. Stateful traits / `excludeTraits`
 6. Ordinal
 
-Every element in a capture can produce a minimum matcher that resolves back to the same element in that capture. If a later capture introduces a conflict, rerun the minimum matcher pass for the new capture. Playback does not silently self-heal stale steps; compatibility failures should be explicit and diagnostic.
+Every element in a capture can produce a minimum matcher that resolves back to the same element in that capture. If a later capture introduces a conflict, rerun the minimum matcher pass for the new capture. Playback does not silently self-heal stale steps; stale matcher failures should be explicit and diagnostic.
 
 ## Expectations
 
@@ -159,7 +152,7 @@ The `expect` field uses the same format as `run_batch` expectations. On playback
 
 Expectations use a `type` discriminator that matches the wire Codable shape for `ActionExpectation`, so JSON from a wire log can be pasted straight into a heist file.
 
-Legacy shorthand strings, top-level expectation arrays, and compiler-derived enum wrapper objects are not part of the persisted format.
+Prototype v1 shorthand strings, top-level expectation arrays, and compiler-derived enum wrapper objects are rejected by the persisted format.
 
 ```json
 {"type": "element_updated", "property": "value", "newValue": "50%"}
@@ -210,12 +203,10 @@ The `_recorded` key carries optional recording notes for debugging. It is preser
 | `heistId` | `String?` | The heistId that was used to target the element at recording time |
 | `frame` | `Object?` | The element's frame at recording time (`x`, `y`, `width`, `height`) |
 | `coordinateOnly` | `Bool?` | True if the step used coordinate-only targeting (no element) |
-| `unsupportedArguments` | `[Object]?` | Arguments omitted from replay because they were not JSON-compatible. Includes `name`, `valueType`, and `reason`. |
-| `caps` | `[Object]?` | Inputs clamped during recording. Includes `name`, `requested`, `applied`, optional `minimum` / `maximum`, and `reason`. |
 | `accessibilityTrace` | `Object?` | Capture trace observed while recording |
 | `expectation` | `Object?` | Expectation evidence observed while recording |
 
-`_recorded.heistId`, traces, caps, unsupported arguments, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the flat step command, matcher fields, ordinal, and command arguments outside `_recorded`. Compact deltas are derived from `_recorded.accessibilityTrace` when needed; they are not stored as separate recorded evidence.
+`_recorded.heistId`, traces, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the flat step command, matcher fields, ordinal, and command arguments outside `_recorded`. Compact deltas are derived from `_recorded.accessibilityTrace` when needed; they are not stored as separate recorded evidence.
 
 ## Durable Recording
 
@@ -237,15 +228,13 @@ buttonheist play_heist --input recording.heist
 buttonheist play_heist --input recording.heist --junit report.xml
 ```
 
-The `--junit <path>` flag writes a JUnit XML report to disk. Each heist step becomes a `<testcase>` element; failed steps include a `<failure>` with the error message and typed error kind. The output is compatible with GitHub Actions, Jenkins, and other CI systems that consume JUnit XML.
+The `--junit <path>` flag writes a JUnit XML report to disk. Each heist step becomes a `<testcase>` element; failed steps include a `<failure>` with the error message and typed error kind. The output can be consumed by GitHub Actions, Jenkins, and other CI systems that read JUnit XML.
 
 Representative MCP flow:
 
-```json
-{"name": "start_heist", "arguments": {"app": "com.example.app"}}
-{"name": "stop_heist", "arguments": {"output": "/path/to/recording.heist"}}
-{"name": "play_heist", "arguments": {"input": "/path/to/recording.heist"}}
-```
+- Call MCP tool `start_heist` with `app: "com.example.app"`.
+- Call MCP tool `stop_heist` with `output: "/path/to/recording.heist"`.
+- Call MCP tool `play_heist` with `input: "/path/to/recording.heist"`.
 
 ## Playback Semantics
 

@@ -27,7 +27,7 @@ struct PublicActionResponse: FencePublicJSONResponse {
         } else {
             self.status = result.success ? .ok : .error
         }
-        self.method = result.method.rawValue
+        self.method = Self.publicMethodName(for: result)
         self.message = result.message
         if case .value(let value) = result.payload {
             self.value = value
@@ -63,6 +63,13 @@ struct PublicActionResponse: FencePublicJSONResponse {
             self.hint = details?.hint
         }
         self.expectation = expectation.map { PublicExpectationResult(result: $0) }
+    }
+
+    private static func publicMethodName(for result: ActionResult) -> String {
+        if case .batchExecution = result.payload {
+            return TheFence.Command.runBatch.rawValue
+        }
+        return TheFence.Command.canonicalName(forActionResultMethod: result.method)
     }
 }
 

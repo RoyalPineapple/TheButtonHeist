@@ -45,7 +45,7 @@ extension TheStash {
     }
 
     static func traitNames(_ traits: AccessibilityTraits) -> [HeistTrait] {
-        traits.namesIncludingUnknownBits.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
+        traits.heistTraits
     }
 
     // MARK: - Element Conversion
@@ -121,7 +121,7 @@ extension TheStash {
     static func toInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
         Interface(
             timestamp: timestamp,
-            tree: screen.liveInterface.hierarchy,
+            tree: screen.liveCapture.hierarchy,
             annotations: InterfaceAnnotations(
                 elements: elementAnnotations(from: screen),
                 containers: containerAnnotations(from: screen)
@@ -132,10 +132,10 @@ extension TheStash {
     // MARK: - Private Helpers
 
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
-        screen.liveInterface.hierarchy.compactMapSubtrees { node, path in
+        screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
-            guard let heistId = screen.liveInterface.heistId(forPath: path)
-                ?? screen.liveInterface.heistIdByElement[element] else {
+            guard let heistId = screen.liveCapture.heistId(forPath: path)
+                ?? screen.liveCapture.heistIdByElement[element] else {
                 wireConversionLogger.error("Hierarchy leaf with no heistId in screen; annotating without id")
                 return InterfaceElementAnnotation(
                     path: path,
@@ -153,12 +153,12 @@ extension TheStash {
     }
 
     private static func containerAnnotations(from screen: Screen) -> [InterfaceContainerAnnotation] {
-        screen.liveInterface.hierarchy.compactMapSubtrees { node, path in
+        screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .container(let container, _) = node else { return nil }
             return InterfaceContainerAnnotation(
                 path: path,
-                stableId: screen.liveInterface.containerStableIdsByPath[path]
-                    ?? screen.liveInterface.containerStableIds[container],
+                stableId: screen.liveCapture.containerStableIdsByPath[path]
+                    ?? screen.liveCapture.containerStableIds[container],
                 actions: buildActions(for: container)
             )
         }

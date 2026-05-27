@@ -8,11 +8,10 @@ public extension AccessibilityTrace {
     /// Payload for `.noChange`.
     struct NoChange: Sendable, Equatable {
         public let elementCount: Int
-        /// Capture edge this delta was derived from. nil for manually
-        /// constructed or historically decoded compact deltas.
+        /// Capture edge this delta was derived from. nil only for standalone
+        /// projection values that are not stored as action-result truth.
         public let captureEdge: CaptureEdge?
-        /// Compatibility projection of `Capture.transition.transient` for
-        /// older clients that read only `accessibilityDelta`.
+        /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
 
         public init(
@@ -30,11 +29,10 @@ public extension AccessibilityTrace {
     struct ElementsChanged: Sendable, Equatable {
         public let elementCount: Int
         public let edits: ElementEdits
-        /// Capture edge this delta was derived from. nil for manually
-        /// constructed or historically decoded compact deltas.
+        /// Capture edge this delta was derived from. nil only for standalone
+        /// projection values that are not stored as action-result truth.
         public let captureEdge: CaptureEdge?
-        /// Compatibility projection of `Capture.transition.transient` for
-        /// older clients that read only `accessibilityDelta`.
+        /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
 
         public init(
@@ -53,13 +51,12 @@ public extension AccessibilityTrace {
     /// Payload for `.screenChanged`.
     struct ScreenChanged: Sendable, Equatable {
         public let elementCount: Int
-        /// Capture edge this delta was derived from. nil for manually
-        /// constructed or historically decoded compact deltas.
+        /// Capture edge this delta was derived from. nil only for standalone
+        /// projection values that are not stored as action-result truth.
         public let captureEdge: CaptureEdge?
         /// Interface snapshot after the screen change.
         public let newInterface: Interface
-        /// Compatibility projection of `Capture.transition.transient` for
-        /// older clients that read only `accessibilityDelta`.
+        /// Compact projection of `Capture.transition.transient`.
         public let transient: [HeistElement]
 
         public init(
@@ -140,8 +137,8 @@ public extension AccessibilityTrace {
         }
 
         /// Capture edge this delta was derived from, when emitted by a
-        /// capture-backed factory. nil indicates a manually constructed or
-        /// historically decoded compact delta.
+        /// capture-backed factory. nil indicates a standalone projection
+        /// value, not action-result storage truth.
         public var captureEdge: CaptureEdge? {
             switch self {
             case .noChange(let payload): return payload.captureEdge

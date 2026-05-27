@@ -1,10 +1,16 @@
 import CoreGraphics
 
-
 public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConvertible {
     case coordinate(ScreenPoint)
     case direction(SwipeDirection)
     case unspecified
+
+    public var isSpecified: Bool {
+        if case .unspecified = self {
+            return false
+        }
+        return true
+    }
 
     public var description: String {
         switch self {
@@ -97,7 +103,7 @@ public struct SwipeTarget: Codable, Sendable {
     /// Duration in seconds (default 0.15).
     public let duration: Double?
 
-    public init(selection: SwipeGestureSelection = .point(start: .unspecified, destination: .unspecified), duration: Double? = nil) {
+    public init(selection: SwipeGestureSelection, duration: Double? = nil) {
         self.selection = selection
         self.duration = duration
     }
@@ -198,15 +204,17 @@ public struct SwipeTarget: Codable, Sendable {
             )
             return
         }
-        self.selection = .point(
-            start: try makeGesturePointSelection(
-                elementTarget: elementTarget,
-                x: startX,
-                y: startY,
-                field: "startPoint"
-            ),
-            destination: try swipeDestinationSelection(x: endX, y: endY, direction: direction)
+        let startSelection = try makeGesturePointSelection(
+            elementTarget: elementTarget,
+            x: startX,
+            y: startY,
+            field: "startPoint"
         )
+        let destination = try swipeDestinationSelection(x: endX, y: endY, direction: direction)
+        guard startSelection.isSpecified, destination.isSpecified else {
+            throw GestureProjectionError.missingSwipeIntent
+        }
+        self.selection = .point(start: startSelection, destination: destination)
     }
 
     public func encode(to encoder: Encoder) throws {

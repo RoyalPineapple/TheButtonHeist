@@ -14,7 +14,7 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
               buttonheist scroll_to_edge btn_list
               buttonheist scroll_to_edge btn_list -e top
               buttonheist scroll_to_edge --stable-id "main_scroll" -e left
-              buttonheist scroll_to_edge -id "longList" -e left
+              buttonheist scroll_to_edge --identifier "longList" -e left
             """
     )
 

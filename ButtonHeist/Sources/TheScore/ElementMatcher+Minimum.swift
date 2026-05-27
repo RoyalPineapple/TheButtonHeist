@@ -28,7 +28,7 @@ public struct MinimumMatcher: Sendable, Equatable {
     public static func build(
         element: HeistElement,
         in capture: AccessibilityTrace.Capture
-    ) -> MinimumMatcher {
+    ) -> MinimumMatcher? {
         let elements = capture.interface.elements
         if let captureElement = elements.first(where: { $0 == element }) {
             return build(element: captureElement, allElements: elements)
@@ -39,19 +39,19 @@ public struct MinimumMatcher: Sendable, Equatable {
     /// Build matchers for every element in a capture, preserving traversal order.
     public static func buildAll(in capture: AccessibilityTrace.Capture) -> [MinimumMatcher] {
         let elements = capture.interface.elements
-        return elements.map { build(element: $0, allElements: elements) }
+        return elements.compactMap { build(element: $0, allElements: elements) }
     }
 
     private static func build(
         element: HeistElement,
         allElements: [HeistElement]
-    ) -> MinimumMatcher {
+    ) -> MinimumMatcher? {
         let candidates = candidateMatchers(for: element, allElements: allElements)
         for candidate in candidates where uniquelyMatches(candidate, element: element, in: allElements) {
             return MinimumMatcher(element: element, matcher: candidate)
         }
 
-        let bestMatcher = candidates.last ?? ElementMatcher()
+        guard let bestMatcher = candidates.last else { return nil }
         return MinimumMatcher(
             element: element,
             matcher: bestMatcher,
@@ -206,9 +206,7 @@ public struct MinimumMatcher: Sendable, Equatable {
     }
 
     /// Find the 0-based index of `element` among all elements matching `matcher`.
-    /// Returns nil if the element is the only match, unless the matcher has no
-    /// predicates. Empty matchers need an explicit ordinal to survive the flat
-    /// playback wire format.
+    /// Returns nil if the element is the only match.
     private static func ordinalOf(
         _ element: HeistElement,
         matching matcher: ElementMatcher,
@@ -224,7 +222,7 @@ public struct MinimumMatcher: Sendable, Equatable {
             index += 1
             totalMatches += 1
         }
-        guard totalMatches > 1 || !matcher.hasPredicates else { return nil }
+        guard totalMatches > 1 else { return nil }
         return found
     }
 }

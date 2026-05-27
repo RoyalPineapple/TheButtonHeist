@@ -2,8 +2,29 @@ import Foundation
 
 /// Payload sent when a connection is approved via the on-device UI
 public struct AuthApprovedPayload: Codable, Sendable {
-    public let token: String?
-    public init(token: String? = nil) { self.token = token }
+    public let token: String
+
+    public init(token: String) {
+        precondition(!token.isEmpty, "AuthApprovedPayload token must not be empty")
+        self.token = token
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case token
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let token = try container.decode(String.self, forKey: .token)
+        guard !token.isEmpty else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .token,
+                in: container,
+                debugDescription: "authApproved token must not be empty"
+            )
+        }
+        self.token = token
+    }
 }
 
 /// Server identity and capabilities sent after a successful handshake.
@@ -18,17 +39,17 @@ public struct ServerInfo: Codable, Sendable {
     public let screenWidth: Double
     public let screenHeight: Double
     /// Per-launch session identifier
-    public let instanceId: String?
+    public let instanceId: String
     /// Human-readable instance identifier (from INSIDEJOB_ID env var, or shortId fallback)
-    public let instanceIdentifier: String?
+    public let instanceIdentifier: String
     /// Port the server is listening on
-    public let listeningPort: UInt16?
+    public let listeningPort: UInt16
     /// Simulator UDID when running on iOS Simulator (nil on physical devices)
     public let simulatorUDID: String?
     /// Vendor identifier from UIDevice.identifierForVendor (stable per app install per device)
     public let vendorIdentifier: String?
     /// Whether TLS transport encryption is active
-    public let tlsActive: Bool?
+    public let tlsActive: Bool
 
     public init(
         appName: String,
@@ -37,12 +58,12 @@ public struct ServerInfo: Codable, Sendable {
         systemVersion: String,
         screenWidth: Double,
         screenHeight: Double,
-        instanceId: String? = nil,
-        instanceIdentifier: String? = nil,
-        listeningPort: UInt16? = nil,
+        instanceId: String,
+        instanceIdentifier: String,
+        listeningPort: UInt16,
         simulatorUDID: String? = nil,
         vendorIdentifier: String? = nil,
-        tlsActive: Bool? = nil
+        tlsActive: Bool
     ) {
         self.appName = appName
         self.bundleIdentifier = bundleIdentifier

@@ -165,7 +165,6 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let json = try XCTUnwrap(encodedRecordedTraceJSON(script))
         XCTAssertNotNil(json["captures"])
-        XCTAssertNil(json["segments"])
         let captures = try XCTUnwrap(json["captures"] as? [[String: Any]])
         XCTAssertEqual(captures.count, 2)
         XCTAssertNotNil(captures.first?["interface"])
@@ -269,7 +268,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordHeistEvidenceDoesNotInventMatcherWhenHeistIdMissingFromTargetCapture() async throws {
+    func testRecordHeistEvidenceRejectsHeistIdMissingFromTargetCapture() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -308,10 +307,11 @@ final class BookKeeperHeistTests: XCTestCase {
             targetCapture: preActionCapture
         )
 
-        let script = try bookKeeper.stopHeistRecording()
-        XCTAssertNil(script.steps[0].target)
-        XCTAssertNil(script.steps[0].ordinal)
-        XCTAssertNil(script.steps[0].recorded?.heistId)
+        XCTAssertThrowsError(try bookKeeper.stopHeistRecording()) { error in
+            guard case BookKeeperError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
     }
 
     @ButtonHeistActor
@@ -409,7 +409,6 @@ final class BookKeeperHeistTests: XCTestCase {
                         "label": "Submit",
                         "traits": ["button"],
                     ],
-                    "required": true,
                 ],
             ],
             targetCapture: nil
@@ -424,7 +423,6 @@ final class BookKeeperHeistTests: XCTestCase {
             ]),
         ]))
         XCTAssertEqual(script.steps[0].arguments["timeout"], .int(2))
-        XCTAssertNil(script.steps[0].arguments["required"])
     }
 
     @ButtonHeistActor
@@ -467,7 +465,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testHeistIdWithNoMatcherPredicatesRecordsOrdinalSelector() async throws {
+    func testHeistIdWithNoMatcherPredicatesIsNotReplayable() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -490,11 +488,11 @@ final class BookKeeperHeistTests: XCTestCase {
             ),
             targetCapture: capture
         )
-        let script = try bookKeeper.stopHeistRecording()
-
-        XCTAssertFalse(try XCTUnwrap(script.steps[0].target).hasPredicates)
-        XCTAssertEqual(script.steps[0].ordinal, 1)
-        XCTAssertEqual(script.steps[0].recorded?.heistId, "anonymous_2")
+        XCTAssertThrowsError(try bookKeeper.stopHeistRecording()) { error in
+            guard case BookKeeperError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
     }
 
     @ButtonHeistActor

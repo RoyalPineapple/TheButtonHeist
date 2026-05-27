@@ -17,11 +17,9 @@ JSON, session JSON, and heist files accept canonical command strings such as
 `activate`, `type_text`, and `scroll_to_visible`; those strings are parsed once
 at the boundary and routed as typed values inside the stack.
 
-Grouped MCP tools are adapters, not a second command model. ButtonHeistMCP
-projects tools from the Fence-owned MCP contract; tools such as `gesture`,
-`scroll`, and `edit_action` use typed selector parameters that route to
-canonical Fence commands. Wire message discriminators live one layer lower in
-TheScore and are documented separately.
+ButtonHeistMCP projects one tool per exposed Fence command from the same
+contract. Wire message discriminators live one layer lower in TheScore and are
+documented separately.
 
 ### Captures and Deltas Are the Currency
 
@@ -31,8 +29,8 @@ recording, interaction logs, and background awareness all use that same
 capture/delta model instead of parallel before/after interfaces.
 
 Agents should start from `get_interface`, then prefer the action result's delta
-over another read. A screen-change delta invalidates old `heistId` handles and
-supplies the new interface evidence.
+over another read. A screen-change delta invalidates prior `heistId` handles
+and supplies the new interface evidence.
 
 ### Tripwire Triggers, Settle Decides Stable
 

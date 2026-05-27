@@ -25,7 +25,7 @@ final class TLSIntegrationTests: XCTestCase {
     // MARK: - TLS Handshake
 
     func testTLSHandshakeWithFingerprintPinning() async throws {
-        let identity = try TLSIdentity.createEphemeral()
+        let identity = try makeEphemeralIdentityOrSkip()
         let generatedTLSParams = await identity.makeTLSParameters()
         let tlsParams = try XCTUnwrap(generatedTLSParams, "TLS parameters must be created")
 
@@ -56,7 +56,7 @@ final class TLSIntegrationTests: XCTestCase {
     }
 
     func testDataExchangeOverTLS() async throws {
-        let identity = try TLSIdentity.createEphemeral()
+        let identity = try makeEphemeralIdentityOrSkip()
         let tlsParams = await identity.makeTLSParameters()!
 
         let echoMessage = Data("hello-tls\n".utf8)
@@ -100,7 +100,7 @@ final class TLSIntegrationTests: XCTestCase {
     }
 
     func testWrongFingerprintRejectsConnection() async throws {
-        let identity = try TLSIdentity.createEphemeral()
+        let identity = try makeEphemeralIdentityOrSkip()
         let tlsParams = await identity.makeTLSParameters()!
 
         let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams)
@@ -130,7 +130,7 @@ final class TLSIntegrationTests: XCTestCase {
     }
 
     func testPassiveReachabilityDoesNotSendUnauthenticatedStatusOverTLS() async throws {
-        let identity = try TLSIdentity.createEphemeral()
+        let identity = try makeEphemeralIdentityOrSkip()
         let tlsParams = await identity.makeTLSParameters()!
 
         // Use the instance server directly (cleaned up by tearDown) instead of

@@ -21,9 +21,9 @@ import TheScore
 /// Key iOS 26 fix: Creates a fresh UIEvent for each touch phase
 /// instead of reusing the same event.
 ///
-/// The `activate` command handles accessibilityActivate → synthetic tap
-/// fallback internally. The `tap` command is a low-level escape hatch
-/// for fuzzing and debugging — it bypasses accessibilityActivate entirely.
+/// The `activate` command owns semantic actionability and may dispatch
+/// a synthetic tap as its final action. `one_finger_tap` is the low-level
+/// coordinate escape hatch for fuzzing and debugging.
 @MainActor
 final class TheSafecracker {
 

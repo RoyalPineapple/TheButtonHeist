@@ -7,20 +7,20 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
         abstract: "Activate a UI element (primary interaction command)",
         discussion: """
             This is the primary way to interact with UI elements. It uses an \
-            accessibility-first pattern: tries accessibilityActivate() (like \
-            VoiceOver) first, then falls back to a synthetic tap at the \
-            element's activation point.
+            semantic actionability path: resolves the element, reveals it when \
+            needed, acquires fresh accessibility geometry, then dispatches the \
+            primary activation policy.
 
             Pass --action to invoke a named action instead of the default \
             activation: "increment", "decrement", or any custom action from \
             the element's actions array.
 
-            For raw coordinate-based taps without accessibility semantics, \
+            For explicit coordinate-based taps, \
             use `buttonheist one_finger_tap` instead.
 
             Examples:
               buttonheist activate btn_login
-              buttonheist activate -l "Sign In" -id loginButton
+              buttonheist activate -l "Sign In" --identifier loginButton
               buttonheist activate -l "Submit" --traits button
               buttonheist activate btn_slider --action increment
               buttonheist activate btn_cell --action "Delete"
@@ -39,8 +39,10 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        let commandAlias = TheFence.Command.activationAlias(forActionName: action)
-        var request = commandAlias.command.cliRequest(commandAlias.parameters)
+        var request = TheFence.Command.activate.cliRequest()
+        if let action {
+            request.set(.action, action)
+        }
 
         try element.applyTo(&request)
         request.set(.timeout, timeoutOption.timeout)

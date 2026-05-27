@@ -50,7 +50,6 @@ extension TheFence {
         )
         let validatedResponse = try await validateActionResponse(
             dispatched.response,
-            command: parsed.command,
             expectation: parsed.expectationPayload.expectation,
             expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
             preActionCaptureRef: postDispatch.preActionCaptureRef,
@@ -157,7 +156,6 @@ extension TheFence {
 
     private func validateActionResponse(
         _ response: FenceResponse,
-        command: Command,
         expectation: ActionExpectation?,
         expectationTimeout: Double?,
         preActionCaptureRef: AccessibilityTrace.CaptureRef?,
@@ -172,21 +170,6 @@ extension TheFence {
                 )
             }
             if let expectation {
-                // wait_for_change sends the expectation to the iOS server; a
-                // successful result means the server observed or already held it.
-                if command == .waitForChange {
-                    return ValidatedResponse(
-                        response: .action(
-                            result: actionResult,
-                            expectation: ExpectationResult(
-                                met: actionResult.success,
-                                expectation: expectation,
-                                actual: actionResult.message ?? actionResult.accessibilityDelta?.kindRawValue
-                            )
-                        ),
-                        deliveredCaptureRef: nil
-                    )
-                }
                 let preActionElements = backgroundAccessibility.elementLookup(captureRef: preActionCaptureRef)
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionElements
@@ -238,15 +221,7 @@ extension TheFence {
             )
             recordCompletedAction(waitResult)
             let waitCursor = ingestActionTrace(waitResult)
-            let waitValidation: ExpectationResult = if waitResult.method == .waitForChange {
-                ExpectationResult(
-                    met: waitResult.success,
-                    expectation: expectation,
-                    actual: waitResult.message ?? waitResult.accessibilityDelta?.kindRawValue
-                )
-            } else {
-                expectation.validate(against: waitResult, preActionElements: preActionElements)
-            }
+            let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(
                 response: .action(
                     result: waitResult,

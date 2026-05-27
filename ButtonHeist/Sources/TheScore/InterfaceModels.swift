@@ -447,19 +447,10 @@ public extension AccessibilityTraits {
     }
 
     var heistTraits: [HeistTrait] {
-        namesIncludingUnknownBits.map { HeistTrait(rawValue: $0) ?? .unknown($0) }
+        Self.heistKnownTraits.compactMap { contains($0.trait) ? HeistTrait(rawValue: $0.name) : nil }
     }
 
-    var namesIncludingUnknownBits: [String] {
-        var result: [String] = []
-        var remaining = rawValue
-        for (trait, name) in Self.heistKnownTraits where contains(trait) {
-            result.append(name)
-            remaining &= ~trait.rawValue
-        }
-        if remaining != 0 {
-            result.append("unknown(0x\(String(remaining, radix: 16)))")
-        }
-        return result
+    var heistTraitNames: [String] {
+        Self.heistKnownTraits.compactMap { contains($0.trait) ? $0.name : nil }
     }
 }

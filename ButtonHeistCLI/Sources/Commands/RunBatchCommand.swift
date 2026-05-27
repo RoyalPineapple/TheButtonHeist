@@ -41,7 +41,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
 
         var request = Self.fenceRequest([.steps: .array(batchSteps.map(\.value))])
         if let policy {
-            guard let parsedPolicy = Self.catalogCanonicalStringValue(policy, for: .policy, caseInsensitive: false) else {
+            guard let parsedPolicy = Self.catalogCanonicalStringValue(policy, for: .policy) else {
                 throw ValidationError("Invalid policy '\(policy)'. Valid: \(Self.catalogAllowedValuesDescription(for: .policy))")
             }
             request.set(.policy, .string(parsedPolicy))
@@ -69,9 +69,14 @@ struct SerializedBatchStep {
     let value: HeistValue
 
     init(value: HeistValue, index: Int) throws {
-        guard case .object = value else {
+        guard case .object(let object) = value else {
             throw ValidationError("steps[\(index)] must be a JSON object")
         }
+        try CLIRequestBuilder.validateCanonicalCommandObject(
+            object,
+            context: "steps[\(index)]",
+            requireBatchExecutable: true
+        )
         self.value = value
     }
 }

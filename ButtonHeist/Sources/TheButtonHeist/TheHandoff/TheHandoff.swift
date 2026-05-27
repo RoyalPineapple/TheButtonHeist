@@ -81,7 +81,7 @@ final class TheHandoff {
     /// client-side recording phase; TheHandoff only forwards typed messages.
     var onRecordingEvent: (@ButtonHeistActor (RecordingEvent) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
-    var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
+    var onAuthApproved: (@ButtonHeistActor (String) -> Void)?
     /// Background UI-change evidence attached to explicit command responses.
     var onBackgroundAccessibilityTrace: (@ButtonHeistActor (AccessibilityTrace) -> Void)?
 

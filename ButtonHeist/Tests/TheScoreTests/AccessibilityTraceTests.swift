@@ -4,13 +4,27 @@ import AccessibilitySnapshotModel
 
 final class AccessibilityTraceTests: XCTestCase {
 
-    func testDecodeRejectsSegmentStorageAsTraceTruth() {
-        let json = #"{"segments":[]}"#
+    func testDecodeRejectsUnsupportedTraceFields() {
+        let json = #"{"captures":[],"projection":[]}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: Data(json.utf8))) { error in
             XCTAssertTrue(
-                "\(error)".contains("segments are derived projections"),
-                "Expected segment storage rejection, got \(error)"
+                "\(error)".contains("Unsupported AccessibilityTrace field: projection"),
+                "Expected unsupported field rejection, got \(error)"
+            )
+        }
+    }
+
+    func testCaptureDecodeRejectsMissingContext() throws {
+        let capture = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
+        var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(capture)) as? [String: Any])
+        payload.removeValue(forKey: "context")
+        let data = try JSONSerialization.data(withJSONObject: payload)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.Capture.self, from: data)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("No value associated with key"),
+                "Expected missing context rejection, got \(error)"
             )
         }
     }

@@ -17,7 +17,7 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
 
     func testTransientTraitsBitmaskRoundTrips() {
         let bitmask = AccessibilityPolicy.transientTraitsBitmask
-        let recoveredNames = Set(bitmask.namesIncludingUnknownBits)
+        let recoveredNames = Set(bitmask.heistTraitNames)
         let expectedNames = Set(AccessibilityPolicy.transientTraits.map(\.rawValue))
         XCTAssertEqual(recoveredNames, expectedNames,
                        "transientTraitsBitmask must round-trip the trait names")
@@ -25,7 +25,7 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
 
     func testInteractiveTraitsBitmaskRoundTrips() {
         let bitmask = AccessibilityPolicy.interactiveTraitsBitmask
-        let recoveredNames = Set(bitmask.namesIncludingUnknownBits)
+        let recoveredNames = Set(bitmask.heistTraitNames)
         let expectedNames = Set(AccessibilityPolicy.interactiveTraits.map(\.rawValue))
         XCTAssertEqual(recoveredNames, expectedNames,
                        "interactiveTraitsBitmask must round-trip the trait names")
@@ -33,7 +33,7 @@ final class AccessibilityPolicyBitmaskTests: XCTestCase {
 
     func testStaticOnlyTraitsBitmaskRoundTrips() {
         let bitmask = AccessibilityPolicy.staticOnlyTraitsBitmask
-        let recoveredNames = Set(bitmask.namesIncludingUnknownBits)
+        let recoveredNames = Set(bitmask.heistTraitNames)
         let expectedNames = Set(AccessibilityPolicy.staticOnlyTraits.map(\.rawValue))
         XCTAssertEqual(recoveredNames, expectedNames,
                        "staticOnlyTraitsBitmask must round-trip the trait names")

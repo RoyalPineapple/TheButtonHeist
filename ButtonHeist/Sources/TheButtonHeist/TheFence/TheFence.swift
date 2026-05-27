@@ -30,8 +30,8 @@ public final class TheFence {
         var deviceFilter: String?
         /// Seconds to wait for initial connection before failing `start()`.
         var connectionTimeout: TimeInterval
-        /// Auth token sent with `client_hello`. Agents use the task slug; omit to
-        /// fall back to the `BUTTONHEIST_TOKEN` environment variable.
+        /// Auth token sent in the `authenticate` message after the server requests
+        /// auth. Agents use the task slug; omit to fall back to `BUTTONHEIST_TOKEN`.
         var token: String?
         /// When true, TheHandoff re-establishes the connection on drop.
         var autoReconnect: Bool
@@ -77,7 +77,7 @@ public final class TheFence {
     /// Fires when the server approves authentication. The parameter is the
     /// approved token, or `nil` when the server accepted a previously-held
     /// session.
-    public var onAuthApproved: (@ButtonHeistActor (String?) -> Void)?
+    public var onAuthApproved: (@ButtonHeistActor (String) -> Void)?
 
     // Dependencies
     var config: Configuration
@@ -122,12 +122,12 @@ public final class TheFence {
         wireUpResponseCallbacks()
     }
 
-    nonisolated static func authApprovedStatusMessage(token: String?, configuredToken: String?) -> String? {
-        guard let token, configuredToken == nil else { return nil }
+    nonisolated static func authApprovedStatusMessage(token: String, configuredToken: String?) -> String? {
+        guard configuredToken == nil else { return nil }
         return "BUTTONHEIST_TOKEN=\(token)"
     }
 
-    private func handleAuthApproved(_ token: String?) {
+    private func handleAuthApproved(_ token: String) {
         if let message = Self.authApprovedStatusMessage(token: token, configuredToken: configuredAuthTokenForStatus) {
             onStatus?(message)
         }
@@ -275,7 +275,7 @@ public final class TheFence {
         switch command {
         case .help:
             return .help(commands: Self.supportedCommands)
-        case .quit, .exit:
+        case .quit:
             stop()
             return .ok(message: "bye")
         default:
@@ -295,11 +295,6 @@ public final class TheFence {
 
     func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
         switch (parsed.command, parsed.payload) {
-        case (.status, _):
-            return .status(
-                connected: handoff.isConnected,
-                deviceName: handoff.connectedDevice.map { handoff.displayName(for: $0) }
-            )
         case (.ping, _):
             return try await handlePing()
         case (.listDevices, _):
@@ -322,9 +317,6 @@ public final class TheFence {
              (.elementSearch, .scroll(.elementSearch)),
              (.scrollToEdge, .scroll(.scrollToEdge)),
              (.activate, .accessibility(.activate)),
-             (.increment, .accessibility(.increment)),
-             (.decrement, .accessibility(.decrement)),
-             (.performCustomAction, .accessibility(.performCustomAction)),
              (.rotor, .rotor),
              (.typeText, .typeText),
              (.editAction, .editAction),
@@ -356,7 +348,7 @@ public final class TheFence {
             return try handleStopHeist(request)
         case (.playHeist, .playHeist(let request)):
             return try await handlePlayHeist(request)
-        case (.help, _), (.quit, _), (.exit, _):
+        case (.help, _), (.quit, _):
             return .error("Unexpected command in dispatch: \(parsed.command.rawValue)")
         default:
             return .error("Internal payload mismatch for command: \(parsed.command.rawValue)")

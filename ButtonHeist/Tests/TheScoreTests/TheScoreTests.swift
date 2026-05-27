@@ -24,7 +24,11 @@ final class MessageIntegrationTests: XCTestCase {
             deviceName: "Test Device",
             systemVersion: "17.0",
             screenWidth: 390,
-            screenHeight: 844
+            screenHeight: 844,
+            instanceId: "integration-session",
+            instanceIdentifier: "integration",
+            listeningPort: 49152,
+            tlsActive: true
         )
         let serverMsg = ServerMessage.info(serverInfo)
         let serverData = try JSONEncoder().encode(serverMsg)
@@ -90,7 +94,8 @@ final class MessageIntegrationTests: XCTestCase {
         let serverMessages: [ServerMessage] = [
             .info(ServerInfo(
                 appName: "Test", bundleIdentifier: "com.test",
-                deviceName: "Device", systemVersion: "17.0", screenWidth: 390, screenHeight: 844
+                deviceName: "Device", systemVersion: "17.0", screenWidth: 390, screenHeight: 844,
+                instanceId: "test-session", instanceIdentifier: "test", listeningPort: 49152, tlsActive: true
             )),
             .interface(Interface(timestamp: Date(), tree: [])),
             .pong(),
@@ -106,7 +111,7 @@ final class MessageIntegrationTests: XCTestCase {
                 session: StatusSession(active: false, watchersAllowed: false, activeConnections: 0)
             )),
             .error(ServerError(kind: .general, message: "Test error")),
-            .screen(ScreenPayload(pngData: "base64data", width: 390, height: 844))
+            .screen(ScreenPayload(pngData: "base64data", width: 390, height: 844, interface: Interface(timestamp: Date(), tree: [])))
         ]
 
         let encoder = JSONEncoder()
@@ -179,7 +184,6 @@ final class MessageIntegrationTests: XCTestCase {
             "Invalid request",
             "Server busy",
             "Timeout",
-            ""  // Empty error message
         ]
 
         for errorMsg in errorMessages {
@@ -193,6 +197,14 @@ final class MessageIntegrationTests: XCTestCase {
             } else {
                 XCTFail("Expected error message")
             }
+        }
+    }
+
+    func testErrorMessageRejectsEmptyMessageOnDecode() {
+        let json = #"{"type":"error","payload":{"kind":"general","message":""}}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("server error message must not be empty"), "\(error)")
         }
     }
 }

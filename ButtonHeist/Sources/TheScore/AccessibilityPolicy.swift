@@ -108,11 +108,7 @@ public enum AccessibilityPolicy {
     /// When comparing two parses that both contain a tab bar, the parser
     /// computes the fraction of non-tab-bar content labels that persist
     /// across the snapshots. If fewer than this fraction persist, the
-    /// transition is classified as a screen change. Consumed by
-    /// `TheBurglar.isTopologyChanged` (server-side topology detection),
-    /// whose result flows into `TheBrains.actionResultWithDelta` and
-    /// `TheBrains.computeDelta` to decide whether an action produced a
-    /// new screen.
+    /// transition is classified as a screen change by trace projection.
     ///
     /// Locked at `0.4` by `AccessibilityPolicyTests`. Changes to this
     /// threshold alter screen-change semantics and should be made with a

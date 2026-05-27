@@ -129,9 +129,9 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.length, 2)
     }
 
-    func testOverlapScrollBackward() {
+    func testOverlapReverseScroll() {
         // Accumulated: [D E F G]
-        // Page (scrolled backward): [A B C D E]
+        // Page (reverse scroll): [A B C D E]
         // Overlap: D E at accumulated[0..1], page[3..4]
         let accumulated = [4, 5, 6, 7]
         let page = [1, 2, 3, 4, 5]
@@ -203,7 +203,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
         XCTAssertEqual(result.elements.map(\.label), ["Row 1", "Row 2", "Row 3", "Row 4", "Row 5"])
     }
 
-    func testReconcileScrollBackward() {
+    func testReconcileReverseScroll() {
         // Accumulated: [Row3 Row4 Row5]
         // Page (scrolled up): [Row1 Row2 Row3 Row4]
         // Result: [Row1 Row2 Row3 Row4 Row5]

@@ -127,11 +127,11 @@ final class TheBrainsActionTests: XCTestCase {
 
     // MARK: - resolveDuration
 
-    func testResolveDurationExplicitDurationTakesPrecedence() {
+    func testResolveDurationUsesExplicitDuration() {
         let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.actions.resolveDuration(2.0, velocity: 50.0, points: points)
+        let result = brains.actions.resolveDuration(2.0, velocity: nil, points: points)
         XCTAssertEqual(result, 2.0, accuracy: 0.001,
-                       "Explicit duration should take precedence over velocity")
+                       "Explicit duration should pass through")
     }
 
     func testResolveDurationFromVelocity() {
@@ -645,8 +645,8 @@ final class TheBrainsActionTests: XCTestCase {
                 actionName: "Archive"
             )), false),
             ("rotor", .rotor(RotorTarget(elementTarget: target, rotor: "Links")), false),
-            ("tap", .touchTap(TouchTapTarget(selection: .element(target))), false),
-            ("swipe", .touchSwipe(SwipeTarget(selection: .unitElement(
+            ("tap", .oneFingerTap(TapTarget(selection: .element(target))), false),
+            ("swipe", .swipe(SwipeTarget(selection: .unitElement(
                 target,
                 start: SwipeDirection.left.defaultStart,
                 end: SwipeDirection.left.defaultEnd,
@@ -887,7 +887,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteTapOutsideWindowReportsGestureDispatchState() async {
         let result = await brains.actions.executeTap(
-            TouchTapTarget(selection: .coordinate(ScreenPoint(x: -10_000, y: -10_000)))
+            TapTarget(selection: .coordinate(ScreenPoint(x: -10_000, y: -10_000)))
         )
 
         XCTAssertFalse(result.success)
@@ -1288,7 +1288,7 @@ final class TheBrainsActionTests: XCTestCase {
             interface: TheStash.WireConversion.toInterface(from: screen)
         )
         let element = try XCTUnwrap(capture.interface.elements.first { $0.heistId == heistId })
-        return SemanticActionTarget(MinimumMatcher.build(element: element, in: capture))
+        return SemanticActionTarget(try XCTUnwrap(MinimumMatcher.build(element: element, in: capture)))
     }
 
     private func XCTAssertDiagnostic(

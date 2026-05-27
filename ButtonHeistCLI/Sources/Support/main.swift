@@ -8,14 +8,14 @@ struct ButtonHeistApp: AsyncParsableCommand {
         commandName: "buttonheist",
         abstract: "Inspect and interact with iOS app UI elements.",
         discussion: """
-            Quick start — the five commands you need most:
+            Common starter flow:
               buttonheist list_devices                      # Find devices
               buttonheist get_interface                     # Inspect UI hierarchy
               buttonheist activate --identifier "myButton"  # Tap a control
               buttonheist type_text "hello"                 # Type text
               buttonheist get_screen                        # Capture screen
 
-            Use `buttonheist session` for an interactive REPL with all commands.
+            Use `buttonheist session` for an interactive REPL, or read the generated command reference for the full command contract.
             """,
         version: buttonHeistVersion,
         subcommands: CLICommandAdapterCatalog.subcommands

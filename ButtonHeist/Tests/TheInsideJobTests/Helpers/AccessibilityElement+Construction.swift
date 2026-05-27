@@ -33,6 +33,7 @@ extension AccessibilityElement {
         respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         let hasExplicitActivationPoint = activationPoint != nil
+        let resolvedActivationPoint = activationPoint ?? shape.defaultActivationPoint
         return AccessibilityElement(
             description: description ?? label ?? "",
             label: label,
@@ -42,7 +43,7 @@ extension AccessibilityElement {
             hint: hint,
             userInputLabels: nil,
             shape: shape,
-            activationPoint: AccessibilityPoint(activationPoint ?? .zero),
+            activationPoint: AccessibilityPoint(resolvedActivationPoint),
             usesDefaultActivationPoint: usesDefaultActivationPoint ?? !hasExplicitActivationPoint,
             customActions: customActions,
             customContent: customContent,
@@ -104,6 +105,34 @@ extension AccessibilityElement {
             activationPoint: CGPoint(x: frame.midX, y: frame.midY),
             respondsToUserInteraction: respondsToUserInteraction
         )
+    }
+}
+
+private extension AccessibilityShape {
+    var defaultActivationPoint: CGPoint {
+        switch self {
+        case .frame(let rect):
+            return CGPoint(x: rect.origin.x + rect.size.width / 2, y: rect.origin.y + rect.size.height / 2)
+        case .path(let elements):
+            let path = CGMutablePath()
+            for element in elements {
+                switch element {
+                case .move(let point):
+                    path.move(to: point.cgPoint)
+                case .line(let point):
+                    path.addLine(to: point.cgPoint)
+                case .quadCurve(let point, let control):
+                    path.addQuadCurve(to: point.cgPoint, control: control.cgPoint)
+                case .curve(let point, let control1, let control2):
+                    path.addCurve(to: point.cgPoint, control1: control1.cgPoint, control2: control2.cgPoint)
+                case .closeSubpath:
+                    path.closeSubpath()
+                }
+            }
+            let bounds = path.boundingBoxOfPath
+            guard !bounds.isNull else { return .zero }
+            return CGPoint(x: bounds.midX, y: bounds.midY)
+        }
     }
 }
 

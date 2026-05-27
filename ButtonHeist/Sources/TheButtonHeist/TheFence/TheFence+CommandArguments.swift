@@ -4,7 +4,7 @@ import TheScore
 
 extension TheFence {
 
-    /// Typed JSON-compatible command arguments after external routing has selected a command.
+    /// Typed JSON-encodable command arguments after external routing has selected a command.
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: CommandArgumentValue]
         let argumentFieldPrefix: String?
@@ -45,7 +45,7 @@ extension TheFence {
         var argumentFieldPrefix: String? { get }
     }
 
-    /// JSON-compatible command argument value used between routing and request decoding.
+    /// JSON-encodable command argument value used between routing and request decoding.
     public enum CommandArgumentValue: Sendable, Equatable {
         case string(String)
         case int(Int)
@@ -150,7 +150,7 @@ extension TheFence {
 
 /// Strict typed accessors for command arguments after command routing.
 /// This keeps raw dictionaries at public decode edges while preserving the
-/// same field-qualified diagnostics as the old dictionary helpers.
+/// field-qualified diagnostics expected by the current command contract.
 extension TheFence.CommandArgumentReadable {
     var keys: Dictionary<String, TheFence.CommandArgumentValue>.Keys {
         argumentValues.keys
@@ -163,6 +163,10 @@ extension TheFence.CommandArgumentReadable {
 
     func observedValue(for key: String) -> Any? {
         argumentValues[key]?.rawValue
+    }
+
+    func observedDescription(for key: String) -> String? {
+        argumentValues[key].map { SchemaValidationError.observedDescription($0.rawValue) }
     }
 
     var observedDescription: String {
@@ -274,6 +278,7 @@ extension TheFence.CommandArgumentReadable {
             )
         }
         let object = TheFence.CommandArgumentObject(values: values, fieldPrefix: field(key))
+        try object.rejectUnknownKeys(allowed: ["x", "y"], expected: "valid unit point field")
         guard let x = try object.schemaNumber("x") else {
             throw SchemaValidationError(field: object.field("x"), observed: nil, expected: "number")
         }
@@ -289,6 +294,16 @@ extension TheFence.CommandArgumentReadable {
         return UnitPoint(x: x, y: y)
     }
 
+    func rejectUnknownKeys(allowed: Set<String>, expected: String) throws {
+        let unknownKeys = keys.filter { !allowed.contains($0) }.sorted()
+        guard let unknownKey = unknownKeys.first else { return }
+        throw SchemaValidationError(
+            field: field(unknownKey),
+            observed: argumentValues[unknownKey]?.rawValue,
+            expected: expected
+        )
+    }
+
     func schemaDictionary(_ key: String) throws -> TheFence.CommandArgumentObject? {
         guard let value = argumentValues[key] else { return nil }
         guard case .object(let object) = value else {
@@ -299,11 +314,10 @@ extension TheFence.CommandArgumentReadable {
 
     func schemaEnum<E>(
         _ key: String,
-        as type: E.Type,
-        normalizedBy normalize: (String) -> String = { $0 }
+        as type: E.Type
     ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
         guard let rawValue = try schemaString(key) else { return nil }
-        guard let value = E(rawValue: normalize(rawValue)) else {
+        guard let value = E(rawValue: rawValue) else {
             throw SchemaValidationError(
                 field: field(key),
                 observed: rawValue as Any,
@@ -315,8 +329,7 @@ extension TheFence.CommandArgumentReadable {
 
     func requiredSchemaEnum<E>(
         _ key: String,
-        as type: E.Type,
-        normalizedBy normalize: (String) -> String = { $0 }
+        as type: E.Type
     ) throws -> E where E: CaseIterable & RawRepresentable, E.RawValue == String {
         guard let rawValue = try schemaString(key) else {
             throw SchemaValidationError(
@@ -325,7 +338,7 @@ extension TheFence.CommandArgumentReadable {
                 expected: SchemaValidationError.expectedEnum(type)
             )
         }
-        guard let value = E(rawValue: normalize(rawValue)) else {
+        guard let value = E(rawValue: rawValue) else {
             throw SchemaValidationError(
                 field: field(key),
                 observed: rawValue as Any,

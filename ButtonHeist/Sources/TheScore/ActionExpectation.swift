@@ -2,6 +2,44 @@ import Foundation
 
 // MARK: - Action Expectations
 
+public struct NonEmptyActionExpectations: Sendable, Equatable {
+    public let elements: [ActionExpectation]
+
+    public init(_ elements: [ActionExpectation]) throws {
+        guard !elements.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: [],
+                debugDescription: "Compound expectation requires at least one expectation"
+            ))
+        }
+        self.elements = elements
+    }
+}
+
+extension NonEmptyActionExpectations: ExpressibleByArrayLiteral {
+    public init(arrayLiteral elements: ActionExpectation...) {
+        precondition(!elements.isEmpty, "Compound expectation requires at least one expectation")
+        self.elements = elements
+    }
+}
+
+extension NonEmptyActionExpectations: RandomAccessCollection {
+    public typealias Index = Array<ActionExpectation>.Index
+
+    public var startIndex: Index { elements.startIndex }
+    public var endIndex: Index { elements.endIndex }
+
+    public subscript(position: Index) -> ActionExpectation {
+        elements[position]
+    }
+}
+
+extension NonEmptyActionExpectations: CustomStringConvertible {
+    public var description: String {
+        elements.map(\.description).joined(separator: ", ")
+    }
+}
+
 /// Outcome signal classifiers for actions.
 /// Attached to a request (not to a target type) so any action can opt in.
 ///
@@ -53,7 +91,7 @@ public enum ActionExpectation: Sendable, Equatable {
     /// Validation requires elements derived from the pre-action capture to resolve removed heistIds to matchers.
     case elementDisappeared(ElementMatcher)
     /// Compound: all sub-expectations must be met.
-    case compound([ActionExpectation])
+    case compound(NonEmptyActionExpectations)
 
     /// Human-readable summary of this expectation, suitable for failure messages.
     public var summaryDescription: String {
@@ -77,7 +115,6 @@ public enum ActionExpectation: Sendable, Equatable {
             let target = matcher.label ?? matcher.identifier ?? "element"
             return "element_disappeared(\(target))"
         case .compound(let expectations):
-            if expectations.isEmpty { return "delivery" }
             return "compound(\(expectations.count) expectations)"
         }
     }
@@ -104,8 +141,7 @@ extension ActionExpectation: CustomStringConvertible {
         case .elementDisappeared(let matcher):
             return ScoreDescription.call("element_disappeared", [matcher.description])
         case .compound(let expectations):
-            if expectations.isEmpty { return "delivery" }
-            return "compound(\(expectations.map(\.description).joined(separator: ", ")))"
+            return "compound(\(expectations))"
         }
     }
 }
@@ -130,12 +166,6 @@ extension ActionExpectation: Codable {
 
     /// Discriminator strings accepted in object-form expectation payloads.
     public static let wireTypeValues: [String] = WireType.allCases.map(\.rawValue)
-
-    /// Payload-free expectation types accepted as compact command input.
-    public static let shorthandWireTypeValues: [String] = [
-        WireType.screenChanged.rawValue,
-        WireType.elementsChanged.rawValue,
-    ]
 
     private enum ElementUpdatedKey: String, CodingKey {
         case type, heistId, property, oldValue, newValue
@@ -184,7 +214,7 @@ extension ActionExpectation: Codable {
         case .compound:
             let container = try decoder.container(keyedBy: CompoundKey.self)
             let expectations = try container.decode([ActionExpectation].self, forKey: .expectations)
-            self = .compound(expectations)
+            self = .compound(try NonEmptyActionExpectations(expectations))
         }
     }
 
@@ -217,7 +247,7 @@ extension ActionExpectation: Codable {
         case .compound(let expectations):
             var container = encoder.container(keyedBy: CompoundKey.self)
             try container.encode(WireType.compound.rawValue, forKey: .type)
-            try container.encode(expectations, forKey: .expectations)
+            try container.encode(expectations.elements, forKey: .expectations)
         }
     }
 }
@@ -265,7 +295,7 @@ extension ActionExpectation {
                 actual: result.success ? "delivered" : (result.message ?? "failed")
             )
         case .screenChanged:
-            let kindString = result.accessibilityDelta?.kindRawValue ?? "noChange"
+            let kindString = result.accessibilityDelta?.kindRawValue ?? "noTrace"
             return ExpectationResult(
                 met: result.accessibilityDelta?.isScreenChanged == true,
                 expectation: self,
@@ -274,7 +304,7 @@ extension ActionExpectation {
         case .elementsChanged:
             // Superset rule: screen_changed implies elements_changed.
             let delta = result.accessibilityDelta
-            let kindString = delta?.kindRawValue ?? "noChange"
+            let kindString = delta?.kindRawValue ?? "noTrace"
             let met: Bool = {
                 guard let delta else { return false }
                 switch delta {

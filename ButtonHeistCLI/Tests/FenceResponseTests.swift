@@ -80,7 +80,7 @@ final class FenceResponseTests: XCTestCase {
         let response = FenceResponse.action(result: result)
         let output = response.humanFormatted()
         XCTAssertTrue(output.hasPrefix("✓"))
-        XCTAssertTrue(output.contains("syntheticTap"))
+        XCTAssertTrue(output.contains("one_finger_tap"))
     }
 
     func testActionSuccessWithValueHumanFormatting() {
@@ -88,14 +88,6 @@ final class FenceResponseTests: XCTestCase {
         let response = FenceResponse.action(result: result)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("value: \"Hello\""))
-    }
-
-    func testActionSuccessWithDeltaHumanFormatting() {
-        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 5))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let response = FenceResponse.action(result: result)
-        let output = response.humanFormatted()
-        XCTAssertTrue(output.contains("[5 elements, no change]"))
     }
 
     func testActionSuccessAnimatingHumanFormatting() {
@@ -116,7 +108,7 @@ final class FenceResponseTests: XCTestCase {
     func testScreenshotHumanFormatting() {
         let response = FenceResponse.screenshot(
             path: "/tmp/screen.png",
-            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852)
+            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: []))
         )
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("/tmp/screen.png"))
@@ -125,7 +117,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testScreenshotDataHumanFormatting() {
         let response = FenceResponse.screenshotData(
-            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852)
+            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: []))
         )
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("393 × 852"))
@@ -151,104 +143,6 @@ final class FenceResponseTests: XCTestCase {
         XCTAssertTrue(output.contains("5.0s"))
         XCTAssertTrue(output.contains("40 frames"))
         XCTAssertTrue(output.contains("manual"))
-    }
-
-    // MARK: - Delta Formatting Tests
-
-    func testDeltaNoChangeFormatting() {
-        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 10))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let output = FenceResponse.action(result: result).humanFormatted()
-        XCTAssertTrue(output.contains("[10 elements, no change]"))
-    }
-
-    func testDeltaElementUpdatedFormatting() {
-        let updated = [ElementUpdate(heistId: "slider", changes: [PropertyChange(property: .value, old: "50", new: "75")])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 8, edits: ElementEdits(updated: updated)))
-        let result = ActionResult(success: true, method: .increment, accessibilityDelta: delta)
-        let output = FenceResponse.action(result: result).humanFormatted()
-        XCTAssertTrue(output.contains("~1 updated"))
-    }
-
-    func testDeltaMultipleUpdatesFormatting() {
-        let updated = [
-            ElementUpdate(heistId: "a", changes: [PropertyChange(property: .value, old: "A", new: "B")]),
-            ElementUpdate(heistId: "b", changes: [PropertyChange(property: .value, old: "C", new: "D")]),
-        ]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: updated)))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let output = FenceResponse.action(result: result).humanFormatted()
-        XCTAssertTrue(output.contains("~2 updated"))
-    }
-
-    func testDeltaElementsChangedFormatting() {
-        let added = [HeistElement(
-            description: "New", label: "New Button",
-            value: nil, identifier: nil,
-            frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
-        )]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 6, edits: ElementEdits(added: added, removed: ["old_1", "old_2"])))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let output = FenceResponse.action(result: result).humanFormatted()
-        XCTAssertTrue(output.contains("+1 added"))
-        XCTAssertTrue(output.contains("-2 removed"))
-    }
-
-    func testDeltaStructuralFormatting() {
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(treeInserted: [
-                makeTreeInsertion(index: 1, heistId: "new_row", label: "New Row"),
-            ], treeRemoved: [
-                TreeRemoval(
-                    ref: TreeNodeRef(id: "old_row", kind: .element),
-                    location: TreeLocation(parentId: nil, index: 2)
-                ),
-            ], treeMoved: [
-                TreeMove(
-                    ref: TreeNodeRef(id: "moved_row", kind: .element),
-                    from: TreeLocation(parentId: nil, index: 0),
-                    to: TreeLocation(parentId: nil, index: 3)
-                ),
-            ])))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let output = FenceResponse.action(result: result).humanFormatted()
-
-        XCTAssertTrue(output.contains("+1 tree inserted"))
-        XCTAssertTrue(output.contains("-1 tree removed"))
-        XCTAssertTrue(output.contains("↕1 moved"))
-    }
-
-    func testCompactDeltaSummarizesStructuralChangesWithoutTreeInternals() {
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(treeInserted: [
-                makeTreeInsertion(index: 1, heistId: "new_row", label: "New Row"),
-            ], treeRemoved: [
-                TreeRemoval(
-                    ref: TreeNodeRef(id: "old_row", kind: .element),
-                    location: TreeLocation(parentId: "parent_row", index: 2)
-                ),
-            ], treeMoved: [
-                TreeMove(
-                    ref: TreeNodeRef(id: "moved_row", kind: .element),
-                    from: TreeLocation(parentId: nil, index: 0),
-                    to: TreeLocation(parentId: "parent_row", index: 3)
-                ),
-            ])))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let output = FenceResponse.action(result: result).compactFormatted()
-
-        XCTAssertTrue(output.contains("hierarchy changed (+1, -1, moved 1)"))
-        XCTAssertFalse(output.contains("root["))
-        XCTAssertFalse(output.contains("parent_row["))
-        XCTAssertFalse(output.contains("moved_row:"))
-    }
-
-    func testDeltaScreenChangedFormatting() {
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
-            elementCount: 12,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let output = FenceResponse.action(result: result).humanFormatted()
-        XCTAssertTrue(output.contains("[12 elements, screen changed]"))
     }
 
     // MARK: - JSON Formatting Tests
@@ -319,7 +213,7 @@ final class FenceResponseTests: XCTestCase {
         let response = FenceResponse.action(result: result)
         let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
-        XCTAssertEqual(dict["method"] as? String, "syntheticTap")
+        XCTAssertEqual(dict["method"] as? String, "one_finger_tap")
         XCTAssertEqual(dict["value"] as? String, "Hello")
     }
 
@@ -332,45 +226,6 @@ final class FenceResponseTests: XCTestCase {
         XCTAssertEqual(dict["message"] as? String, "Not found")
     }
 
-    func testActionWithDeltaJsonFormatting() {
-        let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 5))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let response = FenceResponse.action(result: result)
-        let dict = publicJSONObject(response)
-        XCTAssertNotNil(dict["delta"])
-    }
-
-    func testActionWithStructuralDeltaJsonFormatting() {
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(treeInserted: [
-                makeTreeInsertion(index: 1, heistId: "new_row", label: "New Row"),
-            ], treeRemoved: [
-                TreeRemoval(
-                    ref: TreeNodeRef(id: "old_row", kind: .element),
-                    location: TreeLocation(parentId: nil, index: 2)
-                ),
-            ], treeMoved: [
-                TreeMove(
-                    ref: TreeNodeRef(id: "moved_row", kind: .element),
-                    from: TreeLocation(parentId: nil, index: 0),
-                    to: TreeLocation(parentId: nil, index: 3)
-                ),
-            ])))
-        let result = ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
-        let response = FenceResponse.action(result: result)
-        let dict = publicJSONObject(response)
-        let deltaDict = dict["delta"] as? [String: Any]
-        let editsDict = deltaDict?["edits"] as? [String: Any]
-
-        XCTAssertEqual((editsDict?["treeInserted"] as? [[String: Any]])?.count, 1)
-        XCTAssertEqual((editsDict?["treeRemoved"] as? [[String: Any]])?.count, 1)
-        let moved = editsDict?["treeMoved"] as? [[String: Any]]
-        XCTAssertEqual(moved?.count, 1)
-        let ref = moved?.first?["ref"] as? [String: Any]
-        XCTAssertEqual(ref?["id"] as? String, "moved_row")
-        let to = moved?.first?["to"] as? [String: Any]
-        XCTAssertEqual(to?["index"] as? Int, 3)
-    }
-
     func testActionAnimatingJsonFormatting() {
         let result = ActionResult(success: true, method: .syntheticTap, animating: true)
         let response = FenceResponse.action(result: result)
@@ -381,7 +236,7 @@ final class FenceResponseTests: XCTestCase {
     func testScreenshotJsonFormatting() {
         let response = FenceResponse.screenshot(
             path: "/tmp/s.png",
-            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852)
+            payload: ScreenPayload(pngData: "abc123", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: []))
         )
         let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
@@ -392,7 +247,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testScreenshotDataJsonFormatting() {
         let response = FenceResponse.screenshotData(
-            payload: ScreenPayload(pngData: "base64data", width: 393, height: 852)
+            payload: ScreenPayload(pngData: "base64data", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: []))
         )
         let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
@@ -439,11 +294,11 @@ final class FenceResponseTests: XCTestCase {
         XCTAssertTrue(output.contains("Interactions: 3"))
     }
 
-    func testRecordingWithoutInteractionsNoInteractionLine() {
+    func testRecordingWithoutInteractionsShowsZeroInteractionLine() {
         let payload = makeRecordingPayload(stopReason: .manual)
         let response = FenceResponse.recording(path: "/tmp/rec.mp4", payload: payload)
         let output = response.humanFormatted()
-        XCTAssertFalse(output.contains("Interactions:"))
+        XCTAssertTrue(output.contains("Interactions: 0"))
     }
 
     func testRecordingJsonInteractionCount() {
@@ -604,7 +459,7 @@ final class FenceResponseTests: XCTestCase {
             InteractionEvent(
                 timestamp: Double(i),
                 command: .activate(.matcher(ElementMatcher(label: "element_\(i)"))),
-                result: ActionResult(success: true, method: .activate, accessibilityDelta: .noChange(.init(elementCount: 0)))
+                result: ActionResult(success: true, method: .activate)
             )
         }
         return RecordingPayload(

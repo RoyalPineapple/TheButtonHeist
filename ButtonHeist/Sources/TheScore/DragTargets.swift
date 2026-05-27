@@ -1,6 +1,5 @@
 import CoreGraphics
 
-
 public struct DragTarget: Codable, Sendable {
     public static let defaultDuration = 0.5
 
@@ -9,7 +8,7 @@ public struct DragTarget: Codable, Sendable {
     /// Duration in seconds (default 0.5).
     public let duration: Double?
 
-    public init(start: GesturePointSelection = .unspecified, end: ScreenPoint, duration: Double? = nil) {
+    public init(start: GesturePointSelection, end: ScreenPoint, duration: Double? = nil) {
         self.start = start
         self.end = end
         self.duration = duration
@@ -55,12 +54,16 @@ public struct DragTarget: Codable, Sendable {
         let container = try decoder.container(keyedBy: DragPointCodingKeys.self)
         let startX = try container.decodeIfPresent(Double.self, forKey: .startX)
         let startY = try container.decodeIfPresent(Double.self, forKey: .startY)
-        self.start = try makeGesturePointSelection(
+        let startSelection = try makeGesturePointSelection(
             elementTarget: elementTarget,
             x: startX,
             y: startY,
             field: "startPoint"
         )
+        guard startSelection.isSpecified else {
+            throw GestureProjectionError.missingGesturePoint(field: "startPoint")
+        }
+        self.start = startSelection
         self.end = ScreenPoint(
             x: try container.decode(Double.self, forKey: .endX),
             y: try container.decode(Double.self, forKey: .endY)

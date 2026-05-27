@@ -17,8 +17,8 @@ Generated references are the source of truth for executable surface area:
 
 Button Heist has one product command contract: `TheFence.Command`. CLI
 commands, session JSON, MCP tools, batches, and heist playback all route through
-that contract. The MCP server may group related commands behind adapter-shaped
-tools, but those tools still project from Fence-owned command descriptors.
+that contract. MCP exposes one tool per exposed command, projected from
+Fence-owned command descriptors.
 
 The raw wire protocol lives one layer lower in TheScore. Wire message
 discriminators such as `requestInterface` and `scrollToVisible` are transport
@@ -145,7 +145,7 @@ and parameters.
 - `connect` verifies transport, handshake/authentication, and session
   ownership. Observation still starts with `get_interface`.
 - `run_batch` accepts canonical batch-executable Fence command requests inside
-  `steps`; grouped MCP wrapper shapes are adapter-only.
+  `steps`.
 - Commands that support `expect` validate the expectation against the action
   result and report the observed outcome.
 - Typed responses serialize to human, compact, and JSON forms from the same
@@ -261,8 +261,8 @@ Expectations use object form with a `type` discriminator, for example
 `{"type":"screen_changed"}` or
 `{"type":"element_appeared","matcher":{"label":"Success"}}`.
 
-Legacy shorthand strings and compiler-synthesized enum wrapper shapes are not
-the public persisted format.
+Prototype v1 shorthand strings and compiler-synthesized enum wrapper shapes are
+rejected by the public persisted format.
 
 ## Minimal Integration
 

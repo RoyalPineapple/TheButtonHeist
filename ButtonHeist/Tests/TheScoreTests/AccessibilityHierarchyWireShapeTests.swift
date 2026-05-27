@@ -6,8 +6,7 @@ import XCTest
 ///
 /// The canonical wire payload is the parser's full-fidelity
 /// `AccessibilityHierarchy` plus Button Heist annotations. These tests pin
-/// that shape so the old lossy converted tree payload
-/// payload cannot drift back into the protocol.
+/// that shape so reduced tree projections cannot drift into the protocol.
 final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
     private let encoder = JSONEncoder()

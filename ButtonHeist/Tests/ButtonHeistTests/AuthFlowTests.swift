@@ -148,7 +148,11 @@ final class AuthFlowTests: XCTestCase {
             deviceName: "Test",
             systemVersion: "18.0",
             screenWidth: 393,
-            screenHeight: 852
+            screenHeight: 852,
+            instanceId: "test-session",
+            instanceIdentifier: "test",
+            listeningPort: 49152,
+            tlsActive: true
         )
         try conn.handleMessage(encode(.info(info)))
 

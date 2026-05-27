@@ -49,13 +49,13 @@ extension Navigation {
             guard let scrollView = stash.liveScrollView(for: resolved.screenElement) else {
                 return .failed(
                     "scroll target failed: observed \(targetDescription) with no live scrollable ancestor; "
-                        + "try \(ScrollMode.search.canonicalCommand) or target an element inside a scroll container"
+                        + "try element_search or target an element inside a scroll container"
                 )
             }
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
                 return .failed(
                     "scroll target failed: observed \(targetDescription) inside a scroll view that is unsafe "
-                        + "for programmatic scrolling; try \(ScrollMode.search.canonicalCommand) to use semantic search"
+                        + "for programmatic scrolling; try element_search to use semantic search"
                 )
             }
             let availableAxis = Self.scrollableAxis(contentSize: scrollView.contentSize, frame: scrollView.frame)
@@ -117,7 +117,8 @@ extension Navigation {
         for normalizedTarget: TheStash.NormalizedTarget,
         requiredAxis axis: ScrollAxis
     ) -> ScrollPlan? {
-        guard let resolved = stash.resolveTarget(normalizedTarget.executableTarget).resolved,
+        guard let executableTarget = normalizedTarget.executableTarget,
+              let resolved = stash.resolveTarget(executableTarget).resolved,
               let scrollView = stash.liveScrollView(for: resolved.screenElement),
               !scrollView.bhIsUnsafeForProgrammaticScrolling else {
             return nil
@@ -134,19 +135,19 @@ extension Navigation {
     }
 
     private func scrollSearchContainer(for scrollView: UIScrollView) -> AccessibilityContainer? {
-        stash.currentScreen.liveInterface.scrollableContainerViews.first { _, ref in
+        stash.currentScreen.liveCapture.scrollableContainerViews.first { _, ref in
             ref.view === scrollView
         }?.key
     }
 
     func stableId(for container: AccessibilityContainer) -> HeistContainer? {
-        if let stableId = stash.currentScreen.liveInterface.containerStableIds[container] {
+        if let stableId = stash.currentScreen.liveCapture.containerStableIds[container] {
             return stableId
         }
         return stash.currentHierarchy.containerPaths.first { candidate, _ in
             candidate == container
         }.flatMap { _, path in
-            stash.currentScreen.liveInterface.containerStableIdsByPath[path]
+            stash.currentScreen.liveCapture.containerStableIdsByPath[path]
         }
     }
 
@@ -242,10 +243,10 @@ extension Navigation {
         switch stash.resolveTarget(target) {
         case .resolved:
             return "\(commandName) failed: target is known but not currently visible; "
-                + "use \(ScrollMode.toVisible.canonicalCommand) to reveal it, then retry \(commandName)."
+                + "use scroll_to_visible to reveal it, then retry \(commandName)."
         case .ambiguous(_, let diagnostics):
             return "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
-                + "\(diagnostics)\nNext: use \(ScrollMode.toVisible.canonicalCommand) with a heistId for a known off-screen "
+                + "\(diagnostics)\nNext: use scroll_to_visible with a heistId for a known off-screen "
                 + "target, or retarget from get_screen's visible interface."
         case .notFound(let diagnostics):
             return diagnostics

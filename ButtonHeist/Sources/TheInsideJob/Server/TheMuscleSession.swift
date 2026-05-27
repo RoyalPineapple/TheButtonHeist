@@ -45,9 +45,9 @@ struct TheMuscleSession {
 
     mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
         switch lease.acquire(driverIdentity: driverIdentity, clientId: clientId) {
-        case .accepted(let notifyActiveChanged, let cancelReleaseTimer):
-            if cancelReleaseTimer {
-                cancelReleaseTimer()
+        case .accepted(let notifyActiveChanged, let shouldCancelReleaseTimer):
+            if shouldCancelReleaseTimer {
+                self.cancelReleaseTimer()
             }
             if notifyActiveChanged {
                 sessionLogger.info("Session claimed by client \(clientId)")
@@ -73,8 +73,9 @@ struct TheMuscleSession {
     mutating func removeConnection(_ clientId: Int, owner: TheMuscle) {
         switch lease.removeConnection(clientId) {
         case .draining:
+            let releaseTimeout = lease.releaseTimeout
             replaceReleaseTimer(owner: owner)
-            sessionLogger.info("All session connections gone, starting \(self.lease.releaseTimeout)s release timer")
+            sessionLogger.info("All session connections gone, starting \(releaseTimeout)s release timer")
         case .active, .unchanged:
             break
         }

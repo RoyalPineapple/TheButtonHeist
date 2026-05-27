@@ -34,8 +34,8 @@ struct ConnectionScopeTests {
         #expect(ConnectionScope.parse("bogus") == nil)
     }
 
-    @Test func parseSkipsInvalidEntries() {
-        #expect(ConnectionScope.parse("simulator,bogus,usb") == [.simulator, .usb])
+    @Test func parseRejectsMixedInvalidEntries() {
+        #expect(ConnectionScope.parse("simulator,bogus,usb") == nil)
     }
 
     @Test func parseReturnsNilWhenAllInvalid() {

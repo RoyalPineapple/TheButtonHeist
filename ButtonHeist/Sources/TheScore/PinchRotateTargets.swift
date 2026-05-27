@@ -1,5 +1,3 @@
-
-
 public struct PinchTarget: Codable, Sendable {
     public static let defaultSpread = 100.0
     public static let defaultDuration = 0.5

@@ -48,7 +48,7 @@ TheInsideJob uses an OS-assigned port by default, or a fixed port from `INSIDEJO
 
 ```bash
 # List Bonjour-advertised devices and named targets
-buttonheist list
+buttonheist list_devices
 
 # Connect to a USB device by name when advertised or configured as a target
 buttonheist --device "iPhone 15 Pro" activate --identifier myButton
@@ -199,7 +199,7 @@ Common issues that USB bypasses:
 - Wrong IPv6 prefix (check `lsof -i -P -n | grep CoreDev`)
 - Tunnel interface not up (reconnect USB cable)
 
-### USB device not appearing in `buttonheist list`
+### USB device not appearing in `buttonheist list_devices`
 - Verify device shows as "connected" in `xcrun devicectl list devices`
 - Ensure app is running on the device
 - Remember that default `simulator,usb` scope does not publish Bonjour; use a named/direct target or enable `network` scope only when LAN discovery is acceptable

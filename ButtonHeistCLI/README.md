@@ -77,7 +77,7 @@ buttonheist get_screen --output screen.png
 
 Explicit viewport commands expose viewport state because moving the viewport is
 the command's purpose. Screenshots write artifact files by default; inline media
-is an explicit compatibility mode.
+is an explicit raw media output mode.
 
 ### Record and Replay
 

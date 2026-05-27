@@ -188,7 +188,11 @@ final class TheMuscleTests: XCTestCase {
             deviceName: "Device",
             systemVersion: "1",
             screenWidth: .nan,
-            screenHeight: 100
+            screenHeight: 100,
+            instanceId: "test-session",
+            instanceIdentifier: "test",
+            listeningPort: 49152,
+            tlsActive: true
         )
 
         let data = await muscle.encodeEnvelope(.info(payload), requestId: "bad-info")
