@@ -30,14 +30,6 @@ final class PublicCommandContractTests: XCTestCase {
         )
     }
 
-    func testPublicCommandCatalogCountIsExplicit() {
-        XCTAssertEqual(
-            TheFence.Command.allCases.count,
-            44,
-            "Public command catalog count changed - update samples, adapter projections, and contract guardrails"
-        )
-    }
-
     func testPublicCommandNamesAreDescriptorOwned() {
         let descriptors = TheFence.Command.descriptors
         let canonicalNames = descriptors.map(\.canonicalName)

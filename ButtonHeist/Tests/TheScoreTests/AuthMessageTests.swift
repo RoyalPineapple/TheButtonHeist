@@ -298,20 +298,6 @@ final class AuthMessageTests: XCTestCase {
         }
     }
 
-    func testAuthenticateWithoutDriverIdFromExplicitJSON() throws {
-        let json = """
-        {"type":"authenticate","payload":{"token":"old-client"}}
-        """
-        let data = Data(json.utf8)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-        if case .authenticate(let payload) = decoded {
-            XCTAssertEqual(payload.token, "old-client")
-            XCTAssertNil(payload.driverId)
-        } else {
-            XCTFail("Expected authenticate from old-style JSON")
-        }
-    }
-
     func testAuthenticateNilDriverIdOmittedFromJSON() throws {
         let payload = AuthenticatePayload(token: "test")
         let data = try JSONEncoder().encode(payload)

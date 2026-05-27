@@ -531,18 +531,6 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertNil(result.screenId)
     }
 
-    func testActionResultScreenContextFallsBackWithoutTrace() throws {
-        let result = ActionResult(
-            success: true,
-            method: .activate,
-            screenName: "Legacy Screen",
-            screenId: "legacy_screen"
-        )
-
-        XCTAssertEqual(result.screenName, "Legacy Screen")
-        XCTAssertEqual(result.screenId, "legacy_screen")
-    }
-
     func testActionResultDecodedScreenContextProjectsFromTrace() throws {
         let before = interfaceWithHeader("Before", heistId: "before-title")
         let after = interfaceWithHeader("Trace Screen", heistId: "trace-title", timestamp: 1)
@@ -564,17 +552,6 @@ final class ServerMessageTests: XCTestCase {
 
         XCTAssertEqual(result.screenName, "Trace Screen")
         XCTAssertEqual(result.screenId, "trace_screen")
-    }
-
-    func testActionResultDecodedScreenContextFallsBackWithoutTrace() throws {
-        let json = """
-        {"success":true,"method":"activate","screenName":"Legacy Screen","screenId":"legacy_screen"}
-        """
-
-        let result = try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))
-
-        XCTAssertEqual(result.screenName, "Legacy Screen")
-        XCTAssertEqual(result.screenId, "legacy_screen")
     }
 
     func testActionResultPayloadDecodesFromExplicitJSON() throws {

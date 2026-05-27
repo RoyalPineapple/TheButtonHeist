@@ -83,27 +83,16 @@ extension TheStash {
 
     /// Executable form of a caller-provided element target.
     ///
-    /// Direct heistIds are input handles: when the source screen still knows
-    /// the handle, actions execute through the minimum semantic matcher derived
-    /// from that source element. The original heistId remains attached for
-    /// diagnostics.
+    /// A direct heistId is a current-capture handle, not durable replay
+    /// identity. Durable replay/batch identity arrives as matcher+ordinal via
+    /// SemanticActionTarget; this wrapper only carries source heistId metadata
+    /// for diagnostics.
     struct NormalizedTarget {
-        let originalTarget: ElementTarget
         let executableTarget: ElementTarget
         let sourceHeistId: HeistId?
-        let sourceScreen: Screen
-
-        var didNormalizeHeistId: Bool {
-            switch (originalTarget, executableTarget) {
-            case (.heistId, .matcher):
-                return true
-            default:
-                return false
-            }
-        }
 
         func diagnostics(_ message: String) -> String {
-            guard didNormalizeHeistId, let sourceHeistId else { return message }
+            guard let sourceHeistId else { return message }
             guard !message.contains(sourceHeistId) else { return message }
             return "\(message)\nSource heistId: \(sourceHeistId)"
         }
@@ -172,37 +161,16 @@ extension TheStash {
         }
     }
 
-    /// Convert direct heistId input into the minimum semantic matcher for the
-    /// source screen when the source element is still known. If the handle is
-    /// unknown, keep it executable as a direct heistId so existing not-found
-    /// diagnostics and public support remain intact.
-    func normalizeTarget(_ target: ElementTarget, in sourceScreen: Screen? = nil) -> NormalizedTarget {
-        let sourceScreen = sourceScreen ?? currentScreen
-        switch target {
-        case .heistId(let heistId):
-            guard let sourceElement = sourceScreen.findElement(heistId: heistId) else {
-                return NormalizedTarget(
-                    originalTarget: target,
-                    executableTarget: target,
-                    sourceHeistId: heistId,
-                    sourceScreen: sourceScreen
-                )
-            }
-            let minimum = minimumMatcher(for: sourceElement, in: sourceScreen)
-            return NormalizedTarget(
-                originalTarget: target,
-                executableTarget: .matcher(minimum.matcher, ordinal: minimum.ordinal),
-                sourceHeistId: heistId,
-                sourceScreen: sourceScreen
-            )
-        case .matcher:
-            return NormalizedTarget(
-                originalTarget: target,
-                executableTarget: target,
-                sourceHeistId: nil,
-                sourceScreen: sourceScreen
-            )
-        }
+    /// Wrap a public element target for semantic actionability execution.
+    ///
+    /// This does not rewrite heistIds. A heistId remains an exact handle into
+    /// the current capture; durable replay identity must arrive as matcher
+    /// fields produced by recording or SemanticActionTarget creation.
+    func normalizeTarget(_ target: ElementTarget, in _: Screen? = nil) -> NormalizedTarget {
+        NormalizedTarget(
+            executableTarget: target,
+            sourceHeistId: nil
+        )
     }
 
     /// HeistIds for either the live hierarchy or the committed known screen.
@@ -314,27 +282,6 @@ private extension TheStash {
         case .matcher(let matcher, let ordinal):
             return resolveMatcher(matcher, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
         }
-    }
-
-    func minimumMatcher(for sourceElement: ScreenElement, in sourceScreen: Screen) -> MinimumMatcher {
-        let entries = selectElements(in: sourceScreen)
-        let tree = entries.enumerated().map { index, entry in
-            AccessibilityHierarchy.element(entry.element, traversalIndex: index)
-        }
-        let annotations = entries.enumerated().map { index, entry in
-            InterfaceElementAnnotation(
-                path: TreePath([index]),
-                heistId: entry.heistId,
-                actions: WireConversion.buildActions(for: entry.element)
-            )
-        }
-        let interface = Interface(
-            timestamp: Date(timeIntervalSinceReferenceDate: 0),
-            tree: tree,
-            annotations: InterfaceAnnotations(elements: annotations)
-        )
-        let capture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
-        return MinimumMatcher.build(element: WireConversion.toWire(sourceElement), in: capture)
     }
 
     func resolveMatcher(

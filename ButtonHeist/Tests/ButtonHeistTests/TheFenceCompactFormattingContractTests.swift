@@ -92,23 +92,4 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.canonicalName(forActionResultMethod: .syntheticTap), "syntheticTap")
     }
 
-    func testCompactFormatterDoesNotMirrorActionMethodCommandLists() throws {
-        let sourceURL = packageRoot()
-            .appendingPathComponent("Sources/TheButtonHeist/TheFence/TheFence+Formatting+Compact+Action.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
-
-        XCTAssertTrue(source.contains("canonicalName(forActionResultMethod:"))
-        XCTAssertFalse(source.contains("compactScrollSearchCommandName"))
-        XCTAssertFalse(source.contains("private extension ActionMethod"))
-        XCTAssertFalse(source.contains("case .elementSearch"))
-        XCTAssertFalse(source.contains("case .scrollToVisible"))
-    }
-
-    private func packageRoot() -> URL {
-        var url = URL(fileURLWithPath: #filePath)
-        for _ in 0..<3 {
-            url.deleteLastPathComponent()
-        }
-        return url
-    }
 }

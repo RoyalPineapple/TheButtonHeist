@@ -162,7 +162,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("button_ok"), "Should suggest similar heistId")
     }
 
-    func testNormalizeHeistIdBuildsMatcherFromSourceElement() {
+    func testNormalizeHeistIdKeepsCurrentCaptureHandle() {
         let sourceElement = element(
             label: "Quantity",
             value: "0",
@@ -180,30 +180,24 @@ final class TheStashResolutionTests: XCTestCase {
 
         let normalized = bagman.normalizeTarget(.heistId("quantity_0"), in: sourceScreen)
 
-        guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {
-            XCTFail("Expected heistId to normalize to matcher, got \(normalized.executableTarget)")
-            return
-        }
-        XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
-        XCTAssertNil(matcher.heistId)
-        XCTAssertEqual(matcher.identifier, "quantity_stepper")
-        XCTAssertNil(ordinal)
-        XCTAssertEqual(
-            bagman.resolveTarget(normalized.executableTarget).resolved?.screenElement.heistId,
-            "quantity_1"
+        XCTAssertEqual(normalized.executableTarget, .heistId("quantity_0"))
+        XCTAssertNil(normalized.sourceHeistId)
+        XCTAssertNil(
+            bagman.resolveTarget(normalized.executableTarget).resolved,
+            "Runtime heistIds are current-capture handles and must not replay through source-screen matchers"
         )
     }
 
-    func testNormalizeHeistIdFallsBackToOriginalHandleWhenSourceElementIsMissing() {
+    func testNormalizeHeistIdDoesNotAddSourceMetadata() {
         let screen = Screen.makeForTests()
 
         let normalized = bagman.normalizeTarget(.heistId("missing_button"), in: screen)
 
         XCTAssertEqual(normalized.executableTarget, .heistId("missing_button"))
-        XCTAssertEqual(normalized.sourceHeistId, "missing_button")
+        XCTAssertNil(normalized.sourceHeistId)
     }
 
-    func testNormalizedReplaySelectorAcquiresFreshLiveGeometry() {
+    func testSemanticActionTargetAcquiresFreshLiveGeometry() throws {
         let sourceFrame = CGRect(x: 10, y: 20, width: 80, height: 44)
         let sourcePoint = CGPoint(x: 50, y: 42)
         let sourceElement = AccessibilityElement.make(
@@ -234,12 +228,17 @@ final class TheStashResolutionTests: XCTestCase {
             objects: ["quantity_1": object]
         )
 
-        let normalized = bagman.normalizeTarget(.heistId("quantity_0"), in: sourceScreen)
+        let capture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: TheStash.WireConversion.toInterface(from: sourceScreen)
+        )
+        let sourceWireElement = try XCTUnwrap(capture.interface.elements.first { $0.heistId == "quantity_0" })
+        let semanticTarget = SemanticActionTarget(MinimumMatcher.build(element: sourceWireElement, in: capture))
+        let normalized = bagman.normalizeTarget(semanticTarget, in: sourceScreen)
 
         XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
-        XCTAssertEqual(normalized.sourceScreen.findElement(heistId: "quantity_0")?.element.shape.frame, sourceFrame)
         guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {
-            XCTFail("Expected replay heistId to become semantic matcher, got \(normalized.executableTarget)")
+            XCTFail("Expected semantic replay target to carry matcher identity, got \(normalized.executableTarget)")
             return
         }
         XCTAssertEqual(matcher.identifier, "quantity_stepper")

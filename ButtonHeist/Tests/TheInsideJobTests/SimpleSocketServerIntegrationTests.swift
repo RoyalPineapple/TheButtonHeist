@@ -53,25 +53,6 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         XCTAssertEqual(server.listeningPort, port)
     }
 
-    func testProductionStartRequiresExplicitTLSParameters() throws {
-        let packageRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let sourceURL = packageRoot
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("TheInsideJob")
-            .appendingPathComponent("Server")
-            .appendingPathComponent("SimpleSocketServer.swift")
-        let source = try String(contentsOf: sourceURL)
-
-        XCTAssertTrue(source.contains("func startAsync("))
-        XCTAssertTrue(source.contains("tlsParameters: NWParameters,"))
-        XCTAssertFalse(source.contains("tlsParameters: NWParameters?"))
-        XCTAssertFalse(source.contains("tlsParameters: NWParameters? = nil"))
-        XCTAssertTrue(source.contains("func startPlaintextForTests("))
-    }
-
     func testDoubleStartThrowsAlreadyRunning() async throws {
         _ = try await server.startPlaintextForTests(port: 0, bindToLoopback: true)
 

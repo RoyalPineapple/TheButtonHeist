@@ -1,5 +1,7 @@
 import Foundation
 
+import TheScore
+
 extension TheFence {
 
     func decodeRunBatchRequest(_ arguments: CommandArgumentEnvelope) throws -> RunBatchRequest {
@@ -24,13 +26,9 @@ extension TheFence {
                 expected: "array count 1...\(DecodeLimits.maxRunBatchSteps)"
             )
         }
-        let parser = BatchCommandParser(fence: self)
         return RunBatchRequest(
             steps: batchStepDecodeInputs.enumerated().map { index, stepDecodeInput in
-                parser.decode(
-                    FenceOperationCatalog.routeBatchStepDecodeInput(stepDecodeInput),
-                    index: index
-                )
+                decodeRunBatchStep(stepDecodeInput, index: index)
             },
             policy: try arguments.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
         )
@@ -38,6 +36,108 @@ extension TheFence {
 }
 
 private extension TheFence {
+
+    func decodeRunBatchStep(_ step: CommandArgumentObject, index: Int) -> RunBatchStep {
+        switch FenceOperationCatalog.normalizeBatchStep(step) {
+        case .success(let operation):
+            return decodeRunBatchStep(operation: operation, index: index)
+
+        case .failure(let error):
+            let fenceError = FenceError.invalidRequest("run_batch step \(index): \(error.message)")
+            return .invalid(
+                commandName: diagnosticCommandName(forBatchStep: step),
+                failure: BatchStepFailure(
+                    message: fenceError.coreMessage,
+                    details: fenceError.failureDetails,
+                    includeDetailsInResult: false
+                )
+            )
+        }
+    }
+
+    func decodeRunBatchStep(operation: NormalizedOperation, index: Int) -> RunBatchStep {
+        do {
+            let request = try parseRequest(operation: operation)
+            return .planned(try batchPreparedStep(originalIndex: index, request: request))
+        } catch let error as SchemaValidationError {
+            return invalidBatchStep(operation, message: error.message, includeDetailsInResult: true)
+        } catch let error as MissingElementTarget {
+            return .invalid(
+                commandName: operation.command.rawValue,
+                failure: batchStepFailure(from: missingElementTargetResponse(command: error.command))
+            )
+        } catch let error as FenceError {
+            return .invalid(
+                commandName: operation.command.rawValue,
+                failure: BatchStepFailure(
+                    message: error.coreMessage,
+                    details: error.failureDetails,
+                    includeDetailsInResult: true
+                )
+            )
+        } catch let error as BatchStepPlanBuildError {
+            return invalidBatchStep(operation, message: error.message)
+        } catch {
+            return invalidBatchStep(operation, message: error.localizedDescription)
+        }
+    }
+
+    func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
+        let message = try batchClientMessage(for: request)
+        let typedStep = TheScore.BatchStep.command(
+            message,
+            expect: request.expectationPayload.expectation,
+            deadline: request.expectationPayload.timeout.map(TheScore.Deadline.init(timeout:))
+        )
+        return RunBatchPreparedStep(
+            originalIndex: originalIndex,
+            commandName: request.command.rawValue,
+            command: typedStep.command,
+            expectation: typedStep.expectation,
+            deadline: typedStep.deadline
+        )
+    }
+
+    func invalidBatchStep(
+        _ operation: NormalizedOperation,
+        message: String,
+        includeDetailsInResult: Bool = false
+    ) -> RunBatchStep {
+        .invalid(
+            commandName: operation.command.rawValue,
+            failure: BatchStepFailure(
+                message: message,
+                details: nil,
+                includeDetailsInResult: includeDetailsInResult
+            )
+        )
+    }
+
+    func batchStepFailure(from response: FenceResponse) -> BatchStepFailure {
+        guard case .error(let message, let details) = response else {
+            return BatchStepFailure(
+                message: response.humanFormatted(),
+                details: nil,
+                includeDetailsInResult: false
+            )
+        }
+        return BatchStepFailure(
+            message: message,
+            details: details,
+            includeDetailsInResult: true
+        )
+    }
+
+    func diagnosticCommandName(forBatchStep step: some CommandArgumentReadable) -> String {
+        do {
+            guard let commandName = try step.schemaString("command") else {
+                return "?"
+            }
+            return commandName
+        } catch {
+            return "?"
+        }
+    }
 
     static func validateJSONEnvelope(
         _ arguments: some CommandArgumentReadable,

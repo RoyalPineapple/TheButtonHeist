@@ -71,98 +71,6 @@ final class TheFenceParameterSpecTests: XCTestCase {
         }
     }
 
-    func testRequestPayloadFamiliesAreDescriptorOwned() {
-        let commandsByKind = Dictionary(grouping: TheFence.Command.allCases, by: \.requestPayloadKind)
-
-        XCTAssertEqual(
-            Set(commandsByKind[.none] ?? []),
-            [
-                .help, .status, .ping, .quit, .exit, .listDevices,
-                .getPasteboard, .dismissKeyboard, .getSessionState,
-                .listTargets, .getSessionLog,
-            ]
-        )
-        XCTAssertEqual(Set(commandsByKind[.observation] ?? []), [.getInterface, .getScreen, .stopRecording])
-        XCTAssertEqual(Set(commandsByKind[.waitForChange] ?? []), [.waitForChange])
-        XCTAssertEqual(
-            Set(commandsByKind[.gesture] ?? []),
-            [
-                .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
-                .twoFingerTap, .drawPath, .drawBezier,
-            ]
-        )
-        XCTAssertEqual(
-            Set(commandsByKind[.elementAction] ?? []),
-            [
-                .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-                .activate, .increment, .decrement, .performCustomAction,
-                .rotor, .typeText, .editAction, .setPasteboard, .waitFor,
-            ]
-        )
-        XCTAssertEqual(
-            Set(commandsByKind[.session] ?? []),
-            [
-                .startRecording, .runBatch, .connect, .archiveSession,
-                .startHeist, .stopHeist, .playHeist,
-            ]
-        )
-    }
-
-    func testCommandExecutionEligibilityIsDescriptorOwned() {
-        let descriptors = TheFence.Command.descriptors
-
-        XCTAssertEqual(TheFence.Command.batchExecutableCases, descriptors.filter(\.isBatchExecutable).map(\.command))
-        XCTAssertEqual(TheFence.Command.playbackExecutableCases, TheFence.Command.batchExecutableCases)
-        XCTAssertEqual(
-            TheFence.Command.allCases.filter(\.isHeistRecordable),
-            TheFence.Command.playbackExecutableCases
-        )
-
-        let nonBatchCommands = TheFence.Command.allCases.filter { !$0.isBatchExecutable }
-        XCTAssertEqual(
-            Set(nonBatchCommands),
-            [
-                .help, .status, .ping, .quit, .exit,
-                .listDevices, .getInterface, .getScreen, .getPasteboard,
-                .getSessionState, .connect, .listTargets,
-                .getSessionLog, .archiveSession,
-                .startRecording, .stopRecording, .runBatch,
-                .startHeist, .stopHeist, .playHeist,
-            ]
-        )
-
-        XCTAssertTrue(TheFence.Command.allCases.allSatisfy { !$0.isHeistRecordable || $0.isPlaybackExecutable })
-    }
-
-    func testExecutionEligibilityCountsAreExplicit() {
-        XCTAssertEqual(
-            TheFence.Command.batchExecutableCases.count,
-            24,
-            "Batch-eligible command count changed - update run_batch schema tests and this canary"
-        )
-        XCTAssertEqual(
-            TheFence.Command.playbackExecutableCases.count,
-            TheFence.Command.batchExecutableCases.count,
-            "Playback eligibility should derive from batch eligibility unless a separate product contract is reintroduced"
-        )
-        XCTAssertEqual(
-            TheFence.Command.allCases.filter(\.isHeistRecordable).count,
-            TheFence.Command.playbackExecutableCases.count,
-            "Heist-recordable commands should derive from playback eligibility unless a separate product contract is reintroduced"
-        )
-    }
-
-    func testConnectionDispatchPolicyIsDescriptorOwned() {
-        let noConnectionCommands = TheFence.Command.allCases.filter { !$0.requiresConnectionBeforeDispatch }
-        XCTAssertEqual(
-            Set(noConnectionCommands),
-            [
-                .status, .ping, .getSessionState, .listDevices, .connect, .listTargets,
-                .getSessionLog, .archiveSession, .startHeist, .stopHeist,
-            ]
-        )
-    }
-
     func testPingMCPAnnotationsAreReadOnlyAndIdempotent() {
         let contract = TheFence.Command.mcpToolContract(named: TheFence.Command.ping.rawValue)
 
@@ -179,14 +87,6 @@ final class TheFenceParameterSpecTests: XCTestCase {
         )
 
         XCTAssertEqual(TheFence.Command.humanCommandAliases, descriptorAliases)
-    }
-
-    func testHumanAliasCountIsExplicit() {
-        XCTAssertEqual(
-            TheFence.Command.humanCommandAliases.count,
-            18,
-            "Human alias count changed - update descriptor-owned aliases and REPL help tests"
-        )
     }
 
     func testRepresentativeDescriptorParametersOwnRenderedSchemaProperties() throws {

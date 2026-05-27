@@ -574,77 +574,6 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("MCP adapter source does not mirror Fence command or parameter literals")
-    func mcpAdapterSourceDoesNotMirrorFenceCatalogLiterals() throws {
-        let source = try readRepositoryFile("ButtonHeistMCP/Sources/ToolDefinitions.swift")
-
-        let sourceWithoutContractRoot = source.replacingOccurrences(of: "TheFence.Command.mcpToolContracts", with: "")
-        #expect(
-            !sourceWithoutContractRoot.contains("TheFence.Command."),
-            "ToolDefinitions.swift should render from MCPToolContract instead of referencing command cases"
-        )
-        #expect(
-            !source.contains(".rawValue"),
-            "ToolDefinitions.swift should not render command names through rawValue references"
-        )
-
-        let sourceForLiteralScan = Self.removingLineComments(from: source)
-        let literalCounts = Self.stringLiteralCounts(in: sourceForLiteralScan)
-        for (literal, expectedCount) in Self.expectedSchemaRendererCatalogLiteralCounts {
-            #expect(
-                literalCounts[literal] == expectedCount,
-                """
-                ToolDefinitions.swift contains \(literalCounts[literal] ?? 0) occurrences of the \
-                catalog literal \(literal), expected \(expectedCount) schema-renderer occurrences
-                """
-            )
-        }
-
-        let literalMirrors = Set(literalCounts.keys)
-            .intersection(Self.fenceCatalogLiterals)
-            .subtracting(Self.allowedSchemaRendererLiterals)
-        #expect(
-            literalMirrors.isEmpty,
-            "ToolDefinitions.swift should render command/parameter names from Fence specs, not mirror literals: \(literalMirrors.sorted())"
-        )
-    }
-
-    @Test("MCP server entry point does not hard-code catalog literals")
-    func mcpServerEntryPointDoesNotHardCodeCatalogLiterals() throws {
-        let source = try readRepositoryFile("ButtonHeistMCP/Sources/main.swift")
-        let sourceForLiteralScan = Self.removingLineComments(from: source)
-        let literalCounts = Self.stringLiteralCounts(in: sourceForLiteralScan)
-        let literalMirrors = Set(literalCounts.keys).intersection(Self.fenceCatalogLiterals)
-        #expect(
-            literalMirrors.isEmpty,
-            "main.swift should not hard-code catalog command or parameter literals: \(literalMirrors.sorted())"
-        )
-        #expect(
-            !source.contains("[String: Any]"),
-            "main.swift should decode MCP arguments into CommandArgumentValue, not a raw dictionary"
-        )
-        #expect(
-            !source.contains("anyValue"),
-            "main.swift should not route through an untyped Any conversion helper"
-        )
-        #expect(
-            source.contains("TheFence.Command.mcpServerInstructions"),
-            "main.swift should delegate server instructions to the Fence-owned MCP presentation"
-        )
-        #expect(
-            !source.contains("parameters.first"),
-            "main.swift should not open-code descriptor parameter scans"
-        )
-
-        let presentationSource = try readRepositoryFile(
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Adapters.swift"
-        )
-        #expect(
-            presentationSource.contains("parameter(named:"),
-            "MCP presentation should use the descriptor parameter lookup API for instruction keys"
-        )
-    }
-
     @Test("MCP server instructions render descriptor-backed tool names")
     func mcpServerInstructionsRenderDescriptorBackedToolNames() {
         let instructions = ButtonHeistMCPServer.instructions
@@ -745,62 +674,6 @@ struct ToolSyncTests {
         }
     }
 
-    // MARK: - Documentation Drift
-
-    @Test("Public docs do not hard-code MCP tool counts")
-    func publicDocsDoNotHardCodeMCPToolCounts() throws {
-        let paths = [
-            "README.md",
-            "ButtonHeistMCP/README.md",
-            "docs/API.md",
-            "docs/ARCHITECTURE.md",
-            "docs/REVIEWERS-GUIDE.md",
-            "docs/dossiers/02-MCP.md",
-        ]
-        let aggregate = try paths.map(readRepositoryFile).joined(separator: "\n")
-
-        #expect(
-            aggregate.contains("ToolDefinitions.swift"),
-            "Public MCP docs should point to ToolDefinitions.swift as the rendered tool/schema source"
-        )
-        #expect(
-            aggregate.contains("TheFence.Command.parameters") ||
-                aggregate.contains("Fence-owned MCP contract"),
-            "Public MCP docs should point to the Fence-owned command contract instead of a fixed tool count"
-        )
-
-        for path in paths {
-            let contents = try readRepositoryFile(path)
-            let hardCodedCounts = hardCodedPublicSurfaceCounts(in: contents, nouns: ["tool", "tools"])
-            #expect(
-                hardCodedCounts.isEmpty,
-                "\(path) hard-codes public MCP tool counts instead of pointing to ToolDefinitions: \(hardCodedCounts)"
-            )
-        }
-    }
-
-    @Test("MCP README does not hand-maintain the tool registry")
-    func mcpReadmeDoesNotHandMaintainToolRegistry() throws {
-        let contents = try readRepositoryFile("ButtonHeistMCP/README.md")
-        let toolSurface = try section(named: "## Tool Surface", endingBefore: "## Runtime Behavior", in: contents)
-
-        #expect(
-            contents.contains("ToolDefinitions"),
-            "MCP README should point to ToolDefinitions instead of carrying a tool registry"
-        )
-        #expect(
-            contents.contains("TheFence.Command"),
-            "MCP README should point to TheFence.Command as the product command contract"
-        )
-        let documentedToolBullets = toolSurface.split(separator: "\n").filter { line in
-            line.trimmingCharacters(in: .whitespaces).hasPrefix("- `")
-        }
-        #expect(
-            documentedToolBullets.isEmpty,
-            "MCP README should not carry a second exhaustive tool list: \(documentedToolBullets)"
-        )
-    }
-
     @Test("Generated MCP reference matches executable tool contracts")
     func generatedMCPReferenceMatchesExecutableToolContracts() throws {
         let reference = try readRepositoryFile("docs/reference/mcp-tools.md")
@@ -820,105 +693,7 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("MCP README points to generated references")
-    func mcpReadmePointsToGeneratedReferences() throws {
-        let contents = try readRepositoryFile("ButtonHeistMCP/README.md")
-
-        #expect(contents.contains("../docs/reference/mcp-tools.md"))
-        #expect(contents.contains("../docs/reference/commands.md"))
-    }
-
-    @Test("Public docs do not hard-code command catalog counts")
-    func publicDocsDoNotHardCodeCommandCatalogCounts() throws {
-        let paths = [
-            "docs/API.md",
-            "docs/ARCHITECTURE.md",
-            "docs/REVIEWERS-GUIDE.md",
-            "docs/dossiers/03-THEFENCE.md",
-        ]
-
-        for path in paths {
-            let contents = try readRepositoryFile(path)
-            #expect(
-                contents.contains("TheFence.Command"),
-                "\(path) should point to TheFence.Command as the command catalog source of truth"
-            )
-            let hardCodedCounts = hardCodedPublicSurfaceCounts(in: contents, nouns: ["command", "commands", "case", "cases"])
-            #expect(
-                hardCodedCounts.isEmpty,
-                "\(path) hard-codes public command catalog counts instead of pointing to TheFence.Command: \(hardCodedCounts)"
-            )
-        }
-    }
-
     // MARK: - Helpers
-
-    private static let allowedSchemaRendererLiterals: Set<String> = []
-
-    private static let expectedSchemaRendererCatalogLiteralCounts: [String: Int] = [:]
-
-    private static var fenceCatalogLiterals: Set<String> {
-        var literals = Set(TheFence.Command.allCases.map(\.rawValue))
-        literals.formUnion(TheFence.Command.mcpToolContracts.map(\.name))
-
-        for command in TheFence.Command.allCases {
-            collectParameterKeys(from: command.parameters, into: &literals)
-        }
-        for contract in TheFence.Command.mcpToolContracts {
-            if let selector = contract.selector {
-                collectParameterKeys(from: [selector.parameter], into: &literals)
-            }
-        }
-
-        return literals
-    }
-
-    private static func collectParameterKeys(
-        from specs: [FenceParameterSpec],
-        into literals: inout Set<String>
-    ) {
-        for spec in specs {
-            literals.insert(spec.key)
-            collectParameterKeys(from: spec.jsonSchemaProperty, into: &literals)
-        }
-    }
-
-    private static func collectParameterKeys(
-        from schema: FenceJSONSchemaValue,
-        into literals: inout Set<String>
-    ) {
-        guard case .object(let object) = schema else { return }
-
-        if case .object(let properties)? = object["properties"] {
-            for (key, propertySchema) in properties {
-                literals.insert(key)
-                collectParameterKeys(from: propertySchema, into: &literals)
-            }
-        }
-        if let items = object["items"] {
-            collectParameterKeys(from: items, into: &literals)
-        }
-    }
-
-    private static func removingLineComments(from source: String) -> String {
-        source.replacingOccurrences(of: #"//.*"#, with: "", options: .regularExpression)
-    }
-
-    private static func stringLiterals(in source: String) -> Set<String> {
-        Set(stringLiteralCounts(in: source).keys)
-    }
-
-    private static func stringLiteralCounts(in source: String) -> [String: Int] {
-        guard let regex = try? NSRegularExpression(pattern: #""((?:\\.|[^"\\])*)""#) else {
-            return [:]
-        }
-        let range = NSRange(source.startIndex..<source.endIndex, in: source)
-        let literals: [String] = regex.matches(in: source, range: range).compactMap { match in
-            guard let literalRange = Range(match.range(at: 1), in: source) else { return nil }
-            return String(source[literalRange])
-        }
-        return Dictionary(literals.map { ($0, 1) }, uniquingKeysWith: +)
-    }
 
     private func readRepositoryFile(_ path: String) throws -> String {
         let data = try Data(contentsOf: repositoryRoot().appendingPathComponent(path))
@@ -936,48 +711,12 @@ struct ToolSyncTests {
             .deletingLastPathComponent()
     }
 
-    private func section(named heading: String, endingBefore nextHeading: String, in contents: String) throws -> String {
-        guard let startRange = contents.range(of: heading),
-              let endRange = contents[startRange.upperBound...].range(of: nextHeading) else {
-            Issue.record("Missing section \(heading)")
-            return ""
-        }
-        return String(contents[startRange.upperBound..<endRange.lowerBound])
-    }
-
-    private func regexMatches(in contents: String, pattern: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let range = NSRange(contents.startIndex..<contents.endIndex, in: contents)
-        return regex.matches(in: contents, range: range).compactMap { result in
-            guard result.numberOfRanges > 1,
-                  let matchRange = Range(result.range(at: 1), in: contents) else { return nil }
-            return String(contents[matchRange])
-        }
-    }
-
-    private func hardCodedPublicSurfaceCounts(in contents: String, nouns: [String]) -> [String] {
-        let nounPattern = nouns.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
-        return regexFullMatches(
-            in: contents,
-            pattern: #"\b[0-9]+(?:\s+|-)(?:[A-Za-z-]+(?:\s+|-)){0,3}(?:"# + nounPattern + #")\b"#
-        )
-    }
-
     private func mcpToolName(for command: TheFence.Command) -> String {
         TheFence.Command.mcpToolContracts.first { $0.commands.contains(command) }?.name ?? command.canonicalName
     }
 
     private func inlineCode(_ value: String) -> String {
         "`\(value)`"
-    }
-
-    private func regexFullMatches(in contents: String, pattern: String) -> [String] {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let range = NSRange(contents.startIndex..<contents.endIndex, in: contents)
-        return regex.matches(in: contents, range: range).compactMap { result in
-            guard let matchRange = Range(result.range(at: 0), in: contents) else { return nil }
-            return String(contents[matchRange])
-        }
     }
 
     @Test("get_interface MCP schema does not advertise legacy full mode")

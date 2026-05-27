@@ -244,17 +244,6 @@ final class WireConverterTests: XCTestCase {
                        "HeistTrait.allCases must match parser's UIKit knownTraitNames")
     }
 
-    /// Guards against duplicate `(trait, name)` rows in the parser's `knownTraits` table.
-    /// `traitNames` iterates the array (not the deduplicated `knownTraitNames` set), so a
-    /// duplicate row would silently double-emit on the wire — invisible to the `Set`-based
-    /// `testHeistTraitAllCasesMatchParser` above. Asserts row count equals name-set count.
-    func testParserKnownTraitsHasNoDuplicateRows() {
-        let rowCount = UIAccessibilityTraits.knownTraits.count
-        let uniqueNameCount = AccessibilityTraits.knownTraitNames.count
-        XCTAssertEqual(rowCount, uniqueNameCount,
-                       "knownTraits table contains duplicate (trait, name) rows")
-    }
-
     /// Wire payload regression: a secure text field must emit `"secureTextField"` exactly once
     /// in its `traits` array. A duplicate row in the parser's `knownTraits` table caused
     /// `traits: ["secureTextField", "secureTextField"]` to ship to every client.

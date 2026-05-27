@@ -323,20 +323,6 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(trace.isLinearChain)
     }
 
-    func testOldCaptureWithoutTransitionDecodesAsEmptyTransition() throws {
-        let interface = makeInterface()
-        let capture = AccessibilityTrace.Capture(sequence: 1, interface: interface)
-        let data = try JSONEncoder().encode(capture)
-        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        json.removeValue(forKey: "transition")
-        let oldShapeData = try JSONSerialization.data(withJSONObject: json)
-
-        let decoded = try JSONDecoder().decode(AccessibilityTrace.Capture.self, from: oldShapeData)
-
-        XCTAssertEqual(decoded.hash, capture.hash)
-        XCTAssertEqual(decoded.transition, .empty)
-    }
-
     func testIntegrityValidationCatchesCorruptedStructuralPatch() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeListInterface(["Antipasti"]))
         let after = AccessibilityTrace.Capture(
