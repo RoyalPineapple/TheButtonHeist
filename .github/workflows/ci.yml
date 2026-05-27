@@ -60,7 +60,7 @@ jobs:
 
   spm-package:
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -69,7 +69,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Resolve SPM dependencies
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: swift package resolve
 
       - name: Build TheScore
@@ -102,7 +102,7 @@ jobs:
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
       - name: Install Tuist dependencies
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: tuist install
 
       - name: Verify generated project is up to date
@@ -192,7 +192,7 @@ jobs:
         uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151  # v4
 
       - name: Install Tuist dependencies
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: tuist install
 
       - name: Generate project

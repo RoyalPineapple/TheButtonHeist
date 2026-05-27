@@ -29,28 +29,16 @@ public extension AccessibilityTrace {
 
     enum IntegrityIssue: Sendable, Equatable {
         case captureHashMismatch(
-            segment: Int,
+            index: Int,
             sequence: Int,
             recordedHash: String,
             computedHash: String
         )
         case parentHashMismatch(
-            segment: Int,
+            index: Int,
             sequence: Int,
             recordedParentHash: String?,
             expectedParentHash: String?
-        )
-        case transitionFromHashMismatch(
-            segment: Int,
-            sequence: Int,
-            recordedFromHash: String,
-            expectedFromHash: String
-        )
-        case transitionToHashMismatch(
-            segment: Int,
-            sequence: Int,
-            recordedToHash: String,
-            computedToHash: String
         )
     }
 

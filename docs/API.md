@@ -1,6 +1,10 @@
 # Button Heist API Reference
 
-Complete API documentation for TheInsideJob (iOS), TheFence (command dispatch), TheHandoff (connection lifecycle), and the CLI.
+Integration and invariant documentation for TheInsideJob (iOS), TheFence
+(command dispatch), TheHandoff (connection lifecycle), and the CLI. Generated
+command and MCP surface references live in [Command Reference](reference/commands.md)
+and [MCP Tool Reference](reference/mcp-tools.md); this page avoids duplicating
+their parameter catalogs.
 
 ## TheInsideJob
 
@@ -33,7 +37,7 @@ INSIDEJOB_SESSION_TIMEOUT=30         # Session release timeout in seconds (defau
 INSIDEJOB_SCOPE=simulator,usb        # Allowed scopes (default: simulator,usb; add network to publish Bonjour)
 ```
 
-**Info.plist (fallback):**
+**Info.plist (lower priority):**
 ```xml
 <key>InsideJobPollingInterval</key>
 <real>1.0</real>
@@ -95,7 +99,7 @@ Configure the shared instance with an auth token, instance identifier, allowed s
 - `token`: Auth token for client authentication. If nil, auto-generated at startup.
 - `instanceId`: Human-readable instance identifier. If nil, falls back to a short UUID prefix.
 - `allowedScopes`: Set of connection scopes the server will accept. If nil, startup/default scopes are used (`simulator,usb` unless overridden by `INSIDEJOB_SCOPE` or `InsideJobScope`).
-- `port`: Preferred TCP port for the server. Pass 0 (the default) for an OS-assigned ephemeral port. The Info.plist (`InsideJobPort`) and environment variable (`INSIDEJOB_PORT`) fallback is handled by the auto-start mechanism in `AutoStart.swift`, not by `configure()` itself.
+- `port`: Preferred TCP port for the server. Pass 0 (the default) for an OS-assigned ephemeral port. The Info.plist (`InsideJobPort`) and environment variable (`INSIDEJOB_PORT`) lookup is handled by the auto-start mechanism in `AutoStart.swift`, not by `configure()` itself.
 
 **Note**: Normally not needed - use Info.plist or environment variable configuration instead.
 
@@ -148,22 +152,28 @@ public func notifyChange()
 
 Mark the hierarchy as changed so the next settled Tripwire pulse refreshes Button Heist's accessibility capture.
 
-### Interaction Philosophy: Activation-First
+### Semantic Action Invariant
 
-TheInsideJob follows an **activation-first** strategy for all element interactions:
+Element-targeted semantic commands own the whole actionability loop inside
+Button Heist:
 
-1. **Try `accessibilityActivate()` first** -- TheBrains refreshes live target state, resolves the element to a live object and geometry snapshot, then calls the element's native accessibility activation method. This is the most reliable path because it mirrors how VoiceOver activates controls and respects custom activation behavior.
+1. Resolve the semantic target.
+2. Reveal it if viewport movement is required.
+3. Refresh the hierarchy after movement or state change.
+4. Acquire fresh live geometry.
+5. Act through the command-specific path.
 
-2. **Fall back to synthetic tap** -- If activation returns `false` or the element does not support it, TheSafecracker injects a synthetic tap at the fresh live activation point. If live geometry cannot be acquired, the command fails with structured diagnostics instead of tapping a cached coordinate.
+Callers do not manually position the viewport or provide cached coordinates for semantic commands.
+If live identity, actionability, or geometry cannot be proven, the command fails
+with diagnostics instead of dispatching against stale state.
 
-The same pattern applies to `increment`/`decrement` (native accessibility API first). The `one_finger_tap` command is a pure synthetic tap with no activation-first logic — it is a low-level escape hatch for when coordinate-precise touch injection is needed.
-
-**Why activation-first matters:**
-- Native activation respects custom `accessibilityActivate()` overrides
-- It works correctly with complex controls (e.g., custom toggle implementations)
-- Synthetic taps can miss if the coordinate is occluded by an overlay or the view hierarchy has changed
-
-When a synthetic tap fallback occurs, a debug log is emitted so the behavior is observable.
+`activate`, `increment`, `decrement`, named custom actions, text focus, and
+targeted gestures all follow this invariant. `activate` uses native
+accessibility activation when available and may synthesize a tap at the fresh
+live activation point as part of the same semantic action path. Explicit
+viewport commands (`scroll`, `scroll_to_visible`, `element_search`, and
+`scroll_to_edge`) are the commands where viewport movement itself is caller
+intent.
 
 ### Touch Gesture & Text Input System (TheSafecracker)
 
@@ -406,82 +416,25 @@ public func execute(request: [String: Any]) async throws -> FenceResponse
 ```
 Execute a command. The `request` dictionary must contain a `command` key. Auto-connects if not already connected. Returns a typed `FenceResponse`.
 
-### Command
+### Command and Response Contracts
 
-```swift
-public enum Command: String, CaseIterable, Sendable {
-    case help, status, quit, exit
-    case listDevices = "list_devices"
-    case getInterface = "get_interface"
-    case runBatch = "run_batch"
-    case getSessionState = "get_session_state"
-    case connect
-    case listTargets = "list_targets"
-    case getSessionLog = "get_session_log"
-    case archiveSession = "archive_session"
-    // Full catalog lives in TheFence+CommandCatalog.swift.
-}
-```
+The command catalog, CLI exposure, MCP grouping, batch/playback eligibility,
+and parameter shape are generated from `TheFence.Command.descriptors`:
 
-Single source of truth for supported commands in the product command layer. Each case has a `rawValue` matching the command request string accepted by TheFence (e.g., `.oneFingerTap` -> `"one_finger_tap"`). These command names are the CLI/session/batch contract; wire message discriminators are a lower transport layer and may use different names such as `typeText`. `Command.allCases` replaces the former hand-maintained string array.
+- [Command Reference](reference/commands.md)
+- [MCP Tool Reference](reference/mcp-tools.md)
 
-`connect` establishes the session and returns session state; observation starts with `get_interface`. It verifies transport, handshake/auth, and session ownership, but it does not request, parse, or explore the UI hierarchy.
+TheFence keeps those generated references as the public command surface. This
+page documents command-layer invariants only:
 
-**Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence+CommandCatalog.swift`
-
-### FenceResponse
-
-```swift
-public enum FenceResponse
-```
-
-Typed response enum with `humanFormatted() -> String`, `jsonData() -> Data`, and `compactFormatted() -> String` (token-efficient compact text format used by MCP and JSON output modes) serialization. JSON output is encoded from typed public response models.
-
-#### Cases
-
-| Case | Description |
-|------|-------------|
-| `ok(message:)` | Generic success with message |
-| `error(_:)` | Error with message |
-| `help(commands:)` | List of supported commands |
-| `status(connected:deviceName:)` | Connection status |
-| `devices(_:)` | List of discovered devices |
-| `interface(_:)` | UI element state |
-| `action(result:expectation:)` | Action outcome with delta and optional expectation validation result |
-| `screenshot(path:payload:)` | Screenshot saved to path plus screen payload metadata |
-| `screenshotData(payload:)` | Opt-in inline screenshot as base64 PNG plus metadata; visible interface data is included only when requested |
-| `recording(path:payload:)` | Recording saved to path with metadata summary |
-| `recordingExpanded(path:payload:options:)` | Recording saved to path with explicitly requested bounded inline video and/or interaction log |
-| `recordingData(payload:)` | In-memory recording payload for callers that explicitly request base64 video |
-| `batch(results:completedSteps:failedIndex:totalTimingMs:expectationsChecked:expectationsMet:)` | Batched command results with aggregate timing, optional failure index, and expectation stats |
-| `sessionState(payload:)` | Read-only client-side session summary for `get_session_state` |
-| `targets(_:defaultTarget:)` | Named targets from config file with optional default |
-| `sessionLog(snapshot:)` | Current session log snapshot for `get_session_log` |
-| `archiveResult(path:snapshot:)` | Archive path and final session log snapshot for `archive_session` |
-| `heistStarted(message:)` | Heist recording started confirmation |
-| `heistStopped(path:stepCount:)` | Heist recording stopped with file path and step count |
-| `heistPlayback(completedSteps:failedIndex:totalTimingMs:failure:report:)` | Heist playback result with pass/fail, timing, and per-step report |
-
-### FenceError
-
-```swift
-public enum FenceError: Error, LocalizedError
-```
-
-#### Cases
-
-| Case | Description |
-|------|-------------|
-| `invalidRequest(_:)` | Invalid JSON or missing command |
-| `noDeviceFound` | No devices found within timeout |
-| `noMatchingDevice(filter:available:)` | No device matching the filter |
-| `connectionTimeout` | Connection timed out |
-| `connectionFailed(_:)` | Connection failed |
-| `sessionLocked(_:)` | Session held by another driver |
-| `authFailed(_:)` | Authentication failed |
-| `notConnected` | Not connected to device |
-| `actionTimeout` | Action timed out — connection is preserved |
-| `actionFailed(_:)` | Action failed with server error message |
+- `connect` establishes the session and returns session state; observation
+  starts with `get_interface`. It verifies transport, handshake/auth, and
+  session ownership, but it does not request, parse, or explore the UI
+  hierarchy.
+- Typed responses serialize to human, compact, and JSON forms from the same
+  response models.
+- Errors report product-level diagnostics such as transport failure, auth
+  failure, session lock, protocol mismatch, action timeout, or action failure.
 
 ### TargetConfig
 
@@ -551,7 +504,12 @@ Public diagnostics are grouped into high-level categories rather than exposed as
 
 ### Overview
 
-MCP server projecting its tool schemas from TheFence. `activate` is the primary interaction tool — it uses the activation-first pattern (accessibility activation, then synthetic tap fallback). Pass `action` to `activate` to perform named actions (increment, decrement, or custom actions). Low-level touch gestures are grouped under `gesture` as escape hatches. Build with:
+MCP server projecting its tool schemas from TheFence. `activate` is the
+primary semantic interaction tool: Button Heist resolves the target, reveals it
+when needed, refreshes, acquires live geometry, and then performs the named
+action. Pass `action` to `activate` to perform increment, decrement, or custom
+accessibility actions. Low-level touch gestures are grouped under `gesture` as
+explicit gesture commands. Build with:
 
 ```bash
 cd ButtonHeistMCP && swift build -c release
@@ -665,43 +623,11 @@ Represents a discovered TheInsideJob device.
 public enum ClientMessage: Codable
 ```
 
-Messages sent from client to server.
-
-#### Cases
-
-- `clientHello` - Version-negotiation hello sent immediately after `serverHello`
-- `authenticate(AuthenticatePayload)` - Authenticate with a token (sent after `clientHello` / `authRequired`)
-- `requestInterface` - Request the current on-screen interface
-- `ping` - Keepalive
-- `activate(ElementTarget)` - Activate element (VoiceOver double-tap)
-- `increment(ElementTarget)` - Increment adjustable element
-- `decrement(ElementTarget)` - Decrement adjustable element
-- `performCustomAction(CustomActionTarget)` - Invoke named custom action
-- `touchTap(TouchTapTarget)` - Tap at coordinates or element
-- `touchLongPress(LongPressTarget)` - Long press at coordinates or element
-- `touchSwipe(SwipeTarget)` - Swipe between two points or in a direction
-- `touchDrag(DragTarget)` - Drag from one point to another
-- `touchPinch(PinchTarget)` - Pinch/zoom gesture
-- `touchRotate(RotateTarget)` - Rotation gesture
-- `touchTwoFingerTap(TwoFingerTapTarget)` - Two-finger tap
-- `touchDrawPath(DrawPathTarget)` - Draw along a path of waypoints
-- `touchDrawBezier(DrawBezierTarget)` - Draw along bezier curves (sampled server-side)
-- `typeText(TypeTextTarget)` - Type non-empty text via UIKeyboardImpl.sharedInstance injection
-- `editAction(EditActionTarget)` - Perform edit action (copy, paste, cut, select, selectAll, delete)
-- `setPasteboard(SetPasteboardTarget)` - Write text to general pasteboard
-- `getPasteboard` - Read text from general pasteboard
-- `scroll(ScrollTarget)` - Axis-aware page scroll (finds scroll view matching direction's axis)
-- `scrollToVisible(ScrollToVisibleTarget)` - One-shot scroll to a known element
-- `elementSearch(ElementSearchTarget)` - Iterative scroll search for an unseen element
-- `scrollToEdge(ScrollToEdgeTarget)` - Axis-aware edge jump with lazy container iteration
-- `resignFirstResponder` - Dismiss keyboard
-- `waitForIdle(WaitForIdleTarget)` - Wait for animations to settle (internal)
-- `waitForChange(WaitForChangeTarget)` - Wait for UI to change, optionally matching an expectation
-- `waitFor(WaitForTarget)` - Wait for an element matching a predicate to appear or disappear
-- `requestScreen` - Request PNG screenshot plus visible accessibility data at the wire layer; public responses expose the interface only when explicitly requested
-- `startRecording(RecordingConfig)` - Start screen recording (H.264/MP4)
-- `stopRecording` - Stop active screen recording
-- `status` - Lightweight status probe allowed after the hello handshake and before auth (identity + availability, no session claim)
+Messages sent from client to server. The hand-written case inventory is not
+duplicated here; command names, adapter exposure, playback eligibility, and
+parameter shape are generated in [Command Reference](reference/commands.md).
+Wire protocol handshakes, authentication, and session locking are documented in
+[WIRE-PROTOCOL.md](WIRE-PROTOCOL.md).
 
 ### ServerMessage
 
@@ -797,7 +723,14 @@ public struct SessionLockedPayload: Codable, Sendable
 public enum ElementTarget: Codable, Sendable
 ```
 
-Two resolution strategies: `heistId` (a handle from the current hierarchy) or flat matcher fields (describe the element by accessibility properties). `heistId` takes priority when both are present. A `heistId` is not a durable identity and is not geometry authority; action execution resolves fresh live geometry immediately before touching.
+Two resolution strategies: `heistId` (a handle from the current capture) or
+flat matcher fields (describe the element by accessibility properties).
+`heistId` takes priority when both are present at the request boundary, but it
+is never durable replay identity or geometry authority. Runtime semantic
+actions resolve the handle against current state, reveal if needed, refresh,
+and acquire live geometry before dispatch. Recording/playback durability comes
+from `SemanticActionTarget` / minimum matchers; diagnostics may mention the
+source heistId, but execution does not treat it as a replay selector.
 
 #### Properties
 
@@ -898,7 +831,7 @@ public struct ElementMatcher: Codable, Sendable, Equatable
 
 Composable predicate for matching elements in the accessibility tree. All specified fields use AND semantics. Used by `element_search`, `wait_for`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
 
-Matching is **exact or miss**: string fields are compared case-insensitively after typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and CJK pass through). Traits compare as exact bitmasks. There is no substring fallback. On a miss the resolver returns `.notFound` with a structured near-miss diagnostic that lists up to three substring suggestions (e.g. "did you mean 'Save Draft', 'Save All', 'Save As'?"). The same semantics are evaluated by `HeistElement.matches` on the client and `AccessibilityElement.matches` on the server so the same matcher input produces the same outcome on both sides.
+Matching is **exact or miss**: string fields are compared case-insensitively after typography folding (smart quotes/dashes/ellipsis fold to ASCII; emoji, accents, and CJK pass through). Traits compare as exact bitmasks. Resolution never uses substring matching. On a miss the resolver returns `.notFound` with a structured near-miss diagnostic that lists up to three substring suggestions (e.g. "did you mean 'Save Draft', 'Save All', 'Save As'?"). The same semantics are evaluated by `HeistElement.matches` on the client and `AccessibilityElement.matches` on the server so the same matcher input produces the same outcome on both sides.
 
 #### Properties
 
@@ -916,7 +849,9 @@ public struct ScrollToVisibleTarget: Codable, Sendable
 
 #### Properties
 
-- `elementTarget: ElementTarget?` - Known element to scroll into view. Use `heistId` for current-hierarchy handles; matcher fields resolve elements already present in the current accessibility state. Use `ElementSearchTarget` for iterative discovery.
+- `elementTarget: ElementTarget` - Known element to reveal. Use `heistId`
+  only as a current-capture handle; matcher fields resolve elements present in
+  the current semantic state. Use `ElementSearchTarget` for iterative discovery.
 
 ### ScrollSearchDirection
 
@@ -1000,7 +935,7 @@ here.
 - `screenWidth: Double` - Screen width in points
 - `screenHeight: Double` - Screen height in points
 - `instanceId: String?` - Per-launch session UUID
-- `instanceIdentifier: String?` - Human-readable instance identifier (from `INSIDEJOB_ID` env var, or shortId fallback)
+- `instanceIdentifier: String?` - Human-readable instance identifier (from `INSIDEJOB_ID` env var, or shortId-derived default)
 - `listeningPort: UInt16?` - Port the server is listening on
 - `simulatorUDID: String?` - Simulator UDID when running on iOS Simulator (nil on physical devices)
 - `vendorIdentifier: String?` - `UIDevice.identifierForVendor` UUID string (stable per app install per device)
@@ -1156,35 +1091,11 @@ public struct ActionResult: Codable, Sendable
 public enum ActionMethod: String, Codable, Sendable
 ```
 
-#### Cases
-
-- `activate` - Used activation
-- `increment` - Used increment action
-- `decrement` - Used decrement action
-- `syntheticTap` - Tap via TheSafecracker
-- `syntheticLongPress` - Long press via TheSafecracker
-- `syntheticSwipe` - Swipe via TheSafecracker
-- `syntheticDrag` - Drag via TheSafecracker
-- `syntheticPinch` - Pinch via TheSafecracker
-- `syntheticRotate` - Rotation via TheSafecracker
-- `syntheticTwoFingerTap` - Two-finger tap via TheSafecracker
-- `syntheticDrawPath` - Path drawing via TheSafecracker
-- `typeText` - Text injected via UIKeyboardImpl
-- `customAction` - Used custom action
-- `editAction` - Edit action via responder chain
-- `setPasteboard` - Text written to general pasteboard
-- `getPasteboard` - Text read from general pasteboard
-- `resignFirstResponder` - Keyboard dismissed
-- `waitForIdle` - Wait-for-idle completed (internal)
-- `waitForChange` - Wait-for-change completed
-- `waitFor` - Wait-for element completed
-- `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Known element was scrolled into view
-- `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
-- `scrollToEdge` - Scroll view scrolled to an edge
-- `explore` - Accessibility-state discovery completed
-- `elementNotFound` - Element could not be found
-- `elementDeallocated` - Element's view was deallocated
+Diagnostic method attached to an `ActionResult`. The exhaustive case list is
+kept in code and exercised by generated command references and response tests;
+docs should describe product meaning rather than duplicate enum cases. A method
+identifies the path Button Heist used after semantic resolution, reveal,
+refresh, and live-geometry acquisition.
 
 ### ActionExpectation
 
@@ -1202,7 +1113,7 @@ Expectations follow a **"say what you know"** design: agents express what they c
 - `elementsChanged` - Expected the result's `accessibilityDelta` to be `.elementsChanged` (also met by `.screenChanged` under the superset rule).
 - `elementUpdated(heistId: String?, property: ElementProperty?, oldValue: String?, newValue: String?)` - Expected a property change on an element. All fields optional — provide what you know, omit what you don't. Met when any entry in the delta's `updated` list matches all provided fields.
 - `elementAppeared(ElementMatcher)` - Expected an element matching this predicate to appear in the delta's `added` list.
-- `elementDisappeared(ElementMatcher)` - Expected an element matching this predicate to disappear from the delta's `removed` list. Validation requires a pre-action element cache to resolve removed heistIds to matchers.
+- `elementDisappeared(ElementMatcher)` - Expected an element matching this predicate to disappear from the delta's `removed` list. Validation uses the baseline capture to resolve removed heistIds to matchers.
 - `compound([ActionExpectation])` - All sub-expectations must be met.
 
 #### Static Methods
@@ -1298,11 +1209,11 @@ A single recorded interaction event captured during a Stakeout recording.
 
 | Type | Description |
 |------|-------------|
-| `HeistPlayback` | Recorded heist script for deterministic replay |
-| `HeistEvidence` | Single step of evidence from a heist execution |
+| `HeistPlayback` | Recorded heist script for deterministic replay using durable semantic targets |
+| `HeistEvidence` | Single step of evidence from a heist execution; source heistIds are diagnostic only |
 | `HeistValue` | Dynamically-typed JSON value (bool, int, double, string, array, object) |
 | `RecordedMetadata` | Metadata from the original recording session |
-| `RecordedFrame` | Single recorded command with its expected outcome |
+| `RecordedFrame` | Single recorded command with its expected outcome and replay-safe target shape |
 
 ---
 
@@ -1368,121 +1279,3 @@ struct MyApp: App {
 
 These keys are only needed when you include `network` in `INSIDEJOB_SCOPE` /
 `InsideJobScope`. The default `simulator,usb` scope does not publish Bonjour.
-
-### Callback-Based Usage
-
-```swift
-import ButtonHeist
-import TheScore
-
-@ButtonHeistActor
-class Inspector {
-    let handoff = TheHandoff()
-
-    init() {
-        handoff.onDeviceFound = { [weak self] device in
-            print("Found: \(device.name)")
-            self?.handoff.connect(to: device)
-        }
-
-        handoff.onInterface = { iface, _ in
-            print("Received \(iface.elements.count) elements")
-            for element in iface.elements {
-                print("  \(element.heistId): \(element.description)")
-            }
-        }
-
-        handoff.onActionResult = { result, _ in
-            print("Action: \(result.success ? "success" : "failed") via \(result.method)")
-        }
-
-        handoff.onScreen = { screenshot, _ in
-            print("Screenshot: \(screenshot.width)x\(screenshot.height)")
-        }
-
-        handoff.onConnectionStateChanged = { [weak self] state in
-            if case .disconnected = state,
-               let failure = self?.handoff.connectionDiagnosticFailure {
-                print("Disconnected: \(failure.localizedDescription)")
-            }
-        }
-    }
-
-    func start() {
-        handoff.startDiscovery()
-    }
-}
-```
-
-### Async/Await Action with Result
-
-```swift
-// Activate an element and wait for the result
-let target = ElementTarget.matcher(ElementMatcher(identifier: "loginButton"))
-client.send(.activate(target))
-
-do {
-    let result = try await client.waitForActionResult(timeout: 10)
-    print("Result: \(result.success), method: \(result.method)")
-} catch {
-    print("Timeout waiting for action result")
-}
-```
-
-### CLI Scripting
-
-```bash
-# List all discovered devices
-buttonheist list_devices
-buttonheist list_devices --format json
-
-# Target a specific device (by short ID, UDID, or name)
-buttonheist --device a1b2 activate --identifier myButton
-buttonheist --device DEADBEEF-1234 get_screen --output screen.png
-
-# Get hierarchy as JSON via session
-echo '{"command":"get_interface"}' | buttonheist session --format json
-
-# Activate a button (primary interaction command)
-buttonheist activate --identifier loginButton
-buttonheist activate -l "Submit" --traits button
-
-# Named actions (increment, decrement, custom)
-buttonheist activate --identifier volumeSlider --action increment
-buttonheist activate --identifier volumeSlider --action decrement
-buttonheist activate --identifier myCell --action "Delete"
-
-# Edit actions
-buttonheist edit_action copy
-buttonheist edit_action paste
-buttonheist edit_action delete
-buttonheist dismiss_keyboard
-
-# Capture screenshot
-buttonheist get_screen --output screen.png
-
-# Touch gestures (low-level escape hatches)
-buttonheist one_finger_tap --x 100 --y 200
-buttonheist one_finger_tap --identifier loginButton
-buttonheist long_press --identifier myButton --duration 1.0
-buttonheist swipe --identifier list --direction up
-buttonheist drag --from-x 100 --from-y 200 --to-x 300 --to-y 200
-buttonheist pinch --identifier mapView --scale 2.0
-buttonheist rotate --center-x 200 --center-y 300 --angle 1.57
-buttonheist two_finger_tap --identifier zoomControl
-
-# Text entry
-buttonheist type_text "Hello World" --identifier nameField
-buttonheist activate --identifier nameField
-buttonheist edit_action selectAll
-buttonheist edit_action delete
-buttonheist type_text "World!" --identifier nameField
-
-# Scroll commands
-buttonheist scroll --identifier "buttonheist.longList.item-5" --direction up
-buttonheist scroll -l "Messages" --ordinal 1 --direction down
-buttonheist element_search --label "Color Picker"
-buttonheist element_search --label "Settings" --traits header
-buttonheist scroll_to_visible "buttonheist.longList.last"
-buttonheist scroll_to_edge --identifier "buttonheist.longList.item-0" --edge bottom
-```

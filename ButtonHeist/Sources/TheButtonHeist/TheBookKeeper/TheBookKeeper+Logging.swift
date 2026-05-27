@@ -158,19 +158,19 @@ private extension TheFence.GesturePayload {
     var bookKeeperElementTarget: ElementTarget? {
         switch self {
         case .oneFingerTap(let payload):
-            return payload.elementTarget
+            return payload.selection.elementTarget
         case .longPress(let payload):
-            return payload.elementTarget
+            return payload.selection.elementTarget
         case .swipe(let payload):
             return payload.elementTarget
         case .drag(let payload):
             return payload.elementTarget
         case .pinch(let payload):
-            return payload.elementTarget
+            return payload.centerSelection.elementTarget
         case .rotate(let payload):
-            return payload.elementTarget
+            return payload.centerSelection.elementTarget
         case .twoFingerTap(let payload):
-            return payload.elementTarget
+            return payload.centerSelection.elementTarget
         case .drawPath, .drawBezier:
             return nil
         }
@@ -179,19 +179,19 @@ private extension TheFence.GesturePayload {
     var bookKeeperCoordinateOnly: Bool {
         switch self {
         case .oneFingerTap(let payload):
-            return payload.elementTarget == nil && payload.target.point != nil
+            return payload.selection.screenPoint != nil
         case .longPress(let payload):
-            return payload.elementTarget == nil && payload.target.point != nil
+            return payload.selection.screenPoint != nil
         case .swipe(let payload):
             return payload.elementTarget == nil
         case .drag(let payload):
             return payload.elementTarget == nil
         case .pinch(let payload):
-            return payload.elementTarget == nil
+            return payload.centerSelection.elementTarget == nil
         case .rotate(let payload):
-            return payload.elementTarget == nil
+            return payload.centerSelection.elementTarget == nil
         case .twoFingerTap(let payload):
-            return payload.elementTarget == nil
+            return payload.centerSelection.elementTarget == nil
         case .drawPath, .drawBezier:
             return true
         }

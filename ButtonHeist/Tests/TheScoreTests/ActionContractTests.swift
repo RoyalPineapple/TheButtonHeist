@@ -74,7 +74,7 @@ final class ActionContractTests: XCTestCase {
             .decrement(target),
             .performCustomAction(CustomActionTarget(elementTarget: target, actionName: "Share")),
             .rotor(RotorTarget(elementTarget: target, rotor: "Links")),
-            .touchTap(TouchTapTarget(elementTarget: target, pointX: 1, pointY: 2)),
+            .touchTap(TouchTapTarget(elementTarget: target)),
             .touchLongPress(LongPressTarget(elementTarget: target, duration: 0.7)),
             .touchSwipe(SwipeTarget(elementTarget: target, direction: .left, duration: 0.4)),
             .touchDrag(DragTarget(elementTarget: target, startX: 1, startY: 2, endX: 3, endY: 4)),

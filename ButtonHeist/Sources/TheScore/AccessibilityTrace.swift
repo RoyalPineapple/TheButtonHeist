@@ -4,14 +4,14 @@ import Foundation
 
 /// Accessibility state observed during a session.
 ///
-/// Screen changes create full baseline captures. Same-screen changes are stored
-/// as replayable patches on top of that baseline. `captures` remains the
-/// materialized projection for callers that want the full state at every point.
+/// Captures are the durable source of truth. Segments and replayable patches
+/// are compatibility projections derived when callers need the compact wire
+/// shape.
 public struct AccessibilityTrace: Codable, Sendable, Equatable {
-    public let segments: [ScreenSegment]
+    public let captures: [Capture]
 
-    public var captures: [Capture] {
-        segments.flatMap(\.captures)
+    public var segments: [ScreenSegment] {
+        Self.projectSegments(from: captures)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -19,51 +19,11 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     }
 
     public init(captures: [Capture]) {
-        var segments: [ScreenSegment] = []
-        var currentSegment: ScreenSegment?
-        var previousCapture: Capture?
-
-        for (index, capture) in captures.enumerated() {
-            let linked = Capture(
-                sequence: index + 1,
-                interface: capture.interface,
-                parentHash: previousCapture?.hash,
-                context: capture.context,
-                transition: capture.transition,
-                hash: capture.hash
-            )
-
-            guard let before = previousCapture, var segment = currentSegment else {
-                currentSegment = ScreenSegment(baseline: linked)
-                previousCapture = linked
-                continue
-            }
-
-            switch AccessibilityTrace.Delta.between(before, linked).kind {
-            case .screenChanged:
-                segments.append(segment)
-                currentSegment = ScreenSegment(baseline: linked)
-            case .elementsChanged, .noChange:
-                guard let observed = ObservedTransition.between(before, linked) else {
-                    segments.append(segment)
-                    currentSegment = ScreenSegment(baseline: linked)
-                    previousCapture = linked
-                    continue
-                }
-                segment.append(observed)
-                currentSegment = segment
-            }
-            previousCapture = linked
-        }
-
-        if let currentSegment {
-            segments.append(currentSegment)
-        }
-        self.init(segments: segments)
+        self.captures = Self.normalized(captures)
     }
 
     public init(segments: [ScreenSegment]) {
-        self.segments = segments
+        self.captures = segments.flatMap(\.captures)
     }
 
     public init(capture: Capture) {
@@ -86,6 +46,57 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(segments, forKey: .segments)
+    }
+
+    private static func normalized(_ captures: [Capture]) -> [Capture] {
+        var previousCapture: Capture?
+        return captures.enumerated().map { index, capture in
+            let linked = Capture(
+                sequence: index + 1,
+                interface: capture.interface,
+                parentHash: previousCapture?.hash,
+                context: capture.context,
+                transition: capture.transition,
+                hash: capture.hash
+            )
+            previousCapture = linked
+            return linked
+        }
+    }
+
+    private static func projectSegments(from captures: [Capture]) -> [ScreenSegment] {
+        var segments: [ScreenSegment] = []
+        var currentSegment: ScreenSegment?
+        var previousCapture: Capture?
+
+        for capture in captures {
+            guard let before = previousCapture, var segment = currentSegment else {
+                currentSegment = ScreenSegment(baseline: capture)
+                previousCapture = capture
+                continue
+            }
+
+            switch AccessibilityTrace.Delta.between(before, capture).kind {
+            case .screenChanged:
+                segments.append(segment)
+                currentSegment = ScreenSegment(baseline: capture)
+            case .elementsChanged, .noChange:
+                guard let observed = ObservedTransition.between(before, capture) else {
+                    segments.append(segment)
+                    currentSegment = ScreenSegment(baseline: capture)
+                    previousCapture = capture
+                    continue
+                }
+                segment.append(observed)
+                currentSegment = segment
+            }
+            previousCapture = capture
+        }
+
+        if let currentSegment {
+            segments.append(currentSegment)
+        }
+        return segments
     }
 
     public func appending(
@@ -130,49 +141,26 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         var issues: [IntegrityIssue] = []
         var expectedParentHash: String?
 
-        for (segmentIndex, segment) in segments.enumerated() {
-            let baseline = segment.baseline
-            let computedBaselineHash = Capture.hash(interface: baseline.interface, context: baseline.context)
-            if baseline.hash != computedBaselineHash {
+        for (index, capture) in captures.enumerated() {
+            let computedHash = Capture.hash(interface: capture.interface, context: capture.context)
+            if capture.hash != computedHash {
                 issues.append(.captureHashMismatch(
-                    segment: segmentIndex,
-                    sequence: baseline.sequence,
-                    recordedHash: baseline.hash,
-                    computedHash: computedBaselineHash
+                    index: index,
+                    sequence: capture.sequence,
+                    recordedHash: capture.hash,
+                    computedHash: computedHash
                 ))
             }
-            if baseline.parentHash != expectedParentHash {
+            if capture.parentHash != expectedParentHash {
                 issues.append(.parentHashMismatch(
-                    segment: segmentIndex,
-                    sequence: baseline.sequence,
-                    recordedParentHash: baseline.parentHash,
+                    index: index,
+                    sequence: capture.sequence,
+                    recordedParentHash: capture.parentHash,
                     expectedParentHash: expectedParentHash
                 ))
             }
 
-            var previous = baseline
-            for transition in segment.transitions {
-                if transition.fromHash != previous.hash {
-                    issues.append(.transitionFromHashMismatch(
-                        segment: segmentIndex,
-                        sequence: transition.sequence,
-                        recordedFromHash: transition.fromHash,
-                        expectedFromHash: previous.hash
-                    ))
-                }
-                let materialized = transition.materialize(after: previous)
-                if materialized.hash != transition.toHash {
-                    issues.append(.transitionToHashMismatch(
-                        segment: segmentIndex,
-                        sequence: transition.sequence,
-                        recordedToHash: transition.toHash,
-                        computedToHash: materialized.hash
-                    ))
-                }
-                previous = materialized
-            }
-
-            expectedParentHash = previous.hash
+            expectedParentHash = capture.hash
         }
 
         return issues
