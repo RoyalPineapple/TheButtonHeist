@@ -131,6 +131,7 @@ final class ServerTransport: NSObject {
 
     /// Test hook for deterministic listener-start failures after TLS setup.
     @MainActor var startOverride: ((_ port: UInt16, _ bindToLoopback: Bool) async throws -> UInt16)?
+    @MainActor var stopOverride: (() -> Task<Void, Never>)?
 
     @MainActor
     func setEventBacklogOverflowHandler(
@@ -279,6 +280,11 @@ final class ServerTransport: NSObject {
         callbackTasks.cancelAll()
         stopAdvertising()
         eventContinuation.finish()
+        if let stopOverride {
+            let task = stopOverride()
+            stopTask = task
+            return task
+        }
         let task = Task { [server] in
             await server.stop()
         }

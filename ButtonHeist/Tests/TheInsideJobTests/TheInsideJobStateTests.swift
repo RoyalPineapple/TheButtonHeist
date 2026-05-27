@@ -23,6 +23,15 @@ final class TheInsideJobStateTests: XCTestCase {
         return transport
     }
 
+    private static let inertStartedTransportFactory: @MainActor @Sendable (
+        _ identity: TLSIdentity,
+        _ allowedScopes: Set<ConnectionScope>
+    ) -> ServerTransport = { identity, allowedScopes in
+        let transport = ServerTransport(tlsIdentity: identity, allowedScopes: allowedScopes)
+        transport.startOverride = { _, _ in 4545 }
+        return transport
+    }
+
     private func waitUntil(
         timeout: TimeInterval = 2.0,
         _ condition: @MainActor () -> Bool
@@ -76,6 +85,27 @@ final class TheInsideJobStateTests: XCTestCase {
             XCTFail("Expected .stopped after stop(), got \(job.serverPhase)")
             return
         }
+    }
+
+    func testRuntimeLeaseReleaseIsIdempotent() async {
+        let job = TheInsideJob()
+        let transport = ServerTransport()
+        var stopCount = 0
+        transport.stopOverride = {
+            stopCount += 1
+            return Task {}
+        }
+        let lease = runtimeLease(transport: transport)
+        lease.activate(on: job, resumePolling: false)
+
+        if let releaseTask = lease.release(from: job, policy: .stop) {
+            await releaseTask.value
+        }
+        if let releaseTask = lease.release(from: job, policy: .stop) {
+            await releaseTask.value
+        }
+
+        XCTAssertEqual(stopCount, 1)
     }
 
     func testStopFromSuspendedTransitionsToStopped() async {
@@ -267,7 +297,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testSuspendPausesActivePollingPreservingInterval() async {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverPhase = .running(lease: runtimeLease(transport: transport))
+        runtimeLease(transport: transport).activate(on: job, resumePolling: false)
         job.startPolling(interval: 5.0)
 
         await job.suspend()
@@ -416,6 +446,70 @@ final class TheInsideJobStateTests: XCTestCase {
         XCTAssertTrue(settled, "Expected failed resume to settle back to suspended")
         XCTAssertFalse(job.getaway.identity.tlsActive)
         XCTAssertNil(job.getaway.transport)
+    }
+
+    func testRuntimeLeaseOwnsStartSuspendResumeStopResources() async throws {
+        let identity = try TLSIdentity.createEphemeral()
+        let job = TheInsideJob(
+            token: "test-token",
+            tlsIdentityProvider: { identity },
+            transportFactory: Self.inertStartedTransportFactory
+        )
+
+        try await job.start()
+        job.startPolling(interval: 5.0)
+
+        guard case .running(let firstLease) = job.serverPhase else {
+            return XCTFail("Expected start to acquire a running lease, got \(job.serverPhase)")
+        }
+        XCTAssertTrue(job.tripwire.isPulseRunning)
+        XCTAssertTrue(job.accessibilityObservationActive)
+        XCTAssertTrue(job.lifecycleObservationActive)
+        XCTAssertTrue(job.getaway.transport === firstLease.transport)
+
+        await job.suspend()
+
+        guard case .suspended = job.serverPhase else {
+            return XCTFail("Expected suspend to release the lease and move to suspended, got \(job.serverPhase)")
+        }
+        XCTAssertFalse(job.tripwire.isPulseRunning)
+        XCTAssertFalse(job.accessibilityObservationActive)
+        XCTAssertTrue(job.lifecycleObservationActive)
+        guard case .paused(let interval) = job.pollingPhase else {
+            return XCTFail("Expected suspend to pause polling, got \(job.pollingPhase)")
+        }
+        XCTAssertEqual(interval, 5.0)
+
+        await job.resume()
+        let resumed = await waitUntil {
+            if case .running = job.serverPhase { return true }
+            return false
+        }
+
+        XCTAssertTrue(resumed, "Expected resume to reacquire a running lease")
+        guard case .running(let secondLease) = job.serverPhase else {
+            return XCTFail("Expected running after resume, got \(job.serverPhase)")
+        }
+        XCTAssertFalse(secondLease.transport === firstLease.transport)
+        XCTAssertTrue(job.tripwire.isPulseRunning)
+        XCTAssertTrue(job.accessibilityObservationActive)
+        XCTAssertTrue(job.lifecycleObservationActive)
+        guard case .active(_, let resumedInterval) = job.pollingPhase else {
+            return XCTFail("Expected resume to restore active polling, got \(job.pollingPhase)")
+        }
+        XCTAssertEqual(resumedInterval, 5.0)
+
+        await job.stop()
+
+        guard case .stopped = job.serverPhase else {
+            return XCTFail("Expected stop to release the lease and move to stopped, got \(job.serverPhase)")
+        }
+        XCTAssertFalse(job.tripwire.isPulseRunning)
+        XCTAssertFalse(job.accessibilityObservationActive)
+        XCTAssertFalse(job.lifecycleObservationActive)
+        guard case .disabled = job.pollingPhase else {
+            return XCTFail("Expected stop to disable polling, got \(job.pollingPhase)")
+        }
     }
 
     // MARK: - PollingPhase: Computed properties

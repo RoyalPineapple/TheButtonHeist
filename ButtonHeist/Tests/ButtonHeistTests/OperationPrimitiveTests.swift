@@ -5,9 +5,9 @@ import TheScore
 final class OperationPrimitiveTests: XCTestCase {
 
     func testBatchStepAlwaysCarriesActionExpectationAndDeadline() {
-        let step = BatchStep.command(
-            .setPasteboard(SetPasteboardTarget(text: "value")),
-            expect: .screenChanged,
+        let step = BatchStep(
+            command: .setPasteboard(SetPasteboardTarget(text: "value")),
+            expectation: .screenChanged,
             deadline: Deadline(timeout: 2.0)
         )
 
@@ -32,6 +32,6 @@ final class OperationPrimitiveTests: XCTestCase {
             return XCTFail("Expected read command to stay outside batch operation pipeline")
         }
         XCTAssertEqual(commandName, "get_screen")
-        XCTAssertTrue(failure.message.contains("not batch-executable"))
+        XCTAssertTrue(failure.message.contains("descriptor.isBatchExecutable is false"))
     }
 }

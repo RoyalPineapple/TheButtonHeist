@@ -77,18 +77,6 @@ extension TheGetaway {
         }
     }
 
-    struct RequestDecodeFailure: Error, Sendable, CustomStringConvertible {
-        let underlyingDescription: String
-
-        var description: String {
-            "Failed to decode client message: \(underlyingDescription)"
-        }
-
-        var serverError: ServerError {
-            ServerError(kind: .general, message: "Malformed message — could not decode")
-        }
-    }
-
     func encodeEnvelope(
         _ message: ServerMessage,
         requestId: String? = nil,
@@ -103,14 +91,6 @@ extension TheGetaway {
             return .success(envelopeData)
         } catch {
             return .failure(.init(requestId: requestId, underlyingDescription: String(describing: error)))
-        }
-    }
-
-    func decodeRequest(_ data: Data) -> Result<RequestEnvelope, RequestDecodeFailure> {
-        do {
-            return .success(try RequestEnvelope.decoded(from: data))
-        } catch {
-            return .failure(.init(underlyingDescription: String(describing: error)))
         }
     }
 

@@ -5,8 +5,7 @@ import Foundation
 /// Accessibility state observed during a session.
 ///
 /// Captures are the durable source of truth. Segments and replayable patches
-/// are compatibility projections derived when callers need the compact wire
-/// shape.
+/// are derived projections for callers that need compact change summaries.
 public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public let captures: [Capture]
 
@@ -15,15 +14,12 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case captures
         case segments
     }
 
     public init(captures: [Capture]) {
         self.captures = Self.normalized(captures)
-    }
-
-    public init(segments: [ScreenSegment]) {
-        self.captures = segments.flatMap(\.captures)
     }
 
     public init(capture: Capture) {
@@ -40,12 +36,21 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(segments: try container.decode([ScreenSegment].self, forKey: .segments))
+        if container.contains(.segments) {
+            // Intentional contract break: prior segment-backed traces are not
+            // durable public artifacts. Captures are now the only stored truth.
+            throw DecodingError.dataCorruptedError(
+                forKey: .segments,
+                in: container,
+                debugDescription: "AccessibilityTrace stores captures; segments are derived projections and are not accepted as trace truth"
+            )
+        }
+        self.init(captures: try container.decode([Capture].self, forKey: .captures))
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(segments, forKey: .segments)
+        try container.encode(captures, forKey: .captures)
     }
 
     private static func normalized(_ captures: [Capture]) -> [Capture] {

@@ -98,7 +98,7 @@ final class PublicCommandContractTests: XCTestCase {
     @ButtonHeistActor
     func testEveryPublicCommandRejectsUnknownRequestKeysFromFenceSpecs() async {
         let fence = TheFence(configuration: .init())
-        let invalidKey = "__legacy_public_contract_key"
+        let invalidKey = "__unsupported_public_contract_key"
 
         for sample in allPublicCommandSamples() {
             XCTAssertFalse(sample.command.parameters.map(\.key).contains(invalidKey))

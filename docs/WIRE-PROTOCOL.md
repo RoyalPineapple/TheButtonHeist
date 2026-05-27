@@ -1,1654 +1,353 @@
-# Button Heist Wire Protocol Specification
+# Button Heist Wire Protocol
 
-This document specifies the communication protocol between the Button Heist iOS host and clients (ButtonHeist framework, CLI, Python scripts).
+This document describes the raw TheScore transport between Button Heist clients
+and the iOS host. It is not the CLI, MCP, batch, or heist command registry.
 
-There is no separate wire protocol version. The handshake compares the server's and the client's `buttonHeistVersion` (SemVer, defined in `ButtonHeist/Sources/TheScore/Messages.swift`) for exact equality; any mismatch closes the connection with `protocolMismatch`. Wire-format changes are tied to a release bump via `scripts/release.sh`.
+Use generated references for product command surfaces:
 
-## Command Contract Layers
+- [Command Reference](reference/commands.md)
+- [MCP Tool Reference](reference/mcp-tools.md)
 
-Button Heist has one product command contract: `TheFence.Command`. The CLI, session JSON, batches, and MCP tools adapt to those command names, for example `type_text`, `get_screen`, and `scroll_to_visible`.
+## Versioning
 
-This document describes the lower transport layer. Its envelope `type` values are wire message discriminators from TheScore, for example `typeText`, `requestScreen`, and `scrollToVisible`. They are stable wire names, but they are not the CLI/MCP command namespace. When the two differ, use TheFence command names at adapter boundaries and wire names only for raw transport messages.
+There is no separate wire-protocol version. Both sides carry
+`buttonHeistVersion` in envelopes and compare it for exact equality during the
+hello handshake. Any mismatch returns `protocolMismatch` and closes the
+connection. Wire-format changes ship with a product version bump.
+
+## Command Layers
+
+Button Heist has one product command contract: `TheFence.Command`. CLI,
+session JSON, MCP tools, batches, and heist playback adapt to command names
+such as `get_interface`, `activate`, and `scroll_to_visible`.
+
+The wire protocol is lower-level transport. Its `type` values are TheScore
+message discriminators such as `requestInterface`, `activate`, `requestScreen`,
+and `scrollToVisible`. Use Fence command names at public adapter boundaries and
+wire discriminators only when speaking raw TCP.
 
 ## Transport
 
-- **Layer**: TLS over TCP (Network.framework `NWProtocolTLS`)
-- **Discovery**: Direct `host:port`, named targets, Bonjour/mDNS when network scope is enabled, or CoreDevice IPv6 tunnel (USB)
-- **Service Type**: `_buttonheist._tcp`
-- **Port**: OS-assigned by default; optionally configured by the host app
-- **Encoding**: Newline-delimited JSON (UTF-8)
-- **Socket**: IPv6 dual-stack (accepts both IPv4 and IPv6)
-- **Encryption**: TLS 1.3+ with self-signed ECDSA (P-256) certificates. Non-loopback clients must verify the SHA-256 fingerprint; loopback simulator clients may use TLS without pinning.
+- TLS over TCP using Network.framework
+- Newline-delimited UTF-8 JSON
+- Service type `_buttonheist._tcp`
+- OS-assigned port by default
+- IPv6 dual-stack listener
+- TLS 1.3+ with self-signed ECDSA certificates
 
-## Discovery Methods
+Default connection scope is `simulator,usb`. Bonjour/LAN discovery is opt-in
+with `network` scope.
 
-### WiFi (Bonjour)
-The Button Heist iOS host advertises itself using Bonjour only when `INSIDEJOB_SCOPE` includes `network`. The default scope is `simulator,usb`, so hosts are not LAN-visible by default.
+Non-loopback clients must verify a SHA-256 TLS certificate fingerprint from
+configuration, persisted trust, or Bonjour discovery. Loopback simulator
+clients may use TLS without pinning.
 
-When enabled, Bonjour uses:
-- **Domain**: `local.`
-- **Type**: `_buttonheist._tcp`
-- **Name**: `{AppName}#{instanceId}` (instanceId from `INSIDEJOB_ID` env var, or first 8 chars of a per-launch UUID)
-- **TXT Record**:
-  - `simudid` — Simulator UDID (only present when running in iOS Simulator, from `SIMULATOR_UDID` env var)
-  - `installationid` — Stable per-installation identifier for device discovery and filtering
-  - `instanceid` — Human-readable instance identifier
-  - `devicename` — Human-readable device name
-  - `sessionactive` — `"1"` when an active session exists, `"0"` otherwise. Used by clients to show session state pre-connection.
-  - `certfp` — TLS certificate SHA-256 fingerprint, format: `sha256:<64 hex chars>`
-  - `transport` — `"tls"`
+## Discovery
 
-The TXT record enables pre-connection device identification. Clients can match devices by simulator UDID, instance ID, or session state without establishing a TCP connection first. The `certfp` field enables trust-on-first-discovery (TOFU): clients verify the server's TLS certificate against this fingerprint during the TLS handshake. TLS is required. Non-loopback clients must refuse connections without an explicit fingerprint from Bonjour or configuration.
+### Bonjour
 
-> **Security note**: The `certfp` value is delivered via mDNS, which provides no integrity protection. An attacker on the same network segment could spoof Bonjour responses with a different fingerprint. This is acceptable for a local development tool but does not provide the same guarantees as a PKI-based certificate chain. The fingerprint prevents passive eavesdropping and verifies the server identity hasn't changed between discovery and connection.
+Bonjour is published only when `INSIDEJOB_SCOPE` includes `network`.
 
-### USB (CoreDevice IPv6 Tunnel)
-When connected via USB, macOS creates an IPv6 tunnel:
-- **Device address**: `fd{prefix}::1` (e.g., `fd9a:6190:eed7::1`)
-- **Port**: OS-assigned by default, or fixed via host configuration
-- **Discovery**: Named/direct target configuration, or `lsof -i -P -n | grep CoreDev` for manual debugging
+TXT metadata includes app/device identity, session availability, transport
+mode, and certificate fingerprint:
 
-USB traffic is classified as the `usb` scope and is allowed by default. It is still non-loopback traffic, so clients need an explicit TLS fingerprint for trust unless they are connecting through a loopback simulator endpoint.
+```text
+simudid=<simulator UDID when available>
+installationid=<stable app installation identifier>
+instanceid=<human-readable instance id>
+devicename=<device name>
+sessionactive=0|1
+certfp=sha256:<64 hex chars>
+transport=tls
+```
 
-## Connection Lifecycle
+The Bonjour fingerprint enables trust-on-first-discovery for local development.
+mDNS itself does not provide integrity protection.
+
+### USB
+
+USB uses the CoreDevice IPv6 tunnel. It is classified as `usb` scope and uses
+the same TLS wire protocol as other non-loopback transports.
+
+## Handshake
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant Server
 
-    Client->>Server: TLS Handshake (verify certfp for non-loopback)
-    Note over Client,Server: All subsequent messages encrypted
+    Client->>Server: TLS handshake
     Server-->>Client: serverHello
+    Client->>Server: clientHello
 
-    alt Protocol mismatch
-        Client-->>Server: clientHello
+    alt Version mismatch
         Server-->>Client: protocolMismatch
-        Server--xClient: TCP Close
+        Server--xClient: close
     else Reachability probe
-        Client->>Server: clientHello
         Server-->>Client: authRequired
         Client->>Server: status
-        Server-->>Client: status(StatusPayload)
-        Client->>Server: TCP Close
+        Server-->>Client: status
+        Client->>Server: close
     else Driver connection
-        Client->>Server: clientHello
         Server-->>Client: authRequired
-        Client->>Server: authenticate(token)
-
-        alt Success + session acquired
+        Client->>Server: authenticate
+        alt Success
             Server-->>Client: info
-        else Bad token
-            Server-->>Client: error(authFailure) → disconnect
-        else Waiting for UI approval
+        else UI approval
             Server-->>Client: authApprovalPending
-            Server-->>Client: authApproved / error(authFailure or authApprovalPending)
-        else Session held by another driver
-            Server-->>Client: sessionLocked → disconnect
+            Server-->>Client: authApproved / error
+        else Failure
+            Server-->>Client: error / sessionLocked
+            Server--xClient: close
         end
-
-        Client->>Server: requestInterface
-        opt explicit screen capture
-            Client->>Server: requestScreen
-            Server-->>Client: screen
-        end
-        Server-->>Client: interface
-
-        Client->>Server: activate / touchTap / touchDrag ...
-        Server-->>Client: actionResult
     end
-
-    Client->>Server: ping
-    Server-->>Client: pong
-
-    Client->>Server: TCP Close
 ```
 
-## Message Format
+`status` is the only post-hello message allowed before authentication. It
+reports identity and session availability without claiming a driver session.
 
-All messages are JSON objects terminated by a newline (`\n`). Envelopes use an explicit `type` discriminator and optional `payload`, rather than relying on Swift enum synthesis. The `Interface` payload follows the same rule — its `tree` uses a discriminator-keyed shape (`{"element": {...}}` / `{"container": {...}}`) with explicit field names, never the synthesized `_0` form.
+## Envelopes
 
-### Request/Response Envelopes
+Every message is a JSON object terminated by `\n`.
 
-All messages are wrapped in envelope types for request-response correlation. Examples below omit `requestId` unless the correlation behavior is relevant. Examples use `<semver>` as a placeholder for the current product `buttonHeistVersion`; the literal value is whatever the shipped Button Heist build reports.
+Client request:
 
-**Client → Server** (`RequestEnvelope`):
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"activate","payload":{"identifier":"loginButton"}}
+{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"requestInterface","payload":{}}
 ```
 
-**Server → Client** (`ResponseEnvelope`):
+Server response:
+
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"actionResult","payload":{"success":true,"method":"syntheticTap"}}
+{"buttonHeistVersion":"<semver>","requestId":"abc-123","type":"interface","payload":{"timestamp":"2026-02-03T10:30:45.123Z","tree":[],"annotations":{"elements":[],"containers":[]}}}
 ```
 
-When `requestId` is present, the server echoes it in the corresponding response so the client can match request-response pairs. Screenshots are explicit `requestScreen` responses.
+| Field | Description |
+|-------|-------------|
+| `buttonHeistVersion` | Product SemVer. Must match exactly across client and server. |
+| `requestId` | Optional correlation id. Echoed by the matching response. |
+| `type` | Explicit TheScore message discriminator. |
+| `payload` | Optional payload object. |
+| `accessibilityTrace` | Response trace evidence for captures observed while preparing the response. |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `buttonHeistVersion` | `String` | Server's and client's `buttonHeistVersion`. Compared for exact equality at handshake; mismatch closes the connection with `protocolMismatch`. |
-| `requestId` | `String?` | Optional correlation ID; echoed in the response |
-| `type` | `String` | Explicit message discriminator |
-| `payload` | `Object / String / null` | Optional message payload |
-| `accessibilityTrace` | `AccessibilityTrace?` | (Response only) Capture trace for UI changes observed while the server prepared the response. Compact background-change summaries are derived from this trace at client formatting and expectation edges. |
+## Public Wire Examples
 
-## Client → Server Messages
+These examples show edge contracts that raw clients may need. Command and
+parameter inventories belong in the generated references.
 
-### clientHello
-
-Version handshake sent immediately after `serverHello`.
+### Hello
 
 ```json
+{"buttonHeistVersion":"<semver>","type":"serverHello"}
 {"buttonHeistVersion":"<semver>","type":"clientHello"}
+{"buttonHeistVersion":"<semver>","type":"authRequired"}
 ```
 
-### authenticate
+### Authentication
 
-Authenticate with the server. Must be sent after a successful `clientHello` / `authRequired` handshake. Sending any other command before the handshake completes will result in immediate disconnection.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"authenticate","payload":{"token":"your-secret-token"}}
-```
-
-**With driver identity:**
 ```json
 {"buttonHeistVersion":"<semver>","type":"authenticate","payload":{"token":"your-secret-token","driverId":"agent-1"}}
 ```
 
-The optional `driverId` field provides a unique driver identity for session locking — when set, it takes precedence over the token for distinguishing drivers. See [Session Locking](#session-locking) for details.
+`driverId` is optional. When present, it is the session-locking identity. When
+absent, the token is used as the driver identity.
 
-### requestInterface
+### UI Approval
 
-Request the current app accessibility state from the server. Public clients normally use `get_interface`; optional query payloads can select the returned hierarchy by subtree, matcher, or element ids. Refresh, exploration, selection, and stale-state decisions are owned by TheInsideJob.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"requestInterface","payload":{}}
-```
-
-### activate
-
-Activate an element (equivalent to VoiceOver double-tap). Uses the TouchInjector system with synthetic event fallback chain.
-
-**By identifier:**
-```json
-{"buttonHeistVersion":"<semver>","type":"activate","payload":{"identifier":"loginButton"}}
-```
-
-**By matcher ordinal:**
-```json
-{"buttonHeistVersion":"<semver>","type":"activate","payload":{"label":"Save","traits":["button"],"ordinal":1}}
-```
-
-### touchTap
-
-Tap at coordinates or on an element using Button Heist's synthetic touch engine.
-
-**At coordinates:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchTap","payload":{"pointX":196.5,"pointY":659.0}}
-```
-
-**On element by identifier:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchTap","payload":{"elementTarget":{"identifier":"submitButton"}}}
-```
-
-### touchLongPress
-
-Long press at coordinates or on an element.
+When the server uses an auto-generated token, a client may request on-device
+approval by authenticating with an empty token.
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"touchLongPress","payload":{"pointX":100,"pointY":200,"duration":1.0}}
-```
-
-**On element (default 0.5s):**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchLongPress","payload":{"elementTarget":{"identifier":"myButton"},"duration":0.5}}
-```
-
-### touchSwipe
-
-Swipe between two points or in a direction from an element.
-
-**With explicit coordinates:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchSwipe","payload":{"startX":200,"startY":400,"endX":200,"endY":100,"duration":0.15}}
-```
-
-**From element in direction:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchSwipe","payload":{"elementTarget":{"identifier":"list"},"direction":"up"}}
-```
-
-### touchDrag
-
-Drag from one point to another (slower than swipe, for sliders/reordering).
-
-**With explicit coordinates:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchDrag","payload":{"startX":100,"startY":200,"endX":300,"endY":200,"duration":0.5}}
-```
-
-**From element:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchDrag","payload":{"elementTarget":{"identifier":"slider"},"endX":300,"endY":200}}
-```
-
-### touchPinch
-
-Pinch/zoom gesture centered at a point. Scale >1.0 zooms in, <1.0 zooms out.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"touchPinch","payload":{"centerX":200,"centerY":300,"scale":2.0,"spread":100,"duration":0.5}}
-```
-
-**On element:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchPinch","payload":{"elementTarget":{"identifier":"mapView"},"scale":0.5}}
-```
-
-### touchRotate
-
-Rotation gesture centered at a point. Angle in radians.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"touchRotate","payload":{"centerX":200,"centerY":300,"angle":1.57,"radius":100,"duration":0.5}}
-```
-
-### touchTwoFingerTap
-
-Two-finger tap at a point or element.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"touchTwoFingerTap","payload":{"centerX":200,"centerY":300,"spread":40}}
-```
-
-### touchDrawPath
-
-Draw along a path by tracing through a sequence of waypoints. Supports duration (seconds) or velocity (points/second) for timing.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"duration":1.0}}
-```
-
-**With velocity:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchDrawPath","payload":{"points":[{"x":100,"y":400},{"x":200,"y":300},{"x":300,"y":400}],"velocity":500}}
-```
-
-### touchDrawBezier
-
-Draw along cubic bezier curves. The server samples the curves to a polyline, then traces using the drawPath engine.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"duration":1.0}}
-```
-
-**With samples and velocity:**
-```json
-{"buttonHeistVersion":"<semver>","type":"touchDrawBezier","payload":{"startX":100,"startY":400,"segments":[{"cp1X":100,"cp1Y":200,"cp2X":300,"cp2Y":200,"endX":300,"endY":400}],"samplesPerSegment":40,"velocity":300}}
-```
-
-### increment
-
-Increment an adjustable element (e.g., slider, stepper). Calls `increment()` on the element's view.
-
-**By identifier:**
-```json
-{"buttonHeistVersion":"<semver>","type":"increment","payload":{"identifier":"volumeSlider"}}
-```
-
-**By matcher ordinal:**
-```json
-{"buttonHeistVersion":"<semver>","type":"increment","payload":{"label":"Volume","traits":["adjustable"],"ordinal":0}}
-```
-
-### decrement
-
-Decrement an adjustable element. Calls `decrement()` on the element's view.
-
-**By identifier:**
-```json
-{"buttonHeistVersion":"<semver>","type":"decrement","payload":{"identifier":"volumeSlider"}}
-```
-
-### performCustomAction
-
-Invoke a named custom action on an element. The action name must match one of the element's `actions`.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"performCustomAction","payload":{"elementTarget":{"identifier":"myCell"},"actionName":"Delete"}}
-```
-
-### typeText
-
-Type non-empty text character-by-character by injecting into the keyboard input system (via UIKeyboardImpl.sharedInstance). Returns the current text field value in the `actionResult`. Works in both software and hardware keyboard modes. Destructive edits are explicit `editAction` operations, not `typeText` side effects.
-
-**Type text into a field (taps element to focus first):**
-```json
-{"buttonHeistVersion":"<semver>","type":"typeText","payload":{"text":"Hello","elementTarget":{"identifier":"nameField"}}}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `text` | `String` | Non-empty text to type character-by-character |
-| `elementTarget` | `ElementTarget?` | Semantic target used to resolve fresh live geometry before focusing and reading value back |
-
-### requestScreen
-
-Request a PNG capture of the current screen plus the fresh visible accessibility tree with geometry.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"requestScreen"}
-```
-
-The raw wire response carries base64 PNG data. Public CLI/MCP/Fence callers are artifact-first: `get_screen` writes an artifact and returns metadata by default. Inline PNG data is an explicit opt-in (`inlineData=true` or CLI compatibility `--inline`) and is bounded by the public adapter.
-
-### startRecording
-
-Start recording the screen as H.264/MP4 video. Frames are captured at the configured FPS using `drawHierarchy` compositing (includes fingerprint overlays for taps and continuous gestures). `maxDuration` is the hard cap. `inactivityTimeout` is an optional early-stop hint: when provided, recording auto-stops after that many seconds with no screen changes and no real interactions (actions, touches, typing). When omitted, inactivity auto-stop is disabled. Pings and keepalive messages do not reset the inactivity timer.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"startRecording","payload":{"fps":8,"scale":0.5,"maxDuration":60.0}}
-```
-
-All fields are optional — defaults are applied server-side.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `fps` | `Int?` | Frames per second (1-15, default: 8) |
-| `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
-| `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
-| `inactivityTimeout` | `Double?` | Optional early-stop seconds of no activity; omitted disables inactivity auto-stop |
-
-### stopRecording
-
-Stop an active recording or retrieve a cached auto-finished recording. The server finalizes the video when needed and sends a `recording` message, or returns its own `No recording in progress` error when neither active nor cached recording data exists.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"stopRecording"}
-```
-
-The raw wire response carries base64 MP4 data. Public CLI/MCP/Fence callers write an artifact and return metadata by default. Inline video data and full interaction logs are explicit opt-ins and are capped before public delivery.
-
-### scroll
-
-Scroll near the resolved element by approximately one page in the given direction. Use `elementSearch` when the goal is to scan the screen for an unseen target.
-
-**By identifier:**
-```json
-{"buttonHeistVersion":"<semver>","type":"scroll","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-5"},"direction":"up"}}
-```
-
-**By matcher ordinal:**
-```json
-{"buttonHeistVersion":"<semver>","type":"scroll","payload":{"elementTarget":{"label":"Messages","ordinal":1},"direction":"down"}}
-```
-
-Directions: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
-
-### scrollToVisible
-
-Scroll a known element into view. Use this for elements returned by the current hierarchy or a recent action delta. For iterative discovery of an unseen or stale element, use `element_search`.
-
-**Target fields:** `heistId`, flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`, and optional `ordinal`. Use `heistId` for known current-hierarchy elements. Matcher fields are decoded at the payload root and only resolve elements already present in the current hierarchy; there is no nested `match` object. `ordinal` is a fallback when matcher predicates are ambiguous, or when no matcher predicates exist.
-
-**By heistId:**
-```json
-{"buttonHeistVersion":"<semver>","type":"scrollToVisible","payload":{"heistId":"buttonheist.longList.colorPicker"}}
-```
-
-**By visible label:**
-```json
-{"buttonHeistVersion":"<semver>","type":"scrollToVisible","payload":{"label":"Color Picker"}}
-```
-
-**Visible compound matcher:**
-```json
-{"buttonHeistVersion":"<semver>","type":"scrollToVisible","payload":{"label":"Settings","traits":["header"]}}
-```
-
-**Response** is an `actionResult` with `method: "scrollToVisible"`:
-```json
-{"type":"actionResult","payload":{"success":true,"method":"scrollToVisible"}}
-```
-
-### elementSearch
-
-Search for an element by scrolling the current screen. Uses an `ElementTarget` predicate — all specified matcher fields must match (AND semantics). Returns a `ScrollSearchResult` with diagnostics.
-
-**Target fields:** `heistId`, or flat matcher fields `label`, `identifier`, `value`, `traits`, `excludeTraits`.
-
-**Search options:** `direction` (`"down"`, `"up"`, `"left"`, `"right"`, default: `"down"`).
-
-**By label:**
-```json
-{"buttonHeistVersion":"<semver>","type":"elementSearch","payload":{"label":"Color Picker"}}
-```
-
-**Compound matcher with direction:**
-```json
-{"buttonHeistVersion":"<semver>","type":"elementSearch","payload":{"label":"Settings","traits":["header"],"direction":"up"}}
-```
-
-**Response** carries the search result under `actionResult.payload`:
-```json
-{"type":"actionResult","payload":{"success":true,"method":"elementSearch","payload":{"kind":"scrollSearch","data":{"scrollCount":3,"uniqueElementsSeen":25,"totalItems":80,"exhaustive":false,"foundElement":{...}}}}}
-```
-
-### scrollToEdge
-
-Scroll near the resolved element to an edge (top, bottom, left, right). The target must be in scrollable content that supports the requested axis.
-
-**By identifier:**
-```json
-{"buttonHeistVersion":"<semver>","type":"scrollToEdge","payload":{"elementTarget":{"identifier":"buttonheist.longList.item-0"},"edge":"bottom"}}
-```
-
-Edges: `"top"`, `"bottom"`, `"left"`, `"right"`.
-
-### explore
-
-Accessibility-state discovery. Returns the accessible hierarchy Button Heist can discover for the current screen, including content discovered through scrollable containers.
-
-No payload required.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"explore"}
-```
-
-Returns an `actionResult` with `method: "explore"` and a `payload` of `{"kind": "explore", "data": {...}}` containing the element list and summary discovery statistics.
-
-> **Note**: `explore` is not exposed as a standalone CLI/MCP command. TheInsideJob may run exploration while satisfying `get_interface` requests. See [Element Discovery](#element-discovery) for usage guidance.
-
-### editAction
-
-Perform a standard edit action via the responder chain.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"editAction","payload":{"action":"copy"}}
-```
-
-Valid actions: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`, `"delete"`.
-
-### setPasteboard
-
-Write text to the general pasteboard from within the app. Content written by the app itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"setPasteboard","payload":{"text":"clipboard content"}}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `text` | `String` | Text to write to the pasteboard (required) |
-
-### getPasteboard
-
-Read text from the general pasteboard.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"getPasteboard"}
-```
-
-No payload. Returns an `actionResult` with `method: "getPasteboard"` and the pasteboard text in `value`.
-
-### resignFirstResponder
-
-Dismiss the keyboard by resigning first responder.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"resignFirstResponder"}
-```
-
-### waitForChange
-
-Wait for the UI to change in a way that matches an expectation. With `expect`, the server checks the current settled state first, then watches settled changes until the expectation is true. With no expectation, returns on any post-baseline tree change.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"waitForChange","payload":{"expect":{"type":"screen_changed"},"timeout":30}}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `expect` | `ActionExpectation?` | The change to wait for — object form only, e.g. `{"type":"screen_changed"}`. When nil, any tree change satisfies. |
-| `timeout` | `Double?` | Max wait time in seconds (default: 30, max: 30) |
-
-Returns an `actionResult` with `method: "waitForChange"` and an `accessibilityDelta` describing what changed. If the current state already satisfies a state predicate such as `element_appeared`, `element_disappeared`, or `element_updated` with `newValue`, the result can succeed with `noChange`. On timeout, returns `success: false` with `errorKind: "timeout"`.
-
-For `waitForChange`, `element_disappeared` is a current-state predicate: it is met when no current settled element matches the predicate. It does not require proving that the element existed earlier and was removed.
-
-**Fast paths**: if the current state already satisfies the expectation, returns immediately. If the tree already changed since the last response (while the agent was thinking), returns immediately with the accumulated delta.
-
-**Example flow**: `activate pay_now_button expect="screen_changed"` → delta shows spinner, expectation not met → `waitForChange expect="screen_changed" timeout=30` → receipt screen arrives, expectation met.
-
-### waitFor
-
-Wait for an element matching a predicate to appear (or disappear). Uses settle-event polling, not busy-waiting.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"waitFor","payload":{"label":"Loading","absent":true,"timeout":5.0}}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `heistId` | `String?` | Current-hierarchy element handle returned by `get_interface` or an action delta |
-| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate describing the element to wait for, decoded flat at the payload root |
-| `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
-| `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
-
-Returns an `actionResult` with `method: "waitFor"` and an `accessibilityDelta` containing the settled interface.
-
-### ping
-
-Keepalive ping.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"ping"}
-```
-
-### status
-
-Lightweight status probe. Unlike normal driver commands, this message may be sent before authentication and does not claim a session. It is intended for reachability checks and identity discovery.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"status"}
-```
-
-## Server → Client Messages
-
-### serverHello
-
-Sent immediately on connection. The client must verify `buttonHeistVersion` and respond with `clientHello` carrying its own `buttonHeistVersion`.
-
-```json
-{"buttonHeistVersion":"<semver>","requestId":null,"type":"serverHello"}
-```
-
-### protocolMismatch
-
-Sent when the peer's `buttonHeistVersion` does not exactly match the server's. The server closes the connection immediately after sending this message.
-
-```json
-{"buttonHeistVersion":"<server-semver>","requestId":null,"type":"protocolMismatch","payload":{"serverButtonHeistVersion":"<server-semver>","clientButtonHeistVersion":"<client-semver>"}}
-```
-
-### authRequired
-
-Sent after a successful hello/version handshake. Indicates the client must authenticate before any other interaction.
-
-```json
-{"buttonHeistVersion":"<semver>","requestId":null,"type":"authRequired"}
-```
-
-### authApprovalPending
-
-Sent after the client requests UI approval with an empty token and the server is waiting on the on-device approval prompt. This is non-terminal; the same connection later receives `authApproved` and `info`, or an `error`.
-
-```json
+{"buttonHeistVersion":"<semver>","type":"authenticate","payload":{"token":""}}
 {"buttonHeistVersion":"<semver>","type":"authApprovalPending","payload":{"message":"Waiting for approval on the device.","hint":"Tap Allow on the iOS device to continue."}}
+{"buttonHeistVersion":"<semver>","type":"authApproved","payload":{"token":"auto-generated-token"}}
 ```
 
-### error (auth failure)
+After `authApproved`, the client should persist the token and use it for future
+connections.
 
-Auth failures use the same `error` wire type as everything else; `kind: "authFailure"` distinguishes them. The server disconnects shortly after.
+### Protocol Mismatch
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"error","payload":{"kind":"authFailure","message":"Invalid token"}}
+{"buttonHeistVersion":"<server-semver>","type":"protocolMismatch","payload":{"serverButtonHeistVersion":"<server-semver>","clientButtonHeistVersion":"<client-semver>"}}
 ```
 
-Wrong-token failures use `kind: "authFailure"`. If an explicit token is configured, the recovery message tells the client to retry with that configured token. If the server generated its token and supports UI approval, the recovery message may tell the client to retry without a token to request approval.
-
-Approval denial is also `kind: "authFailure"` with message `"Connection denied by user"`. Approval timeout is `kind: "authApprovalPending"` with message `"Approval timed out — user did not respond to the approval prompt on the device."`
-
-### authApproved
-
-Sent when a connection is approved via the on-device UI (see [UI Approval Flow](#ui-approval-flow)). Contains the auth token for future reconnections.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"authApproved","payload":{"token":"auto-generated-uuid-token"}}
-```
-
-After receiving `authApproved`, the client should store the token and use it for future `authenticate` messages to skip the approval flow.
-
-### sessionLocked
-
-Sent when the server's session is held by a different driver. The server disconnects the client shortly after sending this message. See [Session Locking](#session-locking).
+### Session Locked
 
 ```json
 {"buttonHeistVersion":"<semver>","type":"sessionLocked","payload":{"message":"Session is locked by another driver","activeConnections":1}}
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `message` | `String` | Human-readable description of why the session is locked |
-| `activeConnections` | `Int` | Number of active connections in the current session |
-
-### info
-
-Sent after successful authentication. Contains device and app metadata.
+### Status Probe
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"info","payload":{
-  "appName":"MyApp",
-  "bundleIdentifier":"com.example.myapp",
-  "deviceName":"iPhone 15 Pro",
-  "systemVersion":"17.0",
-  "screenWidth":393.0,
-  "screenHeight":852.0,
-  "instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
-  "instanceIdentifier":"my-instance",
-  "listeningPort":52341,
-  "simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678",
-  "vendorIdentifier":null,
-  "tlsActive":true
-}}
+{"buttonHeistVersion":"<semver>","type":"status"}
 ```
-
-### status
-
-Sent in response to a `status` probe. This response is valid before authentication and returns app identity plus session availability without claiming the session.
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"status","payload":{
-  "identity":{
-    "appName":"MyApp",
-    "bundleIdentifier":"com.example.myapp",
-    "appBuild":"42",
-    "deviceName":"iPhone 15 Pro",
-    "systemVersion":"18.0",
-    "buttonHeistVersion":"<semver>"
-  },
-  "session":{
-    "active":false,
-    "watchersAllowed":false,
-    "activeConnections":0
-  }
-}}
+{"buttonHeistVersion":"<semver>","type":"status","payload":{"identity":{"appName":"MyApp","bundleIdentifier":"com.example.myapp","appBuild":"42","deviceName":"iPhone 15 Pro","systemVersion":"18.0","buttonHeistVersion":"<semver>"},"session":{"active":false,"watchersAllowed":false,"activeConnections":0}}}
 ```
-
-### interface
-
-UI element interface. Public JSON output uses a tree structure. Summary detail emits the identity fields per element (`heistId`, `label`, `value`, `identifier`, `traits`, meaningful `actions`); full detail adds VoiceOver `hint`, `customContent`, frames, and activation points.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"interface","payload":{
-  "screenDescription":"Welcome — 1 button",
-  "timestamp":"2026-02-03T10:30:45.123Z",
-  "tree":[
-    {"element":{
-      "heistId":"staticText_welcome",
-      "label":"Welcome",
-      "traits":["staticText"],
-      "frameX":16.0,
-      "frameY":100.0,
-      "frameWidth":361.0,
-      "frameHeight":24.0,
-      "activationPointX":196.5,
-      "activationPointY":112.0
-    }},
-    {"container":{
-      "type":"semanticGroup",
-      "label":"Form",
-      "frameX":0.0,
-      "frameY":88.0,
-      "frameWidth":393.0,
-      "frameHeight":600.0,
-      "children":[{"element":{
-        "heistId":"button_sign_in",
-        "label":"Sign In",
-        "identifier":"signInButton",
-        "traits":["button"],
-        "frameX":16.0,
-        "frameY":140.0,
-        "frameWidth":361.0,
-        "frameHeight":44.0,
-        "activationPointX":196.5,
-        "activationPointY":162.0
-      }}]
-    }}
-  ]
-}}
-```
-
-The `tree` is the canonical wire shape — every element appears exactly once at its tree position; there is no parallel flat array. Leaves carry the full `HeistElement` payload directly under the `element` key (no `order` field, no `_0` wrapper).
-
-### actionResult
-
-Response to `activate`, `one_finger_tap`, `increment`, `decrement`, `typeText`, `performCustomAction`, `handleAlert`, `setPasteboard`, `getPasteboard`, `scroll`, `scrollToVisible`, `elementSearch`, or `scrollToEdge` commands.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{
-  "success":true,
-  "method":"syntheticTap",
-  "message":null
-}}
-```
-
-For `typeText`, the response includes the current text field value:
-```json
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{
-  "success":true,
-  "method":"typeText",
-  "value":"Hello World"
-}}
-```
-
-Possible methods:
-- `syntheticTap` - Tap synthesized by Button Heist
-- `syntheticLongPress` - Long press synthesized by Button Heist
-- `syntheticSwipe` - Swipe synthesized by Button Heist
-- `syntheticDrag` - Drag synthesized by Button Heist
-- `syntheticPinch` - Pinch gesture synthesized by Button Heist
-- `syntheticRotate` - Rotation gesture synthesized by Button Heist
-- `syntheticTwoFingerTap` - Two-finger tap synthesized by Button Heist
-- `syntheticDrawPath` - Path drawing synthesized by Button Heist
-- `activate` - Element's `activate()` was used
-- `increment` - Element's `increment()` was called
-- `decrement` - Element's `decrement()` was called
-- `typeText` - Text injected via UIKeyboardImpl
-- `customAction` - Named custom action was invoked
-- `editAction` - Edit action performed via responder chain
-- `handleAlert` - System alert handled via IOHIDEventSystemClient
-- `setPasteboard` - Text written to general pasteboard
-- `getPasteboard` - Text read from general pasteboard
-- `resignFirstResponder` - First responder resigned (keyboard dismissed)
-- `waitForIdle` - Wait-for-idle completed
-- `waitForChange` - Wait-for-change completed (expectation met or timeout)
-- `waitFor` - Wait-for element completed
-- `scroll` - Scroll view scrolled by one page
-- `scrollToVisible` - Known element was scrolled into view
-- `elementSearch` - Iterative scroll search found (or failed to find) element matching predicate
-- `scrollToEdge` - Scroll view scrolled to an edge
-- `explore` - Accessibility-state discovery completed
-- `elementNotFound` - Target element could not be found
-- `elementDeallocated` - Element's underlying view was deallocated
-
-The optional `message` field provides additional context, especially for failures:
-```json
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{
-  "success":false,
-  "method":"elementNotFound",
-  "message":"Element is disabled (has 'notEnabled' trait)"
-}}
-```
-
-### screen
-
-PNG capture of the current screen.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"screen","payload":{
-  "pngData":"iVBORw0KGgo...",
-  "width":393.0,
-  "height":852.0,
-  "timestamp":"2026-02-03T10:30:45.123Z",
-  "interface":{"timestamp":"2026-02-03T10:30:45.123Z","tree":[...]}
-}}
-```
-
-The `pngData` field is base64-encoded PNG image data on the raw wire. Public adapters return screenshot metadata plus an artifact path by default; inline image content is opt-in and bounded.
-
-### pong
-
-Response to `ping`.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"pong"}
-```
-
-### recordingStarted
-
-Acknowledgement that recording has begun.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"recordingStarted"}
-```
-
-### recordingStopped
-
-Lightweight notification that recording stopped without including the video payload. This is sent for automatic stops such as inactivity, max duration, or file size limit. The completed video is cached server-side and returned by the next `stopRecording` request.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"recordingStopped"}
-```
-
-### recording
-
-Completed screen recording. Contains the H.264/MP4 video as base64-encoded data on the raw wire. Sent as the response to `stopRecording`, not as an unsolicited broadcast.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"recording","payload":{
-  "videoData":"AAAAIGZ0eXBpc29t...",
-  "width":390,
-  "height":844,
-  "duration":5.2,
-  "frameCount":42,
-  "fps":8,
-  "startTime":"2026-02-24T10:30:00.000Z",
-  "endTime":"2026-02-24T10:30:05.200Z",
-  "stopReason":"inactivity"
-}}
-```
-
-The `videoData` field is base64-encoded MP4 video data. Public adapters write the recording to an artifact path and return metadata by default. Inline video data and full `interactionLog` output require explicit opt-in and are capped before delivery. The optional `interactionLog` field contains an ordered array of `InteractionEvent` objects capturing each command, result, and interface delta during the recording. It is `null` or absent when no interactions occurred or when a public adapter omits it from default output.
-
-Stop reasons: `"manual"`, `"inactivity"`, `"maxDuration"`, `"fileSizeLimit"`.
-
-### error (recording failure)
-
-Recording-pipeline failures use the same `error` wire type with `kind: "recording"`.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"error","payload":{"kind":"recording","message":"AVAssetWriter failed to start"}}
-```
-
-### interaction
-
-Interaction event used in recordings. Runtime interaction subscriptions are no longer a public surface.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"interaction","payload":{"timestamp":1709472045.123,"command":{"type":"activate","payload":{"identifier":"loginButton"}},"result":{"success":true,"method":"syntheticTap","accessibilityDelta":{"kind":"elementsChanged","elementCount":12,"edits":{"updated":[{"heistId":"button·loginButton","changes":[{"property":"value","old":null,"new":"Loading..."}]}]}}}}}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `timestamp` | `Double` | Unix timestamp of the interaction |
-| `command` | `ClientMessage` | The command that triggered the interaction |
-| `result` | `ActionResult` | The result of the action (includes `accessibilityDelta` when the UI hierarchy changed) |
-
-### error
-
-Server-broadcast error. The payload is a `ServerError { kind, message }` so callers can route on `kind` instead of pattern-matching message text. Auth failures use `kind: "authFailure"`, recording failures use `kind: "recording"`, everything else is `"general"`.
-
-```json
-{"buttonHeistVersion":"<semver>","type":"error","payload":{"kind":"general","message":"Root view not available"}}
-```
-
-## Element Discovery
-
-```mermaid
-sequenceDiagram
-    participant Agent
-    participant Client
-    participant Host
-
-    Note over Agent,Host: get_interface (default)
-    Agent->>Client: get_interface()
-    Client->>Host: request accessibility state
-    Host-->>Agent: interface (accessibility hierarchy + summary metadata)
-
-    Note over Agent,Host: get_screen fresh viewport diagnostic
-    Agent->>Client: get_screen()
-    Client->>Host: requestScreen
-    Host-->>Agent: screen (pixels + visible accessibility tree with geometry)
-```
-
-Three ways to find elements, each suited to a different situation:
-
-| Command | What it returns | When to use |
-|---------|----------------|-------------|
-| `get_interface` | Current app accessibility state | You need to know what exists on the current screen before acting. Returns the `interface` response with discovered elements populated. |
-| `get_screen` | Screenshot plus fresh visible accessibility tree with geometry | Diagnostic reads. Use when you need to verify what is currently drawn or inspect geometry after an execution step. |
-| `scroll_to_visible` | Brings a known element into view | You have a visible target or a `heistId` still valid in the current hierarchy. Changes the scroll position. |
-| `element_search` | Scrolls until the target element is found, leaves it visible | You have not discovered the element yet and need to search scrollable content. |
-
-### Choosing between get_interface, element_search, and scroll_to_visible
-
-- **`get_interface`** is a read operation. Use it when you need the current screen's accessibility state before committing to an interaction.
-
-- **`scroll_to_visible`** scrolls to a known target and leaves it visible so you can interact with the element. Use it when the target is visible now or when a `heistId` is still valid in the current hierarchy.
-
-- **`element_search`** scrolls while looking for a matcher and stops when the target is found. Use it when the element has not been seen yet.
-
-```mermaid
-flowchart TD
-    A[Need element evidence?] --> B{Need fresh on-screen geometry or pixels?}
-    B -->|Yes| C[get_screen<br>Pixels plus visible geometry]
-    B -->|No| D{Need to interact with unseen content?}
-    D -->|Yes, already discovered| E[scroll_to_visible<br>Bring known element<br>into view]
-    D -->|Yes, not yet discovered| I[element_search<br>Scroll until found]
-    D -->|No, read state| F[get_interface<br>Read accessibility state]
-    C --> H[Use only for diagnostics]
-```
-
-### When you don't need either
-
-Most agent workflows start from the semantic interface and use fresh on-screen geometry diagnostics sparingly. The typical pattern is:
-
-1. `get_interface` — read the current app accessibility state
-2. `activate` / `scroll` / `swipe` — interact with returned elements
-3. `element_search` — find a specific unseen element when needed
-4. `scroll_to_visible` — return to a known `heistId` while it is still valid in the current hierarchy
-
-Use `get_screen` when you explicitly need fresh on-screen geometry, such as checking layout after a scroll or gesture.
-
-## Data Types
-
-### ServerInfo
-
-The product version is carried by `ResponseEnvelope.buttonHeistVersion` and is
-not duplicated on `ServerInfo`.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `appName` | `String` | App display name |
-| `bundleIdentifier` | `String` | App bundle identifier |
-| `deviceName` | `String` | Device name (e.g., "iPhone 15 Pro") |
-| `systemVersion` | `String` | iOS version (e.g., "17.0") |
-| `screenWidth` | `Double` | Screen width in points |
-| `screenHeight` | `Double` | Screen height in points |
-| `instanceId` | `String?` | Per-launch session UUID |
-| `instanceIdentifier` | `String?` | Human-readable instance identifier from `INSIDEJOB_ID` env var (falls back to shortId) |
-| `listeningPort` | `UInt16?` | Port the server is listening on |
-| `simulatorUDID` | `String?` | Simulator UDID when running in iOS Simulator (nil on physical devices) |
-| `vendorIdentifier` | `String?` | `UIDevice.identifierForVendor` UUID string (nil in simulator) |
-| `tlsActive` | `Bool?` | Whether TLS transport encryption is active |
 
 ### Interface
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `screenDescription` | `String` | Deterministic one-line screen summary (e.g. `"Sign In — 1 text field, 1 password field, 3 buttons"`) |
-| `timestamp` | `ISO8601 Date` | When interface was captured |
-| `tree` | `[AccessibilityHierarchy]` | Canonical full-fidelity parser hierarchy. Every accessibility node appears at its tree position; Button Heist metadata is attached through `annotations`. |
-| `annotations` | `InterfaceAnnotations` | Button Heist element/container metadata keyed by parser traversal index and tree path. |
-
-### HeistElement
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `heistId` | `String` | Current-hierarchy element handle returned by Button Heist. Use it for immediate follow-up actions; recordings persist minimum matcher fields for durable replay. |
-| `label` | `String?` | Label |
-| `value` | `String?` | Current value (for controls) |
-| `identifier` | `String?` | Identifier |
-| `hint` | `String?` | Accessibility hint (full detail only) |
-| `traits` | `[String]` | Trait names (e.g., `"button"`, `"adjustable"`, `"staticText"`, `"backButton"`) |
-| `frameX` | `Double` | Frame origin X in points (full detail only) |
-| `frameY` | `Double` | Frame origin Y in points (full detail only) |
-| `frameWidth` | `Double` | Frame width in points (full detail only) |
-| `frameHeight` | `Double` | Frame height in points (full detail only) |
-| `activationPointX` | `Double` | Activation point X (full detail only) |
-| `activationPointY` | `Double` | Activation point Y (full detail only) |
-| `customContent` | `[HeistCustomContent]?` | Custom accessibility content (full detail only) |
-| `actions` | `[ElementAction]?` | Non-obvious actions only. Omitted when all actions are implied by traits (`activate` for buttons, `increment`/`decrement` for adjustable). Custom actions always included. |
-
-### AccessibilityHierarchy
-
-Recursive node in the canonical interface tree. This is the parser model carried over the wire without converting into a Button Heist-specific tree:
-
-- `{"element":{"_0":{...AccessibilityElement}, "traversalIndex": Int}}` — Leaf node carrying the parser element and traversal index.
-- `{"container":{"_0":{...AccessibilityContainer}, "children":[AccessibilityHierarchy]}}` — Container node carrying the parser container and nested children.
-
-### InterfaceAnnotations
-
-Button Heist metadata is deliberately separate from the parser hierarchy so the tree stays full-fidelity:
-
-| Field | Type | Always present | Description |
-|-------|------|----------------|-------------|
-| `elements` | `[InterfaceElementAnnotation]` | Yes | Element annotations keyed by parser traversal index |
-| `containers` | `[InterfaceContainerAnnotation]` | Yes | Container annotations keyed by tree path |
-| `traversalIndex` | `Int` | Element annotation | Parser traversal index |
-| `heistId` | `String` | Element annotation | Current-hierarchy Button Heist handle |
-| `actions` | `[ElementAction]` | Element annotation | Supported Button Heist actions |
-| `path` | `TreePath` | Container annotation | Root-relative child-index path |
-| `stableId` | `String?` | Container annotation | Capture-local container identity used by subtree targeting and tree deltas |
-
-Container types:
-- `"semanticGroup"` — Semantic grouping (with optional `label`/`value`/`identifier`)
-- `"list"` — List container (affects rotor navigation)
-- `"landmark"` — Landmark container (affects rotor navigation)
-- `"dataTable"` — Data table container; carries `rowCount` and `columnCount`
-- `"tabBar"` — Tab bar container
-- `"scrollable"` — Scrollable region; carries `contentWidth` and `contentHeight`
-
-### ElementTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `heistId` | `String?` | Current-hierarchy element handle returned by `get_interface` or an action delta |
-| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate matcher fields for accessibility-based resolution, decoded flat at the target root |
-| `ordinal` | `Int?` | 0-based index to select among matcher results. Without ordinal, multiple matches return an ambiguity error. Ordinal can stand alone only as the all-elements fallback used by minimum matcher recording. |
-
-Two resolution strategies. Resolution priority: `heistId` > matcher fields. Use handles for the current hierarchy; use minimum matcher fields for durable flows. At least one identity field or ordinal fallback should be provided. A `heistId` is semantic targeting state, not geometry authority; action execution refreshes live geometry immediately before touching.
-
-### TouchTapTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target; taps at a freshly resolved live activation point |
-| `pointX` | `Double?` | Explicit X coordinate |
-| `pointY` | `Double?` | Explicit Y coordinate |
-
-### LongPressTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target; long-presses a freshly resolved live point |
-| `pointX` | `Double?` | Explicit X coordinate |
-| `pointY` | `Double?` | Explicit Y coordinate |
-| `duration` | `Double` | Press duration in seconds (default: 0.5) |
-
-### SwipeTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target; starts from freshly resolved live geometry |
-| `startX` | `Double?` | Start X coordinate |
-| `startY` | `Double?` | Start Y coordinate |
-| `endX` | `Double?` | End X coordinate |
-| `endY` | `Double?` | End Y coordinate |
-| `direction` | `String?` | Swipe direction: "up", "down", "left", "right" |
-| `duration` | `Double?` | Duration in seconds (default: 0.15) |
-| `start` | `UnitPoint?` | Unit-point start relative to element frame (0–1) |
-| `end` | `UnitPoint?` | Unit-point end relative to element frame (0–1) |
-
-### DragTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target; starts from freshly resolved live geometry |
-| `startX` | `Double?` | Start X coordinate |
-| `startY` | `Double?` | Start Y coordinate |
-| `endX` | `Double` | End X coordinate |
-| `endY` | `Double` | End Y coordinate |
-| `duration` | `Double?` | Duration in seconds (default: 0.5) |
-
-### PinchTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target; centers on freshly resolved live geometry |
-| `centerX` | `Double?` | Center X coordinate |
-| `centerY` | `Double?` | Center Y coordinate |
-| `scale` | `Double` | Scale factor (>1.0 zoom in, <1.0 zoom out) |
-| `spread` | `Double?` | Initial finger spread from center (default: 100pt) |
-| `duration` | `Double?` | Duration in seconds (default: 0.5) |
-
-### RotateTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target; centers on freshly resolved live geometry |
-| `centerX` | `Double?` | Center X coordinate |
-| `centerY` | `Double?` | Center Y coordinate |
-| `angle` | `Double` | Rotation angle in radians |
-| `radius` | `Double?` | Distance from center to each finger (default: 100pt) |
-| `duration` | `Double?` | Duration in seconds (default: 0.5) |
-
-### TwoFingerTapTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target; centers on freshly resolved live geometry |
-| `centerX` | `Double?` | Center X coordinate |
-| `centerY` | `Double?` | Center Y coordinate |
-| `spread` | `Double?` | Distance between fingers (default: 40pt) |
-
-### DrawPathTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `points` | `[PathPoint]` | Array of waypoints to trace through (minimum 2) |
-| `duration` | `Double?` | Total duration in seconds (mutually exclusive with velocity) |
-| `velocity` | `Double?` | Speed in points per second (mutually exclusive with duration) |
-
-### PathPoint
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `x` | `Double` | X coordinate in screen points |
-| `y` | `Double` | Y coordinate in screen points |
-
-### DrawBezierTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `startX` | `Double` | Starting X coordinate |
-| `startY` | `Double` | Starting Y coordinate |
-| `segments` | `[BezierSegment]` | Array of cubic bezier segments |
-| `samplesPerSegment` | `Int?` | Points to sample per segment (default: 20) |
-| `duration` | `Double?` | Total duration in seconds (mutually exclusive with velocity) |
-| `velocity` | `Double?` | Speed in points per second (mutually exclusive with duration) |
-
-### BezierSegment
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `cp1X` | `Double` | First control point X |
-| `cp1Y` | `Double` | First control point Y |
-| `cp2X` | `Double` | Second control point X |
-| `cp2Y` | `Double` | Second control point Y |
-| `endX` | `Double` | Endpoint X |
-| `endY` | `Double` | Endpoint Y |
-
-### TypeTextTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `text` | `String` | Non-empty text to type character-by-character |
-| `elementTarget` | `ElementTarget?` | Semantic target used to resolve fresh live geometry before focus and value readback |
-
-`text` is required and must be non-empty. If `elementTarget` is provided, it is tapped first to bring up the keyboard, and its value is read back after the operation. Use `editAction` for destructive edits such as delete or select-all/delete replacement.
-
-### CustomActionTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget` | Semantic target used to resolve fresh live geometry before custom action dispatch |
-| `actionName` | `String` | Name of the custom action |
-
-### EditActionTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `action` | `String` | Edit action: `"copy"`, `"paste"`, `"cut"`, `"select"`, `"selectAll"`, `"delete"` |
-
-### ScrollDirection
-
-Enum values: `"up"`, `"down"`, `"left"`, `"right"`, `"next"`, `"previous"`.
-
-- `up` — Scroll up to reveal content above the visible area
-- `down` — Scroll down to reveal content below the visible area
-- `left` — Scroll left to reveal content to the left
-- `right` — Scroll right to reveal content to the right
-- `next` — Scroll to next page (equivalent to down for vertical content)
-- `previous` — Scroll to previous page (equivalent to up for vertical content)
-
-### ScrollTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target anchoring the scroll action |
-| `direction` | `ScrollDirection` | Scroll direction |
-
-### ScrollEdge
-
-Enum values: `"top"`, `"bottom"`, `"left"`, `"right"`.
-
-### ScrollToEdgeTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `elementTarget` | `ElementTarget?` | Semantic target anchoring the edge scroll action |
-| `edge` | `ScrollEdge` | Which edge to scroll to |
-
-### ElementMatcher
-
-Predicate for matching elements in the accessibility tree. All specified fields must match (AND semantics). Used by `elementSearch`, `waitFor`, `get_interface` filtering, and action commands through flat `ElementTarget` matcher fields.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `label` | `String?` | Exact match on accessibility label |
-| `identifier` | `String?` | Exact match on accessibility identifier |
-| `value` | `String?` | Exact match on accessibility value |
-| `traits` | `[String]?` | All listed traits must be present on the element |
-| `excludeTraits` | `[String]?` | None of the listed traits may be present |
-
-### ScrollToVisibleTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `heistId` | `String?` | Known current-hierarchy handle to scroll into view |
-| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Flat matcher fields for elements already present in the current hierarchy |
-| `ordinal` | `Int?` | 0-based fallback index among matcher results |
-
-### ScrollSearchDirection
-
-| Value | Description |
-|-------|-------------|
-| `"down"` | Scroll down (default) |
-| `"up"` | Scroll up |
-| `"left"` | Scroll left |
-| `"right"` | Scroll right |
-
-### ScrollSearchResult
-
-Diagnostic output from `elementSearch`, included on every `actionResult` for that command.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `scrollCount` | `Int` | Number of scroll steps performed |
-| `uniqueElementsSeen` | `Int` | Number of distinct elements seen across all scroll positions (tracked via `StableKey`) |
-| `totalItems` | `Int?` | Total item count from UITableView/UICollectionView data source (nil if not a collection) |
-| `exhaustive` | `Bool` | `true` if `uniqueElementsSeen >= totalItems` — all items in the collection were visited |
-| `foundElement` | `HeistElement?` | The matched element (nil on failure) |
-
-### WaitForIdleTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `timeout` | `Double?` | Maximum wait time in seconds (default: 5.0, max: 60.0) |
-
-### WaitForTarget
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `heistId` | `String?` | Current-hierarchy element handle, decoded flat at the payload root |
-| `label` / `identifier` / `value` / `traits` / `excludeTraits` | matcher fields | Predicate fields for accessibility-based resolution, decoded flat at the payload root |
-| `ordinal` | `Int?` | 0-based index to select among multiple matcher results |
-| `absent` | `Bool?` | When `true`, wait for element to NOT exist (default: `false`) |
-| `timeout` | `Double?` | Max wait time in seconds (default: 10, max: 30) |
-
-### UnitPoint
-
-A point in unit coordinates (0–1) relative to an element's accessibility frame. `(0, 0)` is top-left, `(1, 1)` is bottom-right.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `x` | `Double` | Horizontal position (0 = left, 1 = right) |
-| `y` | `Double` | Vertical position (0 = top, 1 = bottom) |
-
-### ActionResult
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `success` | `Bool` | Whether action succeeded |
-| `method` | `String` | How action was performed (see method values above) |
-| `message` | `String?` | Additional context or error description |
-| `errorKind` | `String?` | Typed error classification: `"elementNotFound"`, `"timeout"`, `"unsupported"`, `"inputError"`, `"validationError"`, `"actionFailed"`, `"authFailure"`, `"authApprovalPending"`, `"recording"`, `"general"`. Nil on success. |
-| `payload` | `ResultPayload?` | Command-specific payload as a tagged union: `{"kind": "value", "data": "..."}` for `typeText` / `setPasteboard` / `getPasteboard`; `{"kind": "scrollSearch", "data": {...}}` for `elementSearch`; `{"kind": "explore", "data": {...}}` for `explore`. Omitted when no command-specific payload applies. |
-| `accessibilityDelta` | `AccessibilityTrace.Delta?` | Compact delta projected from the action's `accessibilityTrace` |
-| `animating` | `Bool?` | `true` if UI was still animating when result was produced; `nil` means idle |
-| `screenName` | `String?` | Label of the first header element in the post-action snapshot (screen name hint) |
-| `screenId` | `String?` | Slugified screen name for machine use (e.g. `"controls_demo"`) |
-
-### ActionExpectation (Fence-level)
-
-Outcome signal classifiers attached to Fence requests via the `expect` field. `ActionExpectation` is a wire-protocol value with a stable, documented JSON shape as of protocol `7.0`.
-
-Every action implicitly checks delivery (`success == true`). If delivery fails, the response includes an `expectation` object with `met: false` and `status: "expectation_failed"` — no `expect` field needed.
-
-The `expect` field classifies what kind of outcome the caller was going for. Expectations follow a **"say what you know"** design: provide only the fields you care about, omit what you don't. Omitted fields are wildcards. The framework scans the result for any match.
-
-#### Object form
-
-Every `ActionExpectation` serializes to a JSON object with a `type` discriminator. The schema advertises and TheFence accepts object expectations only; CLI shorthand strings are normalized before dispatch. Compound sub-expectations are also object-only.
-
-| `type` | Payload | Description |
-|--------|---------|-------------|
-| `"screen_changed"` | *(no fields)* | VC identity changed |
-| `"elements_changed"` | *(no fields)* | Element-level add/remove/update (superset-met by screen_changed) |
-| `"element_updated"` | `heistId?`, `property?`, `oldValue?`, `newValue?` | A matching entry appears in `accessibilityDelta.edits.updated` |
-| `"element_appeared"` | `matcher` (ElementMatcher) | An element matching the matcher appears in `accessibilityDelta.edits.added` |
-| `"element_disappeared"` | `matcher` (ElementMatcher) | An element matching the matcher was removed |
-| `"compound"` | `expectations` (`[ActionExpectation]`) | Every sub-expectation must be met |
-
-Examples:
 ```json
-{"expect": {"type": "element_updated", "newValue": "5"}}
-{"expect": {"type": "element_updated", "heistId": "counter", "property": "value", "newValue": "5"}}
-{"expect": {"type": "element_appeared", "matcher": {"label": "Success"}}}
-{"expect": {"type": "element_disappeared", "matcher": {"identifier": "loading-spinner"}}}
-{"expect": {"type": "compound", "expectations": [
-  {"type": "screen_changed"},
-  {"type": "element_appeared", "matcher": {"label": "Welcome"}}
-]}}
+{"buttonHeistVersion":"<semver>","type":"requestInterface","payload":{}}
 ```
 
-For `element_updated`, all four payload fields (`heistId`, `property`, `oldValue`, `newValue`) are optional — provide more to tighten the check, fewer to loosen it. When both `oldValue` and `newValue` are provided they must match the same `PropertyChange` entry.
+The interface payload carries the canonical hierarchy tree plus Button Heist
+annotations. There is no parallel wire `elements` array and no compiler-derived
+`_0` wrapper shape in the public wire contract.
 
-The `property` field accepts these values: `"label"`, `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"`, `"customContent"`.
-
-For `compound`, nesting is allowed — a `compound` may contain other `compound` entries.
-
-**Breaking change in the Button Heist release that introduced typed
-expectations**: prior versions used Swift's compiler-synthesized Codable shape
-for `ActionExpectation`, which wrapped `elementUpdated` / `elementAppeared` /
-`elementDisappeared` / `compound` in legacy container keys rather than using the
-`type` discriminator. Callers sending typed expectations must update to the new
-shape.
-
-When an expectation is checked, the Fence response includes an `expectation` object:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `met` | `Bool` | Whether the expectation was satisfied |
-| `expected` | `ActionExpectation?` | The expectation that was checked (JSON-encoded). `null` for implicit delivery check. |
-| `actual` | `String?` | What was actually observed (for diagnostics when `met` is false) |
-
-If `met` is false, the response `status` is set to `"expectation_failed"`.
-
-### Batch Expectations Summary
-
-When a `run_batch` response includes steps with expectations, the response includes an `expectations` summary:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `checked` | `Int` | Number of steps that had expectations checked |
-| `met` | `Int` | Number of expectations that were satisfied |
-| `allMet` | `Bool` | `true` if all checked expectations were met |
-
-Under `stop_on_error` policy, a failed expectation (`status: "expectation_failed"`) stops the batch.
-
-### AccessibilityTrace.Delta
-
-`AccessibilityTrace.Delta` is a discriminated union — the `kind` field selects which other fields are valid. Empty edit collections are omitted on the wire; missing keys decode as empty arrays.
-
-Common fields (every case):
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `kind` | `String` | `"noChange"`, `"elementsChanged"`, or `"screenChanged"` |
-| `elementCount` | `Int` | Total element count after the action |
-| `transient` | `[HeistElement]?` | Elements that appeared and disappeared during settle while baseline and final were otherwise identical. Omitted when empty. |
-
-Case-specific fields:
-
-| `kind` | Additional fields | Notes |
-|--------|-------------------|-------|
-| `noChange` | (none) | The hierarchy did not change. May still carry `transient`. |
-| `elementsChanged` | `edits?` | Element-level edits within the same screen, nested as an `ElementEdits` sub-object. Omitted when empty; a missing key decodes as an empty `ElementEdits`. |
-| `screenChanged` | `newInterface` | View controller identity changed. The full post-change interface is carried on the delta. |
-
-`ElementEdits` shape (used by `elementsChanged.edits`):
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `added` | `[HeistElement]?` | Elements added |
-| `removed` | `[String]?` | HeistIds of elements removed |
-| `updated` | `[ElementUpdate]?` | Element property changes |
-| `treeInserted` | `[TreeInsertion]?` | Tree insertions |
-| `treeRemoved` | `[TreeRemoval]?` | Tree removals |
-| `treeMoved` | `[TreeMove]?` | Tree moves |
-
-Each collection is omitted when empty.
-
-### ElementUpdate
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `heistId` | `String` | Element heistId |
-| `changes` | `[PropertyChange]` | Properties that changed on this element |
-
-### PropertyChange
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `property` | `String` | Which property changed: `"label"`, `"value"`, `"traits"`, `"hint"`, `"actions"`, `"frame"`, `"activationPoint"` |
-| `old` | `String?` | Previous value |
-| `new` | `String?` | New value |
-
-### HeistCustomContent
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `label` | `String` | Content label |
-| `value` | `String` | Content value |
-| `isImportant` | `Bool` | Whether this content is marked important |
-
-### ScreenPayload
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `pngData` | `String` | Base64-encoded PNG image data on the raw wire; public outputs omit it unless inline data is explicitly requested |
-| `width` | `Double` | Screen width in points |
-| `height` | `Double` | Screen height in points |
-| `timestamp` | `ISO8601 Date` | When screen was captured |
-| `interface` | `Interface` | Fresh visible accessibility tree with geometry |
-
-### RecordingConfig
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `fps` | `Int?` | Frames per second (1-15, default: 8) |
-| `scale` | `Double?` | Resolution scale of native pixels (0.25-1.0, default: 1x point size) |
-| `maxDuration` | `Double?` | Maximum recording duration in seconds (default: 60.0) |
-| `inactivityTimeout` | `Double?` | Optional early-stop seconds of inactivity; omitted disables inactivity auto-stop |
-
-### RecordingPayload
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `videoData` | `String` | Base64-encoded H.264/MP4 video data on the raw wire; public outputs omit it unless inline data is explicitly requested |
-| `width` | `Int` | Video width in pixels |
-| `height` | `Int` | Video height in pixels |
-| `duration` | `Double` | Recording duration in seconds |
-| `frameCount` | `Int` | Number of frames captured |
-| `fps` | `Int` | Frames per second used during recording |
-| `startTime` | `ISO8601 Date` | When recording started |
-| `endTime` | `ISO8601 Date` | When recording ended |
-| `stopReason` | `String` | `"manual"`, `"inactivity"`, `"maxDuration"`, or `"fileSizeLimit"` |
-| `interactionLog` | `[InteractionEvent]?` | Ordered log of interactions recorded during the session; public outputs omit it unless explicitly requested |
-| `evidence` | `RecordingPayloadEvidence?` | Diagnostic evidence about recording config clamping and omitted inputs |
-
-### InteractionEvent
-
-A single recorded interaction event captured during a Stakeout recording.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `timestamp` | `Double` | Time offset from recording start in seconds |
-| `command` | `ClientMessage` | The command that triggered this interaction |
-| `result` | `ActionResult` | The result returned to the client (includes `accessibilityDelta` when the UI hierarchy changed) |
-
-## Example Session
-
-```
-# Client connects to a loopback, USB, or explicitly trusted network endpoint
-
-{"buttonHeistVersion":"<semver>","requestId":null,"type":"serverHello"}
-{"buttonHeistVersion":"<semver>","requestId":null,"type":"clientHello"}
-{"buttonHeistVersion":"<semver>","requestId":null,"type":"authRequired"}
-{"buttonHeistVersion":"<semver>","requestId":null,"type":"authenticate","payload":{"token":"my-secret-token"}}
-{"buttonHeistVersion":"<semver>","requestId":null,"type":"info","payload":{"appName":"TestApp","bundleIdentifier":"com.buttonheist.testapp","deviceName":"iPhone","systemVersion":"26.2.1","screenWidth":393.0,"screenHeight":852.0,"instanceId":"A1B2C3D4-E5F6-7890-ABCD-EF1234567890","instanceIdentifier":"my-instance","listeningPort":52341,"simulatorUDID":"DEADBEEF-1234-5678-9ABC-DEF012345678","vendorIdentifier":null,"tlsActive":true}}
-{"buttonHeistVersion":"<semver>","type":"requestInterface"}
-{"buttonHeistVersion":"<semver>","type":"interface","payload":{"timestamp":"2026-02-03T14:08:14.123Z","tree":[...]}}
-{"buttonHeistVersion":"<semver>","type":"activate","payload":{"identifier":"loginButton"}}
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"success":true,"method":"syntheticTap","message":null}}
-{"buttonHeistVersion":"<semver>","type":"ping"}
-{"buttonHeistVersion":"<semver>","type":"pong"}
+```json
+{
+  "buttonHeistVersion": "<semver>",
+  "type": "interface",
+  "payload": {
+    "screenDescription": "Sign In - 1 text field, 1 button",
+    "timestamp": "2026-02-03T10:30:45.123Z",
+    "tree": [
+      {
+        "element": {
+          "heistId": "button_sign_in",
+          "label": "Sign In",
+          "identifier": "signInButton",
+          "traits": ["button"],
+          "frameX": 16,
+          "frameY": 140,
+          "frameWidth": 361,
+          "frameHeight": 44,
+          "activationPointX": 196.5,
+          "activationPointY": 162
+        }
+      }
+    ],
+    "annotations": {
+      "elements": [],
+      "containers": []
+    }
+  }
+}
 ```
 
-### AuthenticatePayload
+`heistId` is a current-capture handle. It can target immediate follow-up
+actions while the capture is current, but durable replay uses semantic
+selectors and matchers.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `token` | `String` | Auth token. Used as fallback session identity only when `driverId` is absent. |
-| `driverId` | `String?` | Unique driver identity for session locking. When set, used instead of token for session identity. Set via `BUTTONHEIST_DRIVER_ID` env var. |
+### Semantic Action
 
-### SessionLockedPayload
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `message` | `String` | Human-readable description |
-| `activeConnections` | `Int` | Number of active connections in the current session |
-
-### StatusPayload
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `identity` | `StatusIdentity` | App/device identity for the reachable Inside Job instance |
-| `session` | `StatusSession` | Current session availability and connection counts |
-
-### StatusIdentity
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `appName` | `String` | App name from the target bundle |
-| `bundleIdentifier` | `String` | Bundle identifier of the running app |
-| `appBuild` | `String` | Build number from `CFBundleVersion` |
-| `deviceName` | `String` | Device name reported by UIKit |
-| `systemVersion` | `String` | iOS version string |
-| `buttonHeistVersion` | `String` | Product version exposed by Inside Job; used for wire compatibility checks |
-
-### StatusSession
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `active` | `Bool` | Whether a driver session is active |
-| `watchersAllowed` | `Bool` | Always `false`; a session has one active driver connection |
-| `activeConnections` | `Int` | Number of connections in the current session |
-
-## Implementation Notes
-
-### Authentication
-
-Token-based authentication is required for driver connections:
-
-1. Server sends `serverHello` immediately on TCP connect
-2. Client must respond with `clientHello` carrying its own `buttonHeistVersion` (must equal the server's exactly)
-3. Server sends `authRequired`
-4. Client must respond with `authenticate`. The one exception is `status`, which is allowed after the hello handshake but before auth for reachability probes and returns `ServerMessage.status` without claiming a session.
-5. For drivers: on success and session acquired, server sends `info` and the session proceeds normally
-6. On wrong token, denial, or explicit-token UI approval request, server sends `error` with `kind: "authFailure"` and disconnects after a brief delay
-7. While waiting for on-device UI approval, server sends `authApprovalPending`; if the prompt times out, the terminal error uses `kind: "authApprovalPending"`
-8. On session conflict, server sends `sessionLocked` and disconnects
-The token is configured via `INSIDEJOB_TOKEN` env var or `InsideJobToken`
-Info.plist key. If not set, a random UUID is auto-generated each launch
-(ephemeral — not persisted) and redacted in startup logs. Clients set the token
-via `BUTTONHEIST_TOKEN`, or omit it to request UI approval and receive a reusable
-token through `authApproved`.
-
-### Session Locking
-
-Session locking prevents multiple drivers from interfering with each other. Only one driver can control a Button Heist host at a time.
-
-**Why sessions?** A single "driver" isn't a single TCP connection. Each CLI command (`buttonheist activate`, `buttonheist get_screen`, etc.) creates a fresh connection, authenticates, executes, and disconnects. Only `session` maintains a persistent connection. The session concept spans multiple sequential connections from the same driver.
-
-**Driver Identity**: The server identifies drivers using a two-tier approach:
-1. `driverId` from the authenticate payload (when present) — set via `BUTTONHEIST_DRIVER_ID` env var
-2. `token` as fallback (when `driverId` is absent) — all same-token connections are one "driver"
-
-If `driverId` is absent, the auth token is used as the driver identity. Setting `BUTTONHEIST_DRIVER_ID` enables multiple drivers sharing the same auth token to be distinguished.
-
-#### Session Lifecycle
-
-1. **Claim** — The first authenticated client's driver identity becomes the active session
-2. **Join** — Subsequent connections with the **same driver identity** are allowed (same driver, different commands)
-3. **Reject** — Connections with a **different driver identity** receive `sessionLocked` and are disconnected. The busy signal includes the inactivity timeout so the client knows how long to wait.
-4. **Inactivity timer** — When the last connection from the session holder disconnects, a single inactivity timer starts (default: 30 seconds)
-5. **Release** — Timer fires → session clears → next driver can claim
-6. **Cancel timer** — Same-driver reconnect within the timeout window cancels the timer
-
-There is only one timer (inactivity). There is no separate "lease" timer. The token is **not** invalidated when the session expires — it remains valid for future connections.
-
-```mermaid
-sequenceDiagram
-    participant A as Driver A (token: "abc")
-    participant S as Server
-    participant B as Driver B (token: "xyz")
-
-    A->>S: authenticate(token:"abc")
-    S-->>A: info (session claimed)
-
-    B->>S: authenticate(token:"xyz")
-    S-->>B: sessionLocked
-    S-xB: disconnect
-
-    A->>S: TCP Close
-    Note over S: 30s inactivity timer starts
-    Note over S: 30s timer fires → session released
-
-    B->>S: authenticate(token:"xyz")
-    S-->>B: info (session claimed)
+```json
+{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"activate","payload":{"label":"Sign In","traits":["button"]}}
 ```
 
-#### Configuration
+Semantic action messages identify elements semantically. The host resolves the
+target against current state, moves the viewport if needed, refreshes, acquires
+fresh live geometry, and then dispatches. Cached coordinates from a prior
+capture are not the authority.
 
-The session inactivity timeout (time after last connection disconnects before the session is released) is configurable:
+Explicit viewport messages such as `scrollToVisible` and `elementSearch`
+expose viewport state because moving the viewport is the requested behavior.
 
-- **Environment variable**: `INSIDEJOB_SESSION_TIMEOUT` (in seconds)
-- **Default**: 30 seconds
+### Screen Capture
 
-### UI Approval Flow
-
-When the token is auto-generated (not explicitly set), Button Heist supports an interactive approval flow that allows the iOS user to approve or deny connections from the device:
-
-1. Server starts with auto-generated token
-2. Client connects and sends `authenticate` with an empty token (`""`)
-3. Server presents a `UIAlertController` with "Allow" and "Deny" buttons
-4. **If approved**: Server sends `authApproved` with the token, then `info` — the session proceeds normally
-5. **If denied**: Server sends `error` with `kind: "authFailure"` and message `"Connection denied by user"`, then disconnects
-6. **If timed out**: Server sends `error` with `kind: "authApprovalPending"` and message `"Approval timed out — user did not respond to the approval prompt on the device."`, then disconnects
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Server as Server (UI approval mode)
-
-    Client->>Server: TCP Connect
-    Server-->>Client: serverHello
-    Client->>Server: clientHello
-    Server-->>Client: authRequired
-    Client->>Server: authenticate(token:"") (empty token)
-    Server-->>Client: authApprovalPending
-    Note over Server: UIAlertController: "Allow / Deny"
-    Note over Server: ... user taps Allow ...
-    Server-->>Client: authApproved(token) (token for future use)
-    Server-->>Client: info
+```json
+{"buttonHeistVersion":"<semver>","type":"requestScreen"}
 ```
 
-The client stores the received token and uses it for subsequent connections, which will authenticate normally without requiring approval.
+The raw wire response carries base64 PNG data plus a fresh visible interface.
+Public CLI/MCP adapters return artifact paths by default and include inline
+media only through explicit, size-bounded opt-ins.
 
-This flow is **only active** when the token is auto-generated. If `INSIDEJOB_TOKEN` or `InsideJobToken` is explicitly set, the standard token-based flow is used and no approval alert is shown.
+### Recording
 
-### Security Limits
+```json
+{"buttonHeistVersion":"<semver>","type":"startRecording","payload":{"fps":8,"scale":0.5,"maxDuration":60}}
+{"buttonHeistVersion":"<semver>","type":"stopRecording"}
+```
 
-- **TLS required**: Production listener startup requires TLS identity and fails closed before binding if TLS parameters are unavailable.
-- **Max connections**: 5 concurrent TCP connections
-- **Rate limiting**: 30 messages/second per client (token bucket). Applied to both authenticated and unauthenticated clients.
-- **Buffer limit**: 10 MB per-client receive buffer. Clients exceeding this are disconnected.
-- **Connection scope**: Default scope is `simulator,usb`. WiFi/LAN `network` scope is opt-in via `INSIDEJOB_SCOPE`.
-- **Discovery exposure**: Bonjour is published only when `network` scope is enabled.
-- **Loopback binding**: Simulator-only scope binds to `::1`. USB or network scopes bind to `::` so CoreDevice USB can connect, then scope classification rejects disallowed sources before authentication.
+The raw wire `recording` response carries base64 MP4 data. Public adapters
+return artifact paths by default. Full interaction logs and inline media are
+explicit opt-ins.
 
-### Port Configuration
+### Wait for Change
 
-The server uses OS-assigned ports by default. When Bonjour is enabled, the actual port is advertised there; after authentication it is included in the `info` message (`listeningPort` field).
+```json
+{"buttonHeistVersion":"<semver>","type":"waitForChange","payload":{"expect":{"type":"screen_changed"},"timeout":30}}
+```
 
-### IPv6 Dual-Stack
+With an expectation, the host checks the current settled state first, then
+waits for later settled captures until the predicate is true or the timeout
+expires. `element_disappeared` is satisfied by current absence.
 
-The listener is IPv6 dual-stack. It binds to `::1` for simulator-only scope and to `::` when USB or network scope is enabled, accepting:
-- IPv4 connections (mapped to `::ffff:x.x.x.x`)
-- IPv6 connections (CoreDevice USB tunnel, or WiFi/LAN only when `network` scope is enabled)
+## Action Results
 
-### Keepalive
+Action responses use `actionResult`:
 
-Clients should send `ping` messages periodically (recommended: every 5 seconds) to detect connection loss. Treat several missed pongs as a failure rather than closing on the first delayed response; app main-thread stalls can delay pong handling.
+```json
+{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"success":true,"method":"activate","accessibilityDelta":{"kind":"screenChanged","elementCount":14}}}
+```
 
-### Error Recovery
+`ActionResult.payload` is a tagged union when command-specific data is needed,
+for example:
 
-If the TCP connection is lost, clients should:
-1. Close the socket
-2. Optionally attempt reconnection
-3. Re-request interface after reconnecting
+```json
+{"kind":"value","data":"Hello"}
+```
 
-### Settled Change Detection
+```json
+{"kind":"scrollSearch","data":{"scrollCount":3,"uniqueElementsSeen":25,"exhaustive":false,"foundElement":{"heistId":"button_color","label":"Color","traits":["button"]}}}
+```
 
-Button Heist uses Tripwire polling to decide when the app is stable, then
-compares the latest accessibility capture against the last state sent to the
-driver. Captures and their derived deltas travel on command responses and
-explicit reads; hierarchy subscriptions are not a public wire surface.
+Errors use typed `errorKind` on action results when the error belongs to the
+action. Server-level failures use the `error` message with `kind` and
+`message`.
 
-## Current Wire Format
+## Traces and Deltas
 
-There is no separate wire-protocol version. The handshake compares
-`buttonHeistVersion` for exact equality between server and client and rejects
-on any mismatch. The current shape is whatever the latest `buttonHeistVersion`
-ships; older clients are not supported. Clients should always bump in lockstep
-with the server.
+The trace stores captures. Segments and deltas are derived projections used for
+formatting, expectations, and diagnostics; they are not the authoritative
+storage truth.
 
-The current shape, beyond what is described in the message reference above:
+`AccessibilityTrace.Delta` is discriminated by `kind`:
 
-- Both envelopes carry `buttonHeistVersion` (SemVer). `protocolVersion` is
-  gone everywhere.
-- `ProtocolMismatchPayload` reports `serverButtonHeistVersion` and
-  `clientButtonHeistVersion` — naming the two sides explicitly.
-- `ActionResult.payload` is a tagged union under one key. Encoded as
-  `{"kind": "value" | "scrollSearch" | "explore", "data": ...}` instead of
-  the previous three flat keys. Synthesized Codable on `ActionResult`.
-- Server-broadcast errors collapse to one `error` wire type carrying
-  `ServerError { kind, message }`. The previous separate `authFailed` and
-  `recordingError` wire types are gone; their categories live in
-  `ErrorKind` (`authFailure`, `authApprovalPending`, `recording`, `general`, plus the existing
-  action-result kinds).
-- `Interface` ships `tree: [AccessibilityHierarchy]` plus `annotations`.
-  `Interface.elements` is a computed projection and does not appear on the wire.
-- `ActionExpectation` uses an explicit `type` discriminator
-  (`{"type": "element_updated", …}`) rather than Swift-synthesized Codable.
-  The `expect` field accepts the object form only.
-- `AccessibilityTrace.Delta` is a discriminated union with cases `noChange` /
-  `elementsChanged` / `screenChanged`. `elementsChanged.edits` nests an
-  `ElementEdits` object; empty edits are omitted and missing keys decode as
-  empty.
+| `kind` | Meaning |
+|--------|---------|
+| `noChange` | The settled hierarchy did not change. |
+| `elementsChanged` | Same screen, element-level additions/removals/updates. |
+| `screenChanged` | Screen identity changed; the post-change interface is included. |
+
+Empty edit collections are omitted on the wire.
+
+## Authentication and Sessions
+
+Driver connections require authentication. A session is held by one driver
+identity at a time:
+
+1. First authenticated driver claims the session.
+2. Same driver identity can reconnect or issue separate direct CLI commands.
+3. Different driver identities receive `sessionLocked`.
+4. When the last connection closes, the inactivity timer starts.
+5. After timeout, the session is released.
+
+The token is not invalidated when the session expires.
+
+## Security Limits
+
+- TLS is required for production listener startup.
+- Default scope is `simulator,usb`; LAN exposure requires explicit `network`
+  scope.
+- Bonjour is published only in `network` scope.
+- Non-loopback targets require explicit or persisted TLS trust.
+- The server applies connection, rate, and receive-buffer limits.
+
+## Keepalive and Recovery
+
+Clients should send `ping` periodically and tolerate a few delayed responses
+before declaring failure. App main-thread stalls can delay pong handling.
+
+After reconnecting, clients should request fresh interface state before acting.
+
+## Current Shape
+
+The current wire shape is whatever the matching `buttonHeistVersion` ships.
+Older clients are not supported. Clients should update in lockstep with the
+server.

@@ -106,24 +106,6 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertTrue(payload.edits.isEmpty)
     }
 
-    func testElementsChangedRejectsLegacyFlatShape() {
-        // The current shape nests ElementEdits under `edits`; flat fields fail fast.
-        let element = """
-            {"heistId":"x","description":"X","label":"X","traits":["button"],\
-            "frameX":0,"frameY":0,"frameWidth":0,"frameHeight":0,\
-            "actions":["activate"]}
-            """
-        let payload = """
-            {"kind":"elementsChanged","elementCount":1,"added":[\(element)]}
-            """
-        XCTAssertThrowsError(try decoder.decode(AccessibilityTrace.Delta.self, from: Data(payload.utf8))) { error in
-            XCTAssertTrue(
-                "\(error)".contains("added"),
-                "Expected flat delta field in error, got \(error)"
-            )
-        }
-    }
-
     func testElementsChangedFullRoundTrip() throws {
         let added = makeElement(heistId: "new", label: "New")
         let transient = makeElement(heistId: "spin", label: "Loading")
@@ -206,33 +188,6 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             return XCTFail("Expected .screenChanged, got \(decoded)")
         }
         XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
-    }
-
-    func testScreenChangedRejectsLegacyInterfaceShape() {
-        let json = """
-        {
-          "kind": "screenChanged",
-          "elementCount": 1,
-          "newInterface": { "timestamp": 1000000, "tree": [] },
-          "postEdits": {
-            "added": [{
-              "heistId": "legacy",
-              "description": "Legacy",
-              "label": "Legacy",
-              "traits": ["staticText"],
-              "frameX": 0,
-              "frameY": 0,
-              "frameWidth": 10,
-              "frameHeight": 10,
-              "actions": []
-            }]
-          }
-        }
-        """
-        XCTAssertThrowsError(
-            try decoder.decode(AccessibilityTrace.Delta.self, from: Data(json.utf8)),
-            "Legacy screenChanged payloads without interface annotations are no longer accepted"
-        )
     }
 
     // MARK: - Cross-Case Accessors

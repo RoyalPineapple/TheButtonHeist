@@ -84,7 +84,65 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(step.arguments["text"], .string("hello"))
     }
 
-    func testStepWithOrdinalOnlyTargetRoundTripsAsEmptyMatcherFallback() throws {
+    func testStepRejectsTopLevelHeistId() throws {
+        let json: [String: Any] = [
+            "command": "activate",
+            "heistId": "stale_button",
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("must not contain top-level heistId"))
+        }
+    }
+
+    func testStepAllowsRecordedHeistIdMetadata() throws {
+        let json: [String: Any] = [
+            "command": "activate",
+            "label": "Save",
+            "_recorded": [
+                "heistId": "recorded_save",
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
+
+        XCTAssertEqual(step.target?.label, "Save")
+        XCTAssertEqual(step.recorded?.heistId, "recorded_save")
+        XCTAssertNil(step.arguments["heistId"])
+    }
+
+    func testStepRejectsEncodingTopLevelHeistIdArgument() throws {
+        let step = HeistEvidence(
+            command: "activate",
+            arguments: ["heistId": .string("stale_button")]
+        )
+
+        XCTAssertThrowsError(try JSONEncoder().encode(step)) { error in
+            guard case EncodingError.invalidValue = error else {
+                return XCTFail("Expected invalidValue, got \(error)")
+            }
+        }
+    }
+
+    func testStepRejectsEncodingTargetMatcherHeistId() throws {
+        let step = HeistEvidence(
+            command: "activate",
+            target: ElementMatcher(heistId: "stale_button")
+        )
+
+        XCTAssertThrowsError(try JSONEncoder().encode(step)) { error in
+            guard case EncodingError.invalidValue = error else {
+                return XCTFail("Expected invalidValue, got \(error)")
+            }
+            XCTAssertTrue("\(error)".contains("must not contain heistId"))
+        }
+    }
+
+    func testStepWithOrdinalOnlyTargetRoundTripsAsOrdinalSelector() throws {
         let json: [String: Any] = [
             "command": "activate",
             "ordinal": 0,

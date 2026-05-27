@@ -11,11 +11,11 @@ private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category:
 
 struct AdmittedClientMessage: Sendable {
     let clientId: Int
-    let data: Data
+    let envelope: RequestEnvelope
 
-    fileprivate init(clientId: Int, data: Data) {
+    fileprivate init(clientId: Int, envelope: RequestEnvelope) {
         self.clientId = clientId
-        self.data = data
+        self.envelope = envelope
     }
 }
 
@@ -92,6 +92,10 @@ actor TheMuscle {
     /// Driver identity that currently holds the session (nil = no active session).
     var activeSessionDriverId: String? {
         sessionLease.activeSessionDriverId
+    }
+
+    var exposedActiveSessionDriverId: String? {
+        sessionLease.exposedActiveDriverId
     }
 
     /// Client IDs belonging to the active session.
@@ -186,12 +190,27 @@ actor TheMuscle {
         data: Data,
         respond: @escaping @Sendable (Data) -> Void
     ) async -> ClientAdmission {
-        guard clientRegistry.phase(for: clientId)?.isAuthenticated == true else {
-            await handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+        guard let envelope = decodeRequest(data) else {
+            guard clientRegistry.phase(for: clientId)?.isAuthenticated == true else {
+                rejectUndecodableUnauthenticatedMessage(clientId, respond: respond)
+                return .handled
+            }
+            rejectUndecodableAuthenticatedMessage(clientId, respond: respond)
             return .handled
         }
 
-        return .admitted(AdmittedClientMessage(clientId: clientId, data: data))
+        guard clientRegistry.phase(for: clientId)?.isAuthenticated == true else {
+            await handleUnauthenticatedMessage(clientId, envelope: envelope, respond: respond)
+            return .handled
+        }
+
+        switch envelope.message {
+        case .clientHello, .authenticate:
+            rejectAuthenticatedProtocolMessage(clientId, envelope: envelope, respond: respond)
+            return .handled
+        default:
+            return .admitted(AdmittedClientMessage(clientId: clientId, envelope: envelope))
+        }
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {
@@ -199,7 +218,14 @@ actor TheMuscle {
             rejectUndecodableUnauthenticatedMessage(clientId, respond: respond)
             return
         }
+        await handleUnauthenticatedMessage(clientId, envelope: envelope, respond: respond)
+    }
 
+    private func handleUnauthenticatedMessage(
+        _ clientId: Int,
+        envelope: RequestEnvelope,
+        respond: @escaping @Sendable (Data) -> Void
+    ) async {
         guard envelope.buttonHeistVersion == buttonHeistVersion else {
             sendMessage(
                 .protocolMismatch(ProtocolMismatchPayload(
@@ -265,6 +291,34 @@ actor TheMuscle {
         )
         logger.warning("Client \(clientId) sent unparsable message before authenticating")
         scheduleDelayedDisconnect(clientId)
+    }
+
+    private func rejectUndecodableAuthenticatedMessage(
+        _ clientId: Int,
+        respond: @escaping @Sendable (Data) -> Void
+    ) {
+        sendMessage(
+            .error(ServerError(kind: .general, message: "Malformed message — could not decode")),
+            respond: respond
+        )
+        logger.warning("Authenticated client \(clientId) sent unparsable message")
+    }
+
+    private func rejectAuthenticatedProtocolMessage(
+        _ clientId: Int,
+        envelope: RequestEnvelope,
+        respond: @escaping @Sendable (Data) -> Void
+    ) {
+        let name = envelope.message.canonicalName
+        sendMessage(
+            .error(ServerError(
+                kind: .validationError,
+                message: "Protocol message \(name) is not an app command after authentication."
+            )),
+            requestId: envelope.requestId,
+            respond: respond
+        )
+        logger.warning("Authenticated client \(clientId) sent protocol message \(name, privacy: .public) after admission")
     }
 
     private func rejectUnauthenticatedMessage(

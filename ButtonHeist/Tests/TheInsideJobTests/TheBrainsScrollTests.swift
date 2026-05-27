@@ -483,19 +483,14 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
-    func testScrollToVisibleUnknownTargetUsesRecordedScreenDiagnostics() async {
+    func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async {
         let visible = makeElement(label: "Visible")
-        let recordedScreen = makeScreenWithOffViewportEntry(
-            liveHierarchy: [(visible, "visible_element")],
-            offViewport: []
-        )
         brains.stash.currentScreen = .makeForTests(
             elements: [(visible, "visible_element")]
         )
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("missing_button")),
-            recordedScreen: recordedScreen
+            ScrollToVisibleTarget(elementTarget: .heistId("missing_button"))
         )
 
         XCTAssertFalse(result.success)
@@ -503,7 +498,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("semantic actionability failed [notFound]") == true)
         XCTAssertTrue(result.message?.contains("Element not found") == true)
         XCTAssertTrue(result.message?.contains("missing_button") == true)
-        XCTAssertTrue(result.message?.contains("1 known element") == true)
         XCTAssertFalse(result.message?.contains("get_interface") == true)
     }
 
@@ -516,8 +510,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let normalized = brains.stash.normalizeTarget(
-            ElementTarget.heistId("offscreen_button"),
-            in: brains.stash.currentScreen
+            ElementTarget.heistId("offscreen_button")
         )
         let result = await brains.navigation.actionability.makeActionable(
             for: normalized,
@@ -529,29 +522,33 @@ final class TheBrainsScrollTests: XCTestCase {
             return XCTFail("Expected semantic actionability failure, got \(result)")
         }
         XCTAssertNil(failure.method)
-        XCTAssertEqual(failure.failedStep, .noRevealPath)
+        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("has no content-space position"))
     }
 
     func testKnownOffscreenTargetWithoutLiveScrollParentFailsNoRevealPath() async {
+        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
         let offscreen = makeElement(label: "Offscreen")
-        installScreenWithOffViewportEntry(
-            liveHierarchy: [(visible, "visible_element")],
-            offViewport: [(offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200))]
+        installScreenWithKnownOffscreen(
+            visible: (visible, "visible_element"),
+            offscreen: (offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200), scrollView),
+            includeLiveScrollAncestor: false
         )
-        let recordedScreen = brains.stash.currentScreen
-
-        let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button")),
-            recordedScreen: recordedScreen
+        let result = await brains.navigation.actionability.makeActionable(
+            for: brains.stash.normalizeTarget(ElementTarget.matcher(ElementMatcher(label: "Offscreen"))),
+            method: .scrollToVisible,
+            deallocatedBoundary: "scroll_to_visible dispatch"
         )
 
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .scrollToVisible)
-        XCTAssertTrue(result.message?.contains("semantic actionability failed [noRevealPath]") == true)
-        XCTAssertTrue(result.message?.contains("no live scrollable ancestor") == true)
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected no-reveal-path actionability failure, got \(result)")
+        }
+        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
+        XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
+        XCTAssertTrue(failure.message.contains("no live scrollable ancestor"))
     }
 
     func testVisibleTargetOutsideViewportWithoutLiveScrollParentFailsGeometryNotActionable() async {
@@ -586,8 +583,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let normalized = brains.stash.normalizeTarget(
-            ElementTarget.heistId("escaped_button"),
-            in: brains.stash.currentScreen
+            ElementTarget.heistId("escaped_button")
         )
         let result = await brains.navigation.actionability.makeActionable(
             for: normalized,
@@ -598,7 +594,7 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected no-reveal-path failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, .noRevealPath)
+        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
     }
 
@@ -630,8 +626,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let normalized = brains.stash.normalizeTarget(
-            ElementTarget.heistId("escaped_button"),
-            in: brains.stash.currentScreen
+            ElementTarget.heistId("escaped_button")
         )
         let result = await brains.navigation.actionability.makeActionable(
             for: normalized,
@@ -642,7 +637,7 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected not-actionable failure, got \(result)")
         }
-        XCTAssertEqual(failure.failedStep, .geometryNotActionable)
+        XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.geometryNotActionable)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [geometryNotActionable]"))
     }
 
@@ -701,36 +696,16 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testKnownSemanticRevealIgnoresStaleSemanticScrollView() async {
+    func testKnownSemanticRevealIgnoresStaleDetachedScrollView() async {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
-        let offscreen = makeElement(label: "Offscreen")
-        let recordedScreen = makeScreenWithOffViewportEntry(
-            liveHierarchy: [(visible, "visible_element")],
-            offViewport: [(offscreen, "offscreen_button", CGPoint(x: 0, y: 1_200))]
-        )
-        let staleContainer = makeScrollableContainer(
-            contentSize: staleScrollView.contentSize,
-            frame: staleScrollView.frame
-        )
-        let staleScreen = Screen(
-            elements: recordedScreen.elements,
-            hierarchy: recordedScreen.liveInterface.hierarchy,
-            containerStableIds: [staleContainer: "stale_scroll"],
-            heistIdByElement: recordedScreen.liveInterface.heistIdByElement,
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                staleContainer: .init(view: staleScrollView)
-            ]
-        )
         brains.stash.currentScreen = .makeForTests(
             elements: [(visible, "visible_element")]
         )
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button")),
-            recordedScreen: staleScreen
+            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button"))
         )
 
         XCTAssertFalse(result.success)
@@ -738,7 +713,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
         XCTAssertFalse(
             result.message?.contains("after semantic reveal") ?? false,
-            "Recorded source screens should not authorize source-only semantic reveal"
+            "Detached scroll views should not authorize semantic reveal"
         )
     }
 
@@ -1035,7 +1010,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         let knownScreen = Screen(
             elements: [knownEntry.heistId: knownEntry],
-            hierarchy: [],
+            hierarchy: [.element(knownElement, traversalIndex: 0)],
             containerStableIds: [scrollContainer: "known_scroll"],
             heistIdByElement: [:],
             elementRefs: [
@@ -1048,20 +1023,22 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         brains.stash.currentScreen = knownScreen
 
-        let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Jump Target"))),
-            recordedScreen: knownScreen
+        let result = await brains.navigation.actionability.makeActionable(
+            for: brains.stash.normalizeTarget(ElementTarget.matcher(ElementMatcher(label: "Jump Target"))),
+            method: .scrollToVisible,
+            deallocatedBoundary: "scroll_to_visible dispatch"
         )
 
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, ActionMethod.scrollToVisible)
+        guard case .failed(let failure) = result else {
+            return XCTFail("Expected post-reveal ambiguity failure, got \(result)")
+        }
         XCTAssertTrue(
-            result.message?.contains("semantic actionability failed [ambiguous]") ?? false,
-            "Expected classified post-reveal ambiguity diagnostic, got \(String(describing: result.message))"
+            failure.message.contains("semantic actionability failed [ambiguous]"),
+            "Expected classified post-reveal ambiguity diagnostic, got \(failure.message)"
         )
         XCTAssertTrue(
-            result.message?.contains("2 elements match") ?? false,
-            "Expected post-reveal ambiguity diagnostic, got \(String(describing: result.message))"
+            failure.message.contains("2 elements match"),
+            "Expected post-reveal ambiguity diagnostic, got \(failure.message)"
         )
     }
 

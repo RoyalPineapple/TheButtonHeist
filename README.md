@@ -96,11 +96,12 @@ Add the MCP server to your project's `.mcp.json`:
 }
 ```
 
-The MCP adapter projects its tools from the Fence command contract. Agents
-typically start with `get_interface`, then use commands such as `activate`,
-`type_text`, `run_batch`, and `get_screen`. Default connections use loopback,
-USB, named targets, or direct `host:port` targets; Bonjour discovery is
-available only when the app opts into network scope:
+The MCP adapter projects its tools from the Fence command contract; the
+generated [MCP Tool Reference](docs/reference/mcp-tools.md) is the current tool
+surface. Agents typically start with `get_interface`, then act with semantic
+commands such as `activate`, `type_text`, and `run_batch`. Default connections
+use loopback, USB, named targets, or direct `host:port` targets; Bonjour
+discovery is available only when the app opts into network scope:
 
 ```
 Agent: "I need to log the user in"
@@ -121,21 +122,18 @@ The agent can work in terms of UI intent instead of coordinates.
 cd ButtonHeistCLI && swift build -c release && cd ..
 BH=./ButtonHeistCLI/.build/release/buttonheist
 
-$BH list_devices                                          # Discover scoped simulator/device targets
-$BH session                                               # Interactive REPL
-$BH activate --identifier loginButton                     # Activate an element
-$BH activate --action "Delete" --identifier cell_row_3    # Named custom action
-$BH type_text "Hello" --identifier nameField              # Type into a field
-$BH scroll --direction down --identifier scrollView       # Scroll one page
-$BH scroll_to_visible --identifier targetElement          # Scroll until visible
-$BH get_screen --output screen.png                        # Capture screenshot
-$BH start_recording --fps 8 --scale 0.5                   # Start screen recording
-$BH stop_recording --output demo.mp4                      # Save recording
+$BH list_devices
+$BH get_interface
+$BH activate --identifier loginButton
+$BH type_text "Hello" --identifier nameField
+$BH get_screen --output screen.png
 ```
 
 The session REPL accepts JSON and shorthand commands: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
 
-For gestures, recording, pasteboard, scroll modes, and multi-device support, see the [API Reference](docs/API.md).
+For the complete generated CLI command surface, see the
+[Command Reference](docs/reference/commands.md). For workflow context, see the
+[CLI README](ButtonHeistCLI/README.md).
 
 ## How the Job Runs
 
@@ -217,7 +215,7 @@ Two actions, two assertions, one round trip. If the email field does not update,
 
 ### 4. Replay: the contract in CI
 
-Button Heist can record an agent session as a replayable `.heist` file. Each step is stored as a semantic matcher: label, traits, and stable identifiers. No coordinates. No ephemeral IDs.
+Button Heist can record an agent session as a replayable `.heist` file. Each step is stored as a semantic matcher: label, traits, and stable identifiers. `heistId` is a current-capture handle and recording clue, not durable replay identity.
 
 Replay uses the same action path as live automation. If a label changes, a trait disappears, or a custom action is removed, the replay fails and surfaces the broken contract. JUnit XML output (`--junit`) puts those failures into CI.
 
@@ -292,8 +290,8 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 
 | Name | Role |
 |------|------|
-| **ButtonHeistCLI** | Command-line interface for `list_devices`, `session`, `activate`, `type_text`, `get_screen`, `start_recording`, and more |
-| **ButtonHeistMCP** | MCP server projecting agent tools from TheFence |
+| **ButtonHeistCLI** | Command-line adapter over TheFence; generated command surface lives in [Command Reference](docs/reference/commands.md) |
+| **ButtonHeistMCP** | MCP adapter over TheFence; generated tool surface lives in [MCP Tool Reference](docs/reference/mcp-tools.md) |
 
 ## Development
 
@@ -322,7 +320,6 @@ ButtonHeist/
 ├── TestApp/                      # SwiftUI + UIKit test applications
 ├── AccessibilitySnapshotBH/      # Git submodule (hierarchy parsing)
 ├── docs/                         # Architecture, API, protocol, auth, connectivity docs
-│   └── dossiers/                 # Per-module technical documentation
 ```
 
 ## Troubleshooting
@@ -352,15 +349,15 @@ ButtonHeist/
 |---|---|
 | **iOS engineer** (instrument app + run locally) | [Quick Start](#quick-start) + [API](docs/API.md) |
 | **QA / automation engineer** (record + replay in CI) | [Benchmarks](docs/BENCHMARKS.md) + [Heist Format](docs/HEIST-FORMAT.md) |
-| **Agent builder** (MCP tools for Codex/Claude/Cursor) | [ButtonHeistMCP](ButtonHeistMCP/) + [Wire Protocol](docs/WIRE-PROTOCOL.md) |
+| **Agent builder** (MCP tools for Codex/Claude/Cursor) | [ButtonHeistMCP](ButtonHeistMCP/) + [MCP Tool Reference](docs/reference/mcp-tools.md) |
 
 **Integrating into an app?** Start with the [Quick Start](#quick-start) and [API Reference](docs/API.md).
 
-**Connecting an agent?** See [ButtonHeistMCP](ButtonHeistMCP/) and the [Wire Protocol](docs/WIRE-PROTOCOL.md).
+**Connecting an agent?** See [ButtonHeistMCP](ButtonHeistMCP/) and the [MCP Tool Reference](docs/reference/mcp-tools.md).
 
-**Understanding the internals?** Read [Architecture](docs/ARCHITECTURE.md) and [Crew Dossiers](docs/dossiers/).
+**Understanding the internals?** Read [Architecture](docs/ARCHITECTURE.md).
 
-All docs: [API](docs/API.md) ・ [Architecture](docs/ARCHITECTURE.md) ・ [Wire Protocol](docs/WIRE-PROTOCOL.md) ・ [Auth](docs/AUTH.md) ・ [USB](docs/USB_DEVICE_CONNECTIVITY.md) ・ [Bonjour Troubleshooting](docs/BONJOUR_TROUBLESHOOTING.md) ・ [Reviewer's Guide](docs/REVIEWERS-GUIDE.md) ・ [Crew Dossiers](docs/dossiers/)
+All docs: [API](docs/API.md) ・ [Command Reference](docs/reference/commands.md) ・ [MCP Tool Reference](docs/reference/mcp-tools.md) ・ [Architecture](docs/ARCHITECTURE.md) ・ [Wire Protocol](docs/WIRE-PROTOCOL.md) ・ [Auth](docs/AUTH.md) ・ [USB](docs/USB_DEVICE_CONNECTIVITY.md) ・ [Bonjour Troubleshooting](docs/BONJOUR_TROUBLESHOOTING.md) ・ [Reviewer's Guide](docs/REVIEWERS-GUIDE.md)
 
 ## License
 

@@ -70,6 +70,20 @@ private final class AdjustableGeometryView: UIView {
     }
 }
 
+private struct TypedEndpointDragInput: DragExecutionInput {
+    let start: GesturePointSelection
+    let end: ScreenPoint
+    let duration: Double?
+
+    var resolvedDuration: Double {
+        duration ?? DragTarget.defaultDuration
+    }
+
+    func dragStartSelection() throws -> GesturePointSelection {
+        start
+    }
+}
+
 @MainActor
 final class TheBrainsActionTests: XCTestCase {
 
@@ -564,24 +578,14 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let target = try semanticActionTarget(heistId: "quantity_0", in: sourceScreen)
 
-        let result = await brains.actions.executeIncrement(
-            target,
-            recordedScreen: sourceScreen
-        )
+        let result = await brains.actions.executeIncrement(target)
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testElementActionCurrentHeistIdDoesNotReplayFromRecordedScreen() async {
-        let sourceElement = makeElement(
-            label: "Quantity",
-            value: "0",
-            identifier: "quantity_stepper",
-            traits: .adjustable
-        )
-        let sourceScreen = Screen.makeForTests(elements: [(sourceElement, "quantity_0")])
+    func testElementActionCurrentHeistIdDoesNotReplayAsSemanticIdentity() async {
         let currentElement = makeElement(label: "Checkout", traits: .button)
         let currentObject = AdjustableGeometryView(
             frame: CGRect(x: 80, y: 180, width: 180, height: 44),
@@ -592,10 +596,7 @@ final class TheBrainsActionTests: XCTestCase {
             objects: ["checkout_button": currentObject]
         )
 
-        let result = await brains.actions.executeIncrement(
-            .heistId("quantity_0"),
-            recordedScreen: sourceScreen
-        )
+        let result = await brains.actions.executeIncrement(.heistId("quantity_0"))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .elementNotFound)
@@ -627,10 +628,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let target = try semanticActionTarget(heistId: "quantity_0", in: sourceScreen)
 
-        let result = await brains.actions.executeIncrement(
-            target,
-            recordedScreen: sourceScreen
-        )
+        let result = await brains.actions.executeIncrement(target)
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
@@ -647,8 +645,13 @@ final class TheBrainsActionTests: XCTestCase {
                 actionName: "Archive"
             )), false),
             ("rotor", .rotor(RotorTarget(elementTarget: target, rotor: "Links")), false),
-            ("tap", .touchTap(TouchTapTarget(elementTarget: target)), false),
-            ("swipe", .touchSwipe(SwipeTarget(elementTarget: target, direction: .left)), false),
+            ("tap", .touchTap(TouchTapTarget(selection: .element(target))), false),
+            ("swipe", .touchSwipe(SwipeTarget(selection: .unitElement(
+                target,
+                start: SwipeDirection.left.defaultStart,
+                end: SwipeDirection.left.defaultEnd,
+                direction: .left
+            ))), false),
             ("type text", .typeText(TypeTextTarget(text: "hello", elementTarget: target)), false),
             ("scroll", .scroll(ScrollTarget(elementTarget: target, direction: .down)), false),
             ("wait", .waitFor(WaitForTarget(elementTarget: target, timeout: 0.01)), true),
@@ -884,7 +887,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteTapOutsideWindowReportsGestureDispatchState() async {
         let result = await brains.actions.executeTap(
-            TouchTapTarget(pointX: -10_000, pointY: -10_000)
+            TouchTapTarget(selection: .coordinate(ScreenPoint(x: -10_000, y: -10_000)))
         )
 
         XCTAssertFalse(result.success)
@@ -968,6 +971,21 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(dispatchedPoint, rawPoint)
+    }
+
+    func testExecuteDragReadsTypedEndpointFromExecutionInput() async {
+        let result = await brains.actions.executeDrag(
+            TypedEndpointDragInput(
+                start: .coordinate(ScreenPoint(x: 10, y: 10)),
+                end: ScreenPoint(x: .infinity, y: 20),
+                duration: 0.01
+            )
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .syntheticDrag)
+        XCTAssertEqual(result.failureKind, .inputValidation)
+        XCTAssertEqual(result.message, "syntheticDrag failed: endPoint must contain finite coordinates")
     }
 
     func testExecuteRotorWithoutCustomRotorsReportsNextStep() async {
@@ -1145,7 +1163,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForIdle)
         XCTAssertEqual(result.errorKind, .actionFailed)
-        // The wire kind stays actionFailed for compatibility. The factual
+        // The public wire kind stays actionFailed. The factual
         // message is what lets TheFence surface the local tree-unavailable
         // diagnostic without adding a new ErrorKind raw value.
         XCTAssertEqual(result.message, "Could not access accessibility tree: no traversable app windows")
@@ -1328,7 +1346,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func batchStepResult(for command: ClientMessage) async -> ActionResult {
         let result = await brains.executeBatchExecutionPlan(BatchPlan(steps: [
-            .command(command),
+            BatchStep(command: command, expectation: .delivery, deadline: Deadline()),
         ], policy: .continueOnError))
         guard case .batchExecution(let batch) = result.payload,
               let stepResult = batch.steps.first,

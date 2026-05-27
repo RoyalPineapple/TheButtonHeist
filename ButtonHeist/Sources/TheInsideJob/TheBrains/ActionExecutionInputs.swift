@@ -31,8 +31,7 @@ protocol SwipeExecutionInput {
 }
 
 protocol DragExecutionInput {
-    var endX: Double { get }
-    var endY: Double { get }
+    var end: ScreenPoint { get }
     var resolvedDuration: Double { get }
     func dragStartSelection() throws -> GesturePointSelection
 }
@@ -71,43 +70,43 @@ extension RotorTarget: RotorExecutionInput {
 
 extension TouchTapTarget: TapExecutionInput {
     func tapPointSelection() throws -> GesturePointSelection {
-        try gesturePointSelection()
+        gesturePointSelection()
     }
 }
 
 extension LongPressTarget: LongPressExecutionInput {
     func tapPointSelection() throws -> GesturePointSelection {
-        try gesturePointSelection()
+        gesturePointSelection()
     }
 }
 
 extension SwipeTarget: SwipeExecutionInput {
     func swipeGestureSelection() throws -> SwipeGestureSelection {
-        try gestureSelection()
+        gestureSelection()
     }
 }
 
 extension DragTarget: DragExecutionInput {
     func dragStartSelection() throws -> GesturePointSelection {
-        try startSelection()
+        startSelection()
     }
 }
 
 extension PinchTarget: PinchExecutionInput {
     func pinchCenterSelection() throws -> GesturePointSelection {
-        try centerSelection()
+        centerSelection()
     }
 }
 
 extension RotateTarget: RotateExecutionInput {
     func rotateCenterSelection() throws -> GesturePointSelection {
-        try centerSelection()
+        centerSelection()
     }
 }
 
 extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
     func twoFingerTapCenterSelection() throws -> GesturePointSelection {
-        try centerSelection()
+        centerSelection()
     }
 }
 

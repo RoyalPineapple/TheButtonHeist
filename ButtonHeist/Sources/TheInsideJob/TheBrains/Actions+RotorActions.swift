@@ -9,15 +9,13 @@ extension Actions {
     // MARK: - Rotor Actions
 
     func executeRotor(
-        _ target: some RotorExecutionInput,
-        recordedScreen: Screen? = nil
+        _ target: some RotorExecutionInput
     ) async -> TheSafecracker.InteractionResult {
         let direction = target.direction ?? .next
         let method: ActionMethod = .rotor
         return await performElementAction(
             target: target.rotorElementTarget,
             method: method,
-            recordedScreen: recordedScreen,
             requireInteractive: false
         ) { context in
             let outcome = self.stash.performRotor(

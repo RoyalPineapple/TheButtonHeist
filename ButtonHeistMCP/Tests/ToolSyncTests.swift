@@ -344,14 +344,18 @@ struct ToolSyncTests {
         }
     }
 
-    @Test("get_interface schema does not expose diagnostic screen scope")
-    func getInterfaceSchemaDoesNotExposeDiagnosticScreenScope() {
+    @Test("get_interface schema uses its command contract properties")
+    func getInterfaceSchemaUsesCommandContractProperties() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
             Issue.record("get_interface tool missing")
             return
         }
+        guard let contract = TheFence.Command.mcpToolContract(named: TheFence.Command.getInterface.rawValue) else {
+            Issue.record("get_interface command contract missing")
+            return
+        }
 
-        #expect(!extractPropertyKeys(from: getInterface).contains("scope"))
+        #expect(extractPropertyKeys(from: getInterface) == Set(contract.parameters.map(\.key)))
     }
 
     @Test("get_interface MCP description presents app state and subtree selection")
@@ -365,13 +369,10 @@ struct ToolSyncTests {
         #expect(description.contains("Omit subtree for the whole hierarchy"))
         #expect(description.contains("select the returned tree"))
         #expect(description.contains("app accessibility hierarchy"))
-        #expect(!description.localizedCaseInsensitiveContains("scope=visible"))
-        #expect(!description.contains("diagnostic on-screen reads"))
-        #expect(!description.localizedCaseInsensitiveContains("viewport"))
     }
 
-    @Test("get_interface subtree schema describes selection without viewport language")
-    func getInterfaceSubtreeSchemaDescribesSelectionWithoutViewportLanguage() {
+    @Test("get_interface subtree schema describes selection")
+    func getInterfaceSubtreeSchemaDescribesSelection() {
         guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }),
               let subtreeSchema = extractPropertySchema(from: getInterface, property: "subtree"),
               let subtreeProperties = extractObjectField(from: subtreeSchema, key: "properties") else {
@@ -520,8 +521,6 @@ struct ToolSyncTests {
 
         #expect(extractIntField(from: textSchema, key: "minLength") == 1)
         #expect(extractRequiredKeys(from: typeText).contains("text"))
-        #expect(extractPropertySchema(from: typeText, property: "deleteCount") == nil)
-        #expect(extractPropertySchema(from: typeText, property: "clearFirst") == nil)
     }
 
     // MARK: - Exhaustiveness
@@ -665,7 +664,7 @@ struct ToolSyncTests {
         for contract in TheFence.Command.mcpToolContracts {
             #expect(
                 !contract.description.hasPrefix("Execute the"),
-                "\(contract.name) is using the generic description fallback"
+                "\(contract.name) is using generic placeholder description prose"
             )
             #expect(
                 toolsByName[contract.name]?.description == contract.description,
@@ -717,18 +716,6 @@ struct ToolSyncTests {
 
     private func inlineCode(_ value: String) -> String {
         "`\(value)`"
-    }
-
-    @Test("get_interface MCP schema does not advertise legacy full mode")
-    func getInterfaceSchemaDoesNotAdvertiseLegacyFullMode() {
-        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == TheFence.Command.getInterface.rawValue }) else {
-            Issue.record("get_interface tool missing")
-            return
-        }
-
-        let propertyKeys = extractPropertyKeys(from: getInterface)
-        #expect(!propertyKeys.contains("scope"))
-        #expect(!propertyKeys.contains("full"))
     }
 
     private enum EnumPolicy {

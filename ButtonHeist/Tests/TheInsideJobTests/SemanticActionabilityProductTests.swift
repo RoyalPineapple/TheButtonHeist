@@ -166,7 +166,11 @@ final class SemanticActionabilityProductTests: XCTestCase {
 
         if batch {
             let plan = BatchPlan(steps: [
-                .command(.activate(.matcher(ElementMatcher(identifier: identifier, traits: [.button])))),
+                BatchStep(
+                    command: .activate(.matcher(ElementMatcher(identifier: identifier, traits: [.button]))),
+                    expectation: .delivery,
+                    deadline: Deadline()
+                ),
             ])
             let result = await localBrains.executeBatchExecutionPlan(plan)
             return (result, fixture.target.activationCount)

@@ -57,7 +57,7 @@ public enum FenceOperationCatalog {
         normalizeCanonicalStep(
             step,
             context: "run_batch step",
-            nonExecutableLabel: "batch-executable",
+            nonExecutableLabel: "descriptor.isBatchExecutable",
             isExecutable: \.isBatchExecutable
         )
     }
@@ -118,7 +118,7 @@ public enum FenceOperationCatalog {
 
         guard command[keyPath: isExecutable] else {
             return .failure(FenceOperationRoutingError(
-                message: "\(context) command \"\(command.rawValue)\" is not \(nonExecutableLabel)"
+                message: "\(context) command \"\(command.rawValue)\" is not supported: \(nonExecutableLabel) is false"
             ))
         }
 

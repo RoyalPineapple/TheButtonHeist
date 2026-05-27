@@ -21,22 +21,7 @@ extension TheInsideJob {
     }
 
     func activateRuntimeLease(_ lease: InsideJobRuntimeLease, resumePolling: Bool) {
-        getaway.identity.tlsActive = true
-        serverPhase = .running(lease: lease)
-        engageIdleTimerProtection()
-
-        startAccessibilityObservation()
-        startLifecycleObservation()
-
-        tripwire.onTransition = { [weak self] transition in
-            self?.handlePulseTransition(transition)
-        }
-        tripwire.startPulse()
-        brains.startKeyboardObservation()
-
-        if resumePolling {
-            pollingRuntime.resumeIfPaused(makeTask: makePollingTask(interval:))
-        }
+        lease.activate(on: self, resumePolling: resumePolling)
     }
 
     func stopRuntime() async {
@@ -50,15 +35,14 @@ extension TheInsideJob {
         await bridge?.value
 
         if case .running(let lease) = serverPhase {
-            pendingTransportStopTask = lease.transport.stop()
+            pendingTransportStopTask = lease.release(from: self, policy: .stop)
+        } else {
+            stopPolling()
+            stopLifecycleObservation()
+            restoreIdleTimerProtection(clearBaseline: true)
         }
 
         serverPhase = .stopped
-        stopPolling()
-
-        tripwire.stopPulse()
-        tripwire.onTransition = nil
-        brains.stopKeyboardObservation()
     }
 
     private func startRuntimeLease(phase: String, leavesStoppedOnFailure: Bool) async throws -> InsideJobRuntimeLease {

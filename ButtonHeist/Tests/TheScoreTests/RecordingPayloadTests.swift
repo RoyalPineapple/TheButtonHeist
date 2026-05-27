@@ -245,7 +245,7 @@ final class RecordingPayloadTests: XCTestCase {
         ))
         let event = InteractionEvent(
             timestamp: 3.2,
-            command: .touchTap(TouchTapTarget(elementTarget: .matcher(ElementMatcher(identifier: "okBtn")))),
+            command: .touchTap(TouchTapTarget(selection: .element(.matcher(ElementMatcher(identifier: "okBtn"))))),
             result: ActionResult(success: true, method: .syntheticTap, accessibilityDelta: delta)
         )
 

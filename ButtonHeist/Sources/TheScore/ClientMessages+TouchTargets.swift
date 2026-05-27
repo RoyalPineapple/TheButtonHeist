@@ -24,6 +24,7 @@ public struct ScreenPoint: Sendable, Equatable, CustomStringConvertible {
 public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConvertible {
     case partialCoordinate(field: String, xPresent: Bool, yPresent: Bool)
     case mixedCoordinateAndElement(field: String)
+    case mixedCoordinateAndDirection(field: String)
     case partialUnitPoints
     case unitPointsRequireElementTarget
 
@@ -33,6 +34,8 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
             return "\(field) requires both x and y coordinates (xPresent=\(xPresent), yPresent=\(yPresent))"
         case .mixedCoordinateAndElement(let field):
             return "\(field) accepts either an element target or coordinates, not both"
+        case .mixedCoordinateAndDirection(let field):
+            return "\(field) accepts either coordinates or direction, not both"
         case .partialUnitPoints:
             return "unit-point swipe requires both start and end unit points"
         case .unitPointsRequireElementTarget:
@@ -94,17 +97,18 @@ public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConverti
 }
 
 public enum SwipeGestureSelection: Sendable, Equatable, CustomStringConvertible {
-    case unitElement(ElementTarget, start: UnitPoint, end: UnitPoint)
+    case unitElement(ElementTarget, start: UnitPoint, end: UnitPoint, direction: SwipeDirection?)
     case point(start: GesturePointSelection, destination: SwipeDestinationSelection)
 
     public var description: String {
         switch self {
-        case .unitElement(let target, let start, let end):
-            return ScoreDescription.call("unitSwipe", [
+        case .unitElement(let target, let start, let end, let direction):
+            return ScoreDescription.call("unitSwipe", ([
                 target.description,
                 "start=\(start)",
                 "end=\(end)",
-            ])
+                ScoreDescription.valueField("direction", direction),
+            ] as [String?]).compactMap { $0 })
         case .point(let start, let destination):
             return ScoreDescription.call("pointSwipe", [
                 "start=\(start)",
@@ -120,6 +124,9 @@ private func makeGesturePointSelection(
     y: Double?,
     field: String
 ) throws -> GesturePointSelection {
+    if elementTarget != nil, x != nil || y != nil {
+        throw GestureProjectionError.mixedCoordinateAndElement(field: field)
+    }
     if let elementTarget {
         return .element(elementTarget)
     }
@@ -140,6 +147,25 @@ private enum GesturePointCodingKeys: String, CodingKey {
 private enum GestureCenterCodingKeys: String, CodingKey {
     case centerX
     case centerY
+}
+
+private enum SwipePointCodingKeys: String, CodingKey {
+    case startX
+    case startY
+    case endX
+    case endY
+    case direction
+    case duration
+    case start
+    case end
+}
+
+private enum DragPointCodingKeys: String, CodingKey {
+    case startX
+    case startY
+    case endX
+    case endY
+    case duration
 }
 
 private func decodeGesturePointSelection(from decoder: Decoder) throws -> GesturePointSelection {
@@ -190,25 +216,14 @@ private func encodeGestureCenterSelection(_ selection: GesturePointSelection, to
     }
 }
 
-private func uncheckedGesturePointSelection(
-    elementTarget: ElementTarget?,
-    x: Double?,
-    y: Double?
-) -> GesturePointSelection {
-    if let elementTarget {
-        return .element(elementTarget)
-    }
-    if let x, let y {
-        return .coordinate(ScreenPoint(x: x, y: y))
-    }
-    return .unspecified
-}
-
 private func swipeDestinationSelection(
     x: Double?,
     y: Double?,
     direction: SwipeDirection?
 ) throws -> SwipeDestinationSelection {
+    if direction != nil, x != nil || y != nil {
+        throw GestureProjectionError.mixedCoordinateAndDirection(field: "endPoint")
+    }
     if let x, let y {
         return .coordinate(ScreenPoint(x: x, y: y))
     }
@@ -230,10 +245,6 @@ public struct TouchTapTarget: Codable, Sendable {
         self.selection = selection
     }
 
-    public init(elementTarget: ElementTarget? = nil, pointX: Double? = nil, pointY: Double? = nil) {
-        self.selection = uncheckedGesturePointSelection(elementTarget: elementTarget, x: pointX, y: pointY)
-    }
-
     public var elementTarget: ElementTarget? {
         selection.elementTarget
     }
@@ -251,7 +262,7 @@ public struct TouchTapTarget: Codable, Sendable {
         return CGPoint(x: x, y: y)
     }
 
-    public func gesturePointSelection() throws -> GesturePointSelection {
+    public func gesturePointSelection() -> GesturePointSelection {
         selection
     }
 
@@ -289,11 +300,6 @@ public struct LongPressTarget: Codable, Sendable {
         self.duration = duration
     }
 
-    public init(elementTarget: ElementTarget? = nil, pointX: Double? = nil, pointY: Double? = nil, duration: Double = 0.5) {
-        self.selection = uncheckedGesturePointSelection(elementTarget: elementTarget, x: pointX, y: pointY)
-        self.duration = duration
-    }
-
     public var elementTarget: ElementTarget? {
         selection.elementTarget
     }
@@ -311,7 +317,7 @@ public struct LongPressTarget: Codable, Sendable {
         return CGPoint(x: x, y: y)
     }
 
-    public func gesturePointSelection() throws -> GesturePointSelection {
+    public func gesturePointSelection() -> GesturePointSelection {
         selection
     }
 
@@ -362,37 +368,67 @@ extension UnitPoint: CustomStringConvertible {
 public struct SwipeTarget: Codable, Sendable {
     public static let defaultDuration = 0.15
 
-    /// Start from element's interaction point
-    public let elementTarget: ElementTarget?
-    /// Or start from explicit coordinates
-    public let startX: Double?
-    public let startY: Double?
-    /// End coordinates (required if not using direction)
-    public let endX: Double?
-    public let endY: Double?
-    /// Or use direction from start point
-    public let direction: SwipeDirection?
+    public let selection: SwipeGestureSelection
     /// Duration in seconds (default 0.15)
     public let duration: Double?
-    /// Unit-point start relative to element frame (0-1)
-    public let start: UnitPoint?
-    /// Unit-point end relative to element frame (0-1)
-    public let end: UnitPoint?
 
-    public init(
-        elementTarget: ElementTarget? = nil,
-        startX: Double? = nil, startY: Double? = nil,
-        endX: Double? = nil, endY: Double? = nil,
-        direction: SwipeDirection? = nil,
-        duration: Double? = nil,
-        start: UnitPoint? = nil, end: UnitPoint? = nil
-    ) {
-        self.elementTarget = elementTarget
-        self.startX = startX; self.startY = startY
-        self.endX = endX; self.endY = endY
-        self.direction = direction
+    public init(selection: SwipeGestureSelection = .point(start: .unspecified, destination: .unspecified), duration: Double? = nil) {
+        self.selection = selection
         self.duration = duration
-        self.start = start; self.end = end
+    }
+
+    public var elementTarget: ElementTarget? {
+        switch selection {
+        case .unitElement(let target, _, _, _):
+            return target
+        case .point(let start, _):
+            return start.elementTarget
+        }
+    }
+
+    public var startX: Double? {
+        guard case .point(let start, _) = selection else { return nil }
+        return start.pointX
+    }
+
+    public var startY: Double? {
+        guard case .point(let start, _) = selection else { return nil }
+        return start.pointY
+    }
+
+    public var endX: Double? {
+        guard case .point(_, .coordinate(let point)) = selection else { return nil }
+        return point.x
+    }
+
+    public var endY: Double? {
+        guard case .point(_, .coordinate(let point)) = selection else { return nil }
+        return point.y
+    }
+
+    public var direction: SwipeDirection? {
+        switch selection {
+        case .unitElement(_, _, _, let direction):
+            return direction
+        case .point(_, .direction(let direction)):
+            return direction
+        case .point:
+            return nil
+        }
+    }
+
+    /// Returns explicit unit start only when the wire target used unit points.
+    /// Direction-based swipes derive their own start/end at dispatch time.
+    public var start: UnitPoint? {
+        guard case .unitElement(_, let start, _, let direction) = selection, direction == nil else { return nil }
+        return start
+    }
+
+    /// Returns explicit unit end only when the wire target used unit points.
+    /// Direction-based swipes derive their own start/end at dispatch time.
+    public var end: UnitPoint? {
+        guard case .unitElement(_, _, let end, let direction) = selection, direction == nil else { return nil }
+        return end
     }
 
     public var startPoint: CGPoint? {
@@ -402,7 +438,21 @@ public struct SwipeTarget: Codable, Sendable {
 
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
-    public func gestureSelection() throws -> SwipeGestureSelection {
+    public func gestureSelection() -> SwipeGestureSelection {
+        selection
+    }
+
+    public init(from decoder: Decoder) throws {
+        let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        let pointContainer = try decoder.container(keyedBy: SwipePointCodingKeys.self)
+        let startX = try pointContainer.decodeIfPresent(Double.self, forKey: .startX)
+        let startY = try pointContainer.decodeIfPresent(Double.self, forKey: .startY)
+        let endX = try pointContainer.decodeIfPresent(Double.self, forKey: .endX)
+        let endY = try pointContainer.decodeIfPresent(Double.self, forKey: .endY)
+        let direction = try pointContainer.decodeIfPresent(SwipeDirection.self, forKey: .direction)
+        let start = try pointContainer.decodeIfPresent(UnitPoint.self, forKey: .start)
+        let end = try pointContainer.decodeIfPresent(UnitPoint.self, forKey: .end)
+        self.duration = try pointContainer.decodeIfPresent(Double.self, forKey: .duration)
         if start != nil || end != nil {
             guard let start, let end else {
                 throw GestureProjectionError.partialUnitPoints
@@ -410,12 +460,22 @@ public struct SwipeTarget: Codable, Sendable {
             guard let elementTarget else {
                 throw GestureProjectionError.unitPointsRequireElementTarget
             }
-            return .unitElement(elementTarget, start: start, end: end)
+            guard direction == nil else {
+                throw GestureProjectionError.mixedCoordinateAndDirection(field: "unitPoints")
+            }
+            self.selection = .unitElement(elementTarget, start: start, end: end, direction: nil)
+            return
         }
         if let direction, let elementTarget, startX == nil, startY == nil, endX == nil, endY == nil {
-            return .unitElement(elementTarget, start: direction.defaultStart, end: direction.defaultEnd)
+            self.selection = .unitElement(
+                elementTarget,
+                start: direction.defaultStart,
+                end: direction.defaultEnd,
+                direction: direction
+            )
+            return
         }
-        return .point(
+        self.selection = .point(
             start: try makeGesturePointSelection(
                 elementTarget: elementTarget,
                 x: startX,
@@ -424,6 +484,48 @@ public struct SwipeTarget: Codable, Sendable {
             ),
             destination: try swipeDestinationSelection(x: endX, y: endY, direction: direction)
         )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch selection {
+        case .unitElement(let target, let start, let end, let direction):
+            try target.encode(to: encoder)
+            var container = encoder.container(keyedBy: SwipePointCodingKeys.self)
+            if let direction {
+                guard start == direction.defaultStart, end == direction.defaultEnd else {
+                    throw EncodingError.invalidValue(self, .init(
+                        codingPath: encoder.codingPath,
+                        debugDescription: "direction swipe must use the direction default start/end; omit direction for explicit unit points"
+                    ))
+                }
+                try container.encode(direction, forKey: .direction)
+            } else {
+                try container.encode(start, forKey: .start)
+                try container.encode(end, forKey: .end)
+            }
+            try container.encodeIfPresent(duration, forKey: .duration)
+        case .point(let start, let destination):
+            var container = encoder.container(keyedBy: SwipePointCodingKeys.self)
+            switch start {
+            case .element(let target):
+                try target.encode(to: encoder)
+            case .coordinate(let point):
+                try container.encode(point.x, forKey: .startX)
+                try container.encode(point.y, forKey: .startY)
+            case .unspecified:
+                break
+            }
+            switch destination {
+            case .coordinate(let point):
+                try container.encode(point.x, forKey: .endX)
+                try container.encode(point.y, forKey: .endY)
+            case .direction(let direction):
+                try container.encode(direction, forKey: .direction)
+            case .unspecified:
+                break
+            }
+            try container.encodeIfPresent(duration, forKey: .duration)
+        }
     }
 }
 
@@ -447,24 +549,35 @@ extension SwipeTarget: CustomStringConvertible {
 public struct DragTarget: Codable, Sendable {
     public static let defaultDuration = 0.5
 
-    public let elementTarget: ElementTarget?
-    public let startX: Double?
-    public let startY: Double?
-    public let endX: Double
-    public let endY: Double
+    public let start: GesturePointSelection
+    public let end: ScreenPoint
     /// Duration in seconds (default 0.5)
     public let duration: Double?
 
-    public init(
-        elementTarget: ElementTarget? = nil,
-        startX: Double? = nil, startY: Double? = nil,
-        endX: Double, endY: Double,
-        duration: Double? = nil
-    ) {
-        self.elementTarget = elementTarget
-        self.startX = startX; self.startY = startY
-        self.endX = endX; self.endY = endY
+    public init(start: GesturePointSelection = .unspecified, end: ScreenPoint, duration: Double? = nil) {
+        self.start = start
+        self.end = end
         self.duration = duration
+    }
+
+    public var elementTarget: ElementTarget? {
+        start.elementTarget
+    }
+
+    public var startX: Double? {
+        start.pointX
+    }
+
+    public var startY: Double? {
+        start.pointY
+    }
+
+    public var endX: Double {
+        end.x
+    }
+
+    public var endY: Double {
+        end.y
     }
 
     public var startPoint: CGPoint? {
@@ -473,18 +586,47 @@ public struct DragTarget: Codable, Sendable {
     }
 
     public var endPoint: CGPoint {
-        CGPoint(x: endX, y: endY)
+        end.cgPoint
     }
 
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
-    public func startSelection() throws -> GesturePointSelection {
-        try makeGesturePointSelection(
+    public func startSelection() -> GesturePointSelection {
+        start
+    }
+
+    public init(from decoder: Decoder) throws {
+        let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        let container = try decoder.container(keyedBy: DragPointCodingKeys.self)
+        let startX = try container.decodeIfPresent(Double.self, forKey: .startX)
+        let startY = try container.decodeIfPresent(Double.self, forKey: .startY)
+        self.start = try makeGesturePointSelection(
             elementTarget: elementTarget,
             x: startX,
             y: startY,
             field: "startPoint"
         )
+        self.end = ScreenPoint(
+            x: try container.decode(Double.self, forKey: .endX),
+            y: try container.decode(Double.self, forKey: .endY)
+        )
+        self.duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: DragPointCodingKeys.self)
+        switch start {
+        case .element(let target):
+            try target.encode(to: encoder)
+        case .coordinate(let point):
+            try container.encode(point.x, forKey: .startX)
+            try container.encode(point.y, forKey: .startY)
+        case .unspecified:
+            break
+        }
+        try container.encode(end.x, forKey: .endX)
+        try container.encode(end.y, forKey: .endY)
+        try container.encodeIfPresent(duration, forKey: .duration)
     }
 }
 
@@ -521,16 +663,6 @@ public struct PinchTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        elementTarget: ElementTarget? = nil,
-        centerX: Double? = nil, centerY: Double? = nil,
-        scale: Double, spread: Double? = nil, duration: Double? = nil
-    ) {
-        self.center = uncheckedGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY)
-        self.scale = scale; self.spread = spread
-        self.duration = duration
-    }
-
-    public init(
         center: GesturePointSelection = .unspecified,
         scale: Double, spread: Double? = nil, duration: Double? = nil
     ) {
@@ -554,7 +686,7 @@ public struct PinchTarget: Codable, Sendable {
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
-    public func centerSelection() throws -> GesturePointSelection {
+    public func centerSelection() -> GesturePointSelection {
         center
     }
 
@@ -608,16 +740,6 @@ public struct RotateTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        elementTarget: ElementTarget? = nil,
-        centerX: Double? = nil, centerY: Double? = nil,
-        angle: Double, radius: Double? = nil, duration: Double? = nil
-    ) {
-        self.center = uncheckedGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY)
-        self.angle = angle; self.radius = radius
-        self.duration = duration
-    }
-
-    public init(
         center: GesturePointSelection = .unspecified,
         angle: Double, radius: Double? = nil, duration: Double? = nil
     ) {
@@ -641,7 +763,7 @@ public struct RotateTarget: Codable, Sendable {
     public var resolvedRadius: Double { radius ?? Self.defaultRadius }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
-    public func centerSelection() throws -> GesturePointSelection {
+    public func centerSelection() -> GesturePointSelection {
         center
     }
 
@@ -687,15 +809,6 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     /// Distance between the two fingers in points
     public let spread: Double?
 
-    public init(
-        elementTarget: ElementTarget? = nil,
-        centerX: Double? = nil, centerY: Double? = nil,
-        spread: Double? = nil
-    ) {
-        self.center = uncheckedGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY)
-        self.spread = spread
-    }
-
     public init(center: GesturePointSelection = .unspecified, spread: Double? = nil) {
         self.center = center
         self.spread = spread
@@ -715,7 +828,7 @@ public struct TwoFingerTapTarget: Codable, Sendable {
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
 
-    public func centerSelection() throws -> GesturePointSelection {
+    public func centerSelection() -> GesturePointSelection {
         center
     }
 

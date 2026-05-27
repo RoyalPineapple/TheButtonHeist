@@ -4,6 +4,17 @@ import AccessibilitySnapshotModel
 
 final class AccessibilityTraceTests: XCTestCase {
 
+    func testDecodeRejectsSegmentStorageAsTraceTruth() {
+        let json = #"{"segments":[]}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("segments are derived projections"),
+                "Expected segment storage rejection, got \(error)"
+            )
+        }
+    }
+
     func testCaptureCarriesFullInterfaceAndStableHash() throws {
         let interface = makeInterface(timestamp: Date(timeIntervalSince1970: 1))
         let sameContent = makeInterface(timestamp: Date(timeIntervalSince1970: 2))

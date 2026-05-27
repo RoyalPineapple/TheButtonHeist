@@ -12,9 +12,9 @@ final class CommandProjectionTests: XCTestCase {
     }
 
     func testPointGestureProjectionUsesCoordinateWhenNoSemanticTargetExists() throws {
-        let target = TouchTapTarget(pointX: 10, pointY: 20)
+        let target = TouchTapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
 
-        XCTAssertEqual(try target.gesturePointSelection(), .coordinate(ScreenPoint(x: 10, y: 20)))
+        XCTAssertEqual(target.gesturePointSelection(), GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20)))
     }
 
     func testPointGestureDecodeRejectsPartialCoordinate() {
@@ -48,27 +48,40 @@ final class CommandProjectionTests: XCTestCase {
     }
 
     func testSwipeProjectionConvertsElementDirectionIntoUnitFrameGesture() throws {
-        let target = SwipeTarget(elementTarget: .heistId("carousel"), direction: .left)
+        let target = try JSONDecoder().decode(
+            SwipeTarget.self,
+            from: Data(#"{"heistId":"carousel","direction":"left"}"#.utf8)
+        )
 
         XCTAssertEqual(
-            try target.gestureSelection(),
-            .unitElement(.heistId("carousel"), start: SwipeDirection.left.defaultStart, end: SwipeDirection.left.defaultEnd)
+            target.gestureSelection(),
+            .unitElement(
+                .heistId("carousel"),
+                start: SwipeDirection.left.defaultStart,
+                end: SwipeDirection.left.defaultEnd,
+                direction: .left
+            )
         )
     }
 
     func testSwipeProjectionRejectsHalfValidUnitPoints() {
-        let target = SwipeTarget(elementTarget: .heistId("carousel"), start: UnitPoint(x: 0.8, y: 0.5))
+        let json = #"{"heistId":"carousel","start":{"x":0.8,"y":0.5}}"#
 
-        XCTAssertThrowsError(try target.gestureSelection()) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(SwipeTarget.self, from: Data(json.utf8))) { error in
             XCTAssertEqual(error as? GestureProjectionError, .partialUnitPoints)
         }
     }
 
     func testSwipeProjectionSeparatesStartAndDestination() throws {
-        let target = SwipeTarget(startX: 10, startY: 20, direction: .down)
+        let target = SwipeTarget(
+            selection: .point(
+                start: .coordinate(ScreenPoint(x: 10, y: 20)),
+                destination: .direction(.down)
+            )
+        )
 
         XCTAssertEqual(
-            try target.gestureSelection(),
+            target.gestureSelection(),
             .point(
                 start: .coordinate(ScreenPoint(x: 10, y: 20)),
                 destination: .direction(.down)
@@ -78,14 +91,18 @@ final class CommandProjectionTests: XCTestCase {
 
     func testScrollTargetProjectsToOneContainerSelection() {
         XCTAssertEqual(
-            ScrollTarget(containerTarget: ScrollContainerTarget(stableId: "main")).containerSelection,
+            ScrollTarget(selection: .container(ScrollContainerTarget(stableId: "main"))).containerSelection,
             .container(ScrollContainerTarget(stableId: "main"))
         )
         XCTAssertEqual(
-            ScrollTarget(elementTarget: .heistId("row")).containerSelection,
+            ScrollTarget(selection: .element(.heistId("row"))).containerSelection,
             .element(.heistId("row"))
         )
         XCTAssertEqual(ScrollTarget().containerSelection, .visibleContainer)
+        XCTAssertEqual(
+            ScrollToEdgeTarget(selection: .container(ScrollContainerTarget(stableId: "main"))).containerSelection,
+            .container(ScrollContainerTarget(stableId: "main"))
+        )
     }
 
     func testCustomActionTargetProjectsToOneSelection() {
@@ -134,7 +151,7 @@ final class CommandProjectionTests: XCTestCase {
             interface: interface,
             hash: "sha256:invalid"
         )
-        let trace = AccessibilityTrace(segments: [.init(baseline: invalidCapture)])
+        let trace = AccessibilityTrace(captures: [invalidCapture])
 
         XCTAssertThrowsError(try trace.validated()) { error in
             guard case .integrityIssues(let issues) = error as? AccessibilityTraceValidationError else {

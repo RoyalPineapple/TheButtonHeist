@@ -133,5 +133,3 @@ failure points at the accessibility contract that changed.
   agents.
 - [Heist Format](HEIST-FORMAT.md) - replayable session file format.
 - [Auth](AUTH.md) - authentication, approval, and session locking.
-- [Crew Dossiers](dossiers/) - implementation deep dives. These are internal
-  notes, not the product contract.

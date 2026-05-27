@@ -49,12 +49,12 @@ final class ClientMessageTests: XCTestCase {
 
     func testRequestEnvelopeRejectsUnknownTopLevelField() throws {
         let data = Data("""
-        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"ping","protocolVersion":"v9"}
+        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"ping","unknownField":"value"}
         """.utf8)
 
         XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
             XCTAssertTrue(
-                "\(error)".contains("protocolVersion"),
+                "\(error)".contains("unknownField"),
                 "Expected unknown request envelope field in error, got \(error)"
             )
         }
@@ -88,14 +88,22 @@ final class ClientMessageTests: XCTestCase {
         let saveTarget = ElementTarget.matcher(ElementMatcher(label: "Save", traits: [.button]))
         let plan = BatchPlan(
             steps: [
-                .command(.activate(saveTarget), expect: .screenChanged),
-                .command(.waitFor(WaitForTarget(elementTarget: saveTarget, absent: false, timeout: 2.5))),
-                .command(
-                    .waitForChange(WaitForChangeTarget(
+                BatchStep(
+                    command: .activate(saveTarget),
+                    expectation: .screenChanged,
+                    deadline: Deadline()
+                ),
+                BatchStep(
+                    command: .waitFor(WaitForTarget(elementTarget: saveTarget, absent: false, timeout: 2.5)),
+                    expectation: .elementAppeared(ElementMatcher(label: "Save", traits: [.button])),
+                    deadline: Deadline(timeout: 2.5)
+                ),
+                BatchStep(
+                    command: .waitForChange(WaitForChangeTarget(
                         expect: .elementAppeared(ElementMatcher(label: "Done")),
                         timeout: 1.0
                     )),
-                    expect: .elementAppeared(ElementMatcher(label: "Done")),
+                    expectation: .elementAppeared(ElementMatcher(label: "Done")),
                     deadline: Deadline(timeout: 1.0)
                 ),
             ],
@@ -120,10 +128,14 @@ final class ClientMessageTests: XCTestCase {
 
     func testBatchPlanEnvelopeRoundTrip() throws {
         let plan = BatchPlan(steps: [
-            .command(.typeText(TypeTextTarget(
-                text: "hello",
-                elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
-            ))),
+            BatchStep(
+                command: .typeText(TypeTextTarget(
+                    text: "hello",
+                    elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
+                )),
+                expectation: .delivery,
+                deadline: Deadline()
+            ),
         ])
         let envelope = RequestEnvelope(
             requestId: "batch-1",
@@ -145,7 +157,11 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testBatchExecutionDescriptionsUseNormalCommandIdentity() {
-        let step = BatchStep.command(.activate(.heistId("button_save")), expect: .screenChanged)
+        let step = BatchStep(
+            command: .activate(.heistId("button_save")),
+            expectation: .screenChanged,
+            deadline: Deadline()
+        )
 
         XCTAssertEqual(
             step.description,
@@ -548,16 +564,6 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testElementTargetHeistIdIgnoresOrdinal() throws {
-        let json = #"{"heistId":"button_save","ordinal":2}"#
-        let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
-
-        guard case .heistId(let id) = decoded else {
-            return XCTFail("Expected .heistId, got \(decoded)")
-        }
-        XCTAssertEqual(id, "button_save")
-    }
-
     func testElementTargetOrdinalEquality() {
         let withOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 1)
         let withoutOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"))
@@ -572,9 +578,12 @@ final class ClientMessageTests: XCTestCase {
 
     func testUnitPointRoundTrip() throws {
         let swipe = SwipeTarget(
-            direction: .up,
-            start: UnitPoint(x: 0.8, y: 0.5),
-            end: UnitPoint(x: 0.2, y: 0.5)
+            selection: .unitElement(
+                .heistId("scrollable"),
+                start: UnitPoint(x: 0.8, y: 0.5),
+                end: UnitPoint(x: 0.2, y: 0.5),
+                direction: nil
+            )
         )
         let message = ClientMessage.touchSwipe(swipe)
         let data = try JSONEncoder().encode(message)

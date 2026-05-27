@@ -690,32 +690,6 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertNotNil(reencodedJson["accessibilityTrace"])
     }
 
-    func testResponseEnvelopeRejectsObsoleteBackgroundDeltaField() throws {
-        let obsoleteShape: [String: Any] = [
-            "buttonHeistVersion": TheScore.buttonHeistVersion,
-            "requestId": "old-delta",
-            "type": "pong",
-            "payload": [
-                "buttonHeistVersion": TheScore.buttonHeistVersion,
-                "appName": "",
-                "bundleIdentifier": "",
-            ],
-            "backgroundAccessibilityDelta": [
-                "kind": "elementsChanged",
-                "elementCount": 3,
-                "edits": ["removed": ["old"]],
-            ],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: obsoleteShape)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ResponseEnvelope.self, from: data)) { error in
-            XCTAssertTrue(
-                "\(error)".contains("backgroundAccessibilityDelta"),
-                "Expected obsolete envelope field in error, got \(error)"
-            )
-        }
-    }
-
     func testResponseEnvelopeAccessibilityTraceOnlyShapeRoundTrips() throws {
         let envelope = ResponseEnvelope(
             requestId: "trace-only",

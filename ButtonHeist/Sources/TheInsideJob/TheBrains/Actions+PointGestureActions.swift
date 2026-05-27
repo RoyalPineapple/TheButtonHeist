@@ -11,7 +11,6 @@ extension Actions {
     func performPointAction(
         selection: GesturePointSelection,
         method: ActionMethod,
-        recordedScreen: Screen? = nil,
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
         let elementTarget: ElementTarget?
@@ -22,7 +21,7 @@ extension Actions {
             elementTarget = nil
         }
         let normalizedTarget = elementTarget.map {
-            normalizePointGestureTarget($0, recordedScreen: recordedScreen)
+            normalizePointGestureTarget($0)
         }
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
         if let normalizedTarget {
@@ -54,10 +53,7 @@ extension Actions {
 
     // MARK: - Touch Gestures
 
-    func executeTap(
-        _ target: some TapExecutionInput,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeTap(_ target: some TapExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
             selection = try target.tapPointSelection()
@@ -66,17 +62,13 @@ extension Actions {
         }
         return await performPointAction(
             selection: selection,
-            method: .syntheticTap,
-            recordedScreen: recordedScreen
+            method: .syntheticTap
         ) { point in
             await self.safecracker.tap(at: point)
         }
     }
 
-    func executeLongPress(
-        _ target: some LongPressExecutionInput,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeLongPress(_ target: some LongPressExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
             selection = try target.tapPointSelection()
@@ -86,17 +78,13 @@ extension Actions {
         let duration = clampDuration(target.duration)
         return await performPointAction(
             selection: selection,
-            method: .syntheticLongPress,
-            recordedScreen: recordedScreen
+            method: .syntheticLongPress
         ) { point in
             await self.safecracker.longPress(at: point, duration: duration)
         }
     }
 
-    func executeSwipe(
-        _ target: some SwipeExecutionInput,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeSwipe(_ target: some SwipeExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: SwipeGestureSelection
         do {
             selection = try target.swipeGestureSelection()
@@ -104,8 +92,8 @@ extension Actions {
             return gestureProjectionFailure(error, method: .syntheticSwipe)
         }
         switch selection {
-        case .unitElement(let elementTarget, let start, let end):
-            let normalizedTarget = normalizePointGestureTarget(elementTarget, recordedScreen: recordedScreen)
+        case .unitElement(let elementTarget, let start, let end, _):
+            let normalizedTarget = normalizePointGestureTarget(elementTarget)
             let actionableTarget: SemanticActionability.SemanticActionableTarget
             switch await actionability.makeActionable(
                 for: normalizedTarget,
@@ -139,7 +127,7 @@ extension Actions {
             return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
         case .point(let startSelection, let destination):
             let startPoint: CGPoint
-            switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe, recordedScreen: recordedScreen) {
+            switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe) {
             case .failure(let result):
                 return result
             case .success(let point):
@@ -181,34 +169,27 @@ extension Actions {
         return gestureDispatchResult(method: .syntheticSwipe, diagnosticPoint: startPoint, success: success)
     }
 
-    func executeDrag(
-        _ target: some DragExecutionInput,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeDrag(_ target: some DragExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
             selection = try target.dragStartSelection()
         } catch {
             return gestureProjectionFailure(error, method: .syntheticDrag)
         }
-        let endPoint = CGPoint(x: target.endX, y: target.endY)
+        let endPoint = target.end.cgPoint
         if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }
         let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             selection: selection,
-            method: .syntheticDrag,
-            recordedScreen: recordedScreen
+            method: .syntheticDrag
         ) { startPoint in
             await self.safecracker.drag(from: startPoint, to: endPoint, duration: duration)
         }
     }
 
-    func executePinch(
-        _ target: some PinchExecutionInput,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executePinch(_ target: some PinchExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
             selection = try target.pinchCenterSelection()
@@ -219,8 +200,7 @@ extension Actions {
         let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             selection: selection,
-            method: .syntheticPinch,
-            recordedScreen: recordedScreen
+            method: .syntheticPinch
         ) { center in
             await self.safecracker.pinch(
                 center: center, scale: CGFloat(target.scale),
@@ -229,10 +209,7 @@ extension Actions {
         }
     }
 
-    func executeRotate(
-        _ target: some RotateExecutionInput,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeRotate(_ target: some RotateExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
             selection = try target.rotateCenterSelection()
@@ -243,8 +220,7 @@ extension Actions {
         let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             selection: selection,
-            method: .syntheticRotate,
-            recordedScreen: recordedScreen
+            method: .syntheticRotate
         ) { center in
             await self.safecracker.rotate(
                 center: center, angle: CGFloat(target.angle),
@@ -253,10 +229,7 @@ extension Actions {
         }
     }
 
-    func executeTwoFingerTap(
-        _ target: some TwoFingerTapExecutionInput,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeTwoFingerTap(_ target: some TwoFingerTapExecutionInput) async -> TheSafecracker.InteractionResult {
         let selection: GesturePointSelection
         do {
             selection = try target.twoFingerTapCenterSelection()
@@ -266,25 +239,14 @@ extension Actions {
         let spread = target.resolvedSpread
         return await performPointAction(
             selection: selection,
-            method: .syntheticTwoFingerTap,
-            recordedScreen: recordedScreen
+            method: .syntheticTwoFingerTap
         ) { center in
             await self.safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
         }
     }
 
-    func normalizePointGestureTarget(
-        _ target: any SemanticElementTarget,
-        recordedScreen: Screen?
-    ) -> TheStash.NormalizedTarget {
-        stash.normalizeTarget(target, in: pointGestureSourceScreen(recordedScreen))
-    }
-
-    private func pointGestureSourceScreen(_ recordedScreen: Screen?) -> Screen {
-        if let recordedScreen {
-            return recordedScreen
-        }
-        return stash.currentScreen
+    func normalizePointGestureTarget(_ target: any SemanticElementTarget) -> TheStash.NormalizedTarget {
+        stash.normalizeTarget(target)
     }
 
     func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult {

@@ -6,23 +6,33 @@ import Foundation
 /// Container targeting uses the same `container` selector shape as
 /// `get_interface.subtree`, with `ordinal` as the disambiguator.
 public struct CustomActionTarget: Codable, Sendable {
-    public let elementTarget: ElementTarget?
-    public let containerTarget: ContainerMatcher?
-    public let containerOrdinal: Int?
-    public let actionName: String
+    public let selection: CustomActionSelection
 
     public init(elementTarget: ElementTarget, actionName: String) {
-        self.elementTarget = elementTarget
-        self.containerTarget = nil
-        self.containerOrdinal = nil
-        self.actionName = actionName
+        self.selection = .element(elementTarget, actionName: actionName)
     }
 
     public init(containerTarget: ContainerMatcher, ordinal: Int? = nil, actionName: String) {
-        self.elementTarget = nil
-        self.containerTarget = containerTarget
-        self.containerOrdinal = ordinal
-        self.actionName = actionName
+        self.selection = .container(containerTarget, ordinal: ordinal, actionName: actionName)
+    }
+
+    public var elementTarget: ElementTarget? {
+        guard case .element(let target, _) = selection else { return nil }
+        return target
+    }
+
+    public var containerTarget: ContainerMatcher? {
+        guard case .container(let target, _, _) = selection else { return nil }
+        return target
+    }
+
+    public var containerOrdinal: Int? {
+        guard case .container(_, let ordinal, _) = selection else { return nil }
+        return ordinal
+    }
+
+    public var actionName: String {
+        selection.actionName
     }
 }
 
@@ -56,28 +66,9 @@ public enum CustomActionSelection: Sendable, Equatable, CustomStringConvertible 
     }
 }
 
-public extension CustomActionTarget {
-    var selection: CustomActionSelection {
-        if let elementTarget {
-            return .element(elementTarget, actionName: actionName)
-        }
-        // Codable validation guarantees the container case when no element is present.
-        return .container(containerTarget ?? ContainerMatcher(), ordinal: containerOrdinal, actionName: actionName)
-    }
-}
-
 extension CustomActionTarget: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("customAction", [
-            elementTarget?.description,
-            containerTarget.map {
-                ScoreDescription.call("container", [
-                    $0.description,
-                    ScoreDescription.valueField("ordinal", containerOrdinal),
-                ].compactMap { $0 })
-            },
-            ScoreDescription.stringField("action", actionName),
-        ].compactMap { $0 })
+        selection.description
     }
 }
 
@@ -91,7 +82,7 @@ extension CustomActionTarget {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        actionName = try container.decode(String.self, forKey: .actionName)
+        let actionName = try container.decode(String.self, forKey: .actionName)
         let hasElementTarget = container.contains(.elementTarget)
         let hasContainerTarget = container.contains(.container)
         guard hasElementTarget != hasContainerTarget else {
@@ -102,11 +93,11 @@ extension CustomActionTarget {
             )
         }
         if hasElementTarget {
-            elementTarget = try container.decode(ElementTarget.self, forKey: .elementTarget)
-            containerTarget = nil
-            containerOrdinal = nil
+            selection = .element(
+                try container.decode(ElementTarget.self, forKey: .elementTarget),
+                actionName: actionName
+            )
         } else {
-            elementTarget = nil
             let matcher = try container.decode(ContainerMatcher.self, forKey: .container)
             let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
             guard matcher.hasPredicates || ordinal != nil else {
@@ -116,7 +107,6 @@ extension CustomActionTarget {
                     debugDescription: "CustomActionTarget container requires stableId, type, label, value, identifier, isModalBoundary, or ordinal"
                 )
             }
-            containerTarget = matcher
             if let ordinal, ordinal < 0 {
                 throw DecodingError.dataCorruptedError(
                     forKey: .ordinal,
@@ -124,24 +114,19 @@ extension CustomActionTarget {
                     debugDescription: "ordinal must be non-negative, got \(ordinal)"
                 )
             }
-            containerOrdinal = ordinal
+            selection = .container(matcher, ordinal: ordinal, actionName: actionName)
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(actionName, forKey: .actionName)
-        switch (elementTarget, containerTarget) {
-        case (let elementTarget?, nil):
+        switch selection {
+        case .element(let elementTarget, _):
             try container.encode(elementTarget, forKey: .elementTarget)
-        case (nil, let containerTarget?):
+        case .container(let containerTarget, let containerOrdinal, _):
             try container.encode(containerTarget, forKey: .container)
             try container.encodeIfPresent(containerOrdinal, forKey: .ordinal)
-        default:
-            throw EncodingError.invalidValue(self, .init(
-                codingPath: encoder.codingPath,
-                debugDescription: "CustomActionTarget requires exactly one of elementTarget or container"
-            ))
         }
     }
 }

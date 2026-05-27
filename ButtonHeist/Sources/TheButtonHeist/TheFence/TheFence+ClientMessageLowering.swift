@@ -7,10 +7,6 @@ private let accessibilityAdjustmentCountRange = 1...100
 @ButtonHeistActor
 extension TheFence {
 
-    struct BatchStepPlanBuildError: Error {
-        let message: String
-    }
-
     struct ClientMessageExecutionPlan {
         let messages: [ClientMessage]
         let timeout: TimeInterval
@@ -19,7 +15,7 @@ extension TheFence {
 
     func clientMessageExecutionPlan(for request: ParsedRequest) throws -> ClientMessageExecutionPlan {
         let timeout = try actionTimeout(for: request)
-        let messages = try clientMessages(for: request, mode: .singleCommand)
+        let messages = try clientMessages(for: request)
         return ClientMessageExecutionPlan(
             messages: messages,
             timeout: timeout,
@@ -27,33 +23,14 @@ extension TheFence {
         )
     }
 
-    func batchClientMessage(for request: ParsedRequest) throws -> ClientMessage {
-        let messages = try clientMessages(for: request, mode: .batchStep)
-        guard let message = messages.first, messages.count == 1 else {
-            let commandName = request.command.rawValue
-            throw BatchStepPlanBuildError(
-                message: "run_batch step command \"\(commandName)\" expands to \(messages.count) actions; express repeats as separate ordered steps"
-            )
-        }
-        return message
-    }
-
-    private enum LoweringMode {
-        case singleCommand
-        case batchStep
-    }
-
-    private func clientMessages(
-        for request: ParsedRequest,
-        mode: LoweringMode
-    ) throws -> [ClientMessage] {
+    private func clientMessages(for request: ParsedRequest) throws -> [ClientMessage] {
         switch request.payload {
         case .gesture(let payload):
             return [gestureCommand(payload)]
         case .scroll(let payload):
             return [scrollCommand(payload)]
         case .accessibility(let payload):
-            return try accessibilityCommands(payload, request: request, mode: mode)
+            return try accessibilityCommands(payload)
         case .rotor(let target):
             return [.rotor(target)]
         case .typeText(let target):
@@ -74,9 +51,7 @@ extension TheFence {
                 timeout: payload.timeout
             ))]
         default:
-            throw BatchStepPlanBuildError(
-                message: "command \"\(request.command.rawValue)\" is not an executable action command"
-            )
+            throw FenceError.invalidRequest("command \"\(request.command.rawValue)\" is not an executable action command")
         }
     }
 
@@ -116,11 +91,7 @@ extension TheFence {
         }
     }
 
-    private func accessibilityCommands(
-        _ payload: AccessibilityPayload,
-        request: ParsedRequest,
-        mode: LoweringMode
-    ) throws -> [ClientMessage] {
+    private func accessibilityCommands(_ payload: AccessibilityPayload) throws -> [ClientMessage] {
         switch payload {
         case .activate(let target, let actionName, let count):
             guard let actionName else {
@@ -130,13 +101,12 @@ extension TheFence {
             return try namedAccessibilityCommands(
                 target: target,
                 actionName: actionName,
-                count: count,
-                mode: mode
+                count: count
             )
         case .increment(let target, let count):
-            return try repeatedAdjustmentCommands(.increment(target), count: count, mode: mode, command: request.command)
+            return try repeatedAdjustmentCommands(.increment(target), count: count)
         case .decrement(let target, let count):
-            return try repeatedAdjustmentCommands(.decrement(target), count: count, mode: mode, command: request.command)
+            return try repeatedAdjustmentCommands(.decrement(target), count: count)
         case .performCustomAction(let target, let count):
             try rejectCount(count)
             return [.performCustomAction(target)]
@@ -146,8 +116,7 @@ extension TheFence {
     private func namedAccessibilityCommands(
         target: ElementTarget,
         actionName: String,
-        count: CountArgument,
-        mode: LoweringMode
+        count: CountArgument
     ) throws -> [ClientMessage] {
         if actionName.hasPrefix("action:") {
             try rejectCount(count)
@@ -160,9 +129,9 @@ extension TheFence {
 
         switch actionName {
         case Command.increment.rawValue:
-            return try repeatedAdjustmentCommands(.increment(target), count: count, mode: mode, command: .increment)
+            return try repeatedAdjustmentCommands(.increment(target), count: count)
         case Command.decrement.rawValue:
-            return try repeatedAdjustmentCommands(.decrement(target), count: count, mode: mode, command: .decrement)
+            return try repeatedAdjustmentCommands(.decrement(target), count: count)
         default:
             try rejectCount(count)
             return [.performCustomAction(CustomActionTarget(elementTarget: target, actionName: actionName))]
@@ -171,16 +140,9 @@ extension TheFence {
 
     private func repeatedAdjustmentCommands(
         _ message: ClientMessage,
-        count countArgument: CountArgument,
-        mode: LoweringMode,
-        command: Command
+        count countArgument: CountArgument
     ) throws -> [ClientMessage] {
         let count = try accessibilityAdjustmentCount(countArgument)
-        guard mode != .batchStep || count == 1 else {
-            throw BatchStepPlanBuildError(
-                message: "run_batch step command \"\(command.rawValue)\" expands to \(count) actions; express repeats as separate ordered steps"
-            )
-        }
         return Array(repeating: message, count: count)
     }
 

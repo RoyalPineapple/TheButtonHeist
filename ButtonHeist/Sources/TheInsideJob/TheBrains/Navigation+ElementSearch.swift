@@ -25,8 +25,7 @@ extension Navigation {
         }
         let searchDirection = direction ?? .down
         let requestedAxis = Self.requiredAxis(for: searchDirection)
-        let knownScreen = stash.currentScreen
-        let normalizedTarget = stash.normalizeTarget(searchTarget, in: knownScreen)
+        let normalizedTarget = stash.normalizeTarget(searchTarget)
         let executableSearchTarget = normalizedTarget.executableTarget
 
         var candidates = scrollSearchCandidates(requiredAxis: requestedAxis)

@@ -78,10 +78,21 @@ private extension TheFence {
 
         @ButtonHeistActor
         func elementTarget(in fence: TheFence) throws -> ElementTarget? {
-            ElementTarget(
-                heistId: try string("heistId"),
-                matcher: try matcher(),
-                ordinal: try ordinal()
+            let heistId = try string("heistId")
+            let matcher = try matcher()
+            let ordinal = try ordinal()
+            let hasMixedHeistIdTarget = ordinal != nil || hasMatcherFieldKeys
+            if heistId != nil, hasMixedHeistIdTarget {
+                throw SchemaValidationError(
+                    field: "target",
+                    observed: request.observedDescription,
+                    expected: "either heistId or matcher fields with optional ordinal"
+                )
+            }
+            return ElementTarget(
+                heistId: heistId,
+                matcher: matcher,
+                ordinal: ordinal
             )
         }
 
@@ -99,6 +110,26 @@ private extension TheFence {
             let captureLocalRef = try container?.schemaString("captureLocalRef") ?? string("captureLocalRef")
             guard stableId != nil || captureLocalRef != nil else { return nil }
             return ScrollContainerTarget(stableId: stableId, captureLocalRef: captureLocalRef)
+        }
+
+        @ButtonHeistActor
+        func scrollContainerSelection(in fence: TheFence) throws -> ScrollContainerSelection {
+            let elementTarget = try elementTarget(in: fence)
+            let containerTarget = try scrollContainerTarget()
+            switch (containerTarget, elementTarget) {
+            case (.some, .some):
+                throw SchemaValidationError(
+                    field: "target",
+                    observed: request.observedDescription,
+                    expected: "at most one of container or element target"
+                )
+            case (.some(let containerTarget), nil):
+                return .container(containerTarget)
+            case (nil, .some(let elementTarget)):
+                return .element(elementTarget)
+            case (nil, nil):
+                return .visibleContainer
+            }
         }
 
         func customActionContainerTarget() throws -> (matcher: ContainerMatcher, ordinal: Int?)? {
@@ -148,6 +179,11 @@ private extension TheFence {
 
         var hasElementTargetFields: Bool {
             if request.keys.contains("heistId") { return true }
+            if hasMatcherFieldKeys { return true }
+            return false
+        }
+
+        var hasMatcherFieldKeys: Bool {
             if request.keys.contains("label") { return true }
             if request.keys.contains("identifier") { return true }
             if request.keys.contains("value") { return true }
@@ -294,8 +330,7 @@ private extension TheFence {
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
             let direction = try request.enumValue("direction", as: ScrollDirection.self) { $0.lowercased() } ?? .down
             target = ScrollTarget(
-                elementTarget: try request.elementTarget(in: fence),
-                containerTarget: try request.scrollContainerTarget(),
+                selection: try request.scrollContainerSelection(in: fence),
                 direction: direction
             )
         }
@@ -331,8 +366,7 @@ private extension TheFence {
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
             let edge = try request.enumValue("edge", as: ScrollEdge.self) { $0.lowercased() } ?? .top
             target = ScrollToEdgeTarget(
-                elementTarget: try request.elementTarget(in: fence),
-                containerTarget: try request.scrollContainerTarget(),
+                selection: try request.scrollContainerSelection(in: fence),
                 edge: edge
             )
         }

@@ -91,21 +91,21 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testLongPressTargetRoundTrip() throws {
         let target = LongPressTarget(
-            elementTarget: .heistId("cell_1"),
+            selection: .element(.heistId("cell_1")),
             duration: 1.5
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("cell_1"))
+        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("cell_1"))
         XCTAssertEqual(decoded.duration, 1.5)
     }
 
     func testLongPressTargetWithPointRoundTrip() throws {
-        let target = LongPressTarget(pointX: 100, pointY: 200, duration: 0.8)
+        let target = LongPressTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200)), duration: 0.8)
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
-        XCTAssertEqual(decoded.pointX, 100)
-        XCTAssertEqual(decoded.pointY, 200)
+        XCTAssertEqual(decoded.selection, .coordinate(ScreenPoint(x: 100, y: 200)))
+        XCTAssertEqual(decoded.point, CGPoint(x: 100, y: 200))
         XCTAssertEqual(decoded.duration, 0.8)
         XCTAssertNil(decoded.elementTarget)
     }
@@ -116,47 +116,45 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testLongPressTargetPointComputed() {
-        let withPoint = LongPressTarget(pointX: 10, pointY: 20)
+        let withPoint = LongPressTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
         XCTAssertEqual(withPoint.point, CGPoint(x: 10, y: 20))
 
         let withoutPoint = LongPressTarget()
         XCTAssertNil(withoutPoint.point)
-
-        let partialPoint = LongPressTarget(pointX: 10)
-        XCTAssertNil(partialPoint.point)
     }
 
     // MARK: - DragTarget
 
     func testDragTargetRoundTrip() throws {
         let target = DragTarget(
-            elementTarget: .heistId("handle"),
-            startX: 50, startY: 100,
-            endX: 200, endY: 300,
+            start: .element(.heistId("handle")),
+            end: ScreenPoint(x: 200, y: 300),
             duration: 0.8
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("handle"))
-        XCTAssertEqual(decoded.startX, 50)
-        XCTAssertEqual(decoded.startY, 100)
-        XCTAssertEqual(decoded.endX, 200)
-        XCTAssertEqual(decoded.endY, 300)
+        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("handle"))
+        XCTAssertEqual(decoded.start, .element(.heistId("handle")))
+        XCTAssertEqual(decoded.end, ScreenPoint(x: 200, y: 300))
+        XCTAssertEqual(decoded.endPoint, CGPoint(x: 200, y: 300))
         XCTAssertEqual(decoded.duration, 0.8)
     }
 
     func testDragTargetComputedPoints() {
-        let target = DragTarget(startX: 10, startY: 20, endX: 30, endY: 40)
+        let target = DragTarget(
+            start: .coordinate(ScreenPoint(x: 10, y: 20)),
+            end: ScreenPoint(x: 30, y: 40)
+        )
         XCTAssertEqual(target.startPoint, CGPoint(x: 10, y: 20))
         XCTAssertEqual(target.endPoint, CGPoint(x: 30, y: 40))
 
-        let noStart = DragTarget(endX: 30, endY: 40)
+        let noStart = DragTarget(end: ScreenPoint(x: 30, y: 40))
         XCTAssertNil(noStart.startPoint)
     }
 
     func testGestureResolvedDefaultsAreContractOwned() {
-        XCTAssertEqual(SwipeTarget(direction: .down).resolvedDuration, 0.15)
-        XCTAssertEqual(DragTarget(endX: 30, endY: 40).resolvedDuration, 0.5)
+        XCTAssertEqual(SwipeTarget(selection: .point(start: .unspecified, destination: .direction(.down))).resolvedDuration, 0.15)
+        XCTAssertEqual(DragTarget(end: ScreenPoint(x: 30, y: 40)).resolvedDuration, 0.5)
         XCTAssertEqual(PinchTarget(scale: 2).resolvedSpread, 100)
         XCTAssertEqual(PinchTarget(scale: 2).resolvedDuration, 0.5)
         XCTAssertEqual(RotateTarget(angle: 1).resolvedRadius, 100)
@@ -169,17 +167,53 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
     }
 
+    func testSwipeTargetRejectsMixedUnitPointsAndDirection() {
+        let json = """
+        {
+          "heistId": "row_5",
+          "start": { "x": 0.8, "y": 0.5 },
+          "end": { "x": 0.2, "y": 0.5 },
+          "direction": "left"
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("unitPoints"),
+                "Expected mixed unit-point/direction failure, got \(error)"
+            )
+        }
+    }
+
+    func testSwipeTargetRejectsEncodingCustomUnitPointsWithDirection() {
+        let target = SwipeTarget(
+            selection: .unitElement(
+                .heistId("row_5"),
+                start: UnitPoint(x: 0.9, y: 0.5),
+                end: UnitPoint(x: 0.1, y: 0.5),
+                direction: .left
+            )
+        )
+
+        XCTAssertThrowsError(try encoder.encode(target)) { error in
+            XCTAssertTrue(
+                "\(error)".contains("direction default start/end"),
+                "Expected lossy direction/unit-point encoding failure, got \(error)"
+            )
+        }
+    }
+
     // MARK: - PinchTarget
 
     func testPinchTargetRoundTrip() throws {
         let target = PinchTarget(
-            elementTarget: .heistId("map"),
+            center: .element(.heistId("map")),
             scale: 2.0, spread: 100, duration: 0.5
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(PinchTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("map"))
-        XCTAssertEqual(decoded.center, .element(.heistId("map")))
+        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("map"))
+        XCTAssertEqual(decoded.center, GesturePointSelection.element(.heistId("map")))
         XCTAssertNil(decoded.centerX)
         XCTAssertNil(decoded.centerY)
         XCTAssertEqual(decoded.scale, 2.0)
@@ -202,13 +236,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testRotateTargetRoundTrip() throws {
         let target = RotateTarget(
-            elementTarget: .heistId("dial"),
+            center: .element(.heistId("dial")),
             angle: .pi / 4, radius: 80, duration: 0.6
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(RotateTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("dial"))
-        XCTAssertEqual(decoded.center, .element(.heistId("dial")))
+        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("dial"))
+        XCTAssertEqual(decoded.center, GesturePointSelection.element(.heistId("dial")))
         XCTAssertEqual(decoded.angle, .pi / 4)
         XCTAssertEqual(decoded.radius, 80)
         XCTAssertEqual(decoded.duration, 0.6)
@@ -227,13 +261,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testTwoFingerTapTargetRoundTrip() throws {
         let target = TwoFingerTapTarget(
-            elementTarget: .heistId("canvas"),
+            center: .element(.heistId("canvas")),
             spread: 60
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(TwoFingerTapTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("canvas"))
-        XCTAssertEqual(decoded.center, .element(.heistId("canvas")))
+        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("canvas"))
+        XCTAssertEqual(decoded.center, GesturePointSelection.element(.heistId("canvas")))
         XCTAssertNil(decoded.centerX)
         XCTAssertNil(decoded.centerY)
         XCTAssertEqual(decoded.spread, 60)
@@ -270,8 +304,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(segment)
         let decoded = try decoder.decode(BezierSegment.self, from: data)
-        XCTAssertEqual(decoded.cp1X, 10)
-        XCTAssertEqual(decoded.endY, 60)
+        XCTAssertEqual(decoded.cp1, CGPoint(x: 10, y: 20))
+        XCTAssertEqual(decoded.cp2, CGPoint(x: 30, y: 40))
+        XCTAssertEqual(decoded.end, CGPoint(x: 50, y: 60))
     }
 
     func testBezierSegmentComputedPoints() {
@@ -321,9 +356,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DrawBezierTarget.self, from: data)
-        XCTAssertEqual(decoded.startX, 0)
-        XCTAssertEqual(decoded.startY, 0)
+        XCTAssertEqual(decoded.startPoint, CGPoint(x: 0, y: 0))
         XCTAssertEqual(decoded.segments.count, 1)
+        XCTAssertEqual(decoded.segments[0].end, CGPoint(x: 100, y: 0))
         XCTAssertEqual(decoded.samplesPerSegment, 30)
         XCTAssertEqual(decoded.duration, 2.0)
         XCTAssertNil(decoded.velocity)
@@ -354,7 +389,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollTargetRoundTrip() throws {
         let target = ScrollTarget(
-            elementTarget: .heistId("list"),
+            selection: .element(.heistId("list")),
             direction: .down
         )
         let data = try encoder.encode(target)
@@ -381,7 +416,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollTargetContainerRoundTrip() throws {
         let target = ScrollTarget(
-            containerTarget: ScrollContainerTarget(stableId: "main_scroll"),
+            selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
             direction: .up
         )
         let data = try encoder.encode(target)
@@ -391,12 +426,29 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.direction, .up)
     }
 
+    func testScrollTargetRejectsContainerAndElementWireShape() {
+        let json = """
+        {
+          "heistId": "list",
+          "container": { "stableId": "main_scroll" },
+          "direction": "down"
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("at most one of container or element target"),
+                "Expected mixed scroll target failure, got \(error)"
+            )
+        }
+    }
+
     // MARK: - ScrollToEdgeTarget
 
     func testScrollToEdgeTargetAllEdges() throws {
         for edge in ScrollEdge.allCases {
             let target = ScrollToEdgeTarget(
-                elementTarget: .heistId("scroll_view"),
+                selection: .element(.heistId("scroll_view")),
                 edge: edge
             )
             let data = try encoder.encode(target)
@@ -415,7 +467,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollToEdgeTargetContainerRoundTrip() throws {
         let target = ScrollToEdgeTarget(
-            containerTarget: ScrollContainerTarget(stableId: "main_scroll"),
+            selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
             edge: .bottom
         )
         let data = try encoder.encode(target)
@@ -423,6 +475,23 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
         XCTAssertNil(decoded.elementTarget)
         XCTAssertEqual(decoded.edge, .bottom)
+    }
+
+    func testScrollToEdgeTargetRejectsContainerAndElementWireShape() {
+        let json = """
+        {
+          "heistId": "scroll_view",
+          "container": { "stableId": "main_scroll" },
+          "edge": "bottom"
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("at most one of container or element target"),
+                "Expected mixed scroll-to-edge target failure, got \(error)"
+            )
+        }
     }
 
     // MARK: - ProtocolMismatchPayload
@@ -645,12 +714,16 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testBatchPlanRoundTripPreservesCommandStepWireShape() throws {
         let plan = BatchPlan(
             steps: [
-                .command(
-                    .activate(.matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1)),
-                    expect: .screenChanged,
+                BatchStep(
+                    command: .activate(.matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1)),
+                    expectation: .screenChanged,
                     deadline: Deadline(timeout: 2.5)
                 ),
-                .command(.setPasteboard(SetPasteboardTarget(text: "ready"))),
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "ready")),
+                    expectation: .delivery,
+                    deadline: Deadline()
+                ),
             ],
             policy: .continueOnError
         )

@@ -2,11 +2,80 @@
 #if DEBUG
 import Foundation
 
-struct InsideJobRuntimeLease {
+@MainActor
+final class InsideJobRuntimeLease {
+    enum ReleasePolicy {
+        case suspend
+        case stop
+    }
+
     let transport: ServerTransport
     let actualPort: UInt16
     let tlsFingerprint: String
     let bonjourServiceName: String?
+    private var isActive = false
+    private var releaseTask: Task<Void, Never>?
+
+    init(
+        transport: ServerTransport,
+        actualPort: UInt16,
+        tlsFingerprint: String,
+        bonjourServiceName: String?
+    ) {
+        self.transport = transport
+        self.actualPort = actualPort
+        self.tlsFingerprint = tlsFingerprint
+        self.bonjourServiceName = bonjourServiceName
+    }
+
+    func activate(on job: TheInsideJob, resumePolling: Bool) {
+        guard !isActive, releaseTask == nil else { return }
+        isActive = true
+
+        job.getaway.identity.tlsActive = true
+        job.serverPhase = .running(lease: self)
+        job.engageIdleTimerProtection()
+
+        job.startAccessibilityObservation()
+        job.startLifecycleObservation()
+
+        job.tripwire.onTransition = { [weak job] transition in
+            job?.handlePulseTransition(transition)
+        }
+        job.tripwire.startPulse()
+        job.brains.startKeyboardObservation()
+
+        if resumePolling {
+            job.pollingRuntime.resumeIfPaused(makeTask: job.makePollingTask(interval:))
+        }
+    }
+
+    func release(from job: TheInsideJob, policy: ReleasePolicy) -> Task<Void, Never>? {
+        guard isActive else {
+            return releaseTask
+        }
+
+        isActive = false
+        let stopTask = transport.stop()
+        releaseTask = stopTask
+
+        switch policy {
+        case .suspend:
+            job.pollingRuntime.pauseIfActive()
+            job.restoreIdleTimerProtection(clearBaseline: false)
+        case .stop:
+            job.stopPolling()
+            job.stopLifecycleObservation()
+            job.restoreIdleTimerProtection(clearBaseline: true)
+        }
+
+        job.tripwire.stopPulse()
+        job.tripwire.onTransition = nil
+        job.brains.stopKeyboardObservation()
+        job.stopAccessibilityObservation()
+
+        return stopTask
+    }
 }
 
 @MainActor

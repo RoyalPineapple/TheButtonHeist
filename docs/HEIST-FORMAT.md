@@ -28,9 +28,15 @@ Version 2 is intentionally not backward-compatible with the prototype v1 expecta
 
 ## Accessibility Trace Evidence
 
-Recording evidence uses accessibility traces as the source of truth. A trace is stored as screen segments: each screen change starts a full baseline capture, and same-screen changes are replayable patches on top of that baseline.
+Recording evidence uses accessibility traces as the source of truth. A trace
+stores captures. Segments and compact deltas are derived projections used for
+diagnostics, matcher derivation, expectation checks, and failure reporting;
+they are not a second storage truth.
 
-Materialized captures are projections from those segments. They are useful for diagnostics, matcher derivation, and failure reporting, but they are not a second storage truth. Actions may explore scroll views to refresh off-screen state, and `get_interface` may refresh the hierarchy it returns; that exploration scope does not decide trace history scope. Only the screen-change classifier starts a new baseline segment.
+Actions may explore scroll views to refresh off-screen state, and
+`get_interface` may refresh the hierarchy it returns. That exploration scope
+does not decide trace history scope. Screen-change classification determines
+how captures are grouped for derived segment views.
 
 ## Evidence (Steps)
 
@@ -97,7 +103,7 @@ Each step is a flat JSON object using the same command names and argument fields
 | `value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
 | `traits` | `[String]` | No | Element matcher: all listed traits must be present |
 | `excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
-| `ordinal` | `Int` | No | 0-based fallback index among matcher results; can stand alone only when no matcher predicate exists |
+| `ordinal` | `Int` | No | 0-based index among matcher results; can stand alone only when no matcher predicate exists |
 | `expect` | `Object` | No | Expected outcome — validated on playback |
 | `_recorded` | `Object` | No | Optional recording notes (ignored during playback) |
 | *(other keys)* | varies | No | Command-specific arguments (`text`, `direction`, `duration`, etc.) |
@@ -133,7 +139,7 @@ Matchers describe elements by the least-specific available evidence in the captu
 - **Label** is next
 - **Semantic traits** (`button`, `header`, `textEntry`, etc.) disambiguate labels before state is considered
 - **Value** is used only when earlier predicates are still ambiguous
-- **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`, `updatesFrequently`) and `excludeTraits` are used before ordinal fallback
+- **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`, `updatesFrequently`) and `excludeTraits` are used before ordinal
 - **UUID-containing identifiers** (runtime-generated) are detected and skipped in favor of labels
 - **Ordinal** is last resort; when an element has no semantic or state predicates, ordinal can be the only replay selector
 
@@ -215,27 +221,25 @@ The `_recorded` key carries optional recording notes for debugging. It is preser
 
 Button Heist preserves successful interaction steps as the heist is recorded, then writes the final `.heist` file when you call `stop_heist`. If a session ends before `stop_heist`, the session archive may still contain enough information to recover the completed steps.
 
-## Commands
+## Recording and Playback Commands
 
-| Command | Wire name | Description |
-|---------|-----------|-------------|
-| Start recording | `start_heist` | Begin capturing actions as evidence |
-| Stop recording | `stop_heist` | Finalize and write the `.heist` file |
-| Play back | `play_heist` | Execute evidence sequentially with expectation validation |
+The executable command surface is generated from `TheFence.Command`. See the
+[Command Reference](reference/commands.md) and
+[MCP Tool Reference](reference/mcp-tools.md) for current CLI and MCP shapes.
 
-### CLI
+Representative CLI flow:
 
 ```bash
-buttonheist start-heist --app com.example.app
+buttonheist start_heist --app com.example.app
 # ... perform actions ...
-buttonheist stop-heist --output recording.heist
-buttonheist play-heist --input recording.heist
-buttonheist play-heist --input recording.heist --junit report.xml
+buttonheist stop_heist --output recording.heist
+buttonheist play_heist --input recording.heist
+buttonheist play_heist --input recording.heist --junit report.xml
 ```
 
 The `--junit <path>` flag writes a JUnit XML report to disk. Each heist step becomes a `<testcase>` element; failed steps include a `<failure>` with the error message and typed error kind. The output is compatible with GitHub Actions, Jenkins, and other CI systems that consume JUnit XML.
 
-### MCP
+Representative MCP flow:
 
 ```json
 {"name": "start_heist", "arguments": {"app": "com.example.app"}}

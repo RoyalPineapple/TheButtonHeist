@@ -44,10 +44,14 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .command(.setPasteboard(SetPasteboardTarget(text: "ready")), expect: .elementsChanged),
-                .command(
-                    .waitForChange(WaitForChangeTarget(expect: .screenChanged, timeout: 0.1)),
-                    expect: .screenChanged,
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "ready")),
+                    expectation: .elementsChanged,
+                    deadline: Deadline()
+                ),
+                BatchStep(
+                    command: .waitForChange(WaitForChangeTarget(expect: .screenChanged, timeout: 0.1)),
+                    expectation: .screenChanged,
                     deadline: Deadline(timeout: 0.1)
                 ),
             ],
@@ -103,9 +107,21 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .command(.setPasteboard(SetPasteboardTarget(text: "first"))),
-                .command(.setPasteboard(SetPasteboardTarget(text: "next"))),
-                .command(.waitForIdle(WaitForIdleTarget(timeout: 0.1))),
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "first")),
+                    expectation: .delivery,
+                    deadline: Deadline()
+                ),
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "next")),
+                    expectation: .delivery,
+                    deadline: Deadline()
+                ),
+                BatchStep(
+                    command: .waitForIdle(WaitForIdleTarget(timeout: 0.1)),
+                    expectation: .delivery,
+                    deadline: Deadline(timeout: 0.1)
+                ),
             ],
             policy: .stopOnError
         )
@@ -152,8 +168,16 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .command(.setPasteboard(SetPasteboardTarget(text: "first"))),
-                .command(.setPasteboard(SetPasteboardTarget(text: "second"))),
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "first")),
+                    expectation: .delivery,
+                    deadline: Deadline()
+                ),
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "second")),
+                    expectation: .delivery,
+                    deadline: Deadline()
+                ),
             ],
             policy: .continueOnError
         )
@@ -190,8 +214,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .command(.explore),
-                .command(.resignFirstResponder),
+                BatchStep(command: .explore, expectation: .delivery, deadline: Deadline()),
+                BatchStep(command: .resignFirstResponder, expectation: .delivery, deadline: Deadline()),
             ],
             policy: .continueOnError
         )
@@ -234,7 +258,11 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                .command(.setPasteboard(SetPasteboardTarget(text: "ready")), expect: .screenChanged),
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "ready")),
+                    expectation: .screenChanged,
+                    deadline: Deadline()
+                ),
             ],
             policy: .stopOnError
         )
@@ -249,7 +277,11 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
 
     func testClientBatchPlanDispatchesToBatchRunner() async throws {
         let plan = TheScore.BatchPlan(steps: [
-            .command(.waitForIdle(WaitForIdleTarget(timeout: 0.01))),
+            BatchStep(
+                command: .waitForIdle(WaitForIdleTarget(timeout: 0.01)),
+                expectation: .delivery,
+                deadline: Deadline(timeout: 0.01)
+            ),
         ])
 
         let result = await brains.executeCommand(.batchExecutionPlan(plan))

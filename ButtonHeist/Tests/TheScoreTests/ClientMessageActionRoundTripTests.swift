@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 import TheScore
 
 /// Round-trip coverage for `ClientMessage` action variants and the assorted
@@ -65,27 +66,29 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testClientMessageTouchTapEncoding() throws {
-        let message = ClientMessage.touchTap(TouchTapTarget(pointX: 100, pointY: 200))
+        let message = ClientMessage.touchTap(TouchTapTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200))))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchTap(let target) = decoded {
-            XCTAssertEqual(target.selection, .coordinate(ScreenPoint(x: 100, y: 200)))
-            XCTAssertEqual(target.pointX, 100)
-            XCTAssertEqual(target.pointY, 200)
+            XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 100, y: 200)))
+            XCTAssertEqual(target.point, CGPoint(x: 100, y: 200))
         } else {
             XCTFail("Expected touchTap message")
         }
     }
 
     func testClientMessageTouchLongPressEncoding() throws {
-        let message = ClientMessage.touchLongPress(LongPressTarget(pointX: 50, pointY: 75, duration: 1.0))
+        let message = ClientMessage.touchLongPress(LongPressTarget(
+            selection: .coordinate(ScreenPoint(x: 50, y: 75)),
+            duration: 1.0
+        ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchLongPress(let target) = decoded {
-            XCTAssertEqual(target.selection, .coordinate(ScreenPoint(x: 50, y: 75)))
-            XCTAssertEqual(target.pointX, 50)
+            XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 50, y: 75)))
+            XCTAssertEqual(target.point, CGPoint(x: 50, y: 75))
             XCTAssertEqual(target.duration, 1.0)
         } else {
             XCTFail("Expected touchLongPress message")
@@ -94,14 +97,16 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testClientMessageTouchDragEncoding() throws {
         let message = ClientMessage.touchDrag(DragTarget(
-            startX: 50, startY: 100, endX: 250, endY: 100, duration: 0.5
+            start: .coordinate(ScreenPoint(x: 50, y: 100)),
+            end: ScreenPoint(x: 250, y: 100),
+            duration: 0.5
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchDrag(let target) = decoded {
-            XCTAssertEqual(target.startX, 50)
-            XCTAssertEqual(target.endX, 250)
+            XCTAssertEqual(target.start, .coordinate(ScreenPoint(x: 50, y: 100)))
+            XCTAssertEqual(target.end, ScreenPoint(x: 250, y: 100))
             XCTAssertEqual(target.duration, 0.5)
         } else {
             XCTFail("Expected touchDrag message")
@@ -109,13 +114,15 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testClientMessageTouchPinchEncoding() throws {
-        let message = ClientMessage.touchPinch(PinchTarget(centerX: 200, centerY: 300, scale: 2.0))
+        let message = ClientMessage.touchPinch(PinchTarget(
+            center: .coordinate(ScreenPoint(x: 200, y: 300)),
+            scale: 2.0
+        ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchPinch(let target) = decoded {
-            XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200, y: 300)))
-            XCTAssertEqual(target.centerX, 200)
+            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 200, y: 300)))
             XCTAssertEqual(target.scale, 2.0)
         } else {
             XCTFail("Expected touchPinch message")
@@ -123,13 +130,15 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testClientMessageTouchRotateEncoding() throws {
-        let message = ClientMessage.touchRotate(RotateTarget(centerX: 150, centerY: 250, angle: 1.57))
+        let message = ClientMessage.touchRotate(RotateTarget(
+            center: .coordinate(ScreenPoint(x: 150, y: 250)),
+            angle: 1.57
+        ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchRotate(let target) = decoded {
-            XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 150, y: 250)))
-            XCTAssertEqual(target.centerX, 150)
+            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 150, y: 250)))
             XCTAssertEqual(target.angle, 1.57)
         } else {
             XCTFail("Expected touchRotate message")
@@ -137,13 +146,15 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     }
 
     func testClientMessageTouchTwoFingerTapEncoding() throws {
-        let message = ClientMessage.touchTwoFingerTap(TwoFingerTapTarget(centerX: 100, centerY: 200, spread: 50))
+        let message = ClientMessage.touchTwoFingerTap(TwoFingerTapTarget(
+            center: .coordinate(ScreenPoint(x: 100, y: 200)),
+            spread: 50
+        ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchTwoFingerTap(let target) = decoded {
-            XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 100, y: 200)))
-            XCTAssertEqual(target.centerX, 100)
+            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 100, y: 200)))
             XCTAssertEqual(target.spread, 50)
         } else {
             XCTFail("Expected touchTwoFingerTap message")
@@ -179,8 +190,9 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchDrawBezier(let target) = decoded {
-            XCTAssertEqual(target.startX, 50)
+            XCTAssertEqual(target.startPoint, CGPoint(x: 50, y: 100))
             XCTAssertEqual(target.segments.count, 1)
+            XCTAssertEqual(target.segments[0].end, CGPoint(x: 150, y: 100))
             XCTAssertEqual(target.duration, 0.8)
         } else {
             XCTFail("Expected touchDrawBezier message")

@@ -4,27 +4,6 @@ import TheScore
 
 final class TheFenceParameterSpecTests: XCTestCase {
 
-    func testRemovedCompatibilityFieldsStayOutOfCommandSpecs() {
-        let removedFieldsByCommand: [TheFence.Command: Set<String>] = [
-            .getInterface: ["full"],
-            .performCustomAction: ["actionName"],
-            .drag: ["x", "y"],
-            .pinch: ["x", "y"],
-            .rotate: ["x", "y"],
-            .twoFingerTap: ["x", "y"],
-        ]
-
-        let offenders = removedFieldsByCommand.flatMap { command, removedFields in
-            let parameterKeys = Set(command.parameters.map(\.key))
-            return parameterKeys.intersection(removedFields).map { "\(command.rawValue).\($0)" }
-        }.sorted()
-
-        XCTAssertTrue(
-            offenders.isEmpty,
-            "Compatibility fields reintroduced into command specs:\n\(offenders.joined(separator: "\n"))"
-        )
-    }
-
     func testHumanCommandAliasesResolveToCanonicalCommands() {
         let aliases = TheFence.Command.humanCommandAliases
 

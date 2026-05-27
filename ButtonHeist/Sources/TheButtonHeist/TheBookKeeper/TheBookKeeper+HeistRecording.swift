@@ -155,14 +155,14 @@ extension TheBookKeeper {
         let lines = data.split(separator: 0x0A)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return lines.enumerated().compactMap { index, lineData in
+        return try lines.enumerated().map { index, lineData in
             do {
                 return try decoder.decode(HeistEvidence.self, from: Data(lineData))
             } catch {
-                heistRecordingLogger.warning(
-                    "Skipping malformed heist line \(index) in \(path.lastPathComponent): \(error.localizedDescription)"
-                )
-                return nil
+                throw BookKeeperError.heistRecording(.evidenceReadFailed(
+                    path: path.path,
+                    reason: "line \(index + 1) is malformed: \(String(describing: error))"
+                ))
             }
         }
     }

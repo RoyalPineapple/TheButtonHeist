@@ -26,16 +26,15 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(id, "save_button")
     }
 
-    func testElementTargetMatcherInitializerIgnoresOrdinalWithHeistId() {
-        let target = ElementTarget(heistId: "save_button", matcher: ElementMatcher(), ordinal: 2)
-
-        guard case .heistId(let id) = target else {
-            return XCTFail("Expected .heistId")
-        }
-        XCTAssertEqual(id, "save_button")
+    func testElementTargetMatcherInitializerRejectsHeistIdWithOrdinal() {
+        XCTAssertNil(ElementTarget(heistId: "save_button", matcher: ElementMatcher(), ordinal: 1))
     }
 
-    func testElementTargetMatcherInitializerAcceptsOrdinalOnlyFallback() {
+    func testElementTargetMatcherInitializerRejectsHeistIdWithMatcherFields() {
+        XCTAssertNil(ElementTarget(heistId: "save_button", matcher: ElementMatcher(label: "Save")))
+    }
+
+    func testElementTargetMatcherInitializerAcceptsOrdinalOnlySelector() {
         let target = ElementTarget(matcher: ElementMatcher(), ordinal: 2)
 
         guard case .matcher(let matcher, let ordinal) = target else {
@@ -73,7 +72,7 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(target.description, #"target(matcher(label="Save" traits=[button]) ordinal=1)"#)
     }
 
-    func testElementTargetDecodesOrdinalOnlyFallback() throws {
+    func testElementTargetDecodesOrdinalOnlySelector() throws {
         let data = Data(#"{"ordinal":1}"#.utf8)
         let target = try JSONDecoder().decode(ElementTarget.self, from: data)
 
@@ -82,6 +81,28 @@ final class ElementMatcherTests: XCTestCase {
         }
         XCTAssertFalse(matcher.hasPredicates)
         XCTAssertEqual(ordinal, 1)
+    }
+
+    func testElementTargetRejectsHeistIdWithOrdinal() {
+        let json = #"{"heistId":"save_button","ordinal":1}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("heistId cannot be combined"))
+        }
+    }
+
+    func testElementTargetRejectsHeistIdWithMatcherFields() {
+        let json = #"{"heistId":"save_button","label":"Save"}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("heistId cannot be combined"))
+        }
     }
 
     func testScrollToVisibleTargetWithElementTarget() {

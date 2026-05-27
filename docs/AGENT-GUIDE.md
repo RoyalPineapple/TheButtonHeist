@@ -451,16 +451,14 @@ Start with `get_interface` for the current screen. If you need less, filter by t
 
 ## Quick Reference
 
-| Task | Tool | Key Parameters |
-|------|------|----------------|
-| Read app accessibility state | `get_interface` | `detail`, `label`, `traits` |
-| Fresh on-screen geometry diagnostic | `get_screen` | none |
-| Find unseen element not currently on screen | `scroll mode=search` / `element_search` | `label`/`identifier` |
-| Return to known element not currently on screen | `scroll mode=to_visible` / `scroll_to_visible` | `heistId` |
-| Tap/activate a control | `activate` | `heistId`, `action` |
-| Type text | `type_text` | `heistId`, `text` |
-| Scroll | `scroll` | `heistId`, `direction` |
-| Wait for element | `wait_for` | `label`/`heistId`, `absent`, `timeout` |
-| Run multiple actions | `run_batch` | `steps`, `policy` |
-| Check what changed | *(read the delta in any action response)* | |
-| Verify an outcome | *(add `expect` to any action)* | |
+Use the generated [MCP Tool Reference](reference/mcp-tools.md) for current tool
+schemas and the generated [Command Reference](reference/commands.md) for
+canonical Fence command names.
+
+Typical flow:
+
+1. Read state with `get_interface`.
+2. Act semantically with `activate`, `type_text`, or `run_batch`.
+3. Use action deltas before fetching the interface again.
+4. Search unseen scrollable content with `element_search`.
+5. Use `get_screen` only when pixels or fresh visible geometry matter.

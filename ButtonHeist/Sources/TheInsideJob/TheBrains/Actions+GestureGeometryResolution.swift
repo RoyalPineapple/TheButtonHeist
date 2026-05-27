@@ -8,13 +8,12 @@ extension Actions {
 
     func resolveGesturePoint(
         selection: GesturePointSelection,
-        method: ActionMethod,
-        recordedScreen: Screen? = nil
+        method: ActionMethod
     ) async -> PointResolution {
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
         switch selection {
         case .element(let target):
-            let normalizedTarget = normalizePointGestureTarget(target, recordedScreen: recordedScreen)
+            let normalizedTarget = normalizePointGestureTarget(target)
             switch await actionability.makeActionable(
                 for: normalizedTarget,
                 method: method,

@@ -147,30 +147,18 @@ final class SemanticActionability {
     /// it is known-only, execute a semantic reveal plan against a live parent
     /// derived from the current graph, then prove success through a fresh
     /// visible resolution.
-    func executeScrollToVisible(
-        _ target: ScrollToVisibleTarget,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
-        await executeScrollToVisible(
-            elementTarget: target.elementTarget,
-            recordedScreen: recordedScreen
-        )
+    func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
+        await executeScrollToVisible(elementTarget: target.elementTarget)
     }
 
-    func executeScrollToVisible(
-        elementTarget: (any SemanticElementTarget)?,
-        recordedScreen: Screen? = nil
-    ) async -> TheSafecracker.InteractionResult {
+    func executeScrollToVisible(elementTarget: (any SemanticElementTarget)?) async -> TheSafecracker.InteractionResult {
         guard let elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for \(ScrollMode.toVisible.canonicalCommand)")
         }
 
-        if recordedScreen == nil {
-            stash.refresh()
-        }
+        stash.refresh()
 
-        let knownScreen = recordedScreen ?? stash.currentScreen
-        let normalizedTarget = stash.normalizeTarget(elementTarget, in: knownScreen)
+        let normalizedTarget = stash.normalizeTarget(elementTarget)
         switch await makeActionable(
             for: normalizedTarget,
             method: .scrollToVisible,
@@ -472,7 +460,7 @@ final class SemanticActionability {
 
     func makeFirstResponderActionable(method: ActionMethod) async -> SemanticActionabilityFailure? {
         guard let heistId = stash.firstResponderHeistId else { return nil }
-        let normalizedTarget = stash.normalizeTarget(.heistId(heistId), in: stash.currentScreen)
+        let normalizedTarget = stash.normalizeTarget(.heistId(heistId))
         switch await makeActionable(
             for: normalizedTarget,
             method: method,
