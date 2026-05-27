@@ -56,7 +56,7 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         let delta = try XCTUnwrap(history.delta(from: startRef, to: endRef))
 
         XCTAssertEqual(trace.captures.count, 2)
-        XCTAssertEqual(delta, trace.captureEndpointDelta)
+        XCTAssertEqual(delta, trace.endpointDeltaProjection)
         XCTAssertEqual(delta.captureEdge?.before.hash, trace.captures[0].hash)
         XCTAssertEqual(delta.captureEdge?.after.hash, trace.captures[1].hash)
     }
@@ -80,7 +80,7 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         let delta = try XCTUnwrap(history.delta(from: baselineRef, to: latestRef))
 
         XCTAssertEqual(history.captures.map(\.sequence), [deliveredRef.sequence, latestRef.sequence])
-        XCTAssertEqual(delta, history.trace(from: baselineRef, to: latestRef)?.captureEndpointDelta)
+        XCTAssertEqual(delta, history.trace(from: baselineRef, to: latestRef)?.endpointDeltaProjection)
         XCTAssertEqual(delta.captureEdge?.before.hash, baselineRef.hash)
         XCTAssertEqual(delta.captureEdge?.after.hash, latestRef.hash)
     }
@@ -143,7 +143,7 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         XCTAssertEqual(pending.index, 0)
         XCTAssertEqual(pending.cursor, history.pendingCursor(at: 0))
         XCTAssertEqual(pending.trace, history.pendingTrace(at: 0)?.trace)
-        XCTAssertEqual(pending.delta, pending.trace.backgroundDelta)
+        XCTAssertEqual(pending.delta, pending.trace.backgroundDeltaProjection)
         XCTAssertEqual(pending.trace.captures.map(\.hash), sourceTrace.captures.map(\.hash))
         XCTAssertEqual(history.elementLookup(captureRef: pending.firstRef)["title"]?.label, "Menu")
     }

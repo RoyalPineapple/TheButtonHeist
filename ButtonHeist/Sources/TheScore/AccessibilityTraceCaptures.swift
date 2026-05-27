@@ -162,6 +162,21 @@ public extension AccessibilityTrace {
         public var afterHash: String { after.hash }
     }
 
+    enum IntegrityIssue: Sendable, Equatable {
+        case captureHashMismatch(
+            index: Int,
+            sequence: Int,
+            recordedHash: String,
+            computedHash: String
+        )
+        case parentHashMismatch(
+            index: Int,
+            sequence: Int,
+            recordedParentHash: String?,
+            expectedParentHash: String?
+        )
+    }
+
     struct Context: Codable, Sendable, Equatable, Hashable {
         public static let empty = Context()
 

@@ -441,7 +441,7 @@ final class TheBrains {
             parentCapture: sent.beforeState.capture,
             classification: classification
         )
-        guard accessibilityTrace.backgroundDelta != nil else { return nil }
+        guard accessibilityTrace.backgroundDeltaProjection != nil else { return nil }
         return accessibilityTrace
     }
 

@@ -136,7 +136,7 @@ public struct ActionResult: Codable, Sendable {
     /// from the trace, even when the trace projects nil.
     public var accessibilityDelta: AccessibilityTrace.Delta? {
         if let accessibilityTrace {
-            return accessibilityTrace.captureEndpointDelta
+            return accessibilityTrace.endpointDeltaProjection
         }
         return noTraceAccessibilityDelta
     }
@@ -190,8 +190,8 @@ public struct ActionResult: Codable, Sendable {
         self.noTraceAccessibilityDelta = accessibilityTrace == nil ? accessibilityDelta : nil
         self.animating = animating
         if let accessibilityTrace {
-            self.screenName = accessibilityTrace.captureEndpointScreenName
-            self.screenId = accessibilityTrace.captureEndpointScreenId
+            self.screenName = accessibilityTrace.endpointScreenNameProjection
+            self.screenId = accessibilityTrace.endpointScreenIdProjection
         } else {
             self.screenName = screenName
             self.screenId = screenId

@@ -35,7 +35,7 @@ public extension AccessibilityTrace {
         public var firstRef: AccessibilityTrace.CaptureRef? { cursor.first }
         public var lastRef: AccessibilityTrace.CaptureRef? { cursor.last }
         public var endpointEdge: AccessibilityTrace.CaptureEdge? { cursor.endpointEdge }
-        public var delta: AccessibilityTrace.Delta? { trace.backgroundDelta }
+        public var delta: AccessibilityTrace.Delta? { trace.backgroundDeltaProjection }
     }
 
     /// Append-only accessibility capture history between explicit prune points.
@@ -219,7 +219,7 @@ public extension AccessibilityTrace {
             from start: AccessibilityTrace.CaptureRef?,
             to end: AccessibilityTrace.CaptureRef?
         ) -> AccessibilityTrace.Delta? {
-            trace(from: start, to: end)?.captureEndpointDelta
+            trace(from: start, to: end)?.endpointDeltaProjection
         }
 
         public mutating func removePendingTrace(

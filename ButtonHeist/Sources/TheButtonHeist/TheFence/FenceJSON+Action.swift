@@ -225,7 +225,7 @@ struct PublicBatchResponse: FencePublicJSONResponse {
             PublicBatchStepSummary(index: index, summary: summary)
         }
         self.stepSummaries = summaries.isEmpty ? nil : summaries
-        self.netDelta = accessibilityTrace?.meaningfulCaptureEndpointDelta.map(PublicDelta.init)
+        self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
     }
 }
 

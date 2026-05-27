@@ -160,7 +160,7 @@ extension TheFence {
         guard actionOutcomeCount > 0,
               stepAccessibilityTraces.count == actionOutcomeCount
         else { return nil }
-        return AccessibilityTrace.captureEndpointTrace(from: stepAccessibilityTraces)
+        return AccessibilityTrace.endpointTraceProjection(from: stepAccessibilityTraces)
     }
 
     // MARK: - Session State

@@ -58,7 +58,7 @@ extension TheBrains {
                 classification: classification
             ) {
                 let accessibilityTrace = makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
-                let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: initial.snapshot.count))
+                let delta = accessibilityTrace.endpointDeltaProjection ?? .noChange(.init(elementCount: initial.snapshot.count))
                 if let result = evaluateWaitForChange(
                     delta: delta,
                     accessibilityTrace: accessibilityTrace,
@@ -91,7 +91,7 @@ extension TheBrains {
         let timeoutAccessibilityTrace = current.map {
             makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
         }
-        let delta = timeoutAccessibilityTrace?.captureEndpointDelta ?? .noChange(.init(elementCount: 0))
+        let delta = timeoutAccessibilityTrace?.endpointDeltaProjection ?? .noChange(.init(elementCount: 0))
         var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
         builder.message = waitForChangeTimeoutMessage(
             elapsed: elapsed,
@@ -141,7 +141,7 @@ extension TheBrains {
             }
 
             let accessibilityTrace = makeClassifiedAccessibilityTrace(after: current, parent: baseline)
-            let delta = accessibilityTrace.captureEndpointDelta ?? .noChange(.init(elementCount: current.snapshot.count))
+            let delta = accessibilityTrace.endpointDeltaProjection ?? .noChange(.init(elementCount: current.snapshot.count))
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateWaitForChange(

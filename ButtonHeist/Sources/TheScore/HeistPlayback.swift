@@ -296,7 +296,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public let expectation: ExpectationResult?
     /// Compact accessibility delta projection derived from the recorded trace.
     public var accessibilityDelta: AccessibilityTrace.Delta? {
-        accessibilityTrace?.captureEndpointDelta
+        accessibilityTrace?.endpointDeltaProjection
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {

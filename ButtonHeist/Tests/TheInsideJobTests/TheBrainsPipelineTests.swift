@@ -166,7 +166,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(projected.settled, true)
         XCTAssertEqual(projected.settleTimeMs, 321)
         XCTAssertEqual(projected.accessibilityDelta, delta)
-        XCTAssertEqual(projected.accessibilityDelta, projected.accessibilityTrace?.captureEndpointDelta)
+        XCTAssertEqual(projected.accessibilityDelta, projected.accessibilityTrace?.endpointDeltaProjection)
         XCTAssertEqual(projected.accessibilityTrace, accessibilityTrace)
         XCTAssertEqual(receipt.attempt.deliveryPhase, .delivered)
         XCTAssertEqual(receipt.settle?.outcome, .settled(timeMs: 321))
@@ -256,7 +256,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
         XCTAssertEqual(payload.captureEdge?.after.hash, afterCapture.hash)
         XCTAssertEqual(payload.newInterface, afterInterface)
-        XCTAssertEqual(result.accessibilityDelta, result.accessibilityTrace?.captureEndpointDelta)
+        XCTAssertEqual(result.accessibilityDelta, result.accessibilityTrace?.endpointDeltaProjection)
         XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
         XCTAssertEqual(result.screenName, "After")
         XCTAssertEqual(result.screenId, "after")
@@ -297,7 +297,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
         XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
         XCTAssertEqual(payload.captureEdge?.after.hash, postCapture.hash)
-        XCTAssertEqual(result.accessibilityDelta, accessibilityTrace.captureEndpointDelta)
+        XCTAssertEqual(result.accessibilityDelta, accessibilityTrace.endpointDeltaProjection)
         XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
     }
 
@@ -314,8 +314,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
         XCTAssertNil(trace.captures.last?.transition.screenChangeReason)
-        guard case .elementsChanged(let payload)? = trace.captureEndpointDelta else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.captureEndpointDelta))")
+        guard case .elementsChanged(let payload)? = trace.endpointDeltaProjection else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
         }
         XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
         XCTAssertEqual(payload.captureEdge?.after.hash, trace.captures.last?.hash)
@@ -331,8 +331,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
         XCTAssertEqual(trace.captures.last?.transition.screenChangeReason, "primaryHeaderChanged")
-        guard case .screenChanged(let payload)? = trace.captureEndpointDelta else {
-            return XCTFail("Expected screenChanged delta, got \(String(describing: trace.captureEndpointDelta))")
+        guard case .screenChanged(let payload)? = trace.endpointDeltaProjection else {
+            return XCTFail("Expected screenChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
         }
         XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
         XCTAssertEqual(payload.captureEdge?.after.hash, trace.captures.last?.hash)
@@ -346,9 +346,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         let after = brains.captureSemanticState()
 
         let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
-        let endpointDelta = try XCTUnwrap(trace.captureEndpointDelta)
+        let endpointDelta = try XCTUnwrap(trace.endpointDeltaProjection)
 
-        XCTAssertEqual(trace.backgroundDelta, endpointDelta)
+        XCTAssertEqual(trace.backgroundDeltaProjection, endpointDelta)
         XCTAssertEqual(trace.captures.first?.hash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.parentHash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.hash, after.capture.hash)

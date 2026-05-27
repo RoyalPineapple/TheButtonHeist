@@ -3,7 +3,7 @@ import AccessibilitySnapshotModel
 
 // MARK: - Accessibility Trace Diff
 
-private struct AccessibilityHierarchyRecord {
+struct AccessibilityTraceHierarchyRecord {
     let ref: TreeNodeRef
     let location: TreeLocation
     let path: TreePath
@@ -32,70 +32,6 @@ private struct ElementStateSignature: Hashable {
 private struct ElementPairingSignature: Hashable {
     let identity: ElementIdentitySignature
     let state: ElementStateSignature
-}
-
-public extension AccessibilityTrace {
-    /// Raw compact projection between this trace's first and final capture.
-    ///
-    /// This is the canonical delta projection for an action receipt: the
-    /// captures remain the durable source, while the delta is just the compact
-    /// view callers use for expectations and formatting. Unlike background
-    /// projections, a no-change action is still meaningful and is returned.
-    var captureEndpointDelta: AccessibilityTrace.Delta? {
-        guard captures.count >= 2,
-              let first = captures.first,
-              let last = captures.last
-        else { return nil }
-        return .between(first, last)
-    }
-
-    /// Background/summary projection between this trace's endpoints.
-    ///
-    /// Silent no-change edges are omitted because they do not carry useful
-    /// background evidence. Transient-bearing no-change edges are preserved.
-    var meaningfulCaptureEndpointDelta: AccessibilityTrace.Delta? {
-        guard let delta = captureEndpointDelta else { return nil }
-        return Self.meaningfulCaptureEndpointDelta(delta)
-    }
-
-    /// Build one source trace from per-step action traces.
-    ///
-    /// Adjacent duplicate captures are collapsed so a batch `[A→B, B→C]`
-    /// becomes `[A, B, C]`. Parent links are normalized by
-    /// `AccessibilityTrace(captures:)`; capture hashes still describe the
-    /// captured interface/context content.
-    static func captureEndpointTrace(from traces: [AccessibilityTrace]) -> AccessibilityTrace? {
-        var captures: [AccessibilityTrace.Capture] = []
-        for trace in traces {
-            for capture in trace.captures {
-                guard captures.last?.hash != capture.hash else { continue }
-                captures.append(capture)
-            }
-        }
-        guard captures.count >= 2 else { return nil }
-        return AccessibilityTrace(captures: captures)
-    }
-
-    /// Raw compact projection across a set of per-step traces.
-    static func captureEndpointDelta(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
-        captureEndpointTrace(from: traces)?.captureEndpointDelta
-    }
-
-    /// Background/summary projection across a set of per-step traces.
-    static func meaningfulCaptureEndpointDelta(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
-        captureEndpointTrace(from: traces)?.meaningfulCaptureEndpointDelta
-    }
-
-    private static func meaningfulCaptureEndpointDelta(
-        _ delta: AccessibilityTrace.Delta
-    ) -> AccessibilityTrace.Delta? {
-        switch delta {
-        case .noChange(let payload) where payload.transient.isEmpty:
-            return nil
-        case .noChange, .elementsChanged, .screenChanged:
-            return delta
-        }
-    }
 }
 
 public extension AccessibilityTrace.Delta {
@@ -221,8 +157,8 @@ public extension ElementEdits {
     }
 
     static func betweenTrees(before: Interface, after: Interface) -> ElementEdits {
-        let oldRecords = indexTree(before)
-        let newRecords = indexTree(after)
+        let oldRecords = traceHierarchyRecords(in: before)
+        let newRecords = traceHierarchyRecords(in: after)
         let oldIds = Set(oldRecords.keys)
         let newIds = Set(newRecords.keys)
 
@@ -292,30 +228,6 @@ public extension ElementEdits {
     }
 }
 
-extension AccessibilityTrace.AccessibilityPatchOperation {
-    static func structuralOperations(
-        between before: Interface,
-        and after: Interface
-    ) -> [Self] {
-        let edits = ElementEdits.betweenTrees(before: before, after: after)
-        let afterRecords = indexTree(after)
-
-        let removals = edits.treeRemoved
-            .reversed()
-            .map(Self.removeSubtree)
-        let moves = edits.treeMoved.compactMap { move -> Self? in
-            guard let record = afterRecords[move.ref] else { return nil }
-            return .moveSubtree(
-                move,
-                node: record.node
-            )
-        }
-        let insertions = edits.treeInserted.map(Self.insertSubtree)
-
-        return removals + moves + insertions
-    }
-}
-
 private func suppressFunctionalMoveElementChurn(
     edits: ElementEdits,
     beforeElements: [HeistElement],
@@ -358,8 +270,8 @@ private func suppressFunctionalMoveElementChurn(
 // MARK: - Functional-Move Pairing
 
 private func inferFunctionalTreePairs(
-    oldRecords: [TreeNodeRef: AccessibilityHierarchyRecord],
-    newRecords: [TreeNodeRef: AccessibilityHierarchyRecord],
+    oldRecords: [TreeNodeRef: AccessibilityTraceHierarchyRecord],
+    newRecords: [TreeNodeRef: AccessibilityTraceHierarchyRecord],
     removedIds: Set<TreeNodeRef>,
     insertedIds: Set<TreeNodeRef>
 ) -> [(removedId: TreeNodeRef, insertedId: TreeNodeRef)] {
@@ -393,8 +305,8 @@ private func inferFunctionalHeistElementPairs(
 }
 
 private func inferFunctionalTreeRecordPairs(
-    removedById: [TreeNodeRef: AccessibilityHierarchyRecord],
-    addedById: [TreeNodeRef: AccessibilityHierarchyRecord]
+    removedById: [TreeNodeRef: AccessibilityTraceHierarchyRecord],
+    addedById: [TreeNodeRef: AccessibilityTraceHierarchyRecord]
 ) -> [(removedId: TreeNodeRef, insertedId: TreeNodeRef)] {
     let removed = removedById.compactMap { identifier, record -> (TreeNodeRef, ElementPairingSignature)? in
         pairingSignature(for: record).map { (identifier, $0) }
@@ -437,7 +349,7 @@ private func inferFunctionalPairs<Identifier: Hashable>(
 
 // MARK: - Signatures
 
-private func pairingSignature(for record: AccessibilityHierarchyRecord) -> ElementPairingSignature? {
+private func pairingSignature(for record: AccessibilityTraceHierarchyRecord) -> ElementPairingSignature? {
     record.element.map(pairingSignature(for:))
 }
 
@@ -482,10 +394,10 @@ private func normalizedTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
 
 // MARK: - Tree Indexing
 
-private func indexTree(_ interface: Interface) -> [TreeNodeRef: AccessibilityHierarchyRecord] {
+func traceHierarchyRecords(in interface: Interface) -> [TreeNodeRef: AccessibilityTraceHierarchyRecord] {
     let elementAnnotations = interface.annotations.elementByPath
     let containerAnnotations = interface.annotations.containerByPath
-    var result: [TreeNodeRef: AccessibilityHierarchyRecord] = [:]
+    var result: [TreeNodeRef: AccessibilityTraceHierarchyRecord] = [:]
     for (index, node) in interface.tree.enumerated() {
         collectTreeRecords(
             node,
@@ -509,7 +421,7 @@ private func collectTreeRecords(
     ancestors: [HeistContainer],
     elementAnnotations: [TreePath: InterfaceElementAnnotation],
     containerAnnotations: [TreePath: InterfaceContainerAnnotation],
-    into result: inout [TreeNodeRef: AccessibilityHierarchyRecord]
+    into result: inout [TreeNodeRef: AccessibilityTraceHierarchyRecord]
 ) {
     let projection = elementProjection(for: node, path: path, annotations: elementAnnotations)
     let ref = treeRef(for: node, path: path, element: projection, containerAnnotations: containerAnnotations)
@@ -517,7 +429,7 @@ private func collectTreeRecords(
     let childParentId: HeistContainer?
     let childAncestors: [HeistContainer]
     if let ref {
-        result[ref] = AccessibilityHierarchyRecord(
+        result[ref] = AccessibilityTraceHierarchyRecord(
             ref: ref,
             location: location,
             path: path,

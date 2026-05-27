@@ -352,7 +352,7 @@ final class ServerMessageTests: XCTestCase {
             accessibilityTrace: trace
         )
 
-        XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(result.accessibilityDelta, trace.endpointDeltaProjection)
         XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
     }
 
@@ -407,7 +407,7 @@ final class ServerMessageTests: XCTestCase {
 
         let result = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(result.accessibilityDelta, trace.endpointDeltaProjection)
         XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
     }
 
@@ -681,8 +681,8 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
         let receipt = try XCTUnwrap(decoded.accessibilityTrace?.receipts.first)
         XCTAssertEqual(receipt.kind, .capture)
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDelta?.kindRawValue, "screenChanged")
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDelta?.elementCount, 1)
+        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.kindRawValue, "screenChanged")
+        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.elementCount, 1)
 
         let reencoded = try JSONEncoder().encode(decoded)
         let reencodedJson = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])

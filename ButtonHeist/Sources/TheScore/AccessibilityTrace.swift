@@ -9,10 +9,6 @@ import Foundation
 public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public let captures: [Capture]
 
-    public var segments: [ScreenSegment] {
-        Self.projectSegments(from: captures)
-    }
-
     private enum CodingKeys: String, CodingKey {
         case captures
         case segments
@@ -67,41 +63,6 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
             previousCapture = linked
             return linked
         }
-    }
-
-    private static func projectSegments(from captures: [Capture]) -> [ScreenSegment] {
-        var segments: [ScreenSegment] = []
-        var currentSegment: ScreenSegment?
-        var previousCapture: Capture?
-
-        for capture in captures {
-            guard let before = previousCapture, var segment = currentSegment else {
-                currentSegment = ScreenSegment(baseline: capture)
-                previousCapture = capture
-                continue
-            }
-
-            switch AccessibilityTrace.Delta.between(before, capture).kind {
-            case .screenChanged:
-                segments.append(segment)
-                currentSegment = ScreenSegment(baseline: capture)
-            case .elementsChanged, .noChange:
-                guard let observed = ObservedTransition.between(before, capture) else {
-                    segments.append(segment)
-                    currentSegment = ScreenSegment(baseline: capture)
-                    previousCapture = capture
-                    continue
-                }
-                segment.append(observed)
-                currentSegment = segment
-            }
-            previousCapture = capture
-        }
-
-        if let currentSegment {
-            segments.append(currentSegment)
-        }
-        return segments
     }
 
     public func appending(

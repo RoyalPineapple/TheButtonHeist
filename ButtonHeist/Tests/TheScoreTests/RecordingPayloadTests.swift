@@ -308,7 +308,7 @@ final class RecordingPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.interactionLog?.count, 1)
         XCTAssertEqual(decoded.interactionLog?.first?.timestamp, 1.0)
         XCTAssertEqual(decoded.interactionLog?.first?.result.accessibilityTrace, trace)
-        XCTAssertEqual(decoded.interactionLog?.first?.result.accessibilityDelta, trace.captureEndpointDelta)
+        XCTAssertEqual(decoded.interactionLog?.first?.result.accessibilityDelta, trace.endpointDeltaProjection)
     }
 
     func testRecordingPayloadNilInteractionLog() throws {
