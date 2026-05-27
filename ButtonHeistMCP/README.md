@@ -37,6 +37,8 @@ the Fence command contract.
 
 ## See Also
 
-- [API Reference](../docs/API.md) for the complete tool schemas
+- [MCP Tool Reference](../docs/reference/mcp-tools.md) for the generated tool surface
+- [Command Reference](../docs/reference/commands.md) for canonical Fence commands
+- [API Reference](../docs/API.md) for public API context
 - [Project Overview](../README.md) for setup and architecture
 - [CLI Reference](../ButtonHeistCLI/) for direct terminal usage

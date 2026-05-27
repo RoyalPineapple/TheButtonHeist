@@ -17,7 +17,7 @@ struct ToolSyncTests {
 
     @Test("Every externally exposed command has an MCP tool")
     func allExposedCommandsHaveMCPTools() {
-        let mcpToolNames = Set(ToolDefinitions.all.map { $0.name })
+        let mcpToolNames = Set(ToolDefinitions.all.map(\.name))
 
         for command in TheFence.Command.allCases {
             switch command.mcpExposure {
@@ -78,13 +78,13 @@ struct ToolSyncTests {
         // Tools that are purely grouped (no matching direct command name)
         let purelyGroupedToolNames = Set(
             TheFence.Command.mcpToolContracts
-                .map { $0.name }
+                .map(\.name)
                 .filter { TheFence.Command(rawValue: $0) == nil }
         )
 
         let directToolNames = Set(
             ToolDefinitions.all
-                .map { $0.name }
+                .map(\.name)
                 .filter { !purelyGroupedToolNames.contains($0) }
         )
         let directCommands = Set(
@@ -114,7 +114,7 @@ struct ToolSyncTests {
                 }
             }
         )
-        let actualToolNames = Set(ToolDefinitions.all.map { $0.name })
+        let actualToolNames = Set(ToolDefinitions.all.map(\.name))
 
         #expect(
             actualToolNames == expectedToolNames,
@@ -560,7 +560,7 @@ struct ToolSyncTests {
         let toolsByName = Dictionary(uniqueKeysWithValues: ToolDefinitions.all.map { ($0.name, $0) })
         let contracts = TheFence.Command.mcpToolContracts
 
-        #expect(Set(toolsByName.keys) == Set(contracts.map { $0.name }))
+        #expect(Set(toolsByName.keys) == Set(contracts.map(\.name)))
 
         for contract in contracts {
             guard let tool = toolsByName[contract.name] else {
@@ -612,10 +612,6 @@ struct ToolSyncTests {
     @Test("MCP server entry point does not hard-code catalog literals")
     func mcpServerEntryPointDoesNotHardCodeCatalogLiterals() throws {
         let source = try readRepositoryFile("ButtonHeistMCP/Sources/main.swift")
-        let sourceWithoutInstructionProjection = source.replacingOccurrences(
-            of: "TheFence.Command.mcpServerInstructions",
-            with: ""
-        )
         let sourceForLiteralScan = Self.removingLineComments(from: source)
         let literalCounts = Self.stringLiteralCounts(in: sourceForLiteralScan)
         let literalMirrors = Set(literalCounts.keys).intersection(Self.fenceCatalogLiterals)
@@ -632,20 +628,12 @@ struct ToolSyncTests {
             "main.swift should not route through an untyped Any conversion helper"
         )
         #expect(
-            source.contains("TheFence.Command.mcpServerInstructions"),
-            "main.swift should project server instructions from the Fence-owned command presentation"
+            source.contains("parameter(named:"),
+            "main.swift should use the descriptor parameter lookup API for instruction keys"
         )
         #expect(
-            source.contains("FenceOperationCatalog.normalizeToolCall"),
-            "main.swift should route MCP calls through the shared Fence operation catalog"
-        )
-        #expect(
-            !source.contains("routeToolRequest"),
-            "main.swift should not keep an MCP-owned routing mirror around the Fence operation catalog"
-        )
-        #expect(
-            !sourceWithoutInstructionProjection.contains("TheFence.Command."),
-            "main.swift should not reference command cases outside the Fence-owned instruction projection"
+            !source.contains("parameters.first"),
+            "main.swift should not open-code descriptor parameter scans"
         )
     }
 
@@ -805,6 +793,33 @@ struct ToolSyncTests {
         )
     }
 
+    @Test("Generated MCP reference matches executable tool contracts")
+    func generatedMCPReferenceMatchesExecutableToolContracts() throws {
+        let reference = try readRepositoryFile("docs/reference/mcp-tools.md")
+
+        #expect(
+            reference == FenceCommandReference.mcpMarkdown(),
+            "docs/reference/mcp-tools.md should be generated from MCPToolContract"
+        )
+        for contract in TheFence.Command.mcpToolContracts {
+            #expect(reference.contains("`\(contract.name)`"))
+            for command in contract.commands {
+                #expect(
+                    reference.contains("`\(command.rawValue)`"),
+                    "Generated MCP reference should include \(contract.name) command \(command.rawValue)"
+                )
+            }
+        }
+    }
+
+    @Test("MCP README points to generated references")
+    func mcpReadmePointsToGeneratedReferences() throws {
+        let contents = try readRepositoryFile("ButtonHeistMCP/README.md")
+
+        #expect(contents.contains("../docs/reference/mcp-tools.md"))
+        #expect(contents.contains("../docs/reference/commands.md"))
+    }
+
     @Test("Public docs do not hard-code command catalog counts")
     func publicDocsDoNotHardCodeCommandCatalogCounts() throws {
         let paths = [
@@ -836,7 +851,7 @@ struct ToolSyncTests {
 
     private static var fenceCatalogLiterals: Set<String> {
         var literals = Set(TheFence.Command.allCases.map(\.rawValue))
-        literals.formUnion(TheFence.Command.mcpToolContracts.map { $0.name })
+        literals.formUnion(TheFence.Command.mcpToolContracts.map(\.name))
 
         for command in TheFence.Command.allCases {
             collectParameterKeys(from: command.parameters, into: &literals)
