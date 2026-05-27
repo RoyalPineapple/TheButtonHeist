@@ -6,16 +6,12 @@ import Foundation
 extension TheInsideJob {
     enum ServerPhase {
         case stopped
-        case running(transport: ServerTransport)
+        case running(lease: InsideJobRuntimeLease)
         case suspended
         case resuming(id: UUID, task: Task<Void, Never>)
     }
 
-    enum PollingPhase {
-        case disabled
-        case active(task: Task<Void, Never>, interval: TimeInterval)
-        case paused(interval: TimeInterval)
-    }
+    typealias PollingPhase = InsideJobPollingRuntime.Phase
 
     /// Idle-timer baseline state. We force `UIApplication.isIdleTimerDisabled`
     /// on while the server is running so the device doesn't sleep mid-session,

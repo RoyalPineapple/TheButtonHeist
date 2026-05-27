@@ -35,6 +35,15 @@ final class TheInsideJobStateTests: XCTestCase {
         return condition()
     }
 
+    private func runtimeLease(transport: ServerTransport = ServerTransport()) -> InsideJobRuntimeLease {
+        InsideJobRuntimeLease(
+            transport: transport,
+            actualPort: 0,
+            tlsFingerprint: "test-fingerprint",
+            bonjourServiceName: nil
+        )
+    }
+
     // MARK: - ServerPhase: Initial
 
     func testInitialServerPhaseIsStopped() {
@@ -59,7 +68,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testStopFromRunningTransitionsToStopped() async {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverPhase = .running(transport: transport)
+        job.serverPhase = .running(lease: runtimeLease(transport: transport))
 
         await job.stop()
 
@@ -103,7 +112,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testSuspendFromRunningTransitionsToSuspended() async {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverPhase = .running(transport: transport)
+        job.serverPhase = .running(lease: runtimeLease(transport: transport))
 
         await job.suspend()
 
@@ -157,9 +166,9 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testRunningStateCarriesTransport() {
         let transport = ServerTransport()
-        let state = TheInsideJob.ServerPhase.running(transport: transport)
-        if case .running(let carried) = state {
-            XCTAssertTrue(carried === transport)
+        let state = TheInsideJob.ServerPhase.running(lease: runtimeLease(transport: transport))
+        if case .running(let lease) = state {
+            XCTAssertTrue(lease.transport === transport)
         } else {
             XCTFail("Pattern match failed")
         }
@@ -258,7 +267,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testSuspendPausesActivePollingPreservingInterval() async {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverPhase = .running(transport: transport)
+        job.serverPhase = .running(lease: runtimeLease(transport: transport))
         job.startPolling(interval: 5.0)
 
         await job.suspend()
@@ -333,7 +342,7 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testTransportEventBacklogOverflowStopsServer() async {
         let job = TheInsideJob()
-        job.serverPhase = .running(transport: ServerTransport())
+        job.serverPhase = .running(lease: runtimeLease())
 
         await job.handleTransportEventBacklogOverflow(maxEvents: ServerTransport.eventStreamBufferLimit)
 
@@ -560,7 +569,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testResumeDrainsPendingSuspendBeforeGuard() async {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        job.serverPhase = .running(transport: transport)
+        job.serverPhase = .running(lease: runtimeLease(transport: transport))
 
         // Simulate what `appDidEnterBackground` does: enroll a suspend
         // wrapper into pendingLifecycleTasks without awaiting it. The Task

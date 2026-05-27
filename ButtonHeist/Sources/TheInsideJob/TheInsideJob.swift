@@ -96,7 +96,7 @@ public final class TheInsideJob {
     // MARK: - Properties
 
     var serverPhase: ServerPhase = .stopped
-    var pollingPhase: PollingPhase = .disabled
+    let pollingRuntime = InsideJobPollingRuntime()
 
     let muscle: TheMuscle
     let tripwire = TheTripwire()
@@ -125,22 +125,21 @@ public final class TheInsideJob {
     }
 
     var transport: ServerTransport? {
-        if case .running(let transport) = serverPhase { return transport }
+        if case .running(let lease) = serverPhase { return lease.transport }
         return nil
     }
 
     var isPollingEnabled: Bool {
-        switch pollingPhase {
-        case .active, .paused: return true
-        case .disabled: return false
-        }
+        pollingRuntime.isEnabled
     }
 
     var pollingTimeoutSeconds: TimeInterval {
-        switch pollingPhase {
-        case .active(_, let interval), .paused(let interval): return interval
-        case .disabled: return Self.defaultPollingTimeout
-        }
+        pollingRuntime.timeoutSeconds(default: Self.defaultPollingTimeout)
+    }
+
+    var pollingPhase: PollingPhase {
+        get { pollingRuntime.phase }
+        set { pollingRuntime.phase = newValue }
     }
 
     /// Recording phase lives on TheGetaway — convenience accessors for tests.
@@ -246,9 +245,8 @@ public final class TheInsideJob {
 
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
-        let startedTransport = try await startTransportForStartup()
-        activateStartedTransport(startedTransport.transport)
-        beginRuntime()
+        let lease = try await startRuntimeLeaseForStartup()
+        activateRuntimeLease(lease, resumePolling: false)
 
         insideJobLogger.info("Server started successfully")
     }
@@ -276,20 +274,12 @@ public final class TheInsideJob {
     }
 
     public func startPolling(interval timeout: TimeInterval = 2.0) {
-        if case .active(let existingTask, _) = pollingPhase {
-            existingTask.cancel()
-        }
-        let interval = max(0.5, timeout)
-        let task = makePollingTask(interval: interval)
-        pollingPhase = .active(task: task, interval: interval)
-        insideJobLogger.info("Polling enabled (settle timeout: \(interval)s)")
+        pollingRuntime.start(interval: timeout, makeTask: makePollingTask(interval:))
+        insideJobLogger.info("Polling enabled (settle timeout: \(self.pollingTimeoutSeconds)s)")
     }
 
     public func stopPolling() {
-        if case .active(let task, _) = pollingPhase {
-            task.cancel()
-        }
-        pollingPhase = .disabled
+        pollingRuntime.stop()
     }
 }
 
