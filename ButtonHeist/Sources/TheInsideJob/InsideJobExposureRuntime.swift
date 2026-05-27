@@ -5,7 +5,7 @@ import UIKit
 @MainActor
 extension TheInsideJob {
     @discardableResult
-    func advertiseService(port: UInt16) -> String? {
+    func advertiseService(on transport: ServerTransport, port: UInt16) -> String? {
         let exposure = ServerExposure(allowedScopes: runtimeConfiguration.allowedScopes)
         guard exposure.publishesBonjour else {
             insideJobLogger.info("Bonjour advertisement disabled: \(exposure.bonjourDisabledReason ?? "unknown", privacy: .public)")
@@ -15,7 +15,7 @@ extension TheInsideJob {
         let appName = Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "App"
         let serviceName = "\(appName)#\(effectiveInstanceId)"
 
-        transport?.advertise(
+        transport.advertise(
             serviceName: serviceName,
             simulatorUDID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"],
             installationId: runtimeConfiguration.sessionIdentity.installationId,

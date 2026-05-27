@@ -4,22 +4,9 @@ import UIKit
 
 @MainActor
 extension TheInsideJob {
-    func beginRuntime() {
-        engageIdleTimerProtection()
-
-        startAccessibilityObservation()
-        startLifecycleObservation()
-
-        tripwire.onTransition = { [weak self] transition in
-            self?.handlePulseTransition(transition)
-        }
-        tripwire.startPulse()
-        brains.startKeyboardObservation()
-    }
-
     // MARK: - Pulse Handling
 
-    private func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
+    func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
         switch transition {
         case .tripwireTriggered:
             getaway.noteBackgroundChange()
@@ -195,18 +182,15 @@ extension TheInsideJob {
     @discardableResult
     private func beginSuspension() -> Bool {
         switch serverPhase {
-        case .running(let activeTransport):
-            pendingTransportStopTask = activeTransport.stop()
+        case .running(let lease):
+            pendingTransportStopTask = lease.transport.stop()
         case .resuming(_, let task):
             task.cancel()
         case .stopped, .suspended:
             return false
         }
 
-        if case .active(let pollingTask, let interval) = pollingPhase {
-            pollingTask.cancel()
-            pollingPhase = .paused(interval: interval)
-        }
+        pollingRuntime.pauseIfActive()
 
         tripwire.stopPulse()
         brains.stopKeyboardObservation()
@@ -247,8 +231,8 @@ extension TheInsideJob {
                     self.pendingTransportStopTask = nil
                 }
 
-                let started = try await self.startTransportForResume()
-                startedTransport = started.transport
+                let lease = try await self.startRuntimeLeaseForResume()
+                startedTransport = lease.transport
 
                 try Task.checkCancellation()
 
@@ -259,24 +243,10 @@ extension TheInsideJob {
                     return
                 }
 
-                self.activateStartedTransport(started.transport)
+                self.activateRuntimeLease(lease, resumePolling: true)
                 startedTransport = nil
 
-                insideJobLogger.info("Server resumed on port \(started.actualPort)")
-
-                self.startAccessibilityObservation()
-                self.engageIdleTimerProtection()
-
-                self.tripwire.onTransition = { [weak self] transition in
-                    self?.handlePulseTransition(transition)
-                }
-                self.tripwire.startPulse()
-                self.brains.startKeyboardObservation()
-
-                if case .paused(let interval) = self.pollingPhase {
-                    let pollingTask = self.makePollingTask(interval: interval)
-                    self.pollingPhase = .active(task: pollingTask, interval: interval)
-                }
+                insideJobLogger.info("Server resumed on port \(lease.actualPort)")
 
                 insideJobLogger.info("Server resume complete")
             } catch is CancellationError {

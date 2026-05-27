@@ -4,34 +4,39 @@ import Foundation
 
 import TheScore
 
-struct StartedInsideJobTransport {
-    let transport: ServerTransport
-    let actualPort: UInt16
-    let tlsFingerprint: String
-}
-
 @MainActor
 extension TheInsideJob {
-    func startTransportForStartup() async throws -> StartedInsideJobTransport {
-        let startedTransport = try await startTransport(phase: "startup", leavesStoppedOnFailure: true)
-        let serviceName = advertiseService(port: startedTransport.actualPort)
+    func startRuntimeLeaseForStartup() async throws -> InsideJobRuntimeLease {
+        let lease = try await startRuntimeLease(phase: "startup", leavesStoppedOnFailure: true)
         logStartupSummary(
-            actualPort: startedTransport.actualPort,
-            tlsFingerprint: startedTransport.tlsFingerprint,
-            bonjourServiceName: serviceName
+            actualPort: lease.actualPort,
+            tlsFingerprint: lease.tlsFingerprint,
+            bonjourServiceName: lease.bonjourServiceName
         )
-        return startedTransport
+        return lease
     }
 
-    func startTransportForResume() async throws -> StartedInsideJobTransport {
-        let startedTransport = try await startTransport(phase: "resume", leavesStoppedOnFailure: false)
-        advertiseService(port: startedTransport.actualPort)
-        return startedTransport
+    func startRuntimeLeaseForResume() async throws -> InsideJobRuntimeLease {
+        try await startRuntimeLease(phase: "resume", leavesStoppedOnFailure: false)
     }
 
-    func activateStartedTransport(_ transport: ServerTransport) {
+    func activateRuntimeLease(_ lease: InsideJobRuntimeLease, resumePolling: Bool) {
         getaway.identity.tlsActive = true
-        serverPhase = .running(transport: transport)
+        serverPhase = .running(lease: lease)
+        engageIdleTimerProtection()
+
+        startAccessibilityObservation()
+        startLifecycleObservation()
+
+        tripwire.onTransition = { [weak self] transition in
+            self?.handlePulseTransition(transition)
+        }
+        tripwire.startPulse()
+        brains.startKeyboardObservation()
+
+        if resumePolling {
+            pollingRuntime.resumeIfPaused(makeTask: makePollingTask(interval:))
+        }
     }
 
     func stopRuntime() async {
@@ -44,8 +49,8 @@ extension TheInsideJob {
         bridge?.cancel()
         await bridge?.value
 
-        if case .running(let activeTransport) = serverPhase {
-            pendingTransportStopTask = activeTransport.stop()
+        if case .running(let lease) = serverPhase {
+            pendingTransportStopTask = lease.transport.stop()
         }
 
         serverPhase = .stopped
@@ -56,7 +61,7 @@ extension TheInsideJob {
         brains.stopKeyboardObservation()
     }
 
-    private func startTransport(phase: String, leavesStoppedOnFailure: Bool) async throws -> StartedInsideJobTransport {
+    private func startRuntimeLease(phase: String, leavesStoppedOnFailure: Bool) async throws -> InsideJobRuntimeLease {
         let identity = try makeTLSIdentity(phase: phase)
         insideJobLogger.info("TLS identity ready: \(identity.fingerprint)")
 
@@ -70,10 +75,12 @@ extension TheInsideJob {
                 port: runtimeConfiguration.preferredPort,
                 bindToLoopback: exposure.bindsToLoopbackOnly
             )
-            return StartedInsideJobTransport(
+            let serviceName = advertiseService(on: transport, port: actualPort)
+            return InsideJobRuntimeLease(
                 transport: transport,
                 actualPort: actualPort,
-                tlsFingerprint: identity.fingerprint
+                tlsFingerprint: identity.fingerprint,
+                bonjourServiceName: serviceName
             )
         } catch {
             await cleanupFailedTransportStartup(transport)
