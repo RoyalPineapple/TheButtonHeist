@@ -564,11 +564,10 @@ through `ToolDefinitions.swift`; this section documents the contract rather
 than duplicating every parameter. The checked-in generated tool reference lives
 at [MCP Tool Reference](reference/mcp-tools.md).
 
-- Direct tools use canonical Fence command names such as `activate`, `type_text`, `wait_for`, `get_screen`, `set_pasteboard`, `run_batch`, and session-management commands.
-- `gesture` is a top-level MCP grouping for low-level gesture commands selected by `type`.
-- `scroll` is a top-level MCP grouping for page scrolling, scroll-to-visible, search scrolling, and edge scrolling selected by `mode`.
-- `edit_action` accepts responder-chain edit actions, with the top-level MCP `dismiss` selector routing to canonical Fence command `dismiss_keyboard`.
-- `run_batch` is the exception to MCP grouping: each step must use a batch-executable canonical Fence command request, not a nested MCP grouped-tool shape.
+The command reference at [Command Reference](reference/commands.md) is the
+source for canonical command names, CLI exposure, MCP grouping, batch
+eligibility, playback eligibility, and parameter shape. Hand-written docs stay
+at the workflow and invariant layer.
 
 `get_session_state` reports the current connection phase and the last known failure/disconnect reason without doing observation work. It does not send `requestInterface` or `explore`.
 
@@ -584,58 +583,6 @@ All tools use strict schemas (`additionalProperties: false`) for the call shape 
 `wait_for_change` is server-owned: with an expectation, TheInsideJob checks the current settled state first, then holds the request open until a later settled scan satisfies the same predicate or the timeout clears it.
 
 For `wait_for_change`, `element_disappeared` is satisfied by current absence. It does not require proving a prior arrival and removal event.
-
-#### activate
-
-The primary way to interact with buttons, links, and controls. Uses the activation-first pattern: resolves the semantic target, refreshes live target geometry, tries `accessibilityActivate()` (like VoiceOver double-tap), then falls back to a synthetic tap at the fresh live activation point. If live geometry cannot be acquired, the command fails with structured diagnostics instead of using cached coordinates. Provide a `heistId` from the current hierarchy or flat matcher fields such as `identifier`, `label`, `traits`, and optional `ordinal`.
-
-Pass `action` to perform a named action instead of default activation:
-- `"increment"` / `"decrement"` — For sliders, steppers
-- Any custom action name from the element's `actions` array
-- Prefix with `"action:"` to force custom action dispatch (e.g., `"action:increment"` dispatches as a custom action named "increment")
-
-For `"increment"` and `"decrement"` only, pass `count` to repeat the same adjustment 1...100 times in one Fence/MCP call. Omitting `count` behaves as `1`; the Fence sends the existing increment/decrement wire command once per repetition.
-
-#### gesture
-
-Touch gesture tool. For element interactions, prefer `activate` instead. The `type` field selects the gesture:
-
-- `swipe` — Swipe on element or between coordinates. `direction` for cardinal swipes, or `start`/`end` unit points (0-1 relative to element frame) for precise control. Also accepts `startX`/`startY`/`endX`/`endY` for absolute screen coordinates. Optional `duration`.
-- `one_finger_tap` — Synthetic tap at x/y coordinates
-- `drag` — Requires `endX`, `endY`
-- `long_press` — Optional `duration` (seconds, default 0.5)
-- `pinch` — Requires `scale` (>1 zoom in, <1 zoom out)
-- `rotate` — Requires `angle` (radians)
-- `two_finger_tap` — Two-finger tap
-- `draw_path` — Requires `points` array of `{x, y}` objects
-- `draw_bezier` — Requires `segments` array of bezier segment objects
-
-#### edit_action
-
-Perform an edit or keyboard action on the current first responder. Requires `action`: `copy`, `paste`, `cut`, `select`, `selectAll`, or `dismiss` (dismisses the software keyboard by resigning first responder).
-
-#### run_batch
-
-Execute an ordered sequence of batch-executable canonical command requests in a single MCP call. Steps run sequentially — the response from one step is not piped into the next.
-
-Batch steps use the batch-executable `TheFence.Command` shape. Do not use grouped MCP wrapper names inside `steps`: use `swipe` instead of `gesture` with `type`, `element_search` instead of `scroll` with `mode: "search"`, and `dismiss_keyboard` instead of `edit_action` with `action: "dismiss"`. Session-only commands (`help`, `status`, `quit`, `exit`) and nested `run_batch` are rejected inside batches.
-
-**Parameters:**
-
-- `steps` (required) — Array of canonical command request objects (e.g., `[{"command": "activate", "identifier": "loginButton", "expect": {"type": "screen_changed"}}, {"command": "swipe", "direction": "left"}]`)
-- `policy` — `"stop_on_error"` (default) or `"continue_on_error"`
-
-With the default `stop_on_error` policy, the batch halts at the first mismet expectation or delivery failure. `failedIndex` points at the step that broke — not a downstream step that failed because the expected state change never happened.
-
-**Response fields:**
-
-- `results` — Array of per-step responses (only includes steps that ran)
-- `completedSteps` — Number of steps executed
-- `failedIndex` — Index of the first failed step (`null` if all passed)
-- `totalTimingMs` — Wall-clock duration of the entire batch
-- `expectations.checked` — Count of steps with explicit `expect` fields
-- `expectations.met` — Count of those that were satisfied
-- `expectations.allMet` — Boolean summary
 
 ### Environment Variables
 

@@ -1,10 +1,14 @@
 import Foundation
 
-/// Semantic element target used by actionability execution plans.
+/// Durable semantic element target used by actionability execution plans.
 ///
 /// `sourceHeistId` is diagnostic source metadata from the capture that produced
 /// the matcher. It is never the executable identity. Execution resolves
 /// `matcher` and `ordinal` against fresh live geometry.
+///
+/// Current-capture heistIds must be converted to this form only at durable
+/// boundaries such as heist recording, playback construction, or explicit
+/// SemanticActionTarget creation.
 public struct SemanticActionTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case sourceHeistId, matcher, ordinal

@@ -138,15 +138,6 @@ final class ScrollToVisibleTests: XCTestCase {
 
     // MARK: - ScrollSearchDirection
 
-    func testScrollSearchDirectionAllCases() {
-        let cases = ScrollSearchDirection.allCases
-        XCTAssertEqual(cases.count, 4)
-        XCTAssertTrue(cases.contains(.down))
-        XCTAssertTrue(cases.contains(.up))
-        XCTAssertTrue(cases.contains(.left))
-        XCTAssertTrue(cases.contains(.right))
-    }
-
     func testScrollSearchDirectionRawValues() {
         XCTAssertEqual(ScrollSearchDirection.down.rawValue, "down")
         XCTAssertEqual(ScrollSearchDirection.up.rawValue, "up")

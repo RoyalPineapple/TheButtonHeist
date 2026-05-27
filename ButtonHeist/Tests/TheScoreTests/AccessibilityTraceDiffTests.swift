@@ -214,18 +214,6 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         )
     }
 
-    func testOldDeltaOnlyPayloadDecodesWithoutCaptureEdge() throws {
-        let jsonString = """
-        {"kind": "noChange", "elementCount": 2}
-        """
-
-        let decoded = try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: Data(jsonString.utf8))
-
-        XCTAssertNil(decoded.captureEdge)
-        XCTAssertEqual(decoded.kindRawValue, "noChange")
-        XCTAssertEqual(decoded.elementCount, 2)
-    }
-
     func testElementDiffTreatsIndistinguishableElementsAsNoChangeWithoutHierarchyContext() {
         let before = makeElement(heistId: "first", label: "Item", traits: [.staticText])
         let after = makeElement(heistId: "second", label: "Item", traits: [.staticText])

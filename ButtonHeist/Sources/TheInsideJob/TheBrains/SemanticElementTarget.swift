@@ -5,8 +5,9 @@ import TheScore
 /// Semantic identity for element-targeted execution.
 ///
 /// Commands may use a current heistId as executable identity or matcher fields
-/// for semantic lookup. Batch steps carry these same command targets; viewport
-/// recovery and semantic reveal stay inside the normal action pipeline.
+/// for semantic lookup. SemanticActionTarget carries durable matcher identity
+/// plus optional source heistId diagnostics; viewport recovery and semantic
+/// reveal stay inside the normal action pipeline.
 protocol SemanticElementTarget: Sendable {
     var exactHeistId: HeistId? { get }
     var sourceHeistId: HeistId? { get }
@@ -22,7 +23,7 @@ extension ElementTarget: SemanticElementTarget {
         return nil
     }
 
-    var sourceHeistId: HeistId? { exactHeistId }
+    var sourceHeistId: HeistId? { nil }
 
     var semanticMatcher: ElementMatcher? {
         if case .matcher(let matcher, _) = self {
@@ -69,10 +70,8 @@ extension TheStash {
         }
         let executableTarget = semanticElementTarget(for: target)
         return NormalizedTarget(
-            originalTarget: executableTarget,
             executableTarget: executableTarget,
-            sourceHeistId: target.sourceHeistId,
-            sourceScreen: sourceScreen ?? currentScreen
+            sourceHeistId: target.sourceHeistId
         )
     }
 

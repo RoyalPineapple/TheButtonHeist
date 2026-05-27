@@ -59,60 +59,35 @@ graph TD
 
 ButtonHeistMCP projects tools from `ToolDefinitions.swift`, which is rendered
 from Fence-owned command contracts and `FenceParameterSpec`. Human docs describe
-families and routing rules; they do not carry a second exhaustive tool list.
+adapter invariants; generated references own tool names, selectors, parameters,
+and grouped-command membership:
 
-### Grouped and Hybrid Tools
+- [Command Reference](../reference/commands.md)
+- [MCP Tool Reference](../reference/mcp-tools.md)
 
-`gesture` groups the gesture command family under a `type` discriminator:
-`swipe`, `one_finger_tap`, `drag`, `long_press`, `pinch`, `rotate`, `two_finger_tap`, `draw_path`, `draw_bezier`
+`run_batch` intentionally stays canonical: steps are normal batch-executable
+`TheFence.Command` request objects, not nested MCP grouped-tool calls.
 
-`scroll` uses a `mode` discriminator: `page` (default — scrolls one page), `to_visible` (jump to known element), `search` (scroll all containers looking for match), `to_edge` (scroll to edge).
+### Expectation Shape
 
-`edit_action` routes `"dismiss"` to the `dismiss_keyboard` TheFence command; all other actions go to the `edit_action` command.
-
-`run_batch` intentionally does not accept these grouped MCP wrapper shapes inside `steps`. Batch steps use batch-executable canonical `TheFence.Command` request objects, so agents send commands such as `swipe`, `element_search`, and `dismiss_keyboard` directly.
-
-### `get_interface`
-- `subtree`: optional selector with exactly one of `element` or `container`. `element.heistId` or element matcher fields select a leaf; `container.stableId`, `container.type`, semantic metadata, or `container.isModalBoundary` select a container. Ambiguous matches require `ordinal`.
-- `detail`: `"summary"` (default — identity fields, traits, and actions only) or `"full"` (adds VoiceOver hint, customContent, frame, and activation point)
-- `elements`: optional `[String]` — leaf heistIds to return as subtrees; omit for the app accessibility hierarchy
-- `readOnlyHint: true`, `idempotentHint: true`
-
-### Shared `expect` Property
-
-Used on all action tools. MCP and TheFence accept the object form only so every caller uses one schema shape.
-- Object with a `type` discriminator that matches `ActionExpectation`'s Codable shape:
-  - `{"type": "screen_changed"}` / `{"type": "elements_changed"}`
-  - `{"type": "element_updated", "heistId": "...", "property": "...", "oldValue": "...", "newValue": "..."}` — all non-`type` fields are optional wildcards; `property` is one of `label`, `value`, `traits`, `hint`, `actions`, `frame`, `activationPoint`, `customContent`
-  - `{"type": "element_appeared", "matcher": { ElementMatcher }}` / `{"type": "element_disappeared", "matcher": { ElementMatcher }}`
-  - `{"type": "compound", "expectations": [ ... ]}`
+Action tools share the same descriptor-owned `expect` object. MCP and TheFence
+accept the object form only so every caller uses one schema shape. The concrete
+property names and enum values are generated from `FenceParameterSpec`.
 
 ## Routing Rules
 
 ```mermaid
 flowchart TD
     Call["MCP CallTool"] --> Decode["decodeArguments → [String: Any]"]
-    Decode --> Switch{"tool name?"}
-
-    Switch -->|"direct tools"| Direct["request['command'] = toolName"]
-    Switch -->|"gesture"| Grouped["request['command'] = request.removeValue('type')"]
-    Switch -->|"scroll"| ScrollRoute["extract mode → map to TheFence command"]
-    Switch -->|"edit_action"| EditRoute["'dismiss' → dismiss_keyboard, else → edit_action"]
-
-    Direct --> Execute["fence.execute(request:)"]
-    Grouped --> Execute
-    ScrollRoute --> Execute
-    EditRoute --> Execute
+    Decode --> Normalize["FenceOperationCatalog.normalizeToolCall"]
+    Normalize --> Execute["fence.execute(request:)"]
     Execute --> Reset["idleMonitor.resetTimer()"]
     Reset --> Render["renderResponse → CallTool.Result"]
 ```
 
-1. Direct tools map 1:1 to `request["command"] = toolName`
-2. `gesture` extracts `type` and uses that as the underlying Fence command
-3. `scroll` extracts `mode` and maps to the corresponding Fence command (page → scroll, to_visible → scroll_to_visible, search → element_search, to_edge → scroll_to_edge)
-4. `edit_action` intercepts `"dismiss"` and routes to `dismiss_keyboard`; other actions pass through
-5. `run_batch` normalizes only batch-executable canonical `TheFence.Command` step objects; it does not recurse through the grouped MCP routing rules above, accept session-only commands (`help`, `status`, `quit`, `exit`), or allow nested `run_batch`
-6. All requests end at `fence.execute(request:)`
+1. MCP decodes adapter-shaped input at the boundary.
+2. `FenceOperationCatalog.normalizeToolCall` resolves direct/grouped tools from `MCPToolContract`.
+3. The normalized request ends at `fence.execute(request:)`.
 
 ## Response Behavior
 

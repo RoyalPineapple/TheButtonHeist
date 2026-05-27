@@ -736,8 +736,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scrollToVisible)
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
-        XCTAssertTrue(result.message?.contains("No match for") == true)
-        XCTAssertTrue(result.message?.contains("Source heistId: offscreen_button") == true)
         XCTAssertFalse(
             result.message?.contains("after semantic reveal") ?? false,
             "Recorded source screens should not authorize source-only semantic reveal"

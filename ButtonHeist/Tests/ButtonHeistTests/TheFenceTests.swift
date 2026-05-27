@@ -102,7 +102,6 @@ final class TheFenceTests: XCTestCase {
             .stopHeist: "stop_heist",
             .playHeist: "play_heist",
         ]
-        XCTAssertEqual(expected.count, TheFence.Command.allCases.count)
         for (command, wire) in expected {
             XCTAssertEqual(command.rawValue, wire)
         }

@@ -27,15 +27,15 @@ extension TheFence {
         )
     }
 
-    func batchActionPlan(context: BatchStepPlanningContext) throws -> BatchStepActionPlan {
-        let messages = try clientMessages(for: context.request, mode: .batchStep)
+    func batchClientMessage(for request: ParsedRequest) throws -> ClientMessage {
+        let messages = try clientMessages(for: request, mode: .batchStep)
         guard let message = messages.first, messages.count == 1 else {
-            let commandName = context.request.command.rawValue
+            let commandName = request.command.rawValue
             throw BatchStepPlanBuildError(
                 message: "run_batch step command \"\(commandName)\" expands to \(messages.count) actions; express repeats as separate ordered steps"
             )
         }
-        return BatchStepActionPlan(command: message)
+        return message
     }
 
     private enum LoweringMode {

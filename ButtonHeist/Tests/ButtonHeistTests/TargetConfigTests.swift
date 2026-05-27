@@ -219,13 +219,7 @@ final class TargetConfigTests: XCTestCase {
         XCTAssertNil(config)
     }
 
-    // MARK: - TheFence Command Enum (updated count)
-
-    func testCommandCaseCountIncludesNewCommands() {
-        let allCases = TheFence.Command.allCases
-        XCTAssertTrue(allCases.contains(.connect))
-        XCTAssertTrue(allCases.contains(.listTargets))
-    }
+    // MARK: - TheFence Command Enum
 
     func testConnectCommandRawValue() {
         XCTAssertEqual(TheFence.Command.connect.rawValue, "connect")

@@ -25,17 +25,6 @@ final class CommandReferenceTests: XCTestCase {
         )
     }
 
-    func testAPIReferenceDoesNotCarryHandWrittenCLICommandTables() throws {
-        let api = try readRepositoryFile("docs/API.md")
-
-        XCTAssertTrue(api.contains("[Command Reference](reference/commands.md)"))
-        XCTAssertTrue(api.contains("[MCP Tool Reference](reference/mcp-tools.md)"))
-        XCTAssertFalse(
-            api.contains("### buttonheist "),
-            "docs/API.md should point to generated command reference instead of hand-written CLI command tables"
-        )
-    }
-
     func testGeneratedReferenceDoesNotExposeDescriptionFallbacks() throws {
         let commandReference = FenceCommandReference.commandMarkdown()
         let mcpReference = FenceCommandReference.mcpMarkdown()

@@ -540,7 +540,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testElementActionNormalizesSourceHeistIdBeforeLiveResolution() async {
+    func testElementActionUsesSemanticActionTargetBeforeLiveResolution() async throws {
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
@@ -562,9 +562,10 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
         )
+        let target = try semanticActionTarget(heistId: "quantity_0", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(
-            .heistId("quantity_0"),
+            target,
             recordedScreen: sourceScreen
         )
 
@@ -573,7 +574,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testElementActionNormalizedHeistIdDoesNotExecuteFromSourceOnlyMatch() async {
+    func testElementActionCurrentHeistIdDoesNotReplayFromRecordedScreen() async {
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
@@ -600,13 +601,12 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .elementNotFound)
         XCTAssertEqual(currentObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
-            "No match for",
-            "quantity_stepper",
-            "Source heistId: quantity_0",
+            "Element not found",
+            "quantity_0",
         ])
     }
 
-    func testElementActionNormalizedHeistIdUsesAccessibilityGeometryWhenObjectFrameIsMissing() async {
+    func testElementActionSemanticTargetUsesAccessibilityGeometryWhenObjectFrameIsMissing() async throws {
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
@@ -625,9 +625,10 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
         )
+        let target = try semanticActionTarget(heistId: "quantity_0", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(
-            .heistId("quantity_0"),
+            target,
             recordedScreen: sourceScreen
         )
 
@@ -1258,6 +1259,18 @@ final class TheBrainsActionTests: XCTestCase {
             customRotors: customRotors,
             respondsToUserInteraction: false
         )
+    }
+
+    private func semanticActionTarget(
+        heistId: HeistId,
+        in screen: Screen
+    ) throws -> SemanticActionTarget {
+        let capture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: TheStash.WireConversion.toInterface(from: screen)
+        )
+        let element = try XCTUnwrap(capture.interface.elements.first { $0.heistId == heistId })
+        return SemanticActionTarget(MinimumMatcher.build(element: element, in: capture))
     }
 
     private func XCTAssertDiagnostic(
