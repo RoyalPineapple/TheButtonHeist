@@ -2,6 +2,32 @@ import Foundation
 
 import TheScore
 
+extension TheFence.GesturePayload {
+
+    var clientMessage: ClientMessage {
+        switch self {
+        case .oneFingerTap(let payload):
+            return .touchTap(payload.target)
+        case .longPress(let payload):
+            return .touchLongPress(payload.target)
+        case .swipe(let payload):
+            return .touchSwipe(payload.target)
+        case .drag(let payload):
+            return .touchDrag(payload.target)
+        case .pinch(let payload):
+            return .touchPinch(payload.target)
+        case .rotate(let payload):
+            return .touchRotate(payload.target)
+        case .twoFingerTap(let payload):
+            return .touchTwoFingerTap(payload.target)
+        case .drawPath(let payload):
+            return .touchDrawPath(payload.target)
+        case .drawBezier(let payload):
+            return .touchDrawBezier(payload.target)
+        }
+    }
+}
+
 extension TheFence {
 
     func decodeGestureRequestPayload(

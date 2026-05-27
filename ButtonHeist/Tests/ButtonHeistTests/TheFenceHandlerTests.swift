@@ -2699,6 +2699,34 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testBatchAndSingleCommandsUseSameClientMessageLowering() async throws {
+        let (fence, _) = makeConnectedFence()
+        let cases: [(command: TheFence.Command, request: [String: Any])] = [
+            (.oneFingerTap, ["x": 12.0, "y": 34.0]),
+            (.scroll, ["direction": "up"]),
+            (.activate, ["identifier": "save-button"]),
+            (.waitFor, ["identifier": "toast"]),
+            (.setPasteboard, ["text": "copied"]),
+        ]
+
+        for testCase in cases {
+            var step = testCase.request
+            step["command"] = testCase.command.rawValue
+            let batch = try decodedRunBatch(fence, steps: [step])
+            guard let plannedStep = plannedBatchSteps(from: batch).first else {
+                return XCTFail("Expected planned batch step for \(testCase.command.rawValue)")
+            }
+            let singleRequest = try fence.parseRequest(command: testCase.command, request: step)
+            let singlePlan = try fence.clientMessageExecutionPlan(for: singleRequest)
+            XCTAssertEqual(
+                String(reflecting: singlePlan.messages),
+                String(reflecting: [plannedStep.typedStep.command]),
+                testCase.command.rawValue
+            )
+        }
+    }
+
+    @ButtonHeistActor
     func testBatchPreparationClassifiesActionAndWaitCandidates() async throws {
         let (fence, _) = makeConnectedFence()
 

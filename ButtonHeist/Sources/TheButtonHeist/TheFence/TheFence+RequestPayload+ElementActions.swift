@@ -2,6 +2,103 @@ import Foundation
 
 import TheScore
 
+private let accessibilityAdjustmentCountRange = 1...100
+
+extension TheFence.ScrollPayload {
+
+    var clientMessage: ClientMessage {
+        switch self {
+        case .scroll(let target):
+            return .scroll(target)
+        case .scrollToVisible(let target):
+            return .scrollToVisible(target)
+        case .elementSearch(let target):
+            return .elementSearch(target)
+        case .scrollToEdge(let target):
+            return .scrollToEdge(target)
+        }
+    }
+}
+
+extension TheFence.AccessibilityPayload {
+
+    func clientMessages() throws -> [ClientMessage] {
+        switch self {
+        case .activate(let target, let actionName, let count):
+            guard let actionName else {
+                try Self.rejectCount(count)
+                return [.activate(target)]
+            }
+            return try Self.namedAccessibilityCommands(
+                target: target,
+                actionName: actionName,
+                count: count
+            )
+        case .increment(let target, let count):
+            return try Self.repeatedAdjustmentCommands(.increment(target), count: count)
+        case .decrement(let target, let count):
+            return try Self.repeatedAdjustmentCommands(.decrement(target), count: count)
+        case .performCustomAction(let target, let count):
+            try Self.rejectCount(count)
+            return [.performCustomAction(target)]
+        }
+    }
+
+    private static func namedAccessibilityCommands(
+        target: ElementTarget,
+        actionName: String,
+        count: TheFence.CountArgument
+    ) throws -> [ClientMessage] {
+        if actionName.hasPrefix("action:") {
+            try rejectCount(count)
+            let customName = String(actionName.dropFirst("action:".count))
+            guard !customName.isEmpty else {
+                throw FenceError.invalidRequest("action: prefix requires a name (e.g. \"action:myAction\")")
+            }
+            return [.performCustomAction(CustomActionTarget(elementTarget: target, actionName: customName))]
+        }
+
+        switch actionName {
+        case TheFence.Command.increment.rawValue:
+            return try repeatedAdjustmentCommands(.increment(target), count: count)
+        case TheFence.Command.decrement.rawValue:
+            return try repeatedAdjustmentCommands(.decrement(target), count: count)
+        default:
+            try rejectCount(count)
+            return [.performCustomAction(CustomActionTarget(elementTarget: target, actionName: actionName))]
+        }
+    }
+
+    private static func repeatedAdjustmentCommands(
+        _ message: ClientMessage,
+        count countArgument: TheFence.CountArgument
+    ) throws -> [ClientMessage] {
+        let count = try accessibilityAdjustmentCount(countArgument)
+        return Array(repeating: message, count: count)
+    }
+
+    private static func accessibilityAdjustmentCount(_ countArgument: TheFence.CountArgument) throws -> Int {
+        let count = countArgument.value ?? 1
+        guard accessibilityAdjustmentCountRange.contains(count) else {
+            throw SchemaValidationError(
+                field: "count",
+                observed: count,
+                expected: "integer in \(accessibilityAdjustmentCountRange.lowerBound)...\(accessibilityAdjustmentCountRange.upperBound)"
+            )
+        }
+        return count
+    }
+
+    private static func rejectCount(_ countArgument: TheFence.CountArgument) throws {
+        guard countArgument.observed != nil else { return }
+        throw SchemaValidationError(
+            field: "count",
+            observed: countArgument.observed,
+            expected: "only valid with increment or decrement"
+        )
+    }
+}
+
 extension TheFence {
 
     func decodeElementActionPayload(
