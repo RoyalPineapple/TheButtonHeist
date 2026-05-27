@@ -308,50 +308,32 @@ public final class TheFence {
             return try await handleGetInterface(request)
         case (.getScreen, .screen(let request)):
             return try await handleGetScreen(request)
-        case (.waitForChange, .waitForChange(let payload)):
-            return try await handleWaitForChange(payload)
-        case (.oneFingerTap, .gesture(.oneFingerTap(let payload))):
-            return try await handleOneFingerTap(payload)
-        case (.longPress, .gesture(.longPress(let payload))):
-            return try await handleLongPress(payload)
-        case (.swipe, .gesture(.swipe(let payload))):
-            return try await handleSwipe(payload)
-        case (.drag, .gesture(.drag(let payload))):
-            return try await handleDrag(payload)
-        case (.pinch, .gesture(.pinch(let payload))):
-            return try await handlePinch(payload)
-        case (.rotate, .gesture(.rotate(let payload))):
-            return try await handleRotate(payload)
-        case (.twoFingerTap, .gesture(.twoFingerTap(let payload))):
-            return try await handleTwoFingerTap(payload)
-        case (.drawPath, .gesture(.drawPath(let payload))):
-            return try await handleDrawPath(payload)
-        case (.drawBezier, .gesture(.drawBezier(let payload))):
-            return try await handleDrawBezier(payload)
-        case (.scroll, .scroll(let payload)),
-             (.scrollToVisible, .scroll(let payload)),
-             (.elementSearch, .scroll(let payload)),
-             (.scrollToEdge, .scroll(let payload)):
-            return try await handleScrollAction(payload)
-        case (.waitFor, .waitFor(let target)):
-            return try await handleWaitFor(target)
-        case (.activate, .accessibility(let payload)),
-             (.increment, .accessibility(let payload)),
-             (.decrement, .accessibility(let payload)),
-             (.performCustomAction, .accessibility(let payload)):
-            return try await handleAccessibilityAction(payload)
-        case (.rotor, .rotor(let target)):
-            return try await handleRotor(target)
-        case (.typeText, .typeText(let target)):
-            return try await handleTypeText(target)
-        case (.editAction, .editAction(let target)):
-            return try await handleEditAction(target)
-        case (.setPasteboard, .setPasteboard(let target)):
-            return try await handleSetPasteboard(target)
-        case (.getPasteboard, _):
-            return try await handleGetPasteboard()
-        case (.dismissKeyboard, _):
-            return try await sendAction(.resignFirstResponder)
+        case (.oneFingerTap, .gesture(.oneFingerTap)),
+             (.longPress, .gesture(.longPress)),
+             (.swipe, .gesture(.swipe)),
+             (.drag, .gesture(.drag)),
+             (.pinch, .gesture(.pinch)),
+             (.rotate, .gesture(.rotate)),
+             (.twoFingerTap, .gesture(.twoFingerTap)),
+             (.drawPath, .gesture(.drawPath)),
+             (.drawBezier, .gesture(.drawBezier)),
+             (.scroll, .scroll(.scroll)),
+             (.scrollToVisible, .scroll(.scrollToVisible)),
+             (.elementSearch, .scroll(.elementSearch)),
+             (.scrollToEdge, .scroll(.scrollToEdge)),
+             (.activate, .accessibility(.activate)),
+             (.increment, .accessibility(.increment)),
+             (.decrement, .accessibility(.decrement)),
+             (.performCustomAction, .accessibility(.performCustomAction)),
+             (.rotor, .rotor),
+             (.typeText, .typeText),
+             (.editAction, .editAction),
+             (.setPasteboard, .setPasteboard),
+             (.waitFor, .waitFor),
+             (.waitForChange, .waitForChange),
+             (.getPasteboard, .none),
+             (.dismissKeyboard, .none):
+            return try await handleClientActionRequest(parsed)
         case (.startRecording, .startRecording(let config)):
             return try await handleStartRecording(config)
         case (.stopRecording, .artifact(let request)):

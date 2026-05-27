@@ -261,10 +261,18 @@ final class PublicContractGoldenTests: XCTestCase {
             "Batch planning should consume parsed requests, not raw routed request dictionaries."
         )
 
-        let batchConstructor = try sourceFile(
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+BatchActionConstructor.swift"
+        let clientMessageLowering = try sourceFile(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+ClientMessageLowering.swift"
         )
-        let forbiddenConstructorPatterns = [
+        XCTAssertTrue(
+            clientMessageLowering.contains("func clientMessageExecutionPlan"),
+            "Direct command execution should lower through the shared client-message plan."
+        )
+        XCTAssertTrue(
+            clientMessageLowering.contains("func batchActionPlan"),
+            "Batch step planning should lower through the same client-message path as direct execution."
+        )
+        let forbiddenLoweringPatterns = [
             "[String: Any]",
             "schemaString(",
             "schemaInteger(",
@@ -272,10 +280,10 @@ final class PublicContractGoldenTests: XCTestCase {
             "operation.arguments",
             "operation.request.arguments",
         ]
-        for pattern in forbiddenConstructorPatterns {
+        for pattern in forbiddenLoweringPatterns {
             XCTAssertFalse(
-                batchConstructor.contains(pattern),
-                "Batch action construction should map typed parsed requests, not parse raw dictionaries with \(pattern)."
+                clientMessageLowering.contains(pattern),
+                "Client-message lowering should map typed parsed requests, not parse raw dictionaries with \(pattern)."
             )
         }
     }

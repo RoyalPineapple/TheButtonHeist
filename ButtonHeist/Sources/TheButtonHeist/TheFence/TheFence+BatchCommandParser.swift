@@ -31,10 +31,8 @@ extension TheFence {
         private func decode(operation: NormalizedOperation, index: Int) -> RunBatchStep {
             do {
                 let request = try fence.parseRequest(operation: operation)
-                return .planned(try BatchStepConstructor().plan(
-                    index: index,
-                    request: request
-                ))
+                let context = BatchStepPlanningContext(originalIndex: index, request: request)
+                return .planned(try context.plan(fence.batchActionPlan(context: context)))
             } catch let error as SchemaValidationError {
                 return invalid(operation, message: error.message, includeDetailsInResult: true)
             } catch let error as MissingElementTarget {
