@@ -36,6 +36,30 @@ final class CommandReferenceTests: XCTestCase {
         )
     }
 
+    func testGeneratedReferenceDoesNotExposeDescriptionFallbacks() throws {
+        let commandReference = FenceCommandReference.commandMarkdown()
+        let mcpReference = FenceCommandReference.mcpMarkdown()
+        let fallbackNeedle = "missing a public description"
+        let prototypeNeedle = "Execute the "
+
+        XCTAssertFalse(
+            commandReference.contains(fallbackNeedle),
+            "Command descriptors must provide product-language public descriptions"
+        )
+        XCTAssertFalse(
+            commandReference.contains(prototypeNeedle),
+            "Command descriptors must not expose prototype fallback prose"
+        )
+        XCTAssertFalse(
+            mcpReference.contains(fallbackNeedle),
+            "MCP tool descriptors must provide product-language public descriptions"
+        )
+        XCTAssertFalse(
+            mcpReference.contains(prototypeNeedle),
+            "MCP tool descriptors must not expose prototype fallback prose"
+        )
+    }
+
     private func readRepositoryFile(_ path: String) throws -> String {
         let url = try repositoryRoot().appendingPathComponent(path)
         return try String(contentsOf: url, encoding: .utf8)
