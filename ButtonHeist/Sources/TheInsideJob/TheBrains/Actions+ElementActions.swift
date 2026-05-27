@@ -148,45 +148,44 @@ extension Actions {
         _ target: some CustomActionExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        if let containerTarget = target.actionContainerTarget {
+        switch target.customActionSelection {
+        case .container(let containerTarget, let ordinal, let actionName):
             return await executeContainerCustomAction(
                 containerTarget,
-                ordinal: target.actionContainerOrdinal,
-                actionName: target.actionName
+                ordinal: ordinal,
+                actionName: actionName
             )
-        }
-        guard let elementTarget = target.actionElementTarget else {
-            return .failure(.customAction, message: "custom action failed: missing element or container target")
-        }
-        return await performElementAction(
-            target: elementTarget,
-            method: .customAction,
-            recordedScreen: recordedScreen,
-            deallocatedBoundary: "custom action"
-        ) { context in
-            let resolved = context.resolvedTarget
-            let liveTarget = context.liveTarget
-            switch self.stash.performCustomAction(named: target.actionName, on: liveTarget) {
-            case .deallocated:
-                return .failure(.customAction, message: "custom action failed")
-            case .noSuchAction:
-                return .failure(
-                    .customAction,
-                    message: ActionCapabilityDiagnostic.missingCustomAction(
-                        target.actionName,
-                        element: resolved.screenElement
+        case .element(let elementTarget, let actionName):
+            return await performElementAction(
+                target: elementTarget,
+                method: .customAction,
+                recordedScreen: recordedScreen,
+                deallocatedBoundary: "custom action"
+            ) { context in
+                let resolved = context.resolvedTarget
+                let liveTarget = context.liveTarget
+                switch self.stash.performCustomAction(named: actionName, on: liveTarget) {
+                case .deallocated:
+                    return .failure(.customAction, message: "custom action failed")
+                case .noSuchAction:
+                    return .failure(
+                        .customAction,
+                        message: ActionCapabilityDiagnostic.missingCustomAction(
+                            actionName,
+                            element: resolved.screenElement
+                        )
                     )
-                )
-            case .declined:
-                return .failure(
-                    .customAction,
-                    message: ActionCapabilityDiagnostic.declinedCustomAction(
-                        target.actionName,
-                        element: resolved.screenElement
+                case .declined:
+                    return .failure(
+                        .customAction,
+                        message: ActionCapabilityDiagnostic.declinedCustomAction(
+                            actionName,
+                            element: resolved.screenElement
+                        )
                     )
-                )
-            case .succeeded:
-                return .success(method: .customAction)
+                case .succeeded:
+                    return .success(method: .customAction)
+                }
             }
         }
     }

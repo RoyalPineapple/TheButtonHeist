@@ -9,13 +9,18 @@ extension Actions {
     /// Unified pipeline for gestures that target a screen point:
     /// semantic selector → actionable target (if element target) → point → gesture.
     func performPointAction(
-        elementTarget: (any SemanticElementTarget)?,
-        pointX: Double?,
-        pointY: Double?,
+        selection: GesturePointSelection,
         method: ActionMethod,
         recordedScreen: Screen? = nil,
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
+        let elementTarget: ElementTarget?
+        switch selection {
+        case .element(let target):
+            elementTarget = target
+        case .coordinate, .unspecified:
+            elementTarget = nil
+        }
         let normalizedTarget = elementTarget.map {
             normalizePointGestureTarget($0, recordedScreen: recordedScreen)
         }
@@ -34,7 +39,7 @@ extension Actions {
         } else {
             actionableTarget = nil
         }
-        switch resolveGesturePoint(from: actionableTarget, pointX: pointX, pointY: pointY, method: method) {
+        switch resolveGesturePoint(from: actionableTarget, selection: selection, method: method) {
         case .failure(let result):
             return result
         case .success(let point):
@@ -53,8 +58,14 @@ extension Actions {
         _ target: some TapExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        await performPointAction(
-            elementTarget: target.tapElementTarget, pointX: target.pointX, pointY: target.pointY,
+        let selection: GesturePointSelection
+        do {
+            selection = try target.tapPointSelection()
+        } catch {
+            return gestureProjectionFailure(error, method: .syntheticTap)
+        }
+        return await performPointAction(
+            selection: selection,
             method: .syntheticTap,
             recordedScreen: recordedScreen
         ) { point in
@@ -66,9 +77,15 @@ extension Actions {
         _ target: some LongPressExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
+        let selection: GesturePointSelection
+        do {
+            selection = try target.tapPointSelection()
+        } catch {
+            return gestureProjectionFailure(error, method: .syntheticLongPress)
+        }
         let duration = clampDuration(target.duration)
         return await performPointAction(
-            elementTarget: target.tapElementTarget, pointX: target.pointX, pointY: target.pointY,
+            selection: selection,
             method: .syntheticLongPress,
             recordedScreen: recordedScreen
         ) { point in
@@ -80,20 +97,14 @@ extension Actions {
         _ target: some SwipeExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
-        // Unit-point swipe: resolve element frame, compute start/end from unit coordinates
-        if let unitPoints = unitSwipePoints(
-            elementTarget: target.swipeElementTarget,
-            direction: target.direction,
-            start: target.start,
-            end: target.end
-        ) {
-            guard let elementTarget = target.swipeElementTarget else {
-                return .failure(
-                    .syntheticSwipe,
-                    message: "synthetic swipe failed: observed unit start/end points without elementTarget; "
-                        + "try providing elementTarget or use absolute startX/startY/endX/endY."
-                )
-            }
+        let selection: SwipeGestureSelection
+        do {
+            selection = try target.swipeGestureSelection()
+        } catch {
+            return gestureProjectionFailure(error, method: .syntheticSwipe)
+        }
+        switch selection {
+        case .unitElement(let elementTarget, let start, let end):
             let normalizedTarget = normalizePointGestureTarget(elementTarget, recordedScreen: recordedScreen)
             let actionableTarget: SemanticActionability.SemanticActionableTarget
             switch await actionability.makeActionable(
@@ -114,52 +125,31 @@ extension Actions {
                 return result
             }
             let startPoint = CGPoint(
-                x: frame.origin.x + unitPoints.start.x * frame.width,
-                y: frame.origin.y + unitPoints.start.y * frame.height
+                x: frame.origin.x + start.x * frame.width,
+                y: frame.origin.y + start.y * frame.height
             )
             let endPoint = CGPoint(
-                x: frame.origin.x + unitPoints.end.x * frame.width,
-                y: frame.origin.y + unitPoints.end.y * frame.height
+                x: frame.origin.x + end.x * frame.width,
+                y: frame.origin.y + end.y * frame.height
             )
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
             let duration = clampDuration(target.resolvedDuration)
             return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
-        }
-
-        // Absolute-point swipe: resolve start point, compute end from direction or explicit coords
-        let normalizedTarget = target.swipeElementTarget.map {
-            normalizePointGestureTarget($0, recordedScreen: recordedScreen)
-        }
-        let actionableTarget: SemanticActionability.SemanticActionableTarget?
-        if let normalizedTarget {
-            switch await actionability.makeActionable(
-                for: normalizedTarget,
-                method: .syntheticSwipe,
-                deallocatedBoundary: "gesture action"
-            ) {
-            case .actionable(let target):
-                actionableTarget = target
-            case .failed(let failure):
-                return failure.interactionResult(commandMethod: .syntheticSwipe)
+        case .point(let startSelection, let destination):
+            let startPoint: CGPoint
+            switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe, recordedScreen: recordedScreen) {
+            case .failure(let result):
+                return result
+            case .success(let point):
+                startPoint = point
             }
-        } else {
-            actionableTarget = nil
-        }
-        switch resolveGesturePoint(
-            from: actionableTarget,
-            pointX: target.startX,
-            pointY: target.startY,
-            method: .syntheticSwipe
-        ) {
-        case .failure(let result):
-            return result
-        case .success(let startPoint):
             let endPoint: CGPoint
-            if let endX = target.endX, let endY = target.endY {
-                endPoint = CGPoint(x: endX, y: endY)
-            } else if let direction = target.direction {
+            switch destination {
+            case .coordinate(let point):
+                endPoint = point.cgPoint
+            case .direction(let direction):
                 let dist = Self.defaultSwipeDistance
                 switch direction {
                 case .up:    endPoint = CGPoint(x: startPoint.x, y: startPoint.y - dist)
@@ -167,7 +157,7 @@ extension Actions {
                 case .left:  endPoint = CGPoint(x: startPoint.x - dist, y: startPoint.y)
                 case .right: endPoint = CGPoint(x: startPoint.x + dist, y: startPoint.y)
                 }
-            } else {
+            case .unspecified:
                 return .failure(
                     .syntheticSwipe,
                     message: "synthetic swipe failed: observed missing end point and direction; "
@@ -191,32 +181,23 @@ extension Actions {
         return gestureDispatchResult(method: .syntheticSwipe, diagnosticPoint: startPoint, success: success)
     }
 
-    private func unitSwipePoints(
-        elementTarget: (any SemanticElementTarget)?,
-        direction: SwipeDirection?,
-        start: UnitPoint?,
-        end: UnitPoint?
-    ) -> (start: UnitPoint, end: UnitPoint)? {
-        if let start, let end {
-            return (start, end)
-        }
-        guard let direction, elementTarget != nil else {
-            return nil
-        }
-        return (direction.defaultStart, direction.defaultEnd)
-    }
-
     func executeDrag(
         _ target: some DragExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
+        let selection: GesturePointSelection
+        do {
+            selection = try target.dragStartSelection()
+        } catch {
+            return gestureProjectionFailure(error, method: .syntheticDrag)
+        }
         let endPoint = CGPoint(x: target.endX, y: target.endY)
         if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }
         let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
-            elementTarget: target.dragElementTarget, pointX: target.startX, pointY: target.startY,
+            selection: selection,
             method: .syntheticDrag,
             recordedScreen: recordedScreen
         ) { startPoint in
@@ -228,10 +209,16 @@ extension Actions {
         _ target: some PinchExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
+        let selection: GesturePointSelection
+        do {
+            selection = try target.pinchCenterSelection()
+        } catch {
+            return gestureProjectionFailure(error, method: .syntheticPinch)
+        }
         let spread = target.resolvedSpread
         let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
-            elementTarget: target.pinchElementTarget, pointX: target.centerX, pointY: target.centerY,
+            selection: selection,
             method: .syntheticPinch,
             recordedScreen: recordedScreen
         ) { center in
@@ -246,10 +233,16 @@ extension Actions {
         _ target: some RotateExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
+        let selection: GesturePointSelection
+        do {
+            selection = try target.rotateCenterSelection()
+        } catch {
+            return gestureProjectionFailure(error, method: .syntheticRotate)
+        }
         let radius = target.resolvedRadius
         let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
-            elementTarget: target.rotateElementTarget, pointX: target.centerX, pointY: target.centerY,
+            selection: selection,
             method: .syntheticRotate,
             recordedScreen: recordedScreen
         ) { center in
@@ -264,9 +257,15 @@ extension Actions {
         _ target: some TwoFingerTapExecutionInput,
         recordedScreen: Screen? = nil
     ) async -> TheSafecracker.InteractionResult {
+        let selection: GesturePointSelection
+        do {
+            selection = try target.twoFingerTapCenterSelection()
+        } catch {
+            return gestureProjectionFailure(error, method: .syntheticTwoFingerTap)
+        }
         let spread = target.resolvedSpread
         return await performPointAction(
-            elementTarget: target.twoFingerTapElementTarget, pointX: target.centerX, pointY: target.centerY,
+            selection: selection,
             method: .syntheticTwoFingerTap,
             recordedScreen: recordedScreen
         ) { center in
@@ -274,7 +273,7 @@ extension Actions {
         }
     }
 
-    private func normalizePointGestureTarget(
+    func normalizePointGestureTarget(
         _ target: any SemanticElementTarget,
         recordedScreen: Screen?
     ) -> TheStash.NormalizedTarget {

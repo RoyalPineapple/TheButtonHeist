@@ -27,6 +27,23 @@ extension ScrollContainerTarget: CustomStringConvertible {
     }
 }
 
+public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertible {
+    case visibleContainer
+    case container(ScrollContainerTarget)
+    case element(ElementTarget)
+
+    public var description: String {
+        switch self {
+        case .visibleContainer:
+            return "visibleContainer"
+        case .container(let target):
+            return target.description
+        case .element(let target):
+            return target.description
+        }
+    }
+}
+
 /// Target for one-page scroll command.
 public struct ScrollTarget: Sendable {
     /// Explicit scroll container to move.
@@ -44,6 +61,16 @@ public struct ScrollTarget: Sendable {
         self.elementTarget = elementTarget
         self.containerTarget = containerTarget
         self.direction = direction
+    }
+
+    public var containerSelection: ScrollContainerSelection {
+        if let containerTarget {
+            return .container(containerTarget)
+        }
+        if let elementTarget {
+            return .element(elementTarget)
+        }
+        return .visibleContainer
     }
 }
 
@@ -179,6 +206,16 @@ public struct ScrollToEdgeTarget: Sendable {
         self.elementTarget = elementTarget
         self.containerTarget = containerTarget
         self.edge = edge
+    }
+
+    public var containerSelection: ScrollContainerSelection {
+        if let containerTarget {
+            return .container(containerTarget)
+        }
+        if let elementTarget {
+            return .element(elementTarget)
+        }
+        return .visibleContainer
     }
 }
 
