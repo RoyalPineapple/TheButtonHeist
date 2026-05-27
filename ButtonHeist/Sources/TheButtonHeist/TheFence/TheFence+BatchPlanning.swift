@@ -97,16 +97,50 @@ private extension TheFence {
                 """
             )
         }
-        let typedStep = TheScore.BatchStep.command(
-            message,
-            expect: request.expectationPayload.expectation,
-            deadline: request.expectationPayload.timeout.map(TheScore.Deadline.init(timeout:))
+        let typedStep = TheScore.BatchStep(
+            command: message,
+            expectation: batchExpectation(for: message, request: request),
+            deadline: batchDeadline(for: message, request: request)
         )
         return RunBatchPreparedStep(
             originalIndex: originalIndex,
             commandName: request.command.rawValue,
             typedStep: typedStep
         )
+    }
+
+    func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> ActionExpectation {
+        if let explicit = request.expectationPayload.expectation {
+            return explicit
+        }
+
+        switch message {
+        case .waitFor(let target):
+            return target.resolvedAbsent
+                ? .elementDisappeared(target.elementTarget.batchExpectationMatcher)
+                : .elementAppeared(target.elementTarget.batchExpectationMatcher)
+        case .waitForChange(let target):
+            return target.expect ?? .screenChanged
+        default:
+            return .delivery
+        }
+    }
+
+    func batchDeadline(for message: ClientMessage, request: ParsedRequest) -> Deadline {
+        if let timeout = request.expectationPayload.timeout {
+            return Deadline(timeout: timeout)
+        }
+
+        switch message {
+        case .waitForIdle(let target):
+            return Deadline(timeout: target.timeout ?? 5)
+        case .waitFor(let target):
+            return Deadline(timeout: target.resolvedTimeout)
+        case .waitForChange(let target):
+            return Deadline(timeout: target.resolvedTimeout)
+        default:
+            return Deadline()
+        }
     }
 
     func invalidBatchStep(
@@ -299,4 +333,15 @@ private extension TheFence {
         return size
     }
 
+}
+
+private extension ElementTarget {
+    var batchExpectationMatcher: ElementMatcher {
+        switch self {
+        case .heistId(let heistId):
+            return ElementMatcher(heistId: heistId)
+        case .matcher(let matcher, _):
+            return matcher
+        }
+    }
 }

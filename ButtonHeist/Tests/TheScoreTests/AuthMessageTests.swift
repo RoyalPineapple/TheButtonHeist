@@ -206,7 +206,7 @@ final class AuthMessageTests: XCTestCase {
         }
     }
 
-    // MARK: - Wire format compatibility
+    // MARK: - Wire format contract
 
     func testAuthRequiredFromRawJSON() throws {
         let json = """

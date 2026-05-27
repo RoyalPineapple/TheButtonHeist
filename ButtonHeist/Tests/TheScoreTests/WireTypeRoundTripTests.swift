@@ -104,8 +104,8 @@ final class WireTypeRoundTripTests: XCTestCase {
         let target = LongPressTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200)), duration: 0.8)
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
-        XCTAssertEqual(decoded.pointX, 100)
-        XCTAssertEqual(decoded.pointY, 200)
+        XCTAssertEqual(decoded.selection, .coordinate(ScreenPoint(x: 100, y: 200)))
+        XCTAssertEqual(decoded.point, CGPoint(x: 100, y: 200))
         XCTAssertEqual(decoded.duration, 0.8)
         XCTAssertNil(decoded.elementTarget)
     }
@@ -134,10 +134,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)
         XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("handle"))
-        XCTAssertNil(decoded.startX)
-        XCTAssertNil(decoded.startY)
-        XCTAssertEqual(decoded.endX, 200)
-        XCTAssertEqual(decoded.endY, 300)
+        XCTAssertEqual(decoded.start, .element(.heistId("handle")))
+        XCTAssertEqual(decoded.end, ScreenPoint(x: 200, y: 300))
+        XCTAssertEqual(decoded.endPoint, CGPoint(x: 200, y: 300))
         XCTAssertEqual(decoded.duration, 0.8)
     }
 
@@ -305,8 +304,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(segment)
         let decoded = try decoder.decode(BezierSegment.self, from: data)
-        XCTAssertEqual(decoded.cp1X, 10)
-        XCTAssertEqual(decoded.endY, 60)
+        XCTAssertEqual(decoded.cp1, CGPoint(x: 10, y: 20))
+        XCTAssertEqual(decoded.cp2, CGPoint(x: 30, y: 40))
+        XCTAssertEqual(decoded.end, CGPoint(x: 50, y: 60))
     }
 
     func testBezierSegmentComputedPoints() {
@@ -356,9 +356,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DrawBezierTarget.self, from: data)
-        XCTAssertEqual(decoded.startX, 0)
-        XCTAssertEqual(decoded.startY, 0)
+        XCTAssertEqual(decoded.startPoint, CGPoint(x: 0, y: 0))
         XCTAssertEqual(decoded.segments.count, 1)
+        XCTAssertEqual(decoded.segments[0].end, CGPoint(x: 100, y: 0))
         XCTAssertEqual(decoded.samplesPerSegment, 30)
         XCTAssertEqual(decoded.duration, 2.0)
         XCTAssertNil(decoded.velocity)
@@ -714,12 +714,16 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testBatchPlanRoundTripPreservesCommandStepWireShape() throws {
         let plan = BatchPlan(
             steps: [
-                .command(
-                    .activate(.matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1)),
-                    expect: .screenChanged,
+                BatchStep(
+                    command: .activate(.matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1)),
+                    expectation: .screenChanged,
                     deadline: Deadline(timeout: 2.5)
                 ),
-                .command(.setPasteboard(SetPasteboardTarget(text: "ready"))),
+                BatchStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "ready")),
+                    expectation: .delivery,
+                    deadline: Deadline()
+                ),
             ],
             policy: .continueOnError
         )

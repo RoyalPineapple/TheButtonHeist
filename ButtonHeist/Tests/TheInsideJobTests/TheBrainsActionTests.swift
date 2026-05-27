@@ -1163,7 +1163,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForIdle)
         XCTAssertEqual(result.errorKind, .actionFailed)
-        // The wire kind stays actionFailed for compatibility. The factual
+        // The public wire kind stays actionFailed. The factual
         // message is what lets TheFence surface the local tree-unavailable
         // diagnostic without adding a new ErrorKind raw value.
         XCTAssertEqual(result.message, "Could not access accessibility tree: no traversable app windows")
@@ -1346,7 +1346,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func batchStepResult(for command: ClientMessage) async -> ActionResult {
         let result = await brains.executeBatchExecutionPlan(BatchPlan(steps: [
-            .command(command),
+            BatchStep(command: command, expectation: .delivery, deadline: Deadline()),
         ], policy: .continueOnError))
         guard case .batchExecution(let batch) = result.payload,
               let stepResult = batch.steps.first,

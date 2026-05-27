@@ -976,10 +976,8 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected touchDrag message")
             return
         }
-        XCTAssertEqual(target.startX, 100.0)
-        XCTAssertEqual(target.startY, 300.0)
-        XCTAssertEqual(target.endX, 300.0)
-        XCTAssertEqual(target.endY, 600.0)
+        XCTAssertEqual(target.start, .coordinate(ScreenPoint(x: 100.0, y: 300.0)))
+        XCTAssertEqual(target.end, ScreenPoint(x: 300.0, y: 600.0))
     }
 
     @ButtonHeistActor

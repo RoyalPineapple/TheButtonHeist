@@ -33,18 +33,6 @@ public struct BatchStep: Sendable {
         self.expectation = expectation
         self.deadline = deadline
     }
-
-    public static func command(
-        _ command: ClientMessage,
-        expect expectation: ActionExpectation? = nil,
-        deadline: Deadline? = nil
-    ) -> BatchStep {
-        BatchStep(
-            command: command,
-            expectation: expectation ?? command.defaultBatchExpectation,
-            deadline: deadline ?? command.defaultBatchDeadline
-        )
-    }
 }
 
 extension BatchStep: CustomStringConvertible {
@@ -87,10 +75,8 @@ extension BatchStep: Codable {
         }
         self.init(
             command: command,
-            expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expect)
-                ?? command.defaultBatchExpectation,
-            deadline: try container.decodeIfPresent(Deadline.self, forKey: .deadline)
-                ?? command.defaultBatchDeadline
+            expectation: try container.decode(ActionExpectation.self, forKey: .expect),
+            deadline: try container.decode(Deadline.self, forKey: .deadline)
         )
     }
 
@@ -122,43 +108,6 @@ extension ClientMessage {
             return true
         default:
             return false
-        }
-    }
-
-    public var defaultBatchExpectation: ActionExpectation {
-        switch self {
-        case .waitFor(let target):
-            return target.resolvedAbsent
-                ? .elementDisappeared(target.elementTarget.expectationMatcher)
-                : .elementAppeared(target.elementTarget.expectationMatcher)
-        case .waitForChange(let target):
-            return target.expect ?? .screenChanged
-        default:
-            return .delivery
-        }
-    }
-
-    public var defaultBatchDeadline: Deadline {
-        switch self {
-        case .waitForIdle(let target):
-            return Deadline(timeout: target.timeout ?? 5)
-        case .waitFor(let target):
-            return Deadline(timeout: target.resolvedTimeout)
-        case .waitForChange(let target):
-            return Deadline(timeout: target.resolvedTimeout)
-        default:
-            return Deadline()
-        }
-    }
-}
-
-private extension ElementTarget {
-    var expectationMatcher: ElementMatcher {
-        switch self {
-        case .heistId(let heistId):
-            return ElementMatcher(heistId: heistId)
-        case .matcher(let matcher, _):
-            return matcher
         }
     }
 }

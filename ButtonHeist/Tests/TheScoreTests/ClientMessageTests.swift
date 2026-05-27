@@ -88,14 +88,22 @@ final class ClientMessageTests: XCTestCase {
         let saveTarget = ElementTarget.matcher(ElementMatcher(label: "Save", traits: [.button]))
         let plan = BatchPlan(
             steps: [
-                .command(.activate(saveTarget), expect: .screenChanged),
-                .command(.waitFor(WaitForTarget(elementTarget: saveTarget, absent: false, timeout: 2.5))),
-                .command(
-                    .waitForChange(WaitForChangeTarget(
+                BatchStep(
+                    command: .activate(saveTarget),
+                    expectation: .screenChanged,
+                    deadline: Deadline()
+                ),
+                BatchStep(
+                    command: .waitFor(WaitForTarget(elementTarget: saveTarget, absent: false, timeout: 2.5)),
+                    expectation: .elementAppeared(ElementMatcher(label: "Save", traits: [.button])),
+                    deadline: Deadline(timeout: 2.5)
+                ),
+                BatchStep(
+                    command: .waitForChange(WaitForChangeTarget(
                         expect: .elementAppeared(ElementMatcher(label: "Done")),
                         timeout: 1.0
                     )),
-                    expect: .elementAppeared(ElementMatcher(label: "Done")),
+                    expectation: .elementAppeared(ElementMatcher(label: "Done")),
                     deadline: Deadline(timeout: 1.0)
                 ),
             ],
@@ -120,10 +128,14 @@ final class ClientMessageTests: XCTestCase {
 
     func testBatchPlanEnvelopeRoundTrip() throws {
         let plan = BatchPlan(steps: [
-            .command(.typeText(TypeTextTarget(
-                text: "hello",
-                elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
-            ))),
+            BatchStep(
+                command: .typeText(TypeTextTarget(
+                    text: "hello",
+                    elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
+                )),
+                expectation: .delivery,
+                deadline: Deadline()
+            ),
         ])
         let envelope = RequestEnvelope(
             requestId: "batch-1",
@@ -145,7 +157,11 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testBatchExecutionDescriptionsUseNormalCommandIdentity() {
-        let step = BatchStep.command(.activate(.heistId("button_save")), expect: .screenChanged)
+        let step = BatchStep(
+            command: .activate(.heistId("button_save")),
+            expectation: .screenChanged,
+            deadline: Deadline()
+        )
 
         XCTAssertEqual(
             step.description,

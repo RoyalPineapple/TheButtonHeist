@@ -5,9 +5,9 @@ import TheScore
 final class OperationPrimitiveTests: XCTestCase {
 
     func testBatchStepAlwaysCarriesActionExpectationAndDeadline() {
-        let step = BatchStep.command(
-            .setPasteboard(SetPasteboardTarget(text: "value")),
-            expect: .screenChanged,
+        let step = BatchStep(
+            command: .setPasteboard(SetPasteboardTarget(text: "value")),
+            expectation: .screenChanged,
             deadline: Deadline(timeout: 2.0)
         )
 

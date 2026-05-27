@@ -102,7 +102,7 @@ xcrun simctl spawn $SIM_UDID log show \
 This shows three lines:
 - `Server listening on port 23456` — the TCP port
 - `token=<redacted>` — generated token exists but is not durable-log-visible
-- `Instance ID: accra-task` (or an 8-char hex fallback if none was set)
+- `Instance ID: accra-task` (or an 8-char hex default if none was set)
 
 Then connect directly:
 ```bash

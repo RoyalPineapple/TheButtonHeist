@@ -8,7 +8,11 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
             ElementMatcher(label: "Count", traits: [.adjustable])
         ))
         let plan = BatchPlan(steps: [
-            .command(command, expect: .elementUpdated(newValue: "2")),
+            BatchStep(
+                command: command,
+                expectation: .elementUpdated(newValue: "2"),
+                deadline: Deadline()
+            ),
         ])
 
         let data = try JSONEncoder().encode(plan)
@@ -28,15 +32,19 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
     func testBatchPlanClientMessageWireShapeCarriesNormalCommands() throws {
         let plan = BatchPlan(
             steps: [
-                .command(
-                    .activate(.heistId("settings_button_current")),
-                    expect: .screenChanged,
+                BatchStep(
+                    command: .activate(.heistId("settings_button_current")),
+                    expectation: .screenChanged,
                     deadline: Deadline(timeout: 2.5)
                 ),
-                .command(.waitForIdle(WaitForIdleTarget(timeout: 0.25))),
-                .command(
-                    .waitForChange(WaitForChangeTarget(expect: .elementsChanged, timeout: 1.5)),
-                    expect: .elementsChanged,
+                BatchStep(
+                    command: .waitForIdle(WaitForIdleTarget(timeout: 0.25)),
+                    expectation: .delivery,
+                    deadline: Deadline(timeout: 0.25)
+                ),
+                BatchStep(
+                    command: .waitForChange(WaitForChangeTarget(expect: .elementsChanged, timeout: 1.5)),
+                    expectation: .elementsChanged,
                     deadline: Deadline(timeout: 1.5)
                 ),
             ],
@@ -89,7 +97,9 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
               "command": {
                 "type": "batchExecutionPlan",
                 "payload": {}
-              }
+              },
+              "expect": { "type": "delivery" },
+              "deadline": {}
             }
           ]
         }
