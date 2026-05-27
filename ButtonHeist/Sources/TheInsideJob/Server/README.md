@@ -1,14 +1,14 @@
 # Server
 
-TLS/TCP server infrastructure — listener, transport, authentication, and connection scope classification.
+TLS/TCP server infrastructure — listener, byte transport, admission, and connection scope classification.
 
 ## Reading order
 
-1. **`SimpleSocketServer.swift`** — `public actor`. `ServerPhase`: `.stopped` / `.listening(listener:, port:)`. `ClientPhase`: `.unauthenticated(connection:, timestamps:)` / `.authenticated(connection:, timestamps:)`. Max 5 concurrent clients.
+1. **`SimpleSocketServer.swift`** — `public actor`. `ServerPhase`: `.stopped` / `.listening(listener:, port:)`. Max 5 concurrent clients.
 
-   `startAsync(port:tlsParameters:callbacks:)` creates an `NWListener`, uses `withCheckedThrowingContinuation` to bridge the state handler (resumes on `.ready` with the bound port). Production startup requires TLS parameters; the plaintext start path is test-only for raw socket coverage. `newConnectionHandler` routes to `handleNewConnection`, which optionally checks `ConnectionScope.classify` against `allowedScopes`, starts receiving, and schedules a 10-second auth deadline.
+   `startAsync(port:tlsParameters:callbacks:)` creates an `NWListener`, uses `withCheckedThrowingContinuation` to bridge the state handler (resumes on `.ready` with the bound port). Production startup requires TLS parameters; the plaintext start path is test-only for raw socket coverage. `newConnectionHandler` routes to `handleNewConnection`, which optionally checks `ConnectionScope.classify` against `allowedScopes`, then starts receiving.
 
-   Receive loop: `receiveNextChunk` appends to a buffer (10 MB cap), scans for `0x0A` newline delimiters, routes each complete message to `callbacks.onDataReceived` (authenticated) or `callbacks.onUnauthenticatedData` (pre-auth). Rate limiting: 30 messages/second per client.
+   Receive loop: `receiveNextChunk` appends to a buffer (10 MB cap), scans for `0x0A` newline delimiters, and routes each complete message to `callbacks.onDataReceived`. Rate limiting: 30 messages/second per client.
 
    `listeningPort` is `nonisolated` via an `OSAllocatedUnfairLock<UInt16>` — readable without actor hop.
 
@@ -27,11 +27,11 @@ TLS/TCP server infrastructure — listener, transport, authentication, and conne
 
    Session release: when all connections drop, starts a 30s drain timer (configurable via `INSIDEJOB_SESSION_TIMEOUT`). If no reconnect arrives, transitions to `.idle`.
 
-   Communicates outward entirely through injected closures (`sendToClient`, `markClientAuthenticated`, `markClientAwaitingApproval`, `disconnectClient`, `onClientAuthenticated`, `onSessionActiveChanged`).
+   Communicates outward entirely through injected closures (`sendToClient`, `disconnectClient`, `onClientAuthenticated`, `onSessionActiveChanged`).
 
 3. **`ServerTransport.swift`** — `public final class ServerTransport: NSObject`. Wraps `SimpleSocketServer` + `NetService`. Created by TheInsideJob, wired to TheMuscle by TheGetaway's `wireTransport(_:)`. `start(port:)` gets TLS parameters from `tlsIdentity`, starts the server. `advertise(serviceName:...)` creates a `NetService` with TXT record (cert fingerprint, simulator UDID, instance ID, etc.). `updateTXTRecord(_:)` merges entries and re-publishes.
 
-   Isolation is per-method, not per-type. Lifecycle and Bonjour methods (`start`, `stop`, `setSyncDataInterceptor`, `makeCallbacks`, `advertise`, `updateTXTRecord`, `stopAdvertising`, `waitForStopped`) are `@MainActor`-isolated because they mutate the Bonjour/lifecycle state owned by the MainActor TheInsideJob. Pass-throughs to the inner `SimpleSocketServer` actor (`send`, `broadcastToAll`, `markAuthenticated`, `disconnect`, `listeningPort`, `events`, `init`) are `nonisolated` and callable from any context. Mutable Bonjour/lifecycle state (`netService`, `stopTask`, `currentTXT`, `hasStarted`, `syncDataInterceptor`) is `@MainActor`-bound at the property level.
+   Isolation is per-method, not per-type. Lifecycle and Bonjour methods (`start`, `stop`, `makeCallbacks`, `advertise`, `updateTXTRecord`, `stopAdvertising`, `waitForStopped`) are `@MainActor`-isolated because they mutate the Bonjour/lifecycle state owned by the MainActor TheInsideJob. Pass-throughs to the inner `SimpleSocketServer` actor (`send`, `disconnect`, `listeningPort`, `events`, `init`) are `nonisolated` and callable from any context. Mutable Bonjour/lifecycle state (`netService`, `stopTask`, `currentTXT`) is `@MainActor`-bound at the property level.
 
 4. **`TLSIdentity.swift`** — `public actor`. `getOrCreate()` checks Keychain for stored identity, regenerates if expiry ≤30 days. `generateCertificate(validityDays:)` creates a `P256.Signing.PrivateKey`, builds a self-signed `X509.Certificate` (CN=ButtonHeist, ECDSA-SHA256, 1-year), serializes to DER. `computeFingerprint` hashes DER bytes with SHA-256. `createEphemeral()` generates cert, briefly stores in Keychain to get a `SecIdentity`, then immediately deletes both Keychain items.
 

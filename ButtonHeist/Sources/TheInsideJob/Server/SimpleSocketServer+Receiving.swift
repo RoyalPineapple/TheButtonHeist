@@ -73,17 +73,13 @@ extension SimpleSocketServer {
         switch clientRegistry.recordInboundMessage(clientId: clientId) {
         case .missingClient:
             return false
-        case .rateLimited(let authenticated, let shouldNotify):
-            if authenticated {
-                receiveLogger.warning("Client \(clientId) rate limited, dropping message")
-            } else {
-                receiveLogger.warning("Unauthenticated client \(clientId) rate limited, dropping message")
-            }
+        case .rateLimited(let shouldNotify):
+            receiveLogger.warning("Client \(clientId) rate limited, dropping message")
             if shouldNotify {
                 notifyRateLimit(clientId)
             }
-        case .accepted(let authenticated):
-            clientLifecycle.receivedData(clientId: clientId, data: messageData, authenticated: authenticated) { [weak self] response in
+        case .accepted:
+            clientLifecycle.receivedData(clientId: clientId, data: messageData) { [weak self] response in
                 guard let self else { return }
                 self.spawnTrackedTask { server in await server.send(response, to: clientId) }
             }

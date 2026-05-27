@@ -13,16 +13,12 @@ import TheScore
 /// all access goes through `NSLock`.
 private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     private var sentMessagesStorage: [(data: Data, clientId: Int)] = []
-    private var markedAuthenticatedStorage: [Int] = []
-    private var markedApprovalPendingStorage: [Int] = []
     private var disconnectedClientsStorage: [Int] = []
     private var authenticatedCallbacksStorage: [(clientId: Int, respond: @Sendable (Data) -> Void)] = []
     private var sessionChangesStorage: [Bool] = []
     private let lock = NSLock()
 
     var sentMessages: [(data: Data, clientId: Int)] { lock.withLock { sentMessagesStorage } }
-    var markedAuthenticated: [Int] { lock.withLock { markedAuthenticatedStorage } }
-    var markedApprovalPending: [Int] { lock.withLock { markedApprovalPendingStorage } }
     var disconnectedClients: [Int] { lock.withLock { disconnectedClientsStorage } }
     var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
         lock.withLock { authenticatedCallbacksStorage }
@@ -30,8 +26,6 @@ private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:thi
     var sessionChanges: [Bool] { lock.withLock { sessionChangesStorage } }
 
     func appendSent(_ entry: (Data, Int)) { lock.withLock { sentMessagesStorage.append(entry) } }
-    func appendAuthenticated(_ clientId: Int) { lock.withLock { markedAuthenticatedStorage.append(clientId) } }
-    func appendApprovalPending(_ clientId: Int) { lock.withLock { markedApprovalPendingStorage.append(clientId) } }
     func appendDisconnected(_ clientId: Int) { lock.withLock { disconnectedClientsStorage.append(clientId) } }
     func appendAuthenticatedCallback(_ entry: (Int, @Sendable (Data) -> Void)) {
         lock.withLock { authenticatedCallbacksStorage.append(entry) }
@@ -62,8 +56,6 @@ final class TheMuscleTests: XCTestCase {
     }
 
     private var sentMessages: [(data: Data, clientId: Int)] { sink.sentMessages }
-    private var markedAuthenticated: [Int] { sink.markedAuthenticated }
-    private var markedApprovalPending: [Int] { sink.markedApprovalPending }
     private var disconnectedClients: [Int] { sink.disconnectedClients }
     private var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
         sink.authenticatedCallbacks
@@ -78,12 +70,6 @@ final class TheMuscleTests: XCTestCase {
             sink.appendSent((data, clientId))
             return .enqueued
         }
-        let markAuth: @Sendable (Int) async -> Void = { clientId in
-            sink.appendAuthenticated(clientId)
-        }
-        let markApprovalPending: @Sendable (Int) async -> Void = { clientId in
-            sink.appendApprovalPending(clientId)
-        }
         let disconnect: @Sendable (Int) async -> Void = { clientId in
             sink.appendDisconnected(clientId)
         }
@@ -97,8 +83,6 @@ final class TheMuscleTests: XCTestCase {
             : ignoreChanges
         await muscle.installCallbacks(
             sendToClient: sendToClient,
-            markClientAuthenticated: markAuth,
-            markClientAwaitingApproval: markApprovalPending,
             disconnectClient: disconnect,
             onClientAuthenticated: onAuthenticated,
             onSessionActiveChanged: onSessionActiveChanged
@@ -238,7 +222,6 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 1, token: "test-token", respond: respond)
         await flushCallbacks()
 
-        XCTAssertTrue(markedAuthenticated.contains(1), "Client should be marked authenticated")
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertTrue(authenticatedIDs.contains(1))
         let authenticatedCount = await muscle.authenticatedClientCount
@@ -257,7 +240,6 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 1, token: "wrong-token", respond: respond)
         await flushCallbacks()
 
-        XCTAssertFalse(markedAuthenticated.contains(1), "Client should not be marked authenticated")
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertFalse(authenticatedIDs.contains(1))
         let authenticatedCount = await muscle.authenticatedClientCount
@@ -283,7 +265,6 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertTrue(authFailure?.message.contains("generated the session token") == true)
-        XCTAssertFalse(markedAuthenticated.contains(1))
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertFalse(authenticatedIDs.contains(1))
         let authenticatedCount = await muscle.authenticatedClientCount
@@ -313,7 +294,6 @@ final class TheMuscleTests: XCTestCase {
 
         try await authenticate(clientId: 1, token: "", respond: respond)
 
-        XCTAssertEqual(markedApprovalPending, [1])
         let payload = try XCTUnwrap(authApprovalPendingPayloads(from: responses()).first)
         XCTAssertEqual(payload.message, "Waiting for approval on the device.")
         XCTAssertEqual(payload.hint, "Tap Allow on the iOS device to continue.")
@@ -338,7 +318,6 @@ final class TheMuscleTests: XCTestCase {
         let explicitResponses = collectResponses()
         try await authenticate(clientId: 1, token: "", respond: explicitResponses.respond)
         XCTAssertTrue(authApprovedPayloads(from: explicitResponses.responses()).isEmpty)
-        XCTAssertTrue(markedApprovalPending.isEmpty)
 
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
@@ -352,7 +331,6 @@ final class TheMuscleTests: XCTestCase {
 
         let payload = try XCTUnwrap(authApprovedPayloads(from: generatedResponses.responses()).first)
         XCTAssertEqual(payload.token, generatedToken)
-        XCTAssertEqual(markedApprovalPending, [2])
     }
 
     func testGeneratedTokenInvalidTokenSuggestsUIApproval() async throws {
@@ -464,7 +442,8 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
         await flushCallbacks()
 
-        XCTAssertFalse(markedAuthenticated.contains(2), "Driver B should not be authenticated")
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertFalse(authenticatedIDs.contains(2), "Driver B should not be authenticated")
         let connections = await muscle.activeSessionConnections
         XCTAssertFalse(connections.contains(2))
 
@@ -503,7 +482,6 @@ final class TheMuscleTests: XCTestCase {
 
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.contains(2), "Same driver should rejoin session")
-        XCTAssertTrue(markedAuthenticated.contains(2))
     }
 
     func testDrainingSessionSurvivesForRejoin() async throws {
@@ -697,7 +675,8 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 10, token: "test-token", address: "192.168.1.200", respond: respond)
         await flushCallbacks()
 
-        XCTAssertTrue(markedAuthenticated.contains(10), "Clients from other addresses should not be affected by lockout")
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertTrue(authenticatedIDs.contains(10), "Clients from other addresses should not be affected by lockout")
     }
 
     func testSuccessfulAuthClearsFailedAttempts() async throws {
@@ -712,7 +691,8 @@ final class TheMuscleTests: XCTestCase {
         // Succeed from same address
         try await authenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
         await flushCallbacks()
-        XCTAssertTrue(markedAuthenticated.contains(4), "Should authenticate after failed attempts below threshold")
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertTrue(authenticatedIDs.contains(4), "Should authenticate after failed attempts below threshold")
 
         // Disconnect and try failing again — counter should be reset
         await muscle.handleClientDisconnected(4)

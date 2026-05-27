@@ -90,7 +90,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
             return XCTFail("Expected missing transport to be a typed send failure, got \(sendOutcome)")
         }
 
-        let callbackOutcome = await delivery.markAuthenticated(1)
-        XCTAssertEqual(callbackOutcome, .failed(.callbacksNotInstalled("markClientAuthenticated")))
+        let callbackOutcome = await delivery.disconnect(1)
+        XCTAssertEqual(callbackOutcome, .failed(.callbacksNotInstalled("disconnectClient")))
     }
 }

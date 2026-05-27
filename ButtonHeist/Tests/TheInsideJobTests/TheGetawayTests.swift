@@ -1,6 +1,7 @@
 #if canImport(UIKit)
 import XCTest
 import UIKit
+import os
 @testable import AccessibilitySnapshotParser
 import TheScore
 @testable import TheInsideJob
@@ -44,6 +45,48 @@ final class TheGetawayTests: XCTestCase {
         private let lock = NSLock()
         func append(_ data: Data, clientId: Int) { lock.withLock { storage.append((data, clientId)) } }
         var all: [(Data, Int)] { lock.withLock { storage } }
+    }
+
+    private func dispatchAuthenticated(
+        _ getaway: TheGetaway,
+        muscle: TheMuscle,
+        clientId: Int = 1,
+        data: Data,
+        respond: @escaping @Sendable (Data) -> Void
+    ) async throws {
+        await muscle.installAuthenticatedClientForTest(clientId)
+        switch await muscle.admitClientMessage(clientId, data: data, respond: respond) {
+        case .admitted(let message):
+            await getaway.handleClientMessage(message, respond: respond)
+        case .handled:
+            XCTFail("Expected authenticated test message to be admitted")
+        }
+    }
+
+    private func sendRawMessageThroughTransport(
+        _ message: ClientMessage,
+        requestId: String,
+        transport: ServerTransport,
+        clientId: Int = 1
+    ) async throws -> ResponseEnvelope {
+        let data = try JSONEncoder().encode(RequestEnvelope(requestId: requestId, message: message))
+        let responses = SentBox()
+        let callbacks = transport.makeCallbacks()
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onClientConnected?(clientId, "192.168.1.1")
+            callbacks.onDataReceived?(clientId, data) { response in
+                responses.append(response, clientId: clientId)
+            }
+        }.value
+
+        try await waitFor {
+            !responses.all.isEmpty
+        }
+
+        return try JSONDecoder().decode(ResponseEnvelope.self, from: try XCTUnwrap(responses.all.first?.0))
     }
 
     // swiftlint:disable:next agent_unchecked_sendable_no_comment - Test callback storage is protected by NSLock.
@@ -91,7 +134,7 @@ final class TheGetawayTests: XCTestCase {
         // swiftlint:disable:next agent_no_task_detached
         await Task.detached {
             callbacks.onClientConnected?(1, "192.168.1.1")
-            callbacks.onUnauthenticatedData?(1, helloData) { _ in }
+            callbacks.onDataReceived?(1, helloData) { _ in }
         }.value
 
         // Wait for the consumer task to drain both events. The for-await loop
@@ -129,7 +172,7 @@ final class TheGetawayTests: XCTestCase {
         await Task.detached {
             for clientId in 1...3 {
                 callbacks.onClientConnected?(clientId, "addr-\(clientId)")
-                callbacks.onUnauthenticatedData?(clientId, helloData) { _ in }
+                callbacks.onDataReceived?(clientId, helloData) { _ in }
             }
         }.value
 
@@ -146,29 +189,11 @@ final class TheGetawayTests: XCTestCase {
         )
     }
 
-    func testUnauthenticatedStatusIsRejectedByMuscle() async throws {
+    func testUnauthenticatedStatusIsRejectedByMuscleBeforeGetawayDispatch() async throws {
         let (getaway, _, transport) = await makeGetaway()
         _ = getaway
 
-        let statusData = try JSONEncoder().encode(RequestEnvelope(requestId: "pre-auth-status", message: .status))
-        let responses = SentBox()
-        let callbacks = transport.makeCallbacks()
-
-        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
-        // swiftlint:disable:next agent_no_task_detached
-        await Task.detached {
-            callbacks.onClientConnected?(1, "192.168.1.1")
-            callbacks.onUnauthenticatedData?(1, statusData) { data in
-                responses.append(data, clientId: 1)
-            }
-        }.value
-
-        try await waitFor {
-            !responses.all.isEmpty
-        }
-
-        let response = try XCTUnwrap(responses.all.first?.0)
-        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: response)
+        let envelope = try await sendRawMessageThroughTransport(.status, requestId: "pre-auth-status", transport: transport)
         XCTAssertEqual(envelope.requestId, "pre-auth-status")
         guard case .error(let error) = envelope.message else {
             return XCTFail("Expected auth failure, got \(envelope.message)")
@@ -177,17 +202,93 @@ final class TheGetawayTests: XCTestCase {
         XCTAssertEqual(error.message, "Authentication required before status.")
     }
 
+    func testUnauthenticatedPingIsRejectedByMuscleBeforeGetawayDispatch() async throws {
+        let (getaway, _, transport) = await makeGetaway()
+        _ = getaway
+
+        let envelope = try await sendRawMessageThroughTransport(.ping, requestId: "pre-auth-ping", transport: transport)
+        XCTAssertEqual(envelope.requestId, "pre-auth-ping")
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected auth failure, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .authFailure)
+        XCTAssertEqual(error.message, "Authentication required before ping.")
+    }
+
+    func testUnauthenticatedActionIsRejectedByMuscleBeforeGetawayDispatch() async throws {
+        let (getaway, _, transport) = await makeGetaway()
+        _ = getaway
+
+        let envelope = try await sendRawMessageThroughTransport(
+            .activate(.heistId("button_1")),
+            requestId: "pre-auth-action",
+            transport: transport
+        )
+        XCTAssertEqual(envelope.requestId, "pre-auth-action")
+        guard case .error(let error) = envelope.message else {
+            return XCTFail("Expected auth failure, got \(envelope.message)")
+        }
+        XCTAssertEqual(error.kind, .authFailure)
+        XCTAssertEqual(error.message, "Authentication required before activate.")
+    }
+
+    func testPostAuthStatusDispatchesAfterMuscleAdmission() async throws {
+        let (getaway, muscle, transport) = await makeGetaway()
+        _ = getaway
+
+        let callbacks = transport.makeCallbacks()
+        let responses = SentBox()
+        let helloData = try JSONEncoder().encode(RequestEnvelope(message: .clientHello))
+        let authData = try JSONEncoder().encode(RequestEnvelope(message: .authenticate(.init(token: "test-token"))))
+        let statusData = try JSONEncoder().encode(RequestEnvelope(requestId: "post-auth-status", message: .status))
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onClientConnected?(1, "192.168.1.1")
+            callbacks.onDataReceived?(1, helloData) { data in responses.append(data, clientId: 1) }
+            callbacks.onDataReceived?(1, authData) { data in responses.append(data, clientId: 1) }
+        }.value
+
+        try await waitFor {
+            let authenticated = await muscle.authenticatedClientIDs
+            return authenticated.contains(1)
+        }
+
+        // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
+        // swiftlint:disable:next agent_no_task_detached
+        await Task.detached {
+            callbacks.onDataReceived?(1, statusData) { data in responses.append(data, clientId: 1) }
+        }.value
+
+        try await waitFor {
+            responses.all.contains { entry in
+                let envelope = try? JSONDecoder().decode(ResponseEnvelope.self, from: entry.0)
+                return envelope?.requestId == "post-auth-status"
+            }
+        }
+
+        let statusResponse = try XCTUnwrap(responses.all.compactMap { entry in
+            try? JSONDecoder().decode(ResponseEnvelope.self, from: entry.0)
+        }.first { $0.requestId == "post-auth-status" })
+        guard case .status = statusResponse.message else {
+            return XCTFail("Expected status after admission, got \(statusResponse.message)")
+        }
+    }
+
     func testNormalPingReturnsCachedHealthPayloadWithTimestamp() async throws {
-        let (getaway, _, _) = await makeGetaway()
+        let (getaway, muscle, _) = await makeGetaway()
         let request = RequestEnvelope(requestId: "health-1", message: .ping)
         let data = try JSONEncoder().encode(request)
-        var responseData: Data?
+        let responses = SentBox()
         let beforeMs = Int64(Date().timeIntervalSince1970 * 1000)
 
-        await getaway.handleClientMessage(1, data: data) { responseData = $0 }
+        try await dispatchAuthenticated(getaway, muscle: muscle, data: data) { data in
+            responses.append(data, clientId: 1)
+        }
         let afterMs = Int64(Date().timeIntervalSince1970 * 1000)
 
-        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: try XCTUnwrap(responseData))
+        let envelope = try JSONDecoder().decode(ResponseEnvelope.self, from: try XCTUnwrap(responses.all.first?.0))
         XCTAssertEqual(envelope.requestId, "health-1")
         guard case .pong(let payload) = envelope.message else {
             return XCTFail("Expected pong, got \(envelope.message)")
@@ -199,14 +300,14 @@ final class TheGetawayTests: XCTestCase {
     }
 
     func testMalformedClientMessageReturnsDecodeFailureEnvelope() async throws {
-        let (getaway, _, _) = await makeGetaway()
-        var responseData: Data?
+        let (getaway, muscle, _) = await makeGetaway()
+        let responses = SentBox()
 
-        await getaway.handleClientMessage(1, data: Data("not-json".utf8)) { data in
-            responseData = data
+        try await dispatchAuthenticated(getaway, muscle: muscle, data: Data("not-json".utf8)) { data in
+            responses.append(data, clientId: 1)
         }
 
-        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
+        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responses.all.first?.0))
         XCTAssertNil(envelope.requestId)
         guard case .error(let error) = envelope.message else {
             return XCTFail("Expected malformed decode error, got \(envelope.message)")
@@ -216,7 +317,7 @@ final class TheGetawayTests: XCTestCase {
     }
 
     func testTargetedActionAfterBackgroundScreenChangeDispatchesToBrains() async throws {
-        let (getaway, _, _) = await makeGetaway()
+        let (getaway, muscle, _) = await makeGetaway()
         seedScreen(getaway.brains, elements: [("Home", .header, "home_header"), ("Old", .button, "button_old")])
         getaway.brains.recordSentState()
         seedScreen(getaway.brains, elements: [("Settings", .header, "settings_header"), ("New", .button, "button_new")])
@@ -226,11 +327,13 @@ final class TheGetawayTests: XCTestCase {
             message: .activate(.heistId("button_old"))
         )
         let data = try JSONEncoder().encode(request)
-        var responseData: Data?
+        let responses = SentBox()
 
-        await getaway.handleClientMessage(1, data: data) { responseData = $0 }
+        try await dispatchAuthenticated(getaway, muscle: muscle, data: data) { data in
+            responses.append(data, clientId: 1)
+        }
 
-        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
+        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responses.all.first?.0))
         XCTAssertEqual(envelope.requestId, "activate-after-change")
         guard case .actionResult(let result) = envelope.message else {
             return XCTFail("Expected action result from TheBrains, got \(envelope.message)")
@@ -272,19 +375,19 @@ final class TheGetawayTests: XCTestCase {
 
     func testSendMessageStillEncodesExplicitErrorResponses() async throws {
         let (getaway, _, _) = await makeGetaway()
-        var responseData: Data?
+        let responses = SentBox()
 
         let result = getaway.sendMessage(
             .error(ServerError(kind: .general, message: "Explicit failure")),
             requestId: "explicit-error"
         ) { data in
-            responseData = data
+            responses.append(data, clientId: 1)
         }
 
         guard case .delivered = result else {
             return XCTFail("Expected explicit error response to encode, got \(result)")
         }
-        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responseData))
+        let envelope = try decodeResponseEnvelope(from: try XCTUnwrap(responses.all.first?.0))
         XCTAssertEqual(envelope.requestId, "explicit-error")
         guard case .error(let error) = envelope.message else {
             return XCTFail("Expected explicit error response, got \(envelope.message)")
@@ -333,7 +436,6 @@ final class TheGetawayTests: XCTestCase {
             sendToClient: { _, clientId in
                 .failed(.transportFailed(clientId: clientId, message: "socket write failed"))
             },
-            markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
             onSessionActiveChanged: { _ in }
@@ -361,7 +463,6 @@ final class TheGetawayTests: XCTestCase {
                 }
                 return .enqueued
             },
-            markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
             onSessionActiveChanged: { _ in }
@@ -384,7 +485,6 @@ final class TheGetawayTests: XCTestCase {
         _ = transport
         await muscle.installCallbacks(
             sendToClient: { _, clientId in .failed(.clientNotFound(clientId)) },
-            markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
             onSessionActiveChanged: { _ in }
@@ -632,7 +732,6 @@ final class TheGetawayTests: XCTestCase {
                 sent.append(data, clientId: clientId)
                 return .enqueued
             },
-            markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
             onSessionActiveChanged: { _ in }
@@ -685,7 +784,6 @@ final class TheGetawayTests: XCTestCase {
                 sent.append(data, clientId: clientId)
                 return .enqueued
             },
-            markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
             onSessionActiveChanged: { _ in }
@@ -723,7 +821,6 @@ final class TheGetawayTests: XCTestCase {
                 sent.append(data, clientId: clientId)
                 return .enqueued
             },
-            markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
             onSessionActiveChanged: { _ in }
@@ -1182,7 +1279,6 @@ final class TheGetawayTests: XCTestCase {
         let (getaway, muscle, _) = await makeGetaway()
         await muscle.installCallbacks(
             sendToClient: { _, clientId in .failed(.clientNotFound(clientId)) },
-            markClientAuthenticated: { _ in },
             disconnectClient: { _ in },
             onClientAuthenticated: { _, _ in },
             onSessionActiveChanged: { _ in }

@@ -9,7 +9,6 @@ struct SocketServerCallbacks: Sendable {
     var onClientDisconnected: (@Sendable (Int) -> Void)?
     var onDataReceived: SocketDataHandler?
     var onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)?
-    var onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
     var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
     init(
@@ -17,14 +16,12 @@ struct SocketServerCallbacks: Sendable {
         onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
         onDataReceived: SocketDataHandler? = nil,
         onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)? = nil,
-        onUnauthenticatedData: (@Sendable (_ clientId: Int, _ data: Data, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil,
         onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
     ) {
         self.onClientConnected = onClientConnected
         self.onClientDisconnected = onClientDisconnected
         self.onDataReceived = onDataReceived
         self.onSendFailed = onSendFailed
-        self.onUnauthenticatedData = onUnauthenticatedData
         self.onRateLimited = onRateLimited
     }
 }
@@ -52,11 +49,9 @@ struct SocketClientLifecycle: Sendable {
     func receivedData(
         clientId: Int,
         data: Data,
-        authenticated: Bool,
         respond: @escaping @Sendable (Data) -> Void
     ) {
-        let dataHandler = authenticated ? callbacks.onDataReceived : callbacks.onUnauthenticatedData
-        dataHandler?(clientId, data, respond)
+        callbacks.onDataReceived?(clientId, data, respond)
     }
 
     @discardableResult
@@ -74,7 +69,6 @@ struct SocketClientLifecycle: Sendable {
     }
 
     private func cancel(_ state: SocketClientRegistry.Client) {
-        state.authentication.cancelDeadline()
         state.connection.cancel()
     }
 }

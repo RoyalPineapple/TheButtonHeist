@@ -120,7 +120,9 @@ final class TheGetaway {
 
     // MARK: - Message Dispatch
 
-    func handleClientMessage(_ clientId: Int, data: Data, respond: @escaping (Data) -> Void) async {
+    func handleClientMessage(_ admitted: AdmittedClientMessage, respond: @escaping (Data) -> Void) async {
+        let clientId = admitted.clientId
+        let data = admitted.data
         let envelope: RequestEnvelope
         switch decodeRequest(data) {
         case .success(let decoded):

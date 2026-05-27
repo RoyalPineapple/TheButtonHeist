@@ -63,7 +63,7 @@ final class TLSIntegrationTests: XCTestCase {
         let echoReceived = expectation(description: "server received message")
 
         let callbacks = SimpleSocketServer.Callbacks(
-            onUnauthenticatedData: { _, data, respond in
+            onDataReceived: { _, data, respond in
                 respond(data)
                 echoReceived.fulfill()
             }
@@ -144,7 +144,7 @@ final class TLSIntegrationTests: XCTestCase {
             onClientConnected: { _, _ in
                 clientConnected.fulfill()
             },
-            onUnauthenticatedData: { _, _, _ in
+            onDataReceived: { _, _, _ in
                 unexpectedPreAuthData.fulfill()
             }
         )

@@ -18,19 +18,13 @@ enum TransportEvent: Sendable {
     case clientConnected(clientId: Int, remoteAddress: String?)
     /// A client connection was cancelled or failed.
     case clientDisconnected(clientId: Int)
-    /// An authenticated client sent a complete message. `respond` enqueues a
-    /// reply on the underlying connection's send queue.
+    /// A connected client sent a complete framed message. `respond` enqueues
+    /// a reply on the underlying connection's send queue; admission belongs to
+    /// `TheMuscle`, not the transport.
     case dataReceived(clientId: Int, data: Data, respond: @Sendable (Data) -> Void)
-    /// An unauthenticated client sent a complete message; the consumer must
-    /// decide whether the message is allowed in the unauthenticated state.
-    case unauthenticatedData(clientId: Int, data: Data, respond: @Sendable (Data) -> Void)
     /// The client exceeded the per-second message cap; `respond` lets the
     /// consumer notify the client once per rate-limit window.
     case rateLimited(clientId: Int, respond: @Sendable (Data) -> Void)
-    /// A `dataReceived` payload was answered synchronously on the network
-    /// queue by `syncDataInterceptor`. The consumer typically only needs to
-    /// note client activity; the response has already been sent.
-    case fastPathHandled(clientId: Int)
     /// Network.framework reported that an enqueued server-to-client send failed.
     case sendFailed(clientId: Int, failure: ServerSendFailure)
 }
@@ -80,16 +74,15 @@ enum ServerTransportError: Error, LocalizedError, Equatable, Sendable {
 /// Usage:
 /// ```
 /// let transport = ServerTransport()
-/// transport.setSyncDataInterceptor { clientId, data in ... }  // optional fast path
 /// let port = try await transport.start()
 /// transport.advertise(serviceName: "MyApp#abc")
 /// for await event in transport.events { ... }
 /// ```
 ///
-/// Isolation: lifecycle methods (`start`, `stop`, `advertise`, `setSyncDataInterceptor`)
+/// Isolation: lifecycle methods (`start`, `stop`, `advertise`, `makeCallbacks`)
 /// are `@MainActor`-isolated because they mutate Bonjour and lifecycle state that the
 /// owning `TheInsideJob` (also MainActor) reads synchronously. The pass-through helpers
-/// (`send`, `broadcastToAll`, `markAuthenticated`, `markApprovalPending`, `disconnect`, `listeningPort`) only
+/// (`send`, `disconnect`, `listeningPort`) only
 /// touch the inner `SimpleSocketServer` actor reference and are nonisolated, so callers
 /// on any context can use them without an actor hop.
 final class ServerTransport: NSObject {
@@ -136,40 +129,8 @@ final class ServerTransport: NSObject {
     /// (`@Sendable`) and finished when the transport is stopped.
     private nonisolated let eventContinuation: AsyncStream<TransportEvent>.Continuation
 
-    /// Synchronous interceptor for off-MainActor fast-path responses.
-    ///
-    /// Called on the network queue *before* a `.dataReceived` event is yielded
-    /// for an authenticated client. If it returns non-nil, the transport sends
-    /// the response synchronously and yields a `.fastPathHandled(clientId:)`
-    /// event instead. Used to keep ping/pong responsive when the consumer's
-    /// actor is wedged on long-running work. Returning nil falls through to
-    /// the normal `.dataReceived` path.
-    ///
-    /// The interceptor is snapshotted at `start()` time; assigning it after
-    /// `start()` has been called is a programmer error and trips a
-    /// `precondition` rather than being silently dropped. Use
-    /// `setSyncDataInterceptor(_:)` to install one before starting.
-    @MainActor private(set) var syncDataInterceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?
-
-    /// Tracks whether `start()` has been called. Once set, the interceptor is
-    /// frozen; later assignments would be silently captured-by-value at
-    /// `makeCallbacks()` time and have no effect on the running transport.
-    @MainActor private var hasStarted = false
-
     /// Test hook for deterministic listener-start failures after TLS setup.
     @MainActor var startOverride: ((_ port: UInt16, _ bindToLoopback: Bool) async throws -> UInt16)?
-
-    /// Install a synchronous data interceptor. Must be called before
-    /// `start()`; calls after start are ignored because `makeCallbacks()`
-    /// snapshots the interceptor by value.
-    @MainActor
-    func setSyncDataInterceptor(_ interceptor: (@Sendable (_ clientId: Int, _ data: Data) -> Data?)?) {
-        guard !hasStarted else {
-            logger.warning("Ignoring syncDataInterceptor assignment after start; makeCallbacks() snapshots it by value")
-            return
-        }
-        syncDataInterceptor = interceptor
-    }
 
     @MainActor
     func setEventBacklogOverflowHandler(
@@ -229,7 +190,6 @@ final class ServerTransport: NSObject {
         }
         if let startOverride {
             let actualPort = try await startOverride(port, bindToLoopback)
-            hasStarted = true
             return actualPort
         }
         let callbacks = makeCallbacks()
@@ -239,7 +199,6 @@ final class ServerTransport: NSObject {
             tlsParameters: params,
             callbacks: callbacks
         )
-        hasStarted = true
         return actualPort
     }
 
@@ -248,13 +207,9 @@ final class ServerTransport: NSObject {
     /// Each closure is `@Sendable` because `SimpleSocketServer` invokes it on
     /// its own network queue, not the main actor. The continuation is itself
     /// Sendable; `yield` is safe to call from any context. The synchronous
-    /// data interceptor is snapshotted here at start time; later interceptor
-    /// assignments are ignored because they would not reach the captured
-    /// `interceptor` constant.
     @MainActor
     internal func makeCallbacks() -> SimpleSocketServer.Callbacks {
         let continuation = eventContinuation
-        let interceptor = syncDataInterceptor
         let callbackTasks = callbackTasks
         let overflow = TransportOverflowStopper(transport: self)
         let onOverflow: @Sendable () -> Void = {
@@ -276,11 +231,6 @@ final class ServerTransport: NSObject {
                 Self.yieldEvent(.clientDisconnected(clientId: clientId), to: continuation, onOverflow: onOverflow)
             },
             onDataReceived: { clientId, data, respond in
-                if let interceptor, let response = interceptor(clientId, data) {
-                    respond(response)
-                    Self.yieldEvent(.fastPathHandled(clientId: clientId), to: continuation, onOverflow: onOverflow)
-                    return
-                }
                 Self.yieldEvent(
                     .dataReceived(clientId: clientId, data: data, respond: respond),
                     to: continuation,
@@ -289,13 +239,6 @@ final class ServerTransport: NSObject {
             },
             onSendFailed: { clientId, failure in
                 Self.yieldEvent(.sendFailed(clientId: clientId, failure: failure), to: continuation, onOverflow: onOverflow)
-            },
-            onUnauthenticatedData: { clientId, data, respond in
-                Self.yieldEvent(
-                    .unauthenticatedData(clientId: clientId, data: data, respond: respond),
-                    to: continuation,
-                    onOverflow: onOverflow
-                )
             },
             onRateLimited: { clientId, respond in
                 Self.yieldEvent(.rateLimited(clientId: clientId, respond: respond), to: continuation, onOverflow: onOverflow)

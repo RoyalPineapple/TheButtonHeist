@@ -9,9 +9,25 @@ import TheScore
 /// Manages client authentication, session token validation, and UI-based connection approval.
 private let logger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
+struct AdmittedClientMessage: Sendable {
+    let clientId: Int
+    let data: Data
+
+    fileprivate init(clientId: Int, data: Data) {
+        self.clientId = clientId
+        self.data = data
+    }
+}
+
+enum ClientAdmission: Sendable {
+    case admitted(AdmittedClientMessage)
+    case handled
+}
+
 actor TheMuscle {
 
     private static let disconnectGracePeriod: Duration = .milliseconds(100)
+    private static let authDeadlineSeconds: UInt64 = 10
     private static let maxFailedAttempts = 5
     private static let lockoutDuration: TimeInterval = 30
 
@@ -27,6 +43,10 @@ actor TheMuscle {
 
     /// Outstanding "wait then disconnect" tasks.
     private let delayedDisconnectTasks = TaskTracker()
+
+    /// Per-client pre-auth deadlines. TheMuscle owns these because it owns
+    /// authentication and approval state.
+    private var authDeadlineTasks: [Int: Task<Void, Never>] = [:]
 
     /// Tasks spawned by `showApprovalAlert` across actor/MainActor isolation.
     private let pendingAlertTasks = TaskTracker()
@@ -115,16 +135,12 @@ actor TheMuscle {
     /// Install transport-facing callbacks. Called once by `TheGetaway.wireTransport`.
     func installCallbacks(
         sendToClient: @escaping @Sendable (Data, Int) async -> ServerSendOutcome,
-        markClientAuthenticated: @escaping @Sendable (Int) async -> Void,
-        markClientAwaitingApproval: @escaping @Sendable (Int) async -> Void = { _ in },
         disconnectClient: @escaping @Sendable (Int) async -> Void,
         onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
         onSessionActiveChanged: @escaping @MainActor @Sendable (Bool) async -> Void
     ) {
         delivery.install(ClientDelivery.Callbacks(
             sendToClient: sendToClient,
-            markClientAuthenticated: markClientAuthenticated,
-            markClientAwaitingApproval: markClientAwaitingApproval,
             disconnectClient: disconnectClient,
             onClientAuthenticated: onClientAuthenticated,
             onSessionActiveChanged: onSessionActiveChanged
@@ -136,6 +152,7 @@ actor TheMuscle {
     /// Register the remote address for a client (called when TCP connection is established).
     func registerClientAddress(_ clientId: Int, address: String) {
         clientRegistry.registerAddress(clientId, address: address)
+        replaceAuthenticationDeadline(for: clientId)
     }
 
     @discardableResult
@@ -162,6 +179,19 @@ actor TheMuscle {
             return .failed(.clientNotFound(clientId))
         }
         return await delivery.send(data, toClient: clientId)
+    }
+
+    func admitClientMessage(
+        _ clientId: Int,
+        data: Data,
+        respond: @escaping @Sendable (Data) -> Void
+    ) async -> ClientAdmission {
+        guard clientRegistry.phase(for: clientId)?.isAuthenticated == true else {
+            await handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+            return .handled
+        }
+
+        return .admitted(AdmittedClientMessage(clientId: clientId, data: data))
     }
 
     func handleUnauthenticatedMessage(_ clientId: Int, data: Data, respond: @escaping @Sendable (Data) -> Void) async {
@@ -275,7 +305,6 @@ actor TheMuscle {
 
             logger.info("Client \(clientId) requesting UI approval (no token)")
             clientRegistry.beginApproval(clientId, address: address, respond: respond, driverId: payload.driverId)
-            _ = await delivery.markAwaitingApproval(clientId)
             sendMessage(.authApprovalPending(AuthApprovalPendingPayload()), respond: respond)
             showApprovalAlert(clientId: clientId)
             return
@@ -303,7 +332,7 @@ actor TheMuscle {
             }
 
             clientRegistry.authenticate(clientId, address: address, driverIdentity: driverIdentity)
-            _ = await delivery.markAuthenticated(clientId)
+            cancelAuthenticationDeadline(for: clientId)
             logger.info("Client \(clientId) authenticated with token")
             _ = await delivery.clientAuthenticated(clientId, respond: respond)
         }
@@ -334,6 +363,7 @@ actor TheMuscle {
     }
 
     func handleClientDisconnected(_ clientId: Int) async {
+        cancelAuthenticationDeadline(for: clientId)
         let removed = clientRegistry.remove(clientId)
         if case .pendingApproval = removed {
             await dismissAlert()
@@ -350,7 +380,7 @@ actor TheMuscle {
         }
 
         clientRegistry.authenticate(clientId, address: address, driverIdentity: driverIdentity)
-        _ = await delivery.markAuthenticated(clientId)
+        cancelAuthenticationDeadline(for: clientId)
         logger.info("Client \(clientId) approved via UI")
         sendMessage(.authApproved(AuthApprovedPayload(token: sessionTokenSource.uiApprovalPayload)), respond: respond)
         _ = await delivery.clientAuthenticated(clientId, respond: respond)
@@ -366,6 +396,7 @@ actor TheMuscle {
 
     func tearDown() async {
         clientRegistry.removeAll()
+        cancelAllAuthenticationDeadlines()
         delayedDisconnectTasks.cancelAll()
         pendingAlertTasks.cancelAll()
         cancelSessionReleaseTimer()
@@ -377,6 +408,7 @@ actor TheMuscle {
 
     /// Schedule a delayed disconnect so the recipient can flush the final error payload.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
+        cancelAuthenticationDeadline(for: clientId)
         delayedDisconnectTasks.spawn { [weak self] in
             guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
             await self?.fireDisconnect(clientId)
@@ -387,6 +419,58 @@ actor TheMuscle {
     /// `disconnectClient` callback while inside actor isolation.
     private func fireDisconnect(_ clientId: Int) async {
         _ = await delivery.disconnect(clientId)
+    }
+
+    // MARK: - Authentication Deadline
+
+    private func replaceAuthenticationDeadline(for clientId: Int) {
+        cancelAuthenticationDeadline(for: clientId)
+        authDeadlineTasks[clientId] = Task { [weak self] in
+            guard await Task.cancellableSleep(for: .seconds(TheMuscle.authDeadlineSeconds)) else { return }
+            await self?.handleAuthenticationDeadline(clientId)
+        }
+    }
+
+    private func cancelAuthenticationDeadline(for clientId: Int) {
+        authDeadlineTasks.removeValue(forKey: clientId)?.cancel()
+    }
+
+    private func cancelAllAuthenticationDeadlines() {
+        for task in authDeadlineTasks.values {
+            task.cancel()
+        }
+        authDeadlineTasks.removeAll()
+    }
+
+    private func handleAuthenticationDeadline(_ clientId: Int) async {
+        guard let phase = clientRegistry.phase(for: clientId),
+              !phase.isAuthenticated else {
+            cancelAuthenticationDeadline(for: clientId)
+            return
+        }
+
+        let error: ServerError
+        switch phase {
+        case .pendingApproval:
+            logger.warning("Client \(clientId): approval timed out — user did not respond to the approval prompt on the device")
+            error = ServerError(
+                kind: .authApprovalPending,
+                message: "Approval timed out — user did not respond to the approval prompt on the device."
+            )
+        case .connected, .helloValidated:
+            logger.warning("Client \(clientId) did not authenticate within \(Self.authDeadlineSeconds)s deadline")
+            error = ServerError(
+                kind: .authFailure,
+                message: "Authentication timed out after \(Self.authDeadlineSeconds) seconds."
+            )
+        case .authenticated:
+            return
+        }
+
+        if let data = encodeEnvelope(.error(error)) {
+            _ = await delivery.send(data, toClient: clientId)
+        }
+        scheduleDelayedDisconnect(clientId)
     }
 
     // MARK: - Status Accessors
