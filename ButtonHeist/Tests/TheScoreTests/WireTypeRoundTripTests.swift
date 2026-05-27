@@ -389,7 +389,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollTargetRoundTrip() throws {
         let target = ScrollTarget(
-            elementTarget: .heistId("list"),
+            selection: .element(.heistId("list")),
             direction: .down
         )
         let data = try encoder.encode(target)
@@ -416,7 +416,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollTargetContainerRoundTrip() throws {
         let target = ScrollTarget(
-            containerTarget: ScrollContainerTarget(stableId: "main_scroll"),
+            selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
             direction: .up
         )
         let data = try encoder.encode(target)
@@ -426,12 +426,29 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.direction, .up)
     }
 
+    func testScrollTargetRejectsContainerAndElementWireShape() {
+        let json = """
+        {
+          "heistId": "list",
+          "container": { "stableId": "main_scroll" },
+          "direction": "down"
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("at most one of container or element target"),
+                "Expected mixed scroll target failure, got \(error)"
+            )
+        }
+    }
+
     // MARK: - ScrollToEdgeTarget
 
     func testScrollToEdgeTargetAllEdges() throws {
         for edge in ScrollEdge.allCases {
             let target = ScrollToEdgeTarget(
-                elementTarget: .heistId("scroll_view"),
+                selection: .element(.heistId("scroll_view")),
                 edge: edge
             )
             let data = try encoder.encode(target)
@@ -450,7 +467,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollToEdgeTargetContainerRoundTrip() throws {
         let target = ScrollToEdgeTarget(
-            containerTarget: ScrollContainerTarget(stableId: "main_scroll"),
+            selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
             edge: .bottom
         )
         let data = try encoder.encode(target)
@@ -458,6 +475,23 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
         XCTAssertNil(decoded.elementTarget)
         XCTAssertEqual(decoded.edge, .bottom)
+    }
+
+    func testScrollToEdgeTargetRejectsContainerAndElementWireShape() {
+        let json = """
+        {
+          "heistId": "scroll_view",
+          "container": { "stableId": "main_scroll" },
+          "edge": "bottom"
+        }
+        """
+
+        XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("at most one of container or element target"),
+                "Expected mixed scroll-to-edge target failure, got \(error)"
+            )
+        }
     }
 
     // MARK: - ProtocolMismatchPayload

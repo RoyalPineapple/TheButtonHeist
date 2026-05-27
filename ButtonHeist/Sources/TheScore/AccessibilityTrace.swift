@@ -15,6 +15,7 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case captures
+        case segments
     }
 
     public init(captures: [Capture]) {
@@ -35,6 +36,13 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.segments) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .segments,
+                in: container,
+                debugDescription: "AccessibilityTrace stores captures; segments are derived projections and are not accepted as trace truth"
+            )
+        }
         self.init(captures: try container.decode([Capture].self, forKey: .captures))
     }
 

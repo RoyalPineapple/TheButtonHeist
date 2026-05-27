@@ -91,14 +91,18 @@ final class CommandProjectionTests: XCTestCase {
 
     func testScrollTargetProjectsToOneContainerSelection() {
         XCTAssertEqual(
-            ScrollTarget(containerTarget: ScrollContainerTarget(stableId: "main")).containerSelection,
+            ScrollTarget(selection: .container(ScrollContainerTarget(stableId: "main"))).containerSelection,
             .container(ScrollContainerTarget(stableId: "main"))
         )
         XCTAssertEqual(
-            ScrollTarget(elementTarget: .heistId("row")).containerSelection,
+            ScrollTarget(selection: .element(.heistId("row"))).containerSelection,
             .element(.heistId("row"))
         )
         XCTAssertEqual(ScrollTarget().containerSelection, .visibleContainer)
+        XCTAssertEqual(
+            ScrollToEdgeTarget(selection: .container(ScrollContainerTarget(stableId: "main"))).containerSelection,
+            .container(ScrollContainerTarget(stableId: "main"))
+        )
     }
 
     func testCustomActionTargetProjectsToOneSelection() {

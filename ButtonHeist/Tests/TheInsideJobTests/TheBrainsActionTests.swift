@@ -70,6 +70,20 @@ private final class AdjustableGeometryView: UIView {
     }
 }
 
+private struct TypedEndpointDragInput: DragExecutionInput {
+    let start: GesturePointSelection
+    let end: ScreenPoint
+    let duration: Double?
+
+    var resolvedDuration: Double {
+        duration ?? DragTarget.defaultDuration
+    }
+
+    func dragStartSelection() throws -> GesturePointSelection {
+        start
+    }
+}
+
 @MainActor
 final class TheBrainsActionTests: XCTestCase {
 
@@ -957,6 +971,21 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(dispatchedPoint, rawPoint)
+    }
+
+    func testExecuteDragReadsTypedEndpointFromExecutionInput() async {
+        let result = await brains.actions.executeDrag(
+            TypedEndpointDragInput(
+                start: .coordinate(ScreenPoint(x: 10, y: 10)),
+                end: ScreenPoint(x: .infinity, y: 20),
+                duration: 0.01
+            )
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .syntheticDrag)
+        XCTAssertEqual(result.failureKind, .inputValidation)
+        XCTAssertEqual(result.message, "syntheticDrag failed: endPoint must contain finite coordinates")
     }
 
     func testExecuteRotorWithoutCustomRotorsReportsNextStep() async {

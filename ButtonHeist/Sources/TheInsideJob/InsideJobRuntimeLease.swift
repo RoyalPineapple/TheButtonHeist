@@ -50,9 +50,9 @@ final class InsideJobRuntimeLease {
         }
     }
 
-    func release(from job: TheInsideJob, policy: ReleasePolicy) -> Task<Void, Never> {
+    func release(from job: TheInsideJob, policy: ReleasePolicy) -> Task<Void, Never>? {
         guard isActive else {
-            return releaseTask ?? Task {}
+            return releaseTask
         }
 
         isActive = false

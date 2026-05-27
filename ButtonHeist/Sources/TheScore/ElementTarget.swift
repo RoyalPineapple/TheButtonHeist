@@ -95,7 +95,10 @@ extension ElementTarget: Codable {
             if ordinal != nil || hasMatcherFields {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: container.codingPath,
-                    debugDescription: "ElementTarget heistId cannot be combined with matcher fields or ordinal; use either a capture handle or a semantic matcher"
+                    debugDescription: """
+                    ElementTarget heistId cannot be combined with matcher fields or ordinal; \
+                    use either a capture handle or a semantic matcher
+                    """
                 ))
             }
             self = .heistId(heistId)

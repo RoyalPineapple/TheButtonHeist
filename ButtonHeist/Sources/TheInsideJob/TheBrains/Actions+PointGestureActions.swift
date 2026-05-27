@@ -176,7 +176,7 @@ extension Actions {
         } catch {
             return gestureProjectionFailure(error, method: .syntheticDrag)
         }
-        let endPoint = CGPoint(x: target.endX, y: target.endY)
+        let endPoint = target.end.cgPoint
         if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }

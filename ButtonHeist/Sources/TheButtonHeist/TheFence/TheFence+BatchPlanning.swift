@@ -91,7 +91,10 @@ private extension TheFence {
         guard let message = executionPlan.messages.first, executionPlan.messages.count == 1 else {
             let commandName = executionPlan.messages.first?.canonicalName ?? request.command.rawValue
             throw BatchStepPlanBuildError(
-                message: "run_batch step command \"\(commandName)\" expands to \(executionPlan.messages.count) actions; express repeats as separate ordered steps"
+                message: """
+                run_batch step command "\(commandName)" expands to \(executionPlan.messages.count) actions; \
+                express repeats as separate ordered steps
+                """
             )
         }
         let typedStep = TheScore.BatchStep.command(

@@ -130,7 +130,10 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             if Self.forbiddenArgumentKeys.contains(key.stringValue) {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: decoder.codingPath + [key],
-                    debugDescription: "Heist playback step must not contain top-level heistId; use matcher fields for durable playback identity and _recorded.heistId for metadata"
+                    debugDescription: """
+                    Heist playback step must not contain top-level heistId; use matcher fields for durable \
+                    playback identity and _recorded.heistId for metadata
+                    """
                 ))
             }
             extraArguments[key.stringValue] = try dynamicContainer.decode(
@@ -144,13 +147,19 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         if let forbiddenKey = arguments.keys.sorted().first(where: { Self.forbiddenArgumentKeys.contains($0) }) {
             throw EncodingError.invalidValue(arguments, .init(
                 codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: forbiddenKey)],
-                debugDescription: "Heist playback step must not contain top-level \(forbiddenKey); use matcher fields for durable playback identity and _recorded.heistId for metadata"
+                debugDescription: """
+                Heist playback step must not contain top-level \(forbiddenKey); use matcher fields for durable \
+                playback identity and _recorded.heistId for metadata
+                """
             ))
         }
         if target?.heistId != nil {
             throw EncodingError.invalidValue(target as Any, .init(
-                codingPath: encoder.codingPath + [CodingKeys.label],
-                debugDescription: "Heist playback target matcher must not contain heistId; use matcher fields for durable playback identity and _recorded.heistId for metadata"
+                codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: "heistId")],
+                debugDescription: """
+                Heist playback target matcher must not contain heistId; use matcher fields for durable \
+                playback identity and _recorded.heistId for metadata
+                """
             ))
         }
 

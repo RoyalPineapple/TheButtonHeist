@@ -60,14 +60,17 @@ public struct ScrollTarget: Sendable {
     }
 
     public init(
-        elementTarget: ElementTarget? = nil,
-        containerTarget: ScrollContainerTarget? = nil,
+        elementTarget: ElementTarget,
         direction: ScrollDirection = .down
     ) {
-        self.init(
-            selection: Self.selection(elementTarget: elementTarget, containerTarget: containerTarget),
-            direction: direction
-        )
+        self.init(selection: .element(elementTarget), direction: direction)
+    }
+
+    public init(
+        containerTarget: ScrollContainerTarget,
+        direction: ScrollDirection = .down
+    ) {
+        self.init(selection: .container(containerTarget), direction: direction)
     }
 
     public var containerSelection: ScrollContainerSelection { selection }
@@ -80,19 +83,6 @@ public struct ScrollTarget: Sendable {
     public var elementTarget: ElementTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
-    }
-
-    private static func selection(
-        elementTarget: ElementTarget?,
-        containerTarget: ScrollContainerTarget?
-    ) -> ScrollContainerSelection {
-        if let containerTarget {
-            return .container(containerTarget)
-        }
-        if let elementTarget {
-            return .element(elementTarget)
-        }
-        return .visibleContainer
     }
 }
 
@@ -116,14 +106,20 @@ extension ScrollTarget: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        guard containerTarget == nil || elementTarget == nil else {
+        switch (containerTarget, elementTarget) {
+        case (.some, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
                 debugDescription: "ScrollTarget requires at most one of container or element target"
             )
+        case (.some(let containerTarget), nil):
+            self.selection = .container(containerTarget)
+        case (nil, .some(let elementTarget)):
+            self.selection = .element(elementTarget)
+        case (nil, nil):
+            self.selection = .visibleContainer
         }
-        self.selection = Self.selection(elementTarget: elementTarget, containerTarget: containerTarget)
         self.direction = try container.decodeIfPresent(ScrollDirection.self, forKey: .direction) ?? .down
     }
 
@@ -251,14 +247,17 @@ public struct ScrollToEdgeTarget: Sendable {
     }
 
     public init(
-        elementTarget: ElementTarget? = nil,
-        containerTarget: ScrollContainerTarget? = nil,
+        elementTarget: ElementTarget,
         edge: ScrollEdge = .top
     ) {
-        self.init(
-            selection: Self.selection(elementTarget: elementTarget, containerTarget: containerTarget),
-            edge: edge
-        )
+        self.init(selection: .element(elementTarget), edge: edge)
+    }
+
+    public init(
+        containerTarget: ScrollContainerTarget,
+        edge: ScrollEdge = .top
+    ) {
+        self.init(selection: .container(containerTarget), edge: edge)
     }
 
     public var containerSelection: ScrollContainerSelection { selection }
@@ -271,19 +270,6 @@ public struct ScrollToEdgeTarget: Sendable {
     public var elementTarget: ElementTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
-    }
-
-    private static func selection(
-        elementTarget: ElementTarget?,
-        containerTarget: ScrollContainerTarget?
-    ) -> ScrollContainerSelection {
-        if let containerTarget {
-            return .container(containerTarget)
-        }
-        if let elementTarget {
-            return .element(elementTarget)
-        }
-        return .visibleContainer
     }
 }
 
@@ -307,14 +293,20 @@ extension ScrollToEdgeTarget: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        guard containerTarget == nil || elementTarget == nil else {
+        switch (containerTarget, elementTarget) {
+        case (.some, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
                 debugDescription: "ScrollToEdgeTarget requires at most one of container or element target"
             )
+        case (.some(let containerTarget), nil):
+            self.selection = .container(containerTarget)
+        case (nil, .some(let elementTarget)):
+            self.selection = .element(elementTarget)
+        case (nil, nil):
+            self.selection = .visibleContainer
         }
-        self.selection = Self.selection(elementTarget: elementTarget, containerTarget: containerTarget)
         self.edge = try container.decodeIfPresent(ScrollEdge.self, forKey: .edge) ?? .top
     }
 

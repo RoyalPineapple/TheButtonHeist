@@ -417,11 +417,15 @@ public struct SwipeTarget: Codable, Sendable {
         }
     }
 
+    /// Returns explicit unit start only when the wire target used unit points.
+    /// Direction-based swipes derive their own start/end at dispatch time.
     public var start: UnitPoint? {
         guard case .unitElement(_, let start, _, let direction) = selection, direction == nil else { return nil }
         return start
     }
 
+    /// Returns explicit unit end only when the wire target used unit points.
+    /// Direction-based swipes derive their own start/end at dispatch time.
     public var end: UnitPoint? {
         guard case .unitElement(_, _, let end, let direction) = selection, direction == nil else { return nil }
         return end
