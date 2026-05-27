@@ -7,26 +7,65 @@ import TheScore
 extension Actions {
 
     func resolveGesturePoint(
+        selection: GesturePointSelection,
+        method: ActionMethod,
+        recordedScreen: Screen? = nil
+    ) async -> PointResolution {
+        let actionableTarget: SemanticActionability.SemanticActionableTarget?
+        switch selection {
+        case .element(let target):
+            let normalizedTarget = normalizePointGestureTarget(target, recordedScreen: recordedScreen)
+            switch await actionability.makeActionable(
+                for: normalizedTarget,
+                method: method,
+                deallocatedBoundary: "gesture action"
+            ) {
+            case .actionable(let target):
+                actionableTarget = target
+            case .failed(let failure):
+                return .failure(failure.interactionResult(commandMethod: method))
+            }
+        case .coordinate, .unspecified:
+            actionableTarget = nil
+        }
+        return resolveGesturePoint(from: actionableTarget, selection: selection, method: method)
+    }
+
+    func resolveGesturePoint(
         from actionableTarget: SemanticActionability.SemanticActionableTarget?,
-        pointX: Double?,
-        pointY: Double?,
+        selection: GesturePointSelection,
         method: ActionMethod
     ) -> PointResolution {
-        guard let actionableTarget else {
-            guard let xCoord = pointX, let yCoord = pointY else {
+        switch selection {
+        case .element:
+            guard let actionableTarget else {
                 return .failure(.failure(.elementNotFound, message: "No target specified"))
             }
-            let point = CGPoint(x: xCoord, y: yCoord)
+            let point = actionableTarget.liveTarget.activationPoint
             if let failure = geometryFailure(method: method, field: "point", point: point) {
                 return .failure(failure)
             }
             return .success(point)
+        case .coordinate(let screenPoint):
+            let point = screenPoint.cgPoint
+            if let failure = geometryFailure(method: method, field: "point", point: point) {
+                return .failure(failure)
+            }
+            return .success(point)
+        case .unspecified:
+            return .failure(.failure(.elementNotFound, message: "No target specified"))
         }
-        let point = actionableTarget.liveTarget.activationPoint
-        if let failure = geometryFailure(method: method, field: "activationPoint", point: point) {
-            return .failure(failure)
-        }
-        return .success(point)
+    }
+
+    func gestureProjectionFailure(
+        _ error: Error,
+        method: ActionMethod
+    ) -> TheSafecracker.InteractionResult {
+        .failure(
+            method,
+            message: "\(method.rawValue) failed: \(error)",
+            failureKind: .inputValidation
+        )
     }
 
     enum GestureFrameResolution {

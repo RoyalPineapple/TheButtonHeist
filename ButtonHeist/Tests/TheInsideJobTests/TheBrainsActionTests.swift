@@ -907,9 +907,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            elementTarget: ElementTarget.heistId("below_fold_button"),
-            pointX: nil,
-            pointY: nil,
+            selection: .element(.heistId("below_fold_button")),
             method: .syntheticTap
         ) { point in
             dispatchedPoint = point
@@ -943,9 +941,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            elementTarget: ElementTarget.heistId(heistId),
-            pointX: nil,
-            pointY: nil,
+            selection: .element(.heistId(heistId)),
             method: .syntheticTap
         ) { point in
             dispatchedPoint = point
@@ -962,9 +958,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            elementTarget: nil,
-            pointX: Double(rawPoint.x),
-            pointY: Double(rawPoint.y),
+            selection: .coordinate(ScreenPoint(x: Double(rawPoint.x), y: Double(rawPoint.y))),
             method: .syntheticTap
         ) { point in
             dispatchedPoint = point

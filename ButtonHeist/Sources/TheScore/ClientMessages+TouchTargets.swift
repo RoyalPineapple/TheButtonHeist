@@ -3,6 +3,131 @@ import CoreGraphics
 
 // MARK: - Touch Gesture Targets
 
+public struct ScreenPoint: Sendable, Equatable, CustomStringConvertible {
+    public let x: Double
+    public let y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
+    }
+
+    public var cgPoint: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+
+    public var description: String {
+        "point(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)))"
+    }
+}
+
+public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConvertible {
+    case partialCoordinate(field: String, xPresent: Bool, yPresent: Bool)
+    case partialUnitPoints
+    case unitPointsRequireElementTarget
+
+    public var description: String {
+        switch self {
+        case .partialCoordinate(let field, let xPresent, let yPresent):
+            return "\(field) requires both x and y coordinates (xPresent=\(xPresent), yPresent=\(yPresent))"
+        case .partialUnitPoints:
+            return "unit-point swipe requires both start and end unit points"
+        case .unitPointsRequireElementTarget:
+            return "unit-point swipe requires elementTarget"
+        }
+    }
+}
+
+public enum GesturePointSelection: Sendable, Equatable, CustomStringConvertible {
+    case element(ElementTarget)
+    case coordinate(ScreenPoint)
+    case unspecified
+
+    public var description: String {
+        switch self {
+        case .element(let target):
+            return target.description
+        case .coordinate(let point):
+            return point.description
+        case .unspecified:
+            return "unspecified"
+        }
+    }
+}
+
+public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConvertible {
+    case coordinate(ScreenPoint)
+    case direction(SwipeDirection)
+    case unspecified
+
+    public var description: String {
+        switch self {
+        case .coordinate(let point):
+            return point.description
+        case .direction(let direction):
+            return "\(direction)"
+        case .unspecified:
+            return "unspecified"
+        }
+    }
+}
+
+public enum SwipeGestureSelection: Sendable, Equatable, CustomStringConvertible {
+    case unitElement(ElementTarget, start: UnitPoint, end: UnitPoint)
+    case point(start: GesturePointSelection, destination: SwipeDestinationSelection)
+
+    public var description: String {
+        switch self {
+        case .unitElement(let target, let start, let end):
+            return ScoreDescription.call("unitSwipe", [
+                target.description,
+                "start=\(start)",
+                "end=\(end)",
+            ])
+        case .point(let start, let destination):
+            return ScoreDescription.call("pointSwipe", [
+                "start=\(start)",
+                "destination=\(destination)",
+            ])
+        }
+    }
+}
+
+private func makeGesturePointSelection(
+    elementTarget: ElementTarget?,
+    x: Double?,
+    y: Double?,
+    field: String
+) throws -> GesturePointSelection {
+    if let elementTarget {
+        return .element(elementTarget)
+    }
+    if let x, let y {
+        return .coordinate(ScreenPoint(x: x, y: y))
+    }
+    if x != nil || y != nil {
+        throw GestureProjectionError.partialCoordinate(field: field, xPresent: x != nil, yPresent: y != nil)
+    }
+    return .unspecified
+}
+
+private func swipeDestinationSelection(
+    x: Double?,
+    y: Double?,
+    direction: SwipeDirection?
+) throws -> SwipeDestinationSelection {
+    if let x, let y {
+        return .coordinate(ScreenPoint(x: x, y: y))
+    }
+    if x != nil || y != nil {
+        throw GestureProjectionError.partialCoordinate(field: "endPoint", xPresent: x != nil, yPresent: y != nil)
+    }
+    if let direction {
+        return .direction(direction)
+    }
+    return .unspecified
+}
+
 /// Target for a tap gesture — either an `ElementTarget` (tap at its activation
 /// point) or explicit screen coordinates. Exactly one form should be set.
 public struct TouchTapTarget: Codable, Sendable {
@@ -19,6 +144,15 @@ public struct TouchTapTarget: Codable, Sendable {
     public var point: CGPoint? {
         guard let x = pointX, let y = pointY else { return nil }
         return CGPoint(x: x, y: y)
+    }
+
+    public func gesturePointSelection() throws -> GesturePointSelection {
+        try makeGesturePointSelection(
+            elementTarget: elementTarget,
+            x: pointX,
+            y: pointY,
+            field: "point"
+        )
     }
 }
 
@@ -50,6 +184,15 @@ public struct LongPressTarget: Codable, Sendable {
     public var point: CGPoint? {
         guard let x = pointX, let y = pointY else { return nil }
         return CGPoint(x: x, y: y)
+    }
+
+    public func gesturePointSelection() throws -> GesturePointSelection {
+        try makeGesturePointSelection(
+            elementTarget: elementTarget,
+            x: pointX,
+            y: pointY,
+            field: "point"
+        )
     }
 }
 
@@ -126,6 +269,30 @@ public struct SwipeTarget: Codable, Sendable {
     }
 
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
+
+    public func gestureSelection() throws -> SwipeGestureSelection {
+        if start != nil || end != nil {
+            guard let start, let end else {
+                throw GestureProjectionError.partialUnitPoints
+            }
+            guard let elementTarget else {
+                throw GestureProjectionError.unitPointsRequireElementTarget
+            }
+            return .unitElement(elementTarget, start: start, end: end)
+        }
+        if let direction, let elementTarget, startX == nil, startY == nil, endX == nil, endY == nil {
+            return .unitElement(elementTarget, start: direction.defaultStart, end: direction.defaultEnd)
+        }
+        return .point(
+            start: try makeGesturePointSelection(
+                elementTarget: elementTarget,
+                x: startX,
+                y: startY,
+                field: "startPoint"
+            ),
+            destination: try swipeDestinationSelection(x: endX, y: endY, direction: direction)
+        )
+    }
 }
 
 extension SwipeTarget: CustomStringConvertible {
@@ -178,6 +345,15 @@ public struct DragTarget: Codable, Sendable {
     }
 
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
+
+    public func startSelection() throws -> GesturePointSelection {
+        try makeGesturePointSelection(
+            elementTarget: elementTarget,
+            x: startX,
+            y: startY,
+            field: "startPoint"
+        )
+    }
 }
 
 extension DragTarget: CustomStringConvertible {
@@ -221,6 +397,15 @@ public struct PinchTarget: Codable, Sendable {
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
+
+    public func centerSelection() throws -> GesturePointSelection {
+        try makeGesturePointSelection(
+            elementTarget: elementTarget,
+            x: centerX,
+            y: centerY,
+            field: "center"
+        )
+    }
 }
 
 extension PinchTarget: CustomStringConvertible {
@@ -264,6 +449,15 @@ public struct RotateTarget: Codable, Sendable {
 
     public var resolvedRadius: Double { radius ?? Self.defaultRadius }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
+
+    public func centerSelection() throws -> GesturePointSelection {
+        try makeGesturePointSelection(
+            elementTarget: elementTarget,
+            x: centerX,
+            y: centerY,
+            field: "center"
+        )
+    }
 }
 
 extension RotateTarget: CustomStringConvertible {
@@ -300,6 +494,15 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     }
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
+
+    public func centerSelection() throws -> GesturePointSelection {
+        try makeGesturePointSelection(
+            elementTarget: elementTarget,
+            x: centerX,
+            y: centerY,
+            field: "center"
+        )
+    }
 }
 
 extension TwoFingerTapTarget: CustomStringConvertible {

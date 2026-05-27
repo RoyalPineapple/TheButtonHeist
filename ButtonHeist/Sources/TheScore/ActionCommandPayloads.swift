@@ -26,6 +26,46 @@ public struct CustomActionTarget: Codable, Sendable {
     }
 }
 
+public enum CustomActionSelection: Sendable, Equatable, CustomStringConvertible {
+    case element(ElementTarget, actionName: String)
+    case container(ContainerMatcher, ordinal: Int?, actionName: String)
+
+    public var actionName: String {
+        switch self {
+        case .element(_, let actionName), .container(_, _, let actionName):
+            return actionName
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .element(let target, let actionName):
+            return ScoreDescription.call("customAction", [
+                target.description,
+                ScoreDescription.stringField("action", actionName),
+            ].compactMap { $0 })
+        case .container(let target, let ordinal, let actionName):
+            return ScoreDescription.call("customAction", [
+                ScoreDescription.call("container", [
+                    target.description,
+                    ScoreDescription.valueField("ordinal", ordinal),
+                ].compactMap { $0 }),
+                ScoreDescription.stringField("action", actionName),
+            ].compactMap { $0 })
+        }
+    }
+}
+
+public extension CustomActionTarget {
+    var selection: CustomActionSelection {
+        if let elementTarget {
+            return .element(elementTarget, actionName: actionName)
+        }
+        // Codable validation guarantees the container case when no element is present.
+        return .container(containerTarget ?? ContainerMatcher(), ordinal: containerOrdinal, actionName: actionName)
+    }
+}
+
 extension CustomActionTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("customAction", [

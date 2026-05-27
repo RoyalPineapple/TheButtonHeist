@@ -5,10 +5,7 @@ import UIKit
 import TheScore
 
 protocol CustomActionExecutionInput {
-    var actionElementTarget: (any SemanticElementTarget)? { get }
-    var actionContainerTarget: ContainerMatcher? { get }
-    var actionContainerOrdinal: Int? { get }
-    var actionName: String { get }
+    var customActionSelection: CustomActionSelection { get }
 }
 
 protocol RotorExecutionInput {
@@ -21,9 +18,7 @@ protocol RotorExecutionInput {
 }
 
 protocol TapExecutionInput {
-    var tapElementTarget: (any SemanticElementTarget)? { get }
-    var pointX: Double? { get }
-    var pointY: Double? { get }
+    func tapPointSelection() throws -> GesturePointSelection
 }
 
 protocol LongPressExecutionInput: TapExecutionInput {
@@ -31,49 +26,34 @@ protocol LongPressExecutionInput: TapExecutionInput {
 }
 
 protocol SwipeExecutionInput {
-    var swipeElementTarget: (any SemanticElementTarget)? { get }
-    var startX: Double? { get }
-    var startY: Double? { get }
-    var endX: Double? { get }
-    var endY: Double? { get }
-    var direction: SwipeDirection? { get }
     var resolvedDuration: Double { get }
-    var start: UnitPoint? { get }
-    var end: UnitPoint? { get }
+    func swipeGestureSelection() throws -> SwipeGestureSelection
 }
 
 protocol DragExecutionInput {
-    var dragElementTarget: (any SemanticElementTarget)? { get }
-    var startX: Double? { get }
-    var startY: Double? { get }
     var endX: Double { get }
     var endY: Double { get }
     var resolvedDuration: Double { get }
+    func dragStartSelection() throws -> GesturePointSelection
 }
 
 protocol PinchExecutionInput {
-    var pinchElementTarget: (any SemanticElementTarget)? { get }
-    var centerX: Double? { get }
-    var centerY: Double? { get }
     var scale: Double { get }
     var resolvedSpread: Double { get }
     var resolvedDuration: Double { get }
+    func pinchCenterSelection() throws -> GesturePointSelection
 }
 
 protocol RotateExecutionInput {
-    var rotateElementTarget: (any SemanticElementTarget)? { get }
-    var centerX: Double? { get }
-    var centerY: Double? { get }
     var angle: Double { get }
     var resolvedRadius: Double { get }
     var resolvedDuration: Double { get }
+    func rotateCenterSelection() throws -> GesturePointSelection
 }
 
 protocol TwoFingerTapExecutionInput {
-    var twoFingerTapElementTarget: (any SemanticElementTarget)? { get }
-    var centerX: Double? { get }
-    var centerY: Double? { get }
     var resolvedSpread: Double { get }
+    func twoFingerTapCenterSelection() throws -> GesturePointSelection
 }
 
 protocol TypeTextExecutionInput {
@@ -82,9 +62,7 @@ protocol TypeTextExecutionInput {
 }
 
 extension CustomActionTarget: CustomActionExecutionInput {
-    var actionElementTarget: (any SemanticElementTarget)? { elementTarget }
-    var actionContainerTarget: ContainerMatcher? { containerTarget }
-    var actionContainerOrdinal: Int? { containerOrdinal }
+    var customActionSelection: CustomActionSelection { selection }
 }
 
 extension RotorTarget: RotorExecutionInput {
@@ -92,31 +70,45 @@ extension RotorTarget: RotorExecutionInput {
 }
 
 extension TouchTapTarget: TapExecutionInput {
-    var tapElementTarget: (any SemanticElementTarget)? { elementTarget }
+    func tapPointSelection() throws -> GesturePointSelection {
+        try gesturePointSelection()
+    }
 }
 
 extension LongPressTarget: LongPressExecutionInput {
-    var tapElementTarget: (any SemanticElementTarget)? { elementTarget }
+    func tapPointSelection() throws -> GesturePointSelection {
+        try gesturePointSelection()
+    }
 }
 
 extension SwipeTarget: SwipeExecutionInput {
-    var swipeElementTarget: (any SemanticElementTarget)? { elementTarget }
+    func swipeGestureSelection() throws -> SwipeGestureSelection {
+        try gestureSelection()
+    }
 }
 
 extension DragTarget: DragExecutionInput {
-    var dragElementTarget: (any SemanticElementTarget)? { elementTarget }
+    func dragStartSelection() throws -> GesturePointSelection {
+        try startSelection()
+    }
 }
 
 extension PinchTarget: PinchExecutionInput {
-    var pinchElementTarget: (any SemanticElementTarget)? { elementTarget }
+    func pinchCenterSelection() throws -> GesturePointSelection {
+        try centerSelection()
+    }
 }
 
 extension RotateTarget: RotateExecutionInput {
-    var rotateElementTarget: (any SemanticElementTarget)? { elementTarget }
+    func rotateCenterSelection() throws -> GesturePointSelection {
+        try centerSelection()
+    }
 }
 
 extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
-    var twoFingerTapElementTarget: (any SemanticElementTarget)? { elementTarget }
+    func twoFingerTapCenterSelection() throws -> GesturePointSelection {
+        try centerSelection()
+    }
 }
 
 extension TypeTextTarget: TypeTextExecutionInput {

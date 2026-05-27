@@ -10,21 +10,18 @@ extension Navigation {
 
     func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult {
         await executeScroll(
-            elementTarget: target.elementTarget,
-            containerTarget: target.containerTarget,
+            selection: target.containerSelection,
             direction: target.direction
         )
     }
 
     func executeScroll(
-        elementTarget: (any SemanticElementTarget)?,
-        containerTarget: ScrollContainerTarget? = nil,
+        selection: ScrollContainerSelection,
         direction: ScrollDirection
     ) async -> TheSafecracker.InteractionResult {
         let axis = Self.requiredAxis(for: direction)
         switch resolveContainerScrollTarget(
-            containerTarget: containerTarget,
-            elementTarget: elementTarget,
+            selection: selection,
             axis: axis,
             commandName: ScrollMode.page.canonicalCommand
         ) {
@@ -43,21 +40,18 @@ extension Navigation {
 
     func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
         await executeScrollToEdge(
-            elementTarget: target.elementTarget,
-            containerTarget: target.containerTarget,
+            selection: target.containerSelection,
             edge: target.edge
         )
     }
 
     func executeScrollToEdge(
-        elementTarget: (any SemanticElementTarget)?,
-        containerTarget: ScrollContainerTarget? = nil,
+        selection: ScrollContainerSelection,
         edge: ScrollEdge
     ) async -> TheSafecracker.InteractionResult {
         let axis = Self.requiredAxis(for: edge)
         switch resolveContainerScrollTarget(
-            containerTarget: containerTarget,
-            elementTarget: elementTarget,
+            selection: selection,
             axis: axis,
             commandName: ScrollMode.toEdge.canonicalCommand
         ) {

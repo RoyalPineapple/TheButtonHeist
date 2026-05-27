@@ -31,19 +31,17 @@ extension Navigation {
     }
 
     func resolveContainerScrollTarget(
-        containerTarget: ScrollContainerTarget?,
-        elementTarget: (any SemanticElementTarget)?,
+        selection: ScrollContainerSelection,
         axis: ScrollAxis,
         commandName: String
     ) -> ContainerScrollResolution {
-        if let containerTarget {
+        switch selection {
+        case .container(let containerTarget):
             guard let plan = scrollPlan(for: containerTarget, requiredAxis: axis) else {
                 return .failed("\(commandName) failed: no visible scroll container matched \(containerTarget.description)")
             }
             return .resolved(plan.target)
-        }
-
-        if let elementTarget {
+        case .element(let elementTarget):
             guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
                 return .failed(liveScrollElementFailureMessage(elementTarget, commandName: commandName))
             }
@@ -69,19 +67,19 @@ extension Navigation {
                 )
             }
             return .resolved(.uiScrollView(scrollView))
+        case .visibleContainer:
+            let candidates = scrollSearchCandidates(requiredAxis: axis)
+            guard !candidates.isEmpty else {
+                return .failed("\(commandName) failed: no visible scroll container supports \(Self.axisDescription(axis))")
+            }
+            guard candidates.count == 1, let plan = candidates.first else {
+                return .failed(
+                    "\(commandName) ambiguous: multiple visible scroll containers support \(Self.axisDescription(axis)); "
+                        + "specify stableId. Candidates: \(candidateContainerRefs(candidates))"
+                )
+            }
+            return .resolved(plan.target)
         }
-
-        let candidates = scrollSearchCandidates(requiredAxis: axis)
-        guard !candidates.isEmpty else {
-            return .failed("\(commandName) failed: no visible scroll container supports \(Self.axisDescription(axis))")
-        }
-        guard candidates.count == 1, let plan = candidates.first else {
-            return .failed(
-                "\(commandName) ambiguous: multiple visible scroll containers support \(Self.axisDescription(axis)); "
-                    + "specify stableId. Candidates: \(candidateContainerRefs(candidates))"
-            )
-        }
-        return .resolved(plan.target)
     }
 
     func scrollPlan(for target: ScrollContainerTarget, requiredAxis axis: ScrollAxis) -> ScrollPlan? {
