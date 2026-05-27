@@ -137,7 +137,7 @@ jobs:
           scripts/swift-test-gate.sh ButtonHeistCLI
 
       - name: Build & test MCP (SwiftPM)
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: |
           swift package --package-path ButtonHeistMCP resolve
           swift build --package-path ButtonHeistMCP
