@@ -37,6 +37,8 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.segments) {
+            // Intentional contract break: prior segment-backed traces are not
+            // durable public artifacts. Captures are now the only stored truth.
             throw DecodingError.dataCorruptedError(
                 forKey: .segments,
                 in: container,
