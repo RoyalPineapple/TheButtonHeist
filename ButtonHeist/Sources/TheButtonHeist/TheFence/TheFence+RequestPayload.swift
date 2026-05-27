@@ -81,6 +81,17 @@ extension TheFence {
             guard case .point(_, let y) = self else { return nil }
             return y
         }
+
+        var selection: GesturePointSelection {
+            switch self {
+            case .element(let target):
+                return .element(target)
+            case .point(let x, let y):
+                return .coordinate(ScreenPoint(x: x, y: y))
+            case .unspecified:
+                return .unspecified
+            }
+        }
     }
 
     enum SwipeGestureEndIntent {
@@ -160,12 +171,10 @@ extension TheFence {
     struct TouchTapGesturePayload {
         let intent: GesturePointIntent
 
-        var elementTarget: ElementTarget? { intent.elementTarget }
-        var pointX: Double? { intent.pointX }
-        var pointY: Double? { intent.pointY }
+        var selection: GesturePointSelection { intent.selection }
 
         var target: TouchTapTarget {
-            TouchTapTarget(elementTarget: elementTarget, pointX: pointX, pointY: pointY)
+            TouchTapTarget(selection: selection)
         }
     }
 
@@ -173,15 +182,11 @@ extension TheFence {
         let intent: GesturePointIntent
         let duration: Double
 
-        var elementTarget: ElementTarget? { intent.elementTarget }
-        var pointX: Double? { intent.pointX }
-        var pointY: Double? { intent.pointY }
+        var selection: GesturePointSelection { intent.selection }
 
         var target: LongPressTarget {
             LongPressTarget(
-                elementTarget: elementTarget,
-                pointX: pointX,
-                pointY: pointY,
+                selection: selection,
                 duration: duration
             )
         }
@@ -243,15 +248,11 @@ extension TheFence {
         let spread: Double?
         let duration: Double?
 
-        var elementTarget: ElementTarget? { center.elementTarget }
-        var centerX: Double? { center.pointX }
-        var centerY: Double? { center.pointY }
+        var centerSelection: GesturePointSelection { center.selection }
 
         var target: PinchTarget {
             PinchTarget(
-                elementTarget: elementTarget,
-                centerX: centerX,
-                centerY: centerY,
+                center: centerSelection,
                 scale: scale,
                 spread: spread,
                 duration: duration
@@ -265,15 +266,11 @@ extension TheFence {
         let radius: Double?
         let duration: Double?
 
-        var elementTarget: ElementTarget? { center.elementTarget }
-        var centerX: Double? { center.pointX }
-        var centerY: Double? { center.pointY }
+        var centerSelection: GesturePointSelection { center.selection }
 
         var target: RotateTarget {
             RotateTarget(
-                elementTarget: elementTarget,
-                centerX: centerX,
-                centerY: centerY,
+                center: centerSelection,
                 angle: angle,
                 radius: radius,
                 duration: duration
@@ -285,15 +282,11 @@ extension TheFence {
         let center: GesturePointIntent
         let spread: Double?
 
-        var elementTarget: ElementTarget? { center.elementTarget }
-        var centerX: Double? { center.pointX }
-        var centerY: Double? { center.pointY }
+        var centerSelection: GesturePointSelection { center.selection }
 
         var target: TwoFingerTapTarget {
             TwoFingerTapTarget(
-                elementTarget: elementTarget,
-                centerX: centerX,
-                centerY: centerY,
+                center: centerSelection,
                 spread: spread
             )
         }

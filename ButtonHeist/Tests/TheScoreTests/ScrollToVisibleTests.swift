@@ -40,6 +40,10 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertEqual(matcher.label, "Save")
     }
 
+    func testScrollToVisibleTargetRejectsMissingElementTarget() {
+        XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: Data("{}".utf8)))
+    }
+
     func testScrollToVisibleClientMessageRoundTrip() throws {
         let target = ScrollToVisibleTarget(
             elementTarget: .matcher(ElementMatcher(label: "Settings", traits: [.header]))
@@ -100,6 +104,10 @@ final class ScrollToVisibleTests: XCTestCase {
         }
         XCTAssertEqual(matcher.label, "Save")
         XCTAssertNil(decoded.direction)
+    }
+
+    func testElementSearchTargetRejectsMissingElementTarget() {
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementSearchTarget.self, from: Data("{}".utf8)))
     }
 
     func testElementSearchClientMessageRoundTrip() throws {

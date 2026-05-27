@@ -85,11 +85,6 @@ final class ElementMatcherTests: XCTestCase {
     }
 
     func testScrollToVisibleTargetWithElementTarget() {
-        // No element target
-        let empty = ScrollToVisibleTarget()
-        XCTAssertNil(empty.elementTarget)
-
-        // With heistId
         let withId = ScrollToVisibleTarget(elementTarget: .heistId("save_button"))
         guard case .heistId(let id) = withId.elementTarget else {
             return XCTFail("Expected .heistId")

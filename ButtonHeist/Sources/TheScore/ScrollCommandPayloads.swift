@@ -46,24 +46,46 @@ public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertib
 
 /// Target for one-page scroll command.
 public struct ScrollTarget: Sendable {
-    /// Explicit scroll container to move.
-    public let containerTarget: ScrollContainerTarget?
-    /// Compatibility: element whose owning scroll container should move.
-    public let elementTarget: ElementTarget?
+    /// Scroll subject to move.
+    public let selection: ScrollContainerSelection
     /// Scroll direction
     public let direction: ScrollDirection
+
+    public init(
+        selection: ScrollContainerSelection = .visibleContainer,
+        direction: ScrollDirection = .down
+    ) {
+        self.selection = selection
+        self.direction = direction
+    }
 
     public init(
         elementTarget: ElementTarget? = nil,
         containerTarget: ScrollContainerTarget? = nil,
         direction: ScrollDirection = .down
     ) {
-        self.elementTarget = elementTarget
-        self.containerTarget = containerTarget
-        self.direction = direction
+        self.init(
+            selection: Self.selection(elementTarget: elementTarget, containerTarget: containerTarget),
+            direction: direction
+        )
     }
 
-    public var containerSelection: ScrollContainerSelection {
+    public var containerSelection: ScrollContainerSelection { selection }
+
+    public var containerTarget: ScrollContainerTarget? {
+        guard case .container(let target) = selection else { return nil }
+        return target
+    }
+
+    public var elementTarget: ElementTarget? {
+        guard case .element(let target) = selection else { return nil }
+        return target
+    }
+
+    private static func selection(
+        elementTarget: ElementTarget?,
+        containerTarget: ScrollContainerTarget?
+    ) -> ScrollContainerSelection {
         if let containerTarget {
             return .container(containerTarget)
         }
@@ -92,8 +114,16 @@ extension ScrollTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
-        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        let containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
+        let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        guard containerTarget == nil || elementTarget == nil else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .container,
+                in: container,
+                debugDescription: "ScrollTarget requires at most one of container or element target"
+            )
+        }
+        self.selection = Self.selection(elementTarget: elementTarget, containerTarget: containerTarget)
         self.direction = try container.decodeIfPresent(ScrollDirection.self, forKey: .direction) ?? .down
     }
 
@@ -115,8 +145,8 @@ public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
 /// Jumps directly to the element's position — no iterative search.
 public struct ScrollToVisibleTarget: Sendable {
     /// Element to scroll into view. Must be a known element with a recorded position.
-    public let elementTarget: ElementTarget?
-    public init(elementTarget: ElementTarget? = nil) {
+    public let elementTarget: ElementTarget
+    public init(elementTarget: ElementTarget) {
         self.elementTarget = elementTarget
     }
 }
@@ -124,7 +154,7 @@ public struct ScrollToVisibleTarget: Sendable {
 extension ScrollToVisibleTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("scrollToVisible", [
-            elementTarget?.description,
+            elementTarget.description,
         ].compactMap { $0 })
     }
 }
@@ -133,11 +163,11 @@ extension ScrollToVisibleTarget: CustomStringConvertible {
 /// Pages through scroll content looking for an element that may not be in the registry.
 public struct ElementSearchTarget: Sendable {
     /// Element to search for while scrolling.
-    public let elementTarget: ElementTarget?
+    public let elementTarget: ElementTarget
     /// Starting scroll direction (default: .down)
     public let direction: ScrollSearchDirection?
     public init(
-        elementTarget: ElementTarget? = nil,
+        elementTarget: ElementTarget,
         direction: ScrollSearchDirection? = nil
     ) {
         self.elementTarget = elementTarget
@@ -150,7 +180,7 @@ public struct ElementSearchTarget: Sendable {
 extension ElementSearchTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("elementSearch", [
-            elementTarget?.description,
+            elementTarget.description,
             ScoreDescription.valueField("direction", direction),
         ].compactMap { $0 })
     }
@@ -158,11 +188,19 @@ extension ElementSearchTarget: CustomStringConvertible {
 
 extension ScrollToVisibleTarget: Codable {
     public init(from decoder: Decoder) throws {
-        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        guard let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder) else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "ScrollToVisibleTarget requires an element target"
+                )
+            )
+        }
+        self.elementTarget = elementTarget
     }
 
     public func encode(to encoder: Encoder) throws {
-        if let elementTarget { try elementTarget.encode(to: encoder) }
+        try elementTarget.encode(to: encoder)
     }
 }
 
@@ -173,12 +211,20 @@ extension ElementSearchTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        guard let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder) else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: decoder.codingPath,
+                    debugDescription: "ElementSearchTarget requires an element target"
+                )
+            )
+        }
+        self.elementTarget = elementTarget
         self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
     }
 
     public func encode(to encoder: Encoder) throws {
-        if let elementTarget { try elementTarget.encode(to: encoder) }
+        try elementTarget.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(direction, forKey: .direction)
     }
@@ -191,24 +237,46 @@ public enum ScrollEdge: String, Codable, Sendable, CaseIterable {
 
 /// Target for scroll-to-edge command
 public struct ScrollToEdgeTarget: Sendable {
-    /// Explicit scroll container to move.
-    public let containerTarget: ScrollContainerTarget?
-    /// Compatibility: element whose scrollable container to scroll.
-    public let elementTarget: ElementTarget?
+    /// Scroll subject to move.
+    public let selection: ScrollContainerSelection
     /// Which edge to scroll to
     public let edge: ScrollEdge
+
+    public init(
+        selection: ScrollContainerSelection = .visibleContainer,
+        edge: ScrollEdge = .top
+    ) {
+        self.selection = selection
+        self.edge = edge
+    }
 
     public init(
         elementTarget: ElementTarget? = nil,
         containerTarget: ScrollContainerTarget? = nil,
         edge: ScrollEdge = .top
     ) {
-        self.elementTarget = elementTarget
-        self.containerTarget = containerTarget
-        self.edge = edge
+        self.init(
+            selection: Self.selection(elementTarget: elementTarget, containerTarget: containerTarget),
+            edge: edge
+        )
     }
 
-    public var containerSelection: ScrollContainerSelection {
+    public var containerSelection: ScrollContainerSelection { selection }
+
+    public var containerTarget: ScrollContainerTarget? {
+        guard case .container(let target) = selection else { return nil }
+        return target
+    }
+
+    public var elementTarget: ElementTarget? {
+        guard case .element(let target) = selection else { return nil }
+        return target
+    }
+
+    private static func selection(
+        elementTarget: ElementTarget?,
+        containerTarget: ScrollContainerTarget?
+    ) -> ScrollContainerSelection {
         if let containerTarget {
             return .container(containerTarget)
         }
@@ -237,8 +305,16 @@ extension ScrollToEdgeTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
-        self.elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        let containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
+        let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        guard containerTarget == nil || elementTarget == nil else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .container,
+                in: container,
+                debugDescription: "ScrollToEdgeTarget requires at most one of container or element target"
+            )
+        }
+        self.selection = Self.selection(elementTarget: elementTarget, containerTarget: containerTarget)
         self.edge = try container.decodeIfPresent(ScrollEdge.self, forKey: .edge) ?? .top
     }
 

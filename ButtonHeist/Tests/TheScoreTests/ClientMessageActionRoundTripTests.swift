@@ -70,6 +70,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchTap(let target) = decoded {
+            XCTAssertEqual(target.selection, .coordinate(ScreenPoint(x: 100, y: 200)))
             XCTAssertEqual(target.pointX, 100)
             XCTAssertEqual(target.pointY, 200)
         } else {
@@ -83,6 +84,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchLongPress(let target) = decoded {
+            XCTAssertEqual(target.selection, .coordinate(ScreenPoint(x: 50, y: 75)))
             XCTAssertEqual(target.pointX, 50)
             XCTAssertEqual(target.duration, 1.0)
         } else {
@@ -112,6 +114,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchPinch(let target) = decoded {
+            XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200, y: 300)))
             XCTAssertEqual(target.centerX, 200)
             XCTAssertEqual(target.scale, 2.0)
         } else {
@@ -125,6 +128,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchRotate(let target) = decoded {
+            XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 150, y: 250)))
             XCTAssertEqual(target.centerX, 150)
             XCTAssertEqual(target.angle, 1.57)
         } else {
@@ -138,6 +142,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .touchTwoFingerTap(let target) = decoded {
+            XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 100, y: 200)))
             XCTAssertEqual(target.centerX, 100)
             XCTAssertEqual(target.spread, 50)
         } else {

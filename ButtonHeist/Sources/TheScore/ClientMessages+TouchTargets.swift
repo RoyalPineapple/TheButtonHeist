@@ -23,6 +23,7 @@ public struct ScreenPoint: Sendable, Equatable, CustomStringConvertible {
 
 public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConvertible {
     case partialCoordinate(field: String, xPresent: Bool, yPresent: Bool)
+    case mixedCoordinateAndElement(field: String)
     case partialUnitPoints
     case unitPointsRequireElementTarget
 
@@ -30,6 +31,8 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
         switch self {
         case .partialCoordinate(let field, let xPresent, let yPresent):
             return "\(field) requires both x and y coordinates (xPresent=\(xPresent), yPresent=\(yPresent))"
+        case .mixedCoordinateAndElement(let field):
+            return "\(field) accepts either an element target or coordinates, not both"
         case .partialUnitPoints:
             return "unit-point swipe requires both start and end unit points"
         case .unitPointsRequireElementTarget:
@@ -42,6 +45,24 @@ public enum GesturePointSelection: Sendable, Equatable, CustomStringConvertible 
     case element(ElementTarget)
     case coordinate(ScreenPoint)
     case unspecified
+
+    public var elementTarget: ElementTarget? {
+        guard case .element(let target) = self else { return nil }
+        return target
+    }
+
+    public var screenPoint: ScreenPoint? {
+        guard case .coordinate(let point) = self else { return nil }
+        return point
+    }
+
+    public var pointX: Double? {
+        screenPoint?.x
+    }
+
+    public var pointY: Double? {
+        screenPoint?.y
+    }
 
     public var description: String {
         switch self {
@@ -111,6 +132,78 @@ private func makeGesturePointSelection(
     return .unspecified
 }
 
+private enum GesturePointCodingKeys: String, CodingKey {
+    case pointX
+    case pointY
+}
+
+private enum GestureCenterCodingKeys: String, CodingKey {
+    case centerX
+    case centerY
+}
+
+private func decodeGesturePointSelection(from decoder: Decoder) throws -> GesturePointSelection {
+    let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+    let container = try decoder.container(keyedBy: GesturePointCodingKeys.self)
+    let pointX = try container.decodeIfPresent(Double.self, forKey: .pointX)
+    let pointY = try container.decodeIfPresent(Double.self, forKey: .pointY)
+    if elementTarget != nil, pointX != nil || pointY != nil {
+        throw GestureProjectionError.mixedCoordinateAndElement(field: "point")
+    }
+    return try makeGesturePointSelection(elementTarget: elementTarget, x: pointX, y: pointY, field: "point")
+}
+
+private func encodeGesturePointSelection(_ selection: GesturePointSelection, to encoder: Encoder) throws {
+    switch selection {
+    case .element(let target):
+        try target.encode(to: encoder)
+    case .coordinate(let point):
+        var container = encoder.container(keyedBy: GesturePointCodingKeys.self)
+        try container.encode(point.x, forKey: .pointX)
+        try container.encode(point.y, forKey: .pointY)
+    case .unspecified:
+        break
+    }
+}
+
+private func decodeGestureCenterSelection(from decoder: Decoder) throws -> GesturePointSelection {
+    let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+    let container = try decoder.container(keyedBy: GestureCenterCodingKeys.self)
+    let centerX = try container.decodeIfPresent(Double.self, forKey: .centerX)
+    let centerY = try container.decodeIfPresent(Double.self, forKey: .centerY)
+    if elementTarget != nil, centerX != nil || centerY != nil {
+        throw GestureProjectionError.mixedCoordinateAndElement(field: "center")
+    }
+    return try makeGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY, field: "center")
+}
+
+private func encodeGestureCenterSelection(_ selection: GesturePointSelection, to encoder: Encoder) throws {
+    switch selection {
+    case .element(let target):
+        try target.encode(to: encoder)
+    case .coordinate(let point):
+        var container = encoder.container(keyedBy: GestureCenterCodingKeys.self)
+        try container.encode(point.x, forKey: .centerX)
+        try container.encode(point.y, forKey: .centerY)
+    case .unspecified:
+        break
+    }
+}
+
+private func uncheckedGesturePointSelection(
+    elementTarget: ElementTarget?,
+    x: Double?,
+    y: Double?
+) -> GesturePointSelection {
+    if let elementTarget {
+        return .element(elementTarget)
+    }
+    if let x, let y {
+        return .coordinate(ScreenPoint(x: x, y: y))
+    }
+    return .unspecified
+}
+
 private func swipeDestinationSelection(
     x: Double?,
     y: Double?,
@@ -129,30 +222,45 @@ private func swipeDestinationSelection(
 }
 
 /// Target for a tap gesture — either an `ElementTarget` (tap at its activation
-/// point) or explicit screen coordinates. Exactly one form should be set.
+/// point) or explicit screen coordinates.
 public struct TouchTapTarget: Codable, Sendable {
-    public let elementTarget: ElementTarget?
-    public let pointX: Double?
-    public let pointY: Double?
+    public let selection: GesturePointSelection
+
+    public init(selection: GesturePointSelection = .unspecified) {
+        self.selection = selection
+    }
 
     public init(elementTarget: ElementTarget? = nil, pointX: Double? = nil, pointY: Double? = nil) {
-        self.elementTarget = elementTarget
-        self.pointX = pointX
-        self.pointY = pointY
+        self.selection = uncheckedGesturePointSelection(elementTarget: elementTarget, x: pointX, y: pointY)
+    }
+
+    public var elementTarget: ElementTarget? {
+        selection.elementTarget
+    }
+
+    public var pointX: Double? {
+        selection.pointX
+    }
+
+    public var pointY: Double? {
+        selection.pointY
     }
 
     public var point: CGPoint? {
-        guard let x = pointX, let y = pointY else { return nil }
+        guard let x = selection.pointX, let y = selection.pointY else { return nil }
         return CGPoint(x: x, y: y)
     }
 
     public func gesturePointSelection() throws -> GesturePointSelection {
-        try makeGesturePointSelection(
-            elementTarget: elementTarget,
-            x: pointX,
-            y: pointY,
-            field: "point"
-        )
+        selection
+    }
+
+    public init(from decoder: Decoder) throws {
+        self.selection = try decodeGesturePointSelection(from: decoder)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeGesturePointSelection(selection, to: encoder)
     }
 }
 
@@ -168,31 +276,55 @@ extension TouchTapTarget: CustomStringConvertible {
 
 /// Target for long press gesture
 public struct LongPressTarget: Codable, Sendable {
-    public let elementTarget: ElementTarget?
-    public let pointX: Double?
-    public let pointY: Double?
+    private enum CodingKeys: String, CodingKey {
+        case duration
+    }
+
+    public let selection: GesturePointSelection
     /// Duration in seconds
     public let duration: Double
 
-    public init(elementTarget: ElementTarget? = nil, pointX: Double? = nil, pointY: Double? = nil, duration: Double = 0.5) {
-        self.elementTarget = elementTarget
-        self.pointX = pointX
-        self.pointY = pointY
+    public init(selection: GesturePointSelection = .unspecified, duration: Double = 0.5) {
+        self.selection = selection
         self.duration = duration
     }
 
+    public init(elementTarget: ElementTarget? = nil, pointX: Double? = nil, pointY: Double? = nil, duration: Double = 0.5) {
+        self.selection = uncheckedGesturePointSelection(elementTarget: elementTarget, x: pointX, y: pointY)
+        self.duration = duration
+    }
+
+    public var elementTarget: ElementTarget? {
+        selection.elementTarget
+    }
+
+    public var pointX: Double? {
+        selection.pointX
+    }
+
+    public var pointY: Double? {
+        selection.pointY
+    }
+
     public var point: CGPoint? {
-        guard let x = pointX, let y = pointY else { return nil }
+        guard let x = selection.pointX, let y = selection.pointY else { return nil }
         return CGPoint(x: x, y: y)
     }
 
     public func gesturePointSelection() throws -> GesturePointSelection {
-        try makeGesturePointSelection(
-            elementTarget: elementTarget,
-            x: pointX,
-            y: pointY,
-            field: "point"
-        )
+        selection
+    }
+
+    public init(from decoder: Decoder) throws {
+        self.selection = try decodeGesturePointSelection(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.duration = try container.decodeIfPresent(Double.self, forKey: .duration) ?? 0.5
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeGesturePointSelection(selection, to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(duration, forKey: .duration)
     }
 }
 
@@ -374,9 +506,13 @@ public struct PinchTarget: Codable, Sendable {
     public static let defaultSpread = 100.0
     public static let defaultDuration = 0.5
 
-    public let elementTarget: ElementTarget?
-    public let centerX: Double?
-    public let centerY: Double?
+    private enum CodingKeys: String, CodingKey {
+        case scale
+        case spread
+        case duration
+    }
+
+    public let center: GesturePointSelection
     /// Scale factor: >1.0 zooms in (spread), <1.0 zooms out (pinch)
     public let scale: Double
     /// Initial distance from center to each finger in points
@@ -389,22 +525,53 @@ public struct PinchTarget: Codable, Sendable {
         centerX: Double? = nil, centerY: Double? = nil,
         scale: Double, spread: Double? = nil, duration: Double? = nil
     ) {
-        self.elementTarget = elementTarget
-        self.centerX = centerX; self.centerY = centerY
+        self.center = uncheckedGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY)
         self.scale = scale; self.spread = spread
         self.duration = duration
+    }
+
+    public init(
+        center: GesturePointSelection = .unspecified,
+        scale: Double, spread: Double? = nil, duration: Double? = nil
+    ) {
+        self.center = center
+        self.scale = scale; self.spread = spread
+        self.duration = duration
+    }
+
+    public var elementTarget: ElementTarget? {
+        center.elementTarget
+    }
+
+    public var centerX: Double? {
+        center.pointX
+    }
+
+    public var centerY: Double? {
+        center.pointY
     }
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
     public func centerSelection() throws -> GesturePointSelection {
-        try makeGesturePointSelection(
-            elementTarget: elementTarget,
-            x: centerX,
-            y: centerY,
-            field: "center"
-        )
+        center
+    }
+
+    public init(from decoder: Decoder) throws {
+        self.center = try decodeGestureCenterSelection(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.scale = try container.decode(Double.self, forKey: .scale)
+        self.spread = try container.decodeIfPresent(Double.self, forKey: .spread)
+        self.duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeGestureCenterSelection(center, to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(scale, forKey: .scale)
+        try container.encodeIfPresent(spread, forKey: .spread)
+        try container.encodeIfPresent(duration, forKey: .duration)
     }
 }
 
@@ -426,9 +593,13 @@ public struct RotateTarget: Codable, Sendable {
     public static let defaultRadius = 100.0
     public static let defaultDuration = 0.5
 
-    public let elementTarget: ElementTarget?
-    public let centerX: Double?
-    public let centerY: Double?
+    private enum CodingKeys: String, CodingKey {
+        case angle
+        case radius
+        case duration
+    }
+
+    public let center: GesturePointSelection
     /// Rotation angle in radians (positive = counter-clockwise)
     public let angle: Double
     /// Distance from center to each finger in points
@@ -441,22 +612,53 @@ public struct RotateTarget: Codable, Sendable {
         centerX: Double? = nil, centerY: Double? = nil,
         angle: Double, radius: Double? = nil, duration: Double? = nil
     ) {
-        self.elementTarget = elementTarget
-        self.centerX = centerX; self.centerY = centerY
+        self.center = uncheckedGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY)
         self.angle = angle; self.radius = radius
         self.duration = duration
+    }
+
+    public init(
+        center: GesturePointSelection = .unspecified,
+        angle: Double, radius: Double? = nil, duration: Double? = nil
+    ) {
+        self.center = center
+        self.angle = angle; self.radius = radius
+        self.duration = duration
+    }
+
+    public var elementTarget: ElementTarget? {
+        center.elementTarget
+    }
+
+    public var centerX: Double? {
+        center.pointX
+    }
+
+    public var centerY: Double? {
+        center.pointY
     }
 
     public var resolvedRadius: Double { radius ?? Self.defaultRadius }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
     public func centerSelection() throws -> GesturePointSelection {
-        try makeGesturePointSelection(
-            elementTarget: elementTarget,
-            x: centerX,
-            y: centerY,
-            field: "center"
-        )
+        center
+    }
+
+    public init(from decoder: Decoder) throws {
+        self.center = try decodeGestureCenterSelection(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.angle = try container.decode(Double.self, forKey: .angle)
+        self.radius = try container.decodeIfPresent(Double.self, forKey: .radius)
+        self.duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeGestureCenterSelection(center, to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(angle, forKey: .angle)
+        try container.encodeIfPresent(radius, forKey: .radius)
+        try container.encodeIfPresent(duration, forKey: .duration)
     }
 }
 
@@ -477,9 +679,11 @@ extension RotateTarget: CustomStringConvertible {
 public struct TwoFingerTapTarget: Codable, Sendable {
     public static let defaultSpread = 40.0
 
-    public let elementTarget: ElementTarget?
-    public let centerX: Double?
-    public let centerY: Double?
+    private enum CodingKeys: String, CodingKey {
+        case spread
+    }
+
+    public let center: GesturePointSelection
     /// Distance between the two fingers in points
     public let spread: Double?
 
@@ -488,20 +692,43 @@ public struct TwoFingerTapTarget: Codable, Sendable {
         centerX: Double? = nil, centerY: Double? = nil,
         spread: Double? = nil
     ) {
-        self.elementTarget = elementTarget
-        self.centerX = centerX; self.centerY = centerY
+        self.center = uncheckedGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY)
         self.spread = spread
+    }
+
+    public init(center: GesturePointSelection = .unspecified, spread: Double? = nil) {
+        self.center = center
+        self.spread = spread
+    }
+
+    public var elementTarget: ElementTarget? {
+        center.elementTarget
+    }
+
+    public var centerX: Double? {
+        center.pointX
+    }
+
+    public var centerY: Double? {
+        center.pointY
     }
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
 
     public func centerSelection() throws -> GesturePointSelection {
-        try makeGesturePointSelection(
-            elementTarget: elementTarget,
-            x: centerX,
-            y: centerY,
-            field: "center"
-        )
+        center
+    }
+
+    public init(from decoder: Decoder) throws {
+        self.center = try decodeGestureCenterSelection(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.spread = try container.decodeIfPresent(Double.self, forKey: .spread)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        try encodeGestureCenterSelection(center, to: encoder)
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(spread, forKey: .spread)
     }
 }
 

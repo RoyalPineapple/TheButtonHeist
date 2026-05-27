@@ -3,11 +3,18 @@
 > **Source:** `ButtonHeist/Sources/TheInsideJob/TheBrains/Navigation+Scroll.swift` (orchestration), `TheSafecracker/TheSafecracker+Scroll.swift` (scroll primitives)
 > **Parent dossiers:** [13-THEBRAINS.md](13-THEBRAINS.md), [14-THESAFECRACKER.md](14-THESAFECRACKER.md)
 
-TheBrains' `Navigation` component owns all scroll orchestration — three explicit scroll commands for agents, and an automatic pre-interaction scroll that ensures every action is visible on screen. TheSafecracker provides the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`, `scrollBySwipe`) but never decides what to scroll or when. `Actions` calls into `Navigation` for pre-action positioning (`ensureOnScreen`, `ensureFirstResponderOnScreen`) — TheStash exposes resolution and current live-geometry snapshots but performs no scroll orchestration.
+TheBrains' `Navigation` component owns all viewport orchestration: explicit
+viewport commands for agents, plus the internal reveal step used by semantic
+commands before live geometry is acquired and acted on. TheSafecracker provides
+the scroll primitives (`scrollByPage`, `scrollToEdge`, `scrollToMakeVisible`,
+`scrollBySwipe`) but never decides what to scroll or when. TheStash exposes
+semantic resolution and current live-geometry snapshots but performs no viewport
+orchestration.
 
 Visible pages are physical evidence; known state is semantic memory; reconciliation is the only place evidence becomes memory. Scroll and search settle on visible page changes, while exploration commits the final reconciled union as known state.
 
-Two-tier dispatch: UIScrollView for direct offset manipulation, synthetic swipe for everything else.
+Two-tier dispatch: UIScrollView for direct offset manipulation, synthetic swipe
+for scrollable containers that require touch-driven movement.
 
 ## Scrollable Container Discovery
 
@@ -34,19 +41,26 @@ A `ScrollableTarget` enum wraps a discovered scrollable container with two tiers
 
 `ScrollAxis` is an `OptionSet` with `.horizontal` and `.vertical`. Three `requiredAxis(for:)` overloads map `ScrollDirection`, `ScrollEdge`, and `ScrollSearchDirection` to the axis they operate on.
 
-For `scroll` and `scroll_to_edge`, `resolveScrollTarget` returns the element's stored `screenElement.scrollView` from the accessibility hierarchy only when it can scroll on the requested axis. If the owned scroll view cannot reveal that axis, resolution returns nil instead of falling back to an unrelated container.
+For `scroll` and `scroll_to_edge`, `resolveScrollTarget` returns the element's stored `screenElement.scrollView` from the accessibility hierarchy only when it can scroll on the requested axis. If the owned scroll view cannot reveal that axis, resolution returns nil instead of borrowing an unrelated container.
 
 For `element_search`, the caller's direction names the required axis. "down" and "up" search vertical containers only; "left" and "right" search horizontal containers only. Containers that cannot satisfy the requested axis are skipped instead of being remapped to their natural axis.
 
 Doctrine: direct scroll commands move only the resolved element's stored scroll view, and only on an axis that can reveal it; global scroll-container scanning belongs to `element_search`.
 
-## Auto-Scroll to Visible
+## Semantic Reveal to Visible
 
 ### Why it exists
 
-Humans watching an agent interact with a simulator need to see every action happen on screen. Without auto-scroll, an agent can tap, type into, or swipe an element that's scrolled out of the viewport — the action succeeds but the observer sees nothing happen.
+Humans watching an agent interact with a simulator need to see every semantic
+action happen on screen. A semantic command should not require the caller to
+move the viewport first, and it should not dispatch against cached coordinates
+after the viewport changes.
 
-The check runs in `Navigation.ensureOnScreen(for:)` before every targeted interaction. The operation gets an explicit positioning result; action callers must consume failures before dispatching. When positioning succeeds, the human sees the screen scroll to the element and then the action occurs. When positioning fails, the command fails before tapping, typing, or invoking accessibility actions.
+Button Heist owns the reveal step inside the semantic actionability loop:
+resolve the target, reveal it if needed, refresh the hierarchy, acquire live
+geometry, and then act. When reveal succeeds, the action occurs against fresh
+live geometry. When reveal fails, the command fails before tapping, typing, or
+invoking accessibility actions.
 
 ### What it checks
 
@@ -60,15 +74,18 @@ The check compares the element's `accessibilityFrame` (screen coordinates, read 
 
 It only cares whether the element's frame is geometrically within the screen rectangle. An element behind a keyboard is "on screen" — an element scrolled 500 points below the viewport is not.
 
-### What it does when an element is off-screen
+### What it does when an element is outside the viewport
 
 A sequential coarse-then-fine flow:
 
-**Step 1 — Coarse jump (known off-screen target only).** If the target resolves into the current or operation-local preserved screen snapshot but is not in the latest interaction snapshot, and the `ScreenElement` carries both an observed `contentSpaceOrigin` and a live `scrollView`:
+**Step 1 — Coarse jump (known target only).** If the target resolves in current
+Button Heist state but is outside the latest visible viewport, and the
+`ScreenElement` carries both an observed `contentSpaceOrigin` and a live
+`scrollView`:
 
 1. Calls `stash.jumpToRecordedPosition(_:)` — the stash internally computes the clamped, centered content offset via `TheStash.scrollTargetOffset(for:in:)` and sets it on the owning scroll view. Returns the previous offset so callers can revert.
 2. Waits for settle via `yieldRealFrames(20)`, then `stash.refresh()` (commits a fresh `currentScreen` value)
-3. Requires the target to resolve visibly after the jump; if it does not, `ensureOnScreen` returns a named failure and the action does not dispatch.
+3. Requires the target to resolve visibly after the jump; if it does not, reveal returns a named failure and the action does not dispatch.
 
 **Step 2 — Fine-tune (any target).** Asks the stash for live geometry via `stash.liveGeometry(for:)`, which promotes the weak NSObject ref to strong internally and returns a value-typed `(frame, activationPoint, scrollView)` snapshot for immediate use:
 
@@ -79,7 +96,7 @@ A sequential coarse-then-fine flow:
 
 ```mermaid
 flowchart TD
-    Cmd["Any interaction command"]
+    Cmd["Any semantic command"]
     Cmd --> HasTarget{element target<br/>or first responder?}
     HasTarget -->|no| Execute["Execute interaction"]
     HasTarget -->|yes| Coarse{"heistId off-screen<br/>+ contentSpaceOrigin<br/>+ scrollView alive?"}
@@ -87,7 +104,7 @@ flowchart TD
     Coarse -->|yes| Jump["stash.jumpToRecordedPosition(_:)<br/>→ setContentOffset (centered, clamped)"]
     Jump --> Settle1["yieldRealFrames(20) + refresh()"]
     Settle1 --> LiveAfterJump{"target visible<br/>after jump?"}
-    LiveAfterJump -->|no| Fail["Return ensure_on_screen failure"]
+    LiveAfterJump -->|no| Fail["Return reveal failure"]
     LiveAfterJump -->|yes| Fine
 
     Coarse -->|no| Fine["resolveTarget(target)"]
@@ -108,30 +125,37 @@ flowchart TD
     Refresh --> Execute
 ```
 
-In the flowchart, `screenElement.scrollView`, `screenElement.contentSpaceOrigin`, and the coarse-jump path all read from the `ScreenElement` in the current or preserved `Screen` value. They are parse-time observations, not durable geometry authority.
+In the flowchart, `screenElement.scrollView`, `screenElement.contentSpaceOrigin`,
+and the coarse-jump path all read from the current Button Heist screen value.
+They are parse-time observations, not durable geometry authority.
 
 ### Entry points
 
-Two public methods resolve their target, then delegate to a shared private implementation:
+Two public paths resolve their target, then delegate to shared reveal mechanics:
 
 | Method | Resolves object from | Used by |
 |--------|---------------------|---------|
-| `ensureOnScreen(for: ElementTarget)` (on `Navigation`) | `stash.resolveTarget` → `currentScreen.elements` | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
-| `ensureFirstResponderOnScreen()` (on `Navigation`) | `tripwire.currentFirstResponder()` responder chain walk | editAction, setPasteboard, getPasteboard, resignFirstResponder |
+| semantic target reveal | `stash.resolveTarget` -> current semantic state | activate, increment, decrement, customAction, tap, longPress, swipe, drag, pinch, rotate, twoFingerTap, typeText |
+| first responder reveal | `tripwire.currentFirstResponder()` responder chain walk | editAction, setPasteboard, getPasteboard, resignFirstResponder |
 
 ### Failure guarantee
 
-Targeted actions consume the `ensureOnScreen` result before dispatch. If the target is known only off-screen without a usable recorded position, cannot be recovered from the operation-local snapshot, or cannot be scrolled into a usable visible position, the action fails before dispatching. Untargeted coordinate gestures still dispatch unchanged.
+Targeted actions consume the reveal result before dispatch. If the target is
+known only outside the viewport without a usable observed position, cannot be
+recovered from current Button Heist state, or cannot be revealed into a usable
+visible position, the action fails before dispatching. Untargeted coordinate
+gestures still dispatch unchanged.
 
 ## Explicit Scroll Commands
 
-Three commands expose scrolling directly to agents. These are not auto-scroll — they are standalone commands the agent sends intentionally.
+Explicit viewport commands expose scrolling directly to agents. These are
+standalone commands the agent sends intentionally.
 
 | Command | Method | Behavior |
 |---------|--------|----------|
 | `scroll` | `executeScroll` → `scrollByPage` | Axis-aware page scroll on the resolved element's stored scroll view |
 | `scroll_to_visible` | `executeScrollToVisible` | One-shot jump to a known element's observed content-space position |
-| `element_search` | `executeElementSearch` | Hierarchy-driven search with swipe fallback for non-UIScrollView containers |
+| `element_search` | `executeElementSearch` | Hierarchy-driven search with synthetic swipe support for non-UIScrollView containers |
 | `scroll_to_edge` | `executeScrollToEdge` → `scrollToEdge` | Axis-aware edge jump on the resolved element's stored scroll view |
 
 ### scroll (page step)
@@ -144,13 +168,22 @@ Offsets are clamped to valid content bounds. Returns `false` if already at the e
 
 ### scroll_to_visible (known-position jump)
 
-Jumps directly to a known element's observed content-space position. This command is for visible elements or `heistId`/matcher targets still present in the current or preserved screen snapshot, especially the state produced by the latest default `get_interface` read; a visible-only refresh before the jump must not erase that preserved target.
+Jumps directly to a known element's observed content-space position. This
+command is for visible elements or `heistId`/matcher targets still present in
+current Button Heist semantic state, especially the state produced by the latest
+default `get_interface` read.
 
-**Input:** `ScrollToVisibleTarget` containing an `ElementTarget`. If the element is already visible, it is comfort-scrolled if needed. If it is off-screen and has an observed content-space position in the current or preserved screen value, Button Heist jumps to that position and re-resolves the target.
+**Input:** `ScrollToVisibleTarget` containing an `ElementTarget`. If the element
+is already visible, it is comfort-scrolled if needed. If it is outside the
+viewport and has an observed content-space position in current Button Heist
+state, Button Heist jumps to that position, refreshes, and re-resolves the
+target.
 
 Known targets guide; visible live targets prove.
 
-Fails closed when the element is not in the current or preserved screen snapshot, is ambiguous, or has no observed content-space position. Use `element_search` for unseen elements or stale targets that have fallen out of the known snapshot.
+Fails closed when the element is not in current Button Heist state, is
+ambiguous, or has no observed content-space position. Use `element_search` for
+unseen elements or stale targets that have fallen out of known state.
 
 ### element_search (hierarchy-driven search)
 
@@ -160,8 +193,8 @@ Searches for an element by scrolling through scrollable containers discovered fr
 
 **Algorithm:**
 
-1. **Pre-check.** Refresh and check if element is already visible via `resolveFirstMatch`.
-2. **Scroll loop.** `findScrollTarget(requiredAxis:excluding:)` walks the hierarchy tree and returns the first non-exhausted scrollable container that supports the requested axis. `ScrollPlan.movement(for:)` returns nil for axis mismatches instead of remapping direction. `scrollOnePageAndSettle` scrolls it and settles (yield + refresh in one call). After each scroll, check for match. If found, `fineTuneAndResolve` runs `ensureOnScreenSync` + yield + refresh + re-resolve to get fresh coordinates. If no new elements appeared, mark the container exhausted.
+1. **Current visible check.** Refresh and check if the element is already visible via the first matching semantic target.
+2. **Scroll loop.** `findScrollTarget(requiredAxis:excluding:)` walks the hierarchy tree and returns the first non-exhausted scrollable container that supports the requested axis. `ScrollPlan.movement(for:)` returns nil for axis mismatches instead of remapping direction. `scrollOnePageAndSettle` scrolls it and settles (yield + refresh in one call). After each scroll, check for match. If found, fine tune visibility, yield, refresh, and re-resolve to get fresh coordinates. If no new elements appeared, mark the container exhausted.
 
 ```mermaid
 flowchart TD
@@ -181,7 +214,7 @@ flowchart TD
     EXHAUST --> LOOP
 
     MOVED -->|Yes| FM{"resolveFirstMatch(target)"}
-    FM -->|Found| FT["fineTuneAndResolve(found)<br/>ensureOnScreenSync + yield + refresh + re-resolve"]
+    FM -->|Found| FT["fineTuneAndResolve(found)<br/>reveal + yield + refresh + re-resolve"]
     FT --> END["Return success<br/>+ ScrollSearchResult"]
     FM -->|Not found| NEW{New elements<br/>appeared?}
     NEW -->|No| EXHAUST
@@ -217,18 +250,25 @@ After any `setContentOffset(animated: true)` call, the scroll view runs a Core A
 
 The `scroll` command settles via `scrollOnePageAndSettle` which handles both yield and refresh internally.
 
-`element_search` and `scroll_to_edge` also settle via `scrollOnePageAndSettle` per step. The auto-scroll path (`ensureOnScreen`) uses `yieldFrames(3)` + `refresh()` after each `setContentOffset` or `scrollToMakeVisible` call.
+`element_search` and `scroll_to_edge` also settle via
+`scrollOnePageAndSettle` per step. The semantic reveal path uses
+`yieldFrames(3)` + `refresh()` after each `setContentOffset` or
+`scrollToMakeVisible` call.
 
 ## Implementation Notes
 
-### Why setContentOffset + swipe fallback
+### Why setContentOffset + synthetic swipe
 
-`setContentOffset` gives exact positioning for `UIScrollView` instances. But SwiftUI's internal scroll containers (e.g. `HostingScrollView.PlatformContainer`) are not `UIScrollView` subclasses on iOS 26 — they don't respond to `setContentOffset`. For these, a synthetic swipe gesture at 75% travel covers a full page reliably. The two-tier `ScrollableTarget` dispatch uses `setContentOffset` when available and falls through to synthetic swipe as the universal fallback.
+`setContentOffset` gives exact positioning for `UIScrollView` instances. But SwiftUI's internal scroll containers (e.g. `HostingScrollView.PlatformContainer`) are not `UIScrollView` subclasses on iOS 26 — they don't respond to `setContentOffset`. For these, a synthetic swipe gesture at 75% travel covers a full page reliably. The two-tier `ScrollableTarget` dispatch uses `setContentOffset` when available and uses synthetic swipe as the touch-driven movement path.
 
 ### Why the 44pt overlap in page scroll
 
 The 44pt overlap when paging ensures continuity — the last few lines of the previous page remain visible at the top of the next page. This matches the standard iOS VoiceOver three-finger-swipe page scrolling behavior. 44pt is also the minimum recommended touch target size in the HIG.
 
-### Why NSObject for ensureOnScreen
+### Why NSObject for semantic reveal
 
-The auto-scroll has two callers: element-targeted commands (resolve through TheStash) and first-responder commands (resolve through the UIView responder chain). Both produce a live `NSObject` that has `accessibilityFrame` and participates in the view hierarchy. Accepting `NSObject` lets both paths share one implementation.
+Semantic reveal has two callers: element-targeted commands (resolve through
+TheStash) and first-responder commands (resolve through the UIView responder
+chain). Both produce a live `NSObject` that has `accessibilityFrame` and
+participates in the view hierarchy. Accepting `NSObject` lets both paths share
+one implementation.

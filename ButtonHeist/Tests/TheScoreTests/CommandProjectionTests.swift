@@ -3,14 +3,12 @@ import XCTest
 
 final class CommandProjectionTests: XCTestCase {
 
-    func testPointGestureProjectionPrefersSemanticTargetOverCoordinates() throws {
-        let target = TouchTapTarget(
-            elementTarget: .heistId("save_button"),
-            pointX: 10,
-            pointY: 20
-        )
+    func testPointGestureDecodeRejectsMixedSemanticTargetAndCoordinates() {
+        let json = #"{"heistId":"save_button","pointX":10,"pointY":20}"#
 
-        XCTAssertEqual(try target.gesturePointSelection(), .element(.heistId("save_button")))
+        XCTAssertThrowsError(try JSONDecoder().decode(TouchTapTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertEqual(error as? GestureProjectionError, .mixedCoordinateAndElement(field: "point"))
+        }
     }
 
     func testPointGestureProjectionUsesCoordinateWhenNoSemanticTargetExists() throws {
@@ -19,13 +17,32 @@ final class CommandProjectionTests: XCTestCase {
         XCTAssertEqual(try target.gesturePointSelection(), .coordinate(ScreenPoint(x: 10, y: 20)))
     }
 
-    func testPointGestureProjectionRejectsPartialCoordinate() {
-        let target = TouchTapTarget(pointX: 10)
+    func testPointGestureDecodeRejectsPartialCoordinate() {
+        let json = #"{"pointX":10}"#
 
-        XCTAssertThrowsError(try target.gesturePointSelection()) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(TouchTapTarget.self, from: Data(json.utf8))) { error in
             XCTAssertEqual(
                 error as? GestureProjectionError,
                 .partialCoordinate(field: "point", xPresent: true, yPresent: false)
+            )
+        }
+    }
+
+    func testCenterGestureDecodeRejectsMixedSemanticTargetAndCoordinates() {
+        let json = #"{"heistId":"map","centerX":10,"centerY":20,"scale":2}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(PinchTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertEqual(error as? GestureProjectionError, .mixedCoordinateAndElement(field: "center"))
+        }
+    }
+
+    func testCenterGestureDecodeRejectsPartialCoordinate() {
+        let json = #"{"centerX":10,"scale":2}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(PinchTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertEqual(
+                error as? GestureProjectionError,
+                .partialCoordinate(field: "center", xPresent: true, yPresent: false)
             )
         }
     }

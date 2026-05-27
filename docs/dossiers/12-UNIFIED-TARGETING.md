@@ -1,28 +1,28 @@
 # Unified Targeting - Element Resolution
 
 > **Cross-cutting concern:** TheFence → TheScore (wire) → TheBrains.Actions / TheBrains.Navigation → TheStash → TheSafecracker
-> **Role:** Routes every action command to a concrete element via a single resolution path
+> **Role:** Defines how semantic commands resolve current targets and acquire live actionability
 
 ## Overview
 
 Unified targeting turns a caller's intent ("tap the Submit button") into
-semantic target identity on the iOS side. Element-targeted actions then perform
-a separate live-geometry resolution immediately before touching or dispatching
-an accessibility action. Every action command — activate, scroll, swipe,
-type_text, gesture, edit_action — flows through this shared semantic resolution
-pipeline before any command-specific live action step.
+semantic target identity on the iOS side. Element-targeted semantic commands
+then resolve, reveal if needed, refresh, acquire fresh live geometry, and act.
+Viewport mechanics are Button Heist-owned unless the command is explicitly
+viewport-oriented (`scroll`, `scroll_to_visible`, `element_search`, or
+`scroll_to_edge`).
 
 There are exactly **two targeting strategies**, encoded as cases of the `ElementTarget` enum:
 
-1. **`.heistId(String)`** — "you gave me this token, I hand it back." Assigned by `get_interface`, valid only as a current-screen handle while the element is in `currentScreen`. O(1) lookup into `currentScreen.elements`.
-2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with **case-insensitive equality** (typography-folded — smart quotes, dashes, ellipsis fold to ASCII) and exact trait bitmask comparison. Matching is **exact or miss** — there is no substring fallback. On a miss the resolver returns structured suggestions through the diagnostic path. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
+1. **`.heistId(String)`** — "you gave me this current-capture handle." Assigned by `get_interface`, valid only while the element is represented in current Button Heist state. It is not durable replay identity and is not geometry authority.
+2. **`.matcher(ElementMatcher)`** — "I'm describing the element by its accessibility properties." A predicate-based search on label, identifier, value, and traits with **case-insensitive equality** (typography-folded — smart quotes, dashes, ellipsis fold to ASCII) and exact trait bitmask comparison. Matching is **exact or miss**; substring matching is reserved for diagnostics. Callers can embed expectations (e.g. `value="6"`) so stale state fails early instead of acting on the wrong element.
 
 A single method, `TheStash.resolveTarget(_:)`, implements semantic resolution
 and returns a `TargetResolution` enum (`.resolved(ResolvedTarget)`,
 `.notFound(diagnostics:)`, `.ambiguous(candidates:diagnostics:)`).
 Element-targeted actions then call `resolveLiveActionTarget(for:)` to promote
 the current object reference and acquire fresh frame/activation-point data.
-Missing live geometry is a first-class failure, not a fallback to cached
+Missing live geometry is a first-class failure, not a reason to use cached
 coordinates.
 
 ### What was removed/changed
@@ -55,15 +55,13 @@ sequenceDiagram
     IJ->>TB: executeCommand(.activate(target))
     TB->>ST: stash.refresh()
     TB->>ACT: executeActivate(target)
-    ACT->>NAV: ensureOnScreen(for: target)
-    NAV->>ST: resolveTarget(target)
     ACT->>ST: resolveTarget(target) → ResolvedTarget
+    ACT->>NAV: reveal if viewport movement is needed
+    NAV->>ST: refresh after movement
     ACT->>ST: resolveLiveActionTarget(resolved) → LiveActionTarget
     ACT->>ST: Interactivity.checkInteractivity(liveTarget)
-    ACT->>ACT: activate
-    ACT-->>ACT: activate failed?
-    ACT->>TS: fallback tap(at: fresh activationPoint)
-    TS-->>ACT: success
+    ACT->>ACT: accessibility action or command-specific touch path
+    ACT->>TS: synthesize touch when the command requires touch
     ACT-->>TB: InteractionResult
     TB-->>IJ: ActionResult (with delta)
 ```
@@ -72,7 +70,7 @@ sequenceDiagram
 
 `TheFence.swift` — called from every action handler. Reads raw args and builds an `ElementTarget`.
 
-**Routing:** if *any* accessibility property is present (label, identifier, value, traits, excludeTraits), all are packed into an `ElementMatcher`. `heistId` stays on `ElementTarget` directly. `ElementTarget` is an enum — cases are mutually exclusive. The convenience `init?(heistId:matcher:)` picks `.heistId` when a heistId is present, otherwise `.matcher`.
+**Routing:** if *any* accessibility property is present (label, identifier, value, traits, excludeTraits), all are packed into an `ElementMatcher`. `heistId` stays on `ElementTarget` directly. `ElementTarget` is an enum — cases are mutually exclusive. The convenience `init?(heistId:matcher:)` picks `.heistId` when a heistId is present, otherwise `.matcher`. That request-boundary precedence does not make heistId durable; recording and playback construct replay-safe semantic targets at their own conversion boundary.
 
 ```
 args: {"identifier":"btn", "traits":["button"]}
@@ -103,7 +101,15 @@ enum ElementTarget: Codable, Sendable {
 }
 ```
 
-Exactly one strategy per target — no invalid states. Custom flat-wire Codable preserves JSON like `{"heistId": "btn"}`, `{"label": "Submit", "traits": ["button"]}`, or the minimum-matcher fallback `{"ordinal": 0}`. The optional `ordinal` (0-based) selects among matcher results; without it, multiple matches return an ambiguity error.
+Exactly one strategy per target — no invalid states. Custom flat-wire Codable preserves JSON like `{"heistId": "btn"}`, `{"label": "Submit", "traits": ["button"]}`, or an ordinal-only replay selector such as `{"ordinal": 0}`. The optional `ordinal` (0-based) selects among matcher results; without it, multiple matches return an ambiguity error.
+
+### SemanticActionTarget
+
+`SemanticActionTarget` is the durable identity shape for replay and batch
+semantics. It is constructed when recording a script or when callers provide a
+durable semantic target directly. Runtime semantic actionability does not
+silently rewrite `.heistId` into matchers. Diagnostics may carry a
+`sourceHeistId`, but execution treats heistId as a current-capture handle only.
 
 ### ElementMatcher (TheScore/Elements.swift)
 
@@ -178,7 +184,11 @@ No match for: label="Sav" traits=[button]
 near miss: matched all fields except label — did you mean label="Save", label="Save Draft", label="Save As"?
 ```
 
-The substring search is reserved for the suggestion path; resolution itself never falls back to substring. Value is relaxed first because it's the most likely to drift (slider moved, text changed). Only relaxations that leave at least one remaining predicate are tried — dropping the only predicate matches everything, which isn't useful.
+The substring search is reserved for the suggestion path; resolution itself
+never uses substring matching. Value is relaxed first because it's the most
+likely to drift (slider moved, text changed). Only relaxations that leave at
+least one remaining predicate are tried — dropping the only predicate matches
+everything, which isn't useful.
 
 ### Tier 3: Total miss — "here's what I see"
 
@@ -198,7 +208,7 @@ The goal: every error message answers the obvious next question. "Why didn't it 
 
 ## Matching Infrastructure (TheStash+Matching.swift)
 
-Matching operates on canonical `AccessibilityElement` values, not wire types. Server-side resolution paths (`matchScreenElements`, `hasTarget`) walk `selectElements()` so matcher resolution sees the committed semantic screen, including known-only entries from exploration. Client-side `HeistElement.matches` evaluates the same exact predicate semantics against wire elements. There is no registry fallback — pre-0.2.25 `cachedElements` was removed when the registry was eliminated.
+Matching operates on canonical `AccessibilityElement` values, not wire types. Server-side resolution paths (`matchScreenElements`, `hasTarget`) walk `selectElements()` so matcher resolution sees the committed semantic screen, including known-only entries from exploration. Client-side `HeistElement.matches` evaluates the same exact predicate semantics against wire elements. There is no registry lookup path — pre-0.2.25 `cachedElements` was removed when the registry was eliminated.
 
 ### Match evaluation (AccessibilityElement.matches)
 
@@ -210,20 +220,24 @@ The same `MatchMode.exact` semantics are shared with `HeistElement.matches` on t
 4. `traits` — resolve names to bitmask, check `traits.contains(mask)`. Unknown names → miss.
 5. `excludeTraits` — resolve names to bitmask, check `traits.isDisjoint(with: mask)`. Unknown names → miss.
 
-All checks are AND — first failure short-circuits to false. There is no substring fallback in the resolution path; substring matching is reserved for the diagnostic suggestion path (`Diagnostics.findNearMiss`).
+All checks are AND — first failure short-circuits to false. Resolution never
+uses substring matching; substring matching is reserved for the diagnostic
+suggestion path (`Diagnostics.findNearMiss`).
 
 ## Callers
 
-Every action executor calls `stash.resolveTarget(target)`. Resolution lives on TheStash; orchestration (scroll, ensureOnScreen) lives on Navigation; action execution lives on Actions:
+Every element-targeted semantic action resolves through TheStash. Resolution
+lives on TheStash; reveal/refresh viewport work lives on Navigation; action
+execution lives on Actions:
 
 | Method | File | What it needs |
 |--------|------|--------------|
-| `ensureOnScreen(for:)` | TheBrains/Navigation+Scroll.swift | screenElement → object → scroll ancestor |
+| semantic reveal path | TheBrains/Navigation+Scroll.swift | screenElement → object → scroll ancestor |
 | `executeScroll(_:)` | TheBrains/Navigation+Scroll.swift | screenElement → object → scroll ancestor |
 | `executeScrollToEdge(_:)` | TheBrains/Navigation+Scroll.swift | screenElement → object → scroll to edge |
-| `executeScrollToVisible(_:)` | TheBrains/Navigation+Scroll.swift | resolveFirstMatch (first-match semantics) |
-| `executeElementSearch(_:)` | TheBrains/Navigation+Scroll.swift | resolveFirstMatch + scroll loop |
-| `executeActivate(_:)` | TheBrains/Actions.swift | element (interactivity check) + screenElement (activate/fallback tap) |
+| `executeScrollToVisible(_:)` | TheBrains/Navigation+Scroll.swift | first matching semantic target |
+| `executeElementSearch(_:)` | TheBrains/Navigation+Scroll.swift | first matching semantic target + scroll loop |
+| `executeActivate(_:)` | TheBrains/Actions.swift | element (interactivity check) + screenElement (accessibility action or touch synthesis) |
 | `executeIncrement(_:)` | TheBrains/Actions.swift | screenElement (increment) + element (fingerprint point) |
 | `executeDecrement(_:)` | TheBrains/Actions.swift | screenElement (decrement) + element (fingerprint point) |
 | `executeCustomAction(_:)` | TheBrains/Actions.swift | screenElement (perform action) |
@@ -250,7 +264,7 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 2. **Two-stage action resolution** — `resolveTarget()` is the only way to go from `ElementTarget` to semantic identity; `resolveLiveActionTarget(for:)` is the required final step before touch/accessibility dispatch. No action treats semantic state as fresh geometry.
 3. **Exact matching only** — no fuzzy resolution, no partial matches. Miss → progressive diagnostic that answers the next question.
 4. **Expectations in the search** — embed value/trait expectations in the matcher so stale state fails early. A slider at value "8" won't match a search for value "6" — you'll know immediately something changed.
-5. **heistId wins for semantic targeting** — fastest path (lookup by current-screen handle), deterministic within the committed `Screen`. It does not imply geometry freshness. Replay records should persist minimum matchers, not heistIds.
+5. **heistId is a current-capture handle** — fastest path for the current Button Heist state, but not durable replay identity and not proof of geometry freshness. Replay records persist `SemanticActionTarget` / minimum matchers; source heistIds are diagnostic evidence only.
 6. **Matching on canonical types** — `ElementMatcher` predicates resolve against `AccessibilityElement` (parser types with real `UIAccessibilityTraits`), not wire types (`HeistElement` with string trait arrays). This avoids lossy string round-trips.
 7. **Progressive disclosure on failure** — errors go from "here's what changed" to "here's what's on screen" depending on how close the miss was. Every error answers the obvious next question.
 
@@ -274,7 +288,7 @@ These commands do not resolve exactly one live element through `resolveTarget()`
 
 Heist recording uses `MinimumMatcher` to turn the element observed in an `AccessibilityTrace.Capture` into the least-specific replay selector that resolves back to that same element in the capture. The ordering is identifier, label, semantic traits, value, stateful traits / `excludeTraits`, then ordinal. Ordinal is the last resort, including anonymous elements where no matcher predicates exist.
 
-Ordinal-only replay targets are intentionally fragile. They exist so anonymous elements remain replayable, but they should be treated as a fallback because a reordered hierarchy can still make the same ordinal point at a different element.
+Ordinal-only replay targets are intentionally fragile. They exist so anonymous elements remain replayable, but they are a last resort because a reordered hierarchy can still make the same ordinal point at a different element.
 
 If a new capture introduces a conflict for an old matcher, run a fresh minimum-matcher pass against the new capture. Playback does not silently self-heal or auto-repair stale steps.
 
@@ -282,7 +296,12 @@ If a new capture introduces a conflict for an old matcher, run a fresh minimum-m
 
 There is no element registry post-0.2.25. TheStash holds exactly one mutable field — `var currentScreen: Screen` — and rebinds it on every parse / merge. The `Screen` value type carries the heistId index, the parsed hierarchy, the reverse index, and weak live scrollable-container references as current-screen projections. Pre-0.2.25 `screenElements: [String: ScreenElement]`, `presentedHeistIds`, `onScreen`, `heistIdByTraversalOrder`, `updateScreenElements()`, `refreshAccessibilityData()`, and the scorched-earth wipe-and-rebuild on screen change are all gone.
 
-`HeistId resolution` (`resolveTarget(.heistId)`) is O(1) dictionary lookup into `currentScreen.elements`. There is no presentation gate — if a heistId is in `currentScreen.elements`, it resolves as a handle into that screen value, not proof of visibility or persisted identity. Exploration unions older elements into `currentScreen` so heistIds for off-viewport elements still resolve until the next non-exploration `parse()` overwrites the screen.
+`HeistId resolution` (`resolveTarget(.heistId)`) is an O(1) lookup into the
+current Button Heist screen value. There is no presentation gate: if a heistId
+resolves, it is a handle into that current semantic state, not proof of
+visibility or persisted identity. Runtime semantic actionability never rewrites
+the handle into a matcher; it resolves, reveals, refreshes, acquires live
+geometry, and acts, or fails with diagnostics.
 
 `Matcher resolution` walks `selectElements()` looking for matching `ScreenElement`s. This keeps live entries in traversal order and appends known-only entries retained from exploration, so matcher resolution and matcher diagnostics share the same candidate scope.
 

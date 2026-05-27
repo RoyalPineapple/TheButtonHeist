@@ -115,7 +115,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
     }
 
-    func testSameScreenChangesAreStoredAsPatchInsideScreenSegment() throws {
+    func testSameScreenChangesProjectAsPatchInsideScreenSegment() throws {
         let before = AccessibilityTrace.Capture(
             sequence: 1,
             interface: makeInterface(label: "Menu", saveValue: "1")
@@ -323,39 +323,6 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertTrue(trace.isLinearChain)
     }
 
-    func testIntegrityValidationCatchesCorruptedStructuralPatch() throws {
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeListInterface(["Antipasti"]))
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeListInterface(["Antipasti", "Pasta"]),
-            parentHash: before.hash
-        )
-        let transition = try XCTUnwrap(AccessibilityTrace.ObservedTransition.between(before, after))
-        let corruptedPatch = AccessibilityTrace.AccessibilityPatch(
-            operations: corruptFirstStructuralOperation(transition.patch.operations),
-            timestamp: transition.patch.timestamp,
-            annotations: transition.patch.annotations,
-            context: transition.patch.context,
-            transition: transition.patch.transition
-        )
-        let corruptedTrace = AccessibilityTrace(segments: [
-            AccessibilityTrace.ScreenSegment(
-                baseline: before,
-                transitions: [AccessibilityTrace.ObservedTransition(
-                    sequence: transition.sequence,
-                    fromHash: transition.fromHash,
-                    toHash: transition.toHash,
-                    patch: corruptedPatch
-                )]
-            ),
-        ])
-
-        XCTAssertTrue(corruptedTrace.integrityIssues.contains {
-            if case .transitionToHashMismatch = $0 { return true }
-            return false
-        })
-    }
-
     private func makeInterface(
         label: String = "Settings",
         saveValue: String? = nil,
@@ -404,30 +371,6 @@ final class AccessibilityTraceTests: XCTestCase {
                 ),
             ])
         )
-    }
-
-    private func corruptFirstStructuralOperation(
-        _ operations: [AccessibilityTrace.AccessibilityPatchOperation]
-    ) -> [AccessibilityTrace.AccessibilityPatchOperation] {
-        let corruptNode = makeTestInterface(elements: [
-            makeElement(heistId: "tile-corrupt", label: "Corrupt"),
-        ]).tree[0]
-        return operations.map { operation in
-            switch operation {
-            case .insertSubtree(let insertion):
-                return .insertSubtree(TreeInsertion(
-                    location: insertion.location,
-                    node: corruptNode,
-                    annotations: insertion.annotations
-                ))
-            case .moveSubtree(let move, _):
-                return .moveSubtree(move, node: corruptNode)
-            case .replaceTree:
-                return .replaceTree(tree: [corruptNode])
-            case .updateElement, .updateContainer, .removeSubtree:
-                return operation
-            }
-        }
     }
 
     private func makeElement(

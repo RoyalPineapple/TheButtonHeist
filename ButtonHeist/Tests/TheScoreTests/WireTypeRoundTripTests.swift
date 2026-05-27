@@ -174,14 +174,14 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testPinchTargetRoundTrip() throws {
         let target = PinchTarget(
             elementTarget: .heistId("map"),
-            centerX: 195, centerY: 422,
             scale: 2.0, spread: 100, duration: 0.5
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(PinchTarget.self, from: data)
         XCTAssertEqual(decoded.elementTarget, .heistId("map"))
-        XCTAssertEqual(decoded.centerX, 195)
-        XCTAssertEqual(decoded.centerY, 422)
+        XCTAssertEqual(decoded.center, .element(.heistId("map")))
+        XCTAssertNil(decoded.centerX)
+        XCTAssertNil(decoded.centerY)
         XCTAssertEqual(decoded.scale, 2.0)
         XCTAssertEqual(decoded.spread, 100)
         XCTAssertEqual(decoded.duration, 0.5)
@@ -203,12 +203,12 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testRotateTargetRoundTrip() throws {
         let target = RotateTarget(
             elementTarget: .heistId("dial"),
-            centerX: 195, centerY: 422,
             angle: .pi / 4, radius: 80, duration: 0.6
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(RotateTarget.self, from: data)
         XCTAssertEqual(decoded.elementTarget, .heistId("dial"))
+        XCTAssertEqual(decoded.center, .element(.heistId("dial")))
         XCTAssertEqual(decoded.angle, .pi / 4)
         XCTAssertEqual(decoded.radius, 80)
         XCTAssertEqual(decoded.duration, 0.6)
@@ -228,14 +228,14 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTwoFingerTapTargetRoundTrip() throws {
         let target = TwoFingerTapTarget(
             elementTarget: .heistId("canvas"),
-            centerX: 200, centerY: 300,
             spread: 60
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(TwoFingerTapTarget.self, from: data)
         XCTAssertEqual(decoded.elementTarget, .heistId("canvas"))
-        XCTAssertEqual(decoded.centerX, 200)
-        XCTAssertEqual(decoded.centerY, 300)
+        XCTAssertEqual(decoded.center, .element(.heistId("canvas")))
+        XCTAssertNil(decoded.centerX)
+        XCTAssertNil(decoded.centerY)
         XCTAssertEqual(decoded.spread, 60)
     }
 
@@ -964,10 +964,10 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testElementSearchTargetResolvedDirection() {
-        let withDirection = ElementSearchTarget(direction: .left)
+        let withDirection = ElementSearchTarget(elementTarget: .heistId("item"), direction: .left)
         XCTAssertEqual(withDirection.resolvedDirection, .left)
 
-        let withoutDirection = ElementSearchTarget()
+        let withoutDirection = ElementSearchTarget(elementTarget: .heistId("item"))
         XCTAssertEqual(withoutDirection.resolvedDirection, .down)
     }
 

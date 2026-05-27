@@ -1025,10 +1025,8 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .gesture(.pinch(let payload)) = parsed.payload else {
             return XCTFail("Expected typed pinch payload, got \(parsed.payload)")
         }
-        XCTAssertNil(payload.elementTarget)
+        XCTAssertEqual(payload.centerSelection, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
         XCTAssertEqual(payload.scale, 2.0)
-        XCTAssertEqual(payload.centerX, 200.0)
-        XCTAssertEqual(payload.centerY, 500.0)
         XCTAssertEqual(payload.spread, 24.0)
         XCTAssertEqual(payload.duration, 0.25)
     }
