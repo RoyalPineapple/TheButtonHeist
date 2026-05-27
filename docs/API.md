@@ -175,7 +175,7 @@ Named targets live in `.buttonheist.json` or
 {
   "targets": {
     "demo": {
-      "device": "127.0.0.1:52341",
+      "device": "<host>:<port>",
       "token": "my-token",
       "certFingerprint": "sha256:<hex>"
     }
