@@ -5,6 +5,6 @@ extension TheFence.Command {
         observationPresentationDescription(for: toolName) ??
             interactionPresentationDescription(for: toolName) ??
             sessionPresentationDescription(for: toolName) ??
-            "Execute the \(toolName) Button Heist tool."
+            "Descriptor metadata for \(toolName) is missing a public description."
     }
 }

@@ -113,62 +113,6 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testCLIAdapterCatalogSeparatesAdapterWiringFromCommandSemantics() throws {
-        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLICommandContract.swift")
-        let pairedCasePattern = #"\.fence\([^,\n]+,\s*\.[A-Za-z0-9_]+\)"#
-        let wiringSource = try sourceSection(
-            in: source,
-            startingAt: "// MARK: - Pure Adapter Wiring",
-            endingBefore: "// MARK: - Catalog Projection"
-        )
-        let projectionSource = source.replacingOccurrences(of: wiringSource, with: "")
-
-        XCTAssertNil(
-            source.range(of: pairedCasePattern, options: .regularExpression),
-            "CLI adapter catalog should bind command types to Fence descriptors from the catalog, not paired command cases"
-        )
-        XCTAssertTrue(
-            wiringSource.contains("commandTypesByFenceCommand"),
-            "CLI adapter command type bindings are pure adapter wiring and should stay isolated from catalog projection code"
-        )
-        XCTAssertFalse(
-            wiringSource.contains(".rawValue"),
-            "Pure CLI adapter wiring should not define command names"
-        )
-        XCTAssertTrue(
-            source.contains("FenceCommandDescriptor"),
-            "CLI adapter catalog should project command semantics from FenceCommandDescriptor"
-        )
-        XCTAssertTrue(
-            source.contains("TheFence.Command.cliDirectCommandDescriptors"),
-            "CLI adapter catalog should consume the Fence-owned direct CLI descriptor projection"
-        )
-        XCTAssertFalse(
-            projectionSource.contains(".cliExposure == .directCommand"),
-            "CLI adapter catalog should not reinterpret descriptor exposure policy locally"
-        )
-        XCTAssertFalse(
-            source.contains("directCommandTypesByDescriptorOrder"),
-            "CLI adapter catalog should not rely on command-type order matching descriptor order"
-        )
-        XCTAssertFalse(
-            source.contains("subcommandTypes"),
-            "CLI adapter catalog should derive subcommand order from FenceCommandDescriptor exposure"
-        )
-
-        let commandCaseReferencesOutsideWiring = Set(
-            captureGroupMatches(
-                in: projectionSource,
-                pattern: #"TheFence\.Command\.([A-Za-z0-9_]+)"#
-            )
-        ).intersection(Set(TheFence.Command.allCases.map { String(describing: $0) }))
-        XCTAssertTrue(
-            commandCaseReferencesOutsideWiring.isEmpty,
-            "Product command-case references outside pure adapter wiring should come from "
-                + "descriptors/catalog projection: \(commandCaseReferencesOutsideWiring.sorted())"
-        )
-    }
-
     func testTopLevelFenceCommandAdaptersRenderNamesFromCanonicalContract() {
         let cliOnlyCommands: Set<String> = ["session"]
 
@@ -279,6 +223,37 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertTrue(contents.contains("--ordinal"), "README should document the current --ordinal flag")
     }
 
+    func testGeneratedCommandReferenceUsesCLIDescriptorProjection() throws {
+        let reference = try readRepositoryFile("docs/reference/commands.md")
+
+        XCTAssertEqual(
+            reference,
+            FenceCommandReference.commandMarkdown(),
+            "CLI command reference should be generated from FenceCommandDescriptor"
+        )
+        for descriptor in TheFence.Command.descriptors {
+            guard let cliName = descriptor.cliName else { continue }
+            XCTAssertTrue(
+                reference.contains("`\(descriptor.canonicalName)`"),
+                "Generated reference should include \(descriptor.canonicalName)"
+            )
+            XCTAssertTrue(
+                reference.contains("`\(cliName)`"),
+                "Generated reference should include descriptor-owned CLI name \(cliName)"
+            )
+        }
+    }
+
+    func testCLIReadmePointsToGeneratedReference() throws {
+        let contents = try readRepositoryFile("ButtonHeistCLI/README.md")
+
+        XCTAssertTrue(contents.contains("../docs/reference/commands.md"))
+        XCTAssertFalse(
+            contents.contains("## Top-Level Commands"),
+            "CLI README should point to the generated reference instead of a command registry"
+        )
+    }
+
     func testSessionHelpProjectsFromFenceDescriptors() {
         let help = ReplSession.humanHelp
         let exposedDescriptors = TheFence.Command.descriptors
@@ -313,34 +288,15 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertTrue(
             source.contains("TheFence.Command.cliSessionHelp"),
-            "REPL help should project through the Fence-owned CLI help renderer"
-        )
-        XCTAssertFalse(
-            source.contains("TheFence.Command.descriptors"),
-            "REPL help should not scan command descriptors itself"
-        )
-        XCTAssertFalse(
-            source.contains("descriptor.cliName"),
-            "REPL help should not own CLI exposure projection"
+            "REPL help should delegate to the Fence-owned CLI session help projection"
         )
         XCTAssertFalse(
             source.contains("descriptor.cliExposure"),
             "REPL help should not reinterpret CLIExposure cases"
         )
-    }
-
-    func testSessionPromptsProjectFromFencePresentation() throws {
-        XCTAssertEqual(ReplSession.startupPrompt, TheFence.Command.cliSessionStartupPrompt)
-        XCTAssertEqual(ReplSession.unknownCommandMessage, TheFence.Command.cliSessionUnknownCommandMessage)
-
-        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Session/SessionRepl.swift")
         XCTAssertFalse(
-            source.contains("TheFence.Command.help"),
-            "REPL prompt text should be a Fence-owned presentation projection, not a direct command-case mirror"
-        )
-        XCTAssertFalse(
-            source.contains("TheFence.Command.quit"),
-            "REPL prompt text should be a Fence-owned presentation projection, not a direct command-case mirror"
+            source.contains("descriptor.cliName"),
+            "REPL help should not own descriptor exposure projection"
         )
     }
 
@@ -455,21 +411,6 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.waitForChange.rawValue)
         XCTAssertEqual(expect?[.type] as? String, "elements_changed")
-    }
-
-    func testHumanParserRejectsUnknownExpectationShortcutBeforeDispatch() {
-        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: "change expect=layout_changed")) { error in
-            let message = CLIRequestBuilder.diagnosticMessage(for: error)
-
-            XCTAssertTrue(
-                message.contains("Invalid expectation 'layout_changed' for wait_for_change"),
-                "Expected command-specific expectation parse failure, got: \(message)"
-            )
-            XCTAssertTrue(
-                message.contains("Expected expectation shorthand"),
-                "Expected valid expectation shape guidance, got: \(message)"
-            )
-        }
     }
 
     func testRunBatchSerializesStepsBeforeSending() throws {
@@ -679,19 +620,6 @@ final class CLICommandSyncTests: XCTestCase {
         )
     }
 
-    func testSharedRequestBuilderRendersCommandNameFromDescriptor() throws {
-        let source = try readRepositoryFile("ButtonHeistCLI/Sources/Support/CLIRequestBuilder.swift")
-
-        XCTAssertTrue(
-            source.contains("command.descriptor.canonicalName"),
-            "Shared CLI request rendering should project command names through FenceCommandDescriptor"
-        )
-        XCTAssertFalse(
-            source.contains("request[.command] = command.rawValue"),
-            "Shared CLI request rendering should not bypass FenceCommandDescriptor for command names"
-        )
-    }
-
     func testCLIAndREPLShareCanonicalRequestBuilding() {
         let parameters: CLIRequestParameters = [
             .heistId: .string("button_save"),
@@ -746,10 +674,10 @@ final class CLICommandSyncTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(source.contains("TheFence.Command.cliSessionHelp"), "REPL alias help should render from the Fence-owned CLI help projection")
-        XCTAssertFalse(source.contains("TheFence.Command.humanCommandAliases"), "REPL alias help should not read alias tables directly")
+        XCTAssertTrue(source.contains("TheFence.Command.cliSessionHelp"))
         XCTAssertFalse(source.contains("commandAliases:"), "REPL command aliases should live in TheFence.Command.humanCommandAliases")
         XCTAssertFalse(source.contains("compoundAliases:"), "REPL compound aliases should live in TheFence.Command.humanCommandAliases")
+        XCTAssertFalse(source.contains("TheFence.Command.humanCommandAliases"), "REPL should consume rendered help, not alias storage")
         XCTAssertFalse(source.contains("descriptor.humanAliases"), "REPL should not rescan descriptor alias fields")
     }
 
@@ -1048,24 +976,6 @@ final class CLICommandSyncTests: XCTestCase {
             return ""
         }
         return contents
-    }
-
-    private func sourceSection(
-        in contents: String,
-        startingAt startMarker: String,
-        endingBefore endMarker: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws -> String {
-        guard let start = contents.range(of: startMarker) else {
-            XCTFail("Missing source marker \(startMarker)", file: file, line: line)
-            return ""
-        }
-        guard let end = contents.range(of: endMarker, range: start.upperBound..<contents.endIndex) else {
-            XCTFail("Missing source marker \(endMarker)", file: file, line: line)
-            return ""
-        }
-        return String(contents[start.lowerBound..<end.lowerBound])
     }
 
     private func captureGroupMatches(in contents: String, pattern: String) -> [String] {

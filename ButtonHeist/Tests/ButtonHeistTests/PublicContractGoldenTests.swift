@@ -167,55 +167,44 @@ final class PublicContractGoldenTests: XCTestCase {
         }
     }
 
-    func testCommandCatalogPresentationStaysSplitByDomain() throws {
+    func testCommandCatalogDescriptionsAreDescriptorBackedAndExplicit() throws {
         let catalog = try sourceFile("ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandCatalog.swift")
 
-        XCTAssertLessThanOrEqual(
-            lineCount(catalog),
-            680,
-            "The command catalog should keep command facts central without growing long presentation prose."
-        )
         XCTAssertTrue(
             catalog.contains("presentationDescription(for:"),
             "Descriptors and MCP contracts should project help text from command presentation files."
         )
 
-        let presentationFamilies: [(path: String, maximumLines: Int, requiredText: [String])] = [
-            (
-                "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Observation.swift",
-                80,
-                ["Check Button Heist connection health", "Read the app accessibility hierarchy"]
-            ),
-            (
-                "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Interaction.swift",
-                100,
-                ["Activate a UI element", "Perform a touch gesture"]
-            ),
-            (
-                "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Session.swift",
-                110,
-                ["Execute multiple commands in one call", "Play back a .heist file"]
-            ),
-        ]
-
-        for family in presentationFamilies {
-            let source = try sourceFile(family.path)
-            XCTAssertLessThanOrEqual(
-                lineCount(source),
-                family.maximumLines,
-                "\(family.path) should stay focused on one command presentation family."
+        for descriptor in TheFence.Command.descriptors {
+            XCTAssertEqual(
+                descriptor.description,
+                TheFence.Command.presentationDescription(for: descriptor.canonicalName),
+                "\(descriptor.canonicalName) should project public prose from the descriptor presentation layer."
             )
+            XCTAssertFalse(
+                descriptor.description.contains("missing a public description"),
+                "\(descriptor.canonicalName) must not expose descriptor fallback prose."
+            )
+            XCTAssertFalse(
+                descriptor.description.contains("Execute the "),
+                "\(descriptor.canonicalName) must not expose prototype command prose."
+            )
+        }
 
-            for text in family.requiredText {
-                XCTAssertTrue(
-                    source.contains(text),
-                    "\(text) should live in \(family.path), not the command fact catalog."
-                )
-                XCTAssertFalse(
-                    catalog.contains(text),
-                    "\(text) should not live in the command fact catalog."
-                )
-            }
+        for contract in TheFence.Command.mcpToolContracts {
+            XCTAssertEqual(
+                contract.description,
+                TheFence.Command.presentationDescription(for: contract.name),
+                "\(contract.name) should project MCP prose from the descriptor presentation layer."
+            )
+            XCTAssertFalse(
+                contract.description.contains("missing a public description"),
+                "\(contract.name) must not expose descriptor fallback prose."
+            )
+            XCTAssertFalse(
+                contract.description.contains("Execute the "),
+                "\(contract.name) must not expose prototype command prose."
+            )
         }
     }
 

@@ -3,6 +3,18 @@ import Foundation
 extension TheFence.Command {
     static func sessionPresentationDescription(for toolName: String) -> String? {
         switch toolName {
+        case Self.help.rawValue:
+            return "Return descriptor-backed help for the current Button Heist command surface."
+
+        case Self.status.rawValue:
+            return "Report connection and session state for the active Button Heist driver."
+
+        case Self.quit.rawValue:
+            return "End the interactive CLI session."
+
+        case Self.exit.rawValue:
+            return "End the interactive CLI session."
+
         case Self.startRecording.rawValue:
             return "Start an H.264/MP4 screen recording. Recording runs until max duration unless inactivity_timeout is explicitly supplied."
 
