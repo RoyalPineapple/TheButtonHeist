@@ -628,12 +628,20 @@ struct ToolSyncTests {
             "main.swift should not route through an untyped Any conversion helper"
         )
         #expect(
-            source.contains("parameter(named:"),
-            "main.swift should use the descriptor parameter lookup API for instruction keys"
+            source.contains("TheFence.Command.mcpServerInstructions"),
+            "main.swift should delegate server instructions to the Fence-owned MCP presentation"
         )
         #expect(
             !source.contains("parameters.first"),
             "main.swift should not open-code descriptor parameter scans"
+        )
+
+        let presentationSource = try readRepositoryFile(
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandPresentation+Adapters.swift"
+        )
+        #expect(
+            presentationSource.contains("parameter(named:"),
+            "MCP presentation should use the descriptor parameter lookup API for instruction keys"
         )
     }
 
