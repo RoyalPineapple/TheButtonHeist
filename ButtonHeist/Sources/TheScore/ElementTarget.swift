@@ -22,18 +22,6 @@ public enum ElementTarget: Sendable, Equatable {
     /// This is a disambiguator for match results, NOT durable identity.
     case matcher(ElementMatcher, ordinal: Int? = nil)
 
-    /// Returns nil if both heistId and matcher are empty. Ordinal only
-    /// disambiguates a non-empty semantic matcher.
-    public init?(heistId: HeistId? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
-        if let heistId {
-            guard ordinal == nil, matcher.nonEmpty == nil else { return nil }
-            self = .heistId(heistId)
-        } else if let match = matcher.nonEmpty {
-            self = .matcher(match, ordinal: ordinal)
-        } else {
-            return nil
-        }
-    }
 }
 
 extension ElementTarget: CustomStringConvertible {
