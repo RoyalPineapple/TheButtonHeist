@@ -2282,12 +2282,13 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(result, .screenChanged)
     }
 
-    func testNormalizeToolCallParsesExpectationPayloadAtCatalogEdge() throws {
+    func testNormalizeToolCallRoutesWithoutParsingRequestArguments() throws {
+        let expectation: HeistValue = .object(["type": .string("screen_changed")])
         let result = FenceOperationCatalog.normalizeToolCall(
             name: "activate",
             arguments: TheFence.CommandArgumentEnvelope(values: [
                 "target": .object(["matcher": .object(["identifier": .string("submit")])]),
-                "expect": .object(["type": .string("screen_changed")]),
+                "expect": expectation,
                 "timeout": .double(0.25),
             ])
         )
@@ -2298,51 +2299,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(operation.command, .activate)
         XCTAssertNil(operation.stringArgument("identifier"))
-        XCTAssertNil(operation.stringArgument("expect"))
-        XCTAssertEqual(operation.request.expectationPayload?.expectation, .screenChanged)
-        XCTAssertEqual(operation.request.expectationPayload?.timeout, 0.25)
-    }
-
-    @ButtonHeistActor
-    func testNormalizedToolOperationUsesTypedExpectationPayload() async throws {
-        let result = FenceOperationCatalog.normalizeToolCall(
-            name: "wait_for_change",
-            arguments: TheFence.CommandArgumentEnvelope(values: [
-                "expect": .object(["type": .string("elements_changed")]),
-            ])
-        )
-
-        guard case .success(let operation) = result else {
-            return XCTFail("Expected successful operation, got \(result)")
-        }
-
-        XCTAssertNil(operation.stringArgument("expect"))
-        XCTAssertEqual(operation.request.expectationPayload?.expectation, .elementsChanged)
-    }
-
-    func testNormalizeToolCallReportsExpectationParseFailure() {
-        let result = FenceOperationCatalog.normalizeToolCall(
-            name: "activate",
-            arguments: TheFence.CommandArgumentEnvelope(values: ["expect": .string("screen_changed")])
-        )
-
-        guard case .failure(let error) = result else {
-            return XCTFail("Expected routing failure, got \(result)")
-        }
-        XCTAssertEqual(error.message, "Invalid expectation type: expected object with a \"type\" discriminator")
-    }
-
-    func testNormalizeToolCallLeavesUnsupportedExpectationForRequestValidation() throws {
-        let result = FenceOperationCatalog.normalizeToolCall(
-            name: "get_screen",
-            arguments: TheFence.CommandArgumentEnvelope(values: ["expect": .string("screen_changed")])
-        )
-
-        guard case .success(let operation) = result else {
-            return XCTFail("Expected successful operation, got \(result)")
-        }
-        XCTAssertEqual(operation.stringArgument("expect"), "screen_changed")
-        XCTAssertNil(operation.request.expectationPayload)
+        XCTAssertEqual(operation.argumentValue("expect"), expectation)
+        XCTAssertEqual(operation.argumentValue("timeout"), .double(0.25))
     }
 
     @ButtonHeistActor
@@ -3169,7 +3127,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "target": matcherTargetValue(label: "Done"),
                 ]),
             ])],
-            contains: "run_batch step 0: Unknown parameter 'unexpected' for scroll"
+            contains: #"schema validation failed for unexpected: observed string "value"; expected valid scroll parameter"#
         )
     }
 

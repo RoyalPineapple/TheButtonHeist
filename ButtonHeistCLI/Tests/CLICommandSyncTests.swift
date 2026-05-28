@@ -111,11 +111,11 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testHumanParserNormalizesChangeExpectationJsonObject() throws {
+    func testHumanParserPreservesChangeExpectationJsonObjectForRequestParsing() throws {
         let operation = try ReplSession.parseHumanInput(#"wait_for_change expect='{"type":"elements_changed"}'"#)
 
         XCTAssertEqual(operation.command, .waitForChange)
-        XCTAssertNil(operation.argument(.expect))
+        XCTAssertEqual(operation.argument(.expect), .object(["type": .string("elements_changed")]))
     }
 
     func testRunBatchSerializesStepsBeforeSending() throws {
@@ -157,20 +157,6 @@ final class CLICommandSyncTests: XCTestCase {
         ) { error in
             XCTAssertTrue(
                 CLIRequestBuilder.diagnosticMessage(for: error).contains(#"steps[0] command "run_batch" is not supported"#),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testRunBatchRejectsUnknownSerializedParameterAtEdge() {
-        XCTAssertThrowsError(
-            try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"scroll","unexpected":"value","target":{"matcher":{"label":"Done"}}}]"#,
-                fromFile: nil
-            )
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown parameter 'unexpected' for scroll"),
                 CLIRequestBuilder.diagnosticMessage(for: error)
             )
         }
@@ -244,21 +230,6 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.requestId, .double(1.0))
-    }
-
-    func testSharedRequestBuilderCarriesMachineRequestIdOnValidationError() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(
-                from: #"{"id":"r1","command":"wait_for_change","expect":"screen_changed"}"#
-            )
-        ) { error in
-            let buildError = error as? CLIRequestBuildError
-            XCTAssertEqual(buildError?.requestId, .string("r1"))
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Invalid expectation type"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
     }
 
     func testSharedRequestBuilderRejectsNonScalarMachineRequestId() {
