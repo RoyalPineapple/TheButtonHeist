@@ -10,20 +10,10 @@ extension TheFence {
 
     enum RequestPayload {
         case none
-        case dismissKeyboard
-        case getPasteboard
+        case clientAction
         case getInterface(GetInterfaceRequest)
         case screen(ScreenRequest)
         case artifact(ArtifactRequest)
-        case gesture(GesturePayload)
-        case scroll(ScrollPayload)
-        case accessibility(AccessibilityPayload)
-        case rotor(RotorTarget)
-        case typeText(TypeTextTarget)
-        case editAction(EditActionTarget)
-        case setPasteboard(SetPasteboardTarget)
-        case waitFor(WaitForTarget)
-        case waitForChange(ExpectationPayload)
         case startRecording(RecordingConfig)
         case connect(ConnectRequest)
         case runBatch(RunBatchRequest)
@@ -231,10 +221,34 @@ extension TheFence {
     struct DecodedRequestPayload {
         let payload: RequestPayload
         let executableMessages: [ClientMessage]?
+        let evidence: RequestEvidence
 
-        init(payload: RequestPayload, executableMessages: [ClientMessage]? = nil) {
+        init(
+            payload: RequestPayload,
+            executableMessages: [ClientMessage]? = nil,
+            evidence: RequestEvidence = .empty
+        ) {
             self.payload = payload
             self.executableMessages = executableMessages
+            self.evidence = evidence
+        }
+    }
+
+    struct RequestEvidence {
+        let arguments: [String: HeistValue]
+        let elementTarget: ElementTarget?
+        let coordinateOnly: Bool
+
+        static let empty = RequestEvidence(arguments: [:])
+
+        init(
+            arguments: [String: HeistValue] = [:],
+            elementTarget: ElementTarget? = nil,
+            coordinateOnly: Bool = false
+        ) {
+            self.arguments = arguments
+            self.elementTarget = elementTarget
+            self.coordinateOnly = coordinateOnly
         }
     }
 
@@ -243,6 +257,7 @@ extension TheFence {
         let requestId: String
         let payload: RequestPayload
         let executableMessages: [ClientMessage]?
+        let evidence: RequestEvidence
         let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit).
         let immediateResponse: FenceResponse?
@@ -252,6 +267,7 @@ extension TheFence {
             requestId: String,
             payload: RequestPayload,
             executableMessages: [ClientMessage]? = nil,
+            evidence: RequestEvidence = .empty,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
         ) {
@@ -259,6 +275,7 @@ extension TheFence {
             self.requestId = requestId
             self.payload = payload
             self.executableMessages = executableMessages
+            self.evidence = evidence
             self.expectationPayload = expectationPayload
             self.immediateResponse = immediateResponse
         }
@@ -354,16 +371,19 @@ extension TheFence {
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
-        let decodedPayload: DecodedRequestPayload = if command.requestPayloadKind == .waitForChange {
-            DecodedRequestPayload(
-                payload: .waitForChange(expectationPayload),
-                executableMessages: [.waitForChange(WaitForChangeTarget(
-                    expect: expectationPayload.expectation,
-                    timeout: expectationPayload.timeout
-                ))]
+        let decodedPayload: DecodedRequestPayload
+        if command.requestPayloadKind == .waitForChange {
+            let target = WaitForChangeTarget(
+                expect: expectationPayload.expectation,
+                timeout: expectationPayload.timeout
+            )
+            decodedPayload = DecodedRequestPayload(
+                payload: .clientAction,
+                executableMessages: [.waitForChange(target)],
+                evidence: RequestEvidence(arguments: target.heistEvidenceArguments())
             )
         } else {
-            try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
+            decodedPayload = try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
         }
 
         return ParsedRequest(
@@ -371,6 +391,7 @@ extension TheFence {
             requestId: requestId,
             payload: decodedPayload.payload,
             executableMessages: decodedPayload.executableMessages,
+            evidence: decodedPayload.evidence,
             expectationPayload: expectationPayload,
             immediateResponse: nil
         )
@@ -411,10 +432,10 @@ extension TheFence {
         switch command.requestPayloadKind {
         case .none:
             if command == .dismissKeyboard {
-                return DecodedRequestPayload(payload: .dismissKeyboard, executableMessages: [.resignFirstResponder])
+                return DecodedRequestPayload(payload: .clientAction, executableMessages: [.resignFirstResponder])
             }
             if command == .getPasteboard {
-                return DecodedRequestPayload(payload: .getPasteboard, executableMessages: [.getPasteboard])
+                return DecodedRequestPayload(payload: .clientAction, executableMessages: [.getPasteboard])
             }
             return DecodedRequestPayload(payload: .none)
         case .observation:

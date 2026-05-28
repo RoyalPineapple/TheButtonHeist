@@ -36,8 +36,9 @@ extension TheFence {
     ) throws -> DecodedRequestPayload {
         let payload = try decodeGesturePayload(command: command, request: GestureRequestInput(arguments))
         return DecodedRequestPayload(
-            payload: .gesture(payload),
-            executableMessages: [payload.clientMessage]
+            payload: .clientAction,
+            executableMessages: [payload.clientMessage],
+            evidence: payload.requestEvidence
         )
     }
 
