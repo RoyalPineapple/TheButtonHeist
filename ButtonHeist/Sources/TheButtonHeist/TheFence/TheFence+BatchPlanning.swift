@@ -86,7 +86,7 @@ private extension TheFence {
         )
         return RunBatchPreparedStep(
             originalIndex: originalIndex,
-            commandName: request.command.rawValue,
+            command: request.command,
             typedStep: typedStep
         )
     }

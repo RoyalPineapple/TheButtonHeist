@@ -10,7 +10,7 @@ extension TheFence {
 
     enum RequestPayload {
         case none
-        case clientAction
+        case clientAction([ClientMessage])
         case getInterface(GetInterfaceRequest)
         case screen(ScreenRequest)
         case artifact(ArtifactRequest)
@@ -60,32 +60,31 @@ extension TheFence {
 
     struct RunBatchPreparedStep {
         let originalIndex: Int
-        let commandName: String
+        let command: Command
         let typedStep: TheScore.BatchStep
 
         init(
             originalIndex: Int,
-            commandName: String,
+            command: Command,
             typedStep: TheScore.BatchStep
         ) {
             self.originalIndex = originalIndex
-            self.commandName = commandName
+            self.command = command
             self.typedStep = typedStep
         }
+
+        var commandName: String { command.rawValue }
     }
 
     struct DecodedRequestPayload {
         let payload: RequestPayload
-        let executableMessages: [ClientMessage]?
         let evidence: RequestEvidence
 
         init(
             payload: RequestPayload,
-            executableMessages: [ClientMessage]? = nil,
             evidence: RequestEvidence = .empty
         ) {
             self.payload = payload
-            self.executableMessages = executableMessages
             self.evidence = evidence
         }
     }
@@ -112,7 +111,6 @@ extension TheFence {
         let command: Command
         let requestId: String
         let payload: RequestPayload
-        let executableMessages: [ClientMessage]?
         let evidence: RequestEvidence
         let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit).
@@ -122,7 +120,6 @@ extension TheFence {
             command: Command,
             requestId: String,
             payload: RequestPayload,
-            executableMessages: [ClientMessage]? = nil,
             evidence: RequestEvidence = .empty,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
@@ -130,10 +127,14 @@ extension TheFence {
             self.command = command
             self.requestId = requestId
             self.payload = payload
-            self.executableMessages = executableMessages
             self.evidence = evidence
             self.expectationPayload = expectationPayload
             self.immediateResponse = immediateResponse
+        }
+
+        var executableMessages: [ClientMessage]? {
+            guard case .clientAction(let messages) = payload else { return nil }
+            return messages
         }
     }
 
@@ -234,8 +235,7 @@ extension TheFence {
                 timeout: expectationPayload.timeout
             )
             decodedPayload = DecodedRequestPayload(
-                payload: .clientAction,
-                executableMessages: [.waitForChange(target)],
+                payload: .clientAction([.waitForChange(target)]),
                 evidence: RequestEvidence(arguments: target.heistEvidenceArguments())
             )
         } else {
@@ -246,7 +246,6 @@ extension TheFence {
             command: command,
             requestId: requestId,
             payload: decodedPayload.payload,
-            executableMessages: decodedPayload.executableMessages,
             evidence: decodedPayload.evidence,
             expectationPayload: expectationPayload,
             immediateResponse: nil
@@ -288,10 +287,10 @@ extension TheFence {
         switch command.requestPayloadKind {
         case .none:
             if command == .dismissKeyboard {
-                return DecodedRequestPayload(payload: .clientAction, executableMessages: [.resignFirstResponder])
+                return DecodedRequestPayload(payload: .clientAction([.resignFirstResponder]))
             }
             if command == .getPasteboard {
-                return DecodedRequestPayload(payload: .clientAction, executableMessages: [.getPasteboard])
+                return DecodedRequestPayload(payload: .clientAction([.getPasteboard]))
             }
             return DecodedRequestPayload(payload: .none)
         case .observation:
