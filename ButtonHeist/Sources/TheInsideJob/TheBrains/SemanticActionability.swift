@@ -6,6 +6,65 @@ import TheScore
 
 // MARK: - Semantic Actionability
 
+private struct ActionabilityLoopPlan {
+    let activationPoint: CGPoint
+    let scrollView: UIScrollView?
+    let noRevealPathMessage: String
+    let notActionableAfterRevealMessage: String
+    let unsafeProgrammaticScrollMessage: String?
+    let scrollFailedMessage: String
+}
+
+private enum ActionabilityLoopOutcome {
+    case ready
+    case refreshAndRetry
+    case failed(SemanticActionability.SemanticActionabilityFailure)
+}
+
+private struct ActionabilityRetryState {
+    let canRefreshLiveTargetState: Bool = true
+
+    func afterRefresh() -> ActionabilityRetryState {
+        ActionabilityRetryState(canRefreshLiveTargetState: false)
+    }
+}
+
+private enum SemanticTargetResolution<Target> {
+    case resolved(Target)
+    case failed(SemanticActionability.SemanticActionabilityFailure)
+}
+
+private enum FreshLiveTargetResolution<Target> {
+    case resolved(Target)
+    case refreshableUnavailable(
+        SemanticActionability.LiveTargetUnavailableReason,
+        includeObservedFailure: Bool
+    )
+    case failed(SemanticActionability.SemanticActionabilityFailure)
+}
+
+private enum RevealRefreshGeometryLoopResult<SemanticTarget, LiveTarget> {
+    case actionable(SemanticTarget, LiveTarget)
+    case failed(SemanticActionability.SemanticActionabilityFailure)
+
+    var failure: SemanticActionability.SemanticActionabilityFailure? {
+        if case .failed(let failure) = self { return failure }
+        return nil
+    }
+}
+
+@MainActor
+private protocol ActionabilityAdapter {
+    associatedtype SemanticTarget
+    associatedtype LiveTarget
+
+    var method: ActionMethod { get }
+
+    func resolveSemanticTarget() async -> SemanticTargetResolution<SemanticTarget>
+    func resolveFreshLiveTarget(for semanticTarget: SemanticTarget) -> FreshLiveTargetResolution<LiveTarget>
+    func viewportAdjustmentPlan(for liveTarget: LiveTarget) -> ActionabilityLoopPlan
+}
+
 /// Central semantic actionability path.
 ///
 /// Semantic commands name a target. This owner absorbs viewport mechanics:
@@ -41,65 +100,6 @@ final class SemanticActionability {
     struct SemanticContainerActionableTarget {
         let resolvedTarget: TheStash.ResolvedContainerTarget
         let liveTarget: TheStash.LiveContainerTarget
-    }
-
-    private struct ActionabilityLoopPlan {
-        let activationPoint: CGPoint
-        let scrollView: UIScrollView?
-        let noRevealPathMessage: String
-        let notActionableAfterRevealMessage: String
-        let unsafeProgrammaticScrollMessage: String?
-        let scrollFailedMessage: String
-    }
-
-    private enum ActionabilityLoopOutcome {
-        case ready
-        case refreshAndRetry
-        case failed(SemanticActionabilityFailure)
-    }
-
-    private struct ActionabilityRetryState {
-        let canRefreshLiveTargetState: Bool = true
-
-        func afterRefresh() -> ActionabilityRetryState {
-            ActionabilityRetryState(canRefreshLiveTargetState: false)
-        }
-    }
-
-    private enum SemanticTargetResolution<Target> {
-        case resolved(Target)
-        case failed(SemanticActionabilityFailure)
-    }
-
-    private enum FreshLiveTargetResolution<Target> {
-        case resolved(Target)
-        case refreshableUnavailable(
-            LiveTargetUnavailableReason,
-            includeObservedFailure: Bool
-        )
-        case failed(SemanticActionabilityFailure)
-    }
-
-    private enum RevealRefreshGeometryLoopResult<SemanticTarget, LiveTarget> {
-        case actionable(SemanticTarget, LiveTarget)
-        case failed(SemanticActionabilityFailure)
-
-        var failure: SemanticActionabilityFailure? {
-            if case .failed(let failure) = self { return failure }
-            return nil
-        }
-    }
-
-    @MainActor
-    private protocol ActionabilityAdapter {
-        associatedtype SemanticTarget
-        associatedtype LiveTarget
-
-        var method: ActionMethod { get }
-
-        func resolveSemanticTarget() async -> SemanticTargetResolution<SemanticTarget>
-        func resolveFreshLiveTarget(for semanticTarget: SemanticTarget) -> FreshLiveTargetResolution<LiveTarget>
-        func viewportAdjustmentPlan(for liveTarget: LiveTarget) -> ActionabilityLoopPlan
     }
 
     enum SemanticActionabilityResult {
