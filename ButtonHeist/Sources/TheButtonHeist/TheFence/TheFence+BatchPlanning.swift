@@ -150,7 +150,7 @@ private extension TheFence {
     }
 
     static func jsonEncodedSize(
-        of object: [String: CommandArgumentValue],
+        of object: [String: HeistValue],
         field: String,
         maxBytes: Int,
         maxDepth: Int,
@@ -192,7 +192,7 @@ private extension TheFence {
     }
 
     static func jsonEncodedSize(
-        of value: CommandArgumentValue,
+        of value: HeistValue,
         field: String,
         maxBytes: Int,
         maxDepth: Int,
@@ -247,9 +247,6 @@ private extension TheFence {
 
         case .bool(let bool):
             return bool ? 4 : 5
-
-        case .null:
-            return 4
 
         case .int(let number):
             return try bounded(String(number).utf8.count)

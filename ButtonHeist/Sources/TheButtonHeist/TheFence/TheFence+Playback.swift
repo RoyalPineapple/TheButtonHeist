@@ -92,10 +92,10 @@ extension TheFence {
         }
 
         func requestDecodeInputEnvelope() -> CommandArgumentEnvelope {
-            var requestArguments = arguments.mapValues(CommandArgumentValue.init)
+            var requestArguments = arguments
 
             if let target {
-                var matcher: [String: CommandArgumentValue] = [:]
+                var matcher: [String: HeistValue] = [:]
                 if let label = target.matcher.label { matcher["label"] = .string(label) }
                 if let matchIdentifier = target.matcher.identifier { matcher["identifier"] = .string(matchIdentifier) }
                 if let matchValue = target.matcher.value { matcher["value"] = .string(matchValue) }
@@ -105,7 +105,7 @@ extension TheFence {
                 if let matchExclude = target.matcher.excludeTraits {
                     matcher["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
                 }
-                var targetArguments: [String: CommandArgumentValue] = ["matcher": .object(matcher)]
+                var targetArguments: [String: HeistValue] = ["matcher": .object(matcher)]
                 if let ordinal = target.ordinal {
                     targetArguments["ordinal"] = .int(ordinal)
                 }

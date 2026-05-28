@@ -394,14 +394,23 @@ final class TheFenceHandlerTests: XCTestCase {
             "bool": NSNumber(value: true),
             "int": NSNumber(value: 3),
             "double": NSNumber(value: 2.5),
-            "null": NSNull(),
         ])
 
         XCTAssertEqual(try envelope.schemaBoolean("bool"), true)
         XCTAssertEqual(try envelope.schemaInteger("int"), 3)
         XCTAssertEqual(try envelope.schemaNumber("double"), 2.5)
         XCTAssertNil(envelope.observedValue(for: "missing"))
-        XCTAssertTrue(envelope.argumentValues["null"] == .null)
+    }
+
+    func testCommandArgumentEnvelopeRejectsNullValues() {
+        XCTAssertThrowsError(try TheFence.CommandArgumentEnvelope(arguments: [
+            "null": NSNull(),
+        ])) { error in
+            XCTAssertEqual(
+                String(describing: error),
+                "SchemaValidationError(field: \"null\", observed: \"null\", expected: \"JSON scalar, array, or object\")"
+            )
+        }
     }
 
     func testCommandArgumentEnvelopePreservesNestedJSONValues() throws {
@@ -412,7 +421,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ],
             "array": [
                 ["x": 0.25, "y": 0.75],
-                NSNull(),
+                ["x": 0.5, "y": 0.5],
             ],
         ] as [String: Any])
 
@@ -430,7 +439,12 @@ final class TheFenceHandlerTests: XCTestCase {
         let first = TheFence.CommandArgumentObject(values: firstObject, fieldPrefix: "array[0]")
         XCTAssertEqual(try first.schemaNumber("x"), 0.25)
         XCTAssertEqual(try first.schemaNumber("y"), 0.75)
-        XCTAssertEqual(array[1], .null)
+        guard case .object(let secondObject) = array[1] else {
+            return XCTFail("Expected typed object")
+        }
+        let second = TheFence.CommandArgumentObject(values: secondObject, fieldPrefix: "array[1]")
+        XCTAssertEqual(try second.schemaNumber("x"), 0.5)
+        XCTAssertEqual(try second.schemaNumber("y"), 0.5)
     }
 
     func testCommandArgumentEnvelopeReadsNestedTypedObjects() throws {
@@ -761,7 +775,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapRejectsNaNCoordinate() async {
         await assertValidationError(
             ["command": "one_finger_tap", "x": Double.nan, "y": 200.0],
-            equals: "schema validation failed for x: observed number nan; expected number"
+            equals: "schema validation failed for x: observed number nan; expected finite JSON number"
         )
     }
 
@@ -769,7 +783,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapRejectsInfiniteCoordinate() async {
         await assertValidationError(
             ["command": "one_finger_tap", "x": Double.infinity, "y": 200.0],
-            equals: "schema validation failed for x: observed number inf; expected number"
+            equals: "schema validation failed for x: observed number inf; expected finite JSON number"
         )
     }
 
@@ -4062,8 +4076,8 @@ private func parseExpectation(_ request: [String: Any]) throws -> ActionExpectat
     ).expectation
 }
 
-private func parseTypedExpectation(_ expectation: TheFence.CommandArgumentValue?) throws -> ActionExpectation? {
-    var values: [String: TheFence.CommandArgumentValue] = [:]
+private func parseTypedExpectation(_ expectation: HeistValue?) throws -> ActionExpectation? {
+    var values: [String: HeistValue] = [:]
     if let expectation {
         values["expect"] = expectation
     }
