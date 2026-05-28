@@ -75,11 +75,9 @@ struct ElementTargetOptions: ParsableArguments {
         }
     }
 
-    /// Apply targeting options to a TheFence request dictionary.
-    /// Uses the raw CLI option values so TheFence can parse them natively.
-    func applyTo(_ request: inout [String: Any]) throws {
+    func applyTo(_ parameters: inout CLIRequestParameters) throws {
         if let target = try targetParameterValue() {
-            request.set(.target, target)
+            parameters.set(.target, target)
         }
     }
 

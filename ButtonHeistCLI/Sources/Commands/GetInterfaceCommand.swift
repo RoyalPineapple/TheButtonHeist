@@ -17,7 +17,7 @@ struct GetInterfaceCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: Self.fenceRequest(),
+            operation: try Self.fenceOperation(),
             statusMessage: "Reading interface..."
         )
     }

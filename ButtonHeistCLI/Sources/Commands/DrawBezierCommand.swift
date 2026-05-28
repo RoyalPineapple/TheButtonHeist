@@ -47,18 +47,18 @@ struct DrawBezierCommand: AsyncParsableCommand, CLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         let array = try loadJSONArray(inline: segments, fromFile: segmentsFromFile, optionName: "segments")
-        var request = Self.fenceRequest([
+        var request: CLIRequestParameters = [
             .startX: .double(startX),
             .startY: .double(startY),
             .segments: .array(array),
-        ])
+        ]
         if let samplesPerSegment { request.set(.samplesPerSegment, samplesPerSegment) }
         if let duration { request.set(.duration, duration) }
         if let velocity { request.set(.velocity, velocity) }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Drawing bezier path..."
         )
     }

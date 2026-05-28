@@ -12,11 +12,11 @@ struct DismissKeyboardCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let request = Self.fenceRequest()
+        let request: CLIRequestParameters = [:]
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Dismissing keyboard..."
         )
     }

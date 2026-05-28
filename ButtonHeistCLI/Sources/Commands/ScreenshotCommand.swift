@@ -24,7 +24,7 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        var request = Self.fenceRequest()
+        var request: CLIRequestParameters = [:]
         if let outputPath = output {
             request.set(.output, outputPath)
         }
@@ -36,13 +36,13 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
             try await CLIRunner.run(
                 connection: connection,
                 format: .human,
-                request: request,
+                operation: try Self.fenceOperation(request),
                 statusMessage: "Requesting screenshot..."
             )
         } else {
             let (fence, response) = try await CLIRunner.execute(
                 connection: connection,
-                request: request,
+                operation: try Self.fenceOperation(request),
                 statusMessage: "Requesting screenshot..."
             )
             defer { fence.stop() }

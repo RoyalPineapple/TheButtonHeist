@@ -22,8 +22,8 @@ struct ListCommand: AsyncParsableCommand, CLICommandContract {
         defer { fence.stop() }
 
         logStatus("Discovering devices...")
-        let request = Self.fenceRequest()
-        let response = try await fence.execute(request: request)
+        let request: CLIRequestParameters = [:]
+        let response = try await fence.execute(operation: try Self.fenceOperation(request))
         CLIRunner.outputResponse(response, format: output.format ?? .auto)
     }
 }
