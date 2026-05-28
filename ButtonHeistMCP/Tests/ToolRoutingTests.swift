@@ -72,12 +72,6 @@ struct ToolRoutingTests {
         let cases: [(step: [String: Argument], message: String)] = [
             (["command": .string("not_a_command")],
              "run_batch step command must be a canonical TheFence.Command; unknown command \"not_a_command\""),
-            (["command": .string(TheFence.Command.scroll.rawValue), "unexpected": .string("value")],
-             "Unknown parameter 'unexpected' for \(TheFence.Command.scroll.rawValue)"),
-            (
-                ["command": .string(TheFence.Command.editAction.rawValue), "action": .int(7)],
-                "schema validation failed for action: observed integer 7; expected string"
-            ),
         ]
 
         for testCase in cases {

@@ -122,23 +122,6 @@ extension TheFence {
         let recordsCompletion: Bool
     }
 
-    struct RoutedCommandRequest {
-        private let arguments: CommandArgumentEnvelope
-        let expectationPayload: ExpectationPayload?
-
-        init(arguments: CommandArgumentEnvelope, expectationPayload: ExpectationPayload? = nil) {
-            self.arguments = arguments
-            self.expectationPayload = expectationPayload
-        }
-
-        func string(_ key: String) -> String? { arguments.string(key) }
-
-        func argumentEnvelopeForRequestDecoding() -> CommandArgumentEnvelope {
-            arguments
-        }
-
-    }
-
     struct ArchiveSessionRequest {
         let deleteSource: Bool
     }
@@ -164,18 +147,6 @@ extension TheFence {
                 expected: "public Button Heist command"
             )
         }
-        return try parseRequest(
-            command: command,
-            arguments: arguments,
-            expectationPayload: nil
-        )
-    }
-
-    private func parseRequest(
-        command: Command,
-        arguments: CommandArgumentEnvelope,
-        expectationPayload typedExpectationPayload: ExpectationPayload?
-    ) throws -> ParsedRequest {
         try validateRequestKeys(command: command, arguments: arguments)
         if let immediate = handleImmediateCommand(command) {
             return ParsedRequest(
@@ -188,7 +159,7 @@ extension TheFence {
             )
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
-        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
+        let expectationPayload = try parseExpectationPayload(arguments)
         let dispatch: DecodedRequestDispatch
         if command.requestPayloadKind == .waitForChange {
             let target = WaitForChangeTarget(
@@ -211,11 +182,9 @@ extension TheFence {
     }
 
     func parseRequest(operation: NormalizedOperation) throws -> ParsedRequest {
-        let request = operation.request
         return try parseRequest(
             command: operation.command,
-            arguments: request.argumentEnvelopeForRequestDecoding(),
-            expectationPayload: request.expectationPayload
+            arguments: operation.arguments
         )
     }
 
