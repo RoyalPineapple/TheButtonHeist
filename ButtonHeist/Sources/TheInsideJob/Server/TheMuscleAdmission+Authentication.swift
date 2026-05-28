@@ -27,14 +27,6 @@ struct MuscleAuthenticationFlow {
         clientRegistry.authenticatedClientIDs
     }
 
-    var authenticatedClientCount: Int {
-        clientRegistry.authenticatedClientCount
-    }
-
-    var helloValidatedClients: Set<Int> {
-        clientRegistry.helloValidatedClients
-    }
-
     mutating func registerClientAddress(_ clientId: Int, address: String) {
         clientRegistry.registerAddress(clientId, address: address)
     }
@@ -49,10 +41,6 @@ struct MuscleAuthenticationFlow {
 
     func contains(_ clientId: Int) -> Bool {
         clientRegistry.contains(clientId)
-    }
-
-    func clientIDs(for driverIdentity: String) -> [Int] {
-        clientRegistry.clientIDs(for: driverIdentity)
     }
 
     mutating func admitClientMessage(

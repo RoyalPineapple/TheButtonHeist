@@ -3,7 +3,7 @@ import Foundation
 public extension AccessibilityTrace {
     /// Derived same-screen run of captures. Captures remain trace truth; this
     /// projection is rebuilt from captures when callers need patch-style replay.
-    struct ScreenSegmentProjection: Codable, Sendable, Equatable {
+    struct ScreenSegmentProjection: Sendable, Equatable {
         public let baseline: Capture
         public private(set) var transitions: [ObservedTransitionProjection]
 
@@ -12,24 +12,13 @@ public extension AccessibilityTrace {
             self.transitions = transitions
         }
 
-        public var captures: [Capture] {
-            transitions.reduce(into: [baseline]) { result, transition in
-                guard let previous = result.last else { return }
-                result.append(transition.materialize(after: previous))
-            }
-        }
-
-        public var currentCapture: Capture {
-            captures.last ?? baseline
-        }
-
         public mutating func append(_ transition: ObservedTransitionProjection) {
             transitions.append(transition)
         }
     }
 
     /// Patch-backed edge used inside `ScreenSegmentProjection`.
-    struct ObservedTransitionProjection: Codable, Sendable, Equatable {
+    struct ObservedTransitionProjection: Sendable, Equatable {
         public let sequence: Int
         public let fromHash: String
         public let toHash: String
@@ -65,13 +54,9 @@ public extension AccessibilityTrace {
                 patch: patch
             )
         }
-
-        public func materialize(after capture: Capture, sequence: Int? = nil) -> Capture {
-            patch.apply(to: capture, sequence: sequence ?? self.sequence)
-        }
     }
 
-    enum TransitionCause: Codable, Sendable, Equatable, Hashable {
+    enum TransitionCause: Sendable, Equatable, Hashable {
         case command(String)
         case external
         case system

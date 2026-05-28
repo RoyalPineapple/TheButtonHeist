@@ -140,6 +140,31 @@ public enum FenceHumanPositionalSyntax: Sendable, Equatable {
     case leadingEdgeThenTarget(Set<String>)
 }
 
+extension FenceCommandDescriptor {
+    func executionTimeout(for request: TheFence.ParsedRequest) throws -> TimeInterval {
+        if actionResultMethod == .getPasteboard {
+            return Timeouts.healthSeconds
+        }
+        if actionResultMethod == .elementSearch || actionResultMethod == .typeText {
+            return Timeouts.longActionSeconds
+        }
+        if actionResultMethod == .waitFor {
+            guard case .waitFor(let target) = request.payload else {
+                throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for payload")
+            }
+            return target.resolvedTimeout + 5
+        }
+        if actionResultMethod == .waitForChange {
+            guard case .waitForChange(let payload) = request.payload else {
+                throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for_change payload")
+            }
+            let target = WaitForChangeTarget(expect: payload.expectation, timeout: payload.timeout)
+            return target.resolvedTimeout + 5
+        }
+        return Timeouts.actionSeconds
+    }
+}
+
 public extension TheFence.Command {
     var descriptor: FenceCommandDescriptor {
         Self.descriptor(for: self)

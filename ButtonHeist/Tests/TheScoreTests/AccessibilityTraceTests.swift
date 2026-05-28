@@ -169,7 +169,6 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.screenSegmentsProjection[0].transitions.count, 1)
         XCTAssertEqual(trace.screenSegmentsProjection[0].transitions[0].fromHash, before.hash)
         XCTAssertEqual(trace.screenSegmentsProjection[0].transitions[0].toHash, after.hash)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].captures.map(\.hash), trace.captures.map(\.hash))
         XCTAssertEqual(trace.captures.map(\.interface), [before.interface, after.interface])
         XCTAssertTrue(trace.hasValidIntegrity)
     }
@@ -237,7 +236,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(transition.patch.operations, [
             .updateElement(path: TreePath([1]), element: afterInterface.tree.pathIndexedElements[1].element),
         ])
-        XCTAssertEqual(transition.materialize(after: before).interface, afterInterface)
+        XCTAssertEqual(transition.patch.apply(to: before, sequence: after.sequence).interface, afterInterface)
     }
 
     func testScreenChangesStartNewBaselineSegment() throws {
@@ -281,7 +280,8 @@ final class AccessibilityTraceTests: XCTestCase {
 
         let trace = AccessibilityTrace(captures: [before, after])
 
-        XCTAssertEqual(trace.screenSegmentsProjection.map(\.captures.count), [1, 1])
+        XCTAssertEqual(trace.screenSegmentsProjection.map(\.baseline.hash), [before.hash, after.hash])
+        XCTAssertEqual(trace.screenSegmentsProjection.flatMap(\.transitions), [])
         XCTAssertEqual(trace.screenSegmentsProjection[1].baseline.interface, after.interface)
         XCTAssertTrue(trace.hasValidIntegrity)
     }
