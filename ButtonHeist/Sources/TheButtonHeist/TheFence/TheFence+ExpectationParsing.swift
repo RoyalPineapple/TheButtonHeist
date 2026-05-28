@@ -44,14 +44,8 @@ extension TheFence {
     /// shape accepted by direct, MCP, batch, and playback request decoding.
     public nonisolated static func parseExpectationArgument(_ rawValue: String) throws -> HeistValue {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if ActionExpectation.shorthandWireTypeValues.contains(trimmed) {
-            return .object([FenceParameterKey.type.rawValue: .string(trimmed)])
-        }
-
         guard trimmed.first == "{" else {
-            throw FenceError.invalidRequest(
-                "Expected expectation shorthand \(ActionExpectation.shorthandWireTypeValues.joined(separator: "/")) or a JSON object"
-            )
+            throw FenceError.invalidRequest("Expected expectation JSON object")
         }
 
         let value: HeistValue
@@ -82,12 +76,16 @@ private enum FenceExpectationParser {
         let type = try expectationType(in: object)
         switch type {
         case "delivery":
+            try validateAllowedKeys(["type"], in: object, type: type)
             return .delivery
         case "screen_changed":
+            try validateAllowedKeys(["type"], in: object, type: type)
             return .screenChanged
         case "elements_changed":
+            try validateAllowedKeys(["type"], in: object, type: type)
             return .elementsChanged
         case "element_updated":
+            try validateAllowedKeys(["type", "heistId", "property", "oldValue", "newValue"], in: object, type: type)
             return try .elementUpdated(
                 heistId: object.schemaString("heistId"),
                 property: elementProperty(in: object),
@@ -95,10 +93,13 @@ private enum FenceExpectationParser {
                 newValue: object.schemaString("newValue")
             )
         case "element_appeared":
+            try validateAllowedKeys(["type", "matcher"], in: object, type: type)
             return try .elementAppeared(requiredMatcher(in: object, type: type))
         case "element_disappeared":
+            try validateAllowedKeys(["type", "matcher"], in: object, type: type)
             return try .elementDisappeared(requiredMatcher(in: object, type: type))
         case "compound":
+            try validateAllowedKeys(["type", "expectations"], in: object, type: type)
             return try .compound(compoundExpectations(in: object))
         default:
             throw FenceError.invalidRequest("Unknown expectation type: \"\(type)\". Valid: \(validTypes)")
@@ -107,6 +108,18 @@ private enum FenceExpectationParser {
 
     private static var validTypes: String {
         ActionExpectation.wireTypeValues.joined(separator: ", ")
+    }
+
+    private static func validateAllowedKeys(
+        _ allowedKeys: Set<String>,
+        in object: TheFence.CommandArgumentObject,
+        type: String
+    ) throws {
+        let unknownKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
+        guard let unknownKey = unknownKeys.first else { return }
+        throw FenceError.invalidRequest(
+            "\(type) expectation does not accept \"\(object.field(unknownKey))\""
+        )
     }
 
     private static func expectationType(in object: TheFence.CommandArgumentObject) throws -> String {
@@ -157,7 +170,8 @@ private enum FenceExpectationParser {
     }
 
     private static func elementMatcher(from object: TheFence.CommandArgumentObject) throws -> ElementMatcher {
-        ElementMatcher(
+        try validateAllowedMatcherKeys(in: object)
+        return ElementMatcher(
             heistId: try object.schemaString("heistId"),
             label: try object.schemaString("label"),
             identifier: try object.schemaString("identifier"),
@@ -173,7 +187,16 @@ private enum FenceExpectationParser {
         )
     }
 
-    private static func compoundExpectations(in object: TheFence.CommandArgumentObject) throws -> [ActionExpectation] {
+    private static func validateAllowedMatcherKeys(in object: TheFence.CommandArgumentObject) throws {
+        let allowedKeys: Set<String> = ["heistId", "label", "identifier", "value", "traits", "excludeTraits"]
+        let unknownKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
+        guard let unknownKey = unknownKeys.first else { return }
+        throw FenceError.invalidRequest(
+            "expectation matcher does not accept \"\(object.field(unknownKey))\""
+        )
+    }
+
+    private static func compoundExpectations(in object: TheFence.CommandArgumentObject) throws -> NonEmptyActionExpectations {
         guard let value = object.argumentValues["expectations"] else {
             throw FenceError.invalidRequest("compound requires an \"expectations\" array")
         }
@@ -184,7 +207,7 @@ private enum FenceExpectationParser {
                 expected: "array of objects"
             )
         }
-        return try values.enumerated().map { index, value in
+        let expectations = try values.enumerated().map { index, value in
             guard case .object(let expectationObject) = value else {
                 throw FenceError.invalidRequest("compound expectations must be objects with a \"type\" discriminator")
             }
@@ -195,5 +218,9 @@ private enum FenceExpectationParser {
                 )
             )
         }
+        guard !expectations.isEmpty else {
+            throw FenceError.invalidRequest("compound requires at least one expectation")
+        }
+        return try NonEmptyActionExpectations(expectations)
     }
 }

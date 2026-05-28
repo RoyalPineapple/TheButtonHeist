@@ -133,25 +133,11 @@ extension TheBrains {
                 expectation: immediateExpectation
             )
         }
-        if step.command.fulfillsOwnBatchExpectation {
-            return BatchExpectationReceipt(
-                actionResult: actionResult,
-                expectation: ExpectationResult(
-                    met: true,
-                    expectation: expectation,
-                    actual: actionResult.message ?? actionResult.accessibilityDelta?.kindRawValue
-                )
-            )
-        }
 
         let waitResult = await runtime.waitForExpectation(expectation, step.deadline)
         return BatchExpectationReceipt(
             actionResult: waitResult,
-            expectation: ExpectationResult(
-                met: waitResult.success,
-                expectation: expectation,
-                actual: waitResult.message ?? waitResult.accessibilityDelta?.kindRawValue
-            )
+            expectation: expectation.validate(against: waitResult)
         )
     }
 

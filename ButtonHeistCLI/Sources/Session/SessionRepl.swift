@@ -99,7 +99,10 @@ final class ReplSession {
         let isMachineInput = line.hasPrefix("{")
         let parsedRequest: CLIParsedRequest
         do {
-            parsedRequest = try CLIRequestBuilder.parsedRequest(from: line)
+            parsedRequest = try CLIRequestBuilder.parsedRequest(
+                from: line,
+                acceptsHumanInput: format != .json
+            )
         } catch {
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
             if isMachineInput {
@@ -120,7 +123,7 @@ final class ReplSession {
 
         do {
             let response = try await fence.execute(request: request)
-            if parsedRequest.command == .quit || parsedRequest.command == .exit {
+            if parsedRequest.command == .quit {
                 if case .running(let idleMonitor) = state {
                     idleMonitor?.stop()
                 }

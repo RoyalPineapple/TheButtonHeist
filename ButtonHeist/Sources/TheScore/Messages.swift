@@ -46,8 +46,8 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
 
     case clientHello, authenticate, requestInterface, ping, status
     case activate, increment, decrement, performCustomAction, rotor
-    case touchTap, touchLongPress, touchSwipe, touchDrag, touchPinch, touchRotate, touchTwoFingerTap
-    case touchDrawPath, touchDrawBezier, typeText, editAction, setPasteboard, getPasteboard
+    case oneFingerTap, longPress, swipe, drag, pinch, rotate, twoFingerTap
+    case drawPath, drawBezier, typeText, editAction, setPasteboard, getPasteboard
     case scroll, scrollToVisible, elementSearch, scrollToEdge, resignFirstResponder
     case requestScreen, explore, waitForIdle, startRecording, stopRecording
     case waitFor, waitForChange, batchExecutionPlan

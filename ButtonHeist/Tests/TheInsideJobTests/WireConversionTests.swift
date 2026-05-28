@@ -49,17 +49,14 @@ final class WireConverterTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 0,
         frameHeight: Double = 0,
-        activationPointX: Double? = nil,
-        activationPointY: Double? = nil,
+        activationPoint: CGPoint? = nil,
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         let frame = CGRect(x: frameX, y: frameY, width: frameWidth, height: frameHeight)
-        let hasExplicitActivationPoint = activationPointX != nil || activationPointY != nil
-        let activationPoint = hasExplicitActivationPoint
-            ? CGPoint(x: activationPointX ?? 0, y: activationPointY ?? 0)
-            : .zero
+        let hasExplicitActivationPoint = activationPoint != nil
+        let resolvedActivationPoint = activationPoint ?? CGPoint(x: frame.midX, y: frame.midY)
         return .make(
             label: label,
             value: value,
@@ -67,7 +64,7 @@ final class WireConverterTests: XCTestCase {
             hint: hint,
             traits: UIAccessibilityTraits.fromNames(traits.map(\.rawValue)),
             shape: .frame(AccessibilityRect(frame)),
-            activationPoint: activationPoint,
+            activationPoint: resolvedActivationPoint,
             usesDefaultActivationPoint: !hasExplicitActivationPoint,
             customContent: customContent,
             customRotors: customRotors,
@@ -86,8 +83,7 @@ final class WireConverterTests: XCTestCase {
         frameY: Double = 0,
         frameWidth: Double = 0,
         frameHeight: Double = 0,
-        activationPointX: Double? = nil,
-        activationPointY: Double? = nil,
+        activationPoint: CGPoint? = nil,
         customContent: [AccessibilityElement.CustomContent] = [],
         customRotors: [AccessibilityElement.CustomRotor] = [],
         respondsToUserInteraction: Bool = true
@@ -99,7 +95,7 @@ final class WireConverterTests: XCTestCase {
                 label: label, value: value, identifier: identifier, hint: hint,
                 traits: traits, frameX: frameX, frameY: frameY,
                 frameWidth: frameWidth, frameHeight: frameHeight,
-                activationPointX: activationPointX, activationPointY: activationPointY,
+                activationPoint: activationPoint,
                 customContent: customContent,
                 customRotors: customRotors,
                 respondsToUserInteraction: respondsToUserInteraction
@@ -265,51 +261,32 @@ final class WireConverterTests: XCTestCase {
         }
     }
 
-    // MARK: - Unknown Trait Bits (audit Finding 9)
+    // MARK: - Unknown Trait Bits
 
-    /// A trait bit not in the parser's `knownTraits` table (e.g. a future iOS
-    /// trait at bit 42, or AXRuntime bit 33 surfaced via XCTest attr 2004)
-    /// must surface on the wire as an `.unknown("unknown(0xHEX)")` entry —
-    /// agents see the bit's presence rather than the parser silently dropping
-    /// it. Mirrors the parser's Codable encode path for forward compat.
-    func testUnknownTraitBitSurfacesOnWire() {
+    /// Trait bits outside the current contract do not become public trait
+    /// values. The parser may observe them, but the wire model exposes only
+    /// named `HeistTrait` cases.
+    func testUnknownTraitBitDoesNotBecomeWireTrait() {
         let unknownBit: UInt64 = 1 << 42
         let traits = UIAccessibilityTraits(rawValue: unknownBit)
         let wire = WireConversion.traitNames(traits)
-        let hasUnknownEntry = wire.contains { trait in
-            if case .unknown(let value) = trait, value.hasPrefix("unknown(0x") { return true }
-            return false
-        }
-        XCTAssertTrue(hasUnknownEntry,
-                      "Unknown trait bit 47 must surface on the wire, got: \(wire)")
+        XCTAssertTrue(wire.isEmpty, "Unknown trait bits must stay out of the wire contract, got: \(wire)")
     }
 
-    /// Mixing a known trait with an unknown bit emits both — the known name
-    /// from the table, plus the residual unknown token.
-    func testKnownPlusUnknownTraitMixSurfacesBoth() {
+    /// Mixing a known trait with an unknown bit emits only the known name from
+    /// the current contract.
+    func testKnownPlusUnknownTraitMixEmitsKnownTraitOnly() {
         let mixed = UIAccessibilityTraits(rawValue: UIAccessibilityTraits.button.rawValue | (1 << 42))
         let wire = WireConversion.traitNames(mixed)
-        XCTAssertTrue(wire.contains(.button), "Known .button must remain in wire output")
-        let hasUnknownEntry = wire.contains { trait in
-            if case .unknown(let value) = trait, value.hasPrefix("unknown(0x") { return true }
-            return false
-        }
-        XCTAssertTrue(hasUnknownEntry,
-                      "Residual unknown bit must surface alongside known traits, got: \(wire)")
+        XCTAssertEqual(wire, [.button], "Only named contract traits should appear, got: \(wire)")
     }
 
-    /// All known bits produce no unknown residual — the regression guard for
-    /// the common path (every standard accessible element).
-    func testAllKnownTraitsProduceNoUnknownResidual() {
+    /// All known bits stay in the named contract.
+    func testAllKnownTraitsRoundTripThroughCurrentContract() {
         for trait in HeistTrait.allCases {
             let bitmask = UIAccessibilityTraits.fromNames([trait.rawValue])
             let wire = WireConversion.traitNames(bitmask)
-            let hasUnknownEntry = wire.contains { trait in
-                if case .unknown(let value) = trait, value.hasPrefix("unknown(0x") { return true }
-                return false
-            }
-            XCTAssertFalse(hasUnknownEntry,
-                           "Known trait \(trait.rawValue) must not produce an unknown residual, got: \(wire)")
+            XCTAssertEqual(wire, [trait], "Known trait \(trait.rawValue) must round-trip, got: \(wire)")
         }
     }
 
@@ -528,8 +505,8 @@ final class WireConverterTests: XCTestCase {
     }
 
     func testActivationPointChangeProducesUpdate() {
-        let before = [makeScreenElement(heistId: "btn", activationPointX: 50, activationPointY: 25)]
-        let after = [makeScreenElement(heistId: "btn", activationPointX: 75, activationPointY: 40)]
+        let before = [makeScreenElement(heistId: "btn", activationPoint: CGPoint(x: 50, y: 25))]
+        let after = [makeScreenElement(heistId: "btn", activationPoint: CGPoint(x: 75, y: 40))]
 
         let delta = computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
@@ -693,14 +670,14 @@ final class WireConverterTests: XCTestCase {
             label: "Telescope, Far Light, 3:32",
             traits: [.button],
             frameY: 100,
-            activationPointY: 122
+            activationPoint: CGPoint(x: 0, y: 122)
         )
         let afterElement = makeScreenElement(
             heistId: "telescope_far_light_3_32_button_at_0_200",
             label: "Telescope, Far Light, 3:32",
             traits: [.button],
             frameY: 200,
-            activationPointY: 222
+            activationPoint: CGPoint(x: 0, y: 222)
         )
         let other = makeScreenElement(heistId: "daybreak_morning_ritual_button", label: "Daybreak")
         let beforeTree = [
@@ -740,7 +717,7 @@ final class WireConverterTests: XCTestCase {
             value: "0",
             traits: [.button],
             frameY: 100,
-            activationPointY: 122
+            activationPoint: CGPoint(x: 0, y: 122)
         )
         let afterElement = makeScreenElement(
             heistId: "favorite_button_at_0_200",
@@ -748,7 +725,7 @@ final class WireConverterTests: XCTestCase {
             value: "1",
             traits: [.button, .selected],
             frameY: 200,
-            activationPointY: 222
+            activationPoint: CGPoint(x: 0, y: 222)
         )
         let other = makeScreenElement(heistId: "queue_button", label: "Queue")
         let beforeTree = [
@@ -791,14 +768,14 @@ final class WireConverterTests: XCTestCase {
             label: "Telescope, Far Light, 3:32",
             traits: [.button],
             frameY: 100,
-            activationPointY: 122
+            activationPoint: CGPoint(x: 0, y: 122)
         )
         let afterElement = makeScreenElement(
             heistId: "telescope_far_light_3_32_button_at_0_200",
             label: "Telescope, Far Light, 3:32",
             traits: [.button],
             frameY: 200,
-            activationPointY: 222
+            activationPoint: CGPoint(x: 0, y: 222)
         )
         let beforeTree = [wireLeaf(beforeElement)]
         let afterTree = [wireLeaf(afterElement)]

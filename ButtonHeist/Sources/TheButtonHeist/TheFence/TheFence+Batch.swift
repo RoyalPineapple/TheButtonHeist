@@ -11,27 +11,7 @@ extension TheFence {
     func handleRunBatch(_ request: RunBatchRequest) async throws -> FenceResponse {
         let batchStart = CFAbsoluteTimeGetCurrent()
         var outcomesByIndex: [Int: BatchStepOutcome] = [:]
-        var plannedSteps: [RunBatchPreparedStep] = []
-        var preDispatchStopIndex: Int?
-
-        stepLoop: for (index, step) in request.steps.enumerated() {
-            switch step {
-            case .planned(let stepPlan):
-                plannedSteps.append(stepPlan)
-
-            case .invalid(let commandName, let failure):
-                outcomesByIndex[index] = BatchStepOutcome(
-                    command: commandName,
-                    response: failure.resultResponse,
-                    diagnosticDetails: failure.details,
-                    stopsBatch: request.policy == .stopOnError
-                )
-                if request.policy == .stopOnError {
-                    preDispatchStopIndex = index
-                    break stepLoop
-                }
-            }
-        }
+        let plannedSteps = request.steps
 
         if !plannedSteps.isEmpty {
             let plan = TheScore.BatchPlan(
@@ -48,7 +28,6 @@ extension TheFence {
 
         let stoppedIndex = stoppedIndex(
             outcomesByIndex: outcomesByIndex,
-            preDispatchStopIndex: preDispatchStopIndex,
             policy: request.policy
         )
         if let stoppedIndex, request.policy == .stopOnError {
@@ -134,22 +113,13 @@ extension TheFence {
 
     private func stoppedIndex(
         outcomesByIndex: [Int: BatchStepOutcome],
-        preDispatchStopIndex: Int?,
         policy: BatchPolicy
     ) -> Int? {
         guard policy == .stopOnError else { return nil }
-        let outcomeStopIndex = outcomesByIndex
+        return outcomesByIndex
             .filter { $0.value.stopsBatch }
             .map(\.key)
             .min()
-        switch (preDispatchStopIndex, outcomeStopIndex) {
-        case (.some(let lhs), .some(let rhs)):
-            return min(lhs, rhs)
-        case (.some(let index), .none), (.none, .some(let index)):
-            return index
-        case (.none, .none):
-            return nil
-        }
     }
 
     private static func batchAccessibilityTrace(
@@ -160,7 +130,7 @@ extension TheFence {
         guard actionOutcomeCount > 0,
               stepAccessibilityTraces.count == actionOutcomeCount
         else { return nil }
-        return AccessibilityTrace.captureEndpointTrace(from: stepAccessibilityTraces)
+        return AccessibilityTrace.endpointTraceProjection(from: stepAccessibilityTraces)
     }
 
     // MARK: - Session State

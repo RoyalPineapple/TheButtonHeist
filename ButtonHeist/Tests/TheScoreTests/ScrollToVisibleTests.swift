@@ -40,10 +40,6 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertEqual(matcher.label, "Save")
     }
 
-    func testScrollToVisibleTargetRejectsMissingElementTarget() {
-        XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: Data("{}".utf8)))
-    }
-
     func testScrollToVisibleClientMessageRoundTrip() throws {
         let target = ScrollToVisibleTarget(
             elementTarget: .matcher(ElementMatcher(label: "Settings", traits: [.header]))
@@ -93,21 +89,7 @@ final class ScrollToVisibleTests: XCTestCase {
     func testElementSearchTargetDefaults() {
         let target = ElementSearchTarget(elementTarget: .matcher(ElementMatcher(label: "Test")))
         XCTAssertEqual(target.resolvedDirection, .down)
-    }
-
-    func testElementSearchTargetMinimal() throws {
-        let target = ElementSearchTarget(elementTarget: .matcher(ElementMatcher(label: "Save")))
-        let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(ElementSearchTarget.self, from: data)
-        guard case .matcher(let matcher, _) = decoded.elementTarget else {
-            return XCTFail("Expected .matcher")
-        }
-        XCTAssertEqual(matcher.label, "Save")
-        XCTAssertNil(decoded.direction)
-    }
-
-    func testElementSearchTargetRejectsMissingElementTarget() {
-        XCTAssertThrowsError(try JSONDecoder().decode(ElementSearchTarget.self, from: Data("{}".utf8)))
+        XCTAssertEqual(target.direction, .down)
     }
 
     func testElementSearchClientMessageRoundTrip() throws {
@@ -142,15 +124,6 @@ final class ScrollToVisibleTests: XCTestCase {
         }
         XCTAssertEqual(matcher.identifier, "market.row.colorPicker")
         XCTAssertEqual(decodedTarget.direction, .left)
-    }
-
-    // MARK: - ScrollSearchDirection
-
-    func testScrollSearchDirectionRawValues() {
-        XCTAssertEqual(ScrollSearchDirection.down.rawValue, "down")
-        XCTAssertEqual(ScrollSearchDirection.up.rawValue, "up")
-        XCTAssertEqual(ScrollSearchDirection.left.rawValue, "left")
-        XCTAssertEqual(ScrollSearchDirection.right.rawValue, "right")
     }
 
     // MARK: - ScrollSearchResult

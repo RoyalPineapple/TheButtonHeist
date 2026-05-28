@@ -10,12 +10,12 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
             Returns the current text field value after the operation.
 
             A single positional argument is always interpreted as text, not \
-            as a heistId. Use -id or --heist-id to target a specific field.
+            as a heistId. Use --identifier or --heist-id to target a specific field.
 
             Examples:
               buttonheist type_text "Hello" btn_nameField
               buttonheist type_text "Hello"
-              buttonheist type_text "Hello" -id "nameField"
+              buttonheist type_text "Hello" --identifier "nameField"
             """
     )
 

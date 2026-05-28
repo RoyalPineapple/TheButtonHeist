@@ -23,7 +23,7 @@ If registration says "Name now registered and active" but the browse returns not
 
 - `dns-sd -B _buttonheist._tcp .` finds zero services
 - `dns-sd -R` registration appears to succeed but nothing is discoverable
-- `buttonheist list` returns no devices even though the app is running
+- `buttonheist list_devices` returns no devices even though the app is running
 - mDNSResponder logs show continuous `sendto()` failures:
   ```
   mDNSPlatformSendUDP -> sendto(6) failed ... errno 32 (Broken pipe)

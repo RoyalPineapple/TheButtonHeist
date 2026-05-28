@@ -36,6 +36,48 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(decoded.steps[1].target)
     }
 
+    func testDecodeRejectsUnsupportedVersionAtBoundary() throws {
+        let json = """
+        {
+          "version": \(HeistPlayback.currentVersion + 1),
+          "recorded": "2026-05-27T12:00:00Z",
+          "app": "com.buttonheist.testapp",
+          "steps": []
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        XCTAssertThrowsError(try decoder.decode(HeistPlayback.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("Unsupported heist file version"))
+            XCTAssertTrue(context.debugDescription.contains("supports version \(HeistPlayback.currentVersion)"))
+        }
+    }
+
+    func testDecodeRejectsUnknownTopLevelPlaybackField() throws {
+        let json = """
+        {
+          "version": \(HeistPlayback.currentVersion),
+          "recorded": "2026-05-27T12:00:00Z",
+          "app": "com.buttonheist.testapp",
+          "steps": [],
+          "projection": {}
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        XCTAssertThrowsError(try decoder.decode(HeistPlayback.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("Unknown heist playback field \"projection\""))
+        }
+    }
+
     // MARK: - Heist Step Flat Encoding
 
     func testStepEncodesFlat() throws {
@@ -142,22 +184,19 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testStepWithOrdinalOnlyTargetRoundTripsAsOrdinalSelector() throws {
+    func testStepRejectsOrdinalOnlyTarget() throws {
         let json: [String: Any] = [
             "command": "activate",
             "ordinal": 0,
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
-        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
-        XCTAssertEqual(step.command, "activate")
-        XCTAssertFalse(try XCTUnwrap(step.target).hasPredicates)
-        XCTAssertEqual(step.ordinal, 0)
-
-        let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(step)) as? [String: Any]
-        XCTAssertEqual(encoded?["ordinal"] as? Int, 0)
-        XCTAssertNil(encoded?["label"])
-        XCTAssertNil(encoded?["target"])
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("ordinal only disambiguates"))
+        }
     }
 
     func testStepRejectsNegativeOrdinal() throws {
@@ -234,42 +273,7 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)
     }
 
-    func testRecordedMetadataRejectsDecodedDeltaEvenWithTrace() throws {
-        let beforeInterface = makeTestInterface(
-            elements: [makeElement(heistId: "status", label: "Old")],
-            timestamp: Date(timeIntervalSince1970: 0)
-        )
-        let afterInterface = makeTestInterface(
-            elements: [makeElement(heistId: "status", label: "New")],
-            timestamp: Date(timeIntervalSince1970: 0)
-        )
-        let beforeCapture = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
-        let afterCapture = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: afterInterface,
-            parentHash: beforeCapture.hash
-        )
-        let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
-        let conflictingDelta: AccessibilityTrace.Delta = .screenChanged(.init(
-            elementCount: 0,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
-        let traceJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(trace))
-        let conflictingDeltaJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(conflictingDelta))
-        let data = try JSONSerialization.data(withJSONObject: [
-            "accessibilityTrace": traceJSON,
-            "accessibilityDelta": conflictingDeltaJSON,
-        ])
-
-        XCTAssertThrowsError(try JSONDecoder().decode(RecordedMetadata.self, from: data)) { error in
-            XCTAssertTrue(
-                "\(error)".contains("accessibilityDelta"),
-                "Expected stale recorded metadata field in error, got \(error)"
-            )
-        }
-    }
-
-    func testRecordedMetadataRejectsDecodedDeltaWithoutTrace() throws {
+    func testRecordedMetadataRejectsStoredDeltaProjection() throws {
         let data = try JSONSerialization.data(withJSONObject: [
             "accessibilityDelta": [
                 "kind": "noChange",

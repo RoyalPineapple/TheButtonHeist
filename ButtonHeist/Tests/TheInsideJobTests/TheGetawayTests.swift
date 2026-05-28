@@ -459,7 +459,11 @@ final class TheGetawayTests: XCTestCase {
             deviceName: "Device",
             systemVersion: "1",
             screenWidth: .nan,
-            screenHeight: 100
+            screenHeight: 100,
+            instanceId: "test-session",
+            instanceIdentifier: "test",
+            listeningPort: 49152,
+            tlsActive: true
         )
 
         let result = getaway.sendMessage(.info(payload), requestId: "bad-info") { data in
@@ -604,7 +608,12 @@ final class TheGetawayTests: XCTestCase {
     func testBroadcastScreenshotReturnsTypedSessionContractFailure() async {
         let (getaway, _, _) = await makeGetaway()
 
-        let result = await getaway.broadcastToAll(.screen(ScreenPayload(pngData: "AAAA", width: 10, height: 20)))
+        let result = await getaway.broadcastToAll(.screen(ScreenPayload(
+            pngData: "AAAA",
+            width: 10,
+            height: 20,
+            interface: Interface(timestamp: Date(), tree: [])
+        )))
 
         guard case .refused(.sessionContractViolation(let message)) = result else {
             return XCTFail("Expected session contract broadcast failure, got \(result)")

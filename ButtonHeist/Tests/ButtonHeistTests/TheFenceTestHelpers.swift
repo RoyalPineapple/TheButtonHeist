@@ -21,7 +21,11 @@ enum TheFenceFixtures {
         deviceName: "MockDevice",
         systemVersion: "18.0",
         screenWidth: 393,
-        screenHeight: 852
+        screenHeight: 852,
+        instanceId: "mock-session",
+        instanceIdentifier: "mock-server",
+        listeningPort: 49152,
+        tlsActive: true
     )
 }
 
@@ -62,14 +66,15 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
         case .requestInterface:
             return .interface(Interface(timestamp: Date(), tree: []))
         case .requestScreen:
-            return .screen(ScreenPayload(pngData: "", width: 393, height: 852))
+            return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
         case .startRecording:
             return .recordingStarted
         case .stopRecording:
             return .recording(RecordingPayload(
                 videoData: "", width: 390, height: 844, duration: 1,
                 frameCount: 8, fps: 8, startTime: Date(), endTime: Date(),
-                stopReason: .manual
+                stopReason: .manual,
+                interactionLog: []
             ))
         default:
             return .actionResult(ActionResult(success: true, method: .activate))

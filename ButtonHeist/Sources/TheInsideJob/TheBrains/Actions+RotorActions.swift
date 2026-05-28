@@ -11,7 +11,7 @@ extension Actions {
     func executeRotor(
         _ target: some RotorExecutionInput
     ) async -> TheSafecracker.InteractionResult {
-        let direction = target.direction ?? .next
+        let direction = target.direction
         let method: ActionMethod = .rotor
         return await performElementAction(
             target: target.rotorElementTarget,

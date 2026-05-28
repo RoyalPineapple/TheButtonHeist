@@ -313,8 +313,8 @@ final class TheStashRotorTests: XCTestCase {
             ("custom action", {
                 .performCustomAction(CustomActionTarget(elementTarget: .heistId($0), actionName: "Archive"))
             }),
-            ("tap", { .touchTap(TouchTapTarget(selection: .element(.heistId($0)))) }),
-            ("long press", { .touchLongPress(LongPressTarget(selection: .element(.heistId($0)))) }),
+            ("tap", { .oneFingerTap(TapTarget(selection: .element(.heistId($0)))) }),
+            ("long press", { .longPress(LongPressTarget(selection: .element(.heistId($0)))) }),
             ("type text", { .typeText(TypeTextTarget(text: "hello", elementTarget: .heistId($0))) }),
             ("scroll to visible", {
                 .scrollToVisible(ScrollToVisibleTarget(elementTarget: .heistId($0)))
@@ -432,7 +432,7 @@ final class TheStashRotorTests: XCTestCase {
         }
 
         let cachedHeistId = "cached_virtual_result"
-        var elements = screen.elements
+        var elements = screen.semantic.elements
         elements[cachedHeistId] = Screen.ScreenElement(
             heistId: cachedHeistId,
             contentSpaceOrigin: nil,
@@ -444,8 +444,8 @@ final class TheStashRotorTests: XCTestCase {
             )
         )
         brains.stash.currentScreen = Screen(
-            elements: elements,
-            liveInterface: screen.liveInterface
+            semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
+            liveCapture: screen.liveCapture
         )
 
         let search = await brains.actions.executeRotor(

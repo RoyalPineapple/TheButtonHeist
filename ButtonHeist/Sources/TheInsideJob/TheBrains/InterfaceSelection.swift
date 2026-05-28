@@ -49,10 +49,6 @@ struct InterfaceSelector {
             return selectLeafSubtrees(matching: query.matcher)
         }
 
-        if let elementIds = query.elementIds, !elementIds.isEmpty {
-            return selectLeafSubtrees(withIds: Set(elementIds))
-        }
-
         return interface
     }
 
@@ -66,19 +62,6 @@ struct InterfaceSelector {
                 annotation: annotation
             ).matches(matcher) else { return nil }
             return InterfaceLeafCandidate(node: node, path: path, traversalIndex: traversalIndex, annotation: annotation)
-        }
-        return selectedInterface(forLeafCandidates: candidates)
-    }
-
-    private func selectLeafSubtrees(withIds heistIds: Set<HeistId>) -> Interface {
-        let annotations = interface.annotations.elementByPath
-        let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceLeafCandidate? in
-            guard case .element(_, let traversalIndex) = node,
-                  let annotation = annotations[path]
-            else { return nil }
-            return heistIds.contains(annotation.heistId)
-                ? InterfaceLeafCandidate(node: node, path: path, traversalIndex: traversalIndex, annotation: annotation)
-                : nil
         }
         return selectedInterface(forLeafCandidates: candidates)
     }

@@ -26,8 +26,7 @@ extension TheFence {
             detail: try arguments.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
             query: InterfaceQuery(
                 subtree: try decodeInterfaceSubtreeSelector(arguments),
-                matcher: try interfaceElementMatcher(arguments),
-                elementIds: try arguments.schemaStringArray("elements")
+                matcher: try interfaceElementMatcher(arguments)
             )
         )
     }

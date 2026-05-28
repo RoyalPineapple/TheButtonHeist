@@ -112,7 +112,7 @@ extension TheStash {
     }
 
     func resolveLiveContainerTarget(for resolvedTarget: ResolvedContainerTarget) -> LiveContainerTargetResolution {
-        guard let object = currentScreen.liveInterface.containerObject(forPath: resolvedTarget.path) else {
+        guard let object = currentScreen.liveCapture.containerObject(forPath: resolvedTarget.path) else {
             return .objectUnavailable
         }
         guard let geometry = LiveElementGeometry(container: resolvedTarget.container) else {
@@ -131,7 +131,7 @@ extension TheStash {
     }
 
     func liveScrollView(for screenElement: ScreenElement) -> UIScrollView? {
-        currentScreen.liveInterface.scrollView(for: screenElement)
+        currentScreen.liveCapture.scrollView(for: screenElement)
     }
 
     func liveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
@@ -140,7 +140,7 @@ extension TheStash {
             ancestorIndices.removeLast()
             guard !ancestorIndices.isEmpty else { break }
             let ancestorPath = TreePath(ancestorIndices)
-            let scrollView = currentScreen.liveInterface.scrollableContainerViewsByPath[ancestorPath]?.view as? UIScrollView
+            let scrollView = currentScreen.liveCapture.scrollableContainerViewsByPath[ancestorPath]?.view as? UIScrollView
             if let scrollView {
                 return scrollView
             }
@@ -150,10 +150,7 @@ extension TheStash {
 
     private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {
         if visibleIds.contains(screenElement.heistId) {
-            return currentScreen.liveInterface.object(for: screenElement.heistId)
-        }
-        if currentScreen.knownInterface.findElement(heistId: screenElement.heistId) == nil {
-            return currentScreen.liveInterface.object(for: screenElement.heistId)
+            return currentScreen.liveCapture.object(for: screenElement.heistId)
         }
         return nil
     }

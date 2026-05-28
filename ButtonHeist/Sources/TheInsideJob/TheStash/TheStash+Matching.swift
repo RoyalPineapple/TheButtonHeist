@@ -99,7 +99,7 @@ extension Array where Element == AccessibilityHierarchy {
         mode: MatchMode,
         limit: Int
     ) -> [AccessibilityHierarchy.MatchResult] {
-        guard limit > 0 else { return [] }
+        guard limit > 0, matcher.hasPredicates else { return [] }
         return compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
             element.matches(matcher, mode: mode) ? AccessibilityHierarchy.MatchResult(element: element) : nil
         })
@@ -124,6 +124,7 @@ extension AccessibilityElement {
     /// strings are resolved to bitmasks via the parser's `fromNames` and always compare
     /// exactly regardless of mode.
     func matches(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
+        guard matcher.hasPredicates else { return false }
         if let matchLabel = matcher.label {
             if matchLabel.isEmpty { return false }
             guard let label, Self.stringMatches(label, matchLabel, mode: mode) else { return false }
@@ -188,7 +189,7 @@ extension TheStash {
         limit: Int,
         in screen: Screen
     ) -> [ScreenElement] {
-        guard limit > 0 else { return [] }
+        guard limit > 0, matcher.hasPredicates else { return [] }
         var matches: [ScreenElement] = []
         matches.reserveCapacity(limit)
         for entry in selectElements(in: screen) where entry.matches(matcher, mode: .exact) {

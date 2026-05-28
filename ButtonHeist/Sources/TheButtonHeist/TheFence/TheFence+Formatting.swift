@@ -229,9 +229,7 @@ extension FenceResponse {
         var text = "✓ Recording saved: \(path)  " +
             "(\(payload.width)×\(payload.height), \(duration)s, " +
             "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
-        if let log = payload.interactionLog {
-            text += "\n  Interactions: \(log.count)"
-        }
+        text += "\n  Interactions: \(payload.interactionLog.count)"
         if options.inlineData {
             let sizeKB = payload.videoData.count * 3 / 4 / 1024
             text += "\n  Inline video data included in JSON response (~\(sizeKB)KB)"
@@ -248,9 +246,7 @@ extension FenceResponse {
         var text = "✓ Recording captured " +
             "(\(payload.width)×\(payload.height), \(duration)s, " +
             "\(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
-        if let log = payload.interactionLog {
-            text += "\n  Interactions: \(log.count)"
-        }
+        text += "\n  Interactions: \(payload.interactionLog.count)"
         return text
     }
 
@@ -297,8 +293,9 @@ extension FenceResponse {
     }
 
     private func formatActionResult(_ result: ActionResult) -> String {
+        let methodName = TheFence.Command.canonicalName(forActionResultMethod: result.method)
         if result.success {
-            var output = "✓ \(result.method.rawValue)"
+            var output = "✓ \(methodName)"
             if case .value(let value) = result.payload {
                 output += "  value: \"\(value)\""
             }
@@ -322,7 +319,7 @@ extension FenceResponse {
             }
             return output
         }
-        return "Error: \(result.message ?? result.method.rawValue)"
+        return "Error: \(result.message ?? methodName)"
     }
 
     /// Actions that aren't implied by the element's traits.

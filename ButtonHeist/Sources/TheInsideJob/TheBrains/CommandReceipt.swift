@@ -19,7 +19,7 @@ struct CommandReceipt {
         case .delivered:
             guard let settle,
                   let postCapture = settle.postCapture,
-                  settle.accessibilityTrace.captureEndpointDelta != nil else {
+                  settle.accessibilityTrace.endpointDeltaProjection != nil else {
                 var builder = ActionResultBuilder(method: attempt.method, snapshot: before.snapshot)
                 builder.message = attempt.message
                 return builder.failure(errorKind: .actionFailed, payload: attempt.payload)

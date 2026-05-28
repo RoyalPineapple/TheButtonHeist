@@ -75,15 +75,15 @@ struct RecordCommand: AsyncParsableCommand, CLICommandContract {
 
     private func saveActionLog(payload: RecordingPayload) {
         guard let actionLogPath = actionLog,
-              let log = payload.interactionLog, !log.isEmpty else { return }
+              !payload.interactionLog.isEmpty else { return }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
-            let logData = try encoder.encode(log)
+            let logData = try encoder.encode(payload.interactionLog)
             try logData.write(to: URL(fileURLWithPath: actionLogPath))
             if !connection.quiet {
-                logStatus("  Action log saved: \(actionLogPath) (\(log.count) events)")
+                logStatus("  Action log saved: \(actionLogPath) (\(payload.interactionLog.count) events)")
             }
         } catch {
             logStatus("  Failed to save action log: \(error.displayMessage)")
@@ -91,7 +91,7 @@ struct RecordCommand: AsyncParsableCommand, CLICommandContract {
     }
 
     private func logRecordingStats(path: String, payload: RecordingPayload) {
-        let interactions = payload.interactionLog.map { ", interactions: \($0.count)" } ?? ""
+        let interactions = payload.interactionLog.isEmpty ? "" : ", interactions: \(payload.interactionLog.count)"
         let duration = String(format: "%.1f", payload.duration)
         let resolution = "\(payload.width)x\(payload.height)"
         let stop = payload.stopReason.rawValue

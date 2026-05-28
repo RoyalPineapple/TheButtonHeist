@@ -14,7 +14,7 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
               buttonheist scroll btn_list
               buttonheist scroll btn_list -d up
               buttonheist scroll --stable-id "main_scroll"
-              buttonheist scroll -id "myElement" -d next
+              buttonheist scroll --identifier "myElement" -d down
             """
     )
 

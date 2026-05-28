@@ -5,11 +5,13 @@ final class ScreenshotPayloadTests: XCTestCase {
 
     func testInitialization() {
         let timestamp = Date()
+        let interface = Interface(timestamp: timestamp, tree: [])
         let payload = ScreenPayload(
             pngData: "base64data",
             width: 390,
             height: 844,
-            timestamp: timestamp
+            timestamp: timestamp,
+            interface: interface
         )
 
         XCTAssertEqual(payload.pngData, "base64data")
@@ -23,7 +25,8 @@ final class ScreenshotPayloadTests: XCTestCase {
         let payload = ScreenPayload(
             pngData: "data",
             width: 100,
-            height: 200
+            height: 200,
+            interface: Interface(timestamp: Date(), tree: [])
         )
         let after = Date()
 
@@ -76,7 +79,8 @@ final class ScreenshotPayloadTests: XCTestCase {
         let payload = ScreenPayload(
             pngData: largeData,
             width: 1206,
-            height: 2622
+            height: 2622,
+            interface: Interface(timestamp: Date(), tree: [])
         )
 
         let encoder = JSONEncoder()
@@ -95,7 +99,8 @@ final class ScreenshotPayloadTests: XCTestCase {
         let payload = ScreenPayload(
             pngData: "data",
             width: 402,
-            height: 874
+            height: 874,
+            interface: Interface(timestamp: Date(), tree: [])
         )
 
         XCTAssertEqual(payload.width, 402)

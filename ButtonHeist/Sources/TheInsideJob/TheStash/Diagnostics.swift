@@ -202,7 +202,7 @@ extension TheStash {
         if screenElements.isEmpty {
             return """
                 \(resolutionScope) hierarchy is empty (0 elements)
-                Next: wait for the target to appear, then retry with an exact label, identifier, heistId, or ordinal.
+                Next: wait for the target to appear, then retry with an exact label, identifier, heistId.
                 """
         }
         let noun = screenElements.count == 1 ? "element" : "elements"
@@ -224,7 +224,7 @@ extension TheStash {
             lines.append("  ... and \(screenElements.count - cap) more")
         }
         lines.append(
-            "Next: target one listed element by exact label, identifier, heistId, or ordinal; "
+            "Next: target one listed element by exact label, identifier, heistId; "
                 + "if the target is absent, wait for it to appear."
         )
         return lines.joined(separator: "\n")

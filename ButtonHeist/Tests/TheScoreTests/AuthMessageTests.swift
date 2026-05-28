@@ -38,17 +38,9 @@ final class AuthMessageTests: XCTestCase {
         }
     }
 
-    func testAuthFailedEmptyReason() throws {
-        let message = ServerMessage.error(ServerError(kind: .authFailure, message: ""))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ServerMessage.self, from: data)
-
-        if case .error(let serverError) = decoded {
-            XCTAssertEqual(serverError.kind, .authFailure)
-            XCTAssertEqual(serverError.message, "")
-        } else {
-            XCTFail("Expected error, got \(decoded)")
-        }
+    func testAuthFailedRejectsEmptyReason() throws {
+        let json = #"{"type":"error","payload":{"kind":"authFailure","message":""}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: Data(json.utf8)))
     }
 
     // MARK: - authApproved
@@ -126,7 +118,10 @@ final class AuthMessageTests: XCTestCase {
             systemVersion: "18.0",
             screenWidth: 393,
             screenHeight: 852,
-            instanceIdentifier: "my-instance"
+            instanceId: "session-1",
+            instanceIdentifier: "my-instance",
+            listeningPort: 49152,
+            tlsActive: true
         )
 
         let data = try JSONEncoder().encode(info)
@@ -135,7 +130,7 @@ final class AuthMessageTests: XCTestCase {
         XCTAssertEqual(decoded.instanceIdentifier, "my-instance")
     }
 
-    func testServerInfoWithoutInstanceIdentifier() throws {
+    func testServerInfoWithoutInstanceIdentifierFails() throws {
         let json = """
         {
             "appName": "TestApp",
@@ -147,9 +142,7 @@ final class AuthMessageTests: XCTestCase {
         }
         """
         let data = Data(json.utf8)
-        let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
-
-        XCTAssertNil(decoded.instanceIdentifier)
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerInfo.self, from: data))
     }
 
     // MARK: - Auth handshake simulation (JSON round-trip)
@@ -183,7 +176,10 @@ final class AuthMessageTests: XCTestCase {
             systemVersion: "18.0",
             screenWidth: 393,
             screenHeight: 852,
-            instanceIdentifier: "test-1"
+            instanceId: "session-1",
+            instanceIdentifier: "test-1",
+            listeningPort: 49152,
+            tlsActive: true
         )
         let infoMsg = ServerMessage.info(serverInfo)
         let infoData = try JSONEncoder().encode(infoMsg)

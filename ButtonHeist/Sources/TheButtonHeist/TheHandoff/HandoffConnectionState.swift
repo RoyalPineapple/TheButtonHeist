@@ -74,11 +74,11 @@ enum HandoffConnectionError: Error, LocalizedError, Equatable {
         case .disconnected(let reason):
             return reason.hint
         case .timeout:
-            return "Check that the app is running with Button Heist enabled; use 'buttonheist list' to see available devices."
+            return "Check that the app is running with Button Heist enabled; use 'buttonheist list_devices' to see available devices."
         case .noDeviceFound:
             return "Start the app and confirm it advertises a Button Heist session."
         case .noMatchingDevice:
-            return "Check the device filter or target name against 'buttonheist list'."
+            return "Check the device filter or target name against 'buttonheist list_devices'."
         }
     }
 }

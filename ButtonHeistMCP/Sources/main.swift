@@ -94,8 +94,12 @@ struct ButtonHeistMCPServer {
             return .double(double)
         case .string(let string):
             return .string(string)
-        case .data(_, let data):
-            return .string(data.base64EncodedString())
+        case .data:
+            throw SchemaValidationError(
+                field: field,
+                observed: "data",
+                expected: "JSON null, boolean, number, string, array, or object"
+            )
         case .array(let values):
             return .array(try values.enumerated().map { index, nested in
                 try commandArgumentValue(from: nested, field: "\(field)[\(index)]")
@@ -114,7 +118,7 @@ struct ButtonHeistMCPServer {
 
         // Background changes: what happened while the agent was thinking
         for backgroundAccessibilityTrace in backgroundAccessibilityTraces {
-            guard let backgroundDelta = backgroundAccessibilityTrace.backgroundDelta else { continue }
+            guard let backgroundDelta = backgroundAccessibilityTrace.backgroundDeltaProjection else { continue }
             let transient = backgroundDelta.transient
             var lines: [String] = []
             switch backgroundDelta {

@@ -51,7 +51,7 @@ extension TheFence {
     }
 
     enum GesturePayload {
-        case oneFingerTap(TouchTapGesturePayload)
+        case oneFingerTap(TapGesturePayload)
         case longPress(LongPressGesturePayload)
         case swipe(SwipeGesturePayload)
         case drag(DragGesturePayload)
@@ -62,11 +62,11 @@ extension TheFence {
         case drawBezier(DrawBezierGesturePayload)
     }
 
-    struct TouchTapGesturePayload {
+    struct TapGesturePayload {
         let selection: GesturePointSelection
 
-        var target: TouchTapTarget {
-            TouchTapTarget(selection: selection)
+        var target: TapTarget {
+            TapTarget(selection: selection)
         }
     }
 
@@ -192,14 +192,11 @@ extension TheFence {
 
     enum AccessibilityPayload {
         case activate(ElementTarget, actionName: String?, count: CountArgument)
-        case increment(ElementTarget, count: CountArgument)
-        case decrement(ElementTarget, count: CountArgument)
-        case performCustomAction(CustomActionTarget, count: CountArgument)
     }
 
     struct CountArgument {
         let value: Int?
-        let observed: Any?
+        let observed: String?
     }
 
     struct ConnectRequest {
@@ -209,22 +206,8 @@ extension TheFence {
     }
 
     struct RunBatchRequest {
-        let steps: [RunBatchStep]
+        let steps: [RunBatchPreparedStep]
         let policy: BatchPolicy
-    }
-
-    enum RunBatchStep {
-        case planned(RunBatchPreparedStep)
-        case invalid(commandName: String, failure: BatchStepFailure)
-
-        var commandName: String {
-            switch self {
-            case .planned(let step):
-                return step.commandName
-            case .invalid(let commandName, _):
-                return commandName
-            }
-        }
     }
 
     struct RunBatchPreparedStep {
@@ -243,25 +226,12 @@ extension TheFence {
         }
     }
 
-    struct BatchStepFailure {
-        let message: String
-        let details: FailureDetails?
-        let includeDetailsInResult: Bool
-
-        var resultResponse: FenceResponse {
-            if includeDetailsInResult {
-                return .error(message, details: details)
-            }
-            return .error(message)
-        }
-    }
-
     struct ParsedRequest {
         let command: Command
         let requestId: String
         let payload: RequestPayload
         let expectationPayload: ExpectationPayload
-        /// Non-nil when the command short-circuits before dispatch (help/quit/exit).
+        /// Non-nil when the command short-circuits before dispatch (help/quit).
         let immediateResponse: FenceResponse?
 
         init(
@@ -277,6 +247,12 @@ extension TheFence {
             self.expectationPayload = expectationPayload
             self.immediateResponse = immediateResponse
         }
+    }
+
+    struct ClientMessageExecutionPlan {
+        let messages: [ClientMessage]
+        let timeout: TimeInterval
+        let recordsCompletion: Bool
     }
 
     struct RoutedCommandRequest {
@@ -314,7 +290,7 @@ extension TheFence {
     }
 
     /// Parse and validate a raw request dictionary into typed fields.
-    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit/exit
+    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit
     /// so the caller short-circuits without logging or dispatching.
     func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
         let requestEnvelope = try CommandArgumentEnvelope(arguments: request, droppingCommandKey: false)
@@ -332,7 +308,14 @@ extension TheFence {
     }
 
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
-        try parseRequest(
+        guard command.descriptor.isPublicRequestContract else {
+            throw SchemaValidationError(
+                field: "command",
+                observed: command.rawValue as Any,
+                expected: "public Button Heist command"
+            )
+        }
+        return try parseRequest(
             command: command,
             arguments: arguments,
             expectationPayload: nil

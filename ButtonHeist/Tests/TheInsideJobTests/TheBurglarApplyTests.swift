@@ -4,10 +4,10 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
-/// Tests for `TheBurglar.buildScreen(from:)` — the lifted body of the old
-/// `apply(_:)` pipeline. Validates that a `ParseResult` is converted into a
-/// `Screen` value with the same semantics: heistId assignment, content-space
-/// origins, first-responder detection, and screen-name derivation.
+/// Tests for `TheBurglar.buildScreen(from:)`. Validates that a `ParseResult`
+/// is converted into a `Screen` value with the current semantics: heistId
+/// assignment, content-space origins, first-responder detection, and
+/// screen-name derivation.
 @MainActor
 final class TheBurglarApplyTests: XCTestCase {
 
@@ -39,8 +39,8 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.elements.count, 2, "Screen should have one entry per parsed element")
-        for heistId in screen.elements.keys {
+        XCTAssertEqual(screen.semantic.elements.count, 2, "Screen should have one entry per parsed element")
+        for heistId in screen.semantic.elements.keys {
             XCTAssertNotNil(screen.findElement(heistId: heistId),
                             "Each heistId should map to an entry")
         }
@@ -56,7 +56,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[element], "ok_button")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[element], "ok_button")
     }
 
     func testBuildScreenKeepsPathHeistIdsForValueEqualElements() {
@@ -74,9 +74,9 @@ final class TheBurglarApplyTests: XCTestCase {
         let screen = TheBurglar.buildScreen(from: result)
         let interface = TheStash.WireConversion.toInterface(from: screen)
 
-        XCTAssertEqual(screen.elements.count, 2)
-        XCTAssertEqual(screen.liveInterface.heistIdByElementPath[TreePath([0])], "item_button_1")
-        XCTAssertEqual(screen.liveInterface.heistIdByElementPath[TreePath([1])], "item_button_2")
+        XCTAssertEqual(screen.semantic.elements.count, 2)
+        XCTAssertEqual(screen.liveCapture.heistIdByElementPath[TreePath([0])], "item_button_1")
+        XCTAssertEqual(screen.liveCapture.heistIdByElementPath[TreePath([1])], "item_button_2")
         XCTAssertEqual(interface.annotations.elements.map(\.heistId), ["item_button_1", "item_button_2"])
     }
 
@@ -89,7 +89,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.liveInterface.hierarchy.count, 1)
+        XCTAssertEqual(screen.liveCapture.hierarchy.count, 1)
     }
 
     // MARK: - Screen name derivation
@@ -169,7 +169,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNotNil(screen.liveInterface.firstResponderHeistId)
+        XCTAssertNotNil(screen.liveCapture.firstResponderHeistId)
 
         textField.resignFirstResponder()
         window.isHidden = true
@@ -187,7 +187,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertNil(screen.liveInterface.firstResponderHeistId)
+        XCTAssertNil(screen.liveCapture.firstResponderHeistId)
     }
 
     // MARK: - HeistId determinism
@@ -202,7 +202,7 @@ final class TheBurglarApplyTests: XCTestCase {
         let first = TheBurglar.buildScreen(from: result)
         let second = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(Set(first.elements.keys), Set(second.elements.keys),
+        XCTAssertEqual(Set(first.semantic.elements.keys), Set(second.semantic.elements.keys),
                        "Same elements should produce same heistIds")
     }
 
@@ -225,8 +225,8 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.elements.count, 2)
-        XCTAssertEqual(screen.elements.count, 2,
+        XCTAssertEqual(screen.semantic.elements.count, 2)
+        XCTAssertEqual(screen.semantic.elements.count, 2,
                        "Duplicate labels should produce two distinct entries")
     }
 
@@ -246,8 +246,8 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[first], "row_button_1")
-        XCTAssertEqual(screen.liveInterface.heistIdByElement[second], "row_button_2")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[first], "row_button_1")
+        XCTAssertEqual(screen.liveCapture.heistIdByElement[second], "row_button_2")
     }
 
     // MARK: - Content space origin
@@ -270,7 +270,7 @@ final class TheBurglarApplyTests: XCTestCase {
         )
 
         let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.elements.keys.first else {
+        guard let heistId = screen.semantic.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }
@@ -288,7 +288,7 @@ final class TheBurglarApplyTests: XCTestCase {
         )
 
         let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.elements.keys.first else {
+        guard let heistId = screen.semantic.elements.keys.first else {
             XCTFail("Expected one heistId")
             return
         }

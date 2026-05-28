@@ -10,7 +10,11 @@ final class ServerMessageTests: XCTestCase {
             deviceName: "iPhone",
             systemVersion: "17.0",
             screenWidth: 390,
-            screenHeight: 844
+            screenHeight: 844,
+            instanceId: "test-session",
+            instanceIdentifier: "test",
+            listeningPort: 49152,
+            tlsActive: true
         )
         let message = ServerMessage.info(info)
         let data = try JSONEncoder().encode(message)
@@ -123,6 +127,32 @@ final class ServerMessageTests: XCTestCase {
         let data = Data(#"{"type":"pong"}"#.utf8)
 
         XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data))
+    }
+
+    func testServerMessageRejectsUnknownTopLevelField() throws {
+        let data = Data(#"{"type":"recordingStarted","staleField":"value"}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("staleField"), "\(error)")
+        }
+    }
+
+    func testNoPayloadServerMessageRejectsStrayPayload() throws {
+        let data = Data(#"{"type":"recordingStarted","payload":{"junk":true}}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("recordingStarted must not include a payload"), "\(error)")
+        }
+    }
+
+    func testNoPayloadResponseEnvelopeRejectsStrayPayload() throws {
+        let data = Data("""
+        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"recordingStarted","payload":{"junk":true}}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ResponseEnvelope.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("recordingStarted must not include a payload"), "\(error)")
+        }
     }
 
     func testResponseEnvelopeRejectsMissingPongPayload() throws {
@@ -298,65 +328,13 @@ final class ServerMessageTests: XCTestCase {
 
         let data = try JSONEncoder().encode(result)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let delta = try XCTUnwrap(json["accessibilityDelta"] as? [String: Any])
 
-        XCTAssertEqual(delta["kind"] as? String, "noChange")
+        XCTAssertNil(json["accessibilityDelta"])
         XCTAssertNotNil(json["accessibilityTrace"])
         XCTAssertNil(json["interfaceDelta"])
     }
 
-    func testActionResultAccessibilityDeltaProjectsFromTrace() throws {
-        let before = makeTestInterface(
-            elements: [
-                HeistElement(
-                    heistId: "before-title",
-                    description: "Before",
-                    label: "Before",
-                    value: nil,
-                    identifier: "before_title",
-                    traits: [.header],
-                    frameX: 0,
-                    frameY: 0,
-                    frameWidth: 100,
-                    frameHeight: 44,
-                    actions: []
-                ),
-            ],
-            timestamp: Date(timeIntervalSince1970: 0)
-        )
-        let after = makeTestInterface(
-            elements: [
-                HeistElement(
-                    heistId: "after-title",
-                    description: "After",
-                    label: "After",
-                    value: nil,
-                    identifier: "after_title",
-                    traits: [.header],
-                    frameX: 0,
-                    frameY: 0,
-                    frameWidth: 100,
-                    frameHeight: 44,
-                    actions: []
-                ),
-            ],
-            timestamp: Date(timeIntervalSince1970: 1)
-        )
-        let trace = AccessibilityTrace(first: before).appending(after)
-        let conflictingDelta = AccessibilityTrace.Delta.noChange(.init(elementCount: 999))
-
-        let result = ActionResult(
-            success: true,
-            method: .activate,
-            accessibilityDelta: conflictingDelta,
-            accessibilityTrace: trace
-        )
-
-        XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
-        XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
-    }
-
-    func testActionResultDecodedAccessibilityDeltaProjectsFromTrace() throws {
+    func testActionResultRejectsDeltaBesideTrace() throws {
         let before = makeTestInterface(
             elements: [
                 HeistElement(
@@ -405,70 +383,45 @@ final class ServerMessageTests: XCTestCase {
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
 
-        let result = try JSONDecoder().decode(ActionResult.self, from: data)
-
-        XCTAssertEqual(result.accessibilityDelta, trace.captureEndpointDelta)
-        XCTAssertNotEqual(result.accessibilityDelta, conflictingDelta)
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("accessibilityTrace"), "\(error)")
+            XCTAssertTrue("\(error)".contains("accessibilityDelta"), "\(error)")
+        }
     }
 
-    func testActionResultAccessibilityDeltaRetainsNoTraceProjection() throws {
-        let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 7))
+    func testActionResultRejectsUnknownField() throws {
+        let json = #"{"success":true,"method":"activate","interfaceDelta":{"kind":"noChange"}}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("interfaceDelta"), "\(error)")
+        }
+    }
+
+    func testActionResultHasNoAccessibilityDeltaWithoutTrace() throws {
         let result = ActionResult(
             success: true,
-            method: .activate,
-            accessibilityDelta: delta
+            method: .activate
         )
 
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertEqual(decoded.accessibilityDelta, delta)
+        XCTAssertNil(decoded.accessibilityDelta)
     }
 
-    func testActionResultTraceWithoutEndpointDropsIndependentDelta() throws {
-        let interface = makeTestInterface(
-            elements: [
-                HeistElement(
-                    heistId: "title",
-                    description: "Title",
-                    label: "Title",
-                    value: nil,
-                    identifier: "title",
-                    traits: [.header],
-                    frameX: 0,
-                    frameY: 0,
-                    frameWidth: 100,
-                    frameHeight: 44,
-                    actions: []
-                ),
-            ],
-            timestamp: Date(timeIntervalSince1970: 0)
-        )
-        let trace = AccessibilityTrace(interface: interface)
-        let independentDelta = AccessibilityTrace.Delta.noChange(.init(elementCount: 999))
-        let result = ActionResult(
-            success: true,
-            method: .activate,
-            accessibilityDelta: independentDelta,
-            accessibilityTrace: trace
-        )
-
-        XCTAssertNil(result.accessibilityDelta)
-
-        let traceJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(trace))
-        let deltaJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(independentDelta))
+    func testActionResultRejectsDecodedAccessibilityDeltaWithoutTrace() throws {
+        let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 7))
+        let deltaJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(delta))
         let json: [String: Any] = [
             "success": true,
             "method": "activate",
             "accessibilityDelta": deltaJSON,
-            "accessibilityTrace": traceJSON,
         ]
-        let decoded = try JSONDecoder().decode(
-            ActionResult.self,
-            from: try JSONSerialization.data(withJSONObject: json)
-        )
+        let data = try JSONSerialization.data(withJSONObject: json)
 
-        XCTAssertNil(decoded.accessibilityDelta)
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("accessibilityDelta"), "\(error)")
+        }
     }
 
     func testActionResultScreenContextProjectsFromTrace() throws {
@@ -681,8 +634,8 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
         let receipt = try XCTUnwrap(decoded.accessibilityTrace?.receipts.first)
         XCTAssertEqual(receipt.kind, .capture)
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDelta?.kindRawValue, "screenChanged")
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDelta?.elementCount, 1)
+        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.kindRawValue, "screenChanged")
+        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.elementCount, 1)
 
         let reencoded = try JSONEncoder().encode(decoded)
         let reencodedJson = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])

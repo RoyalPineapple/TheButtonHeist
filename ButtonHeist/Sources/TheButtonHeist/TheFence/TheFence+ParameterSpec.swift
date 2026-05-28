@@ -153,45 +153,7 @@ private func jsonSchemaNumber(_ value: Double) -> FenceJSONSchemaValue {
 
 public enum MCPExposure: Sendable, Equatable {
     case directTool
-    case groupedUnder(String)
     case notExposed
-}
-
-public struct MCPToolSelector: Sendable, Equatable {
-    public let parameter: FenceParameterSpec
-    public let defaultValue: String?
-    public let commandByValue: [String: TheFence.Command]
-    public let consumedValues: Set<String>
-
-    public init(
-        parameter: FenceParameterSpec,
-        defaultValue: String? = nil,
-        commandByValue: [String: TheFence.Command],
-        consumedValues: Set<String>? = nil
-    ) {
-        self.parameter = parameter
-        self.defaultValue = defaultValue
-        self.commandByValue = commandByValue
-        self.consumedValues = consumedValues ?? Set(commandByValue.keys)
-    }
-
-    public func command(for value: String?) -> TheFence.Command? {
-        guard let value else {
-            guard let defaultValue else { return nil }
-            return commandByValue[defaultValue]
-        }
-        return commandByValue[value]
-    }
-
-    public func selectorValue(for command: TheFence.Command) -> String? {
-        let values = commandByValue.compactMap { $0.value == command ? $0.key : nil }
-        return values.count == 1 ? values[0] : nil
-    }
-
-    public func consumesValue(_ value: String?) -> Bool {
-        guard let value else { return false }
-        return consumedValues.contains(value)
-    }
 }
 
 public struct MCPToolAnnotationSpec: Sendable, Equatable {
@@ -209,47 +171,27 @@ public struct MCPToolAnnotationSpec: Sendable, Equatable {
 
 public struct MCPToolContract: Sendable, Equatable {
     public let name: String
-    public let commands: [TheFence.Command]
-    public let selector: MCPToolSelector?
+    public let command: TheFence.Command
     public let description: String
     public let annotations: MCPToolAnnotationSpec?
 
     public init(
         name: String,
-        commands: [TheFence.Command],
-        selector: MCPToolSelector? = nil,
+        command: TheFence.Command,
         description: String,
         annotations: MCPToolAnnotationSpec? = nil
     ) {
         self.name = name
-        self.commands = commands
-        self.selector = selector
+        self.command = command
         self.description = description
         self.annotations = annotations
     }
 
     public var parameters: [FenceParameterSpec] {
-        var merged: [FenceParameterSpec] = []
-        for spec in commands.flatMap(\.parameters) where !merged.contains(where: { $0.key == spec.key }) {
-            merged.append(spec)
-        }
-        if let selector {
-            if let existingIndex = merged.firstIndex(where: { $0.key == selector.parameter.key }) {
-                merged[existingIndex] = selector.parameter
-            } else {
-                merged.append(selector.parameter)
-            }
-        }
-        return merged
+        command.parameters
     }
 
     public var requiredParameterKeys: [String] {
-        if let selector {
-            // Selector tools flatten several command shapes into one Claude-compatible
-            // schema. Requiring command-specific keys here would overconstrain other
-            // selector values without JSON Schema composition.
-            return selector.parameter.required ? [selector.parameter.key] : []
-        }
         return parameters.filter(\.required).map(\.key)
     }
 }
@@ -298,7 +240,6 @@ public extension FenceParameterSpec {
 
 public enum CLIExposure: Sendable, Equatable {
     case directCommand
-    case groupedUnder(String)
     case sessionOnly
     case notExposed
 }
@@ -407,7 +348,7 @@ extension TheFence.Command {
 
         switch self {
 
-        case .help, .quit, .exit, .status, .ping, .listDevices, .getSessionState,
+        case .help, .quit, .ping, .listDevices, .getSessionState,
              .listTargets, .getSessionLog:
             return []
 
@@ -418,7 +359,6 @@ extension TheFence.Command {
             return filter + [
                 FenceParameterBlocks.interfaceSubtree,
                 param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
-                param(.elements, .stringArray),
             ]
 
         case .getScreen:
@@ -515,12 +455,6 @@ extension TheFence.Command {
 
         case .activate:
             return target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation
-
-        case .increment, .decrement:
-            return target + [FenceParameterBlocks.incrementCount] + expectation
-
-        case .performCustomAction:
-            return target + [param(.container, .object), param(.action, .string, required: true)] + expectation
 
         case .rotor:
             return target + [

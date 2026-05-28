@@ -1,17 +1,40 @@
 import XCTest
- import TheScore
+import TheScore
 
 final class ServerInfoTests: XCTestCase {
 
-    func testEncodingRoundTrip() throws {
-        let info = ServerInfo(
-            appName: "TestApp",
-            bundleIdentifier: "com.test.app",
-            deviceName: "iPhone 15",
-            systemVersion: "17.2",
-            screenWidth: 393,
-            screenHeight: 852
+    private func makeServerInfo(
+        appName: String = "TestApp",
+        bundleIdentifier: String = "com.test.app",
+        deviceName: String = "iPhone 15",
+        systemVersion: String = "17.2",
+        screenWidth: Double = 393,
+        screenHeight: Double = 852,
+        instanceId: String = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+        instanceIdentifier: String = "test-instance",
+        listeningPort: UInt16 = 49152,
+        simulatorUDID: String? = nil,
+        vendorIdentifier: String? = nil,
+        tlsActive: Bool = true
+    ) -> ServerInfo {
+        ServerInfo(
+            appName: appName,
+            bundleIdentifier: bundleIdentifier,
+            deviceName: deviceName,
+            systemVersion: systemVersion,
+            screenWidth: screenWidth,
+            screenHeight: screenHeight,
+            instanceId: instanceId,
+            instanceIdentifier: instanceIdentifier,
+            listeningPort: listeningPort,
+            simulatorUDID: simulatorUDID,
+            vendorIdentifier: vendorIdentifier,
+            tlsActive: tlsActive
         )
+    }
+
+    func testEncodingRoundTrip() throws {
+        let info = makeServerInfo()
 
         let data = try JSONEncoder().encode(info)
         let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
@@ -24,31 +47,23 @@ final class ServerInfoTests: XCTestCase {
         XCTAssertEqual(info.screenHeight, decoded.screenHeight)
     }
 
-    func testEncodingRoundTripWithInstanceId() throws {
-        let info = ServerInfo(
-            appName: "TestApp",
-            bundleIdentifier: "com.test.app",
-            deviceName: "iPhone 16 Pro",
-            systemVersion: "18.0",
-            screenWidth: 393,
-            screenHeight: 852,
-            instanceId: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
-            listeningPort: 49152
-        )
+    func testEncodingRoundTripWithCurrentIdentity() throws {
+        let info = makeServerInfo(deviceName: "iPhone 16 Pro", systemVersion: "18.0")
 
         let data = try JSONEncoder().encode(info)
         let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
 
         XCTAssertEqual(decoded.instanceId, "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
+        XCTAssertEqual(decoded.instanceIdentifier, "test-instance")
         XCTAssertEqual(decoded.listeningPort, 49152)
+        XCTAssertEqual(decoded.tlsActive, true)
     }
 
-    func testDecodingWithoutInstanceId() throws {
-        // Optional fields absent — instanceId and listeningPort decode as nil
+    func testDecodingWithoutCurrentIdentityFails() throws {
         let json = """
         {
-            "appName": "OldApp",
-            "bundleIdentifier": "com.old",
+            "appName": "MissingIdentity",
+            "bundleIdentifier": "com.missing",
             "deviceName": "iPhone 15",
             "systemVersion": "17.0",
             "screenWidth": 390,
@@ -56,40 +71,23 @@ final class ServerInfoTests: XCTestCase {
         }
         """
         let data = Data(json.utf8)
-        let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
-
-        XCTAssertEqual(decoded.appName, "OldApp")
-        XCTAssertNil(decoded.instanceId)
-        XCTAssertNil(decoded.listeningPort)
+        XCTAssertThrowsError(try JSONDecoder().decode(ServerInfo.self, from: data))
     }
 
-    func testEncodingWithNilInstanceId() throws {
-        let info = ServerInfo(
-            appName: "TestApp",
-            bundleIdentifier: "com.test",
-            deviceName: "iPhone",
-            systemVersion: "18.0",
-            screenWidth: 393,
-            screenHeight: 852
-        )
+    func testEncodingRequiresIdentity() throws {
+        let info = makeServerInfo(bundleIdentifier: "com.test", deviceName: "iPhone", systemVersion: "18.0")
 
         let data = try JSONEncoder().encode(info)
         let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
 
-        XCTAssertNil(decoded.instanceId)
-        XCTAssertNil(decoded.listeningPort)
+        XCTAssertEqual(decoded.instanceId, info.instanceId)
+        XCTAssertEqual(decoded.listeningPort, info.listeningPort)
     }
 
     func testEncodingRoundTripWithDeviceIdentifiers() throws {
-        let info = ServerInfo(
-            appName: "TestApp",
-            bundleIdentifier: "com.test.app",
+        let info = makeServerInfo(
             deviceName: "iPhone 16 Pro",
             systemVersion: "18.0",
-            screenWidth: 393,
-            screenHeight: 852,
-            instanceId: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
-            listeningPort: 49152,
             simulatorUDID: "DEADBEEF-1234-5678-9ABC-DEF012345678",
             vendorIdentifier: "CAFE0000-BABE-FACE-DEAD-BEEF12345678"
         )
@@ -102,22 +100,26 @@ final class ServerInfoTests: XCTestCase {
     }
 
     func testDecodingWithoutDeviceIdentifiers() throws {
-        // Simulate server that doesn't include simulatorUDID/vendorIdentifier
         let json = """
         {
-            "appName": "OldApp",
-            "bundleIdentifier": "com.old",
+            "appName": "CurrentApp",
+            "bundleIdentifier": "com.current",
             "deviceName": "iPhone 15",
             "systemVersion": "17.0",
             "screenWidth": 390,
             "screenHeight": 844,
-            "instanceId": "12345"
+            "instanceId": "12345",
+            "instanceIdentifier": "current",
+            "listeningPort": 49152,
+            "tlsActive": true
         }
         """
         let data = Data(json.utf8)
         let decoded = try JSONDecoder().decode(ServerInfo.self, from: data)
 
         XCTAssertEqual(decoded.instanceId, "12345")
+        XCTAssertEqual(decoded.instanceIdentifier, "current")
+        XCTAssertEqual(decoded.listeningPort, 49152)
         XCTAssertNil(decoded.simulatorUDID)
         XCTAssertNil(decoded.vendorIdentifier)
     }
@@ -130,8 +132,7 @@ final class ServerInfoTests: XCTestCase {
         ]
 
         for (name, version, width, height) in devices {
-            let info = ServerInfo(
-                appName: "TestApp",
+            let info = makeServerInfo(
                 bundleIdentifier: "com.test",
                 deviceName: name,
                 systemVersion: version,

@@ -62,7 +62,7 @@ extension Navigation {
 
     static func requiredAxis(for direction: ScrollDirection) -> ScrollAxis {
         switch direction {
-        case .up, .down, .next, .previous: return .vertical
+        case .up, .down: return .vertical
         case .left, .right: return .horizontal
         }
     }
@@ -107,8 +107,6 @@ extension Navigation {
         case .down: return .down
         case .left: return .left
         case .right: return .right
-        case .next: return .next
-        case .previous: return .previous
         }
     }
 

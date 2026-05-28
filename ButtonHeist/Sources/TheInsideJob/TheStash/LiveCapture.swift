@@ -78,7 +78,7 @@ struct LiveCapture: Equatable {
     }
 
     func contains(heistId: HeistId) -> Bool {
-        heistIdByElement.values.contains(heistId)
+        heistIds.contains(heistId)
     }
 
     func heistId(for element: AccessibilityElement) -> HeistId? {
@@ -110,7 +110,8 @@ struct LiveCapture: Equatable {
     }
 
     func scrollView(for element: SemanticScreen.Element) -> UIScrollView? {
-        scrollView(for: element.heistId)
+        let visibleScrollView = contains(heistId: element.heistId) ? scrollView(for: element.heistId) : nil
+        return visibleScrollView
             ?? element.scrollContentLocation.map { $0.scrollContainer }.flatMap(scrollView(forContainer:))
     }
 

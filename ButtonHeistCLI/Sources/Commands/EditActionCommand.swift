@@ -41,7 +41,7 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
     }
 
     private static func canonicalAction(_ action: String) throws -> String {
-        guard let editAction = Self.catalogCanonicalStringValue(action, for: .action, caseInsensitive: false) else {
+        guard let editAction = Self.catalogCanonicalStringValue(action, for: .action) else {
             throw ValidationError("Unknown edit action: \(action). Valid: \(Self.catalogAllowedValuesDescription(for: .action))")
         }
         return editAction

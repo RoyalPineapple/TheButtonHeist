@@ -55,7 +55,7 @@ extension FenceResponse {
                 checked: outcomes.expectationsChecked,
                 met: outcomes.expectationsMet,
                 stepSummaries: outcomes.stepSummaries,
-                netDelta: accessibilityTrace?.meaningfulCaptureEndpointDelta
+                netDelta: accessibilityTrace?.meaningfulEndpointDeltaProjection
             )
         case .sessionState(let payload):
             return Self.compactSessionState(payload)

@@ -83,8 +83,6 @@ public enum HeistTrait: Equatable, Hashable, Sendable {
     case secureTextField, inactive, footer, autoCorrectCandidate, deleteKey
     case selectionDismissesItem, visited, spacer, tableIndex, map
     case textOperationsAvailable, draggable, popupButton, menuItem, alert
-    /// Unknown trait from a newer server — preserved for round-tripping.
-    case unknown(String)
 
 }
 
@@ -114,13 +112,13 @@ extension HeistTrait: RawRepresentable {
         return map
     }()
 
-    /// Returns nil for unknown trait strings. Use Codable for forward-compatible decoding.
+    /// Returns nil for unknown trait strings. Codable remains the wire-contract decoder.
     public init?(rawValue: String) {
         guard let known = Self.nameToTrait[rawValue] else { return nil }
         self = known
     }
 
-    /// The string name for known cases. `.unknown` stores its own value.
+    /// The string name for known cases.
     private var nameValue: String {
         switch self {
         case .button: return "button"
@@ -166,7 +164,6 @@ extension HeistTrait: RawRepresentable {
         case .popupButton: return "popupButton"
         case .menuItem: return "menuItem"
         case .alert: return "alert"
-        case .unknown(let value): return value
         }
     }
 
@@ -177,7 +174,13 @@ extension HeistTrait: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
-        self = HeistTrait(rawValue: value) ?? .unknown(value)
+        guard let trait = HeistTrait(rawValue: value) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unknown HeistTrait: \"\(value)\""
+            )
+        }
+        self = trait
     }
 
     public func encode(to encoder: Encoder) throws {

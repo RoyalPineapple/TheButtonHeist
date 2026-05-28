@@ -11,10 +11,9 @@ extension TheBurglar {
 
     // MARK: - Build Screen From Parse
 
-    /// Build a Screen value from a ParseResult. Pure: no mutable state.
-    /// This is the lifted body of the old `apply(_:to:)` — heistId assignment,
-    /// context resolution, container stable-id computation, and first-responder
-    /// detection, all in one pass.
+    /// Build a Screen value from a ParseResult. Pure: no mutable state. This
+    /// pass assigns heistIds, resolves context, computes container stable IDs,
+    /// and detects first responder state.
     static func buildScreen(from result: ParseResult) -> Screen {
         let indexedElements = result.hierarchy.pathIndexedElements
         let elements = indexedElements.map(\.element)

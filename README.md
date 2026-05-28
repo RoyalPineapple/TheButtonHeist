@@ -35,8 +35,8 @@ Button Heist tells the agent what the tap did:
   - textfield_email
   - textfield_password
   - button_login
-  + header_dashboard "Dashboard" [header]
-  + button_settings "Settings" [button]
+  + header_dashboard "Dashboard" header
+  + button_settings "Settings" button
 ```
 
 The first tool says the tap landed.
@@ -129,7 +129,7 @@ $BH type_text "Hello" --identifier nameField
 $BH get_screen --output screen.png
 ```
 
-The session REPL accepts JSON and shorthand commands: `tap loginButton`, `type "hello"`, `scroll down list`, `screen`.
+The session REPL accepts canonical command names with `key=value` arguments or canonical machine JSON.
 
 For the complete generated CLI command surface, see the
 [Command Reference](docs/reference/commands.md). For workflow context, see the

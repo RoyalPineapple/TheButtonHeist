@@ -38,17 +38,10 @@ public enum FenceOperationCatalog {
         arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let contract = TheFence.Command.mcpToolContract(named: name) else {
-            return routeCommandNamed(name, arguments: arguments)
-        }
-
-        if let selector = contract.selector {
-            return routeSelectorTool(contract, selector: selector, arguments: arguments)
-        }
-
-        guard let command = contract.commands.first, contract.commands.count == 1 else {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
-        return normalizeToolOperation(command: command, arguments: arguments)
+
+        return normalizeToolOperation(command: contract.command, arguments: arguments)
     }
 
     public static func normalizeBatchStep(
@@ -57,7 +50,6 @@ public enum FenceOperationCatalog {
         normalizeCanonicalStep(
             step,
             context: "run_batch step",
-            nonExecutableLabel: "descriptor.isBatchExecutable",
             isExecutable: \.isBatchExecutable
         )
     }
@@ -75,7 +67,6 @@ public enum FenceOperationCatalog {
     private static func normalizeCanonicalStep(
         _ step: TheFence.CommandArgumentObject,
         context: String,
-        nonExecutableLabel: String,
         isExecutable: KeyPath<TheFence.Command, Bool>
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         let commandName: String
@@ -98,7 +89,6 @@ public enum FenceOperationCatalog {
             commandName: commandName,
             arguments: arguments,
             context: context,
-            nonExecutableLabel: nonExecutableLabel,
             isExecutable: isExecutable
         )
     }
@@ -107,7 +97,6 @@ public enum FenceOperationCatalog {
         commandName: String,
         arguments: TheFence.CommandArgumentEnvelope,
         context: String,
-        nonExecutableLabel: String,
         isExecutable: KeyPath<TheFence.Command, Bool>
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: commandName) else {
@@ -118,7 +107,7 @@ public enum FenceOperationCatalog {
 
         guard command[keyPath: isExecutable] else {
             return .failure(FenceOperationRoutingError(
-                message: "\(context) command \"\(command.rawValue)\" is not supported: \(nonExecutableLabel) is false"
+                message: "\(context) command \"\(command.rawValue)\" is not supported"
             ))
         }
 
@@ -148,149 +137,39 @@ public enum FenceOperationCatalog {
         return .success(command)
     }
 
-    private static func routeCommandNamed(
-        _ name: String,
-        arguments: TheFence.CommandArgumentEnvelope
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        guard let command = TheFence.Command(rawValue: name) else {
-            return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
-        }
-        guard command.mcpExposure == .directTool else {
-            if let message = groupedToolRoutingMessage(for: command) {
-                return .failure(FenceOperationRoutingError(message: message))
-            }
-            return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
-        }
-
-        return normalizeToolOperation(command: command, arguments: arguments)
-    }
-
-    private static func groupedToolRoutingMessage(for command: TheFence.Command) -> String? {
-        switch command.mcpExposure {
-        case .groupedUnder(let toolName):
-            guard let contract = TheFence.Command.mcpToolContract(named: toolName),
-                  let selector = contract.selector,
-                  let selectorValue = selector.selectorValue(for: command) else {
-                return nil
-            }
-            return groupedToolRoutingMessage(
-                rawToolName: command.rawValue,
-                groupedToolName: toolName,
-                selectorName: selector.parameter.key,
-                selectorValue: selectorValue
-            )
-        default:
-            return nil
-        }
-    }
-
-    private static func groupedToolRoutingMessage(
-        rawToolName: String,
-        groupedToolName: String,
-        selectorName: String,
-        selectorValue: String
-    ) -> String {
-        "Tool \"\(rawToolName)\" is grouped under \"\(groupedToolName)\"; call \(groupedToolName) with \(selectorName)=\"\(selectorValue)\"."
-    }
-
     private static func canonicalShapeError(
         for command: TheFence.Command,
         arguments: some TheFence.CommandArgumentReadable,
-        context: String
+        context _: String
     ) -> FenceOperationRoutingError? {
-        guard let contract = TheFence.Command.mcpToolContract(named: command.rawValue),
-              let selector = contract.selector else {
-            return nil
+        let commandParameters = command.parameters
+        let commandParameterKeys = Set(commandParameters.map(\.key))
+        if let unsupportedKey = arguments.keys.filter({ !commandParameterKeys.contains($0) }).sorted().first {
+            return .init(message: "Unknown parameter '\(unsupportedKey)' for \(command.rawValue)")
         }
 
-        let selectorKey = selector.parameter.key
-        guard arguments.keys.contains(selectorKey) else { return nil }
-
-        let commandParameterKeys = Set(command.parameters.map(\.key))
-        if !commandParameterKeys.contains(selectorKey) {
-            return .init(
-                message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorKey) selector; " +
-                    "use canonical Fence commands \(rawCommandList(contract.commands))."
-            )
+        for parameter in commandParameters {
+            guard let enumValues = parameter.enumValues,
+                  arguments.keys.contains(parameter.key) else {
+                continue
+            }
+            do {
+                guard let value = try arguments.schemaString(parameter.key) else { continue }
+                guard enumValues.contains(value) else {
+                    return .init(message: SchemaValidationError(
+                        field: parameter.key,
+                        observed: SchemaValidationError.observedDescription(value),
+                        expected: SchemaValidationError.expectedEnumValues(enumValues)
+                    ).message)
+                }
+            } catch let error as SchemaValidationError {
+                return .init(message: error.message)
+            } catch {
+                return .init(message: error.localizedDescription)
+            }
         }
 
-        let selectorValue: String?
-        do {
-            selectorValue = try arguments.schemaString(selectorKey)
-        } catch let error as SchemaValidationError {
-            return .init(message: error.message)
-        } catch {
-            return .init(message: error.localizedDescription)
-        }
-        guard let selectorValue,
-              selector.consumesValue(selectorValue),
-              let selectedCommand = selector.command(for: selectorValue),
-              selectedCommand != command else {
-            return nil
-        }
-        return .init(
-            message: "\(context) \"\(command.rawValue)\" uses the MCP \(selectorValue) selector; " +
-                "use canonical Fence command \(selectedCommand.rawValue)."
-        )
-    }
-
-    private static func rawCommandList(_ commands: [TheFence.Command]) -> String {
-        let commandNames = commands.map(\.rawValue)
-        switch commandNames.count {
-        case 0:
-            return ""
-        case 1:
-            return commandNames[0]
-        case 2:
-            return "\(commandNames[0]) or \(commandNames[1])"
-        default:
-            return commandNames.dropLast().joined(separator: ", ") + ", or \(commandNames.last ?? "")"
-        }
-    }
-
-    private static func routeSelectorTool(
-        _ contract: MCPToolContract,
-        selector: MCPToolSelector,
-        arguments: TheFence.CommandArgumentEnvelope
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        let rawValue: String?
-        do {
-            rawValue = try selectorValue(in: arguments, selector: selector)
-        } catch let error as SchemaValidationError {
-            return .failure(selectorRoutingError(error, contract: contract, selector: selector))
-        } catch {
-            return .failure(selectorRoutingError(error.localizedDescription, contract: contract, selector: selector))
-        }
-
-        guard let command = selector.command(for: rawValue) else {
-            return .failure(FenceOperationRoutingError(
-                message: "Unknown \(contract.name) selector value: \(rawValue ?? "missing")"
-            ))
-        }
-        var operationValues = arguments.argumentValues
-        if selector.consumesValue(rawValue) {
-            operationValues.removeValue(forKey: selector.parameter.key)
-        }
-        operationValues = selectorRoutedOperationValues(
-            operationValues,
-            contract: contract,
-            command: command
-        )
-        let operationArguments = TheFence.CommandArgumentEnvelope(
-            values: operationValues,
-            fieldPrefix: arguments.argumentFieldPrefix
-        )
-        return normalizeToolOperation(command: command, arguments: operationArguments)
-    }
-
-    private static func selectorRoutedOperationValues(
-        _ values: [String: TheFence.CommandArgumentValue],
-        contract: MCPToolContract,
-        command: TheFence.Command
-    ) -> [String: TheFence.CommandArgumentValue] {
-        guard contract.name == TheFence.Command.scroll.rawValue else { return values }
-        let allowedKeys = Set(command.parameters.map(\.key))
-        return values.filter { allowedKeys.contains($0.key) }
+        return nil
     }
 
     private static func normalizeToolOperation(
@@ -336,52 +215,6 @@ public enum FenceOperationCatalog {
         return (payload, TheFence.CommandArgumentEnvelope(values: operationValues))
     }
 
-    private static func selectorValue(
-        in arguments: some TheFence.CommandArgumentReadable,
-        selector: MCPToolSelector
-    ) throws -> String? {
-        let key = selector.parameter.key
-        let rawValue = try arguments.schemaString(key)
-        guard let enumValues = selector.parameter.enumValues else { return rawValue ?? selector.defaultValue }
-
-        if let rawValue {
-            guard enumValues.contains(rawValue) else {
-                throw SchemaValidationError(
-                    field: key,
-                    observed: SchemaValidationError.observedDescription(rawValue),
-                    expected: SchemaValidationError.expectedEnumValues(enumValues)
-                )
-            }
-            return rawValue
-        }
-
-        guard !selector.parameter.required else {
-            throw SchemaValidationError(
-                field: key,
-                observed: nil,
-                expected: SchemaValidationError.expectedEnumValues(enumValues)
-            )
-        }
-        return selector.defaultValue
-    }
-
-    private static func selectorRoutingError(
-        _ error: SchemaValidationError,
-        contract: MCPToolContract,
-        selector: MCPToolSelector
-    ) -> FenceOperationRoutingError {
-        selectorRoutingError(error.message, contract: contract, selector: selector)
-    }
-
-    private static func selectorRoutingError(
-        _ message: String,
-        contract: MCPToolContract,
-        selector: MCPToolSelector
-    ) -> FenceOperationRoutingError {
-        FenceOperationRoutingError(
-            message: "\(contract.name).\(selector.parameter.key): \(message)"
-        )
-    }
 }
 
 private extension TheFence.Command {

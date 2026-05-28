@@ -133,6 +133,30 @@ public extension AccessibilityTrace {
     }
 }
 
+extension AccessibilityTrace.AccessibilityPatchOperation {
+    static func structuralOperations(
+        between before: Interface,
+        and after: Interface
+    ) -> [Self] {
+        let edits = ElementEdits.betweenTrees(before: before, after: after)
+        let afterRecords = traceHierarchyRecords(in: after)
+
+        let removals = edits.treeRemoved
+            .reversed()
+            .map(Self.removeSubtree)
+        let moves = edits.treeMoved.compactMap { move -> Self? in
+            guard let record = afterRecords[move.ref] else { return nil }
+            return .moveSubtree(
+                move,
+                node: record.node
+            )
+        }
+        let insertions = edits.treeInserted.map(Self.insertSubtree)
+
+        return removals + moves + insertions
+    }
+}
+
 private func valueOperations(
     between before: Interface,
     and after: Interface

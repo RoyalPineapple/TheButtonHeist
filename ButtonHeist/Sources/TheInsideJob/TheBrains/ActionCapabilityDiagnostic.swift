@@ -224,7 +224,7 @@ import AccessibilitySnapshotParser
     }
 
     static func traitNames(_ traits: AccessibilityTraits) -> [String] {
-        traits.namesIncludingUnknownBits
+        traits.heistTraitNames
     }
 
     private static func availableCustomActions(

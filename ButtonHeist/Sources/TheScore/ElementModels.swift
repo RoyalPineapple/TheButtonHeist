@@ -42,8 +42,8 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         frameY: Double,
         frameWidth: Double,
         frameHeight: Double,
-        activationPointX: Double = 0,
-        activationPointY: Double = 0,
+        activationPointX: Double? = nil,
+        activationPointY: Double? = nil,
         respondsToUserInteraction: Bool = true,
         customContent: [HeistCustomContent]? = nil,
         rotors: [HeistRotor]? = nil,
@@ -60,8 +60,9 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         self.frameY = frameY
         self.frameWidth = frameWidth
         self.frameHeight = frameHeight
-        self.activationPointX = activationPointX
-        self.activationPointY = activationPointY
+        precondition((activationPointX == nil) == (activationPointY == nil), "activationPointX and activationPointY must be provided together")
+        self.activationPointX = activationPointX ?? frameX + (frameWidth / 2)
+        self.activationPointY = activationPointY ?? frameY + (frameHeight / 2)
         self.respondsToUserInteraction = respondsToUserInteraction
         self.customContent = customContent
         self.rotors = rotors

@@ -13,7 +13,7 @@ public struct ScreenPayload: Codable, Sendable {
         width: Double,
         height: Double,
         timestamp: Date = Date(),
-        interface: Interface = Interface(timestamp: Date(), tree: [])
+        interface: Interface
     ) {
         self.pngData = pngData
         self.width = width
@@ -48,8 +48,8 @@ public struct RecordingPayload: Codable, Sendable {
     public let startTime: Date
     public let endTime: Date
     public let stopReason: StopReason
-    /// Ordered log of interactions recorded during this session, or nil if none occurred.
-    public let interactionLog: [InteractionEvent]?
+    /// Ordered log of interactions recorded during this session.
+    public let interactionLog: [InteractionEvent]
     /// Recording-time evidence about config clamping.
     /// This is diagnostic only; it is never replay authority.
     public let evidence: RecordingPayloadEvidence?
@@ -66,7 +66,7 @@ public struct RecordingPayload: Codable, Sendable {
         startTime: Date,
         endTime: Date,
         stopReason: StopReason,
-        interactionLog: [InteractionEvent]? = nil,
+        interactionLog: [InteractionEvent] = [],
         evidence: RecordingPayloadEvidence? = nil
     ) {
         self.videoData = videoData

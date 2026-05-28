@@ -143,8 +143,8 @@ final class TripwireIntegrationTests: XCTestCase {
     func testPulseProducesReadingAfterStart() async throws {
         // waitForSettle starts the pulse and only returns once at least one
         // tick has produced a reading — observable signal beats wall-clock sleep.
-        // requiredQuietFrames: 1 mirrors the old "got a reading" semantic and
-        // keeps the test resilient to host noise.
+        // requiredQuietFrames: 1 asks for the first produced reading and keeps
+        // the test resilient to host noise.
         let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)
         XCTAssertTrue(settled, "Pulse should settle within timeout")
         let reading = try XCTUnwrap(tripwire.latestReading)

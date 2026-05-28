@@ -31,8 +31,8 @@ extension TheFence {
             )
         }
         return RunBatchRequest(
-            steps: batchStepDecodeInputs.enumerated().map { index, stepDecodeInput in
-                decodeRunBatchStep(stepDecodeInput, index: index)
+            steps: try batchStepDecodeInputs.enumerated().map { index, stepDecodeInput in
+                try decodeRunBatchStep(stepDecodeInput, index: index)
             },
             policy: try arguments.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
         )
@@ -41,55 +41,37 @@ extension TheFence {
 
 private extension TheFence {
 
-    func decodeRunBatchStep(_ step: CommandArgumentObject, index: Int) -> RunBatchStep {
+    func decodeRunBatchStep(_ step: CommandArgumentObject, index: Int) throws -> RunBatchPreparedStep {
         switch FenceOperationCatalog.normalizeBatchStep(step) {
         case .success(let operation):
-            return decodeRunBatchStep(operation: operation, index: index)
+            return try decodeRunBatchStep(operation: operation, index: index)
 
         case .failure(let error):
-            let fenceError = FenceError.invalidRequest("run_batch step \(index): \(error.message)")
-            return .invalid(
-                commandName: diagnosticCommandName(forBatchStep: step),
-                failure: BatchStepFailure(
-                    message: fenceError.coreMessage,
-                    details: fenceError.failureDetails,
-                    includeDetailsInResult: false
-                )
-            )
+            throw FenceError.invalidRequest("run_batch step \(index): \(error.message)")
         }
     }
 
-    func decodeRunBatchStep(operation: NormalizedOperation, index: Int) -> RunBatchStep {
+    func decodeRunBatchStep(operation: NormalizedOperation, index: Int) throws -> RunBatchPreparedStep {
         do {
             let request = try parseRequest(operation: operation)
-            return .planned(try batchPreparedStep(originalIndex: index, request: request))
+            return try batchPreparedStep(originalIndex: index, request: request)
         } catch let error as SchemaValidationError {
-            return invalidBatchStep(operation, message: error.message, includeDetailsInResult: true)
+            throw FenceError.invalidRequest(error.message)
         } catch let error as MissingElementTarget {
-            return .invalid(
-                commandName: operation.command.rawValue,
-                failure: batchStepFailure(from: missingElementTargetResponse(command: error.command))
-            )
+            throw FenceError.invalidRequest(missingElementTargetResponse(command: error.command).humanFormatted())
         } catch let error as FenceError {
-            return .invalid(
-                commandName: operation.command.rawValue,
-                failure: BatchStepFailure(
-                    message: error.coreMessage,
-                    details: error.failureDetails,
-                    includeDetailsInResult: true
-                )
-            )
+            throw error
         } catch let error as BatchStepPlanBuildError {
-            return invalidBatchStep(operation, message: error.message)
+            throw FenceError.invalidRequest(error.message)
         } catch {
-            return invalidBatchStep(operation, message: error.localizedDescription)
+            throw FenceError.invalidRequest(error.localizedDescription)
         }
     }
 
     func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
         let executionPlan = try clientMessageExecutionPlan(for: request)
         guard let message = executionPlan.messages.first, executionPlan.messages.count == 1 else {
-            let commandName = executionPlan.messages.first?.canonicalName ?? request.command.rawValue
+            let commandName = request.command.rawValue
             throw BatchStepPlanBuildError(
                 message: """
                 run_batch step command "\(commandName)" expands to \(executionPlan.messages.count) actions; \
@@ -116,9 +98,12 @@ private extension TheFence {
 
         switch message {
         case .waitFor(let target):
+            guard let matcher = target.elementTarget.batchExpectationMatcher else {
+                return .delivery
+            }
             return target.resolvedAbsent
-                ? .elementDisappeared(target.elementTarget.batchExpectationMatcher)
-                : .elementAppeared(target.elementTarget.batchExpectationMatcher)
+                ? .elementDisappeared(matcher)
+                : .elementAppeared(matcher)
         case .waitForChange(let target):
             return target.expect ?? .screenChanged
         default:
@@ -140,47 +125,6 @@ private extension TheFence {
             return Deadline(timeout: target.resolvedTimeout)
         default:
             return Deadline()
-        }
-    }
-
-    func invalidBatchStep(
-        _ operation: NormalizedOperation,
-        message: String,
-        includeDetailsInResult: Bool = false
-    ) -> RunBatchStep {
-        .invalid(
-            commandName: operation.command.rawValue,
-            failure: BatchStepFailure(
-                message: message,
-                details: nil,
-                includeDetailsInResult: includeDetailsInResult
-            )
-        )
-    }
-
-    func batchStepFailure(from response: FenceResponse) -> BatchStepFailure {
-        guard case .error(let message, let details) = response else {
-            return BatchStepFailure(
-                message: response.humanFormatted(),
-                details: nil,
-                includeDetailsInResult: false
-            )
-        }
-        return BatchStepFailure(
-            message: message,
-            details: details,
-            includeDetailsInResult: true
-        )
-    }
-
-    func diagnosticCommandName(forBatchStep step: some CommandArgumentReadable) -> String {
-        do {
-            guard let commandName = try step.schemaString("command") else {
-                return "?"
-            }
-            return commandName
-        } catch {
-            return "?"
         }
     }
 
@@ -336,10 +280,10 @@ private extension TheFence {
 }
 
 private extension ElementTarget {
-    var batchExpectationMatcher: ElementMatcher {
+    var batchExpectationMatcher: ElementMatcher? {
         switch self {
-        case .heistId(let heistId):
-            return ElementMatcher(heistId: heistId)
+        case .heistId:
+            return nil
         case .matcher(let matcher, _):
             return matcher
         }

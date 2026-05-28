@@ -12,16 +12,18 @@ protocol RotorExecutionInput {
     var rotorElementTarget: any SemanticElementTarget { get }
     var rotor: String? { get }
     var rotorIndex: Int? { get }
-    var direction: RotorDirection? { get }
+    var direction: RotorDirection { get }
     var currentHeistId: HeistId? { get }
     var currentTextRange: TextRangeReference? { get }
 }
 
-protocol TapExecutionInput {
-    func tapPointSelection() throws -> GesturePointSelection
+protocol PointGestureExecutionInput {
+    func pointSelection() throws -> GesturePointSelection
 }
 
-protocol LongPressExecutionInput: TapExecutionInput {
+protocol TapExecutionInput: PointGestureExecutionInput {}
+
+protocol LongPressExecutionInput: PointGestureExecutionInput {
     var duration: Double { get }
 }
 
@@ -68,14 +70,14 @@ extension RotorTarget: RotorExecutionInput {
     var rotorElementTarget: any SemanticElementTarget { elementTarget }
 }
 
-extension TouchTapTarget: TapExecutionInput {
-    func tapPointSelection() throws -> GesturePointSelection {
+extension TapTarget: TapExecutionInput {
+    func pointSelection() throws -> GesturePointSelection {
         gesturePointSelection()
     }
 }
 
 extension LongPressTarget: LongPressExecutionInput {
-    func tapPointSelection() throws -> GesturePointSelection {
+    func pointSelection() throws -> GesturePointSelection {
         gesturePointSelection()
     }
 }

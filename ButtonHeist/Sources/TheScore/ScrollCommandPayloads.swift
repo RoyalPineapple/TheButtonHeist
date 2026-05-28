@@ -2,7 +2,7 @@ import Foundation
 
 /// Direction for scroll actions
 public enum ScrollDirection: String, Codable, Sendable, CaseIterable {
-    case up, down, left, right, next, previous
+    case up, down, left, right
 }
 
 /// Target for container-moving scroll commands.
@@ -120,7 +120,7 @@ extension ScrollTarget: Codable {
         case (nil, nil):
             self.selection = .visibleContainer
         }
-        self.direction = try container.decodeIfPresent(ScrollDirection.self, forKey: .direction) ?? .down
+        self.direction = try container.decode(ScrollDirection.self, forKey: .direction)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -160,17 +160,17 @@ extension ScrollToVisibleTarget: CustomStringConvertible {
 public struct ElementSearchTarget: Sendable {
     /// Element to search for while scrolling.
     public let elementTarget: ElementTarget
-    /// Starting scroll direction (default: .down)
-    public let direction: ScrollSearchDirection?
+    /// Starting scroll direction.
+    public let direction: ScrollSearchDirection
     public init(
         elementTarget: ElementTarget,
-        direction: ScrollSearchDirection? = nil
+        direction: ScrollSearchDirection = .down
     ) {
         self.elementTarget = elementTarget
         self.direction = direction
     }
 
-    public var resolvedDirection: ScrollSearchDirection { direction ?? .down }
+    public var resolvedDirection: ScrollSearchDirection { direction }
 }
 
 extension ElementSearchTarget: CustomStringConvertible {
@@ -216,13 +216,13 @@ extension ElementSearchTarget: Codable {
             )
         }
         self.elementTarget = elementTarget
-        self.direction = try container.decodeIfPresent(ScrollSearchDirection.self, forKey: .direction)
+        self.direction = try container.decode(ScrollSearchDirection.self, forKey: .direction)
     }
 
     public func encode(to encoder: Encoder) throws {
         try elementTarget.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(direction, forKey: .direction)
+        try container.encode(direction, forKey: .direction)
     }
 }
 
@@ -307,7 +307,7 @@ extension ScrollToEdgeTarget: Codable {
         case (nil, nil):
             self.selection = .visibleContainer
         }
-        self.edge = try container.decodeIfPresent(ScrollEdge.self, forKey: .edge) ?? .top
+        self.edge = try container.decode(ScrollEdge.self, forKey: .edge)
     }
 
     public func encode(to encoder: Encoder) throws {

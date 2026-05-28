@@ -11,7 +11,9 @@ public enum FenceCommandReference {
     public static func commandMarkdown(
         descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors
     ) -> String {
-        let sortedDescriptors = descriptors.sorted { $0.canonicalName < $1.canonicalName }
+        let sortedDescriptors = descriptors
+            .filter(\.isPublicRequestContract)
+            .sorted { $0.canonicalName < $1.canonicalName }
         var lines: [String] = [
             "# ButtonHeist Command Reference",
             "",
@@ -26,7 +28,7 @@ public enum FenceCommandReference {
         for descriptor in sortedDescriptors {
             let columns = [
                 "`\(descriptor.canonicalName)`",
-                cliExposureSummary(descriptor.cliExposure, cliName: descriptor.cliName),
+                cliExposureSummary(descriptor),
                 mcpExposureSummary(descriptor.mcpExposure),
                 yesNo(descriptor.isBatchExecutable),
                 markdownCell(firstLine(of: descriptor.description)),
@@ -54,15 +56,13 @@ public enum FenceCommandReference {
             "",
             "## Summary",
             "",
-            "| Tool | Commands | Selector | Description |",
-            "|------|----------|----------|-------------|",
+            "| Tool | Command | Description |",
+            "|------|---------|-------------|",
         ]
 
         for contract in sortedContracts {
-            let commands = contract.commands.map { "`\($0.rawValue)`" }.joined(separator: ", ")
-            let selector = contract.selector.map { "`\($0.parameter.key)`" } ?? "-"
             lines.append(
-                "| `\(contract.name)` | \(commands) | \(selector) | \(markdownCell(firstLine(of: contract.description))) |"
+                "| `\(contract.name)` | `\(contract.command.rawValue)` | \(markdownCell(firstLine(of: contract.description))) |"
             )
         }
 
@@ -81,17 +81,12 @@ public enum FenceCommandReference {
             "",
             descriptor.description,
             "",
-            "- CLI: \(cliExposureDetail(descriptor.cliExposure, cliName: descriptor.cliName))",
+            "- CLI: \(cliExposureDetail(descriptor))",
             "- MCP: \(mcpExposureDetail(descriptor.mcpExposure))",
             "- Batch: \(yesNo(descriptor.isBatchExecutable))",
             "- Playback: \(yesNo(descriptor.isPlaybackExecutable))",
             "- Connection before dispatch: \(yesNo(descriptor.requiresConnectionBeforeDispatch))",
         ]
-
-        let aliases = descriptor.humanAliases.keys.sorted()
-        if !aliases.isEmpty {
-            lines.append("- Human aliases: \(aliases.map { "`\($0)`" }.joined(separator: ", "))")
-        }
 
         lines.append(contentsOf: ["", "Parameters:", ""])
         lines.append(contentsOf: parameterTableLines(descriptor.parameters))
@@ -105,20 +100,8 @@ public enum FenceCommandReference {
             "",
             contract.description,
             "",
-            "- Commands: \(contract.commands.map { "`\($0.rawValue)`" }.joined(separator: ", "))",
+            "- Command: `\(contract.command.rawValue)`",
         ]
-
-        if let selector = contract.selector {
-            lines.append("- Selector: `\(selector.parameter.key)`")
-            if let defaultValue = selector.defaultValue {
-                lines.append("- Selector default: `\(defaultValue)`")
-            }
-            let routes = selector.commandByValue
-                .sorted { $0.key < $1.key }
-                .map { "`\($0.key)` -> `\($0.value.rawValue)`" }
-                .joined(separator: ", ")
-            lines.append("- Selector routes: \(routes)")
-        }
 
         lines.append(contentsOf: ["", "Parameters:", ""])
         lines.append(contentsOf: parameterTableLines(contract.parameters))
@@ -145,25 +128,21 @@ public enum FenceCommandReference {
         return lines
     }
 
-    private static func cliExposureSummary(_ exposure: CLIExposure, cliName: String?) -> String {
-        switch exposure {
+    private static func cliExposureSummary(_ descriptor: FenceCommandDescriptor) -> String {
+        switch descriptor.cliExposure {
         case .directCommand, .sessionOnly:
-            return cliName.map { "`\($0)`" } ?? "-"
-        case .groupedUnder(let commandName):
-            return "`\(commandName)`"
+            return "`\(descriptor.canonicalName)`"
         case .notExposed:
             return "-"
         }
     }
 
-    private static func cliExposureDetail(_ exposure: CLIExposure, cliName: String?) -> String {
-        switch exposure {
+    private static func cliExposureDetail(_ descriptor: FenceCommandDescriptor) -> String {
+        switch descriptor.cliExposure {
         case .directCommand:
-            return cliName.map { "direct command `\($0)`" } ?? "direct command"
-        case .groupedUnder(let commandName):
-            return "grouped under `\(commandName)`"
+            return "direct command `\(descriptor.canonicalName)`"
         case .sessionOnly:
-            return cliName.map { "session-only `\($0)`" } ?? "session-only"
+            return "session-only `\(descriptor.canonicalName)`"
         case .notExposed:
             return "not exposed"
         }
@@ -173,8 +152,6 @@ public enum FenceCommandReference {
         switch exposure {
         case .directTool:
             return "direct"
-        case .groupedUnder(let toolName):
-            return "`\(toolName)`"
         case .notExposed:
             return "-"
         }
@@ -184,8 +161,6 @@ public enum FenceCommandReference {
         switch exposure {
         case .directTool:
             return "direct tool"
-        case .groupedUnder(let toolName):
-            return "grouped under `\(toolName)`"
         case .notExposed:
             return "not exposed"
         }

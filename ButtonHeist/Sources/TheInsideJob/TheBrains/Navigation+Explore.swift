@@ -33,7 +33,7 @@ extension Navigation {
     /// committed to `stash.currentScreen` so subsequent operations can target
     /// known semantic content while action execution owns reachability.
     ///
-    /// During this call, `stash.currentScreen.liveInterface` is rebound
+    /// During this call, `stash.currentScreen.liveCapture` is rebound
     /// to each latest parse so termination heuristics (`stash.visibleIds ==
     /// before`) compare page-to-page ids. On return,
     /// `stash.currentScreen.knownInterface` contains all elements observed
@@ -42,7 +42,7 @@ extension Navigation {
         var union = stash.currentScreen
         let manifest = await exploreScreen(target: target, union: &union)
         // End-of-cycle union commit: knownInterface contains the semantic set;
-        // liveInterface still reflects the last parsed page.
+        // liveCapture still reflects the last parsed page.
         stash.currentScreen = union
         return manifest
     }
@@ -271,7 +271,7 @@ extension Navigation {
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         Dictionary(
-            stash.currentScreen.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
+            stash.currentScreen.semantic.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
             uniquingKeysWith: { first, _ in first }
         )
     }

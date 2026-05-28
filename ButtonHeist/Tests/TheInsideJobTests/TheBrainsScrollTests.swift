@@ -74,7 +74,7 @@ final class TheBrainsScrollTests: XCTestCase {
             XCTAssertEqual(Optional(scrollView.contentOffset), unsafeOffsets[ObjectIdentifier(scrollView)])
         }
         XCTAssertTrue(
-            union.elements.values.contains {
+            union.semantic.elements.values.contains {
                 $0.element.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the private queuing scroll view"
@@ -169,8 +169,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.down), .vertical)
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.left), .horizontal)
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.right), .horizontal)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.next), .vertical)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollDirection.previous), .vertical)
     }
 
     func testRequiredAxisForScrollEdge() {
@@ -201,8 +199,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.down), .down)
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.left), .left)
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.right), .right)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.next), .next)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.previous), .previous)
     }
 
     // MARK: - Scroll Target Description
@@ -401,7 +397,11 @@ final class TheBrainsScrollTests: XCTestCase {
                 visibleEntry.heistId: visibleEntry,
                 offscreenEntry.heistId: offscreenEntry,
             ],
-            hierarchy: [.element(visible.0, traversalIndex: 0)],
+            hierarchy: [
+                .container(scrollContainer, children: [
+                    .element(visible.0, traversalIndex: 0)
+                ])
+            ],
             containerStableIds: [scrollContainer: scrollStableId],
             heistIdByElement: [visible.0: visible.1],
             elementRefs: includeLiveScrollAncestor ? [
@@ -1010,7 +1010,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         let knownScreen = Screen(
             elements: [knownEntry.heistId: knownEntry],
-            hierarchy: [.element(knownElement, traversalIndex: 0)],
+            hierarchy: [.container(scrollContainer, children: [])],
             containerStableIds: [scrollContainer: "known_scroll"],
             heistIdByElement: [:],
             elementRefs: [

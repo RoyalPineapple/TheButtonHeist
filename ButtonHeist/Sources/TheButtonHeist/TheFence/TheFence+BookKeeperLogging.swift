@@ -87,7 +87,6 @@ extension TheFence {
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
         let targetCapture = dispatchedResponse.actionResult?.accessibilityTrace?.captures.first
             ?? lookupCaptureRef.flatMap { backgroundAccessibility.capture(ref: $0) }
-            ?? finalReceipt.actionResult.accessibilityTrace?.captures.first
         bookKeeper.recordHeistEvidence(
             request,
             actionResult: finalReceipt.actionResult,

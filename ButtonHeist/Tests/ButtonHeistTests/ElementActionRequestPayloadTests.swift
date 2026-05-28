@@ -22,80 +22,6 @@ final class ElementActionRequestPayloadTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAdjustmentRequestsDecodeTypedCounts() async throws {
-        let increment = try parsedPayload(.increment, request: [
-            "command": "increment",
-            "label": "Quantity",
-            "count": 3,
-        ])
-        guard case .accessibility(.increment(let incrementTarget, let incrementCount)) = increment else {
-            return XCTFail("Expected increment accessibility payload")
-        }
-        assertMatcherTarget(incrementTarget, label: "Quantity")
-        XCTAssertEqual(incrementCount.value, 3)
-
-        let decrement = try parsedPayload(.decrement, request: [
-            "command": "decrement",
-            "label": "Quantity",
-            "count": 2,
-        ])
-        guard case .accessibility(.decrement(let decrementTarget, let decrementCount)) = decrement else {
-            return XCTFail("Expected decrement accessibility payload")
-        }
-        assertMatcherTarget(decrementTarget, label: "Quantity")
-        XCTAssertEqual(decrementCount.value, 2)
-    }
-
-    @ButtonHeistActor
-    func testCustomActionRequestDecodesTypedAction() async throws {
-        let payload = try parsedPayload(.performCustomAction, request: [
-            "command": "perform_custom_action",
-            "heistId": "card",
-            "action": "Dismiss",
-        ])
-
-        guard case .accessibility(.performCustomAction(let target, let count)) = payload else {
-            return XCTFail("Expected perform_custom_action accessibility payload")
-        }
-        XCTAssertEqual(target.elementTarget, .heistId("card"))
-        XCTAssertEqual(target.actionName, "Dismiss")
-        XCTAssertNil(count.value)
-    }
-
-    @ButtonHeistActor
-    func testCustomActionRequestDecodesContainerTarget() async throws {
-        let payload = try parsedPayload(.performCustomAction, request: [
-            "command": "perform_custom_action",
-            "container": ["stableId": "semantic_actions__actions"],
-            "action": "Dismiss",
-        ])
-
-        guard case .accessibility(.performCustomAction(let target, _)) = payload else {
-            return XCTFail("Expected perform_custom_action accessibility payload")
-        }
-        XCTAssertEqual(target.containerTarget?.stableId, "semantic_actions__actions")
-        XCTAssertEqual(target.actionName, "Dismiss")
-    }
-
-    @ButtonHeistActor
-    func testCustomActionRequestDecodesContainerOrdinalTarget() async throws {
-        let payload = try parsedPayload(.performCustomAction, request: [
-            "command": "perform_custom_action",
-            "container": ["type": "semanticGroup"],
-            "ordinal": 1,
-            "action": "Dismiss",
-        ])
-
-        guard case .accessibility(.performCustomAction(let target, _)) = payload else {
-            return XCTFail("Expected perform_custom_action accessibility payload")
-        }
-        XCTAssertNil(target.elementTarget)
-        XCTAssertEqual(target.containerTarget?.type, .semanticGroup)
-        XCTAssertEqual(target.containerOrdinal, 1)
-        XCTAssertEqual(target.actionName, "Dismiss")
-    }
-
-    @ButtonHeistActor
     func testRotorRequestDecodesFlatCursorShape() async throws {
         let payload = try parsedPayload(.rotor, request: [
             "command": "rotor",
@@ -229,15 +155,6 @@ final class ElementActionRequestPayloadTests: XCTestCase {
         await assertExecutionError(
             ["command": "activate", "identifier": "counter", "action": "increment", "count": 0],
             contains: "schema validation failed for count: observed integer 0; expected integer in 1...100"
-        )
-    }
-
-    @ButtonHeistActor
-    func testCustomActionMissingActionDiagnostic() async {
-        assertParseError(
-            .performCustomAction,
-            request: ["command": "perform_custom_action", "identifier": "card"],
-            equals: "schema validation failed for action: observed missing; expected string"
         )
     }
 

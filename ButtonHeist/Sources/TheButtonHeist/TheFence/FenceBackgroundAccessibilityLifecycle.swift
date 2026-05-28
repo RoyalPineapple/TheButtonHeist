@@ -98,7 +98,7 @@ final class FenceBackgroundAccessibilityLifecycle {
         )?
         for pendingTrace in history.pendingTraces(startingAt: startIndex) {
             let trace = pendingTrace.trace
-            guard trace.backgroundDelta != nil else { continue }
+            guard trace.backgroundDeltaProjection != nil else { continue }
             let syntheticResult = ActionResult(
                 success: true,
                 method: .waitForChange,

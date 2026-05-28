@@ -153,7 +153,7 @@ final class SemanticActionability {
 
     func executeScrollToVisible(elementTarget: (any SemanticElementTarget)?) async -> TheSafecracker.InteractionResult {
         guard let elementTarget else {
-            return .failure(.scrollToVisible, message: "Element target required for \(ScrollMode.toVisible.canonicalCommand)")
+            return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
 
         stash.refresh()
@@ -185,12 +185,15 @@ final class SemanticActionability {
         deallocatedBoundary: String,
         allowingStaleRefresh: Bool = true
     ) async -> SemanticActionabilityResult {
+        guard let executableTarget = normalizedTarget.executableTarget else {
+            return .failed(.notFound(normalizedTarget.validationFailureMessage))
+        }
         if let preparationFailure = await prepareActionability(for: normalizedTarget) {
             return .failed(preparationFailure)
         }
 
         let resolved: TheStash.ResolvedTarget
-        switch stash.resolveVisibleTarget(normalizedTarget.executableTarget) {
+        switch stash.resolveVisibleTarget(executableTarget) {
         case .resolved(let target):
             resolved = target
         case .notFound(let diagnostics):
@@ -316,9 +319,12 @@ final class SemanticActionability {
     private func prepareActionability(
         for normalizedTarget: TheStash.NormalizedTarget
     ) async -> SemanticActionabilityFailure? {
+        guard let executableTarget = normalizedTarget.executableTarget else {
+            return .notFound(normalizedTarget.validationFailureMessage)
+        }
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
-        switch stash.resolveTarget(normalizedTarget.executableTarget) {
+        switch stash.resolveTarget(executableTarget) {
         case .resolved(let semanticTarget):
             let reveal = stash.executeSemanticRevealPlan(for: semanticTarget.screenElement)
             if case .failed = reveal {
@@ -452,10 +458,6 @@ final class SemanticActionability {
                 allowingStaleRefresh: false
             )
         }
-    }
-
-    func ensureFirstResponderOnScreen() async {
-        _ = await makeFirstResponderActionable(method: .editAction)
     }
 
     func makeFirstResponderActionable(method: ActionMethod) async -> SemanticActionabilityFailure? {

@@ -139,17 +139,6 @@ final class TheHandoffMessageTests: XCTestCase {
         XCTAssertEqual(approvedToken, "new-token")
     }
 
-    @ButtonHeistActor
-    func testAuthApprovedNilToken() async {
-        let handoff = TheHandoff()
-        handoff.token = "old"
-
-        handoff.handleServerMessage(.authApproved(AuthApprovedPayload(token: nil)),
-                                    requestId: nil)
-
-        XCTAssertNil(handoff.token)
-    }
-
     // MARK: - .sessionLocked
 
     @ButtonHeistActor
@@ -491,7 +480,11 @@ final class TheHandoffMessageTests: XCTestCase {
             deviceName: "iPhone",
             systemVersion: "17.0",
             screenWidth: 390,
-            screenHeight: 844
+            screenHeight: 844,
+            instanceId: "test-session",
+            instanceIdentifier: "test",
+            listeningPort: 49152,
+            tlsActive: true
         )
     }
 
@@ -521,7 +514,8 @@ final class TheHandoffMessageTests: XCTestCase {
             pngData: "base64png",
             width: 390,
             height: 844,
-            timestamp: Date(timeIntervalSince1970: 5_678)
+            timestamp: Date(timeIntervalSince1970: 5_678),
+            interface: Interface(timestamp: Date(timeIntervalSince1970: 5_678), tree: [])
         )
     }
 

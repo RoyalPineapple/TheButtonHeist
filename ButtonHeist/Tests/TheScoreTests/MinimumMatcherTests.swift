@@ -35,12 +35,12 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(derived["button_submit"]?.matcher, ElementMatcher(label: "Submit", traits: [.button]))
     }
 
-    func testBuildForSingleElementUsesCaptureMembershipAndUniqueness() {
+    func testBuildForSingleElementUsesCaptureMembershipAndUniqueness() throws {
         let target = makeElement(heistId: "submit", label: "Submit", traits: [.button])
         let duplicateLabel = makeElement(heistId: "heading", label: "Submit", traits: [.header])
         let capture = makeCapture([target, duplicateLabel])
 
-        let minimumMatcher = MinimumMatcher.build(element: target, in: capture)
+        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: target, in: capture))
 
         XCTAssertEqual(minimumMatcher.element, target)
         XCTAssertEqual(minimumMatcher.matcher, ElementMatcher(label: "Submit", traits: [.button]))
@@ -48,13 +48,13 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(resolve(minimumMatcher, in: capture), target)
     }
 
-    func testBuildForElementOutsideCaptureAppendsElementToUniquenessUniverse() {
+    func testBuildForElementOutsideCaptureAppendsElementToUniquenessUniverse() throws {
         let externalElement = makeElement(heistId: "external", label: "External", traits: [.button])
         let capture = makeCapture([
             makeElement(heistId: "save", label: "Save", traits: [.button]),
         ])
 
-        let minimumMatcher = MinimumMatcher.build(element: externalElement, in: capture)
+        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: externalElement, in: capture))
 
         XCTAssertEqual(minimumMatcher.element, externalElement)
         XCTAssertEqual(minimumMatcher.matcher, ElementMatcher(label: "External"))
@@ -62,13 +62,13 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertNil(resolve(minimumMatcher, in: capture))
     }
 
-    func testFreshPassResolvesNewConflictIntroducedByMutatedCapture() {
+    func testFreshPassResolvesNewConflictIntroducedByMutatedCapture() throws {
         let originalTarget = makeElement(heistId: "save", label: "Save", traits: [.button])
         let originalCapture = makeCapture([
             originalTarget,
             makeElement(heistId: "cancel", label: "Cancel", traits: [.button]),
         ])
-        let originalMatcher = MinimumMatcher.build(element: originalTarget, in: originalCapture)
+        let originalMatcher = try XCTUnwrap(MinimumMatcher.build(element: originalTarget, in: originalCapture))
 
         let mutatedTarget = makeElement(heistId: "save", label: "Save", identifier: "primary.save", traits: [.button])
         let newConflict = makeElement(heistId: "secondary_save", label: "Save", traits: [.button])
@@ -77,23 +77,23 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(
             mutatedCapture.interface.elements.filter { $0.matches(originalMatcher.matcher) }.count,
             2,
-            "The old matcher should become ambiguous after the capture mutates."
+            "The prior matcher should become ambiguous after the capture mutates."
         )
 
-        let repairedMatcher = MinimumMatcher.build(element: mutatedTarget, in: mutatedCapture)
+        let repairedMatcher = try XCTUnwrap(MinimumMatcher.build(element: mutatedTarget, in: mutatedCapture))
 
         XCTAssertEqual(repairedMatcher.matcher, ElementMatcher(identifier: "primary.save"))
         XCTAssertNil(repairedMatcher.ordinal)
         XCTAssertEqual(resolve(repairedMatcher, in: mutatedCapture), mutatedTarget)
     }
 
-    func testStatePredicatesAreUsedBeforeOrdinal() {
+    func testStatePredicatesAreUsedBeforeOrdinal() throws {
         let selected = makeElement(heistId: "primary_save", label: "Save", traits: [.button, .selected])
         let unselected = makeElement(heistId: "secondary_save", label: "Save", traits: [.button])
         let capture = makeCapture([selected, unselected])
 
-        let selectedMatcher = MinimumMatcher.build(element: selected, in: capture)
-        let unselectedMatcher = MinimumMatcher.build(element: unselected, in: capture)
+        let selectedMatcher = try XCTUnwrap(MinimumMatcher.build(element: selected, in: capture))
+        let unselectedMatcher = try XCTUnwrap(MinimumMatcher.build(element: unselected, in: capture))
 
         XCTAssertEqual(selectedMatcher.matcher, ElementMatcher(label: "Save", traits: [.button, .selected]))
         XCTAssertNil(selectedMatcher.ordinal)
@@ -105,16 +105,16 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertNil(unselectedMatcher.ordinal)
     }
 
-    func testOrdinalIsOnlyUsedAfterAllMatcherPredicatesFailToDisambiguate() {
+    func testOrdinalIsOnlyUsedAfterAllMatcherPredicatesFailToDisambiguate() throws {
         let stableTarget = makeElement(heistId: "primary_save", label: "Save", identifier: "primary.save", traits: [.button])
         let sameLabel = makeElement(heistId: "secondary_save", label: "Save", traits: [.button])
         let firstAmbiguous = makeElement(heistId: "item_1", label: "Item", traits: [.staticText])
         let secondAmbiguous = makeElement(heistId: "item_2", label: "Item", traits: [.staticText])
         let capture = makeCapture([stableTarget, sameLabel, firstAmbiguous, secondAmbiguous])
 
-        let stableMatcher = MinimumMatcher.build(element: stableTarget, in: capture)
-        let firstOrdinalMatcher = MinimumMatcher.build(element: firstAmbiguous, in: capture)
-        let secondOrdinalMatcher = MinimumMatcher.build(element: secondAmbiguous, in: capture)
+        let stableMatcher = try XCTUnwrap(MinimumMatcher.build(element: stableTarget, in: capture))
+        let firstOrdinalMatcher = try XCTUnwrap(MinimumMatcher.build(element: firstAmbiguous, in: capture))
+        let secondOrdinalMatcher = try XCTUnwrap(MinimumMatcher.build(element: secondAmbiguous, in: capture))
 
         XCTAssertEqual(stableMatcher.matcher, ElementMatcher(identifier: "primary.save"))
         XCTAssertNil(stableMatcher.ordinal, "Identifier should disambiguate before ordinal selection.")
@@ -124,7 +124,7 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(secondOrdinalMatcher.ordinal, 1)
     }
 
-    func testBuildSkipsUUIDIdentifiers() {
+    func testBuildSkipsUUIDIdentifiers() throws {
         let runtimeIdentifier = "SwiftUI.550E8400-E29B-41D4-A716-446655440000.42"
         let target = makeElement(heistId: "proceed", label: "Proceed", identifier: runtimeIdentifier, traits: [.button])
         let capture = makeCapture([
@@ -132,21 +132,21 @@ final class MinimumMatcherTests: XCTestCase {
             makeElement(heistId: "cancel", label: "Cancel", traits: [.button]),
         ])
 
-        let minimumMatcher = MinimumMatcher.build(element: target, in: capture)
+        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: target, in: capture))
 
         XCTAssertNil(minimumMatcher.matcher.identifier)
         XCTAssertEqual(minimumMatcher.matcher.label, "Proceed")
         XCTAssertNil(minimumMatcher.ordinal)
     }
 
-    func testBuildOmitsStateTraitsWhenSemanticTraitsAreUnique() {
+    func testBuildOmitsStateTraitsWhenSemanticTraitsAreUnique() throws {
         let target = makeElement(heistId: "toggle", label: "Toggle", traits: [.button, .selected])
         let capture = makeCapture([
             target,
             makeElement(heistId: "heading", label: "Toggle", traits: [.staticText]),
         ])
 
-        let minimumMatcher = MinimumMatcher.build(element: target, in: capture)
+        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: target, in: capture))
 
         XCTAssertEqual(minimumMatcher.matcher.label, "Toggle")
         XCTAssertEqual(minimumMatcher.matcher.traits, [.button])
@@ -168,44 +168,33 @@ final class MinimumMatcherTests: XCTestCase {
         XCTAssertEqual(resolve(matchers[1], in: capture), second)
     }
 
-    func testBuildUsesValueBeforeStateTraits() {
+    func testBuildUsesValueBeforeStateTraits() throws {
         let first = makeElement(heistId: "mode_1", label: "Mode", value: "A", traits: [.button, .selected])
         let second = makeElement(heistId: "mode_2", label: "Mode", value: "B", traits: [.button, .selected])
         let capture = makeCapture([first, second])
 
-        let minimumMatcher = MinimumMatcher.build(element: first, in: capture)
+        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: first, in: capture))
 
         XCTAssertEqual(minimumMatcher.matcher, ElementMatcher(label: "Mode", value: "A", traits: [.button]))
         XCTAssertNil(minimumMatcher.ordinal)
         XCTAssertEqual(resolve(minimumMatcher, in: capture), first)
     }
 
-    func testAnonymousElementsUseOrdinalSelectorAcrossTheCapture() {
+    func testAnonymousElementsDoNotProduceDurableMatchers() {
         let first = makeElement(heistId: "anonymous_1")
         let named = makeElement(heistId: "save", label: "Save", traits: [.button])
         let second = makeElement(heistId: "anonymous_2")
         let capture = makeCapture([first, named, second])
 
-        let firstMatcher = MinimumMatcher.build(element: first, in: capture)
-        let secondMatcher = MinimumMatcher.build(element: second, in: capture)
-
-        XCTAssertFalse(firstMatcher.matcher.hasPredicates)
-        XCTAssertEqual(firstMatcher.ordinal, 0)
-        XCTAssertEqual(resolve(firstMatcher, in: capture), first)
-        XCTAssertFalse(secondMatcher.matcher.hasPredicates)
-        XCTAssertEqual(secondMatcher.ordinal, 2)
-        XCTAssertEqual(resolve(secondMatcher, in: capture), second)
+        XCTAssertNil(MinimumMatcher.build(element: first, in: capture))
+        XCTAssertNil(MinimumMatcher.build(element: second, in: capture))
     }
 
-    func testSingleAnonymousElementStillCarriesOrdinalForPlayback() {
+    func testSingleAnonymousElementDoesNotProduceDurableMatcher() {
         let element = makeElement(heistId: "anonymous")
         let capture = makeCapture([element])
 
-        let minimumMatcher = MinimumMatcher.build(element: element, in: capture)
-
-        XCTAssertFalse(minimumMatcher.matcher.hasPredicates)
-        XCTAssertEqual(minimumMatcher.ordinal, 0)
-        XCTAssertEqual(resolve(minimumMatcher, in: capture), element)
+        XCTAssertNil(MinimumMatcher.build(element: element, in: capture))
     }
 
     func testDescriptionComposesElementMatcherAndOrdinal() {

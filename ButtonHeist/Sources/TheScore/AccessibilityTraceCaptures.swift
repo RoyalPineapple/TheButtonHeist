@@ -48,7 +48,7 @@ public extension AccessibilityTrace {
             hash = try container.decode(String.self, forKey: .hash)
             parentHash = try container.decodeIfPresent(String.self, forKey: .parentHash)
             interface = try container.decode(Interface.self, forKey: .interface)
-            context = try container.decodeIfPresent(Context.self, forKey: .context) ?? .empty
+            context = try container.decode(Context.self, forKey: .context)
             transition = try container.decodeIfPresent(Transition.self, forKey: .transition) ?? .empty
         }
 
@@ -162,6 +162,21 @@ public extension AccessibilityTrace {
         public var afterHash: String { after.hash }
     }
 
+    enum IntegrityIssue: Sendable, Equatable {
+        case captureHashMismatch(
+            index: Int,
+            sequence: Int,
+            recordedHash: String,
+            computedHash: String
+        )
+        case parentHashMismatch(
+            index: Int,
+            sequence: Int,
+            recordedParentHash: String?,
+            expectedParentHash: String?
+        )
+    }
+
     struct Context: Codable, Sendable, Equatable, Hashable {
         public static let empty = Context()
 
@@ -216,7 +231,7 @@ public extension AccessibilityTrace {
         }
     }
 
-    /// Compatibility view over an accessibility capture.
+    /// Receipt projection over an accessibility capture.
     struct Receipt: Codable, Sendable, Equatable {
         public let capture: Capture
 

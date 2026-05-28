@@ -322,7 +322,11 @@ final class TargetConfigTests: XCTestCase {
         deviceName: "MockDevice",
         systemVersion: "18.0",
         screenWidth: 393,
-        screenHeight: 852
+        screenHeight: 852,
+        instanceId: "mock-session",
+        instanceIdentifier: "mock-server",
+        listeningPort: 49152,
+        tlsActive: true
     )
 
     @ButtonHeistActor

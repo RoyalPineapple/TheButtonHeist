@@ -87,8 +87,8 @@ final class TLSIdentityTests: XCTestCase {
         let label = "com.buttonheist.tls.test.\(UUID().uuidString)"
         defer { try? TLSIdentity.delete(label: label) }
 
-        let first = try TLSIdentity.getOrCreate(label: label)
-        let second = try TLSIdentity.getOrCreate(label: label)
+        let first = try makeKeychainIdentityOrSkip(label: label)
+        let second = try makeKeychainIdentityOrSkip(label: label)
         XCTAssertEqual(first.fingerprint, second.fingerprint,
                        "Same label should return the same identity")
     }
@@ -96,17 +96,53 @@ final class TLSIdentityTests: XCTestCase {
     func testDeleteRemovesIdentity() throws {
         let label = "com.buttonheist.tls.test.\(UUID().uuidString)"
 
-        let first = try TLSIdentity.getOrCreate(label: label)
-        try TLSIdentity.delete(label: label)
-        let second = try TLSIdentity.getOrCreate(label: label)
+        let first = try makeKeychainIdentityOrSkip(label: label)
+        do {
+            try TLSIdentity.delete(label: label)
+        } catch {
+            try skipIfKeychainUnavailable(error)
+            throw error
+        }
+        let second = try makeKeychainIdentityOrSkip(label: label)
         XCTAssertNotEqual(first.fingerprint, second.fingerprint,
                           "After delete, a new identity should be generated")
-        try TLSIdentity.delete(label: label)
+        do {
+            try TLSIdentity.delete(label: label)
+        } catch {
+            try skipIfKeychainUnavailable(error)
+            throw error
+        }
     }
 
     func testEphemeralIdentityProducesValidTLSParameters() async throws {
-        let identity = try TLSIdentity.createEphemeral()
+        let identity = try makeEphemeralIdentityOrSkip()
         let params = await identity.makeTLSParameters()
         XCTAssertNotNil(params, "makeTLSParameters must succeed for valid ephemeral identity")
     }
+
+    private func makeKeychainIdentityOrSkip(label: String) throws -> TLSIdentity {
+        do {
+            return try TLSIdentity.getOrCreate(label: label)
+        } catch {
+            try skipIfKeychainUnavailable(error)
+            throw error
+        }
+    }
+}
+
+func makeEphemeralIdentityOrSkip() throws -> TLSIdentity {
+    do {
+        return try TLSIdentity.createEphemeral()
+    } catch {
+        try skipIfKeychainUnavailable(error)
+        throw error
+    }
+}
+
+func skipIfKeychainUnavailable(_ error: Error) throws {
+    guard case TLSIdentityError.keychainError(let status) = error,
+          status == errSecMissingEntitlement || status == errSecWrPerm else {
+        return
+    }
+    throw XCTSkip("Keychain identity storage is unavailable in this test runner (OSStatus \(status)).")
 }

@@ -9,9 +9,7 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
     public static let currentVersion = 2
 
-    /// Version from the decoded file. Not enforced at decode time — a playback
-    /// with `version: 99` decodes cleanly; callers that care must compare
-    /// against `HeistPlayback.currentVersion` before replay.
+    /// Current heist file format version.
     public let version: Int
     /// ISO 8601 timestamp of when the recording was made.
     public let recorded: Date
@@ -30,6 +28,45 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
         self.recorded = recorded
         self.app = app
         self.steps = steps
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case version
+        case recorded
+        case app
+        case steps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownPlaybackKeys(decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedVersion = try container.decode(Int.self, forKey: .version)
+        guard decodedVersion == Self.currentVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .version,
+                in: container,
+                debugDescription: "Unsupported heist file version \(decodedVersion). " +
+                    "This Button Heist build supports version \(Self.currentVersion). " +
+                    "Re-record the heist with the current format."
+            )
+        }
+
+        version = decodedVersion
+        recorded = try container.decode(Date.self, forKey: .recorded)
+        app = try container.decode(String.self, forKey: .app)
+        steps = try container.decode([HeistEvidence].self, forKey: .steps)
+    }
+
+    private static func rejectUnknownPlaybackKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown heist playback field \"\(unknownKey.stringValue)\""
+        ))
     }
 }
 
@@ -58,7 +95,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     /// iOS + macOS.
     public let command: String
     /// Element matcher fields — nil means the command doesn't target an element.
-    /// An empty matcher with `ordinal` is the last-resort selector for anonymous elements.
+    /// Ordinal only disambiguates a non-empty matcher.
     public let target: ElementMatcher?
     /// 0-based selection index when the matcher is ambiguous (multiple elements
     /// share the same label/traits). Nil when the matcher uniquely identifies the element.
@@ -118,7 +155,14 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             )
         }
         ordinal = decodedOrdinal
-        target = matcher.nonEmpty ?? (ordinal != nil ? matcher : nil)
+        if decodedOrdinal != nil, matcher.nonEmpty == nil {
+            throw DecodingError.dataCorruptedError(
+                forKey: .ordinal,
+                in: container,
+                debugDescription: "ordinal only disambiguates matcher results; playback steps require matcher fields"
+            )
+        }
+        target = matcher.nonEmpty
 
         recorded = try container.decodeIfPresent(RecordedMetadata.self, forKey: .recorded)
 
@@ -160,6 +204,12 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
                 Heist playback target matcher must not contain heistId; use matcher fields for durable \
                 playback identity and _recorded.heistId for metadata
                 """
+            ))
+        }
+        if ordinal != nil, target?.nonEmpty == nil {
+            throw EncodingError.invalidValue(self, .init(
+                codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: "ordinal")],
+                debugDescription: "ordinal only disambiguates matcher results; playback steps require matcher fields"
             ))
         }
 
@@ -207,7 +257,7 @@ extension HeistEvidence: CustomStringConvertible {
 
 // MARK: - Heist Value
 
-/// A JSON-compatible value type for command arguments.
+/// A JSON-encodable value type for command arguments.
 /// Supports the value types that TheFence.execute(request:) expects.
 public enum HeistValue: Codable, Sendable, Equatable {
     case string(String)
@@ -296,7 +346,7 @@ public struct RecordedMetadata: Codable, Sendable, Equatable {
     public let expectation: ExpectationResult?
     /// Compact accessibility delta projection derived from the recorded trace.
     public var accessibilityDelta: AccessibilityTrace.Delta? {
-        accessibilityTrace?.captureEndpointDelta
+        accessibilityTrace?.endpointDeltaProjection
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {

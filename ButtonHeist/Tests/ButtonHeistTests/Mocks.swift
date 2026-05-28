@@ -236,12 +236,48 @@ final class MockConnection: TransportReachabilityConnecting {
         case .error(let error):
             return ActionResult(
                 success: false,
-                method: .unsupportedCommand,
+                method: actionMethod(for: command),
                 message: error.message,
                 errorKind: .general
             )
         default:
             return ActionResult(success: true, method: .activate)
+        }
+    }
+
+    private func actionMethod(for command: ClientMessage) -> ActionMethod {
+        switch command {
+        case .activate: return .activate
+        case .increment: return .increment
+        case .decrement: return .decrement
+        case .performCustomAction: return .customAction
+        case .rotor: return .rotor
+        case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .getPasteboard: return .getPasteboard
+        case .resignFirstResponder: return .resignFirstResponder
+        case .oneFingerTap: return .syntheticTap
+        case .longPress: return .syntheticLongPress
+        case .swipe: return .syntheticSwipe
+        case .drag: return .syntheticDrag
+        case .pinch: return .syntheticPinch
+        case .rotate: return .syntheticRotate
+        case .twoFingerTap: return .syntheticTwoFingerTap
+        case .drawPath, .drawBezier: return .syntheticDrawPath
+        case .typeText: return .typeText
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
+        case .scrollToEdge: return .scrollToEdge
+        case .waitForIdle: return .waitForIdle
+        case .waitFor: return .waitFor
+        case .waitForChange: return .waitForChange
+        case .batchExecutionPlan: return .batchExecutionPlan
+        case .explore: return .explore
+        case .clientHello, .authenticate, .requestInterface,
+             .ping, .status, .requestScreen,
+             .startRecording, .stopRecording:
+            return .batchExecutionPlan
         }
     }
 }

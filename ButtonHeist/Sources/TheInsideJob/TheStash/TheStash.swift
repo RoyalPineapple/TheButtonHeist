@@ -13,7 +13,7 @@ import AccessibilitySnapshotParser
 /// wire-conversion facades over that value; parsing, diagnostics, capture,
 /// recording, response memory, and UIKit actions are boundary transforms or
 /// owned by other crew members. `currentScreen.knownInterface` is targetable
-/// semantic state; `currentScreen.liveInterface` is the latest parse
+/// semantic state; `currentScreen.liveCapture` is the latest parse
 /// used for geometry, live objects, and scrolling. Callers call `parse()` to
 /// obtain a Screen value, then decide when to write it back via
 /// `currentScreen = ...`. The exploration accumulator lives in TheBrains as
@@ -55,17 +55,17 @@ final class TheStash {
 
     /// Hierarchy from the most recent parse. Proxy for call-site clarity —
     /// reads, matchers, scroll dispatch, and tab-bar geometry all need it
-    /// without spelling out `currentScreen.liveInterface.hierarchy`
+    /// without spelling out `currentScreen.liveCapture.hierarchy`
     /// every time.
     var currentHierarchy: [AccessibilityHierarchy] {
-        currentScreen.liveInterface.hierarchy
+        currentScreen.liveCapture.hierarchy
     }
 
     /// Scrollable containers paired with their backing UIView.
     /// Unwraps the weak ref wrapper for call sites that need a live UIView.
     var scrollableContainerViews: [AccessibilityContainer: UIView] {
         var result: [AccessibilityContainer: UIView] = [:]
-        for (container, ref) in currentScreen.liveInterface.scrollableContainerViews {
+        for (container, ref) in currentScreen.liveCapture.scrollableContainerViews {
             if let view = ref.view {
                 result[container] = view
             }
@@ -91,7 +91,7 @@ final class TheStash {
 
     /// HeistId of the element whose live object is currently first responder.
     var firstResponderHeistId: HeistId? {
-        currentScreen.liveInterface.firstResponderHeistId
+        currentScreen.liveCapture.firstResponderHeistId
     }
 
     /// Screen name from the current screen (first header element by traversal order).

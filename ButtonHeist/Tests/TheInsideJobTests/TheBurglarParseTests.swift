@@ -75,7 +75,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let values = semanticGroupValues(in: result.liveInterface.hierarchy)
+        let values = semanticGroupValues(in: result.liveCapture.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: \(levelA.rawValue)"))
         XCTAssertTrue(values.contains("windowLevel: \(levelB.rawValue)"))
     }
@@ -111,7 +111,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let labels = result.liveInterface.hierarchy.sortedElements.compactMap(\.label)
+        let labels = result.liveCapture.hierarchy.sortedElements.compactMap(\.label)
         XCTAssertTrue(
             labels.contains("Window \(Int(UIWindow.Level.normal.rawValue))"),
             "Elevated non-modal windows should not hide the base app window"
@@ -144,7 +144,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let values = semanticGroupValues(in: result.liveInterface.hierarchy)
+        let values = semanticGroupValues(in: result.liveCapture.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.alert.rawValue)"))
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
         XCTAssertTrue(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
@@ -172,7 +172,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let values = semanticGroupValues(in: result.liveInterface.hierarchy)
+        let values = semanticGroupValues(in: result.liveCapture.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.alert.rawValue)"))
         XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
     }
@@ -198,8 +198,8 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let labels = result.liveInterface.hierarchy.sortedElements.compactMap(\.label)
-        let values = semanticGroupValues(in: result.liveInterface.hierarchy)
+        let labels = result.liveCapture.hierarchy.sortedElements.compactMap(\.label)
+        let values = semanticGroupValues(in: result.liveCapture.hierarchy)
         XCTAssertTrue(labels.contains("Window \(Int(UIWindow.Level.alert.rawValue))"))
         XCTAssertTrue(labels.contains("Modal Boundary"))
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
@@ -229,7 +229,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let values = semanticGroupValues(in: result.liveInterface.hierarchy)
+        let values = semanticGroupValues(in: result.liveCapture.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: 2000.0"))
         XCTAssertFalse(values.contains("windowLevel: 100.0"))
         XCTAssertFalse(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
@@ -261,7 +261,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let values = semanticGroupValues(in: result.liveInterface.hierarchy)
+        let values = semanticGroupValues(in: result.liveCapture.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: 2000.0"))
         XCTAssertTrue(values.contains("windowLevel: 1999.0"))
         XCTAssertTrue(values.contains("windowLevel: \(modalLevel.rawValue)"))
@@ -291,7 +291,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let values = semanticGroupValues(in: result.liveInterface.hierarchy)
+        let values = semanticGroupValues(in: result.liveCapture.hierarchy)
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.alert.rawValue)"))
         XCTAssertTrue(values.contains("windowLevel: \(UIWindow.Level.normal.rawValue)"))
         XCTAssertFalse(values.contains("windowLevel: \((UIWindow.Level.normal - 1).rawValue)"))
@@ -334,7 +334,7 @@ final class TheBurglarParseTests: XCTestCase {
             return
         }
 
-        let labels = result.liveInterface.hierarchy.sortedElements.compactMap(\.label)
+        let labels = result.liveCapture.hierarchy.sortedElements.compactMap(\.label)
         XCTAssertTrue(
             labels.contains("Popover Action"),
             "Popover content presented as a sibling after the dismiss region should be parsed"

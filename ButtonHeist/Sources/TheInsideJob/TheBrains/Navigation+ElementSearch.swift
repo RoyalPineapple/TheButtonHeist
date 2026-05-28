@@ -18,15 +18,17 @@ extension Navigation {
 
     func executeElementSearch(
         elementTarget: (any SemanticElementTarget)?,
-        direction: ScrollSearchDirection?
+        direction: ScrollSearchDirection
     ) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = elementTarget else {
-            return .failure(.elementSearch, message: "Element target required for \(ScrollMode.search.canonicalCommand)")
+            return .failure(.elementSearch, message: "Element target required for element_search")
         }
-        let searchDirection = direction ?? .down
+        let searchDirection = direction
         let requestedAxis = Self.requiredAxis(for: searchDirection)
         let normalizedTarget = stash.normalizeTarget(searchTarget)
-        let executableSearchTarget = normalizedTarget.executableTarget
+        guard let executableSearchTarget = normalizedTarget.executableTarget else {
+            return .failure(.elementSearch, message: normalizedTarget.validationFailureMessage)
+        }
 
         var candidates = scrollSearchCandidates(requiredAxis: requestedAxis)
         if let seed = scrollSearchSeedCandidate(for: normalizedTarget, requiredAxis: requestedAxis),

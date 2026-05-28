@@ -166,7 +166,7 @@ struct SemanticScreen: Equatable {
             value: element.value,
             identifier: element.identifier,
             hint: element.hint,
-            traits: element.traits.namesIncludingUnknownBits,
+            traits: element.traits.heistTraitNames,
             respondsToUserInteraction: element.respondsToUserInteraction,
             customContent: customContent,
             rotors: element.customRotors.map { $0.name }.filter { !$0.isEmpty }

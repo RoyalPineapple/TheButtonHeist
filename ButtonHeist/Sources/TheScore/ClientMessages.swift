@@ -65,34 +65,34 @@ public enum ClientMessage: Codable, Sendable {
     /// Move through a custom accessibility rotor.
     case rotor(RotorTarget)
 
-    // MARK: - Touch Gesture Commands
+    // MARK: - Gesture Commands
 
     /// Tap at a point or element
-    case touchTap(TouchTapTarget)
+    case oneFingerTap(TapTarget)
 
     /// Long press at a point or element
-    case touchLongPress(LongPressTarget)
+    case longPress(LongPressTarget)
 
     /// Swipe from one point to another
-    case touchSwipe(SwipeTarget)
+    case swipe(SwipeTarget)
 
     /// Drag from one point to another
-    case touchDrag(DragTarget)
+    case drag(DragTarget)
 
     /// Pinch/zoom gesture
-    case touchPinch(PinchTarget)
+    case pinch(PinchTarget)
 
     /// Rotation gesture
-    case touchRotate(RotateTarget)
+    case rotate(RotateTarget)
 
     /// Two-finger tap
-    case touchTwoFingerTap(TwoFingerTapTarget)
+    case twoFingerTap(TwoFingerTapTarget)
 
     /// Draw along a path (sequence of points)
-    case touchDrawPath(DrawPathTarget)
+    case drawPath(DrawPathTarget)
 
     /// Draw along a bezier curve (sampled to polyline server-side)
-    case touchDrawBezier(DrawBezierTarget)
+    case drawBezier(DrawBezierTarget)
 
     /// Type text character-by-character by tapping keyboard keys
     case typeText(TypeTextTarget)
@@ -153,10 +153,9 @@ public enum ClientMessage: Codable, Sendable {
     /// Stop an in-progress recording
     case stopRecording
 
-    /// Canonical snake-case wire name for this message, suitable for log
-    /// output and command-name diagnostics. Stable across the codebase: the
-    /// same string the CLI accepts on argv and MCP tools advertise as their
-    /// command discriminator.
+    /// Canonical snake-case wire diagnostic name for this typed message.
+    /// Some messages are transport-only or internal execution plans, so this
+    /// is not necessarily a public CLI/MCP command name.
     public var canonicalName: String {
         switch self {
         case .clientHello: return "client_hello"
@@ -174,15 +173,15 @@ public enum ClientMessage: Codable, Sendable {
         case .setPasteboard: return "set_pasteboard"
         case .getPasteboard: return "get_pasteboard"
         case .resignFirstResponder: return "resign_first_responder"
-        case .touchTap: return "touch_tap"
-        case .touchLongPress: return "touch_long_press"
-        case .touchSwipe: return "touch_swipe"
-        case .touchDrag: return "touch_drag"
-        case .touchPinch: return "touch_pinch"
-        case .touchRotate: return "touch_rotate"
-        case .touchTwoFingerTap: return "touch_two_finger_tap"
-        case .touchDrawPath: return "touch_draw_path"
-        case .touchDrawBezier: return "touch_draw_bezier"
+        case .oneFingerTap: return "one_finger_tap"
+        case .longPress: return "long_press"
+        case .swipe: return "swipe"
+        case .drag: return "drag"
+        case .pinch: return "pinch"
+        case .rotate: return "rotate"
+        case .twoFingerTap: return "two_finger_tap"
+        case .drawPath: return "draw_path"
+        case .drawBezier: return "draw_bezier"
         case .typeText: return "type_text"
         case .scroll: return "scroll"
         case .scrollToVisible: return "scroll_to_visible"

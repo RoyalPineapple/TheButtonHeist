@@ -6,25 +6,25 @@ A quick orientation for anyone reviewing the ButtonHeist codebase for the first 
 
 Button Heist lets AI agents (and humans) inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to tap buttons, read UI hierarchies, type text, swipe, scroll, take screenshots, and record video — all without manual interaction.
 
-## The 5-Command Happy Path
+## Common Starter Flow
 
-Most usage boils down to five CLI commands:
+Most usage starts with this CLI loop:
 
 ```bash
-buttonheist list                              # Find running apps
+buttonheist list_devices                      # Find running apps
 buttonheist get_interface                     # Read the UI element tree
 buttonheist activate --identifier "loginBtn"  # Tap a control
 buttonheist type_text "hello@example.com"     # Type into a field
 buttonheist get_screen                        # Capture the screen
 ```
 
-Everything else builds on this core loop.
+The generated command reference is the source of truth for the full command contract.
 
 ## Why So Many Commands?
 
-The `TheFence.Command` enum is the source of truth for the public command contract; the CLI has grouped top-level subcommands, and MCP projects its tools from the same Fence-owned contract. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll modes, text editing, recording, etc.).
+The `TheFence.Command` enum is the source of truth for the public command contract; CLI and MCP project from the same Fence-owned contract. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll operations, text editing, recording, etc.).
 
-Both interfaces use the same **grouping strategy**: gesture variants fold into one surface (`gesture` in MCP, `touch` in CLI), scroll variants fold into `scroll`, and edit menu operations fold into `edit_action`. Common operations like `activate`, `type_text`, and `get_interface` stay top-level in both.
+Both interfaces expose canonical command names. Common operations like `activate`, `type_text`, `get_interface`, `swipe`, and `scroll_to_visible` stay top-level in both.
 
 ## TheFence and TheHandoff
 
@@ -35,10 +35,10 @@ This boundary exists so that **tests can inject mock connections** at the TheHan
 
 ## Why `activate` and `one_finger_tap` Both Exist
 
-- **`activate`** is the primary interaction command. It calls `accessibilityActivate()` first (the same path VoiceOver uses), then falls back to a synthetic tap. This works reliably across SwiftUI, UIKit, and custom controls.
-- **`one_finger_tap`** is a raw synthetic tap at exact coordinates. Use it for canvas-like UIs, maps, or other cases where accessibility activation doesn't apply.
+- **`activate`** is the primary interaction command. It resolves semantic identity, reveals the element when needed, acquires fresh accessibility geometry, then dispatches the primary activation policy. This abstracts viewport position across SwiftUI, UIKit, and custom controls.
+- **`one_finger_tap`** dispatches a synthetic tap after the same semantic actionability path when given an element target, or at explicit coordinates for canvas-like UIs, maps, and other coordinate surfaces.
 
-Rule of thumb: use `activate` for controls, `one_finger_tap` for coordinates.
+Rule of thumb: use `activate` for controls when accessibility activation applies, and use `one_finger_tap` when the intended product action is specifically a tap.
 
 ## Module Map
 
@@ -54,7 +54,7 @@ Both CLI and MCP are thin shells. All business logic lives in `TheFence` and bel
 
 ## Wire Protocol
 
-JSON-over-TLS request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`; envelopes carry `buttonHeistVersion` for exact handshake equality. Interface payloads use the canonical parser `AccessibilityHierarchy` plus Button Heist annotations, not a parallel flat element array. Runtime subscriptions are legacy unsupported messages. See `docs/WIRE-PROTOCOL.md` for the full spec.
+JSON-over-TLS request/response with `requestId` correlation via `RequestEnvelope`/`ResponseEnvelope`; envelopes carry `buttonHeistVersion` for exact handshake equality. Interface payloads use the canonical parser `AccessibilityHierarchy` plus Button Heist annotations, not a parallel flat element array. Runtime subscriptions are removed unsupported messages. See `docs/WIRE-PROTOCOL.md` for the full spec.
 
 ## Testing
 

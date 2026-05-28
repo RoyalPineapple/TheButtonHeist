@@ -70,7 +70,7 @@ final class TheFenceSecurityTests: XCTestCase {
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(), tree: []))
             case .requestScreen:
-                return .screen(ScreenPayload(pngData: "", width: 393, height: 852))
+                return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
             case .startRecording:
                 return .recordingStarted
             case .stopRecording:
@@ -144,7 +144,7 @@ final class TheFenceSecurityTests: XCTestCase {
     func testAllCatalogCommandsAreRouted() async {
         let (fence, _) = makeConnectedFence()
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
-        let skipCommands: Set<TheFence.Command> = [.help, .quit, .exit]
+        let skipCommands: Set<TheFence.Command> = [.help, .quit]
 
         for command in TheFence.Command.allCases where !skipCommands.contains(command) {
             do {

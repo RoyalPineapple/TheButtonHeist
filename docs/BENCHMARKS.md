@@ -31,10 +31,10 @@ The difference is visible in a single action. Here's what it looks like to tap "
 
 ← appearance | activate: screen changed
   23 elements
-  [0] appearance_header "Appearance" [header]
-  [1] system_button "System" [button, selected]
-  [2] dark_button "Dark" [button]
-  [3] purple_button "Purple" [button]
+  [0] appearance_header "Appearance" header
+  [1] system_button "System" button | selected
+  [2] dark_button "Dark" button
+  [3] purple_button "Purple" button
   ...
 ```
 

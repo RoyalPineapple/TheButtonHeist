@@ -2,6 +2,32 @@ import Foundation
 
 import TheScore
 
+extension TheFence.GesturePayload {
+
+    var clientMessage: ClientMessage {
+        switch self {
+        case .oneFingerTap(let payload):
+            return .oneFingerTap(payload.target)
+        case .longPress(let payload):
+            return .longPress(payload.target)
+        case .swipe(let payload):
+            return .swipe(payload.target)
+        case .drag(let payload):
+            return .drag(payload.target)
+        case .pinch(let payload):
+            return .pinch(payload.target)
+        case .rotate(let payload):
+            return .rotate(payload.target)
+        case .twoFingerTap(let payload):
+            return .twoFingerTap(payload.target)
+        case .drawPath(let payload):
+            return .drawPath(payload.target)
+        case .drawBezier(let payload):
+            return .drawBezier(payload.target)
+        }
+    }
+}
+
 extension TheFence {
 
     func decodeGestureRequestPayload(
@@ -17,7 +43,7 @@ extension TheFence {
     ) throws -> GesturePayload {
         switch command {
         case .oneFingerTap:
-            return .oneFingerTap(try decodeTouchTapGesturePayload(request))
+            return .oneFingerTap(try decodeTapGesturePayload(request))
         case .longPress:
             return .longPress(try decodeLongPressGesturePayload(request))
         case .swipe:
@@ -104,10 +130,9 @@ extension TheFence {
 
         func enumValue<E>(
             _ key: String,
-            as type: E.Type,
-            normalizedBy normalize: (String) -> String = { $0 }
+            as type: E.Type
         ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
-            try request.schemaEnum(key, as: type, normalizedBy: normalize)
+            try request.schemaEnum(key, as: type)
         }
 
         func requiredObjectArray(_ key: String) throws -> [GestureRequestObject] {
@@ -120,6 +145,10 @@ extension TheFence {
 
         fileprivate init(_ object: CommandArgumentObject) {
             self.object = object
+        }
+
+        func rejectUnknownKeys(_ allowedKeys: Set<String>, expected: String) throws {
+            try object.rejectUnknownKeys(allowed: allowedKeys, expected: expected)
         }
 
         func requiredNumber(_ key: String, field: String) throws -> Double {
@@ -198,7 +227,7 @@ extension TheFence {
         SchemaValidationError(field: field, observed: "mixed gesture target shapes", expected: expected)
     }
 
-    private func decodeTouchTapGesturePayload(_ request: GestureRequestInput) throws -> TouchTapGesturePayload {
+    private func decodeTapGesturePayload(_ request: GestureRequestInput) throws -> TapGesturePayload {
         let selection = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
@@ -207,7 +236,7 @@ extension TheFence {
             field: "x/y",
             missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
         )
-        return TouchTapGesturePayload(selection: selection)
+        return TapGesturePayload(selection: selection)
     }
 
     private func decodeLongPressGesturePayload(_ request: GestureRequestInput) throws -> LongPressGesturePayload {
@@ -229,7 +258,7 @@ extension TheFence {
             throw FenceError.invalidRequest("Unit-point swipe requires both start and end")
         }
         let elementTarget = try request.elementTarget(in: self)
-        let direction = try request.enumValue("direction", as: SwipeDirection.self) { $0.lowercased() }
+        let direction = try request.enumValue("direction", as: SwipeDirection.self)
         let startPoint = try decodeCoordinatePair(request: request, xKey: "startX", yKey: "startY", field: "startX/startY")
         let endPoint = try decodeCoordinatePair(request: request, xKey: "endX", yKey: "endY", field: "endX/endY")
         if start != nil || end != nil, request.hasAny("startX", "startY", "endX", "endY") {
@@ -259,7 +288,9 @@ extension TheFence {
         } else if let startPoint {
             startSelection = .coordinate(ScreenPoint(x: startPoint.x, y: startPoint.y))
         } else {
-            startSelection = .unspecified
+            throw FenceError.invalidRequest(
+                "Swipe requires a semantic target (heistId or matcher) or start coordinates (startX, startY)"
+            )
         }
         let endSelection: SwipeDestinationSelection
         if let direction {
@@ -267,7 +298,7 @@ extension TheFence {
         } else if let endPoint {
             endSelection = .coordinate(ScreenPoint(x: endPoint.x, y: endPoint.y))
         } else {
-            endSelection = .unspecified
+            throw FenceError.invalidRequest("Swipe requires end coordinates (endX, endY) or direction")
         }
         let selection = SwipeGestureSelection.point(
             start: startSelection,
@@ -349,7 +380,8 @@ extension TheFence {
             note: "at least 2 points"
         )
         let points = try pointsArray.enumerated().map { index, point -> PathPoint in
-            PathPoint(
+            try point.rejectUnknownKeys(["x", "y"], expected: "valid draw path point field")
+            return PathPoint(
                 x: try point.requiredNumber("x", field: "points[\(index)].x"),
                 y: try point.requiredNumber("y", field: "points[\(index)].y")
             )
@@ -358,10 +390,12 @@ extension TheFence {
             "duration",
             maximum: DecodeLimits.maxDrawGestureDurationSeconds
         )
+        let velocity = try request.positiveNumber("velocity")
+        try validateDrawTiming(duration: duration, velocity: velocity)
         return DrawPathGesturePayload(
             points: points,
             duration: duration,
-            velocity: try request.positiveNumber("velocity")
+            velocity: velocity
         )
     }
 
@@ -377,7 +411,11 @@ extension TheFence {
             note: "At least 1 bezier segment is required"
         )
         let segments = try segmentsArray.enumerated().map { index, segment -> BezierSegment in
-            BezierSegment(
+            try segment.rejectUnknownKeys(
+                ["cp1X", "cp1Y", "cp2X", "cp2Y", "endX", "endY"],
+                expected: "valid bezier segment field"
+            )
+            return BezierSegment(
                 cp1X: try segment.requiredNumber("cp1X", field: "segments[\(index)].cp1X"),
                 cp1Y: try segment.requiredNumber("cp1Y", field: "segments[\(index)].cp1Y"),
                 cp2X: try segment.requiredNumber("cp2X", field: "segments[\(index)].cp2X"),
@@ -404,14 +442,26 @@ extension TheFence {
             "duration",
             maximum: DecodeLimits.maxDrawGestureDurationSeconds
         )
+        let velocity = try request.positiveNumber("velocity")
+        try validateDrawTiming(duration: duration, velocity: velocity)
         return DrawBezierGesturePayload(
             startX: startX,
             startY: startY,
             segments: segments,
             samplesPerSegment: samplesPerSegment,
             duration: duration,
-            velocity: try request.positiveNumber("velocity")
+            velocity: velocity
         )
+    }
+
+    private func validateDrawTiming(duration: Double?, velocity: Double?) throws {
+        guard duration == nil || velocity == nil else {
+            throw SchemaValidationError(
+                field: "duration/velocity",
+                observed: "both duration and velocity",
+                expected: "duration or velocity"
+            )
+        }
     }
 
     private func validateArrayCount(

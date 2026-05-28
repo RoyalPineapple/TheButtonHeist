@@ -16,18 +16,20 @@ final class InterfaceSelectorTests: XCTestCase {
         XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
 
-    func testElementIdsSelectMatchingLeaves() throws {
-        let interface = try select(InterfaceQuery(elementIds: ["cancel"]))
-        XCTAssertEqual(interface.elements.map(\.heistId), ["cancel"])
-        XCTAssertEqual(interface.annotations.elements.map(\.heistId), ["cancel"])
-        XCTAssertTrue(interface.annotations.containers.isEmpty)
-    }
-
     func testElementSubtreeSelectsMatchingLeaf() throws {
         let interface = try select(InterfaceQuery(
             subtree: .element(ElementMatcher(identifier: "submit_button"))
         ))
         XCTAssertEqual(interface.elements.map(\.heistId), ["submit"])
+    }
+
+    func testElementSubtreeSelectsHeistIdLeaf() throws {
+        let interface = try select(InterfaceQuery(
+            subtree: .element(ElementMatcher(heistId: "cancel"))
+        ))
+        XCTAssertEqual(interface.elements.map(\.heistId), ["cancel"])
+        XCTAssertEqual(interface.annotations.elements.map(\.heistId), ["cancel"])
+        XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
 
     func testContainerSubtreeSelectsMatchingContainer() throws {

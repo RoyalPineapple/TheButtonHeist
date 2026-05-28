@@ -68,7 +68,10 @@ extension TheStash {
         let executableTarget = semanticElementTarget(for: target)
         return NormalizedTarget(
             executableTarget: executableTarget,
-            sourceHeistId: target.sourceHeistId
+            sourceHeistId: target.sourceHeistId,
+            validationFailure: executableTarget == nil
+                ? "semantic target requires matcher predicates"
+                : nil
         )
     }
 
@@ -76,23 +79,31 @@ extension TheStash {
         normalizeTarget(BatchSemanticElementTarget(target))
     }
 
-    func semanticElementTarget(for target: any SemanticElementTarget) -> ElementTarget {
+    func semanticElementTarget(for target: any SemanticElementTarget) -> ElementTarget? {
         if let exactHeistId = target.exactHeistId {
             return .heistId(exactHeistId)
         }
-        return .matcher(target.semanticMatcher ?? ElementMatcher(), ordinal: target.semanticOrdinal)
+        guard let matcher = target.semanticMatcher?.nonEmpty else { return nil }
+        return .matcher(matcher, ordinal: target.semanticOrdinal)
     }
 
     func resolveTarget(_ target: any SemanticElementTarget) -> TargetResolution {
-        resolveTarget(semanticElementTarget(for: target))
+        guard let executableTarget = semanticElementTarget(for: target) else {
+            return .notFound(diagnostics: "semantic target requires matcher predicates")
+        }
+        return resolveTarget(executableTarget)
     }
 
     func resolveVisibleTarget(_ target: any SemanticElementTarget) -> TargetResolution {
-        resolveVisibleTarget(semanticElementTarget(for: target))
+        guard let executableTarget = semanticElementTarget(for: target) else {
+            return .notFound(diagnostics: "semantic target requires matcher predicates")
+        }
+        return resolveVisibleTarget(executableTarget)
     }
 
     func resolveFirstVisibleMatch(_ target: any SemanticElementTarget) -> ResolvedTarget? {
-        resolveFirstVisibleMatch(semanticElementTarget(for: target))
+        guard let executableTarget = semanticElementTarget(for: target) else { return nil }
+        return resolveFirstVisibleMatch(executableTarget)
     }
 }
 

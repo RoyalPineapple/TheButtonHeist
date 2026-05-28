@@ -21,8 +21,10 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - ScrollDirection
 
     func testScrollDirectionRawValues() {
-        XCTAssertEqual(ScrollDirection.next.rawValue, "next")
-        XCTAssertEqual(ScrollDirection.previous.rawValue, "previous")
+        XCTAssertEqual(ScrollDirection.up.rawValue, "up")
+        XCTAssertEqual(ScrollDirection.down.rawValue, "down")
+        XCTAssertEqual(ScrollDirection.left.rawValue, "left")
+        XCTAssertEqual(ScrollDirection.right.rawValue, "right")
     }
 
     // MARK: - EditActionTarget
@@ -73,18 +75,19 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.actionName, "Dismiss")
     }
 
-    func testCustomActionTargetWithContainerOrdinalOnlyRoundTrip() throws {
+    func testCustomActionTargetRejectsContainerOrdinalOnly() throws {
         let target = CustomActionTarget(
             containerTarget: ContainerMatcher(),
             ordinal: 1,
             actionName: "Dismiss"
         )
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertNil(decoded.elementTarget)
-        XCTAssertEqual(decoded.containerTarget, ContainerMatcher())
-        XCTAssertEqual(decoded.containerOrdinal, 1)
-        XCTAssertEqual(decoded.actionName, "Dismiss")
+
+        XCTAssertThrowsError(try encoder.encode(target)) { error in
+            guard case EncodingError.invalidValue = error else {
+                return XCTFail("Expected invalidValue, got \(error)")
+            }
+            XCTAssertTrue("\(error)".contains("ordinal only disambiguates"))
+        }
     }
 
     // MARK: - LongPressTarget
@@ -111,7 +114,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testLongPressTargetDefaultDuration() {
-        let target = LongPressTarget()
+        let target = LongPressTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
         XCTAssertEqual(target.duration, 0.5)
     }
 
@@ -119,7 +122,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let withPoint = LongPressTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
         XCTAssertEqual(withPoint.point, CGPoint(x: 10, y: 20))
 
-        let withoutPoint = LongPressTarget()
+        let withoutPoint = LongPressTarget(selection: .element(.heistId("button")))
         XCTAssertNil(withoutPoint.point)
     }
 
@@ -148,13 +151,19 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(target.startPoint, CGPoint(x: 10, y: 20))
         XCTAssertEqual(target.endPoint, CGPoint(x: 30, y: 40))
 
-        let noStart = DragTarget(end: ScreenPoint(x: 30, y: 40))
+        let noStart = DragTarget(start: .element(.heistId("handle")), end: ScreenPoint(x: 30, y: 40))
         XCTAssertNil(noStart.startPoint)
     }
 
     func testGestureResolvedDefaultsAreContractOwned() {
-        XCTAssertEqual(SwipeTarget(selection: .point(start: .unspecified, destination: .direction(.down))).resolvedDuration, 0.15)
-        XCTAssertEqual(DragTarget(end: ScreenPoint(x: 30, y: 40)).resolvedDuration, 0.5)
+        XCTAssertEqual(
+            SwipeTarget(selection: .point(start: .element(.heistId("list")), destination: .direction(.down))).resolvedDuration,
+            0.15
+        )
+        XCTAssertEqual(
+            DragTarget(start: .coordinate(ScreenPoint(x: 10, y: 20)), end: ScreenPoint(x: 30, y: 40)).resolvedDuration,
+            0.5
+        )
         XCTAssertEqual(PinchTarget(scale: 2).resolvedSpread, 100)
         XCTAssertEqual(PinchTarget(scale: 2).resolvedDuration, 0.5)
         XCTAssertEqual(RotateTarget(angle: 1).resolvedRadius, 100)
@@ -165,42 +174,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             DrawBezierTarget(startX: 0, startY: 0, segments: [], samplesPerSegment: 5_000).resolvedSamplesPerSegment,
             1_000
         )
-    }
-
-    func testSwipeTargetRejectsMixedUnitPointsAndDirection() {
-        let json = """
-        {
-          "heistId": "row_5",
-          "start": { "x": 0.8, "y": 0.5 },
-          "end": { "x": 0.2, "y": 0.5 },
-          "direction": "left"
-        }
-        """
-
-        XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue(
-                "\(error)".contains("unitPoints"),
-                "Expected mixed unit-point/direction failure, got \(error)"
-            )
-        }
-    }
-
-    func testSwipeTargetRejectsEncodingCustomUnitPointsWithDirection() {
-        let target = SwipeTarget(
-            selection: .unitElement(
-                .heistId("row_5"),
-                start: UnitPoint(x: 0.9, y: 0.5),
-                end: UnitPoint(x: 0.1, y: 0.5),
-                direction: .left
-            )
-        )
-
-        XCTAssertThrowsError(try encoder.encode(target)) { error in
-            XCTAssertTrue(
-                "\(error)".contains("direction default start/end"),
-                "Expected lossy direction/unit-point encoding failure, got \(error)"
-            )
-        }
     }
 
     // MARK: - PinchTarget
@@ -343,6 +316,24 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.velocity, 200)
     }
 
+    func testDrawPathTargetRejectsDurationAndVelocityTogether() throws {
+        let target = DrawPathTarget(
+            points: [PathPoint(x: 0, y: 0), PathPoint(x: 50, y: 50)],
+            duration: 1,
+            velocity: 200
+        )
+        XCTAssertThrowsError(try encoder.encode(target)) { error in
+            XCTAssertTrue("\(error)".contains("duration or velocity"), "\(error)")
+        }
+
+        let json = """
+        {"points":[{"x":0,"y":0},{"x":50,"y":50}],"duration":1,"velocity":200}
+        """
+        XCTAssertThrowsError(try decoder.decode(DrawPathTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("duration or velocity"), "\(error)")
+        }
+    }
+
     // MARK: - DrawBezierTarget
 
     func testDrawBezierTargetRoundTrip() throws {
@@ -367,6 +358,33 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testDrawBezierTargetStartPoint() {
         let target = DrawBezierTarget(startX: 42, startY: 99, segments: [])
         XCTAssertEqual(target.startPoint, CGPoint(x: 42, y: 99))
+    }
+
+    func testDrawBezierTargetRejectsDurationAndVelocityTogether() throws {
+        let segment = BezierSegment(cp1X: 10, cp1Y: 50, cp2X: 90, cp2Y: 50, endX: 100, endY: 0)
+        let target = DrawBezierTarget(
+            startX: 0,
+            startY: 0,
+            segments: [segment],
+            duration: 1,
+            velocity: 200
+        )
+        XCTAssertThrowsError(try encoder.encode(target)) { error in
+            XCTAssertTrue("\(error)".contains("duration or velocity"), "\(error)")
+        }
+
+        let json = """
+        {
+          "startX":0,
+          "startY":0,
+          "segments":[{"cp1X":10,"cp1Y":50,"cp2X":90,"cp2Y":50,"endX":100,"endY":0}],
+          "duration":1,
+          "velocity":200
+        }
+        """
+        XCTAssertThrowsError(try decoder.decode(DrawBezierTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("duration or velocity"), "\(error)")
+        }
     }
 
     // MARK: - WaitForIdleTarget
@@ -407,13 +425,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollTargetDefaultsDirectionDown() throws {
-        let decoded = try decoder.decode(ScrollTarget.self, from: Data("{}".utf8))
-        XCTAssertEqual(decoded.direction, .down)
-        XCTAssertNil(decoded.elementTarget)
-        XCTAssertNil(decoded.containerTarget)
-    }
-
     func testScrollTargetContainerRoundTrip() throws {
         let target = ScrollTarget(
             selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
@@ -424,23 +435,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
         XCTAssertNil(decoded.elementTarget)
         XCTAssertEqual(decoded.direction, .up)
-    }
-
-    func testScrollTargetRejectsContainerAndElementWireShape() {
-        let json = """
-        {
-          "heistId": "list",
-          "container": { "stableId": "main_scroll" },
-          "direction": "down"
-        }
-        """
-
-        XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue(
-                "\(error)".contains("at most one of container or element target"),
-                "Expected mixed scroll target failure, got \(error)"
-            )
-        }
     }
 
     // MARK: - ScrollToEdgeTarget
@@ -458,13 +452,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollToEdgeTargetDefaultsEdgeTop() throws {
-        let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: Data("{}".utf8))
-        XCTAssertEqual(decoded.edge, .top)
-        XCTAssertNil(decoded.elementTarget)
-        XCTAssertNil(decoded.containerTarget)
-    }
-
     func testScrollToEdgeTargetContainerRoundTrip() throws {
         let target = ScrollToEdgeTarget(
             selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
@@ -475,23 +462,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
         XCTAssertNil(decoded.elementTarget)
         XCTAssertEqual(decoded.edge, .bottom)
-    }
-
-    func testScrollToEdgeTargetRejectsContainerAndElementWireShape() {
-        let json = """
-        {
-          "heistId": "scroll_view",
-          "container": { "stableId": "main_scroll" },
-          "edge": "bottom"
-        }
-        """
-
-        XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue(
-                "\(error)".contains("at most one of container or element target"),
-                "Expected mixed scroll-to-edge target failure, got \(error)"
-            )
-        }
     }
 
     // MARK: - ProtocolMismatchPayload
@@ -759,19 +729,19 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.steps[1].expectation, .delivery)
     }
 
-    func testBatchExecutionResultRoundTripPreservesFailureDiagnostics() throws {
+    func testBatchExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
         let result = BatchExecutionResult(
             policy: .stopOnError,
             steps: [
                 BatchExecutionStepResult(
                     index: 0,
-                    actionName: "get_pasteboard",
+                    actionName: "activate",
                     expectationName: "delivery",
                     actionResult: ActionResult(
                         success: false,
-                        method: .unsupportedCommand,
-                        message: "Unsupported batch Action 'get_pasteboard': read operation is not batch executable",
-                        errorKind: .unsupported
+                        method: .activate,
+                        message: "No element matching label \"Save\"",
+                        errorKind: .elementNotFound
                     ),
                     durationMs: 0,
                     stopsBatch: true
@@ -800,14 +770,14 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.policy, .stopOnError)
         XCTAssertEqual(decoded.failedIndex, 0)
         XCTAssertEqual(decoded.steps.count, 2)
-        XCTAssertEqual(decoded.steps[0].actionName, "get_pasteboard")
+        XCTAssertEqual(decoded.steps[0].actionName, "activate")
         XCTAssertEqual(decoded.steps[0].expectationName, "delivery")
         XCTAssertTrue(decoded.steps[0].stopsBatch)
-        XCTAssertEqual(decoded.steps[0].actionResult?.method, .unsupportedCommand)
-        XCTAssertEqual(decoded.steps[0].actionResult?.errorKind, .unsupported)
+        XCTAssertEqual(decoded.steps[0].actionResult?.method, .activate)
+        XCTAssertEqual(decoded.steps[0].actionResult?.errorKind, .elementNotFound)
         XCTAssertEqual(
             decoded.steps[0].actionResult?.message,
-            "Unsupported batch Action 'get_pasteboard': read operation is not batch executable"
+            "No element matching label \"Save\""
         )
         XCTAssertTrue(decoded.steps[1].isSkipped)
         XCTAssertEqual(decoded.steps[1].skipped?.reason, "skipped: stop_on_error stopped batch after step 0")
@@ -871,25 +841,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded, update)
     }
 
-    // MARK: - ActionMethod
-
-    func testActionMethodAllCasesRoundTrip() throws {
-        let allMethods: [ActionMethod] = [
-            .activate, .increment, .decrement,
-            .syntheticTap, .syntheticLongPress, .syntheticSwipe, .syntheticDrag,
-            .syntheticPinch, .syntheticRotate, .syntheticTwoFingerTap, .syntheticDrawPath,
-            .typeText, .customAction, .editAction, .resignFirstResponder,
-            .setPasteboard, .getPasteboard, .rotor, .waitForIdle,
-            .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-            .waitFor, .explore, .unsupportedCommand, .elementNotFound, .elementDeallocated,
-        ]
-        for method in allMethods {
-            let data = try encoder.encode(method)
-            let decoded = try decoder.decode(ActionMethod.self, from: data)
-            XCTAssertEqual(decoded, method)
-        }
-    }
-
     // MARK: - Wire Message Types
 
     func testClientWireMessageTypeAllCasesRoundTrip() throws {
@@ -906,69 +857,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             let decoded = try decoder.decode(ServerWireMessageType.self, from: data)
             XCTAssertEqual(decoded, messageType)
         }
-    }
-
-    func testClientWireMessageTypeRawValues() {
-        XCTAssertEqual(ClientWireMessageType.allCases.map(\.rawValue), [
-            "clientHello",
-            "authenticate",
-            "requestInterface",
-            "ping",
-            "status",
-            "activate",
-            "increment",
-            "decrement",
-            "performCustomAction",
-            "rotor",
-            "touchTap",
-            "touchLongPress",
-            "touchSwipe",
-            "touchDrag",
-            "touchPinch",
-            "touchRotate",
-            "touchTwoFingerTap",
-            "touchDrawPath",
-            "touchDrawBezier",
-            "typeText",
-            "editAction",
-            "setPasteboard",
-            "getPasteboard",
-            "scroll",
-            "scrollToVisible",
-            "elementSearch",
-            "scrollToEdge",
-            "resignFirstResponder",
-            "requestScreen",
-            "explore",
-            "waitForIdle",
-            "startRecording",
-            "stopRecording",
-            "waitFor",
-            "waitForChange",
-            "batchExecutionPlan",
-        ])
-    }
-
-    func testServerWireMessageTypeRawValues() {
-        XCTAssertEqual(ServerWireMessageType.allCases.map(\.rawValue), [
-            "serverHello",
-            "protocolMismatch",
-            "authRequired",
-            "authApprovalPending",
-            "authApproved",
-            "info",
-            "interface",
-            "pong",
-            "status",
-            "error",
-            "actionResult",
-            "screen",
-            "sessionLocked",
-            "recordingStarted",
-            "recordingStopped",
-            "recording",
-            "interaction",
-        ])
     }
 
     // MARK: - TXTRecordKey
@@ -1040,8 +928,9 @@ final class WireTypeRoundTripTests: XCTestCase {
         let withDirection = ElementSearchTarget(elementTarget: .heistId("item"), direction: .left)
         XCTAssertEqual(withDirection.resolvedDirection, .left)
 
-        let withoutDirection = ElementSearchTarget(elementTarget: .heistId("item"))
-        XCTAssertEqual(withoutDirection.resolvedDirection, .down)
+        let defaultDirection = ElementSearchTarget(elementTarget: .heistId("item"))
+        XCTAssertEqual(defaultDirection.resolvedDirection, .down)
+        XCTAssertEqual(defaultDirection.direction, .down)
     }
 
     // MARK: - WaitForTarget

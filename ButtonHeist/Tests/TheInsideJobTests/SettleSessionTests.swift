@@ -123,7 +123,7 @@ final class SettleSessionTests: XCTestCase {
             XCTFail("Expected .settled, got \(outcome.outcome)")
         }
         XCTAssertEqual(outcome.elementsByKey.count, 1)
-        XCTAssertEqual(outcome.finalScreen?.liveInterface.hierarchy.sortedElements.first?.label, "Hello")
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.first?.label, "Hello")
     }
 
     func testNoChangeParsesSettleAndReturnFinalStableScreen() async {
@@ -145,7 +145,7 @@ final class SettleSessionTests: XCTestCase {
             XCTFail("Expected .settled for no-change parses, got \(outcome.outcome)")
         }
         XCTAssertFalse(outcome.events.containsTripwireSignalChange)
-        XCTAssertEqual(outcome.finalScreen?.liveInterface.hierarchy.sortedElements.map(\.label), ["Unchanged"])
+        XCTAssertEqual(outcome.finalScreen?.liveCapture.hierarchy.sortedElements.map(\.label), ["Unchanged"])
     }
 
     // MARK: - Timeout

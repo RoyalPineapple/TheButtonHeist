@@ -6,13 +6,7 @@ extension TheFence.Command {
         case Self.help.rawValue:
             return "Return descriptor-backed help for the current Button Heist command surface."
 
-        case Self.status.rawValue:
-            return "Report connection and session state for the active Button Heist driver."
-
         case Self.quit.rawValue:
-            return "End the interactive CLI session."
-
-        case Self.exit.rawValue:
             return "End the interactive CLI session."
 
         case Self.startRecording.rawValue:
@@ -53,9 +47,8 @@ extension TheFence.Command {
         case Self.runBatch.rawValue:
             return """
                 Execute multiple commands in one call. Each step is a JSON object with 'command' set \
-                to a canonical TheFence.Command name plus that command's parameters; grouped MCP tool \
-                names and selector shapes are not accepted inside batches. Attach 'expect' per step to verify \
-                inline. Returns ordered per-step results. \
+                to a canonical TheFence.Command name plus that command's parameters. Attach 'expect' per step \
+                to verify inline. Returns ordered per-step results. \
                 policy=stop_on_error (default) or continue_on_error.
                 """
 

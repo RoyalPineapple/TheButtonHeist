@@ -88,13 +88,18 @@ extension TheStash {
     /// SemanticActionTarget; this wrapper only carries source heistId metadata
     /// for diagnostics.
     struct NormalizedTarget {
-        let executableTarget: ElementTarget
+        let executableTarget: ElementTarget?
         let sourceHeistId: HeistId?
+        let validationFailure: String?
 
         func diagnostics(_ message: String) -> String {
             guard let sourceHeistId else { return message }
             guard !message.contains(sourceHeistId) else { return message }
             return "\(message)\nSource heistId: \(sourceHeistId)"
+        }
+
+        var validationFailureMessage: String {
+            diagnostics(validationFailure ?? "target requires heistId or semantic matcher predicates")
         }
     }
 
@@ -123,8 +128,8 @@ extension TheStash {
     }
 
     func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
-        guard matcher.hasPredicates || ordinal != nil else {
-            return .notFound(diagnostics: "container target requires stableId, type, label, value, identifier, or ordinal")
+        guard matcher.hasPredicates else {
+            return .notFound(diagnostics: "container target requires stableId, type, label, value, or identifier")
         }
         let matches = currentScreen.semantic.containers.values
             .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
@@ -169,7 +174,8 @@ extension TheStash {
     func normalizeTarget(_ target: ElementTarget) -> NormalizedTarget {
         NormalizedTarget(
             executableTarget: target,
-            sourceHeistId: nil
+            sourceHeistId: nil,
+            validationFailure: nil
         )
     }
 
@@ -177,7 +183,7 @@ extension TheStash {
     func ids(in scope: InterfaceElementScope) -> Set<HeistId> {
         switch scope {
         case .visible:
-            return currentScreen.liveInterface.heistIds
+            return currentScreen.liveCapture.heistIds
         case .known:
             return currentScreen.knownInterface.heistIds
         }
@@ -185,14 +191,14 @@ extension TheStash {
 
     /// Looks up an element by heistId in the selected scope.
     ///
-    /// `.known` reads the committed `Screen.elements` map, including any
+    /// `.known` reads the committed semantic element map, including any
     /// exploration union. `.visible` only returns ids backed by the latest live
     /// hierarchy parse.
     func screenElement(heistId: HeistId, in scope: InterfaceElementScope) -> ScreenElement? {
         guard let entry = currentScreen.knownInterface.findElement(heistId: heistId) else { return nil }
         switch scope {
         case .visible:
-            return currentScreen.liveInterface.contains(heistId: heistId) ? entry : nil
+            return currentScreen.liveCapture.contains(heistId: heistId) ? entry : nil
         case .known:
             return entry
         }
@@ -204,7 +210,7 @@ extension TheStash {
     /// `heistIdByElement`. Off-screen known elements cannot be found with this
     /// overload.
     func screenElement(for element: AccessibilityElement, in scope: InterfaceElementScope) -> ScreenElement? {
-        guard let heistId = currentScreen.liveInterface.heistId(for: element) else { return nil }
+        guard let heistId = currentScreen.liveCapture.heistId(for: element) else { return nil }
         return screenElement(heistId: heistId, in: scope)
     }
 
@@ -254,7 +260,7 @@ extension TheStash {
     /// All elements in the current screen.
     ///
     /// Live elements appear first in hierarchy (depth-first) traversal order;
-    /// any heistIds present in `currentScreen.elements` but not in the live
+    /// any heistIds present in `currentScreen.semantic.elements` but not in the live
     /// hierarchy (post-exploration union) appear after, sorted by heistId so
     /// the snapshot order is stable across runs.
     func selectElements(in screen: Screen? = nil) -> [ScreenElement] {
@@ -274,8 +280,8 @@ private extension TheStash {
             guard let entry = screen.findElement(heistId: heistId) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,
-                    knownIds: screen.elements.keys,
-                    knownCount: screen.elements.count
+                    knownIds: screen.semantic.elements.keys,
+                    knownCount: screen.semantic.elements.count
                 ))
             }
             return .resolved(ResolvedTarget(screenElement: entry))

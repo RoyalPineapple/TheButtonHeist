@@ -5,7 +5,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 ## Core Loop
 
 1. **Read** — `get_interface` returns the app accessibility state with heistIds, labels, values, traits, and actions.
-2. **Act** — `activate`, `type_text`, `scroll`, `gesture` — target by heistId or matcher. Always attach `expect` when you know what should change.
+2. **Act** — `activate`, `type_text`, `scroll`, `swipe`, and the other canonical action tools — target by heistId or matcher. Always attach `expect` when you know what should change.
 3. **Read the response** — action responses carry the action's `accessibilityDelta`; any `[while_idle: ...]` block uses the same capture/delta contract to report a change that happened while you were idle between tool calls. If either answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true. If the change already happened while you were idle, `wait_for_change` returns instantly.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
@@ -14,9 +14,9 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 **Observing**: `get_interface` for element data, `get_screen` for visual context plus fresh visible geometry. Start with `get_interface`; it returns the app accessibility state for the current screen, including content Button Heist can discover in scroll views. Pass `subtree.element` to project from a leaf, or `subtree.container` to project from a container. Reach for `get_screen` when layout, pixels, or the current viewport geometry matters.
 
-**Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. `gesture` with type "swipe" for directional gestures. `scroll` for paging through lists. Prefer `activate` over `gesture` — raw coordinates are fragile and don't record well.
+**Acting**: `activate` is your primary tool — it taps, toggles, follows links. Use `action: "increment"` or `"decrement"` for adjustable controls, with optional `count` to repeat 1...100 times. `type_text` for keyboard input. Use direct gesture tools such as `swipe`, `drag`, and `one_finger_tap` when you need a gesture. `scroll` pages through lists. Prefer `activate` over gesture tools — raw coordinates are fragile and don't record well.
 
-**Finding**: `scroll` with mode "to_visible" when you've seen an element before but it is not currently on screen. `scroll` with mode "search" when you've never seen it — scrolls every container looking for a match. `wait_for` when you know a specific element will appear.
+**Finding**: semantic actions resolve and reveal targets internally. Use `scroll_to_visible` when your intent is explicit viewport positioning, `element_search` when you want to search scroll content without acting, and `wait_for` when you know a specific element will appear.
 
 **Waiting**: `wait_for_change` when the UI is updating asynchronously — network requests, timers, animations completing. Pass an expectation object to wait for the specific outcome: `expect={"type":"screen_changed"}` rides through loading spinners until the real navigation happens. With `expect`, the server first checks whether the current state already satisfies it, then blocks until a later settled scan does. With no expectation, returns on any tree change. This is the correct response when your action produced a transient state (spinner appeared, interactive elements disappeared) and you need the final result.
 

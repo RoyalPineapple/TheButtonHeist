@@ -11,8 +11,8 @@ import UIKit
 /// `installScreenWithOffViewportEntry` helpers that all rebuilt the same
 /// `Screen` value from a list of `(AccessibilityElement, heistId)` pairs.
 ///
-/// Known-only entries live in `Screen.elements` (so target resolution sees
-/// them) but are not present in the live hierarchy — modeling an element
+/// Known-only entries live in `Screen.semantic.elements` (so target resolution
+/// sees them) but are not present in the live hierarchy — modeling an element
 /// retained from a previous exploration that has since scrolled out of view.
 extension Screen {
 

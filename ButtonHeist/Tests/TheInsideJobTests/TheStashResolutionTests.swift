@@ -162,7 +162,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("button_ok"), "Should suggest similar heistId")
     }
 
-    func testNormalizeHeistIdKeepsCurrentCaptureHandle() {
+    func testNormalizeHeistIdKeepsCurrentCaptureHandle() throws {
         let currentElement = element(
             label: "Quantity",
             value: "1",
@@ -175,8 +175,9 @@ final class TheStashResolutionTests: XCTestCase {
 
         XCTAssertEqual(normalized.executableTarget, .heistId("quantity_0"))
         XCTAssertNil(normalized.sourceHeistId)
+        let executableTarget = try XCTUnwrap(normalized.executableTarget)
         XCTAssertNil(
-            bagman.resolveTarget(normalized.executableTarget).resolved,
+            bagman.resolveTarget(executableTarget).resolved,
             "Runtime heistIds are current-capture handles and must not replay through source-screen matchers"
         )
     }
@@ -224,19 +225,23 @@ final class TheStashResolutionTests: XCTestCase {
             interface: TheStash.WireConversion.toInterface(from: sourceScreen)
         )
         let sourceWireElement = try XCTUnwrap(capture.interface.elements.first { $0.heistId == "quantity_0" })
-        let semanticTarget = SemanticActionTarget(MinimumMatcher.build(element: sourceWireElement, in: capture))
+        let semanticTarget = SemanticActionTarget(try XCTUnwrap(MinimumMatcher.build(
+            element: sourceWireElement,
+            in: capture
+        )))
         let normalized = bagman.normalizeTarget(semanticTarget)
 
         XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
-        guard case .matcher(let matcher, let ordinal) = normalized.executableTarget else {
-            XCTFail("Expected semantic replay target to carry matcher identity, got \(normalized.executableTarget)")
+        let executableTarget = try XCTUnwrap(normalized.executableTarget)
+        guard case .matcher(let matcher, let ordinal) = executableTarget else {
+            XCTFail("Expected semantic replay target to carry matcher identity, got \(executableTarget)")
             return
         }
         XCTAssertEqual(matcher.identifier, "quantity_stepper")
         XCTAssertNil(matcher.heistId)
         XCTAssertNil(ordinal)
 
-        guard let resolved = bagman.resolveTarget(normalized.executableTarget).resolved else {
+        guard let resolved = bagman.resolveTarget(executableTarget).resolved else {
             XCTFail("Expected semantic replay selector to resolve against current screen")
             return
         }
@@ -781,10 +786,9 @@ final class TheStashResolutionTests: XCTestCase {
 
     // MARK: - Exact-or-Miss Contract (Task 1, Findings 4/5/8)
 
-    /// A partial label that would have matched via the old substring fallback
-    /// must now return `.notFound` with a near-miss suggestion. This is the
-    /// product decision codified in the matcher contract: "exact or miss",
-    /// suggestions on miss.
+    /// A partial label must return `.notFound` with a near-miss suggestion.
+    /// This is the product decision codified in the matcher contract: "exact
+    /// or miss", suggestions on miss.
     func testSubstringPartialLabelReturnsNotFoundWithSuggestion() {
         let save = element(label: "Save Draft", traits: .button)
         register(save, heistId: "button_save_draft", index: 0)

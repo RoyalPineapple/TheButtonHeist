@@ -2,6 +2,87 @@ import Foundation
 
 import TheScore
 
+private let accessibilityAdjustmentCountRange = 1...100
+
+extension TheFence.ScrollPayload {
+
+    var clientMessage: ClientMessage {
+        switch self {
+        case .scroll(let target):
+            return .scroll(target)
+        case .scrollToVisible(let target):
+            return .scrollToVisible(target)
+        case .elementSearch(let target):
+            return .elementSearch(target)
+        case .scrollToEdge(let target):
+            return .scrollToEdge(target)
+        }
+    }
+}
+
+extension TheFence.AccessibilityPayload {
+
+    func clientMessages() throws -> [ClientMessage] {
+        switch self {
+        case .activate(let target, let actionName, let count):
+            guard let actionName else {
+                try Self.rejectCount(count)
+                return [.activate(target)]
+            }
+            return try Self.namedAccessibilityCommands(
+                target: target,
+                actionName: actionName,
+                count: count
+            )
+        }
+    }
+
+    private static func namedAccessibilityCommands(
+        target: ElementTarget,
+        actionName: String,
+        count: TheFence.CountArgument
+    ) throws -> [ClientMessage] {
+        switch actionName {
+        case ElementAction.increment.description:
+            return try repeatedAdjustmentCommands(.increment(target), count: count)
+        case ElementAction.decrement.description:
+            return try repeatedAdjustmentCommands(.decrement(target), count: count)
+        default:
+            try rejectCount(count)
+            return [.performCustomAction(CustomActionTarget(elementTarget: target, actionName: actionName))]
+        }
+    }
+
+    private static func repeatedAdjustmentCommands(
+        _ message: ClientMessage,
+        count countArgument: TheFence.CountArgument
+    ) throws -> [ClientMessage] {
+        let count = try accessibilityAdjustmentCount(countArgument)
+        return Array(repeating: message, count: count)
+    }
+
+    private static func accessibilityAdjustmentCount(_ countArgument: TheFence.CountArgument) throws -> Int {
+        let count = countArgument.value ?? 1
+        guard accessibilityAdjustmentCountRange.contains(count) else {
+            throw SchemaValidationError(
+                field: "count",
+                observed: count,
+                expected: "integer in \(accessibilityAdjustmentCountRange.lowerBound)...\(accessibilityAdjustmentCountRange.upperBound)"
+            )
+        }
+        return count
+    }
+
+    private static func rejectCount(_ countArgument: TheFence.CountArgument) throws {
+        guard countArgument.observed != nil else { return }
+        throw SchemaValidationError(
+            field: "count",
+            observed: countArgument.observed ?? "missing",
+            expected: "only valid with increment or decrement"
+        )
+    }
+}
+
 extension TheFence {
 
     func decodeElementActionPayload(
@@ -20,12 +101,6 @@ extension TheFence {
             return .scroll(.scrollToEdge(try ScrollToEdgeRequestInput(input, fence: self).target))
         case .activate:
             return .accessibility(try ActivateRequestInput(input, fence: self).payload)
-        case .increment:
-            return .accessibility(try IncrementRequestInput(input, fence: self).payload)
-        case .decrement:
-            return .accessibility(try DecrementRequestInput(input, fence: self).payload)
-        case .performCustomAction:
-            return .accessibility(try PerformCustomActionRequestInput(input, fence: self).payload)
         case .rotor:
             return .rotor(try RotorRequestInput(input, fence: self).target)
         case .typeText:
@@ -143,11 +218,11 @@ private extension TheFence {
                 isModalBoundary: try container.schemaBoolean("isModalBoundary")
             )
             let ordinal = try nonNegativeInteger("ordinal")
-            guard matcher.hasPredicates || ordinal != nil else {
+            guard matcher.hasPredicates else {
                 throw SchemaValidationError(
                     field: "container",
                     observed: container.observedDescription,
-                    expected: "container selector with stableId, type, label, value, identifier, isModalBoundary, or ordinal"
+                    expected: "container target with stableId, type, label, value, identifier, or isModalBoundary"
                 )
             }
             return (matcher, ordinal)
@@ -172,7 +247,7 @@ private extension TheFence {
             }
 
             guard let elementTarget = try elementTarget(in: fence) else {
-                throw MissingElementTarget(command: TheFence.Command.performCustomAction.rawValue)
+                throw MissingElementTarget(command: TheFence.Command.activate.rawValue)
             }
             return CustomActionTarget(elementTarget: elementTarget, actionName: actionName)
         }
@@ -235,17 +310,6 @@ private extension TheFence {
 
         func accessibilityActionName(_ key: String) throws -> String? {
             guard let value = try optionalNonEmptyString(key) else { return nil }
-            if value.hasPrefix("action:") {
-                let customName = String(value.dropFirst("action:".count))
-                if !customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    return value
-                }
-                throw SchemaValidationError(
-                    field: request.field(key),
-                    observed: value as Any,
-                    expected: "action: prefix followed by a custom action name or a built-in action name"
-                )
-            }
             return value
         }
 
@@ -271,24 +335,22 @@ private extension TheFence {
 
         func enumValue<E>(
             _ key: String,
-            as type: E.Type,
-            normalizedBy normalize: (String) -> String = { $0 }
+            as type: E.Type
         ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
-            try request.schemaEnum(key, as: type, normalizedBy: normalize)
+            try request.schemaEnum(key, as: type)
         }
 
         func requiredEnumValue<E>(
             _ key: String,
-            as type: E.Type,
-            normalizedBy normalize: (String) -> String = { $0 }
+            as type: E.Type
         ) throws -> E where E: CaseIterable & RawRepresentable, E.RawValue == String {
-            try request.requiredSchemaEnum(key, as: type, normalizedBy: normalize)
+            try request.requiredSchemaEnum(key, as: type)
         }
 
         func countArgument() throws -> TheFence.CountArgument {
             TheFence.CountArgument(
                 value: try integer("count"),
-                observed: request.observedValue(for: "count")
+                observed: request.observedDescription(for: "count")
             )
         }
 
@@ -328,7 +390,7 @@ private extension TheFence {
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let direction = try request.enumValue("direction", as: ScrollDirection.self) { $0.lowercased() } ?? .down
+            let direction = try request.enumValue("direction", as: ScrollDirection.self) ?? .down
             target = ScrollTarget(
                 selection: try request.scrollContainerSelection(in: fence),
                 direction: direction
@@ -354,7 +416,7 @@ private extension TheFence {
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
             target = ElementSearchTarget(
                 elementTarget: try request.requiredElementTarget(command: .elementSearch, in: fence),
-                direction: try request.enumValue("direction", as: ScrollSearchDirection.self) { $0.lowercased() }
+                direction: try request.enumValue("direction", as: ScrollSearchDirection.self) ?? .down
             )
         }
     }
@@ -364,7 +426,7 @@ private extension TheFence {
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let edge = try request.enumValue("edge", as: ScrollEdge.self) { $0.lowercased() } ?? .top
+            let edge = try request.enumValue("edge", as: ScrollEdge.self) ?? .top
             target = ScrollToEdgeTarget(
                 selection: try request.scrollContainerSelection(in: fence),
                 edge: edge
@@ -386,39 +448,6 @@ private extension TheFence {
         }
     }
 
-    struct IncrementRequestInput {
-        let payload: AccessibilityPayload
-
-        @ButtonHeistActor
-        init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let target = try request.requiredElementTarget(command: .increment, in: fence)
-            payload = .increment(target, count: try request.countArgument())
-        }
-    }
-
-    struct DecrementRequestInput {
-        let payload: AccessibilityPayload
-
-        @ButtonHeistActor
-        init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let target = try request.requiredElementTarget(command: .decrement, in: fence)
-            payload = .decrement(target, count: try request.countArgument())
-        }
-    }
-
-    struct PerformCustomActionRequestInput {
-        let payload: AccessibilityPayload
-
-        @ButtonHeistActor
-        init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let actionName = try request.nonEmptyString("action")
-            payload = .performCustomAction(
-                try request.customActionTarget(actionName: actionName, in: fence),
-                count: try request.countArgument()
-            )
-        }
-    }
-
     struct RotorRequestInput {
         let target: RotorTarget
 
@@ -432,7 +461,7 @@ private extension TheFence {
                 elementTarget: try request.requiredElementTarget(command: .rotor, in: fence),
                 rotor: try request.string("rotor"),
                 rotorIndex: rotorIndex,
-                direction: try request.enumValue("direction", as: RotorDirection.self) { $0.lowercased() } ?? .next,
+                direction: try request.enumValue("direction", as: RotorDirection.self) ?? .next,
                 currentHeistId: currentHeistId,
                 currentTextRange: cursor.currentTextRange
             )

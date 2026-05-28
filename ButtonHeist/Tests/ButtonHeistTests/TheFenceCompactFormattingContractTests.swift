@@ -8,9 +8,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         let cases: [(method: ActionMethod, expected: String)] = [
             (.typeText, "type_text: ok"),
             (.waitFor, "wait_for: ok"),
-            (.customAction, "perform_custom_action: ok"),
+            (.customAction, "activate: ok"),
             (.resignFirstResponder, "dismiss_keyboard: ok"),
-            (.syntheticTap, "syntheticTap: ok"),
+            (.syntheticTap, "one_finger_tap: ok"),
         ]
 
         for testCase in cases {
@@ -56,7 +56,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             "Action result method projections must be unambiguous:\n\(duplicateDescriptions.joined(separator: "\n"))"
         )
 
-        let expected: [ActionMethod: TheFence.Command] = [
+        let descriptorExpected: [ActionMethod: TheFence.Command] = [
             .waitForChange: .waitForChange,
             .syntheticLongPress: .longPress,
             .syntheticSwipe: .swipe,
@@ -69,9 +69,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             .elementSearch: .elementSearch,
             .scrollToEdge: .scrollToEdge,
             .activate: .activate,
-            .increment: .increment,
-            .decrement: .decrement,
-            .customAction: .performCustomAction,
             .rotor: .rotor,
             .typeText: .typeText,
             .editAction: .editAction,
@@ -81,15 +78,22 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             .resignFirstResponder: .dismissKeyboard,
         ]
 
-        for (method, command) in expected {
+        for (method, command) in descriptorExpected {
             let descriptor = TheFence.Command.descriptor(forActionResultMethod: method)
 
             XCTAssertEqual(descriptor?.command, command)
             XCTAssertEqual(TheFence.Command.canonicalName(forActionResultMethod: method), command.rawValue)
         }
+
+        let activateProjectedMethods: [ActionMethod] = [.increment, .decrement, .customAction]
+        for method in activateProjectedMethods {
+            XCTAssertNil(TheFence.Command.descriptor(forActionResultMethod: method))
+            XCTAssertEqual(TheFence.Command.canonicalName(forActionResultMethod: method), TheFence.Command.activate.rawValue)
+        }
         XCTAssertNil(TheFence.Command.descriptor(forActionResultMethod: .syntheticTap))
         XCTAssertNil(TheFence.Command.descriptor(forActionResultMethod: .syntheticDrawPath))
-        XCTAssertEqual(TheFence.Command.canonicalName(forActionResultMethod: .syntheticTap), "syntheticTap")
+        XCTAssertEqual(TheFence.Command.canonicalName(forActionResultMethod: .syntheticTap), TheFence.Command.oneFingerTap.rawValue)
+        XCTAssertEqual(TheFence.Command.canonicalName(forActionResultMethod: .syntheticDrawPath), TheFence.Command.drawPath.rawValue)
     }
 
 }

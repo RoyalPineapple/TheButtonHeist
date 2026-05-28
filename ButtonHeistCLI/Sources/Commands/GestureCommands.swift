@@ -48,16 +48,16 @@ extension GestureCLICommandContract {
 struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Raw synthetic tap at coordinates or element center",
+        abstract: "One-finger tap by semantic element or explicit coordinates",
         discussion: """
-            Performs a direct synthetic tap without accessibility semantics. \
-            For interacting with buttons, links, and controls, prefer \
-            `buttonheist activate` which tries accessibilityActivate() first \
-            and is more reliable across different UI frameworks.
+            Performs a one-finger tap. Element-targeted taps use the semantic \
+            actionability path: resolve, reveal, acquire fresh accessibility \
+            geometry, then dispatch the tap. Coordinate taps are explicit \
+            viewport actions.
 
             Use one_finger_tap when you need precise coordinate-based taps \
-            or when accessibility activation is not appropriate (e.g., tapping \
-            a specific point on a canvas or map).
+            or when the product intent is a tap rather than primary activation \
+            (for example, a specific point on a canvas or map).
             """
     )
 
@@ -75,7 +75,7 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (x != nil && y != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
+            throw ValidationError("Must specify a heistId, --identifier, or --x/--y coordinates")
         }
 
         let request = try Self.gestureRequest(element: element, numbers: [(.x, x), (.y, y)])
@@ -105,7 +105,7 @@ struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (x != nil && y != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --x/--y coordinates")
+            throw ValidationError("Must specify a heistId, --identifier, or --x/--y coordinates")
         }
 
         let request = try Self.gestureRequest(
@@ -168,11 +168,11 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
 
         if hasUnitStart {
             guard try element.hasTarget else {
-                throw ValidationError("Unit-point swipe requires an element target (heistId, -id, or -l)")
+                throw ValidationError("Unit-point swipe requires an element target (heistId, --identifier, or -l)")
             }
         } else {
             guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {
-                throw ValidationError("Must specify a heistId, -id, --from-x/--from-y, or --start-x/--start-y unit points")
+                throw ValidationError("Must specify a heistId, --identifier, --from-x/--from-y, or --start-x/--start-y unit points")
             }
             guard (toX != nil && toY != nil) || direction != nil else {
                 throw ValidationError("Must specify --to-x/--to-y, --direction, or --end-x/--end-y unit points")
@@ -245,7 +245,7 @@ struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --from-x/--from-y coordinates")
+            throw ValidationError("Must specify a heistId, --identifier, or --from-x/--from-y coordinates")
         }
 
         let request = try Self.gestureRequest(
@@ -288,7 +288,7 @@ struct PinchSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (centerX != nil && centerY != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
+            throw ValidationError("Must specify a heistId, --identifier, or --center-x/--center-y coordinates")
         }
 
         let request = try Self.gestureRequest(
@@ -333,7 +333,7 @@ struct RotateSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (centerX != nil && centerY != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
+            throw ValidationError("Must specify a heistId, --identifier, or --center-x/--center-y coordinates")
         }
 
         let request = try Self.gestureRequest(
@@ -372,7 +372,7 @@ struct TwoFingerTapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (centerX != nil && centerY != nil) else {
-            throw ValidationError("Must specify a heistId, -id, or --center-x/--center-y coordinates")
+            throw ValidationError("Must specify a heistId, --identifier, or --center-x/--center-y coordinates")
         }
 
         let request = try Self.gestureRequest(

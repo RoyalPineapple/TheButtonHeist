@@ -78,11 +78,11 @@ public extension FenceError {
         case .noDeviceFound:
             return "Start the app and confirm it advertises a Button Heist session."
         case .noMatchingDevice:
-            return "Check the device filter or target name against 'buttonheist list'."
+            return "Check the device filter or target name against 'buttonheist list_devices'."
         case .connectionTimeout:
-            return "Is the app running? Check 'buttonheist list' to see available devices."
+            return "Is the app running? Check 'buttonheist list_devices' to see available devices."
         case .connectionFailed:
-            return "Is the app running? Check 'buttonheist list' to see available devices."
+            return "Is the app running? Check 'buttonheist list_devices' to see available devices."
         case .connectionFailure(let failure):
             return failure.hint
         case .sessionLocked:
@@ -93,7 +93,7 @@ public extension FenceError {
         case .authApprovalPending:
             return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
         case .notConnected:
-            return "Check that the app is running, then retry the command. Use 'buttonheist list' to see available devices."
+            return "Check that the app is running, then retry the command. Use 'buttonheist list_devices' to see available devices."
         case .actionTimeout:
             return Self.actionTimeoutRecoveryHint
         case .actionFailed:

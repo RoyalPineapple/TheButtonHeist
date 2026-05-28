@@ -1,5 +1,5 @@
 import XCTest
- import TheScore
+import TheScore
 
 final class ClientMessageTests: XCTestCase {
 
@@ -57,6 +57,32 @@ final class ClientMessageTests: XCTestCase {
                 "\(error)".contains("unknownField"),
                 "Expected unknown request envelope field in error, got \(error)"
             )
+        }
+    }
+
+    func testClientMessageRejectsUnknownTopLevelField() throws {
+        let data = Data(#"{"type":"ping","staleField":"value"}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("staleField"), "\(error)")
+        }
+    }
+
+    func testNoPayloadClientMessageRejectsStrayPayload() throws {
+        let data = Data(#"{"type":"ping","payload":{"junk":true}}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("ping must not include a payload"), "\(error)")
+        }
+    }
+
+    func testNoPayloadRequestEnvelopeRejectsStrayPayload() throws {
+        let data = Data("""
+        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"ping","payload":{"junk":true}}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("ping must not include a payload"), "\(error)")
         }
     }
 
@@ -585,15 +611,15 @@ final class ClientMessageTests: XCTestCase {
                 direction: nil
             )
         )
-        let message = ClientMessage.touchSwipe(swipe)
+        let message = ClientMessage.swipe(swipe)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .touchSwipe(let target) = decoded {
+        if case .swipe(let target) = decoded {
             XCTAssertEqual(target.start, UnitPoint(x: 0.8, y: 0.5))
             XCTAssertEqual(target.end, UnitPoint(x: 0.2, y: 0.5))
         } else {
-            XCTFail("Expected touchSwipe, got \(decoded)")
+            XCTFail("Expected swipe, got \(decoded)")
         }
     }
 }

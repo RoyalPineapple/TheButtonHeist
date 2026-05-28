@@ -35,15 +35,15 @@ final class ScreenTests: XCTestCase {
     // MARK: - .empty
 
     func testEmptyHasNoElements() {
-        XCTAssertTrue(Screen.empty.elements.isEmpty)
+        XCTAssertTrue(Screen.empty.semantic.elements.isEmpty)
     }
 
     func testEmptyHasNoHierarchy() {
-        XCTAssertTrue(Screen.empty.liveInterface.hierarchy.isEmpty)
+        XCTAssertTrue(Screen.empty.liveCapture.hierarchy.isEmpty)
     }
 
     func testEmptyHasNoFirstResponder() {
-        XCTAssertNil(Screen.empty.liveInterface.firstResponderHeistId)
+        XCTAssertNil(Screen.empty.liveCapture.firstResponderHeistId)
     }
 
     func testEmptyHasNoName() {
@@ -76,9 +76,9 @@ final class ScreenTests: XCTestCase {
         )
 
         XCTAssertEqual(screen.knownInterface.heistIds, ["button_visible", "button_known"])
-        XCTAssertEqual(screen.liveInterface.heistIds, ["button_visible"])
+        XCTAssertEqual(screen.liveCapture.heistIds, ["button_visible"])
         XCTAssertEqual(screen.knownInterface.findElement(heistId: "button_known")?.element.label, "Known")
-        XCTAssertFalse(screen.liveInterface.contains(heistId: "button_known"))
+        XCTAssertFalse(screen.liveCapture.contains(heistId: "button_known"))
     }
 
     func testMergingUnionsKnownInterfaceButTakesLatestLiveInterface() {
@@ -90,9 +90,9 @@ final class ScreenTests: XCTestCase {
         let merged = oldPage.merging(newPage)
 
         XCTAssertEqual(merged.knownInterface.heistIds, ["button_first", "button_second"])
-        XCTAssertEqual(merged.liveInterface.heistIds, ["button_second"])
-        XCTAssertNil(merged.liveInterface.heistId(for: first))
-        XCTAssertEqual(merged.liveInterface.heistId(for: second), "button_second")
+        XCTAssertEqual(merged.liveCapture.heistIds, ["button_second"])
+        XCTAssertNil(merged.liveCapture.heistId(for: first))
+        XCTAssertEqual(merged.liveCapture.heistId(for: second), "button_second")
     }
 
     func testVisibleOnlyFiltersKnownEntriesOutsideLatestParse() {
@@ -114,8 +114,8 @@ final class ScreenTests: XCTestCase {
 
         XCTAssertEqual(visibleOnly.knownIds, ["button_visible"])
         XCTAssertEqual(visibleOnly.visibleIds, ["button_visible"])
-        XCTAssertEqual(visibleOnly.liveInterface.hierarchy, screen.liveInterface.hierarchy)
-        XCTAssertEqual(visibleOnly.liveInterface.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(visibleOnly.liveCapture.hierarchy, screen.liveCapture.hierarchy)
+        XCTAssertEqual(visibleOnly.liveCapture.firstResponderHeistId, "button_visible")
         XCTAssertNil(visibleOnly.findElement(heistId: "button_known"))
     }
 
@@ -406,8 +406,8 @@ final class ScreenTests: XCTestCase {
 
         let merged = lhs.merging(rhs)
 
-        XCTAssertEqual(merged.liveInterface.hierarchy.count, 1)
-        if case .element(let element, _) = merged.liveInterface.hierarchy[0] {
+        XCTAssertEqual(merged.liveCapture.hierarchy.count, 1)
+        if case .element(let element, _) = merged.liveCapture.hierarchy[0] {
             XCTAssertEqual(element.label, "New")
         } else {
             XCTFail("Expected element node")
@@ -428,7 +428,7 @@ final class ScreenTests: XCTestCase {
             scrollableContainerViews: [:]
         )
 
-        XCTAssertEqual(lhs.merging(rhs).liveInterface.firstResponderHeistId, "new_field")
+        XCTAssertEqual(lhs.merging(rhs).liveCapture.firstResponderHeistId, "new_field")
     }
 
     // MARK: - refreshingVisibleState
@@ -456,7 +456,7 @@ final class ScreenTests: XCTestCase {
 
         XCTAssertEqual(updated.knownIds, ["button_visible", "button_known"])
         XCTAssertEqual(updated.visibleIds, ["button_visible"])
-        XCTAssertEqual(updated.liveInterface.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(updated.liveCapture.firstResponderHeistId, "button_visible")
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
     }
 

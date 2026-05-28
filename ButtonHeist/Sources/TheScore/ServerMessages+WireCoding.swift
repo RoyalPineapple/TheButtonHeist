@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Coding Keys
 
-private enum ServerMessageCodingKeys: String, CodingKey {
+private enum ServerMessageCodingKeys: String, CodingKey, CaseIterable {
     case type
     case payload
 }
@@ -107,13 +107,26 @@ extension ServerMessage {
             guard let payloadDecoder else { throw missingServerPayload(type) }
             return payloadDecoder
         }
+        func noPayload() throws {
+            if let payloadDecoder {
+                throw unexpectedServerPayload(type, codingPath: payloadDecoder.codingPath)
+            }
+        }
         switch type {
-        case .serverHello: return .serverHello
-        case .authRequired: return .authRequired
+        case .serverHello:
+            try noPayload()
+            return .serverHello
+        case .authRequired:
+            try noPayload()
+            return .authRequired
         case .authApprovalPending: return .authApprovalPending(try AuthApprovalPendingPayload(from: try payload()))
         case .pong: return .pong(try PongPayload(from: try payload()))
-        case .recordingStarted: return .recordingStarted
-        case .recordingStopped: return .recordingStopped
+        case .recordingStarted:
+            try noPayload()
+            return .recordingStarted
+        case .recordingStopped:
+            try noPayload()
+            return .recordingStopped
         case .protocolMismatch: return .protocolMismatch(try ProtocolMismatchPayload(from: try payload()))
         case .authApproved: return .authApproved(try AuthApprovedPayload(from: try payload()))
         case .error: return .error(try ServerError(from: try payload()))
@@ -131,6 +144,7 @@ extension ServerMessage {
     // MARK: - Codable Conformance
 
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownMessageKeys(decoder)
         let container = try decoder.container(keyedBy: ServerMessageCodingKeys.self)
         let type = try container.decode(ServerWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
@@ -147,10 +161,29 @@ extension ServerMessage {
             try payload.encode(to: container.superEncoder(forKey: .payload))
         }
     }
+
+    private static func rejectUnknownMessageKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(ServerMessageCodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: EnvelopeCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown server message field \"\(unknownKey.stringValue)\""
+        ))
+    }
 }
 
 // MARK: - Helpers
 
 private func missingServerPayload(_ type: ServerWireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
     .missingPayload(key: ServerMessageCodingKeys.payload, type: type, codingPath: codingPath)
+}
+
+private func unexpectedServerPayload(_ type: ServerWireMessageType, codingPath: [CodingKey]) -> DecodingError {
+    .dataCorrupted(.init(
+        codingPath: codingPath,
+        debugDescription: "\(type.rawValue) must not include a payload"
+    ))
 }

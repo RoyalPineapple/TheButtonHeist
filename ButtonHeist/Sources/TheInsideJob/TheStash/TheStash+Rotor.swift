@@ -215,7 +215,7 @@ private extension TheStash {
     /// Return the known `ScreenElement` corresponding to a UIKit accessibility
     /// object by live object identity.
     func knownObject(_ object: NSObject) -> ParsedRotorResultObject? {
-        guard let heistId = currentScreen.liveInterface.elementRefs.first(where: { _, ref in
+        guard let heistId = currentScreen.liveCapture.elementRefs.first(where: { _, ref in
             ref.object === object
         })?.key,
             let cached = currentScreen.findElement(heistId: heistId)
@@ -239,8 +239,8 @@ private extension TheStash {
             return nil
         }
         let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.liveInterface.heistIdByElement[parsedElement] else { return nil }
-        return screen.elements[heistId]
+        guard let heistId = screen.liveCapture.heistIdByElement[parsedElement] else { return nil }
+        return screen.semantic.elements[heistId]
     }
 
     func parseRotorResultObject(_ object: NSObject) -> ParsedRotorResultObject? {

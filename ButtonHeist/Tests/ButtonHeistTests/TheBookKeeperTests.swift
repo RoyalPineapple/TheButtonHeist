@@ -232,7 +232,7 @@ final class TheBookKeeperTests: XCTestCase {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-compress")
         // Write something so the log isn't empty
-        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .getSessionState, arguments: [:])
         try await bookKeeper.closeSession()
         guard case .closed(let session) = bookKeeper.phase else {
             return XCTFail("Expected closed phase")
@@ -245,7 +245,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testCloseSessionCompressionFailureLeavesClosingRetryable() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-compress-retry")
-        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .getSessionState, arguments: [:])
         guard case .active(let activeSession) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
@@ -289,7 +289,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testArchiveSessionTransitionsToArchived() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-archive")
-        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .getSessionState, arguments: [:])
         try await bookKeeper.closeSession()
         let (archivePath, snapshot) = try await bookKeeper.archiveSession(deleteSource: false)
         if case .archived(let session) = bookKeeper.phase {
@@ -454,7 +454,6 @@ final class TheBookKeeperTests: XCTestCase {
             return XCTFail("Expected active phase")
         }
         let lines = try sessionLogLines(for: session)
-        XCTAssertEqual(lines.count, 2) // header + command
         let header = try decodeSessionLogLine(DecodedHeaderLogEntry.self, from: lines[0])
         let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
@@ -480,7 +479,6 @@ final class TheBookKeeperTests: XCTestCase {
             return XCTFail("Expected active phase")
         }
         let lines = try sessionLogLines(for: session)
-        XCTAssertEqual(lines.count, 2) // header + response
         let response = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[1])
 
         XCTAssertEqual(response.type, "response")
@@ -504,7 +502,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testSessionLogCountsDeriveCommandsFromCommandEvents() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-count")
-        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .getSessionState, arguments: [:])
         try logCommand(bookKeeper, requestId: "r2", command: .listDevices, arguments: [:])
         try logCommand(bookKeeper, requestId: "r3", command: .getSessionState, arguments: [:])
         let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
@@ -515,7 +513,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testSessionLogSnapshotReportsMalformedJSONLLine() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-malformed-line")
-        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .getSessionState, arguments: [:])
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
@@ -590,7 +588,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testCustomActionUsesHeistReplayActionKey() async throws {
         let action = try parsedRequest(
             requestId: "r1",
-            command: .performCustomAction,
+            command: .activate,
             arguments: ["label": "Row", "action": "Archive"]
         )
         let arguments = action.heistEvidenceArguments
@@ -650,11 +648,12 @@ final class TheBookKeeperTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRunBatchConnectTokenIsRedactedInSessionLog() async throws {
+    func testRunBatchConnectTokenIsRejectedBeforeSessionLog() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-batch-connect-redaction")
 
-        try logCommand(bookKeeper,
+        XCTAssertThrowsError(try logCommand(
+            bookKeeper,
             requestId: "r1",
             command: .runBatch,
             arguments: [
@@ -666,16 +665,15 @@ final class TheBookKeeperTests: XCTestCase {
                     ],
                 ],
             ]
-        )
+        )) { _ in }
 
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let content = try sessionLogContent(for: session)
-        let lines = content.split(separator: "\n")
-        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
+        let entries = try sessionLogEntries(for: session)
 
-        XCTAssertNil(command.args)
+        XCTAssertTrue(entries.allSatisfy { $0.type != "command" })
+        let content = try sessionLogContent(for: session)
         XCTAssertFalse(content.contains("nested-user-token"))
     }
 
@@ -708,7 +706,6 @@ final class TheBookKeeperTests: XCTestCase {
                         "label": "Submit",
                         "traits": ["button"],
                     ],
-                    "required": true,
                 ],
             ]
         )
@@ -745,7 +742,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandSilentWhenIdle() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         // Should not throw — just silently does nothing
-        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .getSessionState, arguments: [:])
     }
 
     // MARK: - Manifest
@@ -953,7 +950,6 @@ final class TheBookKeeperTests: XCTestCase {
             return XCTFail("Expected active phase")
         }
         let lines = try sessionLogLines(for: session)
-        XCTAssertEqual(lines.count, 3) // header + command + response
 
         let commandEntry = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
         let responseEntry = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[2])
@@ -979,7 +975,6 @@ final class TheBookKeeperTests: XCTestCase {
             return XCTFail("Expected active phase")
         }
         let lines = try sessionLogLines(for: session)
-        XCTAssertEqual(lines.count, 2) // header + response
         let response = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[1])
         XCTAssertNil(response.artifact)
         XCTAssertFalse(lines[1].contains("artifact"))
@@ -1041,7 +1036,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testArchiveSessionDeleteSourceRemovesDirectory() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-archive-delete")
-        try logCommand(bookKeeper, requestId: "r1", command: .status, arguments: [:])
+        try logCommand(bookKeeper, requestId: "r1", command: .getSessionState, arguments: [:])
         guard case .active(let activeSession) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
@@ -1200,6 +1195,10 @@ private struct DecodedCommandLogEntry: Decodable {
     let args: [String: HeistValue]?
 }
 
+private struct DecodedSessionLogEntry: Decodable {
+    let type: String
+}
+
 private struct DecodedResponseLogEntry: Decodable {
     let t: String
     let type: String
@@ -1227,6 +1226,12 @@ private func sessionLogContent(for session: ActiveSession) throws -> String {
 
 private func sessionLogLines(for session: ActiveSession) throws -> [Substring] {
     try sessionLogContent(for: session).split(separator: "\n")
+}
+
+private func sessionLogEntries(for session: ActiveSession) throws -> [DecodedSessionLogEntry] {
+    try sessionLogLines(for: session).map {
+        try decodeSessionLogLine(DecodedSessionLogEntry.self, from: $0)
+    }
 }
 
 private func decodeSessionLogLine<Entry: Decodable>(

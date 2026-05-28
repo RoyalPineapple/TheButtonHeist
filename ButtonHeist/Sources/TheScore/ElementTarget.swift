@@ -22,15 +22,14 @@ public enum ElementTarget: Sendable, Equatable {
     /// This is a disambiguator for match results, NOT durable identity.
     case matcher(ElementMatcher, ordinal: Int? = nil)
 
-    /// Returns nil if both matcher and ordinal are empty.
+    /// Returns nil if both heistId and matcher are empty. Ordinal only
+    /// disambiguates a non-empty semantic matcher.
     public init?(heistId: HeistId? = nil, matcher: ElementMatcher, ordinal: Int? = nil) {
         if let heistId {
             guard ordinal == nil, matcher.nonEmpty == nil else { return nil }
             self = .heistId(heistId)
         } else if let match = matcher.nonEmpty {
             self = .matcher(match, ordinal: ordinal)
-        } else if ordinal != nil {
-            self = .matcher(matcher, ordinal: ordinal)
         } else {
             return nil
         }
@@ -111,16 +110,16 @@ extension ElementTarget: Codable {
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
-        if let match = matcher.nonEmpty {
-            self = .matcher(match, ordinal: ordinal)
-        } else if ordinal != nil {
-            self = .matcher(matcher, ordinal: ordinal)
-        } else {
+        guard let match = matcher.nonEmpty else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
-                debugDescription: "ElementTarget requires heistId, ordinal, or at least one matcher field (label, identifier, value, traits, excludeTraits)"
+                debugDescription: """
+                ElementTarget requires heistId or at least one matcher field \
+                (label, identifier, value, traits, excludeTraits); ordinal only disambiguates a matcher
+                """
             ))
         }
+        self = .matcher(match, ordinal: ordinal)
     }
 
     public func encode(to encoder: Encoder) throws {

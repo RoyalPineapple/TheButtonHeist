@@ -247,7 +247,7 @@ extension AccessibilityElement {
         var previousFingerprint: Int? = {
             guard let initial = parseProvider() else { return nil }
             lastScreen = initial
-            let initialElements = initial.liveInterface.hierarchy.sortedElements
+            let initialElements = initial.liveCapture.hierarchy.sortedElements
             for element in initialElements {
                 elementsByKey[element.timelineKey] = element
             }
@@ -286,7 +286,7 @@ extension AccessibilityElement {
                     continue
                 }
                 lastScreen = parse
-                let parsedElements = parse.liveInterface.hierarchy.sortedElements
+                let parsedElements = parse.liveCapture.hierarchy.sortedElements
                 for element in parsedElements {
                     elementsByKey[element.timelineKey] = element
                 }
@@ -296,7 +296,7 @@ extension AccessibilityElement {
 
             guard let parse = parseProvider() else { continue }
             lastScreen = parse
-            let parsedElements = parse.liveInterface.hierarchy.sortedElements
+            let parsedElements = parse.liveCapture.hierarchy.sortedElements
             for element in parsedElements {
                 elementsByKey[element.timelineKey] = element
             }

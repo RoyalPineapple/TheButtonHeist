@@ -22,7 +22,7 @@ struct PublicRecordingResponse: FencePublicJSONResponse {
         self.frameCount = payload.frameCount
         self.fps = payload.fps
         self.stopReason = payload.stopReason.rawValue
-        self.interactionCount = payload.interactionLog?.count ?? 0
+        self.interactionCount = payload.interactionLog.count
         self.path = path
         self.videoData = options.inlineData ? payload.videoData : nil
         self.interactionLog = options.includeInteractionLog ? payload.interactionLog : nil

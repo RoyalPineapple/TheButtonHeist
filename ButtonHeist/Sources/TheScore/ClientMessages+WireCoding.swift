@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Coding Keys
 
-private enum ClientMessageCodingKeys: String, CodingKey {
+private enum ClientMessageCodingKeys: String, CodingKey, CaseIterable {
     case type
     case payload
 }
@@ -94,15 +94,15 @@ extension ClientMessage {
         case .rotor(let payload): return (.rotor, payload)
         case .editAction(let payload): return (.editAction, payload)
         case .setPasteboard(let payload): return (.setPasteboard, payload)
-        case .touchTap(let payload): return (.touchTap, payload)
-        case .touchLongPress(let payload): return (.touchLongPress, payload)
-        case .touchSwipe(let payload): return (.touchSwipe, payload)
-        case .touchDrag(let payload): return (.touchDrag, payload)
-        case .touchPinch(let payload): return (.touchPinch, payload)
-        case .touchRotate(let payload): return (.touchRotate, payload)
-        case .touchTwoFingerTap(let payload): return (.touchTwoFingerTap, payload)
-        case .touchDrawPath(let payload): return (.touchDrawPath, payload)
-        case .touchDrawBezier(let payload): return (.touchDrawBezier, payload)
+        case .oneFingerTap(let payload): return (.oneFingerTap, payload)
+        case .longPress(let payload): return (.longPress, payload)
+        case .swipe(let payload): return (.swipe, payload)
+        case .drag(let payload): return (.drag, payload)
+        case .pinch(let payload): return (.pinch, payload)
+        case .rotate(let payload): return (.rotate, payload)
+        case .twoFingerTap(let payload): return (.twoFingerTap, payload)
+        case .drawPath(let payload): return (.drawPath, payload)
+        case .drawBezier(let payload): return (.drawBezier, payload)
         case .typeText(let payload): return (.typeText, payload)
         case .scroll(let payload): return (.scroll, payload)
         case .scrollToVisible(let payload): return (.scrollToVisible, payload)
@@ -123,16 +123,37 @@ extension ClientMessage {
             guard let payloadDecoder else { throw missingClientPayload(type) }
             return payloadDecoder
         }
+        func noPayload() throws {
+            if let payloadDecoder {
+                throw unexpectedClientPayload(type, codingPath: payloadDecoder.codingPath)
+            }
+        }
         switch type {
-        case .clientHello: return .clientHello
+        case .clientHello:
+            try noPayload()
+            return .clientHello
         case .requestInterface: return .requestInterface(try InterfaceQuery(from: try payload()))
-        case .ping: return .ping
-        case .status: return .status
-        case .resignFirstResponder: return .resignFirstResponder
-        case .getPasteboard: return .getPasteboard
-        case .requestScreen: return .requestScreen
-        case .explore: return .explore
-        case .stopRecording: return .stopRecording
+        case .ping:
+            try noPayload()
+            return .ping
+        case .status:
+            try noPayload()
+            return .status
+        case .resignFirstResponder:
+            try noPayload()
+            return .resignFirstResponder
+        case .getPasteboard:
+            try noPayload()
+            return .getPasteboard
+        case .requestScreen:
+            try noPayload()
+            return .requestScreen
+        case .explore:
+            try noPayload()
+            return .explore
+        case .stopRecording:
+            try noPayload()
+            return .stopRecording
         case .authenticate: return .authenticate(try AuthenticatePayload(from: try payload()))
         case .activate: return .activate(try ElementTarget(from: try payload()))
         case .increment: return .increment(try ElementTarget(from: try payload()))
@@ -141,15 +162,15 @@ extension ClientMessage {
         case .rotor: return .rotor(try RotorTarget(from: try payload()))
         case .editAction: return .editAction(try EditActionTarget(from: try payload()))
         case .setPasteboard: return .setPasteboard(try SetPasteboardTarget(from: try payload()))
-        case .touchTap: return .touchTap(try TouchTapTarget(from: try payload()))
-        case .touchLongPress: return .touchLongPress(try LongPressTarget(from: try payload()))
-        case .touchSwipe: return .touchSwipe(try SwipeTarget(from: try payload()))
-        case .touchDrag: return .touchDrag(try DragTarget(from: try payload()))
-        case .touchPinch: return .touchPinch(try PinchTarget(from: try payload()))
-        case .touchRotate: return .touchRotate(try RotateTarget(from: try payload()))
-        case .touchTwoFingerTap: return .touchTwoFingerTap(try TwoFingerTapTarget(from: try payload()))
-        case .touchDrawPath: return .touchDrawPath(try DrawPathTarget(from: try payload()))
-        case .touchDrawBezier: return .touchDrawBezier(try DrawBezierTarget(from: try payload()))
+        case .oneFingerTap: return .oneFingerTap(try TapTarget(from: try payload()))
+        case .longPress: return .longPress(try LongPressTarget(from: try payload()))
+        case .swipe: return .swipe(try SwipeTarget(from: try payload()))
+        case .drag: return .drag(try DragTarget(from: try payload()))
+        case .pinch: return .pinch(try PinchTarget(from: try payload()))
+        case .rotate: return .rotate(try RotateTarget(from: try payload()))
+        case .twoFingerTap: return .twoFingerTap(try TwoFingerTapTarget(from: try payload()))
+        case .drawPath: return .drawPath(try DrawPathTarget(from: try payload()))
+        case .drawBezier: return .drawBezier(try DrawBezierTarget(from: try payload()))
         case .typeText: return .typeText(try TypeTextTarget(from: try payload()))
         case .scroll: return .scroll(try ScrollTarget(from: try payload()))
         case .scrollToVisible: return .scrollToVisible(try ScrollToVisibleTarget(from: try payload()))
@@ -166,6 +187,7 @@ extension ClientMessage {
     // MARK: - Codable Conformance
 
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownMessageKeys(decoder)
         let container = try decoder.container(keyedBy: ClientMessageCodingKeys.self)
         let type = try container.decode(ClientWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
@@ -182,10 +204,29 @@ extension ClientMessage {
             try payload.encode(to: container.superEncoder(forKey: .payload))
         }
     }
+
+    private static func rejectUnknownMessageKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(ClientMessageCodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: RequestEnvelopeUnknownKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown client message field \"\(unknownKey.stringValue)\""
+        ))
+    }
 }
 
 // MARK: - Helpers
 
 private func missingClientPayload(_ type: ClientWireMessageType, codingPath: [CodingKey] = []) -> DecodingError {
     .missingPayload(key: ClientMessageCodingKeys.payload, type: type, codingPath: codingPath)
+}
+
+private func unexpectedClientPayload(_ type: ClientWireMessageType, codingPath: [CodingKey]) -> DecodingError {
+    .dataCorrupted(.init(
+        codingPath: codingPath,
+        debugDescription: "\(type.rawValue) must not include a payload"
+    ))
 }

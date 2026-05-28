@@ -72,7 +72,16 @@ extension TheBookKeeper {
         try createPrivateFile(at: temporaryURL, contents: data)
         do {
             if fileManager.fileExists(atPath: url.path) {
-                try fileManager.removeItem(at: url)
+                do {
+                    try fileManager.removeItem(at: url)
+                } catch {
+                    if fileManager.fileExists(atPath: url.path) {
+                        throw error
+                    } else {
+                        // Destination disappeared after the existence check; the move below
+                        // still provides the one authoritative replacement write.
+                    }
+                }
             }
             try fileManager.moveItem(at: temporaryURL, to: url)
             try fileManager.setAttributes(attributes, ofItemAtPath: url.path)

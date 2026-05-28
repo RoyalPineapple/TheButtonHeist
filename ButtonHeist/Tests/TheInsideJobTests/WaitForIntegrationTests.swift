@@ -455,37 +455,33 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertNil(result.errorKind)
     }
 
-    // MARK: - wait_for_change current state
+    // MARK: - wait_for_change trace truth
 
-    func testWaitForChangeElementAppearedAlreadyPresentReturnsImmediately() async throws {
+    func testWaitForChangeElementAppearedAlreadyPresentStillRequiresObservedChange() async throws {
         let label = addLabel("WaitForChange-AlreadyPresent")
         defer { label.removeFromSuperview() }
 
         let result = await waitForChange(
             expectation: .elementAppeared(ElementMatcher(label: "WaitForChange-AlreadyPresent")),
-            timeout: 5.0
+            timeout: 0.2
         )
 
-        XCTAssertTrue(result.success)
+        XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForChange)
-        XCTAssertEqual(result.message, "expectation already met by current state (0.0s)")
-        guard case .noChange = result.accessibilityDelta else {
-            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityDelta))")
-        }
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("expected: element_appeared(WaitForChange-AlreadyPresent)") == true)
     }
 
-    func testWaitForChangeElementDisappearedAlreadyAbsentReturnsImmediately() async throws {
+    func testWaitForChangeElementDisappearedAlreadyAbsentStillRequiresObservedChange() async throws {
         let result = await waitForChange(
             expectation: .elementDisappeared(ElementMatcher(label: "WaitForChange-NeverExisted")),
-            timeout: 5.0
+            timeout: 0.2
         )
 
-        XCTAssertTrue(result.success)
+        XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForChange)
-        XCTAssertEqual(result.message, "expectation already met by current state (0.0s)")
-        guard case .noChange = result.accessibilityDelta else {
-            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityDelta))")
-        }
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("expected: element_disappeared(WaitForChange-NeverExisted)") == true)
     }
 
     func testWaitForChangeElementAppearedAfterBaselineReturnsThroughChangePath() async throws {

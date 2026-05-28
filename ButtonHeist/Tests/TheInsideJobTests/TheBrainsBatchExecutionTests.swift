@@ -32,10 +32,21 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             },
             waitForExpectation: { expectation, _ in
                 events.append("expectation:\(expectation.summaryDescription)")
+                let trace: AccessibilityTrace.Delta
+                switch expectation {
+                case .screenChanged:
+                    trace = .screenChanged(.init(
+                        elementCount: 1,
+                        newInterface: Interface(timestamp: Date(), tree: [])
+                    ))
+                default:
+                    trace = .elementsChanged(.init(elementCount: 1, edits: ElementEdits()))
+                }
                 return ActionResult(
                     success: true,
                     method: .waitForChange,
-                    message: expectation.summaryDescription
+                    message: expectation.summaryDescription,
+                    traceProjecting: trace
                 )
             },
             settleRefreshRecordBaseline: {
@@ -67,6 +78,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             "expectation:elements_changed",
             "baseline",
             "action:wait_for_change",
+            "expectation:screen_changed",
             "baseline",
         ])
 
@@ -242,7 +254,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
-                    accessibilityDelta: .screenChanged(.init(
+                    traceProjecting: .screenChanged(.init(
                         elementCount: 1,
                         newInterface: Interface(timestamp: Date(), tree: [])
                     ))

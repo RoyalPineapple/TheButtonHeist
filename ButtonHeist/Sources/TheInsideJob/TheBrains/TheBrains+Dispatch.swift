@@ -37,23 +37,23 @@ extension TheBrains {
             return await performInteraction(command: message) { await self.actions.executeSetPasteboard(target) }
         case .resignFirstResponder:
             return await performInteraction(command: message) { await self.actions.executeResignFirstResponder() }
-        case .touchTap(let target):
+        case .oneFingerTap(let target):
             return await performInteraction(command: message) { await self.actions.executeTap(target) }
-        case .touchLongPress(let target):
+        case .longPress(let target):
             return await performInteraction(command: message) { await self.actions.executeLongPress(target) }
-        case .touchSwipe(let target):
+        case .swipe(let target):
             return await performInteraction(command: message) { await self.actions.executeSwipe(target) }
-        case .touchDrag(let target):
+        case .drag(let target):
             return await performInteraction(command: message) { await self.actions.executeDrag(target) }
-        case .touchPinch(let target):
+        case .pinch(let target):
             return await performInteraction(command: message) { await self.actions.executePinch(target) }
-        case .touchRotate(let target):
+        case .rotate(let target):
             return await performInteraction(command: message) { await self.actions.executeRotate(target) }
-        case .touchTwoFingerTap(let target):
+        case .twoFingerTap(let target):
             return await performInteraction(command: message) { await self.actions.executeTwoFingerTap(target) }
-        case .touchDrawPath(let target):
+        case .drawPath(let target):
             return await performInteraction(command: message) { await self.actions.executeDrawPath(target) }
-        case .touchDrawBezier(let target):
+        case .drawBezier(let target):
             return await performInteraction(command: message) { await self.actions.executeDrawBezier(target) }
         case .typeText(let target):
             return await performInteraction(command: message) { await self.actions.executeTypeText(target) }
@@ -78,10 +78,10 @@ extension TheBrains {
             return await executeBatchExecutionPlan(plan)
         case .explore:
             return await performExplore()
-
-        default:
-            insideJobLogger.error("Unhandled message type in executeCommand")
-            return unsupportedCommandResult(for: message, context: "executeCommand")
+        case .clientHello, .authenticate, .requestInterface,
+             .ping, .status, .requestScreen,
+             .startRecording, .stopRecording, .getPasteboard:
+            preconditionFailure("Non-executable client message reached action execution: \(message.canonicalName)")
         }
     }
 
@@ -149,7 +149,7 @@ extension TheBrains {
 
     func performElementSearch(
         elementTarget: (any SemanticElementTarget)?,
-        direction: ScrollSearchDirection?,
+        direction: ScrollSearchDirection,
         method: ActionMethod
     ) async -> ActionResult {
         guard refresh() != nil else {
@@ -210,7 +210,13 @@ extension TheBrains {
     ) async -> TheSafecracker.InteractionResult {
         let deadline = ContinuousClock.now + .seconds(timeout)
         let start = CFAbsoluteTimeGetCurrent()
-        let executableTarget = stash.semanticElementTarget(for: elementTarget)
+        guard let executableTarget = stash.semanticElementTarget(for: elementTarget) else {
+            return .failure(
+                .waitFor,
+                message: "wait_for target requires heistId or semantic matcher predicates",
+                failureKind: .inputValidation
+            )
+        }
 
         guard await refreshSemanticStateForWait(target: executableTarget) else {
             return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
@@ -276,7 +282,7 @@ extension TheBrains {
         var parts = [
             "timed out after \(elapsed)s waiting for \(expected)",
             "expected: \(waitForTargetDescription(target))",
-            "known: \(stash.currentScreen.elements.count) elements",
+            "known: \(stash.currentScreen.semantic.elements.count) elements",
         ]
         if let screenId = stash.lastScreenId {
             parts.append("screen: \(screenId)")
@@ -297,12 +303,14 @@ extension TheBrains {
         if let heistId = target.exactHeistId {
             return "heistId=\"\(heistId)\""
         }
-        let matcher = target.semanticMatcher ?? ElementMatcher()
+        guard let matcher = target.semanticMatcher?.nonEmpty else {
+            return "<missing semantic matcher>"
+        }
         var description = stash.formatMatcher(matcher)
         if let ordinal = target.semanticOrdinal {
             description += " ordinal=\(ordinal)"
         }
-        return description.isEmpty ? "<empty matcher>" : description
+        return description
     }
 
     static func waitForErrorKind(for failureKind: TheSafecracker.FailureKind?) -> ErrorKind {
@@ -367,18 +375,9 @@ extension TheBrains {
         )
     }
 
-    private func unsupportedCommandResult(for message: ClientMessage, context: String) -> ActionResult {
-        var builder = ActionResultBuilder(
-            method: Self.diagnosticMethod(for: message),
-            screenName: stash.lastScreenName,
-            screenId: stash.lastScreenId
-        )
-        builder.message = "Unsupported command '\(message.canonicalName)' in \(context)"
-        return builder.failure(errorKind: .unsupported)
-    }
-
-    /// Map a ClientMessage to the ActionMethod that best identifies it for diagnostic output.
-    /// Handshake/control messages have no natural executor and use a diagnostic-only method.
+    /// Map an executable ClientMessage to the ActionMethod that identifies it
+    /// for diagnostic output. Protocol/control messages are rejected before
+    /// action execution and must not produce ActionResult values.
     static func diagnosticMethod(for message: ClientMessage) -> ActionMethod {
         switch message {
         case .activate: return .activate
@@ -390,14 +389,14 @@ extension TheBrains {
         case .setPasteboard: return .setPasteboard
         case .getPasteboard: return .getPasteboard
         case .resignFirstResponder: return .resignFirstResponder
-        case .touchTap: return .syntheticTap
-        case .touchLongPress: return .syntheticLongPress
-        case .touchSwipe: return .syntheticSwipe
-        case .touchDrag: return .syntheticDrag
-        case .touchPinch: return .syntheticPinch
-        case .touchRotate: return .syntheticRotate
-        case .touchTwoFingerTap: return .syntheticTwoFingerTap
-        case .touchDrawPath, .touchDrawBezier: return .syntheticDrawPath
+        case .oneFingerTap: return .syntheticTap
+        case .longPress: return .syntheticLongPress
+        case .swipe: return .syntheticSwipe
+        case .drag: return .syntheticDrag
+        case .pinch: return .syntheticPinch
+        case .rotate: return .syntheticRotate
+        case .twoFingerTap: return .syntheticTwoFingerTap
+        case .drawPath, .drawBezier: return .syntheticDrawPath
         case .typeText: return .typeText
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
@@ -411,7 +410,7 @@ extension TheBrains {
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen,
              .startRecording, .stopRecording:
-            return .unsupportedCommand
+            preconditionFailure("Non-executable client message reached action diagnostics: \(message.canonicalName)")
         }
     }
 
@@ -429,13 +428,13 @@ private extension ClientMessage {
              .increment,
              .decrement,
              .performCustomAction,
-             .touchTap,
-             .touchLongPress,
-             .touchSwipe,
-             .touchDrag,
-             .touchPinch,
-             .touchRotate,
-             .touchTwoFingerTap,
+             .oneFingerTap,
+             .longPress,
+             .swipe,
+             .drag,
+             .pinch,
+             .rotate,
+             .twoFingerTap,
              .typeText,
              .scrollToVisible:
             return nil
@@ -444,8 +443,8 @@ private extension ClientMessage {
              .requestInterface,
              .ping,
              .status,
-             .touchDrawPath,
-             .touchDrawBezier,
+             .drawPath,
+             .drawBezier,
              .editAction,
              .scroll,
              .elementSearch,

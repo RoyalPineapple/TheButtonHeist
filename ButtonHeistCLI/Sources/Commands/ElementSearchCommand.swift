@@ -12,7 +12,7 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
 
             Examples:
               buttonheist element_search -l "Color Picker"
-              buttonheist element_search -id "market.row.colorPicker"
+              buttonheist element_search --identifier "market.row.colorPicker"
               buttonheist element_search -l "Settings" --traits button
               buttonheist element_search -l "Color Picker" -d up
             """
