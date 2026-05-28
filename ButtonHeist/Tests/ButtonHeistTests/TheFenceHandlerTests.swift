@@ -3396,9 +3396,9 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistExecutesStepsInOrder() async throws {
         let steps = [
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn2")),
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn3")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn2")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn3")),
         ]
         let heist = HeistPlayback(app: "com.test.mock", steps: steps)
         let heistURL = try writeTemporaryHeist(heist)
@@ -3451,12 +3451,11 @@ final class TheFenceHandlerTests: XCTestCase {
                 steps: [
                     HeistEvidence(
                         command: "type_text",
-                        target: ElementMatcher(identifier: "email"),
-                        ordinal: 1,
+                        target: semanticTarget(identifier: "email", ordinal: 1),
                         arguments: ["text": .string("user@example.com")],
                         recorded: RecordedMetadata(heistId: "recorded-email")
                     ),
-                    HeistEvidence(command: "activate", target: ElementMatcher(identifier: "submit")),
+                    HeistEvidence(command: "activate", target: semanticTarget(identifier: "submit")),
                 ]
             )
         )
@@ -3466,8 +3465,8 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.totalStepCount, 2)
         XCTAssertEqual(operation.command, .typeText)
         XCTAssertEqual(playback.steps[1].command, .activate)
-        XCTAssertEqual(operation.target?.identifier, "email")
-        XCTAssertEqual(operation.ordinal, 1)
+        XCTAssertEqual(operation.target?.matcher.identifier, "email")
+        XCTAssertEqual(operation.target?.ordinal, 1)
 
         let normalizedOperation = operation.normalizedOperation()
         XCTAssertEqual(normalizedOperation.command, .typeText)
@@ -3477,13 +3476,13 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackLoadsFlatHeistFileAtFileEdge() async throws {
+    func testTypedPlaybackLoadsHeistFileAtFileEdge() async throws {
         let heist = HeistPlayback(
             app: "com.test.mock",
             steps: [
                 HeistEvidence(
                     command: "activate",
-                    target: ElementMatcher(identifier: "submit"),
+                    target: semanticTarget(identifier: "submit"),
                     arguments: ["expect": .object(["type": .string("screen_changed")])]
                 ),
             ]
@@ -3495,7 +3494,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.map(\.command), [.activate])
-        XCTAssertEqual(playback.steps.first?.target?.identifier, "submit")
+        XCTAssertEqual(playback.steps.first?.target?.matcher.identifier, "submit")
         let expect = playback.steps.first?.requestDecodeInputArguments()["expect"] as? [String: Any]
         XCTAssertEqual(expect?["type"] as? String, "screen_changed")
     }
@@ -3505,7 +3504,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let heist = HeistPlayback(
             version: HeistPlayback.currentVersion + 1,
             app: "com.test.mock",
-            steps: [HeistEvidence(command: "activate", target: ElementMatcher(identifier: "submit"))]
+            steps: [HeistEvidence(command: "activate", target: semanticTarget(identifier: "submit"))]
         )
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
@@ -3524,7 +3523,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let operation = try TheFence.PlaybackOperation(
             evidence: HeistEvidence(
                 command: "type_text",
-                target: ElementMatcher(identifier: "email"),
+                target: semanticTarget(identifier: "email"),
                 arguments: ["expect": .object(["type": .string("screen_changed")])]
             ),
             index: 0
@@ -3636,7 +3635,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testExecutePlaybackOperationUsesTypedCommand() async throws {
         let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            evidence: HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
             index: 0
         )
 
@@ -3658,7 +3657,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistDoesNotImplicitlyRecoverElementNotFoundWithScrollToVisible() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "offscreen")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "offscreen")),
         ])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
@@ -3710,7 +3709,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistMapsServerErrorResponseToCommandFailure() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
         ])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
@@ -3753,7 +3752,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistPreservesPlaybackFailureWhenDiagnosticInterfaceCaptureFails() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
         ])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
@@ -3821,7 +3820,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let operation = try TheFence.PlaybackOperation(
             evidence: HeistEvidence(
                 command: "activate",
-                target: ElementMatcher(identifier: "btn1"),
+                target: semanticTarget(identifier: "btn1"),
                 recorded: RecordedMetadata(heistId: "stale_debug_id")
             ),
             index: 0
@@ -3857,7 +3856,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
             HeistEvidence(
                 command: "activate",
-                target: ElementMatcher(identifier: "btn1"),
+                target: semanticTarget(identifier: "btn1"),
                 recorded: RecordedMetadata(
                     accessibilityTrace: AccessibilityTrace(interface: Interface(
                         timestamp: Date(timeIntervalSince1970: 0),
@@ -3892,9 +3891,9 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistRejectsInvalidCommandBeforeExecution() async throws {
         let steps = [
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
             HeistEvidence(command: "not_a_real_command"),
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn3")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn3")),
         ]
         let heist = HeistPlayback(app: "com.test.mock", steps: steps)
         let heistURL = try writeTemporaryHeist(heist)
@@ -3921,7 +3920,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPlayHeistRejectsInvalidFirstCommandBeforePrimingInterface() async throws {
         let steps = [
             HeistEvidence(command: "not_a_real_command"),
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
         ]
         let heist = HeistPlayback(app: "com.test.mock", steps: steps)
         let heistURL = try writeTemporaryHeist(heist)
@@ -3987,7 +3986,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistReportsTimingMs() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
         ])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
@@ -4006,7 +4005,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistResetsPhaseAfterCompletion() async throws {
         let heist = HeistPlayback(app: "com.test.mock", steps: [
-            HeistEvidence(command: "activate", target: ElementMatcher(identifier: "btn1")),
+            HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
         ])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }

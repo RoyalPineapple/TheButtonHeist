@@ -19,9 +19,9 @@ public enum PlaybackFailure: Sendable {
     /// The step that failed — command name and element target.
     public struct FailedStep: Sendable {
         public let command: String
-        public let target: ElementMatcher?
+        public let target: SemanticActionTarget?
 
-        public init(command: String, target: ElementMatcher?) {
+        public init(command: String, target: SemanticActionTarget?) {
             self.command = command
             self.target = target
         }

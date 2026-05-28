@@ -42,23 +42,16 @@ extension TheFence {
 
     struct PlaybackOperation: Sendable {
         let command: Command
-        let target: ElementMatcher?
-        let ordinal: Int?
+        let target: SemanticActionTarget?
         let payload: PlaybackPayload
 
         init(evidence: HeistEvidence, index: Int) throws {
             let payload = PlaybackPayload(values: evidence.arguments)
             if payload.values["heistId"] != nil {
                 throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): top-level heistId is not valid playback identity; use matcher fields and _recorded.heistId metadata"
+                    "Invalid heist step \(index): top-level heistId is not valid playback identity; use target.matcher and _recorded.heistId metadata"
                 )
             }
-            if evidence.target?.heistId != nil {
-                throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): matcher must not carry heistId during playback; use _recorded.heistId metadata"
-                )
-            }
-
             let command: Command
             switch FenceOperationCatalog.normalizePlaybackStep(
                 commandName: evidence.command,
@@ -75,20 +68,17 @@ extension TheFence {
             self.init(
                 command: command,
                 target: evidence.target,
-                ordinal: evidence.ordinal,
                 payload: payload
             )
         }
 
         private init(
             command: Command,
-            target: ElementMatcher?,
-            ordinal: Int?,
+            target: SemanticActionTarget?,
             payload: PlaybackPayload
         ) {
             self.command = command
             self.target = target
-            self.ordinal = ordinal
             self.payload = payload
         }
 
@@ -108,22 +98,20 @@ extension TheFence {
 
             if let target {
                 var matcher: [String: CommandArgumentValue] = [:]
-                if let label = target.label { matcher["label"] = .string(label) }
-                if let matchIdentifier = target.identifier { matcher["identifier"] = .string(matchIdentifier) }
-                if let matchValue = target.value { matcher["value"] = .string(matchValue) }
-                if let matchTraits = target.traits {
+                if let label = target.matcher.label { matcher["label"] = .string(label) }
+                if let matchIdentifier = target.matcher.identifier { matcher["identifier"] = .string(matchIdentifier) }
+                if let matchValue = target.matcher.value { matcher["value"] = .string(matchValue) }
+                if let matchTraits = target.matcher.traits {
                     matcher["traits"] = .array(matchTraits.map { .string($0.rawValue) })
                 }
-                if let matchExclude = target.excludeTraits {
+                if let matchExclude = target.matcher.excludeTraits {
                     matcher["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
                 }
                 var targetArguments: [String: CommandArgumentValue] = ["matcher": .object(matcher)]
-                if let ordinal {
+                if let ordinal = target.ordinal {
                     targetArguments["ordinal"] = .int(ordinal)
                 }
                 arguments["target"] = .object(targetArguments)
-            } else if let ordinal {
-                arguments["target"] = .object(["ordinal": .int(ordinal)])
             }
 
             return CommandArgumentEnvelope(values: arguments)

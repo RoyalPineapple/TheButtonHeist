@@ -187,9 +187,9 @@ final class PublicContractGoldenTests: XCTestCase {
             try jsonString(response),
             golden(
                 #"{"errorCode":"request.missing_target","hint":"get_interface()","#,
-                #""message":"activate request contract failed: missing target; requires heistId or at least one matcher field "#,
-                #"(label, identifier, value, traits, or excludeTraits). Next: get_interface() to inspect the current app accessibility "#,
-                #"state, then retry activate with a heistId or exact matcher.","phase":"request","#,
+                #""message":"activate request contract failed: missing target; requires target object with heistId or matcher. "#,
+                #"Next: get_interface() to inspect the current app accessibility state, then retry activate with "#,
+                #"target.heistId or target.matcher.","phase":"request","#,
                 #""retryable":false,"status":"error"}"#
             )
         )
@@ -303,7 +303,7 @@ final class PublicContractGoldenTests: XCTestCase {
         let failure = PlaybackFailure.fenceError(
             step: PlaybackFailure.FailedStep(
                 command: "activate",
-                target: ElementMatcher(label: "Pay", traits: [.button])
+                target: semanticTarget(label: "Pay", traits: [.button])
             ),
             message: "not connected",
             interface: nil,
@@ -319,7 +319,7 @@ final class PublicContractGoldenTests: XCTestCase {
             )),
             golden(
                 #"{"completedSteps":1,"failedIndex":1,"failure":{"command":"activate","#,
-                #""error":"not connected","target":{"label":"Pay","traits":["button"]}},"#,
+                #""error":"not connected","target":{"matcher":{"label":"Pay","traits":["button"]}}},"#,
                 #""status":"error","totalTimingMs":25}"#
             )
         )
@@ -329,7 +329,7 @@ final class PublicContractGoldenTests: XCTestCase {
         let failure = PlaybackFailure.fenceError(
             step: PlaybackFailure.FailedStep(
                 command: "activate",
-                target: ElementMatcher(label: "Pay", traits: [.button])
+                target: semanticTarget(label: "Pay", traits: [.button])
             ),
             message: "not connected",
             interface: nil,
@@ -346,7 +346,7 @@ final class PublicContractGoldenTests: XCTestCase {
             golden(
                 #"{"completedSteps":1,"failedIndex":1,"failure":{"command":"activate","#,
                 #""diagnosticCaptureFailure":"diagnostic interface unavailable","#,
-                #""error":"not connected","target":{"label":"Pay","traits":["button"]}},"#,
+                #""error":"not connected","target":{"matcher":{"label":"Pay","traits":["button"]}}},"#,
                 #""status":"error","totalTimingMs":25}"#
             )
         )
@@ -383,17 +383,17 @@ final class PublicContractGoldenTests: XCTestCase {
 
     func testHeistPlaybackWireGolden() throws {
         let playback = HeistPlayback(
-            version: 2,
+            version: HeistPlayback.currentVersion,
             recorded: Date(timeIntervalSince1970: 0),
             app: "com.buttonheist.testapp",
             steps: [
                 HeistEvidence(
                     command: "activate",
-                    target: ElementMatcher(label: "Pay", traits: [.button])
+                    target: semanticTarget(label: "Pay", traits: [.button])
                 ),
                 HeistEvidence(
                     command: "type_text",
-                    target: ElementMatcher(label: "Note"),
+                    target: semanticTarget(label: "Note"),
                     arguments: ["text": .string("hello")]
                 ),
             ]
@@ -403,8 +403,8 @@ final class PublicContractGoldenTests: XCTestCase {
             try sortedJSONString(playback, dateEncodingStrategy: .iso8601),
             golden(
                 #"{"app":"com.buttonheist.testapp","recorded":"1970-01-01T00:00:00Z","steps":["#,
-                #"{"command":"activate","label":"Pay","traits":["button"]},"#,
-                #"{"command":"type_text","label":"Note","text":"hello"}],"version":2}"#
+                #"{"command":"activate","target":{"matcher":{"label":"Pay","traits":["button"]}}},"#,
+                #"{"command":"type_text","target":{"matcher":{"label":"Note"}},"text":"hello"}],"version":3}"#
             )
         )
     }

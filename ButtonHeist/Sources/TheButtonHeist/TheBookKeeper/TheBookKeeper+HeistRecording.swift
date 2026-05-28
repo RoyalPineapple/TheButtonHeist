@@ -184,8 +184,7 @@ extension TheBookKeeper {
         expectation: ExpectationResult?
     ) -> HeistEvidence? {
         let elementTarget = request.payload.bookKeeperElementTarget
-        var target: ElementMatcher?
-        var ordinal: Int?
+        var target: SemanticActionTarget?
         var recordedHeistId: HeistId?
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
@@ -195,8 +194,7 @@ extension TheBookKeeper {
                   let element = targetCapture.interface.elements.last(where: { $0.heistId == heistId }),
                   let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
             else { return nil }
-            target = minimumMatcher.matcher
-            ordinal = minimumMatcher.ordinal
+            target = SemanticActionTarget(minimumMatcher)
             recordedHeistId = heistId
             recordedFrame = RecordedFrame(
                 x: element.frameX, y: element.frameY,
@@ -204,8 +202,7 @@ extension TheBookKeeper {
             )
         } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
             guard matcher.hasPredicates else { return nil }
-            target = matcher
-            ordinal = matchedOrdinal
+            target = SemanticActionTarget(matcher: matcher, ordinal: matchedOrdinal)
         } else if request.payload.bookKeeperCoordinateOnly {
             coordinateOnly = true
         }
@@ -228,7 +225,6 @@ extension TheBookKeeper {
         return HeistEvidence(
             command: request.command.rawValue,
             target: target,
-            ordinal: ordinal,
             arguments: request.heistEvidenceArguments,
             recorded: recorded
         )

@@ -448,7 +448,7 @@ final class TheBookKeeperTests: XCTestCase {
             bookKeeper,
             requestId: "req-1",
             command: .activate,
-            arguments: ["identifier": "loginButton"]
+            arguments: ["target": targetArgument(identifier: "loginButton")]
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
@@ -561,12 +561,12 @@ final class TheBookKeeperTests: XCTestCase {
         let activate = try parsedRequest(
             requestId: "r1",
             command: .activate,
-            arguments: ["heistId": "login_button"]
+            arguments: ["target": targetArgument(heistId: "login_button")]
         )
 
         XCTAssertEqual(activate.command, .activate)
         XCTAssertEqual(activate.payload.bookKeeperElementTarget, .heistId("login_button"))
-        XCTAssertNil(activate.heistEvidenceArguments["heistId"])
+        XCTAssertNil(activate.heistEvidenceArguments["target"])
     }
 
     @ButtonHeistActor
@@ -589,14 +589,17 @@ final class TheBookKeeperTests: XCTestCase {
         let action = try parsedRequest(
             requestId: "r1",
             command: .activate,
-            arguments: ["label": "Row", "action": "Archive"]
+            arguments: [
+                "target": targetArgument(label: "Row"),
+                "action": "Archive",
+            ]
         )
         let arguments = action.heistEvidenceArguments
 
         XCTAssertEqual(Set(arguments.keys), Set(["action"]))
         XCTAssertEqual(arguments["action"], .string("Archive"))
         XCTAssertNil(arguments["actionName"])
-        XCTAssertNil(arguments["label"])
+        XCTAssertNil(arguments["target"])
     }
 
     @ButtonHeistActor
@@ -605,7 +608,7 @@ final class TheBookKeeperTests: XCTestCase {
             requestId: "r1",
             command: .rotor,
             arguments: [
-                "heistId": "field",
+                "target": targetArgument(heistId: "field"),
                 "rotor": "Words",
                 "currentHeistId": "word_1",
                 "currentTextStartOffset": 4,
@@ -619,7 +622,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(arguments["currentTextStartOffset"], .int(4))
         XCTAssertEqual(arguments["currentTextEndOffset"], .int(9))
         XCTAssertNil(arguments["currentTextRange"])
-        XCTAssertNil(arguments["heistId"])
+        XCTAssertNil(arguments["target"])
     }
 
     @ButtonHeistActor
@@ -686,7 +689,10 @@ final class TheBookKeeperTests: XCTestCase {
             bookKeeper,
             requestId: "r1",
             command: .activate,
-            arguments: ["label": "Submit", "metadata": Data([0x01])]
+            arguments: [
+                "target": targetArgument(label: "Submit"),
+                "metadata": Data([0x01]),
+            ]
         )) { error in
             let validation = error as? SchemaValidationError
             XCTAssertEqual(validation?.field, "metadata")

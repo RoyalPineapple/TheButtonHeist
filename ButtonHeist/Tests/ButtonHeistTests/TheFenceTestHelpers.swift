@@ -47,6 +47,80 @@ extension TheFence.PlaybackOperation {
     }
 }
 
+func semanticTarget(
+    sourceHeistId: HeistId? = nil,
+    label: String? = nil,
+    identifier: String? = nil,
+    value: String? = nil,
+    traits: [HeistTrait]? = nil,
+    excludeTraits: [HeistTrait]? = nil,
+    ordinal: Int? = nil
+) -> SemanticActionTarget {
+    SemanticActionTarget(
+        sourceHeistId: sourceHeistId,
+        matcher: ElementMatcher(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits
+        ),
+        ordinal: ordinal
+    )
+}
+
+func targetArgument(heistId: String) -> [String: Any] {
+    ["heistId": heistId]
+}
+
+func targetArgument(
+    label: String? = nil,
+    identifier: String? = nil,
+    value: String? = nil,
+    traits: [String]? = nil,
+    excludeTraits: [String]? = nil,
+    ordinal: Int? = nil
+) -> [String: Any] {
+    var matcher: [String: Any] = [:]
+    if let label { matcher["label"] = label }
+    if let identifier { matcher["identifier"] = identifier }
+    if let value { matcher["value"] = value }
+    if let traits { matcher["traits"] = traits }
+    if let excludeTraits { matcher["excludeTraits"] = excludeTraits }
+
+    var target: [String: Any] = ["matcher": matcher]
+    if let ordinal { target["ordinal"] = ordinal }
+    return target
+}
+
+func activateArguments(
+    label: String? = nil,
+    identifier: String? = nil,
+    value: String? = nil,
+    traits: [String]? = nil,
+    excludeTraits: [String]? = nil,
+    ordinal: Int? = nil
+) -> [String: Any] {
+    [
+        "command": TheFence.Command.activate.rawValue,
+        "target": targetArgument(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits,
+            ordinal: ordinal
+        ),
+    ]
+}
+
+func activateArguments(heistId: String) -> [String: Any] {
+    [
+        "command": TheFence.Command.activate.rawValue,
+        "target": targetArgument(heistId: heistId),
+    ]
+}
+
 @ButtonHeistActor
 func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (TheFence, MockConnection) {
     let mockConn = MockConnection()
