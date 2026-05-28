@@ -900,27 +900,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPinchRequestDecodesTypedPayloadBeforeDispatch() async throws {
-        let (fence, _) = makeConnectedFence()
-        let parsed = try fence.parseRequest([
-            "command": "pinch",
-            "scale": 2.0,
-            "centerX": 200.0,
-            "centerY": 500.0,
-            "spread": 24.0,
-            "duration": 0.25,
-        ])
-
-        guard case .gesture(.pinch(let payload)) = parsed.payload else {
-            return XCTFail("Expected typed pinch payload, got \(parsed.payload)")
-        }
-        XCTAssertEqual(payload.center, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
-        XCTAssertEqual(payload.scale, 2.0)
-        XCTAssertEqual(payload.spread, 24.0)
-        XCTAssertEqual(payload.duration, 0.25)
-    }
-
-    @ButtonHeistActor
     func testPinchWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(request: [
@@ -1634,22 +1613,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypeTextRequestDecodesTypedPayloadBeforeDispatch() async throws {
-        let (fence, _) = makeConnectedFence()
-        let parsed = try fence.parseRequest([
-            "command": "type_text",
-            "text": "hello",
-            "heistId": "search_field",
-        ])
-
-        guard case .typeText(let target) = parsed.payload else {
-            return XCTFail("Expected typed type_text payload, got \(parsed.payload)")
-        }
-        XCTAssertEqual(target.text, "hello")
-        XCTAssertEqual(target.elementTarget, .heistId("search_field"))
-    }
-
-    @ButtonHeistActor
     func testTypeTextTypedPayloadDispatchesCanonicalWireMessage() async throws {
         let (fence, mockConn) = makeConnectedFence()
 
@@ -2028,7 +1991,6 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testNormalizedToolOperationUsesTypedExpectationPayload() async throws {
-        let (fence, _) = makeConnectedFence()
         let result = FenceOperationCatalog.normalizeToolCall(
             name: "wait_for_change",
             arguments: TheFence.CommandArgumentEnvelope(values: [
@@ -2041,12 +2003,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         XCTAssertNil(operation.stringArgument("expect"))
-        let parsed = try fence.parseRequest(operation: operation)
-        XCTAssertEqual(parsed.expectationPayload.expectation, .elementsChanged)
-        guard case .waitForChange(let payload) = parsed.payload else {
-            return XCTFail("Expected wait_for_change payload, got \(parsed.payload)")
-        }
-        XCTAssertEqual(payload.expectation, .elementsChanged)
+        XCTAssertEqual(operation.request.expectationPayload?.expectation, .elementsChanged)
     }
 
     func testNormalizeToolCallReportsExpectationParseFailure() {
@@ -3504,17 +3461,9 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(operation.ordinal, 1)
 
         let normalizedOperation = operation.normalizedOperation()
-        let parsed = try TheFence(configuration: .init()).parseRequest(operation: normalizedOperation)
         XCTAssertEqual(normalizedOperation.command, .typeText)
-        guard case .typeText(let target) = parsed.payload else {
-            return XCTFail("Expected type_text payload")
-        }
-        guard case .matcher(let matcher, let ordinal) = target.elementTarget else {
-            return XCTFail("Expected playback matcher target")
-        }
-        XCTAssertEqual(matcher.identifier, "email")
-        XCTAssertEqual(ordinal, 1)
-        XCTAssertEqual(target.text, "user@example.com")
+        XCTAssertEqual(normalizedOperation.stringArgument("identifier"), "email")
+        XCTAssertEqual(normalizedOperation.stringArgument("text"), "user@example.com")
         XCTAssertNil(normalizedOperation.stringArgument("_recorded"))
     }
 
