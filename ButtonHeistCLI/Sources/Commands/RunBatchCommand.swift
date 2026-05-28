@@ -39,7 +39,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let batchSteps = try Self.serializedBatchSteps(inline: steps, fromFile: stepsFromFile)
 
-        var request: CLIRequestParameters = [.steps: .array(batchSteps.map(\.value))]
+        var request: CLIRequestParameters = [.steps: .array(batchSteps)]
         if let policy {
             guard let parsedPolicy = Self.catalogCanonicalStringValue(policy, for: .policy) else {
                 throw ValidationError("Invalid policy '\(policy)'. Valid: \(Self.catalogAllowedValuesDescription(for: .policy))")
@@ -54,29 +54,20 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         )
     }
 
-    static func serializedBatchSteps(inline: String?, fromFile path: String?) throws -> [SerializedBatchStep] {
+    static func serializedBatchSteps(inline: String?, fromFile path: String?) throws -> [HeistValue] {
         try loadJSONArray(
             inline: inline,
             fromFile: path,
             optionName: "steps"
         ).enumerated().map { index, value in
-            try SerializedBatchStep(value: value, index: index)
+            guard case .object(let object) = value else {
+                throw ValidationError("steps[\(index)] must be a JSON object")
+            }
+            let step = TheFence.CommandArgumentObject(values: object, fieldPrefix: "steps[\(index)]")
+            if case .failure(let error) = FenceOperationCatalog.normalizeBatchStep(step, context: "steps[\(index)]") {
+                throw ValidationError(error.message)
+            }
+            return value
         }
-    }
-}
-
-struct SerializedBatchStep {
-    let value: HeistValue
-
-    init(value: HeistValue, index: Int) throws {
-        guard case .object(let object) = value else {
-            throw ValidationError("steps[\(index)] must be a JSON object")
-        }
-        try CLIRequestBuilder.validateCanonicalCommandObject(
-            object,
-            context: "steps[\(index)]",
-            requireBatchExecutable: true
-        )
-        self.value = value
     }
 }

@@ -125,7 +125,7 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(steps.count, 1)
-        guard case .object(let object) = steps[0].value else {
+        guard case .object(let object) = steps[0] else {
             return XCTFail("expected serialized batch step object")
         }
         XCTAssertEqual(object["command"], .string(TheFence.Command.activate.rawValue))
@@ -140,7 +140,9 @@ final class CLICommandSyncTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown command 'not_a_command'"),
+                CLIRequestBuilder.diagnosticMessage(for: error).contains(
+                    #"steps[0] command must be a canonical TheFence.Command; unknown command "not_a_command""#
+                ),
                 CLIRequestBuilder.diagnosticMessage(for: error)
             )
         }
@@ -154,7 +156,7 @@ final class CLICommandSyncTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("steps[0] command 'run_batch' is not supported in run_batch"),
+                CLIRequestBuilder.diagnosticMessage(for: error).contains(#"steps[0] command "run_batch" is not supported"#),
                 CLIRequestBuilder.diagnosticMessage(for: error)
             )
         }

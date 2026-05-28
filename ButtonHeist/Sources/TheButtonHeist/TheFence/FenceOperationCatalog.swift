@@ -58,10 +58,28 @@ public enum FenceOperationCatalog {
     public static func normalizeBatchStep(
         _ step: TheFence.CommandArgumentObject
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        normalizeBatchStep(step, context: "run_batch step")
+    }
+
+    public static func normalizeBatchStep(
+        _ step: TheFence.CommandArgumentObject,
+        context: String
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         normalizeCanonicalStep(
             step,
-            context: "run_batch step",
+            context: context,
             isExecutable: \.isBatchExecutable
+        )
+    }
+
+    public static func normalizeCommandObject(
+        _ object: TheFence.CommandArgumentObject,
+        context: String
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        normalizeCanonicalStep(
+            object,
+            context: context,
+            isExecutable: nil
         )
     }
 
@@ -87,7 +105,7 @@ public enum FenceOperationCatalog {
     private static func normalizeCanonicalStep(
         _ step: TheFence.CommandArgumentObject,
         context: String,
-        isExecutable: KeyPath<TheFence.Command, Bool>
+        isExecutable: KeyPath<TheFence.Command, Bool>?
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         let commandName: String
         do {
@@ -117,7 +135,7 @@ public enum FenceOperationCatalog {
         commandName: String,
         arguments: TheFence.CommandArgumentEnvelope,
         context: String,
-        isExecutable: KeyPath<TheFence.Command, Bool>
+        isExecutable: KeyPath<TheFence.Command, Bool>?
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
@@ -125,7 +143,7 @@ public enum FenceOperationCatalog {
             ))
         }
 
-        guard command[keyPath: isExecutable] else {
+        if let isExecutable, !command[keyPath: isExecutable] {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command \"\(command.rawValue)\" is not supported"
             ))
@@ -135,7 +153,7 @@ public enum FenceOperationCatalog {
             return .failure(error)
         }
 
-        return .success(NormalizedOperation(command: command, arguments: arguments))
+        return normalizeToolOperation(command: command, arguments: arguments)
     }
 
     private static func normalizeTypedPlaybackStep(

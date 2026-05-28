@@ -113,19 +113,18 @@ enum CLIRequestBuilder {
         } catch let error as DecodingError {
             throw ValidationError(diagnosticMessage(for: error))
         }
-        let object = envelope.commandObject
-        guard !object.isEmpty else {
-            throw ValidationError("Expected JSON object with string field 'command'")
-        }
         do {
-            guard case .string(_)? = object[FenceParameterKey.command.rawValue] else {
-                throw ValidationError("Expected JSON object with string field 'command'")
+            let operation: NormalizedOperation
+            switch FenceOperationCatalog.normalizeCommandObject(envelope.arguments, context: "JSON input") {
+            case .success(let normalizedOperation):
+                operation = normalizedOperation
+            case .failure(let error):
+                throw ValidationError(error.message)
             }
-            let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
             return CLIParsedRequest(
-                operation: try operation(command: descriptor.command, parameters: commandParameters(from: object)),
+                operation: operation,
                 requestId: requestId,
-                descriptor: descriptor,
+                descriptor: operation.command.descriptor,
                 mode: .machine
             )
         } catch let error as CLIRequestBuildError {
@@ -138,45 +137,6 @@ enum CLIRequestBuilder {
         }
     }
 
-    @discardableResult
-    static func validateCanonicalCommandObject(
-        _ object: [String: HeistValue],
-        context: String,
-        requireBatchExecutable: Bool = false
-    ) throws -> FenceCommandDescriptor {
-        guard case .string(let commandName)? = object[FenceParameterKey.command.rawValue] else {
-            throw ValidationError("\(context) must include string field 'command'")
-        }
-        guard let descriptor = FenceCommandDescriptor.descriptor(canonicalName: commandName) else {
-            throw ValidationError("Unknown command '\(commandName)'. \(context) requires a canonical command name.")
-        }
-        if requireBatchExecutable, !descriptor.isBatchExecutable {
-            throw ValidationError("\(context) command '\(commandName)' is not supported in run_batch")
-        }
-
-        let allowedKeys = Set([FenceParameterKey.command.rawValue, "id"] + descriptor.parameters.map(\.key))
-        let unsupportedKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
-        if let unsupportedKey = unsupportedKeys.first {
-            throw ValidationError("Unknown parameter '\(unsupportedKey)' for \(commandName)")
-        }
-
-        return descriptor
-    }
-
-    private static func commandParameters(from object: [String: HeistValue]) -> CLIRequestParameters {
-        Dictionary(
-            object.compactMap { key, value in
-                guard key != FenceParameterKey.command.rawValue,
-                      key != "id",
-                      let parameterKey = FenceParameterKey(rawValue: key) else {
-                    return nil
-                }
-                return (parameterKey, value)
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
-    }
-
     static func diagnosticMessage(for error: Error) -> String {
         let description = String(describing: error)
         return description.isEmpty ? error.localizedDescription : description
@@ -184,19 +144,19 @@ enum CLIRequestBuilder {
 }
 
 private struct CLIMachineRequestEnvelope: Decodable {
-    let commandObject: [String: HeistValue]
+    let arguments: TheFence.CommandArgumentObject
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
-        var commandObject: [String: HeistValue] = [:]
+        var values: [String: HeistValue] = [:]
         for key in container.allKeys {
             if key.stringValue == "id" {
                 continue
             } else {
-                commandObject[key.stringValue] = try container.decode(HeistValue.self, forKey: key)
+                values[key.stringValue] = try container.decode(HeistValue.self, forKey: key)
             }
         }
-        self.commandObject = commandObject
+        arguments = TheFence.CommandArgumentObject(values: values, fieldPrefix: nil)
     }
 }
 
