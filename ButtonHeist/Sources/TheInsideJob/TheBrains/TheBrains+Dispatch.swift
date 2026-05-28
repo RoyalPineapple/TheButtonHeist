@@ -141,14 +141,14 @@ extension TheBrains {
         method: ActionMethod
     ) async -> ActionResult {
         await performElementSearch(
-            elementTarget: target.elementTarget,
+            elementTarget: .currentCapture(target.elementTarget),
             direction: target.direction,
             method: method
         )
     }
 
     func performElementSearch(
-        elementTarget: (any SemanticElementTarget)?,
+        elementTarget: SemanticElementTarget?,
         direction: ScrollSearchDirection,
         method: ActionMethod
     ) async -> ActionResult {
@@ -171,14 +171,14 @@ extension TheBrains {
     /// Wait for an element to appear or disappear.
     func performWaitFor(target: WaitForTarget) async -> ActionResult {
         await performWaitFor(
-            elementTarget: target.elementTarget,
+            elementTarget: .currentCapture(target.elementTarget),
             absent: target.absent,
             timeout: target.timeout
         )
     }
 
     func performWaitFor(
-        elementTarget: any SemanticElementTarget,
+        elementTarget: SemanticElementTarget,
         absent: Bool?,
         timeout: Double?
     ) async -> ActionResult {
@@ -204,7 +204,7 @@ extension TheBrains {
 
     /// Execute the wait_for polling loop.
     private func executeWaitFor(
-        elementTarget: any SemanticElementTarget,
+        elementTarget: SemanticElementTarget,
         absent: Bool,
         timeout: Double
     ) async -> TheSafecracker.InteractionResult {
@@ -273,7 +273,7 @@ extension TheBrains {
     private func waitForTimeoutMessage(
         absent: Bool,
         elapsed: String,
-        target: any SemanticElementTarget,
+        target: SemanticElementTarget,
         resolution: TheStash.TargetResolution
     ) -> String {
         let expected = absent ? "element to disappear" : "element to appear"
@@ -299,18 +299,20 @@ extension TheBrains {
         return parts.joined(separator: "; ")
     }
 
-    private func waitForTargetDescription(_ target: any SemanticElementTarget) -> String {
-        if let heistId = target.exactHeistId {
-            return "heistId=\"\(heistId)\""
-        }
-        guard let matcher = target.semanticMatcher?.nonEmpty else {
+    private func waitForTargetDescription(_ target: SemanticElementTarget) -> String {
+        guard let executableTarget = target.executableTarget else {
             return "<missing semantic matcher>"
         }
-        var description = stash.formatMatcher(matcher)
-        if let ordinal = target.semanticOrdinal {
-            description += " ordinal=\(ordinal)"
+        switch executableTarget {
+        case .heistId(let heistId):
+            return "heistId=\"\(heistId)\""
+        case .matcher(let matcher, let ordinal):
+            var description = stash.formatMatcher(matcher)
+            if let ordinal {
+                description += " ordinal=\(ordinal)"
+            }
+            return description
         }
-        return description
     }
 
     static func waitForErrorKind(for failureKind: TheSafecracker.FailureKind?) -> ErrorKind {

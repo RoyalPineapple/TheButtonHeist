@@ -22,7 +22,7 @@ extension Actions {
     /// Unified pipeline for actions that target an element:
     /// semantic selector → reveal plan → fresh live geometry → actionable target.
     func performElementAction(
-        target: any SemanticElementTarget,
+        target: SemanticElementTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
         deallocatedBoundary: String = "element action",
@@ -47,14 +47,14 @@ extension Actions {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await executeActivate(target as any SemanticElementTarget)
+        await executeActivate(.currentCapture(target))
     }
 
     func executeActivate(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
-        await executeActivate(BatchSemanticElementTarget(target))
+        await executeActivate(.durable(target))
     }
 
-    private func executeActivate(_ target: any SemanticElementTarget) async -> TheSafecracker.InteractionResult {
+    private func executeActivate(_ target: SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .activate
@@ -73,14 +73,14 @@ extension Actions {
     }
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(target as any SemanticElementTarget)
+        await executeIncrement(.currentCapture(target))
     }
 
     func executeIncrement(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(BatchSemanticElementTarget(target))
+        await executeIncrement(.durable(target))
     }
 
-    private func executeIncrement(_ target: any SemanticElementTarget) async -> TheSafecracker.InteractionResult {
+    private func executeIncrement(_ target: SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .increment,
@@ -107,14 +107,14 @@ extension Actions {
     }
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(target as any SemanticElementTarget)
+        await executeDecrement(.currentCapture(target))
     }
 
     func executeDecrement(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(BatchSemanticElementTarget(target))
+        await executeDecrement(.durable(target))
     }
 
-    private func executeDecrement(_ target: any SemanticElementTarget) async -> TheSafecracker.InteractionResult {
+    private func executeDecrement(_ target: SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .decrement,

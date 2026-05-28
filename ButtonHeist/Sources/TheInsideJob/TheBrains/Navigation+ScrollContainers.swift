@@ -237,7 +237,7 @@ extension Navigation {
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
     private func liveScrollElementFailureMessage(
-        _ target: any SemanticElementTarget,
+        _ target: SemanticElementTarget,
         commandName: String
     ) -> String {
         switch stash.resolveTarget(target) {

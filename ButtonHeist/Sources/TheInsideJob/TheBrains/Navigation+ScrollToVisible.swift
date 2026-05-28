@@ -14,7 +14,7 @@ extension Navigation {
     }
 
     func executeScrollToVisible(
-        elementTarget: (any SemanticElementTarget)?
+        elementTarget: SemanticElementTarget?
     ) async -> TheSafecracker.InteractionResult {
         await actionability.executeScrollToVisible(elementTarget: elementTarget)
     }

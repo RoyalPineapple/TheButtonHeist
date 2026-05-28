@@ -9,7 +9,7 @@ protocol CustomActionExecutionInput {
 }
 
 protocol RotorExecutionInput {
-    var rotorElementTarget: any SemanticElementTarget { get }
+    var rotorElementTarget: SemanticElementTarget { get }
     var selection: RotorSelection { get }
     var direction: RotorDirection { get }
     var continuation: RotorContinuation { get }
@@ -57,7 +57,7 @@ protocol TwoFingerTapExecutionInput {
 
 protocol TypeTextExecutionInput {
     var text: String { get }
-    var typeTextElementTarget: (any SemanticElementTarget)? { get }
+    var typeTextElementTarget: SemanticElementTarget? { get }
 }
 
 extension CustomActionTarget: CustomActionExecutionInput {
@@ -65,7 +65,7 @@ extension CustomActionTarget: CustomActionExecutionInput {
 }
 
 extension RotorTarget: RotorExecutionInput {
-    var rotorElementTarget: any SemanticElementTarget { elementTarget }
+    var rotorElementTarget: SemanticElementTarget { .currentCapture(elementTarget) }
 }
 
 extension TapTarget: TapExecutionInput {
@@ -111,7 +111,7 @@ extension TwoFingerTapTarget: TwoFingerTapExecutionInput {
 }
 
 extension TypeTextTarget: TypeTextExecutionInput {
-    var typeTextElementTarget: (any SemanticElementTarget)? { elementTarget }
+    var typeTextElementTarget: SemanticElementTarget? { elementTarget.map(SemanticElementTarget.currentCapture) }
 }
 #endif // DEBUG
 #endif // canImport(UIKit)
