@@ -164,9 +164,9 @@ private extension TheFence.GesturePayload {
         case .longPress(let payload):
             return payload.selection.elementTarget
         case .swipe(let payload):
-            return payload.target.elementTarget
+            return payload.target.selection.bookKeeperElementTarget
         case .drag(let payload):
-            return payload.target.elementTarget
+            return payload.target.start.elementTarget
         case .pinch(let payload):
             return payload.center.elementTarget
         case .rotate(let payload):
@@ -185,9 +185,9 @@ private extension TheFence.GesturePayload {
         case .longPress(let payload):
             return payload.selection.screenPoint != nil
         case .swipe(let payload):
-            return payload.target.elementTarget == nil
+            return payload.target.selection.bookKeeperElementTarget == nil
         case .drag(let payload):
-            return payload.target.elementTarget == nil
+            return payload.target.start.elementTarget == nil
         case .pinch(let payload):
             return payload.center.elementTarget == nil
         case .rotate(let payload):
@@ -196,6 +196,17 @@ private extension TheFence.GesturePayload {
             return payload.center.elementTarget == nil
         case .drawPath, .drawBezier:
             return true
+        }
+    }
+}
+
+private extension SwipeGestureSelection {
+    var bookKeeperElementTarget: ElementTarget? {
+        switch self {
+        case .unitElement(let target, _, _, _):
+            return target
+        case .point(let start, _):
+            return start.elementTarget
         }
     }
 }

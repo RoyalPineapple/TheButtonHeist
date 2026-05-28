@@ -1,5 +1,3 @@
-import CoreGraphics
-
 public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConvertible {
     case coordinate(ScreenPoint)
     case direction(SwipeDirection)
@@ -108,35 +106,6 @@ public struct SwipeTarget: Codable, Sendable {
         self.duration = duration
     }
 
-    public var elementTarget: ElementTarget? {
-        switch selection {
-        case .unitElement(let target, _, _, _):
-            return target
-        case .point(let start, _):
-            return start.elementTarget
-        }
-    }
-
-    public var startX: Double? {
-        guard case .point(let start, _) = selection else { return nil }
-        return start.pointX
-    }
-
-    public var startY: Double? {
-        guard case .point(let start, _) = selection else { return nil }
-        return start.pointY
-    }
-
-    public var endX: Double? {
-        guard case .point(_, .coordinate(let point)) = selection else { return nil }
-        return point.x
-    }
-
-    public var endY: Double? {
-        guard case .point(_, .coordinate(let point)) = selection else { return nil }
-        return point.y
-    }
-
     public var direction: SwipeDirection? {
         switch selection {
         case .unitElement(_, _, _, let direction):
@@ -158,11 +127,6 @@ public struct SwipeTarget: Codable, Sendable {
     public var end: UnitPoint? {
         guard case .unitElement(_, _, let end, let direction) = selection, direction == nil else { return nil }
         return end
-    }
-
-    public var startPoint: CGPoint? {
-        guard let x = startX, let y = startY else { return nil }
-        return CGPoint(x: x, y: y)
     }
 
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
@@ -263,15 +227,8 @@ public struct SwipeTarget: Codable, Sendable {
 extension SwipeTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("swipe", [
-            elementTarget?.description,
-            startX.map { "startX=\(ScoreDescription.decimal($0))" },
-            startY.map { "startY=\(ScoreDescription.decimal($0))" },
-            endX.map { "endX=\(ScoreDescription.decimal($0))" },
-            endY.map { "endY=\(ScoreDescription.decimal($0))" },
-            ScoreDescription.valueField("direction", direction),
+            selection.description,
             duration.map { "duration=\(ScoreDescription.decimal($0))" },
-            start.map { "start=\($0)" },
-            end.map { "end=\($0)" },
         ].compactMap { $0 })
     }
 }

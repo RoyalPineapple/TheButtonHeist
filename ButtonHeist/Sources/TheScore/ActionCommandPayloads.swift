@@ -252,10 +252,6 @@ public struct RotorTarget: Sendable {
         self.continuation = continuation
     }
 
-    public var rotor: String? { selection.rotorName }
-    public var rotorIndex: Int? { selection.rotorIndex }
-    public var currentHeistId: HeistId? { continuation.currentHeistId }
-    public var currentTextRange: TextRangeReference? { continuation.currentTextRange }
     public var resolvedDirection: RotorDirection { direction }
 }
 
@@ -331,10 +327,23 @@ extension RotorTarget: Codable {
     public func encode(to encoder: Encoder) throws {
         try elementTarget.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(rotor, forKey: .rotor)
-        try container.encodeIfPresent(rotorIndex, forKey: .rotorIndex)
+        switch selection {
+        case .automatic:
+            break
+        case .named(let rotor):
+            try container.encode(rotor, forKey: .rotor)
+        case .index(let rotorIndex):
+            try container.encode(rotorIndex, forKey: .rotorIndex)
+        }
         try container.encode(direction, forKey: .direction)
-        try container.encodeIfPresent(currentHeistId, forKey: .currentHeistId)
-        try container.encodeIfPresent(currentTextRange, forKey: .currentTextRange)
+        switch continuation {
+        case .none:
+            break
+        case .item(let heistId):
+            try container.encode(heistId, forKey: .currentHeistId)
+        case .textRange(let heistId, let range):
+            try container.encode(heistId, forKey: .currentHeistId)
+            try container.encode(range, forKey: .currentTextRange)
+        }
     }
 }
