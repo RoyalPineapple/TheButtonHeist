@@ -2,80 +2,66 @@ import Foundation
 
 import TheScore
 
-extension TheFence {
+extension TheFence.CommandArgumentReadable {
+    func number(_ key: String) throws -> Double? {
+        try schemaNumber(key)
+    }
 
-    struct GestureRequestInput {
-        private let request: any CommandArgumentReadable
+    func hasAny(_ keys: String...) -> Bool {
+        keys.contains { argumentValues[$0] != nil }
+    }
 
-        init(_ request: some CommandArgumentReadable) {
-            self.request = request
+    func requiredNumber(_ key: String) throws -> Double {
+        try requiredSchemaNumber(key)
+    }
+
+    func positiveNumber(_ key: String) throws -> Double? {
+        guard let value = try number(key) else { return nil }
+        guard value > 0 else {
+            throw SchemaValidationError(field: key, observed: value, expected: "number > 0")
         }
+        return value
+    }
 
-        @ButtonHeistActor
-        func elementTarget(in fence: TheFence) throws -> ElementTarget? {
-            try fence.decodedElementTarget(request)
+    func requiredPositiveNumber(_ key: String) throws -> Double {
+        guard let value = try positiveNumber(key) else {
+            throw SchemaValidationError(field: key, observed: "missing", expected: "number > 0")
         }
+        return value
+    }
 
-        func number(_ key: String) throws -> Double? {
-            try request.schemaNumber(key)
-        }
+    func gestureDuration() throws -> Double? {
+        try boundedPositiveNumber("duration", maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds)
+    }
 
-        func hasAny(_ keys: String...) -> Bool {
-            keys.contains { request.argumentValues[$0] != nil }
+    func boundedPositiveNumber(_ key: String, maximum: Double) throws -> Double? {
+        guard let value = try positiveNumber(key) else { return nil }
+        guard value <= maximum else {
+            throw SchemaValidationError(field: key, observed: value, expected: "number in 0...\(maximum)")
         }
+        return value
+    }
 
-        func requiredNumber(_ key: String) throws -> Double {
-            try request.requiredSchemaNumber(key)
+    func boundedPositiveInteger(_ key: String, minimum: Int, maximum: Int) throws -> Int? {
+        guard let value = try schemaInteger(key) else { return nil }
+        guard value >= minimum && value <= maximum else {
+            throw SchemaValidationError(field: key, observed: value, expected: "integer in \(minimum)...\(maximum)")
         }
+        return value
+    }
 
-        func positiveNumber(_ key: String) throws -> Double? {
-            guard let value = try number(key) else { return nil }
-            guard value > 0 else {
-                throw SchemaValidationError(field: key, observed: value, expected: "number > 0")
-            }
-            return value
-        }
+    func unitPoint(_ key: String) throws -> UnitPoint? {
+        try schemaUnitPoint(key)
+    }
 
-        func requiredPositiveNumber(_ key: String) throws -> Double {
-            guard let value = try positiveNumber(key) else {
-                throw SchemaValidationError(field: key, observed: "missing", expected: "number > 0")
-            }
-            return value
-        }
+    func enumValue<E>(
+        _ key: String,
+        as type: E.Type
+    ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
+        try schemaEnum(key, as: type)
+    }
 
-        func gestureDuration() throws -> Double? {
-            try boundedPositiveNumber("duration", maximum: DecodeLimits.maxDrawGestureDurationSeconds)
-        }
-
-        func boundedPositiveNumber(_ key: String, maximum: Double) throws -> Double? {
-            guard let value = try positiveNumber(key) else { return nil }
-            guard value <= maximum else {
-                throw SchemaValidationError(field: key, observed: value, expected: "number in 0...\(maximum)")
-            }
-            return value
-        }
-
-        func boundedPositiveInteger(_ key: String, minimum: Int, maximum: Int) throws -> Int? {
-            guard let value = try request.schemaInteger(key) else { return nil }
-            guard value >= minimum && value <= maximum else {
-                throw SchemaValidationError(field: key, observed: value, expected: "integer in \(minimum)...\(maximum)")
-            }
-            return value
-        }
-
-        func unitPoint(_ key: String) throws -> UnitPoint? {
-            try request.schemaUnitPoint(key)
-        }
-
-        func enumValue<E>(
-            _ key: String,
-            as type: E.Type
-        ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
-            try request.schemaEnum(key, as: type)
-        }
-
-        func requiredObjectArray(_ key: String) throws -> [CommandArgumentObject] {
-            try request.requiredSchemaObjectArray(key)
-        }
+    func requiredObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject] {
+        try requiredSchemaObjectArray(key)
     }
 }

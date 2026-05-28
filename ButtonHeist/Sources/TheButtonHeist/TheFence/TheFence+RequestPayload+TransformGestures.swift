@@ -4,11 +4,11 @@ import TheScore
 
 extension TheFence {
 
-    func decodePinchTarget(_ request: GestureRequestInput) throws -> PinchTarget {
+    func decodePinchTarget(_ request: some CommandArgumentReadable) throws -> PinchTarget {
         let scale = try request.requiredPositiveNumber("scale")
         let center = try decodeRequiredPointIntent(
             request: request,
-            elementTarget: try request.elementTarget(in: self),
+            elementTarget: try decodedElementTarget(request),
             xKey: "centerX",
             yKey: "centerY",
             field: "centerX/centerY",
@@ -22,11 +22,11 @@ extension TheFence {
         )
     }
 
-    func decodeRotateTarget(_ request: GestureRequestInput) throws -> RotateTarget {
+    func decodeRotateTarget(_ request: some CommandArgumentReadable) throws -> RotateTarget {
         let angle = try request.requiredNumber("angle")
         let center = try decodeRequiredPointIntent(
             request: request,
-            elementTarget: try request.elementTarget(in: self),
+            elementTarget: try decodedElementTarget(request),
             xKey: "centerX",
             yKey: "centerY",
             field: "centerX/centerY",
