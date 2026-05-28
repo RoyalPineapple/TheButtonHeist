@@ -65,8 +65,7 @@ extension ContainerMatcher: CustomStringConvertible {
 /// Composable predicate for scanning the accessibility tree.
 /// All non-nil fields must match (AND semantics).
 ///
-/// Matching is **exact or miss**: `heistId` must equal the current leaf handle;
-/// string fields (`label`, `identifier`, `value`) must equal the matcher value,
+/// Matching is **exact or miss**: string fields (`label`, `identifier`, `value`) must equal the matcher value,
 /// compared case-insensitively after typography folding (smart quotes/dashes/
 /// ellipsis fold to ASCII; emoji, accents, and CJK pass through). Trait fields
 /// use exact bitmask comparison.
@@ -79,9 +78,7 @@ extension ContainerMatcher: CustomStringConvertible {
 /// Trait values use the HeistTrait enum (e.g. .button, .header, .selected).
 /// The hierarchy-level matcher bridges these to UIAccessibilityTraits bitmasks
 /// via AccessibilitySnapshotParser's knownTraits.
-public struct ElementMatcher: Codable, Sendable, Equatable {
-    /// Exact match against the Button Heist leaf element handle
-    public let heistId: HeistId?
+public struct ElementMatcher: Sendable, Equatable {
     /// Case-insensitive equality match against element label (typography-folded)
     public let label: String?
     /// Case-insensitive equality match against accessibility identifier (typography-folded)
@@ -94,14 +91,12 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     public let excludeTraits: [HeistTrait]?
 
     public init(
-        heistId: HeistId? = nil,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
         traits: [HeistTrait]? = nil,
         excludeTraits: [HeistTrait]? = nil
     ) {
-        self.heistId = heistId
         self.label = label
         self.identifier = identifier
         self.value = value
@@ -113,10 +108,10 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
         (traits?.isEmpty == false) || (excludeTraits?.isEmpty == false)
     }
 
-    /// Whether any property predicate is set (heistId, label, identifier, value, traits, or excludeTraits).
+    /// Whether any property predicate is set (label, identifier, value, traits, or excludeTraits).
     /// Empty strings are treated as unset — they match nothing rather than everything.
     public var hasPredicates: Bool {
-        heistId?.isEmpty == false || label?.isEmpty == false || identifier?.isEmpty == false ||
+        label?.isEmpty == false || identifier?.isEmpty == false ||
             value?.isEmpty == false || hasTraitPredicates
     }
 
@@ -126,10 +121,43 @@ public struct ElementMatcher: Codable, Sendable, Equatable {
     public var nonEmpty: Self? { hasPredicates ? self : nil }
 }
 
+extension ElementMatcher: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case label, identifier, value, traits, excludeTraits
+        case heistId
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.heistId) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .heistId,
+                in: container,
+                debugDescription: "ElementMatcher does not accept heistId; use ElementTarget.heistId for current-capture handles"
+            )
+        }
+        self.init(
+            label: try container.decodeIfPresent(String.self, forKey: .label),
+            identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
+            value: try container.decodeIfPresent(String.self, forKey: .value),
+            traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
+            excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(identifier, forKey: .identifier)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encodeIfPresent(traits, forKey: .traits)
+        try container.encodeIfPresent(excludeTraits, forKey: .excludeTraits)
+    }
+}
+
 extension ElementMatcher: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("matcher", [
-            ScoreDescription.stringField("heistId", heistId),
             ScoreDescription.stringField("label", label),
             ScoreDescription.stringField("identifier", identifier),
             ScoreDescription.stringField("value", value),
@@ -141,18 +169,23 @@ extension ElementMatcher: CustomStringConvertible {
 
 /// Selector for projecting an `Interface` to one matched node.
 ///
-/// `.element` searches leaf `HeistElement` nodes with `ElementMatcher`.
+/// `.element` searches leaf `HeistElement` nodes by current-capture handle or `ElementMatcher`.
 /// `.container` searches parser container nodes with `ContainerMatcher`.
 /// `ordinal` is applied only after semantic narrowing; element matches are
 /// ordered by parse-local traversal index with tree path as a tie-breaker.
 public enum SubtreeSelector: Codable, Sendable, Equatable {
-    case element(ElementMatcher, ordinal: Int? = nil)
+    case element(ElementTarget)
     case container(ContainerMatcher, ordinal: Int? = nil)
 
     private enum CodingKeys: String, CodingKey {
         case element
         case container
         case ordinal
+    }
+
+    private enum ElementCodingKeys: String, CodingKey {
+        case heistId
+        case label, identifier, value, traits, excludeTraits
     }
 
     public init(from decoder: Decoder) throws {
@@ -168,7 +201,36 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         }
         let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
         if hasElement {
-            self = .element(try container.decode(ElementMatcher.self, forKey: .element), ordinal: ordinal)
+            let element = try container.nestedContainer(keyedBy: ElementCodingKeys.self, forKey: .element)
+            if let heistId = try element.decodeIfPresent(HeistId.self, forKey: .heistId) {
+                let hasMatcherFields = [
+                    ElementCodingKeys.label, .identifier, .value, .traits, .excludeTraits,
+                ].contains { element.contains($0) }
+                guard ordinal == nil, !hasMatcherFields else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .element,
+                        in: container,
+                        debugDescription: "Subtree element heistId cannot be combined with matcher fields or ordinal"
+                    )
+                }
+                self = .element(.heistId(heistId))
+            } else {
+                let matcher = ElementMatcher(
+                    label: try element.decodeIfPresent(String.self, forKey: .label),
+                    identifier: try element.decodeIfPresent(String.self, forKey: .identifier),
+                    value: try element.decodeIfPresent(String.self, forKey: .value),
+                    traits: try element.decodeIfPresent([HeistTrait].self, forKey: .traits),
+                    excludeTraits: try element.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
+                )
+                guard let target = ElementTarget(heistId: nil, matcher: matcher, ordinal: ordinal) else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .element,
+                        in: container,
+                        debugDescription: "Subtree element requires heistId or at least one matcher field"
+                    )
+                }
+                self = .element(target)
+            }
         } else {
             self = .container(try container.decode(ContainerMatcher.self, forKey: .container), ordinal: ordinal)
         }
@@ -177,9 +239,19 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .element(let matcher, let ordinal):
-            try container.encode(matcher, forKey: .element)
-            try container.encodeIfPresent(ordinal, forKey: .ordinal)
+        case .element(let target):
+            var element = container.nestedContainer(keyedBy: ElementCodingKeys.self, forKey: .element)
+            switch target {
+            case .heistId(let heistId):
+                try element.encode(heistId, forKey: .heistId)
+            case .matcher(let matcher, let ordinal):
+                try element.encodeIfPresent(matcher.label, forKey: .label)
+                try element.encodeIfPresent(matcher.identifier, forKey: .identifier)
+                try element.encodeIfPresent(matcher.value, forKey: .value)
+                try element.encodeIfPresent(matcher.traits, forKey: .traits)
+                try element.encodeIfPresent(matcher.excludeTraits, forKey: .excludeTraits)
+                try container.encodeIfPresent(ordinal, forKey: .ordinal)
+            }
         case .container(let matcher, let ordinal):
             try container.encode(matcher, forKey: .container)
             try container.encodeIfPresent(ordinal, forKey: .ordinal)
@@ -188,14 +260,18 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
 
     public var ordinal: Int? {
         switch self {
-        case .element(_, let ordinal), .container(_, let ordinal):
+        case .element(.matcher(_, let ordinal)), .container(_, let ordinal):
             return ordinal
+        case .element(.heistId):
+            return nil
         }
     }
 
     public var hasPredicates: Bool {
         switch self {
-        case .element(let matcher, _):
+        case .element(.heistId(let heistId)):
+            return !heistId.isEmpty
+        case .element(.matcher(let matcher, _)):
             return matcher.hasPredicates
         case .container(let matcher, _):
             return matcher.hasPredicates
@@ -206,10 +282,9 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
 extension SubtreeSelector: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .element(let matcher, let ordinal):
+        case .element(let target):
             return ScoreDescription.call("subtree.element", [
-                matcher.description,
-                ScoreDescription.valueField("ordinal", ordinal),
+                target.description,
             ].compactMap { $0 })
         case .container(let matcher, let ordinal):
             return ScoreDescription.call("subtree.container", [
@@ -241,10 +316,6 @@ extension HeistElement {
     /// Unknown traits in `traits` or `excludeTraits` cause a miss (fail-safe).
     public func matches(_ matcher: ElementMatcher) -> Bool {
         guard matcher.hasPredicates else { return false }
-        if let matchHeistId = matcher.heistId {
-            if matchHeistId.isEmpty { return false }
-            guard heistId == matchHeistId else { return false }
-        }
         if let matchLabel = matcher.label {
             if matchLabel.isEmpty { return false }
             guard let label, ElementMatcher.stringEquals(label, matchLabel) else { return false }

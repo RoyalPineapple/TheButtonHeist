@@ -76,7 +76,13 @@ struct InterfaceSelector {
                     accessibilityElement: element,
                     annotation: elementAnnotations[path]
                 )
-                guard case .element(let matcher, _) = subtree, projected.matches(matcher) else { return nil }
+                guard case .element(let target) = subtree else { return nil }
+                switch target {
+                case .heistId(let heistId):
+                    guard projected.heistId == heistId else { return nil }
+                case .matcher(let matcher, _):
+                    guard projected.matches(matcher) else { return nil }
+                }
                 return InterfaceSubtreeCandidate(
                     node: node,
                     originalPath: path,

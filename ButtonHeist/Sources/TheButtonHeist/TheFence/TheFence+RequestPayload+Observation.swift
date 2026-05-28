@@ -103,8 +103,8 @@ extension TheFence {
         let selector: SubtreeSelector
         if let elementDictionary {
             try validateInterfaceSubtreeElementKeys(elementDictionary)
-            let matcher = try subtreeElementMatcher(elementDictionary)
-            selector = .element(matcher, ordinal: ordinal)
+            let target = try subtreeElementTarget(elementDictionary, ordinal: ordinal)
+            selector = .element(target)
         } else if let containerDictionary {
             try validateInterfaceSubtreeContainerKeys(containerDictionary)
             let matcher = try subtreeContainerMatcher(containerDictionary)
@@ -155,16 +155,20 @@ extension TheFence {
         )
     }
 
-    private func subtreeElementMatcher(_ element: CommandArgumentObject) throws -> ElementMatcher {
+    private func subtreeElementTarget(_ element: CommandArgumentObject, ordinal: Int?) throws -> ElementTarget {
         let matcher = try interfaceElementMatcher(element)
-        return ElementMatcher(
+        guard let target = ElementTarget(
             heistId: try element.schemaString("heistId"),
-            label: matcher.label,
-            identifier: matcher.identifier,
-            value: matcher.value,
-            traits: matcher.traits,
-            excludeTraits: matcher.excludeTraits
-        )
+            matcher: matcher,
+            ordinal: ordinal
+        ) else {
+            throw SchemaValidationError(
+                field: "subtree.element",
+                observed: element.observedDescription,
+                expected: "heistId or non-empty matcher fields, not both"
+            )
+        }
+        return target
     }
 
     private func subtreeContainerMatcher(_ container: CommandArgumentObject) throws -> ContainerMatcher {

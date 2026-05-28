@@ -172,7 +172,6 @@ private enum FenceExpectationParser {
     private static func elementMatcher(from object: TheFence.CommandArgumentObject) throws -> ElementMatcher {
         try validateAllowedMatcherKeys(in: object)
         return ElementMatcher(
-            heistId: try object.schemaString("heistId"),
             label: try object.schemaString("label"),
             identifier: try object.schemaString("identifier"),
             value: try object.schemaString("value"),
@@ -188,7 +187,7 @@ private enum FenceExpectationParser {
     }
 
     private static func validateAllowedMatcherKeys(in object: TheFence.CommandArgumentObject) throws {
-        let allowedKeys: Set<String> = ["heistId", "label", "identifier", "value", "traits", "excludeTraits"]
+        let allowedKeys: Set<String> = ["label", "identifier", "value", "traits", "excludeTraits"]
         let unknownKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
         guard let unknownKey = unknownKeys.first else { return }
         throw FenceError.invalidRequest(
