@@ -18,8 +18,6 @@ extension TheFence {
                 expected: "either rotor or rotorIndex"
             )
         }
-        let cursor = try input.rotorTextCursor()
-        let currentHeistId = try cursor.currentHeistId ?? input.string("currentHeistId")
         let selection: RotorSelection = if let rotor {
             .named(rotor)
         } else if let rotorIndex {
@@ -27,14 +25,7 @@ extension TheFence {
         } else {
             .automatic
         }
-        let continuation: RotorContinuation = if let range = cursor.currentTextRange,
-                                                 let currentHeistId {
-            .textRange(currentHeistId, range)
-        } else if let currentHeistId {
-            .item(currentHeistId)
-        } else {
-            .none
-        }
+        let continuation = try input.rotorContinuation()
         return try decodedExecutablePayload(.rotor(RotorTarget(
             elementTarget: input.requiredElementTarget(command: .rotor, in: self),
             selection: selection,
@@ -42,22 +33,20 @@ extension TheFence {
             continuation: continuation
         )))
     }
-
-    struct RotorTextCursorInput {
-        let currentHeistId: String?
-        let currentTextRange: TextRangeReference?
-    }
 }
 
 extension TheFence.ElementActionRequestInput {
-    func rotorTextCursor() throws -> TheFence.RotorTextCursorInput {
+    func rotorContinuation() throws -> RotorContinuation {
         let startOffset = try integer("currentTextStartOffset")
         let endOffset = try integer("currentTextEndOffset")
         if (startOffset == nil) != (endOffset == nil) {
             throw FenceError.invalidRequest("currentTextStartOffset and currentTextEndOffset must be provided together")
         }
         guard let startOffset, let endOffset else {
-            return TheFence.RotorTextCursorInput(currentHeistId: nil, currentTextRange: nil)
+            guard let currentHeistId = try string("currentHeistId") else {
+                return .none
+            }
+            return .item(currentHeistId)
         }
         guard let currentHeistId = try string("currentHeistId") else {
             throw SchemaValidationError(field: "currentHeistId", observed: "missing", expected: "string")
@@ -69,9 +58,6 @@ extension TheFence.ElementActionRequestInput {
                 expected: "integer range with start >= 0 and end >= start"
             )
         }
-        return TheFence.RotorTextCursorInput(
-            currentHeistId: currentHeistId,
-            currentTextRange: TextRangeReference(startOffset: startOffset, endOffset: endOffset)
-        )
+        return .textRange(currentHeistId, TextRangeReference(startOffset: startOffset, endOffset: endOffset))
     }
 }

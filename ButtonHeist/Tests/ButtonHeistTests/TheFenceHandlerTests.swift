@@ -884,6 +884,15 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testOneFingerTapRejectsPartialCoordinates() async {
+        await assertOperationValidationError(
+            command: .oneFingerTap,
+            arguments: ["x": .double(100.0)],
+            equals: "schema validation failed for x/y: observed partial coordinates; expected both x and y, or neither"
+        )
+    }
+
+    @ButtonHeistActor
     func testOneFingerTapRejectsNaNCoordinate() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
@@ -972,6 +981,20 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .swipe,
             arguments: ["direction": .string("up")],
             equals: "Swipe requires target object or start coordinates (startX, startY)"
+        )
+    }
+
+    @ButtonHeistActor
+    func testSwipeRejectsPartialStartCoordinates() async {
+        await assertOperationValidationError(
+            command: .swipe,
+            arguments: [
+                "startX": .double(10.0),
+                "endX": .double(100.0),
+                "endY": .double(200.0),
+            ],
+            equals: "schema validation failed for startX/startY: observed partial coordinates; " +
+                "expected both startX and startY, or neither"
         )
     }
 

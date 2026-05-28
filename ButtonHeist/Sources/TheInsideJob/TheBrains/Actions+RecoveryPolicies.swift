@@ -25,7 +25,7 @@ struct LiveActionTargetRecoveryPolicy {
     }
 
     enum Resolution {
-        case success(Actions.LiveElementActionContext)
+        case success(SemanticActionability.SemanticActionableTarget)
         case failure(TheSafecracker.InteractionResult)
     }
 
@@ -93,11 +93,7 @@ struct LiveActionTargetRecoveryPolicy {
                 ))
             }
         }
-        return .success(Actions.LiveElementActionContext(
-            normalizedTarget: actionableTarget.normalizedTarget,
-            resolvedTarget: resolved,
-            liveTarget: liveTarget
-        ))
+        return .success(actionableTarget)
     }
 }
 

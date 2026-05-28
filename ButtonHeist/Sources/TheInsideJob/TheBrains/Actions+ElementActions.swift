@@ -10,15 +10,6 @@ extension Actions {
 
     // MARK: - Element Action Pipeline
 
-    struct LiveElementActionContext {
-        let normalizedTarget: TheStash.NormalizedTarget
-        let resolvedTarget: TheStash.ResolvedTarget
-        let liveTarget: TheStash.LiveActionTarget
-
-        var screenElement: TheStash.ScreenElement { resolvedTarget.screenElement }
-        var element: AccessibilityElement { resolvedTarget.element }
-    }
-
     /// Unified pipeline for actions that target an element:
     /// semantic selector → reveal plan → fresh live geometry → actionable target.
     func performElementAction(
@@ -27,7 +18,7 @@ extension Actions {
         requireInteractive: Bool = true,
         deallocatedBoundary: String = "element action",
         preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)? = nil,
-        action: @MainActor (LiveElementActionContext) async -> TheSafecracker.InteractionResult
+        action: @MainActor (SemanticActionability.SemanticActionableTarget) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
         let normalizedTarget = stash.normalizeTarget(target)
         switch await liveActionTargetRecoveryPolicy.resolve(.init(
