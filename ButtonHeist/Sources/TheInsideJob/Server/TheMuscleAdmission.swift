@@ -89,14 +89,6 @@ struct TheMuscleAdmission {
         authentication.authenticatedClientIDs
     }
 
-    var authenticatedClientCount: Int {
-        authentication.authenticatedClientCount
-    }
-
-    var helloValidatedClients: Set<Int> {
-        authentication.helloValidatedClients
-    }
-
     mutating func registerClientAddress(_ clientId: Int, address: String) {
         authentication.registerClientAddress(clientId, address: address)
     }
@@ -111,10 +103,6 @@ struct TheMuscleAdmission {
 
     func contains(_ clientId: Int) -> Bool {
         authentication.contains(clientId)
-    }
-
-    func clientIDs(for driverIdentity: String) -> [Int] {
-        authentication.clientIDs(for: driverIdentity)
     }
 
     mutating func admitClientMessage(

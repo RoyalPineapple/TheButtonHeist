@@ -79,20 +79,6 @@ actor TheMuscle {
         admission.authenticatedClientIDs
     }
 
-    /// Count of authenticated clients.
-    var authenticatedClientCount: Int {
-        admission.authenticatedClientCount
-    }
-
-    /// IDs of all clients that have completed the hello handshake.
-    var helloValidatedClients: Set<Int> {
-        admission.helloValidatedClients
-    }
-
-    func clientIDs(for driverIdentity: String) -> [Int] {
-        admission.clientIDs(for: driverIdentity)
-    }
-
     // MARK: - Session Accessors
 
     var sessionToken: String { sessionTokenSource.token }

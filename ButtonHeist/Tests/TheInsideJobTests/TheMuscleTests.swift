@@ -228,8 +228,7 @@ final class TheMuscleTests: XCTestCase {
 
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertTrue(authenticatedIDs.contains(1))
-        let authenticatedCount = await muscle.authenticatedClientCount
-        XCTAssertEqual(authenticatedCount, 1)
+        XCTAssertEqual(authenticatedIDs.count, 1)
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         for msg in serverMessages {
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
@@ -246,8 +245,7 @@ final class TheMuscleTests: XCTestCase {
 
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertFalse(authenticatedIDs.contains(1))
-        let authenticatedCount = await muscle.authenticatedClientCount
-        XCTAssertEqual(authenticatedCount, 0)
+        XCTAssertEqual(authenticatedIDs.count, 0)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let authFailure = serverMessages.compactMap { msg -> ServerError? in
@@ -271,8 +269,7 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(authFailure?.message.contains("generated the session token") == true)
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertFalse(authenticatedIDs.contains(1))
-        let authenticatedCount = await muscle.authenticatedClientCount
-        XCTAssertEqual(authenticatedCount, 0)
+        XCTAssertEqual(authenticatedIDs.count, 0)
     }
 
     func testGeneratedTokenEmptyTokenTriggersPendingApproval() async throws {
@@ -426,8 +423,8 @@ final class TheMuscleTests: XCTestCase {
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.contains(1))
         XCTAssertFalse(connections.contains(2))
-        let count = await muscle.authenticatedClientCount
-        XCTAssertEqual(count, 1)
+        let authenticatedIDs = await muscle.authenticatedClientIDs
+        XCTAssertEqual(authenticatedIDs.count, 1)
 
         let payload = try XCTUnwrap(
             sessionLockedPayloads(from: responses()).first,
@@ -613,8 +610,8 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
         await flushCallbacks()
 
-        let helloValidatedBefore = await muscle.helloValidatedClients
-        XCTAssertTrue(helloValidatedBefore.contains(1))
+        let authenticatedIDsBefore = await muscle.authenticatedClientIDs
+        XCTAssertTrue(authenticatedIDsBefore.contains(1))
 
         await muscle.tearDown()
 
@@ -624,10 +621,6 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertTrue(connections.isEmpty)
         let authenticatedIDs = await muscle.authenticatedClientIDs
         XCTAssertTrue(authenticatedIDs.isEmpty)
-        let helloValidatedAfter = await muscle.helloValidatedClients
-        XCTAssertTrue(helloValidatedAfter.isEmpty)
-        let authenticatedCount = await muscle.authenticatedClientCount
-        XCTAssertEqual(authenticatedCount, 0)
     }
 
     // MARK: - Brute-Force Protection Tests
