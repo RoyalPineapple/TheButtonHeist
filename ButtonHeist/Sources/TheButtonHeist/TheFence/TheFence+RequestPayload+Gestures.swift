@@ -329,44 +329,49 @@ extension TheFence {
     }
 
     private func decodePinchGesturePayload(_ request: GestureRequestInput) throws -> PinchGesturePayload {
-        let center = try decodeOptionalPointIntent(
+        let scale = try request.requiredPositiveNumber("scale")
+        let center = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "centerX",
             yKey: "centerY",
-            field: "centerX/centerY"
+            field: "centerX/centerY",
+            missingMessage: "Pinch requires element target or center coordinates (centerX, centerY)"
         )
         return PinchGesturePayload(
             center: center,
-            scale: try request.requiredPositiveNumber("scale"),
+            scale: scale,
             spread: try request.positiveNumber("spread"),
             duration: try request.gestureDuration()
         )
     }
 
     private func decodeRotateGesturePayload(_ request: GestureRequestInput) throws -> RotateGesturePayload {
-        let center = try decodeOptionalPointIntent(
+        let angle = try request.requiredNumber("angle")
+        let center = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "centerX",
             yKey: "centerY",
-            field: "centerX/centerY"
+            field: "centerX/centerY",
+            missingMessage: "Rotate requires element target or center coordinates (centerX, centerY)"
         )
         return RotateGesturePayload(
             center: center,
-            angle: try request.requiredNumber("angle"),
+            angle: angle,
             radius: try request.positiveNumber("radius"),
             duration: try request.gestureDuration()
         )
     }
 
     private func decodeTwoFingerTapGesturePayload(_ request: GestureRequestInput) throws -> TwoFingerTapGesturePayload {
-        let center = try decodeOptionalPointIntent(
+        let center = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "centerX",
             yKey: "centerY",
-            field: "centerX/centerY"
+            field: "centerX/centerY",
+            missingMessage: "Two finger tap requires element target or center coordinates (centerX, centerY)"
         )
         return TwoFingerTapGesturePayload(
             center: center,

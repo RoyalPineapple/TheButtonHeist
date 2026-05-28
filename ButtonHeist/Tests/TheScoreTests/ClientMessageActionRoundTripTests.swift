@@ -29,24 +29,30 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testClientMessageRotorPreviousEncoding() throws {
         let message = ClientMessage.rotor(RotorTarget(
             elementTarget: .heistId("form"),
-            rotor: "Errors",
+            selection: .named("Errors"),
             direction: .previous,
-            currentHeistId: "email",
-            currentTextRange: TextRangeReference(startOffset: 10, endOffset: 15)
+            continuation: .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .rotor(let target) = decoded {
-            XCTAssertEqual(target.elementTarget, .heistId("form"))
-            XCTAssertEqual(target.rotor, "Errors")
-            XCTAssertNil(target.rotorIndex)
-            XCTAssertEqual(target.direction, .previous)
+            XCTAssertEqual(target.elementTarget, ElementTarget.heistId("form"))
+            XCTAssertEqual(target.selection, .named("Errors"))
+            XCTAssertEqual(target.direction, RotorDirection.previous)
             XCTAssertEqual(target.currentHeistId, "email")
             XCTAssertEqual(target.currentTextRange, TextRangeReference(startOffset: 10, endOffset: 15))
         } else {
             XCTFail("Expected rotor message")
         }
+    }
+
+    func testClientMessageRotorRejectsMixedSelectorShape() throws {
+        let json = """
+        {"type":"rotor","payload":{"heistId":"form","rotor":"Errors","rotorIndex":1}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
     }
 
     func testClientMessageRotorRejectsNegativeIndex() throws {
@@ -60,6 +66,14 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testClientMessageRotorRejectsInvalidCurrentTextRange() throws {
         let json = """
         {"type":"rotor","payload":{"heistId":"form","currentTextRange":{"startOffset":8,"endOffset":3}}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
+    }
+
+    func testClientMessageRotorRejectsTextRangeWithoutCurrentItem() throws {
+        let json = """
+        {"type":"rotor","payload":{"heistId":"form","currentTextRange":{"startOffset":3,"endOffset":8}}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))

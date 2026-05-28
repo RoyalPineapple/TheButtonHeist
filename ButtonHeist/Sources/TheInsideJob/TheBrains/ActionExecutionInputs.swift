@@ -10,11 +10,9 @@ protocol CustomActionExecutionInput {
 
 protocol RotorExecutionInput {
     var rotorElementTarget: any SemanticElementTarget { get }
-    var rotor: String? { get }
-    var rotorIndex: Int? { get }
+    var selection: RotorSelection { get }
     var direction: RotorDirection { get }
-    var currentHeistId: HeistId? { get }
-    var currentTextRange: TextRangeReference? { get }
+    var continuation: RotorContinuation { get }
 }
 
 protocol PointGestureExecutionInput {

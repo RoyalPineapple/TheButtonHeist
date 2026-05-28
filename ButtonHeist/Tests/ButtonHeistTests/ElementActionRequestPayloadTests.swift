@@ -27,7 +27,6 @@ final class ElementActionRequestPayloadTests: XCTestCase {
             "command": "rotor",
             "label": "Body",
             "rotor": "Headings",
-            "rotorIndex": 1,
             "direction": "previous",
             "currentHeistId": "body-current",
             "currentTextStartOffset": 4,
@@ -38,11 +37,9 @@ final class ElementActionRequestPayloadTests: XCTestCase {
             return XCTFail("Expected rotor payload")
         }
         assertMatcherTarget(target.elementTarget, label: "Body")
-        XCTAssertEqual(target.rotor, "Headings")
-        XCTAssertEqual(target.rotorIndex, 1)
+        XCTAssertEqual(target.selection, .named("Headings"))
         XCTAssertEqual(target.direction, .previous)
-        XCTAssertEqual(target.currentHeistId, "body-current")
-        XCTAssertEqual(target.currentTextRange, TextRangeReference(startOffset: 4, endOffset: 10))
+        XCTAssertEqual(target.continuation, .textRange("body-current", TextRangeReference(startOffset: 4, endOffset: 10)))
     }
 
     @ButtonHeistActor

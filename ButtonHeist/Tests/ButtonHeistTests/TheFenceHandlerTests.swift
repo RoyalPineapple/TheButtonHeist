@@ -892,9 +892,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPinchWithScalePassesValidation() async {
-        await assertPassesValidation(
-            ["command": "pinch", "scale": 2.0]
+    func testPinchRequiresCenter() async {
+        await assertValidationError(
+            ["command": "pinch", "scale": 2.0],
+            equals: "Pinch requires element target or center coordinates (centerX, centerY)"
         )
     }
 
@@ -958,9 +959,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRotateWithAnglePassesValidation() async {
-        await assertPassesValidation(
-            ["command": "rotate", "angle": 1.57]
+    func testRotateRequiresCenter() async {
+        await assertValidationError(
+            ["command": "rotate", "angle": 1.57],
+            equals: "Rotate requires element target or center coordinates (centerX, centerY)"
         )
     }
 
@@ -1308,6 +1310,14 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             ["command": "rotor", "identifier": "myElement", "rotorIndex": -1],
             equals: "schema validation failed for rotorIndex: observed integer -1; expected integer >= 0"
+        )
+    }
+
+    @ButtonHeistActor
+    func testRotorRejectsMixedSelectorShape() async {
+        await assertValidationError(
+            ["command": "rotor", "identifier": "myElement", "rotor": "Errors", "rotorIndex": 1],
+            contains: "either rotor or rotorIndex"
         )
     }
 

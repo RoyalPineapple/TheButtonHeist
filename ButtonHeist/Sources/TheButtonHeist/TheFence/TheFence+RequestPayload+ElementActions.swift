@@ -168,6 +168,10 @@ private extension TheFence {
             self.request = request
         }
 
+        var observedDescription: String {
+            request.observedDescription
+        }
+
         @ButtonHeistActor
         func elementTarget(in fence: TheFence) throws -> ElementTarget? {
             let heistId = try string("heistId")
@@ -470,17 +474,38 @@ private extension TheFence {
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
+            let rotor = try request.string("rotor")
             let rotorIndex = try request.nonNegativeInteger("rotorIndex")
+            if rotor != nil, rotorIndex != nil {
+                throw SchemaValidationError(
+                    field: "rotor/rotorIndex",
+                    observed: request.observedDescription,
+                    expected: "either rotor or rotorIndex"
+                )
+            }
             let cursor = try request.rotorTextCursor()
             let currentHeistId = try cursor.currentHeistId ?? request.string("currentHeistId")
+            let selection: RotorSelection = if let rotor {
+                .named(rotor)
+            } else if let rotorIndex {
+                .index(rotorIndex)
+            } else {
+                .automatic
+            }
+            let continuation: RotorContinuation = if let range = cursor.currentTextRange,
+                                                     let currentHeistId {
+                .textRange(currentHeistId, range)
+            } else if let currentHeistId {
+                .item(currentHeistId)
+            } else {
+                .none
+            }
 
             target = RotorTarget(
                 elementTarget: try request.requiredElementTarget(command: .rotor, in: fence),
-                rotor: try request.string("rotor"),
-                rotorIndex: rotorIndex,
+                selection: selection,
                 direction: try request.enumValue("direction", as: RotorDirection.self) ?? .next,
-                currentHeistId: currentHeistId,
-                currentTextRange: cursor.currentTextRange
+                continuation: continuation
             )
         }
     }
