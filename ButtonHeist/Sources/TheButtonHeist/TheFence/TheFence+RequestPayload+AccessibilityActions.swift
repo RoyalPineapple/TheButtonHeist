@@ -6,12 +6,12 @@ extension TheFence {
 
     func decodeAccessibilityActionDispatch(
         command: Command,
-        input: ElementActionRequestInput
+        input: some CommandArgumentReadable
     ) throws -> DecodedRequestDispatch {
         guard command == .activate else {
             throw FenceError.invalidRequest("Unexpected accessibility action command: \(command.rawValue)")
         }
-        let target = try input.requiredElementTarget(command: .activate, in: self)
+        let target = try input.requiredElementTarget(command: .activate)
         let actionName = try input.optionalNonEmptyString("action")
         let count = try input.countArgument()
         return Self.clientActionDispatch(

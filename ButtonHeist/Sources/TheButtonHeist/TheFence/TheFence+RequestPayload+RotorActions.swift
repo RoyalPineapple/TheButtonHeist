@@ -4,12 +4,12 @@ extension TheFence {
 
     func decodeRotorActionDispatch(
         command: Command,
-        input: ElementActionRequestInput
+        input: some CommandArgumentReadable
     ) throws -> DecodedRequestDispatch {
         guard command == .rotor else {
             throw FenceError.invalidRequest("Unexpected rotor action command: \(command.rawValue)")
         }
-        let rotor = try input.string("rotor")
+        let rotor = try input.schemaString("rotor")
         let rotorIndex = try input.nonNegativeInteger("rotorIndex")
         if rotor != nil, rotorIndex != nil {
             throw SchemaValidationError(
@@ -27,7 +27,7 @@ extension TheFence {
         }
         let continuation = try input.rotorContinuation()
         return try decodedExecutablePayload(.rotor(RotorTarget(
-            elementTarget: input.requiredElementTarget(command: .rotor, in: self),
+            elementTarget: input.requiredElementTarget(command: .rotor),
             selection: selection,
             direction: input.enumValue("direction", as: RotorDirection.self) ?? .next,
             continuation: continuation
@@ -35,7 +35,7 @@ extension TheFence {
     }
 }
 
-extension TheFence.ElementActionRequestInput {
+extension TheFence.CommandArgumentReadable {
     func rotorContinuation() throws -> RotorContinuation {
         let startOffset = try integer("currentTextStartOffset")
         let endOffset = try integer("currentTextEndOffset")
@@ -43,12 +43,12 @@ extension TheFence.ElementActionRequestInput {
             throw FenceError.invalidRequest("currentTextStartOffset and currentTextEndOffset must be provided together")
         }
         guard let startOffset, let endOffset else {
-            guard let currentHeistId = try string("currentHeistId") else {
+            guard let currentHeistId = try schemaString("currentHeistId") else {
                 return .none
             }
             return .item(currentHeistId)
         }
-        guard let currentHeistId = try string("currentHeistId") else {
+        guard let currentHeistId = try schemaString("currentHeistId") else {
             throw SchemaValidationError(field: "currentHeistId", observed: "missing", expected: "string")
         }
         guard startOffset >= 0, endOffset >= startOffset else {

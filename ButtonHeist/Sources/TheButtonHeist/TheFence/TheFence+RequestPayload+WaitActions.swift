@@ -4,13 +4,13 @@ extension TheFence {
 
     func decodeWaitActionDispatch(
         command: Command,
-        input: ElementActionRequestInput
+        input: some CommandArgumentReadable
     ) throws -> DecodedRequestDispatch {
         guard command == .waitFor else {
             throw FenceError.invalidRequest("Unexpected wait action command: \(command.rawValue)")
         }
         return try decodedExecutablePayload(.waitFor(WaitForTarget(
-            elementTarget: input.requiredElementTarget(command: .waitFor, in: self),
+            elementTarget: input.requiredElementTarget(command: .waitFor),
             absent: input.boolean("absent"),
             timeout: input.number("timeout")
         )))
