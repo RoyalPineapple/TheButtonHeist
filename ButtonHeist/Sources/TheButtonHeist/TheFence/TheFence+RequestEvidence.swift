@@ -8,22 +8,23 @@ private let evidenceTargetKeys: Set<String> = [
 ]
 
 extension HeistValue {
-    static func encoded<T: Encodable>(_ value: T) -> HeistValue {
-        do {
-            let data = try JSONEncoder().encode(value)
-            return try JSONDecoder().decode(HeistValue.self, from: data)
-        } catch {
-            return .object([
-                "type": .string("encoding_failed"),
-                "error": .string(String(describing: error)),
-            ])
-        }
+    static func encoded<T: Encodable>(_ value: T) throws -> HeistValue {
+        let data = try JSONEncoder().encode(value)
+        return try JSONDecoder().decode(HeistValue.self, from: data)
     }
 }
 
 private extension Encodable {
-    func heistEvidenceArguments(renaming renamedKeys: [String: String] = [:]) -> [String: HeistValue] {
-        guard case .object(let encoded) = HeistValue.encoded(self) else { return [:] }
+    func heistEvidenceArguments(renaming renamedKeys: [String: String] = [:]) throws -> [String: HeistValue] {
+        guard case .object(let encoded) = try HeistValue.encoded(self) else {
+            throw DecodingError.typeMismatch(
+                [String: HeistValue].self,
+                DecodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Heist evidence projection must encode \(Self.self) as an object"
+                )
+            )
+        }
         var arguments = encoded.reduce(into: [String: HeistValue]()) { result, pair in
             guard !evidenceTargetKeys.contains(pair.key) else { return }
             result[renamedKeys[pair.key] ?? pair.key] = pair.value
@@ -77,36 +78,36 @@ private struct HeistRecordingProjection {
 }
 
 extension TheFence.ParsedRequest {
-    var heistRecordingElementTarget: ElementTarget? {
-        heistRecordingProjection.elementTarget
+    func heistRecordingElementTarget() throws -> ElementTarget? {
+        try heistRecordingProjection().elementTarget
     }
 
-    var heistRecordingCoordinateOnly: Bool {
-        heistRecordingProjection.coordinateOnly
+    func heistRecordingCoordinateOnly() throws -> Bool {
+        try heistRecordingProjection().coordinateOnly
     }
 
-    var heistRecordingArguments: [String: HeistValue] {
-        heistRecordingProjection.arguments
+    func heistRecordingArguments() throws -> [String: HeistValue] {
+        try heistRecordingProjection().arguments
     }
 
-    private var heistRecordingProjection: HeistRecordingProjection {
+    private func heistRecordingProjection() throws -> HeistRecordingProjection {
         guard let messages = executableMessages else { return .empty }
         guard command == .activate else {
-            return messages.first?.heistRecordingProjection ?? .empty
+            return try messages.first?.heistRecordingProjection() ?? .empty
         }
-        return .activate(messages)
+        return try .activate(messages)
     }
 }
 
 private extension HeistRecordingProjection {
-    static func activate(_ messages: [ClientMessage]) -> HeistRecordingProjection {
+    static func activate(_ messages: [ClientMessage]) throws -> HeistRecordingProjection {
         guard let first = messages.first else { return .empty }
         switch first {
         case .activate(let target):
             return .target(elementTarget: target)
         case .increment(let target):
             return .target(
-                arguments: ActivateEvidenceArguments(
+                arguments: try ActivateEvidenceArguments(
                     action: ElementAction.increment.description,
                     count: messages.count > 1 ? messages.count : nil
                 ).heistEvidenceArguments(),
@@ -114,7 +115,7 @@ private extension HeistRecordingProjection {
             )
         case .decrement(let target):
             return .target(
-                arguments: ActivateEvidenceArguments(
+                arguments: try ActivateEvidenceArguments(
                     action: ElementAction.decrement.description,
                     count: messages.count > 1 ? messages.count : nil
                 ).heistEvidenceArguments(),
@@ -122,64 +123,64 @@ private extension HeistRecordingProjection {
             )
         case .performCustomAction(let target):
             return .target(
-                arguments: ActivateEvidenceArguments(action: target.actionName, count: nil)
+                arguments: try ActivateEvidenceArguments(action: target.actionName, count: nil)
                     .heistEvidenceArguments(),
                 elementTarget: target.elementTarget
             )
         default:
-            return first.heistRecordingProjection
+            return try first.heistRecordingProjection()
         }
     }
 }
 
 private extension ClientMessage {
-    var heistRecordingProjection: HeistRecordingProjection {
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
         switch self {
         case .activate(let target), .increment(let target), .decrement(let target):
             return .target(elementTarget: target)
         case .performCustomAction(let target):
             return .target(
-                arguments: target.heistEvidenceArguments(),
+                arguments: try target.heistEvidenceArguments(),
                 elementTarget: target.elementTarget
             )
         case .rotor(let target):
-            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
         case .typeText(let target):
-            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
         case .editAction(let target):
-            return HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments())
         case .setPasteboard(let target):
-            return HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments())
         case .oneFingerTap(let target):
-            return target.heistRecordingProjection
+            return try target.heistRecordingProjection()
         case .longPress(let target):
-            return target.heistRecordingProjection
+            return try target.heistRecordingProjection()
         case .swipe(let target):
-            return target.heistRecordingProjection
+            return try target.heistRecordingProjection()
         case .drag(let target):
-            return target.heistRecordingProjection
+            return try target.heistRecordingProjection()
         case .pinch(let target):
-            return target.heistRecordingProjection
+            return try target.heistRecordingProjection()
         case .rotate(let target):
-            return target.heistRecordingProjection
+            return try target.heistRecordingProjection()
         case .twoFingerTap(let target):
-            return target.heistRecordingProjection
+            return try target.heistRecordingProjection()
         case .drawPath(let target):
-            return HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
         case .drawBezier(let target):
-            return HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
         case .scroll(let target):
-            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
         case .scrollToVisible(let target):
             return .target(elementTarget: target.elementTarget)
         case .elementSearch(let target):
-            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
         case .scrollToEdge(let target):
-            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
         case .waitFor(let target):
-            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
         case .waitForChange(let target):
-            return HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments())
         default:
             return .empty
         }
@@ -187,8 +188,8 @@ private extension ClientMessage {
 }
 
 private extension TapTarget {
-    var heistRecordingProjection: HeistRecordingProjection {
-        HeistRecordingProjection(
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        try HeistRecordingProjection(
             arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
             elementTarget: selection.elementTarget,
             coordinateOnly: selection.screenPoint != nil
@@ -197,8 +198,8 @@ private extension TapTarget {
 }
 
 private extension LongPressTarget {
-    var heistRecordingProjection: HeistRecordingProjection {
-        HeistRecordingProjection(
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        try HeistRecordingProjection(
             arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
             elementTarget: selection.elementTarget,
             coordinateOnly: selection.screenPoint != nil
@@ -207,8 +208,8 @@ private extension LongPressTarget {
 }
 
 private extension SwipeTarget {
-    var heistRecordingProjection: HeistRecordingProjection {
-        HeistRecordingProjection(
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        try HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: selection.bookKeeperElementTarget,
             coordinateOnly: selection.bookKeeperElementTarget == nil
@@ -217,8 +218,8 @@ private extension SwipeTarget {
 }
 
 private extension DragTarget {
-    var heistRecordingProjection: HeistRecordingProjection {
-        HeistRecordingProjection(
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        try HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: start.elementTarget,
             coordinateOnly: start.elementTarget == nil
@@ -227,8 +228,8 @@ private extension DragTarget {
 }
 
 private extension PinchTarget {
-    var heistRecordingProjection: HeistRecordingProjection {
-        HeistRecordingProjection(
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        try HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
@@ -237,8 +238,8 @@ private extension PinchTarget {
 }
 
 private extension RotateTarget {
-    var heistRecordingProjection: HeistRecordingProjection {
-        HeistRecordingProjection(
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        try HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
@@ -247,8 +248,8 @@ private extension RotateTarget {
 }
 
 private extension TwoFingerTapTarget {
-    var heistRecordingProjection: HeistRecordingProjection {
-        HeistRecordingProjection(
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        try HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil

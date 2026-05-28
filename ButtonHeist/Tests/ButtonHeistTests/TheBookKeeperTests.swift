@@ -565,8 +565,8 @@ final class TheBookKeeperTests: XCTestCase {
         )
 
         XCTAssertEqual(activate.command, .activate)
-        XCTAssertEqual(activate.heistRecordingElementTarget, .heistId("login_button"))
-        XCTAssertNil(activate.heistEvidenceArguments["target"])
+        XCTAssertEqual(try activate.heistRecordingElementTarget(), .heistId("login_button"))
+        XCTAssertNil(try activate.heistEvidenceArguments()["target"])
     }
 
     @ButtonHeistActor
@@ -576,7 +576,7 @@ final class TheBookKeeperTests: XCTestCase {
             command: .oneFingerTap,
             arguments: ["x": 10.5, "y": 20.25]
         )
-        let arguments = tap.heistEvidenceArguments
+        let arguments = try tap.heistEvidenceArguments()
 
         XCTAssertEqual(arguments["x"], .double(10.5))
         XCTAssertEqual(arguments["y"], .double(20.25))
@@ -594,7 +594,7 @@ final class TheBookKeeperTests: XCTestCase {
                 "action": "Archive",
             ]
         )
-        let arguments = action.heistEvidenceArguments
+        let arguments = try action.heistEvidenceArguments()
 
         XCTAssertEqual(Set(arguments.keys), Set(["action"]))
         XCTAssertEqual(arguments["action"], .string("Archive"))
@@ -615,7 +615,7 @@ final class TheBookKeeperTests: XCTestCase {
                 "currentTextEndOffset": 9,
             ]
         )
-        let arguments = rotor.heistEvidenceArguments
+        let arguments = try rotor.heistEvidenceArguments()
 
         XCTAssertEqual(arguments["rotor"], .string("Words"))
         XCTAssertEqual(arguments["currentHeistId"], .string("word_1"))
@@ -716,7 +716,7 @@ final class TheBookKeeperTests: XCTestCase {
             ]
         )
 
-        let arguments = request.heistEvidenceArguments
+        let arguments = try request.heistEvidenceArguments()
 
         XCTAssertEqual(arguments["expect"], .object([
             "type": .string("element_appeared"),
