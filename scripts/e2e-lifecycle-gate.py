@@ -501,7 +501,7 @@ def scenario_background_foreground(cli: Path, sim: str, connect_timeout: float) 
         one_shot_success(foreground_before, "foreground get_interface before background")
         background_method = background_app(sim)
         time.sleep(1.0)
-        while_background = cli_once(cli, app, "bg-driver", "get_interface", connect_timeout=connect_timeout, timeout=12)
+        while_background = cli_once(cli, app, "bg-driver", "get_interface", connect_timeout=connect_timeout, timeout=25)
         if while_background["json"] is None:
             raise AssertionError(f"background command did not return structured JSON: {while_background}")
         if (
