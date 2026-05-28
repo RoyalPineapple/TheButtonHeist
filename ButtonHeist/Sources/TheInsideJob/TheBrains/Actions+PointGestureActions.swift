@@ -17,7 +17,7 @@ extension Actions {
         switch selection {
         case .element(let target):
             elementTarget = target
-        case .coordinate, .unspecified:
+        case .coordinate:
             elementTarget = nil
         }
         let normalizedTarget = elementTarget.map {
@@ -145,12 +145,6 @@ extension Actions {
                 case .left:  endPoint = CGPoint(x: startPoint.x - dist, y: startPoint.y)
                 case .right: endPoint = CGPoint(x: startPoint.x + dist, y: startPoint.y)
                 }
-            case .unspecified:
-                return .failure(
-                    .syntheticSwipe,
-                    message: "synthetic swipe failed: observed missing end point and direction; "
-                        + "try providing endX/endY or direction."
-                )
             }
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure

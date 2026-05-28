@@ -21,6 +21,7 @@
 		06A24ABB3DDA92F7B9081BE6 /* ScreenClassifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61AED0209793344783FFCD7 /* ScreenClassifierTests.swift */; };
 		06FAC24F6349D1CED1EF99A5 /* SocketClientRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EB5ADCBFB0F4F536A643E3 /* SocketClientRegistryTests.swift */; };
 		075005209685BC2EAE669585 /* RecordingPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB78C05290143B3FE6E3F55 /* RecordingPayloadTests.swift */; };
+		08FD548DF55C895FCAB7C1BB /* TheFence+RequestPayload+GesturePointDecoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03F144C68A222F859B64227C /* TheFence+RequestPayload+GesturePointDecoding.swift */; };
 		08FEAFD618D0D7176ACA6DE7 /* Actions+RotorActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD4F22F146ACA56DDDE8BC5B /* Actions+RotorActions.swift */; };
 		09987A8680B07DB479C74267 /* Screen.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD54BF184FD9589D4A4A9804 /* Screen.swift */; };
 		0A7CAAD85FF26A515AD618CC /* TheFence+SessionHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBC75E84240686A5338BB6A /* TheFence+SessionHandlers.swift */; };
@@ -384,6 +385,7 @@
 		D1554802A6D27516EB2224E5 /* CommandProjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDCD117167E144FB24DA79F5 /* CommandProjectionTests.swift */; };
 		D1866FC1E2D5639B2DCA6A27 /* TheFence+CommandCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEEFEEE99B850E0AD80B6397 /* TheFence+CommandCatalog.swift */; };
 		D19C1AD163D7F2C987339045 /* TheTripwireTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD59EB8684A62ABBB0EFEF4 /* TheTripwireTests.swift */; };
+		D1C52D0F4506CE16F0619B2A /* TheFence+RequestPayload+GestureValidation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D248D786AFC509B2B1B584 /* TheFence+RequestPayload+GestureValidation.swift */; };
 		D1CABD6D09423256E7BA63A3 /* DiscoveredDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 558658BD430870069086F3A8 /* DiscoveredDevice.swift */; };
 		D1EF4C0055D9CFE76B6695BA /* ConnectionResultWaiters.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE82C21766665FC9B6231C3F /* ConnectionResultWaiters.swift */; };
 		D1FFB551FE1CABDBBD72694A /* TheBrains+Dispatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3535E1A875F4E39BB589D4A3 /* TheBrains+Dispatch.swift */; };
@@ -588,6 +590,7 @@
 		0174AFB9CF315CBB34A5BBF1 /* _CertificateInternals.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = _CertificateInternals.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		02697E99A62FBB8C44A48262 /* TheFence+FailureMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+FailureMapping.swift"; sourceTree = "<group>"; };
 		03B8591D59CF21B4C3622406 /* InterfaceSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceSelectionTests.swift; sourceTree = "<group>"; };
+		03F144C68A222F859B64227C /* TheFence+RequestPayload+GesturePointDecoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+GesturePointDecoding.swift"; sourceTree = "<group>"; };
 		0416F886B1256AC38EC0F682 /* Navigation+Explore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Navigation+Explore.swift"; sourceTree = "<group>"; };
 		04A3B71A8BAE90E1CD164BDE /* FenceJSON+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FenceJSON+Recording.swift"; sourceTree = "<group>"; };
 		04ED01D497D5E5B60EED28A6 /* Navigation+ElementSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Navigation+ElementSearch.swift"; sourceTree = "<group>"; };
@@ -782,6 +785,7 @@
 		74717952EF31517C30BDACBB /* TheFence+RequestEvidence+GestureTargets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestEvidence+GestureTargets.swift"; sourceTree = "<group>"; };
 		762A9678A59A16CFF629FB3E /* TheFence+FailureTaxonomy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+FailureTaxonomy.swift"; sourceTree = "<group>"; };
 		767DEE6FAE03706BA7D58223 /* TheFence+Formatting+Compact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting+Compact.swift"; sourceTree = "<group>"; };
+		76D248D786AFC509B2B1B584 /* TheFence+RequestPayload+GestureValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+GestureValidation.swift"; sourceTree = "<group>"; };
 		777C1B11A62069B0B5FD6393 /* ElementModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementModels.swift; sourceTree = "<group>"; };
 		78915572C3F6D6F56146906D /* SynthesisDeterminismTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynthesisDeterminismTests.swift; sourceTree = "<group>"; };
 		78E08CC045CD0C77114CCCD5 /* TheSafecracker+Bezier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+Bezier.swift"; sourceTree = "<group>"; };
@@ -1205,7 +1209,9 @@
 				F202E22C79890D9F7D445409 /* TheFence+RequestPayload+DrawGestures.swift */,
 				C563F9006A5994C60474596B /* TheFence+RequestPayload+ElementActions.swift */,
 				21227095A0979F06C322D7D1 /* TheFence+RequestPayload+GestureDecodingSupport.swift */,
+				03F144C68A222F859B64227C /* TheFence+RequestPayload+GesturePointDecoding.swift */,
 				6D23ED6450908FC41AA710DD /* TheFence+RequestPayload+Gestures.swift */,
+				76D248D786AFC509B2B1B584 /* TheFence+RequestPayload+GestureValidation.swift */,
 				35CB7DADF77498D30A91CC4A /* TheFence+RequestPayload+Observation.swift */,
 				84D1831C2867656143871E2E /* TheFence+RequestPayload+RotorActions.swift */,
 				9688AC554CE877191678C97E /* TheFence+RequestPayload+ScrollActions.swift */,
@@ -2337,6 +2343,8 @@
 				A86204288B408BF8FB7891DF /* TheFence+RequestPayload+DrawGestures.swift in Sources */,
 				182D08F34A032A4555C8B88C /* TheFence+RequestPayload+ElementActions.swift in Sources */,
 				76F45269A571FB4C0834EEE9 /* TheFence+RequestPayload+GestureDecodingSupport.swift in Sources */,
+				08FD548DF55C895FCAB7C1BB /* TheFence+RequestPayload+GesturePointDecoding.swift in Sources */,
+				D1C52D0F4506CE16F0619B2A /* TheFence+RequestPayload+GestureValidation.swift in Sources */,
 				AA1B8B5F7613FE5A793280A5 /* TheFence+RequestPayload+Gestures.swift in Sources */,
 				4EE6A6798E30E502E1877994 /* TheFence+RequestPayload+Observation.swift in Sources */,
 				A0647F805F24BBCFFB602C0C /* TheFence+RequestPayload+RotorActions.swift in Sources */,

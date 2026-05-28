@@ -61,12 +61,13 @@ extension TheFence {
     }
 
     func decodeDragTarget(_ request: GestureRequestInput) throws -> DragTarget {
-        let start = try decodeOptionalPointIntent(
+        let start = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "startX",
             yKey: "startY",
-            field: "startX/startY"
+            field: "startX/startY",
+            missingMessage: "Drag requires target object or start coordinates (startX, startY)"
         )
         return DragTarget(
             start: start,

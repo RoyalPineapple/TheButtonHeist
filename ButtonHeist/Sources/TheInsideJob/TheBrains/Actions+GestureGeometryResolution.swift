@@ -24,7 +24,7 @@ extension Actions {
             case .failed(let failure):
                 return .failure(failure.interactionResult(commandMethod: method))
             }
-        case .coordinate, .unspecified:
+        case .coordinate:
             actionableTarget = nil
         }
         return resolveGesturePoint(from: actionableTarget, selection: selection, method: method)
@@ -51,8 +51,6 @@ extension Actions {
                 return .failure(failure)
             }
             return .success(point)
-        case .unspecified:
-            return .failure(.failure(.elementNotFound, message: "No target specified"))
         }
     }
 

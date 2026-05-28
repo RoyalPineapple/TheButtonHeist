@@ -1018,10 +1018,23 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testDragWithEndCoordinatesPassesValidation() async {
+    func testDragWithoutStartTargetIsRejected() async {
+        await assertOperationValidationError(
+            command: .drag,
+            arguments: ["endX": .double(100.0), "endY": .double(200.0)],
+            equals: "Drag requires target object or start coordinates (startX, startY)"
+        )
+    }
+
+    @ButtonHeistActor
+    func testDragWithElementTargetAndEndCoordinatesPassesValidation() async {
         await assertOperationPassesValidation(
             command: .drag,
-            arguments: ["endX": .double(100.0), "endY": .double(200.0)]
+            arguments: [
+                "target": heistTargetValue("source"),
+                "endX": .double(100.0),
+                "endY": .double(200.0),
+            ]
         )
     }
 

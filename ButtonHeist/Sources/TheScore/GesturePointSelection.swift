@@ -50,7 +50,6 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
 public enum GesturePointSelection: Sendable, Equatable, CustomStringConvertible {
     case element(ElementTarget)
     case coordinate(ScreenPoint)
-    case unspecified
 
     public var elementTarget: ElementTarget? {
         guard case .element(let target) = self else { return nil }
@@ -62,29 +61,12 @@ public enum GesturePointSelection: Sendable, Equatable, CustomStringConvertible 
         return point
     }
 
-    public var pointX: Double? {
-        screenPoint?.x
-    }
-
-    public var pointY: Double? {
-        screenPoint?.y
-    }
-
-    public var isSpecified: Bool {
-        if case .unspecified = self {
-            return false
-        }
-        return true
-    }
-
     public var description: String {
         switch self {
         case .element(let target):
             return target.description
         case .coordinate(let point):
             return point.description
-        case .unspecified:
-            return "unspecified"
         }
     }
 }
@@ -104,7 +86,7 @@ func makeGesturePointSelection(
     x: Double?,
     y: Double?,
     field: String
-) throws -> GesturePointSelection {
+) throws -> GesturePointSelection? {
     if elementTarget != nil, x != nil || y != nil {
         throw GestureProjectionError.mixedCoordinateAndElement(field: field)
     }
@@ -117,10 +99,10 @@ func makeGesturePointSelection(
     if x != nil || y != nil {
         throw GestureProjectionError.partialCoordinate(field: field, xPresent: x != nil, yPresent: y != nil)
     }
-    return .unspecified
+    return nil
 }
 
-func decodeGesturePointSelection(from decoder: Decoder) throws -> GesturePointSelection {
+func decodeGesturePointSelection(from decoder: Decoder) throws -> GesturePointSelection? {
     let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
     let container = try decoder.container(keyedBy: GesturePointCodingKeys.self)
     let pointX = try container.decodeIfPresent(Double.self, forKey: .pointX)
@@ -132,8 +114,7 @@ func decodeGesturePointSelection(from decoder: Decoder) throws -> GesturePointSe
 }
 
 func decodeRequiredGesturePointSelection(from decoder: Decoder, field: String = "point") throws -> GesturePointSelection {
-    let selection = try decodeGesturePointSelection(from: decoder)
-    guard selection.isSpecified else {
+    guard let selection = try decodeGesturePointSelection(from: decoder) else {
         throw GestureProjectionError.missingGesturePoint(field: field)
     }
     return selection
@@ -147,12 +128,10 @@ func encodeGesturePointSelection(_ selection: GesturePointSelection, to encoder:
         var container = encoder.container(keyedBy: GesturePointCodingKeys.self)
         try container.encode(point.x, forKey: .pointX)
         try container.encode(point.y, forKey: .pointY)
-    case .unspecified:
-        break
     }
 }
 
-func decodeGestureCenterSelection(from decoder: Decoder) throws -> GesturePointSelection {
+func decodeGestureCenterSelection(from decoder: Decoder) throws -> GesturePointSelection? {
     let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
     let container = try decoder.container(keyedBy: GestureCenterCodingKeys.self)
     let centerX = try container.decodeIfPresent(Double.self, forKey: .centerX)
@@ -164,8 +143,7 @@ func decodeGestureCenterSelection(from decoder: Decoder) throws -> GesturePointS
 }
 
 func decodeRequiredGestureCenterSelection(from decoder: Decoder, field: String = "center") throws -> GesturePointSelection {
-    let selection = try decodeGestureCenterSelection(from: decoder)
-    guard selection.isSpecified else {
+    guard let selection = try decodeGestureCenterSelection(from: decoder) else {
         throw GestureProjectionError.missingGesturePoint(field: field)
     }
     return selection
@@ -179,7 +157,5 @@ func encodeGestureCenterSelection(_ selection: GesturePointSelection, to encoder
         var container = encoder.container(keyedBy: GestureCenterCodingKeys.self)
         try container.encode(point.x, forKey: .centerX)
         try container.encode(point.y, forKey: .centerY)
-    case .unspecified:
-        break
     }
 }
