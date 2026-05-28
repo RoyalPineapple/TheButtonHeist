@@ -67,22 +67,22 @@ final class PublicContractGoldenTests: XCTestCase {
 
     func testPublicJSONRequestIdRejectsNonScalarValues() {
         XCTAssertThrowsError(
-            try PublicRequestId(value: ["nested": "object"])
+            try decodeRequestId(from: #"{"nested":"object"}"#)
         )
         XCTAssertThrowsError(
-            try PublicRequestId(value: ["array"])
+            try decodeRequestId(from: #"["array"]"#)
         )
         XCTAssertThrowsError(
-            try PublicRequestId(value: true)
+            try decodeRequestId(from: #"true"#)
         )
     }
 
     func testPublicJSONRequestIdRejectsNonFiniteNumbers() {
         XCTAssertThrowsError(
-            try PublicRequestId(value: Double.nan)
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .double(Double.nan))
         )
         XCTAssertThrowsError(
-            try PublicRequestId(value: Double.infinity)
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .double(Double.infinity))
         )
     }
 
@@ -385,6 +385,10 @@ final class PublicContractGoldenTests: XCTestCase {
     private func jsonString(_ response: FenceResponse, requestId: PublicRequestId) throws -> String {
         let data = try response.jsonData(requestId: requestId)
         return try XCTUnwrap(String(data: data, encoding: .utf8))
+    }
+
+    private func decodeRequestId(from json: String) throws -> PublicRequestId {
+        try JSONDecoder().decode(PublicRequestId.self, from: Data(json.utf8))
     }
 
     private func sortedJSONString<T: Encodable>(
