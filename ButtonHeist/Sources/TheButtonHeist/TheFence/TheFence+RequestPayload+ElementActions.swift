@@ -90,12 +90,11 @@ extension TheFence {
         case .activate:
             let input = try ActivateRequestInput(input, fence: self)
             return DecodedRequestPayload(
-                payload: .clientAction,
-                executableMessages: try Self.accessibilityClientMessages(
+                payload: .clientAction(try Self.accessibilityClientMessages(
                     target: input.target,
                     actionName: input.actionName,
                     count: input.count
-                ),
+                )),
                 evidence: Self.accessibilityEvidence(
                     target: input.target,
                     actionName: input.actionName,
@@ -141,7 +140,7 @@ extension TheFence {
         message: ClientMessage,
         evidence: RequestEvidence
     ) -> DecodedRequestPayload {
-        DecodedRequestPayload(payload: .clientAction, executableMessages: [message], evidence: evidence)
+        DecodedRequestPayload(payload: .clientAction([message]), evidence: evidence)
     }
 
     func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {

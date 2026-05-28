@@ -52,7 +52,7 @@ extension TheFence {
         _ message: ClientMessage,
         evidence: RequestEvidence
     ) -> DecodedRequestPayload {
-        DecodedRequestPayload(payload: .clientAction, executableMessages: [message], evidence: evidence)
+        DecodedRequestPayload(payload: .clientAction([message]), evidence: evidence)
     }
 
     private struct GestureRequestInput {
