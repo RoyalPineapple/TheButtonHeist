@@ -3,22 +3,22 @@ import Foundation
 import TheScore
 
 private extension Dictionary where Key == String, Value == HeistValue {
-    mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) {
+    mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) throws {
         if let expectation {
-            self["expect"] = .encoded(expectation)
+            self["expect"] = try .encoded(expectation)
         }
         if let timeout {
-            self["timeout"] = .encoded(timeout)
+            self["timeout"] = try .encoded(timeout)
         }
     }
 }
 
 extension TheFence.ParsedRequest {
-    var heistEvidenceArguments: [String: HeistValue] {
-        var arguments = heistRecordingArguments
+    func heistEvidenceArguments() throws -> [String: HeistValue] {
+        var arguments = try heistRecordingArguments()
         if command != .waitForChange {
             let timeout = expectationPayload.expectation == nil ? nil : expectationPayload.timeout
-            arguments.appendExpectation(expectationPayload.expectation, timeout: timeout)
+            try arguments.appendExpectation(expectationPayload.expectation, timeout: timeout)
         }
         return arguments
     }
