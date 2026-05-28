@@ -11,6 +11,7 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
+        expireRotorContinuationIfCommandCannotConsumeIt(message)
         switch message {
         case .activate(let target):
             return await performInteraction(method: .activate) { await self.actions.executeActivate(target) }
@@ -90,6 +91,13 @@ extension TheBrains {
     }
 
     // MARK: - Interaction Pipeline
+
+    private func expireRotorContinuationIfCommandCannotConsumeIt(_ message: ClientMessage) {
+        if case .rotor = message {
+            return
+        }
+        clearPendingRotorResult()
+    }
 
     func performInteraction(
         method: ActionMethod,
