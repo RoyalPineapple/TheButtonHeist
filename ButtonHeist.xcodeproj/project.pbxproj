@@ -119,6 +119,7 @@
 		37A3E33799F2C13AF5F9D355 /* TheBurglarApplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BE3551882C8F9FF740EA26B /* TheBurglarApplyTests.swift */; };
 		37B4B9C76D5CDA76A5FE69C1 /* ScreenMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC23F750B22956636D1DB832 /* ScreenMetrics.swift */; };
 		388F0487801F4A25F6C30E9B /* TextAndWaitCommandPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E57C93FA6D48F7EA91EAE4 /* TextAndWaitCommandPayloads.swift */; };
+		389C90E173A1DEF5C0585562 /* ElementTargetGrammar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48953C73290D6EC49324660C /* ElementTargetGrammar.swift */; };
 		38A5185C768FD6136825A892 /* Navigation+ScrollContainers.swift in Sources */ = {isa = PBXBuildFile; fileRef = F309B4BB37F4BB1D95143D0F /* Navigation+ScrollContainers.swift */; };
 		3B71E4B90D486E4E81E21BC8 /* AccessibilityTraceDiffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4F0E46D5FDF7214ED8460E8 /* AccessibilityTraceDiffTests.swift */; };
 		3B77ADFA2877DBF64C911BA1 /* Actions+ElementActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EEBB6B59046741597C045AB /* Actions+ElementActions.swift */; };
@@ -706,6 +707,7 @@
 		4733C3D4A440AFEA26B7ECF3 /* IdleMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleMonitor.swift; sourceTree = "<group>"; };
 		4787FCEE2083A3D0D9CF380A /* ServerMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessageTests.swift; sourceTree = "<group>"; };
 		4831BAF2630B422BC3BF544E /* ActivationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivationPolicy.swift; sourceTree = "<group>"; };
+		48953C73290D6EC49324660C /* ElementTargetGrammar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementTargetGrammar.swift; sourceTree = "<group>"; };
 		48C0A7E7B525AB54B71D0EC5 /* ButtonHeistActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonHeistActor.swift; sourceTree = "<group>"; };
 		49DC85F5FB0AB0E2A81C9B96 /* TheHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheHandoff.swift; sourceTree = "<group>"; };
 		4B0A2A0866EE7E1975FF7580 /* TheFence+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Playback.swift"; sourceTree = "<group>"; };
@@ -1553,6 +1555,7 @@
 				777C1B11A62069B0B5FD6393 /* ElementModels.swift */,
 				88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */,
 				AC9978E2F3476C7F8CBDA303 /* ElementTarget.swift */,
+				48953C73290D6EC49324660C /* ElementTargetGrammar.swift */,
 				30CFBB40A1FC23933CF59662 /* GestureDirections.swift */,
 				BF3DD659C5F2BEF2AD118FA9 /* GesturePointSelection.swift */,
 				00570569B5278E4B6A863854 /* HeistPlayback.swift */,
@@ -2057,6 +2060,7 @@
 				908DC4CE0DA755F8BD3D326E /* ElementMatching.swift in Sources */,
 				53DD643041AC1DAA3E48298B /* ElementModels.swift in Sources */,
 				0CA864136D868EA899BA754B /* ElementTarget.swift in Sources */,
+				389C90E173A1DEF5C0585562 /* ElementTargetGrammar.swift in Sources */,
 				90C16D53B6D3D2C41A8CC04B /* Elements.swift in Sources */,
 				D8AA40696432289C348E49A1 /* GestureDirections.swift in Sources */,
 				4752187B20B883A2144A8002 /* GesturePointSelection.swift in Sources */,

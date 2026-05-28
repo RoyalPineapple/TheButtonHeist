@@ -125,9 +125,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     private static let reservedKeys: Set<String> = [
         "command", "target", "_recorded",
     ]
-    private static let forbiddenArgumentKeys: Set<String> = [
-        "heistId", "label", "identifier", "value", "traits", "excludeTraits", "ordinal",
-    ]
+    private static let forbiddenArgumentKeys = Set(ElementTargetGrammar.inlineFieldNames)
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)

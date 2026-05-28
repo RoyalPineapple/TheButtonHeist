@@ -277,7 +277,7 @@ extension RotorTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        elementTarget = try ElementTarget(from: decoder)
+        elementTarget = try ElementTarget.decodeInline(from: decoder)
         let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
         let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
         if rotor != nil, rotorIndex != nil {

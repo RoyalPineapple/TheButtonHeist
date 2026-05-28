@@ -167,9 +167,8 @@ extension WaitForTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // WaitForTarget requires an inline ElementTarget — defer to ElementTarget's
-        // own validation (it throws when no matcher/heistId keys are present).
-        self.elementTarget = try ElementTarget(from: decoder)
+        // WaitForTarget requires an inline ElementTarget alongside wait policy fields.
+        self.elementTarget = try ElementTarget.decodeInline(from: decoder)
         self.absent = try container.decodeIfPresent(Bool.self, forKey: .absent)
         self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
     }

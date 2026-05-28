@@ -553,6 +553,27 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
+    func testSubtreeSelectorElementRejectsHeistIdWithMatcherFields() {
+        let json = #"{"element":{"heistId":"button_save","label":"Save"}}"#
+        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("cannot be combined"), "\(error)")
+        }
+    }
+
+    func testSubtreeSelectorElementRejectsHeistIdWithOrdinal() {
+        let json = #"{"element":{"heistId":"button_save"},"ordinal":1}"#
+        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("cannot be combined"), "\(error)")
+        }
+    }
+
+    func testSubtreeSelectorElementRejectsUnknownTargetField() {
+        let json = #"{"element":{"label":"Save","legacyTarget":"button_save"}}"#
+        XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("legacyTarget"), "\(error)")
+        }
+    }
+
     // MARK: - AccessibilityHierarchy
 
     func testAccessibilityHierarchyLeafRoundTrip() throws {

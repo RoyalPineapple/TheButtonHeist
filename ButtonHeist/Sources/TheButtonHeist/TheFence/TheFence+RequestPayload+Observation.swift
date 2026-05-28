@@ -85,10 +85,7 @@ extension TheFence {
     private func decodeInterfaceSubtreeSelector(_ arguments: CommandArgumentEnvelope) throws -> SubtreeSelector? {
         guard let subtree = try arguments.schemaDictionary("subtree") else { return nil }
         try validateInterfaceSubtreeKeys(subtree)
-        let ordinal = try subtree.schemaInteger("ordinal")
-        if let ordinal, ordinal < 0 {
-            throw SchemaValidationError(field: subtree.field("ordinal"), observed: ordinal, expected: "integer >= 0")
-        }
+        let ordinal = try subtree.schemaNonNegativeInteger("ordinal")
 
         let elementDictionary = try subtree.schemaDictionary("element")
         let containerDictionary = try subtree.schemaDictionary("container")
@@ -132,7 +129,7 @@ extension TheFence {
     }
 
     private func validateInterfaceSubtreeElementKeys(_ element: CommandArgumentObject) throws {
-        let allowedKeys: Set<String> = ["heistId", "label", "value", "identifier", "traits", "excludeTraits"]
+        let allowedKeys = Set(["heistId"] + ElementTargetGrammar.matcherFieldNames)
         guard let unexpectedKey = element.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
         }
@@ -157,18 +154,35 @@ extension TheFence {
 
     private func subtreeElementTarget(_ element: CommandArgumentObject, ordinal: Int?) throws -> ElementTarget {
         let matcher = try interfaceElementMatcher(element)
-        guard let target = ElementTarget(
-            heistId: try element.schemaString("heistId"),
-            matcher: matcher,
-            ordinal: ordinal
-        ) else {
+        let matcherWasProvided = ElementTargetGrammar.matcherFieldNames
+            .contains { element.keys.contains($0) }
+        do {
+            return try ElementTargetGrammar.validatedTarget(
+                heistId: try element.schemaString("heistId"),
+                matcher: matcher,
+                matcherWasProvided: matcherWasProvided,
+                ordinal: ordinal
+            )
+        } catch let error as ElementTargetGrammarError {
             throw SchemaValidationError(
                 field: "subtree.element",
                 observed: element.observedDescription,
-                expected: "heistId or non-empty matcher fields, not both"
+                expected: subtreeElementExpectedDescription(for: error)
             )
         }
-        return target
+    }
+
+    private func subtreeElementExpectedDescription(for error: ElementTargetGrammarError) -> String {
+        switch error {
+        case .missingTarget:
+            return "heistId or non-empty matcher fields"
+        case .emptyMatcher:
+            return "matcher with label, identifier, value, traits, or excludeTraits"
+        case .mixedHeistIdWithMatcherOrOrdinal:
+            return "heistId or matcher fields with optional ordinal, not both"
+        case .negativeOrdinal:
+            return "integer >= 0"
+        }
     }
 
     private func subtreeContainerMatcher(_ container: CommandArgumentObject) throws -> ContainerMatcher {

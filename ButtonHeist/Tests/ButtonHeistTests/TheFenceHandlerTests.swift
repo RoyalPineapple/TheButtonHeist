@@ -733,6 +733,44 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testElementTargetRejectsHeistIdAndOrdinal() async throws {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(
+            try decodedElementTarget(
+                fence,
+                target: elementTargetValue([
+                    "heistId": .string("button_save"),
+                    "ordinal": .int(1),
+                ])
+            )
+        ) { error in
+            XCTAssertTrue(
+                "\(error)".contains("either heistId or matcher"),
+                "Expected heistId+ordinal rejection, got \(error)"
+            )
+        }
+    }
+
+    @ButtonHeistActor
+    func testElementTargetRejectsUnknownTargetField() async throws {
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(
+            try decodedElementTarget(
+                fence,
+                target: elementTargetValue([
+                    "matcher": .object(["label": .string("Save")]),
+                    "legacyTarget": .string("button_save"),
+                ])
+            )
+        ) { error in
+            XCTAssertTrue(
+                "\(error)".contains("legacyTarget"),
+                "Expected unknown target field rejection, got \(error)"
+            )
+        }
+    }
+
+    @ButtonHeistActor
     func testElementTargetWithOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
         guard let target = try decodedElementTarget(fence, target: matcherTargetValue(label: "Save", ordinal: 2)),
@@ -868,6 +906,20 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationPassesValidation(
             command: .oneFingerTap,
             arguments: ["target": matcherTargetValue(identifier: "myButton")]
+        )
+    }
+
+    @ButtonHeistActor
+    func testGestureTargetRejectsHeistIdAndMatcher() async {
+        await assertOperationValidationError(
+            command: .oneFingerTap,
+            arguments: [
+                "target": elementTargetValue([
+                    "heistId": .string("button_save"),
+                    "matcher": .object(["label": .string("Save")]),
+                ]),
+            ],
+            contains: "either heistId or matcher"
         )
     }
 
@@ -2453,6 +2505,21 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testParseExpectationMatcherRejectsHeistId() async {
+        XCTAssertThrowsError(try parseTypedExpectation(.object([
+            "type": .string("element_appeared"),
+            "matcher": .object([
+                "heistId": .string("button_save"),
+            ]),
+        ]))) { error in
+            guard case FenceError.invalidRequest(let message) = error else {
+                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            }
+            XCTAssertEqual(message, #"expectation matcher does not accept "matcher.heistId""#)
+        }
+    }
+
+    @ButtonHeistActor
     func testParseExpectationTypedPayloadNonStringTypeNamesTypeField() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .int(7),
@@ -3374,6 +3441,36 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(children.count, 2)
         XCTAssertEqual((children[0]["element"] as? [String: Any])?["heistId"] as? String, "submit")
         XCTAssertEqual((children[1]["element"] as? [String: Any])?["heistId"] as? String, "cancel")
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceSubtreeElementRejectsHeistIdAndOrdinal() async {
+        await assertOperationValidationError(
+            command: .getInterface,
+            arguments: [
+                "subtree": .object([
+                    "element": .object(["heistId": .string("button_save")]),
+                    "ordinal": .int(1),
+                ]),
+            ],
+            contains: "heistId or matcher fields"
+        )
+    }
+
+    @ButtonHeistActor
+    func testGetInterfaceSubtreeElementRejectsUnknownTargetField() async {
+        await assertOperationValidationError(
+            command: .getInterface,
+            arguments: [
+                "subtree": .object([
+                    "element": .object([
+                        "label": .string("Save"),
+                        "legacyTarget": .string("button_save"),
+                    ]),
+                ]),
+            ],
+            contains: "legacyTarget"
+        )
     }
 
     func testContainerStableIdAppearsInSummaryJsonAndCompactOutput() {
