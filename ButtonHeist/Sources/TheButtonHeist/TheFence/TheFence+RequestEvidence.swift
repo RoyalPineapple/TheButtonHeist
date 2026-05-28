@@ -45,7 +45,7 @@ private extension Dictionary where Key == String, Value == HeistValue {
     }
 }
 
-private struct AccessibilityEvidenceArguments: Encodable {
+struct ActivateEvidenceArguments: Encodable {
     let action: String?
     let count: Int?
 }
@@ -65,78 +65,85 @@ extension Encodable {
     }
 }
 
-extension TheFence.GesturePayload {
+extension TapTarget {
     var requestEvidence: TheFence.RequestEvidence {
         TheFence.RequestEvidence(
-            arguments: heistEvidenceArguments,
-            elementTarget: bookKeeperElementTarget,
-            coordinateOnly: bookKeeperCoordinateOnly
+            arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
+            elementTarget: selection.elementTarget,
+            coordinateOnly: selection.screenPoint != nil
         )
     }
+}
 
-    private var heistEvidenceArguments: [String: HeistValue] {
-        switch self {
-        case .oneFingerTap(let payload):
-            return payload.target.heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"])
-        case .longPress(let payload):
-            return payload.target.heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"])
-        case .swipe(let payload):
-            return payload.target.heistEvidenceArguments()
-        case .drag(let payload):
-            return payload.target.heistEvidenceArguments()
-        case .pinch(let payload):
-            return payload.target.heistEvidenceArguments()
-        case .rotate(let payload):
-            return payload.target.heistEvidenceArguments()
-        case .twoFingerTap(let payload):
-            return payload.target.heistEvidenceArguments()
-        case .drawPath(let payload):
-            return payload.target.heistEvidenceArguments()
-        case .drawBezier(let payload):
-            return payload.target.heistEvidenceArguments()
-        }
+extension LongPressTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
+            elementTarget: selection.elementTarget,
+            coordinateOnly: selection.screenPoint != nil
+        )
     }
+}
 
-    private var bookKeeperElementTarget: ElementTarget? {
-        switch self {
-        case .oneFingerTap(let payload):
-            return payload.selection.elementTarget
-        case .longPress(let payload):
-            return payload.selection.elementTarget
-        case .swipe(let payload):
-            return payload.target.selection.bookKeeperElementTarget
-        case .drag(let payload):
-            return payload.target.start.elementTarget
-        case .pinch(let payload):
-            return payload.center.elementTarget
-        case .rotate(let payload):
-            return payload.center.elementTarget
-        case .twoFingerTap(let payload):
-            return payload.center.elementTarget
-        case .drawPath, .drawBezier:
-            return nil
-        }
+extension SwipeTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(),
+            elementTarget: selection.bookKeeperElementTarget,
+            coordinateOnly: selection.bookKeeperElementTarget == nil
+        )
     }
+}
 
-    private var bookKeeperCoordinateOnly: Bool {
-        switch self {
-        case .oneFingerTap(let payload):
-            return payload.selection.screenPoint != nil
-        case .longPress(let payload):
-            return payload.selection.screenPoint != nil
-        case .swipe(let payload):
-            return payload.target.selection.bookKeeperElementTarget == nil
-        case .drag(let payload):
-            return payload.target.start.elementTarget == nil
-        case .pinch(let payload):
-            return payload.center.elementTarget == nil
-        case .rotate(let payload):
-            return payload.center.elementTarget == nil
-        case .twoFingerTap(let payload):
-            return payload.center.elementTarget == nil
-        case .drawPath, .drawBezier:
-            return true
-        }
+extension DragTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(),
+            elementTarget: start.elementTarget,
+            coordinateOnly: start.elementTarget == nil
+        )
+    }
+}
+
+extension PinchTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(),
+            elementTarget: center.elementTarget,
+            coordinateOnly: center.elementTarget == nil
+        )
+    }
+}
+
+extension RotateTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(),
+            elementTarget: center.elementTarget,
+            coordinateOnly: center.elementTarget == nil
+        )
+    }
+}
+
+extension TwoFingerTapTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(),
+            elementTarget: center.elementTarget,
+            coordinateOnly: center.elementTarget == nil
+        )
+    }
+}
+
+extension DrawPathTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(arguments: heistEvidenceArguments(), coordinateOnly: true)
+    }
+}
+
+extension DrawBezierTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(arguments: heistEvidenceArguments(), coordinateOnly: true)
     }
 }
 
@@ -151,50 +158,35 @@ private extension SwipeGestureSelection {
     }
 }
 
-extension TheFence.ScrollPayload {
+extension ScrollTarget {
     var requestEvidence: TheFence.RequestEvidence {
         TheFence.RequestEvidence(
-            arguments: heistEvidenceArguments,
-            elementTarget: bookKeeperElementTarget
+            arguments: heistEvidenceArguments(),
+            elementTarget: elementTarget
         )
-    }
-
-    private var heistEvidenceArguments: [String: HeistValue] {
-        switch self {
-        case .scroll(let target):
-            return target.heistEvidenceArguments()
-        case .scrollToVisible:
-            return [:]
-        case .elementSearch(let target):
-            return target.heistEvidenceArguments()
-        case .scrollToEdge(let target):
-            return target.heistEvidenceArguments()
-        }
-    }
-
-    private var bookKeeperElementTarget: ElementTarget? {
-        switch self {
-        case .scroll(let target):
-            return target.elementTarget
-        case .scrollToVisible(let target):
-            return target.elementTarget
-        case .elementSearch(let target):
-            return target.elementTarget
-        case .scrollToEdge(let target):
-            return target.elementTarget
-        }
     }
 }
 
-extension TheFence.AccessibilityPayload {
+extension ScrollToVisibleTarget {
     var requestEvidence: TheFence.RequestEvidence {
-        switch self {
-        case .activate(let target, let actionName, let count):
-            return TheFence.RequestEvidence(
-                arguments: AccessibilityEvidenceArguments(action: actionName, count: count.value)
-                    .heistEvidenceArguments(),
-                elementTarget: target
-            )
-        }
+        TheFence.RequestEvidence(elementTarget: elementTarget)
+    }
+}
+
+extension ElementSearchTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(),
+            elementTarget: elementTarget
+        )
+    }
+}
+
+extension ScrollToEdgeTarget {
+    var requestEvidence: TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: heistEvidenceArguments(),
+            elementTarget: elementTarget
+        )
     }
 }
