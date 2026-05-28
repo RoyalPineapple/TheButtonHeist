@@ -18,7 +18,7 @@ enum PublicJSONSerializer {
 
     static func data<T: Encodable>(
         encoding response: T,
-        requestId: Any?,
+        requestId: PublicRequestId?,
         outputFormatting: JSONEncoder.OutputFormatting,
         encodingFailureResponse: PublicErrorResponse
     ) throws -> Data {
@@ -29,9 +29,8 @@ enum PublicJSONSerializer {
                 encodingFailureResponse: encodingFailureResponse
             )
         }
-        let publicRequestId = try PublicRequestId(value: requestId)
-        let envelope = PublicResponseEnvelope(requestId: publicRequestId, response: response)
-        let failureEnvelope = PublicResponseEnvelope(requestId: publicRequestId, response: encodingFailureResponse)
+        let envelope = PublicResponseEnvelope(requestId: requestId, response: response)
+        let failureEnvelope = PublicResponseEnvelope(requestId: requestId, response: encodingFailureResponse)
         do {
             return try encode(envelope, outputFormatting: outputFormatting)
         } catch {
@@ -65,51 +64,104 @@ private struct PublicResponseEnvelope<Response: Encodable>: Encodable {
     }
 }
 
-private enum PublicRequestId: Encodable {
+public enum PublicRequestId: Encodable, Equatable, Sendable {
     case string(String)
-    case integer(Int)
+    case signedInteger(Int64)
+    case unsignedInteger(UInt64)
     case double(Double)
-    case bool(Bool)
     case null
 
-    init(value: Any) throws {
+    public init(value: HeistValue) throws {
         switch value {
-        case let value as String:
+        case .string(let value):
             self = .string(value)
-        case let value as NSNumber:
-            if CFGetTypeID(value) == CFBooleanGetTypeID() {
-                self = .bool(value.boolValue)
-            } else if CFNumberIsFloatType(value) {
-                self = .double(value.doubleValue)
-            } else {
-                self = .integer(value.intValue)
+        case .int(let value):
+            self = .signedInteger(Int64(value))
+        case .double(let value):
+            guard value.isFinite else {
+                throw Self.invalidValue(value)
             }
-        case is NSNull:
-            self = .null
-        default:
-            throw EncodingError.invalidValue(
-                value,
-                EncodingError.Context(
-                    codingPath: [],
-                    debugDescription: "Public JSON request id must be a JSON scalar"
-                )
-            )
+            self = .double(value)
+        case .bool, .array, .object:
+            throw Self.invalidValue(value)
         }
     }
 
-    func encode(to encoder: Encoder) throws {
+    init(value: Any) throws {
+        switch value {
+        case is NSNull:
+            self = .null
+        case let value as String:
+            self = .string(value)
+        case is Bool:
+            throw Self.invalidValue(value)
+        case let value as Int:
+            self = .signedInteger(Int64(value))
+        case let value as Int64:
+            self = .signedInteger(value)
+        case let value as UInt:
+            self = .unsignedInteger(UInt64(value))
+        case let value as UInt64:
+            self = .unsignedInteger(value)
+        case let value as Double:
+            guard value.isFinite else {
+                throw Self.invalidValue(value)
+            }
+            self = .double(value)
+        case let value as Float:
+            guard value.isFinite else {
+                throw Self.invalidValue(value)
+            }
+            self = .double(Double(value))
+        case let value as NSNumber:
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                throw Self.invalidValue(value)
+            } else if CFNumberIsFloatType(value) {
+                let doubleValue = value.doubleValue
+                guard doubleValue.isFinite else {
+                    throw Self.invalidValue(value)
+                }
+                self = .double(doubleValue)
+            } else {
+                self = Self.integerValue(from: value)
+            }
+        default:
+            throw Self.invalidValue(value)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
         case .string(let value):
             try container.encode(value)
-        case .integer(let value):
+        case .signedInteger(let value):
+            try container.encode(value)
+        case .unsignedInteger(let value):
             try container.encode(value)
         case .double(let value):
-            try container.encode(value)
-        case .bool(let value):
             try container.encode(value)
         case .null:
             try container.encodeNil()
         }
+    }
+
+    private static func integerValue(from number: NSNumber) -> PublicRequestId {
+        switch String(cString: number.objCType) {
+        case "C", "S", "I", "L", "Q":
+            return .unsignedInteger(number.uint64Value)
+        default:
+            return .signedInteger(number.int64Value)
+        }
+    }
+
+    private static func invalidValue(_ value: Any) -> EncodingError {
+        EncodingError.invalidValue(
+            value,
+            EncodingError.Context(
+                codingPath: [],
+                debugDescription: "Public JSON request id must be a finite JSON scalar"
+            )
+        )
     }
 }

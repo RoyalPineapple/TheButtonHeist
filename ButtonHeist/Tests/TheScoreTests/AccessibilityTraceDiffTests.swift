@@ -89,6 +89,55 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         })
     }
 
+    func testPatchProjectionUsesIncrementalPatchWhenItReconstructsTarget() {
+        let before = makeTestInterface(nodes: [
+            testElement(makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])),
+        ])
+        let after = makeTestInterface(nodes: [
+            testElement(makeElement(heistId: "total", label: "Total", value: "$7.00", traits: [.staticText])),
+        ])
+
+        let decision = AccessibilityTracePatchProjection.project(
+            between: before,
+            and: after,
+            context: AccessibilityTrace.Context()
+        )
+
+        guard case .incremental(let patch) = decision else {
+            return XCTFail("Expected incremental patch, got \(decision)")
+        }
+        XCTAssertEqual(patch.apply(to: before), after)
+        XCTAssertFalse(patch.operations.contains { operation in
+            if case .replaceTree = operation { return true }
+            return false
+        })
+    }
+
+    func testPatchProjectionNamesFullReplacementWhenIncrementalCannotReconstructTarget() {
+        let before = makeTestInterface(nodes: [
+            testElement(makeElement(heistId: "", label: "Anonymous", traits: [.staticText])),
+        ])
+        let after = makeTestInterface(nodes: [
+            testElement(makeElement(heistId: "", label: "Anonymous", traits: [.staticText])),
+            testElement(makeElement(heistId: "", label: "Untracked", traits: [.staticText])),
+        ])
+
+        let decision = AccessibilityTracePatchProjection.project(
+            between: before,
+            and: after,
+            context: AccessibilityTrace.Context()
+        )
+
+        guard case .fullReplacement(
+            let patch,
+            reason: .incrementalProjectionDidNotReconstructTarget
+        ) = decision else {
+            return XCTFail("Expected explicit full replacement patch, got \(decision)")
+        }
+        XCTAssertEqual(patch.apply(to: before), after)
+        XCTAssertEqual(patch.operations, [.replaceTree(tree: after.tree)])
+    }
+
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
         let beforeInterface = makeTestInterface(
             nodes: [

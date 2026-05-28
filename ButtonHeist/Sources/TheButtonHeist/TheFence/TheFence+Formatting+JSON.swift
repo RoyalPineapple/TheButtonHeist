@@ -15,10 +15,10 @@ extension FenceResponse {
     }
 
     public func jsonData(
-        requestId: Any?,
+        requestId: PublicRequestId?,
         outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]
     ) throws -> Data {
-        try PublicJSONSerializer.data(
+        return try PublicJSONSerializer.data(
             encoding: PublicResponseModel(response: self),
             requestId: requestId,
             outputFormatting: outputFormatting,

@@ -95,7 +95,7 @@ final class ReplSession {
         return monitor
     }
 
-    private func processLine(_ line: String) async -> (FenceResponse, Any?) {
+    private func processLine(_ line: String) async -> (FenceResponse, PublicRequestId?) {
         let isMachineInput = line.hasPrefix("{")
         let parsedRequest: CLIParsedRequest
         do {
@@ -137,7 +137,7 @@ final class ReplSession {
 
     // MARK: - Output
 
-    private func outputResponse(_ response: FenceResponse, id: Any?) {
+    private func outputResponse(_ response: FenceResponse, id: PublicRequestId?) {
         switch format {
         case .human:
             writeOutput(response.humanFormatted())

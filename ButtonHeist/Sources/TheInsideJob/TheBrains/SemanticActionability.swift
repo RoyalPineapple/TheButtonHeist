@@ -66,6 +66,11 @@ final class SemanticActionability {
     enum SemanticContainerActionabilityResult {
         case actionable(SemanticContainerActionableTarget)
         case failed(SemanticActionabilityFailure)
+
+        var failure: SemanticActionabilityFailure? {
+            if case .failed(let failure) = self { return failure }
+            return nil
+        }
     }
 
     enum SemanticActionabilityFailureStep: String {
@@ -145,6 +150,35 @@ final class SemanticActionability {
         ) -> String {
             guard !message.contains("[\(step.rawValue)]") else { return message }
             return "semantic actionability failed [\(step.rawValue)]: \(message)"
+        }
+    }
+
+    private enum LiveTargetUnavailableReason {
+        case stale(message: String, method: ActionMethod?)
+        case geometry(message: String, method: ActionMethod?)
+
+        var failure: SemanticActionabilityFailure {
+            switch self {
+            case .stale(let message, let method):
+                return .staleRefresh(message, method: method)
+            case .geometry(let message, let method):
+                return .geometryNotActionable(message, method: method)
+            }
+        }
+
+        func failureAfterRefresh(observed: SemanticActionabilityFailure?) -> SemanticActionabilityFailure {
+            switch self {
+            case .stale(let message, let method):
+                return .staleRefresh(
+                    message + "\nrefresh observed: " + (observed?.message ?? "unknown"),
+                    method: method
+                )
+            case .geometry(let message, let method):
+                return .geometryNotActionable(
+                    message + "\nrefresh observed: " + (observed?.message ?? "unknown"),
+                    method: method
+                )
+            }
         }
     }
 
@@ -231,25 +265,21 @@ final class SemanticActionability {
                     isInflated: stash.visibleIds.contains(resolved.screenElement.heistId)
                 )
             )
-            guard allowingStaleRefresh else {
-                return .failed(.staleRefresh(message, method: .elementDeallocated))
-            }
-            refresh()
-            let refreshed = await makeActionable(
-                for: normalizedTarget,
-                method: method,
-                deallocatedBoundary: deallocatedBoundary,
-                allowingStaleRefresh: false
+            return await retryAfterLiveTargetRefresh(
+                reason: .stale(message: message, method: .elementDeallocated),
+                allowingRefresh: allowingStaleRefresh,
+                includeRefreshObservation: true,
+                retry: {
+                    await self.makeActionable(
+                        for: normalizedTarget,
+                        method: method,
+                        deallocatedBoundary: deallocatedBoundary,
+                        allowingStaleRefresh: false
+                    )
+                },
+                resultFailure: { $0.failure },
+                failureResult: SemanticActionabilityResult.failed
             )
-            if case .actionable = refreshed {
-                return refreshed
-            }
-            return .failed(.staleRefresh(
-                message
-                    + "\nrefresh observed: "
-                    + (refreshed.failure?.message ?? "unknown"),
-                method: .elementDeallocated
-            ))
         case .geometryUnavailable:
             return .failed(.geometryNotActionable(
                 normalizedTarget.diagnostics(
@@ -262,6 +292,25 @@ final class SemanticActionability {
                 method: method
             ))
         }
+    }
+
+    private func retryAfterLiveTargetRefresh<Result>(
+        reason: LiveTargetUnavailableReason,
+        allowingRefresh: Bool,
+        includeRefreshObservation: Bool = false,
+        retry: () async -> Result,
+        resultFailure: (Result) -> SemanticActionabilityFailure?,
+        failureResult: (SemanticActionabilityFailure) -> Result
+    ) async -> Result {
+        guard allowingRefresh else {
+            return failureResult(reason.failure)
+        }
+        refresh()
+        let refreshed = await retry()
+        guard includeRefreshObservation,
+              let observedFailure = resultFailure(refreshed)
+        else { return refreshed }
+        return failureResult(reason.failureAfterRefresh(observed: observedFailure))
     }
 
     private func ensureLiveGeometryActionable(
@@ -443,32 +492,34 @@ final class SemanticActionability {
                 )
             }
         case .objectUnavailable:
-            guard allowingStaleRefresh else {
-                return .failed(.staleRefresh(
-                    "container target became stale before dispatch",
-                    method: method
-                ))
-            }
-            refresh()
-            return await makeActionable(
-                matcher: matcher,
-                ordinal: ordinal,
-                method: method,
-                allowingStaleRefresh: false
+            return await retryAfterLiveTargetRefresh(
+                reason: .stale(message: "container target became stale before dispatch", method: method),
+                allowingRefresh: allowingStaleRefresh,
+                retry: {
+                    await self.makeActionable(
+                        matcher: matcher,
+                        ordinal: ordinal,
+                        method: method,
+                        allowingStaleRefresh: false
+                    )
+                },
+                resultFailure: { $0.failure },
+                failureResult: SemanticContainerActionabilityResult.failed
             )
         case .geometryUnavailable:
-            guard allowingStaleRefresh else {
-                return .failed(.geometryNotActionable(
-                    "container target has no fresh actionable geometry",
-                    method: method
-                ))
-            }
-            refresh()
-            return await makeActionable(
-                matcher: matcher,
-                ordinal: ordinal,
-                method: method,
-                allowingStaleRefresh: false
+            return await retryAfterLiveTargetRefresh(
+                reason: .geometry(message: "container target has no fresh actionable geometry", method: method),
+                allowingRefresh: allowingStaleRefresh,
+                retry: {
+                    await self.makeActionable(
+                        matcher: matcher,
+                        ordinal: ordinal,
+                        method: method,
+                        allowingStaleRefresh: false
+                    )
+                },
+                resultFailure: { $0.failure },
+                failureResult: SemanticContainerActionabilityResult.failed
             )
         }
     }
