@@ -79,6 +79,7 @@ extension TheFence {
     struct ParsedRequest {
         let command: Command
         let requestId: String
+        let arguments: CommandArgumentEnvelope
         let executableMessages: [ClientMessage]?
         let handler: ParsedRequestHandler
         let expectationPayload: ExpectationPayload
@@ -88,12 +89,14 @@ extension TheFence {
         init(
             command: Command,
             requestId: String,
+            arguments: CommandArgumentEnvelope,
             dispatch: DecodedRequestDispatch,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
+            self.arguments = arguments
             self.executableMessages = dispatch.executableMessages
             self.handler = dispatch.handler
             self.expectationPayload = expectationPayload
@@ -178,6 +181,7 @@ extension TheFence {
             return ParsedRequest(
                 command: command,
                 requestId: "",
+                arguments: arguments,
                 dispatch: Self.emptyDispatch(command: command),
                 expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
                 immediateResponse: immediate
@@ -199,6 +203,7 @@ extension TheFence {
         return ParsedRequest(
             command: command,
             requestId: requestId,
+            arguments: arguments,
             dispatch: dispatch,
             expectationPayload: expectationPayload,
             immediateResponse: nil

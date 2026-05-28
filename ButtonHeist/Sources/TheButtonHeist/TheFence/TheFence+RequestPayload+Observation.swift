@@ -71,6 +71,7 @@ extension TheFence {
         ParsedRequest(
             command: .getInterface,
             requestId: UUID().uuidString,
+            arguments: CommandArgumentEnvelope(values: [:]),
             dispatch: DecodedRequestDispatch { fence, _ in
                 try await fence.handleGetInterface(GetInterfaceRequest(
                     detail: .summary,
