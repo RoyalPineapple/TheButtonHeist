@@ -58,11 +58,21 @@ struct ElementTargetOptions: ParsableArguments {
     }
 
     func parsedTarget() throws -> ElementTarget? {
-        ElementTarget(
-            heistId: try resolvedHeistId,
-            matcher: try parsedMatcher() ?? ElementMatcher(),
-            ordinal: ordinal
-        )
+        let heistId = try resolvedHeistId
+        let matcher = try parsedMatcher()
+        guard heistId != nil || matcher != nil || ordinal != nil else {
+            return nil
+        }
+        do {
+            return try ElementTargetGrammar.validatedTarget(
+                heistId: heistId,
+                matcher: matcher,
+                matcherWasProvided: matcher != nil,
+                ordinal: ordinal
+            )
+        } catch let error as ElementTargetGrammarError {
+            throw ValidationError(error.diagnosticDescription)
+        }
     }
 
     private func parseTraits(_ names: [String], label: String) throws -> [HeistTrait]? {
@@ -91,29 +101,33 @@ struct ElementTargetOptions: ParsableArguments {
     }
 
     private func targetParameterValue() throws -> HeistValue? {
-        if let resolved = try resolvedHeistId {
-            var target: [String: HeistValue] = [FenceParameterKey.heistId.rawValue: .string(resolved)]
+        guard let elementTarget = try parsedTarget() else {
+            return nil
+        }
+        switch elementTarget {
+        case .heistId(let heistId):
+            return .object([FenceParameterKey.heistId.rawValue: .string(heistId)])
+        case .matcher(let matcher, let ordinal):
+            var matcherValue: [String: HeistValue] = [:]
+            if let identifier = matcher.identifier {
+                matcherValue[FenceParameterKey.identifier.rawValue] = .string(identifier)
+            }
+            if let label = matcher.label { matcherValue[FenceParameterKey.label.rawValue] = .string(label) }
+            if let value = matcher.value { matcherValue[FenceParameterKey.value.rawValue] = .string(value) }
+            if let traits = matcher.traits {
+                matcherValue[FenceParameterKey.traits.rawValue] = .array(traits.map { .string($0.rawValue) })
+            }
+            if let excludeTraits = matcher.excludeTraits {
+                matcherValue[FenceParameterKey.excludeTraits.rawValue] = .array(
+                    excludeTraits.map { .string($0.rawValue) }
+                )
+            }
+            var target: [String: HeistValue] = [FenceParameterKey.matcher.rawValue: .object(matcherValue)]
             if let ordinal {
                 target[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
             }
             return .object(target)
         }
-
-        var matcher: [String: HeistValue] = [:]
-        if let identifier { matcher[FenceParameterKey.identifier.rawValue] = .string(identifier) }
-        if let label { matcher[FenceParameterKey.label.rawValue] = .string(label) }
-        if let value { matcher[FenceParameterKey.value.rawValue] = .string(value) }
-        if !traits.isEmpty { matcher[FenceParameterKey.traits.rawValue] = .array(traits.map(HeistValue.string)) }
-        if !excludeTraits.isEmpty {
-            matcher[FenceParameterKey.excludeTraits.rawValue] = .array(excludeTraits.map(HeistValue.string))
-        }
-        guard !matcher.isEmpty else { return nil }
-
-        var target: [String: HeistValue] = [FenceParameterKey.matcher.rawValue: .object(matcher)]
-        if let ordinal {
-            target[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
-        }
-        return .object(target)
     }
 
     /// Returns true when the supplied options construct a valid ElementTarget.
