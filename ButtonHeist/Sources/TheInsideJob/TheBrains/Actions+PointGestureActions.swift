@@ -21,7 +21,7 @@ extension Actions {
             elementTarget = nil
         }
         let normalizedTarget = elementTarget.map {
-            normalizePointGestureTarget($0)
+            normalizePointGestureTarget(.currentCapture($0))
         }
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
         if let normalizedTarget {
@@ -239,7 +239,7 @@ extension Actions {
         }
     }
 
-    func normalizePointGestureTarget(_ target: any SemanticElementTarget) -> TheStash.NormalizedTarget {
+    func normalizePointGestureTarget(_ target: SemanticElementTarget) -> TheStash.NormalizedTarget {
         stash.normalizeTarget(target)
     }
 
