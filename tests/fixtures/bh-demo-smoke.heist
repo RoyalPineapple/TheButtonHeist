@@ -1,37 +1,49 @@
 {
-  "version": 2,
+  "version": 3,
   "app": "com.buttonheist.testapp",
   "recorded": "2026-05-15T00:00:00Z",
   "steps": [
     {
       "command": "activate",
-      "label": "Controls Demo",
-      "traits": [
-        "button"
-      ],
       "expect": {
         "type": "screen_changed"
+      },
+      "target": {
+        "matcher": {
+          "label": "Controls Demo",
+          "traits": [
+            "button"
+          ]
+        }
       }
     },
     {
       "command": "activate",
-      "label": "Display",
-      "traits": [
-        "button"
-      ],
       "expect": {
         "type": "screen_changed"
+      },
+      "target": {
+        "matcher": {
+          "label": "Display",
+          "traits": [
+            "button"
+          ]
+        }
       }
     },
     {
       "command": "activate",
-      "label": "Controls Demo",
-      "traits": [
-        "button",
-        "backButton"
-      ],
       "expect": {
         "type": "screen_changed"
+      },
+      "target": {
+        "matcher": {
+          "label": "Controls Demo",
+          "traits": [
+            "button",
+            "backButton"
+          ]
+        }
       }
     }
   ]

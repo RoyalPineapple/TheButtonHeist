@@ -46,8 +46,8 @@ extension HeistPlaybackReport {
         public let index: Int
         /// TheFence command name (e.g. "activate", "swipe", "type_text").
         public let command: String
-        /// Element matcher used to target the element, if any.
-        public let target: ElementMatcher?
+        /// Durable semantic target used to target the element, if any.
+        public let target: SemanticActionTarget?
         /// Wall-clock time for this step, in seconds.
         public let timeSeconds: Double
         /// Pass or fail with diagnostic detail.
@@ -56,7 +56,7 @@ extension HeistPlaybackReport {
         public init(
             index: Int,
             command: String,
-            target: ElementMatcher?,
+            target: SemanticActionTarget?,
             timeSeconds: Double,
             outcome: Outcome
         ) {
@@ -75,9 +75,9 @@ extension HeistPlaybackReport {
         /// Human-readable name for this step (used as testcase name in JUnit).
         public var displayName: String {
             var name = "[\(index)] \(command)"
-            if let target, let label = target.label {
+            if let target, let label = target.matcher.label {
                 name += " label=\"\(label)\""
-            } else if let target, let identifier = target.identifier {
+            } else if let target, let identifier = target.matcher.identifier {
                 name += " identifier=\"\(identifier)\""
             }
             return name
@@ -185,9 +185,9 @@ extension HeistPlaybackReport {
         body += "step: [\(failedStep.index)] \(failedStep.command)\n"
         if let target = failedStep.target {
             var parts: [String] = []
-            if let label = target.label { parts.append("label=\"\(label)\"") }
-            if let identifier = target.identifier { parts.append("identifier=\"\(identifier)\"") }
-            if let value = target.value { parts.append("value=\"\(value)\"") }
+            if let label = target.matcher.label { parts.append("label=\"\(label)\"") }
+            if let identifier = target.matcher.identifier { parts.append("identifier=\"\(identifier)\"") }
+            if let value = target.matcher.value { parts.append("value=\"\(value)\"") }
             if !parts.isEmpty {
                 body += "target: \(parts.joined(separator: ", "))\n"
             }

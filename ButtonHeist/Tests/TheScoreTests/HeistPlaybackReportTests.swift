@@ -41,7 +41,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         let step = HeistPlaybackReport.StepResult(
             index: 2,
             command: "activate",
-            target: ElementMatcher(label: "Submit"),
+            target: semanticTarget(label: "Submit"),
             timeSeconds: 0.5,
             outcome: .passed
         )
@@ -52,7 +52,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         let step = HeistPlaybackReport.StepResult(
             index: 0,
             command: "swipe",
-            target: ElementMatcher(identifier: "scroll-view"),
+            target: semanticTarget(identifier: "scroll-view"),
             timeSeconds: 0.3,
             outcome: .passed
         )
@@ -74,7 +74,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         let step = HeistPlaybackReport.StepResult(
             index: 1,
             command: "activate",
-            target: ElementMatcher(label: "OK", identifier: "ok-button"),
+            target: semanticTarget(label: "OK", identifier: "ok-button"),
             timeSeconds: 0.2,
             outcome: .passed
         )
@@ -172,7 +172,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         let step = HeistPlaybackReport.StepResult(
             index: 0,
             command: "activate",
-            target: ElementMatcher(label: "Save & Continue <now>"),
+            target: semanticTarget(label: "Save & Continue <now>"),
             timeSeconds: 0.1,
             outcome: .failed(
                 message: "Element \"Save & Continue <now>\" not found",
@@ -220,7 +220,7 @@ final class HeistPlaybackReportTests: XCTestCase {
         let step = HeistPlaybackReport.StepResult(
             index: 0,
             command: "swipe",
-            target: ElementMatcher(label: "List", identifier: "main-list"),
+            target: semanticTarget(label: "List", identifier: "main-list"),
             timeSeconds: 0.5,
             outcome: .failed(message: "swipe failed", errorKind: .action(.actionFailed))
         )
@@ -267,7 +267,7 @@ final class HeistPlaybackReportTests: XCTestCase {
             HeistPlaybackReport.StepResult(
                 index: index,
                 command: "activate",
-                target: ElementMatcher(label: "Button \(index)"),
+                target: semanticTarget(label: "Button \(index)"),
                 timeSeconds: Double(index) * 0.5 + 0.1,
                 outcome: outcome
             )
@@ -290,6 +290,12 @@ final class HeistPlaybackReportTests: XCTestCase {
             "Expected string to contain \"\(substring)\" but it did not.\nFull string:\n\(string)",
             file: file,
             line: line
+        )
+    }
+
+    private func semanticTarget(label: String? = nil, identifier: String? = nil) -> SemanticActionTarget {
+        SemanticActionTarget(
+            matcher: ElementMatcher(label: label, identifier: identifier)
         )
     }
 }

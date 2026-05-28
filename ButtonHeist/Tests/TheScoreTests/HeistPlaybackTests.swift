@@ -10,9 +10,9 @@ final class HeistPlaybackTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.buttonheist.testapp",
             steps: [
-                HeistEvidence(command: "activate", target: ElementMatcher(label: "Login", traits: [.button])),
+                HeistEvidence(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
                 HeistEvidence(command: "type_text", arguments: ["text": .string("user@example.com")]),
-                HeistEvidence(command: "activate", target: ElementMatcher(label: "Submit", traits: [.button])),
+                HeistEvidence(command: "activate", target: semanticTarget(label: "Submit", traits: [.button])),
             ]
         )
 
@@ -25,12 +25,12 @@ final class HeistPlaybackTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(HeistPlayback.self, from: data)
 
-        XCTAssertEqual(decoded.version, 2)
+        XCTAssertEqual(decoded.version, 3)
         XCTAssertEqual(decoded.app, "com.buttonheist.testapp")
         XCTAssertEqual(decoded.steps.count, 3)
         XCTAssertEqual(decoded.steps[0].command, "activate")
-        XCTAssertEqual(decoded.steps[0].target?.label, "Login")
-        XCTAssertEqual(decoded.steps[0].target?.traits, [.button])
+        XCTAssertEqual(decoded.steps[0].target?.matcher.label, "Login")
+        XCTAssertEqual(decoded.steps[0].target?.matcher.traits, [.button])
         XCTAssertEqual(decoded.steps[1].command, "type_text")
         XCTAssertEqual(decoded.steps[1].arguments["text"], .string("user@example.com"))
         XCTAssertNil(decoded.steps[1].target)
@@ -78,12 +78,12 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    // MARK: - Heist Step Flat Encoding
+    // MARK: - Heist Step Target Encoding
 
-    func testStepEncodesFlat() throws {
+    func testStepEncodesTargetObject() throws {
         let step = HeistEvidence(
             command: "swipe",
-            target: ElementMatcher(label: "List", traits: [.adjustable]),
+            target: semanticTarget(label: "List", traits: [.adjustable]),
             arguments: ["direction": .string("up")]
         )
 
@@ -91,25 +91,29 @@ final class HeistPlaybackTests: XCTestCase {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         XCTAssertEqual(json?["command"] as? String, "swipe")
-        XCTAssertEqual(json?["label"] as? String, "List")
-        XCTAssertEqual(json?["traits"] as? [String], ["adjustable"])
         XCTAssertEqual(json?["direction"] as? String, "up")
-        // No nesting — target fields are top-level
-        XCTAssertNil(json?["target"])
+        let target = try XCTUnwrap(json?["target"] as? [String: Any])
+        let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
+        XCTAssertEqual(matcher["label"] as? String, "List")
+        XCTAssertEqual(matcher["traits"] as? [String], ["adjustable"])
     }
 
-    func testStepDecodesFromFlatJson() throws {
+    func testStepDecodesFromTargetJson() throws {
         let json: [String: Any] = [
             "command": "activate",
-            "label": "Submit",
-            "traits": ["button"],
+            "target": [
+                "matcher": [
+                    "label": "Submit",
+                    "traits": ["button"],
+                ],
+            ],
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.command, "activate")
-        XCTAssertEqual(step.target?.label, "Submit")
-        XCTAssertEqual(step.target?.traits, [.button])
+        XCTAssertEqual(step.target?.matcher.label, "Submit")
+        XCTAssertEqual(step.target?.matcher.traits, [.button])
         XCTAssertTrue(step.arguments.isEmpty)
     }
 
@@ -144,7 +148,9 @@ final class HeistPlaybackTests: XCTestCase {
     func testStepAllowsRecordedHeistIdMetadata() throws {
         let json: [String: Any] = [
             "command": "activate",
-            "label": "Save",
+            "target": [
+                "matcher": ["label": "Save"],
+            ],
             "_recorded": [
                 "heistId": "recorded_save",
             ],
@@ -152,7 +158,7 @@ final class HeistPlaybackTests: XCTestCase {
         let data = try JSONSerialization.data(withJSONObject: json)
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
-        XCTAssertEqual(step.target?.label, "Save")
+        XCTAssertEqual(step.target?.matcher.label, "Save")
         XCTAssertEqual(step.recorded?.heistId, "recorded_save")
         XCTAssertNil(step.arguments["heistId"])
     }
@@ -170,24 +176,15 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testStepRejectsEncodingTargetMatcherHeistId() throws {
-        let step = HeistEvidence(
-            command: "activate",
-            target: ElementMatcher(heistId: "stale_button")
-        )
-
-        XCTAssertThrowsError(try JSONEncoder().encode(step)) { error in
-            guard case EncodingError.invalidValue = error else {
-                return XCTFail("Expected invalidValue, got \(error)")
-            }
-            XCTAssertTrue("\(error)".contains("must not contain heistId"))
-        }
-    }
-
-    func testStepRejectsOrdinalOnlyTarget() throws {
+    func testStepRejectsTargetMatcherHeistIdOnDecode() throws {
         let json: [String: Any] = [
             "command": "activate",
-            "ordinal": 0,
+            "target": [
+                "matcher": [
+                    "heistId": "stale_button",
+                    "label": "Save",
+                ],
+            ],
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
 
@@ -195,14 +192,32 @@ final class HeistPlaybackTests: XCTestCase {
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("ordinal only disambiguates"))
+            XCTAssertTrue(context.debugDescription.contains("matcher must not carry heistId"))
+        }
+    }
+
+    func testStepRejectsOrdinalOnlyTarget() throws {
+        let json: [String: Any] = [
+            "command": "activate",
+            "target": ["ordinal": 0],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("requires matcher predicates"))
         }
     }
 
     func testStepRejectsNegativeOrdinal() throws {
         let json: [String: Any] = [
             "command": "activate",
-            "ordinal": -1,
+            "target": [
+                "matcher": ["label": "Save"],
+                "ordinal": -1,
+            ],
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
 
@@ -217,7 +232,7 @@ final class HeistPlaybackTests: XCTestCase {
     func testStepWithRecordedMetadata() throws {
         let step = HeistEvidence(
             command: "activate",
-            target: ElementMatcher(label: "Save", traits: [.button]),
+            target: semanticTarget(label: "Save", traits: [.button]),
             recorded: RecordedMetadata(
                 heistId: "button_save",
                 frame: RecordedFrame(x: 20, y: 680, width: 350, height: 44)
@@ -244,7 +259,7 @@ final class HeistPlaybackTests: XCTestCase {
         )
         let step = HeistEvidence(
             command: "activate",
-            target: ElementMatcher(label: "Continue", traits: [.button]),
+            target: semanticTarget(label: "Continue", traits: [.button]),
             recorded: RecordedMetadata(
                 accessibilityTrace: AccessibilityTrace(first: before).appending(
                     after,
@@ -289,8 +304,8 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testCurrentVersionIsTwo() {
-        XCTAssertEqual(HeistPlayback.currentVersion, 2)
+    func testCurrentVersionIsThree() {
+        XCTAssertEqual(HeistPlayback.currentVersion, 3)
     }
 
     // MARK: - Heist Value
@@ -352,7 +367,7 @@ final class HeistPlaybackTests: XCTestCase {
     func testHeistEvidenceDescriptionComposesTargetArgumentsAndRecording() {
         let step = HeistEvidence(
             command: "activate",
-            target: ElementMatcher(label: "Save", traits: [.button]),
+            target: semanticTarget(label: "Save", traits: [.button]),
             arguments: [
                 "count": .int(2),
                 "text": .string("hello"),
@@ -365,7 +380,7 @@ final class HeistPlaybackTests: XCTestCase {
             )
         )
 
-        let expected = #"step(command="activate" matcher(label="Save" traits=[button]) "#
+        let expected = #"step(command="activate" semanticTarget(matcher(label="Save" traits=[button])) "#
             + #"args=arguments("count"=2 "text"="hello") "#
             + #"recorded(heistId="save_button" frame(1,2,3,4) coordinateOnly=false "#
             + #"expectation(met=true expected=screen_changed actual="screenChanged")))"#
@@ -381,7 +396,7 @@ final class HeistPlaybackTests: XCTestCase {
             steps: [
                 HeistEvidence(
                     command: "activate",
-                    target: ElementMatcher(label: "Go", traits: [.button]),
+                    target: semanticTarget(label: "Go", traits: [.button]),
                     recorded: RecordedMetadata(heistId: "button_go")
                 ),
             ]
@@ -393,7 +408,7 @@ final class HeistPlaybackTests: XCTestCase {
         let data = try encoder.encode(script)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
-        XCTAssertEqual(json?["version"] as? Int, 2)
+        XCTAssertEqual(json?["version"] as? Int, 3)
         XCTAssertEqual(json?["app"] as? String, "com.example.app")
 
         let steps = json?["steps"] as? [[String: Any]]
@@ -401,7 +416,9 @@ final class HeistPlaybackTests: XCTestCase {
 
         let firstStep = steps?.first
         XCTAssertEqual(firstStep?["command"] as? String, "activate")
-        XCTAssertEqual(firstStep?["label"] as? String, "Go")
+        let target = try XCTUnwrap(firstStep?["target"] as? [String: Any])
+        let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
+        XCTAssertEqual(matcher["label"] as? String, "Go")
 
         let recorded = firstStep?["_recorded"] as? [String: Any]
         XCTAssertEqual(recorded?["heistId"] as? String, "button_go")
@@ -467,6 +484,28 @@ final class HeistPlaybackTests: XCTestCase {
             frameWidth: 100,
             frameHeight: 44,
             actions: [.activate]
+        )
+    }
+
+    private func semanticTarget(
+        sourceHeistId: HeistId? = nil,
+        label: String? = nil,
+        identifier: String? = nil,
+        value: String? = nil,
+        traits: [HeistTrait]? = nil,
+        excludeTraits: [HeistTrait]? = nil,
+        ordinal: Int? = nil
+    ) -> SemanticActionTarget {
+        SemanticActionTarget(
+            sourceHeistId: sourceHeistId,
+            matcher: ElementMatcher(
+                label: label,
+                identifier: identifier,
+                value: value,
+                traits: traits,
+                excludeTraits: excludeTraits
+            ),
+            ordinal: ordinal
         )
     }
 

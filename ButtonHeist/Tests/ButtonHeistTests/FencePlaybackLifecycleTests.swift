@@ -50,18 +50,4 @@ final class FencePlaybackLifecycleTests: XCTestCase {
         }
     }
 
-    func testPlaybackOperationRejectsHeistIdMatcher() throws {
-        XCTAssertThrowsError(try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "activate",
-                target: ElementMatcher(heistId: "stale_button", label: "Save")
-            ),
-            index: 0
-        )) { error in
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("matcher must not carry heistId"))
-        }
-    }
 }
