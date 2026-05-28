@@ -23,7 +23,7 @@ extension TheFence {
             expectation == nil ? nil : timeout
         }
 
-        static func parseExpectation(_ value: CommandArgumentValue?) throws -> ActionExpectation? {
+        static func parseExpectation(_ value: HeistValue?) throws -> ActionExpectation? {
             guard let value else { return nil }
             return try FenceExpectationParser.decode(value)
         }
@@ -63,7 +63,7 @@ extension TheFence {
 }
 
 private enum FenceExpectationParser {
-    static func decode(_ value: TheFence.CommandArgumentValue) throws -> ActionExpectation {
+    static func decode(_ value: HeistValue) throws -> ActionExpectation {
         if case .object(let object) = value {
             return try decode(TheFence.CommandArgumentObject(values: object, fieldPrefix: nil))
         }
