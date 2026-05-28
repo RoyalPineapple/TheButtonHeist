@@ -41,8 +41,8 @@ public extension TheFence.Command {
         \(commandLines.joined(separator: "\n"))
 
         Bare words are looked up as current heistId handles (from get_interface).
-        Key=value pairs work for any parameter: one_finger_tap identifier=btn x=100 y=200
-        JSON input still works: {"command":"activate","heistId":"button_save"}
+        Key=value pairs work for scalar parameters: one_finger_tap x=100 y=200
+        JSON input still works: {"command":"activate","target":{"heistId":"button_save"}}
         """
     }
 }

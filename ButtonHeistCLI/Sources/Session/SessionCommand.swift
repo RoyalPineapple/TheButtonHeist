@@ -21,7 +21,7 @@ struct SessionCommand: AsyncParsableCommand {
               buttonheist session
               buttonheist session --device a1b2
               echo '{"command":"get_interface"}' | buttonheist session --format json
-              echo '{"command":"activate","heistId":"myButton"}' | buttonheist session --format json
+              echo '{"command":"activate","target":{"heistId":"myButton"}}' | buttonheist session --format json
             """
     )
 

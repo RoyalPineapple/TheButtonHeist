@@ -32,17 +32,17 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
         case .partialCoordinate(let field, let xPresent, let yPresent):
             return "\(field) requires both x and y coordinates (xPresent=\(xPresent), yPresent=\(yPresent))"
         case .mixedCoordinateAndElement(let field):
-            return "\(field) accepts either an element target or coordinates, not both"
+            return "\(field) accepts either a semantic target or coordinates, not both"
         case .mixedCoordinateAndDirection(let field):
             return "\(field) accepts either coordinates or direction, not both"
         case .missingGesturePoint(let field):
-            return "\(field) requires an element target or coordinates"
+            return "\(field) requires a semantic target or coordinates"
         case .missingSwipeIntent:
             return "swipe requires a start target or point and an end point or direction"
         case .partialUnitPoints:
             return "unit-point swipe requires both start and end unit points"
         case .unitPointsRequireElementTarget:
-            return "unit-point swipe requires elementTarget"
+            return "unit-point swipe requires a semantic target"
         }
     }
 }

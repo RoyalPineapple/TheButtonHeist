@@ -107,17 +107,24 @@ extension TheFence {
             var arguments = payload.values.mapValues(CommandArgumentValue.init)
 
             if let target {
-                if let label = target.label { arguments["label"] = .string(label) }
-                if let matchIdentifier = target.identifier { arguments["identifier"] = .string(matchIdentifier) }
-                if let matchValue = target.value { arguments["value"] = .string(matchValue) }
+                var matcher: [String: CommandArgumentValue] = [:]
+                if let label = target.label { matcher["label"] = .string(label) }
+                if let matchIdentifier = target.identifier { matcher["identifier"] = .string(matchIdentifier) }
+                if let matchValue = target.value { matcher["value"] = .string(matchValue) }
                 if let matchTraits = target.traits {
-                    arguments["traits"] = .array(matchTraits.map { .string($0.rawValue) })
+                    matcher["traits"] = .array(matchTraits.map { .string($0.rawValue) })
                 }
                 if let matchExclude = target.excludeTraits {
-                    arguments["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
+                    matcher["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
                 }
+                var targetArguments: [String: CommandArgumentValue] = ["matcher": .object(matcher)]
+                if let ordinal {
+                    targetArguments["ordinal"] = .int(ordinal)
+                }
+                arguments["target"] = .object(targetArguments)
+            } else if let ordinal {
+                arguments["target"] = .object(["ordinal": .int(ordinal)])
             }
-            if let ordinal { arguments["ordinal"] = .int(ordinal) }
 
             return CommandArgumentEnvelope(values: arguments)
         }
