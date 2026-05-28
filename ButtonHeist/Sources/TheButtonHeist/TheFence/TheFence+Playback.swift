@@ -43,19 +43,17 @@ extension TheFence {
     struct PlaybackOperation: Sendable {
         let command: Command
         let target: SemanticActionTarget?
-        let payload: PlaybackPayload
+        let arguments: [String: HeistValue]
 
         init(evidence: HeistEvidence, index: Int) throws {
-            let payload = PlaybackPayload(values: evidence.arguments)
-            if payload.values["heistId"] != nil {
+            if evidence.arguments["heistId"] != nil {
                 throw FenceError.invalidRequest(
                     "Invalid heist step \(index): top-level heistId is not valid playback identity; use target.matcher and _recorded.heistId metadata"
                 )
             }
             let command: Command
             switch FenceOperationCatalog.normalizePlaybackStep(
-                commandName: evidence.command,
-                arguments: payload.values
+                commandName: evidence.command
             ) {
             case .success(let normalizedCommand):
                 command = normalizedCommand
@@ -68,18 +66,18 @@ extension TheFence {
             self.init(
                 command: command,
                 target: evidence.target,
-                payload: payload
+                arguments: evidence.arguments
             )
         }
 
         private init(
             command: Command,
             target: SemanticActionTarget?,
-            payload: PlaybackPayload
+            arguments: [String: HeistValue]
         ) {
             self.command = command
             self.target = target
-            self.payload = payload
+            self.arguments = arguments
         }
 
         var commandName: String {
@@ -94,7 +92,7 @@ extension TheFence {
         }
 
         func requestDecodeInputEnvelope() -> CommandArgumentEnvelope {
-            var arguments = payload.values.mapValues(CommandArgumentValue.init)
+            var requestArguments = arguments.mapValues(CommandArgumentValue.init)
 
             if let target {
                 var matcher: [String: CommandArgumentValue] = [:]
@@ -111,22 +109,10 @@ extension TheFence {
                 if let ordinal = target.ordinal {
                     targetArguments["ordinal"] = .int(ordinal)
                 }
-                arguments["target"] = .object(targetArguments)
+                requestArguments["target"] = .object(targetArguments)
             }
 
-            return CommandArgumentEnvelope(values: arguments)
-        }
-    }
-
-    struct PlaybackPayload: Sendable, Equatable {
-        let values: [String: HeistValue]
-
-        init(values: [String: HeistValue]) {
-            self.values = values
-        }
-
-        subscript(key: String) -> HeistValue? {
-            values[key]
+            return CommandArgumentEnvelope(values: requestArguments)
         }
     }
 }

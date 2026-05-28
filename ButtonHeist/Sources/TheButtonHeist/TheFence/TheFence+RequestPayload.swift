@@ -78,32 +78,9 @@ extension TheFence {
 
     struct DecodedRequestPayload {
         let payload: RequestPayload
-        let evidence: RequestEvidence
 
-        init(
-            payload: RequestPayload,
-            evidence: RequestEvidence = .empty
-        ) {
+        init(payload: RequestPayload) {
             self.payload = payload
-            self.evidence = evidence
-        }
-    }
-
-    struct RequestEvidence {
-        let arguments: [String: HeistValue]
-        let elementTarget: ElementTarget?
-        let coordinateOnly: Bool
-
-        static let empty = RequestEvidence(arguments: [:])
-
-        init(
-            arguments: [String: HeistValue] = [:],
-            elementTarget: ElementTarget? = nil,
-            coordinateOnly: Bool = false
-        ) {
-            self.arguments = arguments
-            self.elementTarget = elementTarget
-            self.coordinateOnly = coordinateOnly
         }
     }
 
@@ -111,7 +88,6 @@ extension TheFence {
         let command: Command
         let requestId: String
         let payload: RequestPayload
-        let evidence: RequestEvidence
         let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit).
         let immediateResponse: FenceResponse?
@@ -120,14 +96,12 @@ extension TheFence {
             command: Command,
             requestId: String,
             payload: RequestPayload,
-            evidence: RequestEvidence = .empty,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
             self.payload = payload
-            self.evidence = evidence
             self.expectationPayload = expectationPayload
             self.immediateResponse = immediateResponse
         }
@@ -235,8 +209,7 @@ extension TheFence {
                 timeout: expectationPayload.timeout
             )
             decodedPayload = DecodedRequestPayload(
-                payload: .clientAction([.waitForChange(target)]),
-                evidence: RequestEvidence(arguments: target.heistEvidenceArguments())
+                payload: .clientAction([.waitForChange(target)])
             )
         } else {
             decodedPayload = try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
@@ -246,7 +219,6 @@ extension TheFence {
             command: command,
             requestId: requestId,
             payload: decodedPayload.payload,
-            evidence: decodedPayload.evidence,
             expectationPayload: expectationPayload,
             immediateResponse: nil
         )

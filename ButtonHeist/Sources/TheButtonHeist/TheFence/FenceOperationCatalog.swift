@@ -54,10 +54,7 @@ public enum FenceOperationCatalog {
         )
     }
 
-    public static func normalizePlaybackStep(
-        commandName: String,
-        arguments _: [String: HeistValue]
-    ) -> Result<TheFence.Command, FenceOperationRoutingError> {
+    public static func normalizePlaybackStep(commandName: String) -> Result<TheFence.Command, FenceOperationRoutingError> {
         normalizeTypedPlaybackStep(
             commandName: commandName,
             context: "heist step"

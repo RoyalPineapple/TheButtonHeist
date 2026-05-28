@@ -15,7 +15,7 @@ private extension Dictionary where Key == String, Value == HeistValue {
 
 extension TheFence.ParsedRequest {
     var heistEvidenceArguments: [String: HeistValue] {
-        var arguments = evidence.arguments
+        var arguments = heistRecordingArguments
         if command != .waitForChange {
             let timeout = expectationPayload.expectation == nil ? nil : expectationPayload.timeout
             arguments.appendExpectation(expectationPayload.expectation, timeout: timeout)
