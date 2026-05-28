@@ -464,9 +464,9 @@ final class ActionExpectationTests: XCTestCase {
     }
 
     func testExpectationMatcherRejectsUnknownFieldAtCodableBoundary() {
-        let json = Data(#"{"type":"element_appeared","matcher":{"label":"Save","legacyTarget":"button_save"}}"#.utf8)
+        let json = Data(#"{"type":"element_appeared","matcher":{"label":"Save","unexpectedTargetField":"button_save"}}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains("legacyTarget"), "\(error)")
+            XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
         }
     }
 }

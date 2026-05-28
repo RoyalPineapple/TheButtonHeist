@@ -46,11 +46,6 @@ extension TheFence {
         let arguments: [String: HeistValue]
 
         init(evidence: HeistEvidence, index: Int) throws {
-            if evidence.arguments["heistId"] != nil {
-                throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): top-level heistId is not valid playback identity; use target.matcher and _recorded.heistId metadata"
-                )
-            }
             let command: Command
             switch FenceOperationCatalog.normalizePlaybackStep(
                 commandName: evidence.command

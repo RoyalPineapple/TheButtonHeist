@@ -35,19 +35,4 @@ final class FencePlaybackLifecycleTests: XCTestCase {
         }
     }
 
-    func testPlaybackOperationRejectsTopLevelHeistIdArgument() throws {
-        XCTAssertThrowsError(try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "activate",
-                arguments: ["heistId": .string("stale_button")]
-            ),
-            index: 0
-        )) { error in
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("top-level heistId is not valid playback identity"))
-        }
-    }
-
 }

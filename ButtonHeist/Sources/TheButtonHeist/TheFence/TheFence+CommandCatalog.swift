@@ -140,6 +140,18 @@ public enum FenceHumanPositionalSyntax: Sendable, Equatable {
     case leadingEdgeThenTarget(Set<String>)
 }
 
+private struct FenceCommandCatalogEntry {
+    var actionResultMethod: ActionMethod?
+    var requestPayloadKind: FenceRequestPayloadKind = .none
+    var cliExposure: CLIExposure = .directCommand
+    var mcpExposure: MCPExposure = .directTool
+    var isBatchExecutable = false
+    var requiresConnectionBeforeDispatch = true
+    var humanPositionalSyntax: FenceHumanPositionalSyntax = .target
+    var mcpAnnotations: MCPToolAnnotationSpec?
+    var recordsActionCompletion = true
+}
+
 extension FenceCommandDescriptor {
     func executionTimeout(for request: TheFence.ParsedRequest) throws -> TimeInterval {
         if actionResultMethod == .getPasteboard {
@@ -246,7 +258,7 @@ public extension TheFence.Command {
     }
 
     static var batchExecutableCases: [Self] {
-        allCases.filter(\.catalogBatchExecutable)
+        allCases.filter { $0.catalogEntry.isBatchExecutable }
     }
 
     /// Commands that can execute as a heist playback step.
@@ -287,187 +299,166 @@ public extension TheFence.Command {
 
 extension TheFence.Command {
     static func descriptor(for command: Self) -> FenceCommandDescriptor {
-        FenceCommandDescriptor(
+        let entry = command.catalogEntry
+        return FenceCommandDescriptor(
             command: command,
-            actionResultMethod: command.catalogActionResultMethod,
-            requestPayloadKind: command.catalogRequestPayloadKind,
-            cliExposure: command.catalogCLIExposure,
-            mcpExposure: command.catalogMCPExposure,
-            isBatchExecutable: command.catalogBatchExecutable,
-            requiresConnectionBeforeDispatch: command.catalogRequiresConnectionBeforeDispatch,
-            humanPositionalSyntax: command.catalogHumanPositionalSyntax,
+            actionResultMethod: entry.actionResultMethod,
+            requestPayloadKind: entry.requestPayloadKind,
+            cliExposure: entry.cliExposure,
+            mcpExposure: entry.mcpExposure,
+            isBatchExecutable: entry.isBatchExecutable,
+            requiresConnectionBeforeDispatch: entry.requiresConnectionBeforeDispatch,
+            humanPositionalSyntax: entry.humanPositionalSyntax,
             parameters: command.catalogParameters,
-            mcpAnnotations: command.catalogMCPAnnotations,
-            recordsActionCompletion: command.catalogRecordsActionCompletion,
+            mcpAnnotations: entry.mcpAnnotations,
+            recordsActionCompletion: entry.recordsActionCompletion,
             description: presentationDescription(for: command.rawValue)
         )
     }
 
-    var catalogActionResultMethod: ActionMethod? {
+    private var catalogEntry: FenceCommandCatalogEntry {
+        var entry = FenceCommandCatalogEntry()
         switch self {
+        case .help:
+            entry.cliExposure = .sessionOnly
+            entry.mcpExposure = .notExposed
+            entry.requiresConnectionBeforeDispatch = false
+        case .ping:
+            entry.requiresConnectionBeforeDispatch = false
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+        case .quit:
+            entry.cliExposure = .sessionOnly
+            entry.mcpExposure = .notExposed
+        case .listDevices:
+            entry.requiresConnectionBeforeDispatch = false
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+        case .getInterface:
+            entry.requestPayloadKind = .observation
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+        case .getScreen:
+            entry.requestPayloadKind = .observation
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
         case .waitForChange:
-            return .waitForChange
+            entry.actionResultMethod = .waitForChange
+            entry.requestPayloadKind = .waitForChange
+            entry.isBatchExecutable = true
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
+        case .oneFingerTap:
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
         case .longPress:
-            return .syntheticLongPress
+            entry.actionResultMethod = .syntheticLongPress
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
         case .swipe:
-            return .syntheticSwipe
+            entry.actionResultMethod = .syntheticSwipe
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
+            entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
         case .drag:
-            return .syntheticDrag
+            entry.actionResultMethod = .syntheticDrag
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
         case .pinch:
-            return .syntheticPinch
+            entry.actionResultMethod = .syntheticPinch
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
         case .rotate:
-            return .syntheticRotate
+            entry.actionResultMethod = .syntheticRotate
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
         case .twoFingerTap:
-            return .syntheticTwoFingerTap
+            entry.actionResultMethod = .syntheticTwoFingerTap
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
+        case .drawPath:
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
+        case .drawBezier:
+            entry.requestPayloadKind = .gesture
+            entry.isBatchExecutable = true
         case .scroll:
-            return .scroll
+            entry.actionResultMethod = .scroll
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
+            entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
         case .scrollToVisible:
-            return .scrollToVisible
+            entry.actionResultMethod = .scrollToVisible
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
         case .elementSearch:
-            return .elementSearch
+            entry.actionResultMethod = .elementSearch
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
         case .scrollToEdge:
-            return .scrollToEdge
+            entry.actionResultMethod = .scrollToEdge
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
+            entry.humanPositionalSyntax = .leadingEdgeThenTarget(Self.humanScrollEdgeValues)
         case .activate:
-            return .activate
+            entry.actionResultMethod = .activate
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
         case .rotor:
-            return .rotor
+            entry.actionResultMethod = .rotor
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
+            entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
         case .typeText:
-            return .typeText
+            entry.actionResultMethod = .typeText
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
+            entry.humanPositionalSyntax = .joinedText(.text)
         case .editAction:
-            return .editAction
+            entry.actionResultMethod = .editAction
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
+            entry.humanPositionalSyntax = .firstToken(.action)
         case .setPasteboard:
-            return .setPasteboard
+            entry.actionResultMethod = .setPasteboard
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
         case .getPasteboard:
-            return .getPasteboard
+            entry.actionResultMethod = .getPasteboard
+            entry.recordsActionCompletion = false
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
         case .waitFor:
-            return .waitFor
+            entry.actionResultMethod = .waitFor
+            entry.requestPayloadKind = .elementAction
+            entry.isBatchExecutable = true
         case .dismissKeyboard:
-            return .resignFirstResponder
-        case .oneFingerTap, .drawPath, .drawBezier:
-            // `syntheticTap` and `syntheticDrawPath` can come from multiple
-            // public commands, so keep those action methods diagnostic-only.
-            return nil
-        case .help, .ping, .quit,
-             .listDevices, .getInterface, .getScreen,
-             .startRecording, .stopRecording, .runBatch,
-             .getSessionState, .connect, .listTargets,
-             .getSessionLog, .archiveSession,
-             .startHeist, .stopHeist, .playHeist:
-            return nil
+            entry.actionResultMethod = .resignFirstResponder
+            entry.isBatchExecutable = true
+        case .startRecording:
+            entry.requestPayloadKind = .session
+        case .stopRecording:
+            entry.requestPayloadKind = .observation
+        case .runBatch:
+            entry.requestPayloadKind = .session
+        case .getSessionState:
+            entry.requiresConnectionBeforeDispatch = false
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+        case .connect:
+            entry.requestPayloadKind = .session
+            entry.requiresConnectionBeforeDispatch = false
+        case .listTargets:
+            entry.requiresConnectionBeforeDispatch = false
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+        case .getSessionLog:
+            entry.requiresConnectionBeforeDispatch = false
+            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
+        case .archiveSession:
+            entry.requestPayloadKind = .session
+            entry.requiresConnectionBeforeDispatch = false
+        case .startHeist:
+            entry.requestPayloadKind = .session
+            entry.requiresConnectionBeforeDispatch = false
+        case .stopHeist:
+            entry.requestPayloadKind = .session
+            entry.requiresConnectionBeforeDispatch = false
+        case .playHeist:
+            entry.requestPayloadKind = .session
         }
-    }
-
-    var catalogRequestPayloadKind: FenceRequestPayloadKind {
-        switch self {
-        case .help, .ping, .quit, .listDevices, .getPasteboard,
-             .dismissKeyboard, .getSessionState, .listTargets, .getSessionLog:
-            return .none
-        case .getInterface, .getScreen, .stopRecording:
-            return .observation
-        case .waitForChange:
-            return .waitForChange
-        case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
-             .twoFingerTap, .drawPath, .drawBezier:
-            return .gesture
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-             .activate,
-             .rotor, .typeText, .editAction, .setPasteboard, .waitFor:
-            return .elementAction
-        case .startRecording, .runBatch, .connect, .archiveSession, .startHeist,
-             .stopHeist, .playHeist:
-            return .session
-        }
-    }
-
-    var catalogCLIExposure: CLIExposure {
-        switch self {
-        case .help, .quit:
-            return .sessionOnly
-        default:
-            return .directCommand
-        }
-    }
-
-    var catalogMCPExposure: MCPExposure {
-        switch self {
-        case .help, .quit:
-            return .notExposed
-        default:
-            return .directTool
-        }
-    }
-
-    var catalogBatchExecutable: Bool {
-        switch self {
-        case .waitForChange,
-             .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate,
-             .twoFingerTap, .drawPath, .drawBezier,
-             .scroll, .scrollToVisible, .elementSearch, .scrollToEdge,
-             .activate,
-             .rotor, .typeText, .editAction, .setPasteboard,
-             .waitFor, .dismissKeyboard:
-            return true
-        case .help, .ping, .quit,
-             .listDevices, .getInterface, .getScreen, .getPasteboard,
-             .getSessionState, .connect, .listTargets,
-             .getSessionLog, .archiveSession,
-             .startRecording, .stopRecording, .runBatch,
-             .startHeist, .stopHeist, .playHeist:
-            return false
-        }
-    }
-
-    var catalogRequiresConnectionBeforeDispatch: Bool {
-        switch self {
-        case .ping, .getSessionState, .listDevices, .connect, .listTargets,
-             .getSessionLog, .archiveSession, .startHeist, .stopHeist:
-            return false
-        default:
-            return true
-        }
-    }
-
-    var catalogHumanPositionalSyntax: FenceHumanPositionalSyntax {
-        switch self {
-        case .typeText:
-            return .joinedText(.text)
-        case .editAction:
-            return .firstToken(.action)
-        case .scrollToEdge:
-            return .leadingEdgeThenTarget(Self.humanScrollEdgeValues)
-        case .swipe, .scroll, .rotor:
-            return .leadingDirectionThenTarget(Self.humanDirectionValues)
-        default:
-            return .target
-        }
-    }
-
-    var catalogMCPAnnotations: MCPToolAnnotationSpec? {
-        switch self {
-        case .ping,
-             .getInterface,
-             .getScreen,
-             .listDevices,
-             .getSessionState,
-             .listTargets,
-             .getSessionLog:
-            return MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-
-        case .waitForChange,
-             .getPasteboard:
-            return MCPToolAnnotationSpec(readOnlyHint: true)
-
-        default:
-            return nil
-        }
-    }
-
-    var catalogRecordsActionCompletion: Bool {
-        switch self {
-        case .getPasteboard:
-            return false
-        default:
-            return true
-        }
+        return entry
     }
 }

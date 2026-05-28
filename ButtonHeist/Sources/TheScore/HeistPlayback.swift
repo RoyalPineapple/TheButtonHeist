@@ -7,7 +7,7 @@ import Foundation
 /// wire fields to typed commands before execution.
 public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
-    public static let currentVersion = 3
+    public static let currentVersion = 4
 
     /// Current heist file format version.
     public let version: Int
@@ -85,9 +85,9 @@ extension HeistPlayback: CustomStringConvertible {
 /// A single command in a heist playback. Contains the command name, durable
 /// semantic target, command-specific arguments, and optional recording metadata.
 ///
-/// The step is structured so that dropping `_recorded` yields typed command
-/// arguments for playback. Element identity lives under `target`; top-level
-/// matcher fields are not a playback contract.
+/// Element identity lives under `target`; command arguments live under
+/// `arguments`. Top-level step fields are closed so unsupported shapes fail at
+/// the playback boundary.
 public struct HeistEvidence: Codable, Sendable, Equatable {
     /// The `TheFence.Command` raw value (e.g. `"activate"`, `"type_text"`,
     /// `"swipe"`). Stored as a string rather than the enum because `Command`
@@ -116,66 +116,40 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
 
     // MARK: - Codable
 
-    private enum CodingKeys: String, CodingKey {
-        case command, target
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case command, target, arguments
         case recorded = "_recorded"
     }
 
-    /// Keys that belong to element targeting or step metadata, not command arguments.
-    private static let reservedKeys: Set<String> = [
-        "command", "target", "_recorded",
-    ]
-    private static let forbiddenArgumentKeys = Set(ElementTargetGrammar.inlineFieldNames)
-
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownStepKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         command = try container.decode(String.self, forKey: .command)
-
         target = try container.decodeIfPresent(SemanticActionTarget.self, forKey: .target)
+        arguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
         recorded = try container.decodeIfPresent(RecordedMetadata.self, forKey: .recorded)
+    }
 
-        // Everything else in the step object is a command argument.
+    private static func rejectUnknownStepKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
         let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
-        var extraArguments: [String: HeistValue] = [:]
-        for key in dynamicContainer.allKeys {
-            guard !Self.reservedKeys.contains(key.stringValue) else { continue }
-            if Self.forbiddenArgumentKeys.contains(key.stringValue) {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: decoder.codingPath + [key],
-                    debugDescription: """
-                    Heist playback step must not contain top-level \(key.stringValue); use target.matcher for \
-                    durable playback identity and _recorded.heistId for metadata
-                    """
-                ))
-            }
-            extraArguments[key.stringValue] = try dynamicContainer.decode(
-                HeistValue.self, forKey: key
-            )
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
         }
-        arguments = extraArguments
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown heist playback step field \"\(unknownKey.stringValue)\""
+        ))
     }
 
     public func encode(to encoder: Encoder) throws {
-        if let forbiddenKey = arguments.keys.sorted().first(where: { Self.forbiddenArgumentKeys.contains($0) }) {
-            throw EncodingError.invalidValue(arguments, .init(
-                codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: forbiddenKey)],
-                debugDescription: """
-                Heist playback step must not contain top-level \(forbiddenKey); use target.matcher for durable \
-                playback identity and _recorded.heistId for metadata
-            """
-            ))
-        }
-
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
         try container.encodeIfPresent(target, forKey: .target)
-        try container.encodeIfPresent(recorded, forKey: .recorded)
-
-        // Encode extra arguments as flat top-level keys.
-        var dynamicContainer = encoder.container(keyedBy: DynamicCodingKey.self)
-        for (key, playbackValue) in arguments.sorted(by: { $0.key < $1.key }) {
-            try dynamicContainer.encode(playbackValue, forKey: DynamicCodingKey(stringValue: key))
+        if !arguments.isEmpty {
+            try container.encode(arguments, forKey: .arguments)
         }
+        try container.encodeIfPresent(recorded, forKey: .recorded)
     }
 
 }

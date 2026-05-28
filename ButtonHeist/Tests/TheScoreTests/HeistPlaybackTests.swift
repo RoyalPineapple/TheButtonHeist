@@ -25,7 +25,7 @@ final class HeistPlaybackTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(HeistPlayback.self, from: data)
 
-        XCTAssertEqual(decoded.version, 3)
+        XCTAssertEqual(decoded.version, HeistPlayback.currentVersion)
         XCTAssertEqual(decoded.app, "com.buttonheist.testapp")
         XCTAssertEqual(decoded.steps.count, 3)
         XCTAssertEqual(decoded.steps[0].command, "activate")
@@ -91,7 +91,8 @@ final class HeistPlaybackTests: XCTestCase {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         XCTAssertEqual(json?["command"] as? String, "swipe")
-        XCTAssertEqual(json?["direction"] as? String, "up")
+        let arguments = try XCTUnwrap(json?["arguments"] as? [String: Any])
+        XCTAssertEqual(arguments["direction"] as? String, "up")
         let target = try XCTUnwrap(json?["target"] as? [String: Any])
         let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
         XCTAssertEqual(matcher["label"] as? String, "List")
@@ -127,9 +128,9 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testPlaybackTargetRejectsUnknownTargetField() {
-        let json = #"{"command":"activate","target":{"matcher":{"label":"Save"},"legacyTarget":"button_save"}}"#
+        let json = #"{"command":"activate","target":{"matcher":{"label":"Save"},"unexpectedTargetField":"button_save"}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("legacyTarget"), "\(error)")
+            XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
         }
     }
 
@@ -160,16 +161,10 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(step.arguments["heistId"])
     }
 
-    func testStepRejectsEncodingTopLevelHeistIdArgument() throws {
-        let step = HeistEvidence(
-            command: "activate",
-            arguments: ["heistId": .string("stale_button")]
-        )
-
-        XCTAssertThrowsError(try JSONEncoder().encode(step)) { error in
-            guard case EncodingError.invalidValue = error else {
-                return XCTFail("Expected invalidValue, got \(error)")
-            }
+    func testStepRejectsUnknownTopLevelField() {
+        let json = #"{"command":"activate","unexpectedStepField":"button_save"}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("unexpectedStepField"), "\(error)")
         }
     }
 
@@ -247,8 +242,8 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)
     }
 
-    func testCurrentVersionIsThree() {
-        XCTAssertEqual(HeistPlayback.currentVersion, 3)
+    func testCurrentVersionIsFour() {
+        XCTAssertEqual(HeistPlayback.currentVersion, 4)
     }
 
     // MARK: - Heist Value
@@ -351,7 +346,7 @@ final class HeistPlaybackTests: XCTestCase {
         let data = try encoder.encode(script)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
-        XCTAssertEqual(json?["version"] as? Int, 3)
+        XCTAssertEqual(json?["version"] as? Int, HeistPlayback.currentVersion)
         XCTAssertEqual(json?["app"] as? String, "com.example.app")
 
         let steps = json?["steps"] as? [[String: Any]]

@@ -1,13 +1,10 @@
 {
-  "version": 3,
+  "version": 4,
   "app": "com.buttonheist.testapp",
   "recorded": "2026-05-15T00:00:00Z",
   "steps": [
     {
       "command": "activate",
-      "expect": {
-        "type": "screen_changed"
-      },
       "target": {
         "matcher": {
           "label": "Controls Demo",
@@ -15,13 +12,15 @@
             "button"
           ]
         }
+      },
+      "arguments": {
+        "expect": {
+          "type": "screen_changed"
+        }
       }
     },
     {
       "command": "activate",
-      "expect": {
-        "type": "screen_changed"
-      },
       "target": {
         "matcher": {
           "label": "Display",
@@ -29,13 +28,15 @@
             "button"
           ]
         }
+      },
+      "arguments": {
+        "expect": {
+          "type": "screen_changed"
+        }
       }
     },
     {
       "command": "activate",
-      "expect": {
-        "type": "screen_changed"
-      },
       "target": {
         "matcher": {
           "label": "Controls Demo",
@@ -43,6 +44,11 @@
             "button",
             "backButton"
           ]
+        }
+      },
+      "arguments": {
+        "expect": {
+          "type": "screen_changed"
         }
       }
     }
