@@ -38,14 +38,14 @@ struct WaitForCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        var request = Self.fenceRequest([.timeout: .double(timeout)])
+        var request: CLIRequestParameters = [.timeout: .double(timeout)]
         try element.applyTo(&request)
         if absent { request.set(.absent, true) }
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: absent ? "Waiting for element to disappear..." : "Waiting for element to appear..."
         )
     }

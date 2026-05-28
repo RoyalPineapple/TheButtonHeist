@@ -18,14 +18,14 @@ struct WaitForChangeCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        var request = Self.fenceRequest([.timeout: .double(timeout)])
+        var request: CLIRequestParameters = [.timeout: .double(timeout)]
         if let expect {
             request.set(.expect, try TheFence.parseExpectationArgument(expect))
         }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Waiting for change..."
         )
     }

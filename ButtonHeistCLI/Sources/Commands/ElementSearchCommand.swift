@@ -43,14 +43,14 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
             scrollDirection = nil
         }
 
-        var request = Self.fenceRequest([.timeout: .double(timeout)])
+        var request: CLIRequestParameters = [.timeout: .double(timeout)]
         try element.applyTo(&request)
         if let scrollDirection { request.set(.direction, scrollDirection) }
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Searching for element..."
         )
     }

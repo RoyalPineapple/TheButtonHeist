@@ -36,13 +36,13 @@ struct DrawPathCommand: AsyncParsableCommand, CLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         let array = try loadJSONArray(inline: points, fromFile: pointsFromFile, optionName: "points")
-        var request = Self.fenceRequest([.points: .array(array)])
+        var request: CLIRequestParameters = [.points: .array(array)]
         if let duration { request.set(.duration, duration) }
         if let velocity { request.set(.velocity, velocity) }
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Drawing path..."
         )
     }

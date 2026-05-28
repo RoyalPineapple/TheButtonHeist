@@ -39,7 +39,7 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         _ = try element.requireTarget()
 
-        var request = TheFence.Command.activate.cliRequest()
+        var request: CLIRequestParameters = [:]
         if let action {
             request.set(.action, action)
         }
@@ -50,7 +50,7 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: action.map { "Sending \($0)..." } ?? "Activating element..."
         )
     }

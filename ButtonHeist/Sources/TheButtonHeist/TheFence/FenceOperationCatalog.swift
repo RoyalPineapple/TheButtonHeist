@@ -17,6 +17,9 @@ public struct NormalizedOperation {
     let request: TheFence.RoutedCommandRequest
 
     public func stringArgument(_ key: String) -> String? { request.string(key) }
+    public func argumentValue(_ key: String) -> HeistValue? {
+        request.argumentEnvelopeForRequestDecoding().argumentValues[key]
+    }
 
     init(
         command: TheFence.Command,
@@ -42,6 +45,13 @@ public enum FenceOperationCatalog {
         }
 
         return normalizeToolOperation(command: contract.command, arguments: arguments)
+    }
+
+    public static func normalizeCommand(
+        _ command: TheFence.Command,
+        arguments: TheFence.CommandArgumentEnvelope
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        normalizeToolOperation(command: command, arguments: arguments)
     }
 
     public static func normalizeBatchStep(

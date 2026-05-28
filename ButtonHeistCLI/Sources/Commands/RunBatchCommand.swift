@@ -39,7 +39,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let batchSteps = try Self.serializedBatchSteps(inline: steps, fromFile: stepsFromFile)
 
-        var request = Self.fenceRequest([.steps: .array(batchSteps.map(\.value))])
+        var request: CLIRequestParameters = [.steps: .array(batchSteps.map(\.value))]
         if let policy {
             guard let parsedPolicy = Self.catalogCanonicalStringValue(policy, for: .policy) else {
                 throw ValidationError("Invalid policy '\(policy)'. Valid: \(Self.catalogAllowedValuesDescription(for: .policy))")
@@ -49,7 +49,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Running batch..."
         )
     }

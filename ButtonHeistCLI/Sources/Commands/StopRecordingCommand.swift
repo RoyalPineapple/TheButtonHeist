@@ -21,7 +21,7 @@ struct StopRecordingCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        var request = Self.fenceRequest()
+        var request: CLIRequestParameters = [:]
         if let output {
             request.set(.output, output)
         }
@@ -35,7 +35,7 @@ struct StopRecordingCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: outputFormat.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Stopping recording..."
         )
     }
