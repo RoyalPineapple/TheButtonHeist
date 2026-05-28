@@ -40,8 +40,10 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             XCTAssertEqual(target.elementTarget, ElementTarget.heistId("form"))
             XCTAssertEqual(target.selection, .named("Errors"))
             XCTAssertEqual(target.direction, RotorDirection.previous)
-            XCTAssertEqual(target.currentHeistId, "email")
-            XCTAssertEqual(target.currentTextRange, TextRangeReference(startOffset: 10, endOffset: 15))
+            XCTAssertEqual(
+                target.continuation,
+                .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
+            )
         } else {
             XCTFail("Expected rotor message")
         }
@@ -86,7 +88,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
         if case .oneFingerTap(let target) = decoded {
             XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 100, y: 200)))
-            XCTAssertEqual(target.point, CGPoint(x: 100, y: 200))
         } else {
             XCTFail("Expected oneFingerTap message")
         }
@@ -102,7 +103,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
         if case .longPress(let target) = decoded {
             XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 50, y: 75)))
-            XCTAssertEqual(target.point, CGPoint(x: 50, y: 75))
             XCTAssertEqual(target.duration, 1.0)
         } else {
             XCTFail("Expected longPress message")

@@ -931,8 +931,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected pinch message")
             return
         }
-        XCTAssertEqual(target.centerX, 200.0)
-        XCTAssertEqual(target.centerY, 500.0)
+        XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
     }
 
     @ButtonHeistActor
@@ -946,8 +945,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected rotate message")
             return
         }
-        XCTAssertEqual(target.centerX, 150.0)
-        XCTAssertEqual(target.centerY, 400.0)
+        XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 150.0, y: 400.0)))
     }
 
     @ButtonHeistActor
@@ -979,8 +977,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected twoFingerTap message")
             return
         }
-        XCTAssertEqual(target.centerX, 200.0)
-        XCTAssertEqual(target.centerY, 500.0)
+        XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
     }
 
     // MARK: - Draw Path Validation

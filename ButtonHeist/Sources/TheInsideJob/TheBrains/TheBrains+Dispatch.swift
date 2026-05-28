@@ -423,7 +423,7 @@ private extension ClientMessage {
         case .rotor(let target):
             // Retained out-of-tree rotor results are cursor state only. They
             // may seed the next rotor predicate, but never semantic actions.
-            return target.currentHeistId
+            return target.continuation.currentHeistId
         case .activate,
              .increment,
              .decrement,

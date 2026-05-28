@@ -26,18 +26,6 @@ public struct PinchTarget: Codable, Sendable {
         self.duration = duration
     }
 
-    public var elementTarget: ElementTarget? {
-        center.elementTarget
-    }
-
-    public var centerX: Double? {
-        center.pointX
-    }
-
-    public var centerY: Double? {
-        center.pointY
-    }
-
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
@@ -65,9 +53,7 @@ public struct PinchTarget: Codable, Sendable {
 extension PinchTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("pinch", [
-            elementTarget?.description,
-            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
-            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            center.description,
             "scale=\(ScoreDescription.decimal(scale))",
             spread.map { "spread=\(ScoreDescription.decimal($0))" },
             duration.map { "duration=\(ScoreDescription.decimal($0))" },
@@ -103,18 +89,6 @@ public struct RotateTarget: Codable, Sendable {
         self.duration = duration
     }
 
-    public var elementTarget: ElementTarget? {
-        center.elementTarget
-    }
-
-    public var centerX: Double? {
-        center.pointX
-    }
-
-    public var centerY: Double? {
-        center.pointY
-    }
-
     public var resolvedRadius: Double { radius ?? Self.defaultRadius }
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
 
@@ -142,9 +116,7 @@ public struct RotateTarget: Codable, Sendable {
 extension RotateTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("rotate", [
-            elementTarget?.description,
-            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
-            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            center.description,
             "angle=\(ScoreDescription.decimal(angle))",
             radius.map { "radius=\(ScoreDescription.decimal($0))" },
             duration.map { "duration=\(ScoreDescription.decimal($0))" },
@@ -166,18 +138,6 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     public init(center: GesturePointSelection, spread: Double? = nil) {
         self.center = center
         self.spread = spread
-    }
-
-    public var elementTarget: ElementTarget? {
-        center.elementTarget
-    }
-
-    public var centerX: Double? {
-        center.pointX
-    }
-
-    public var centerY: Double? {
-        center.pointY
     }
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
@@ -202,9 +162,7 @@ public struct TwoFingerTapTarget: Codable, Sendable {
 extension TwoFingerTapTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("twoFingerTap", [
-            elementTarget?.description,
-            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
-            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            center.description,
             spread.map { "spread=\(ScoreDescription.decimal($0))" },
         ].compactMap { $0 })
     }
