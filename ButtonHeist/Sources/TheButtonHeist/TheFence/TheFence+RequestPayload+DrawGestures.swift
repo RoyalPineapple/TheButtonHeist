@@ -14,7 +14,7 @@ extension TheFence {
             note: "at least 2 points"
         )
         let points = try pointsArray.enumerated().map { index, point -> PathPoint in
-            try point.rejectUnknownKeys(["x", "y"], expected: "valid draw path point field")
+            try point.rejectUnknownKeys(allowed: ["x", "y"], expected: "valid draw path point field")
             return PathPoint(
                 x: try point.requiredNumber("x", field: "points[\(index)].x"),
                 y: try point.requiredNumber("y", field: "points[\(index)].y")
@@ -46,7 +46,7 @@ extension TheFence {
         )
         let segments = try segmentsArray.enumerated().map { index, segment -> BezierSegment in
             try segment.rejectUnknownKeys(
-                ["cp1X", "cp1Y", "cp2X", "cp2Y", "endX", "endY"],
+                allowed: ["cp1X", "cp1Y", "cp2X", "cp2Y", "endX", "endY"],
                 expected: "valid bezier segment field"
             )
             return BezierSegment(
@@ -86,5 +86,18 @@ extension TheFence {
             duration: duration,
             velocity: velocity
         )
+    }
+}
+
+private extension TheFence.CommandArgumentObject {
+    func requiredNumber(_ key: String, field: String) throws -> Double {
+        do {
+            guard let value = try schemaNumber(key) else {
+                throw SchemaValidationError(field: field, observed: "missing", expected: "number")
+            }
+            return value
+        } catch let error as SchemaValidationError {
+            throw SchemaValidationError(field: field, observed: error.observed, expected: error.expected)
+        }
     }
 }

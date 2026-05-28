@@ -74,31 +74,8 @@ extension TheFence {
             try request.schemaEnum(key, as: type)
         }
 
-        func requiredObjectArray(_ key: String) throws -> [GestureRequestObject] {
-            try request.requiredSchemaObjectArray(key).map(GestureRequestObject.init)
-        }
-    }
-
-    struct GestureRequestObject {
-        private let object: CommandArgumentObject
-
-        fileprivate init(_ object: CommandArgumentObject) {
-            self.object = object
-        }
-
-        func rejectUnknownKeys(_ allowedKeys: Set<String>, expected: String) throws {
-            try object.rejectUnknownKeys(allowed: allowedKeys, expected: expected)
-        }
-
-        func requiredNumber(_ key: String, field: String) throws -> Double {
-            do {
-                guard let value = try object.schemaNumber(key) else {
-                    throw SchemaValidationError(field: field, observed: "missing", expected: "number")
-                }
-                return value
-            } catch let error as SchemaValidationError {
-                throw SchemaValidationError(field: field, observed: error.observed, expected: error.expected)
-            }
+        func requiredObjectArray(_ key: String) throws -> [CommandArgumentObject] {
+            try request.requiredSchemaObjectArray(key)
         }
     }
 }
