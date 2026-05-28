@@ -28,7 +28,7 @@ final class InsideJobRuntimeLease {
         self.bonjourServiceName = bonjourServiceName
     }
 
-    func activate(on job: TheInsideJob, resumePolling: Bool) {
+    func activate(on job: TheInsideJob) {
         guard !isActive, releaseTask == nil else { return }
         isActive = true
 
@@ -44,10 +44,7 @@ final class InsideJobRuntimeLease {
         }
         job.tripwire.startPulse()
         job.brains.startKeyboardObservation()
-
-        if resumePolling {
-            job.pollingRuntime.resumeIfPaused(makeTask: job.makePollingTask(interval:))
-        }
+        job.pollingRuntime.resumeIfPaused(makeTask: job.makePollingTask(interval:))
     }
 
     func release(from job: TheInsideJob, policy: ReleasePolicy) -> Task<Void, Never>? {
@@ -59,20 +56,7 @@ final class InsideJobRuntimeLease {
         let stopTask = transport.stop()
         releaseTask = stopTask
 
-        switch policy {
-        case .suspend:
-            job.pollingRuntime.pauseIfActive()
-            job.restoreIdleTimerProtection(clearBaseline: false)
-        case .stop:
-            job.stopPolling()
-            job.stopLifecycleObservation()
-            job.restoreIdleTimerProtection(clearBaseline: true)
-        }
-
-        job.tripwire.stopPulse()
-        job.tripwire.onTransition = nil
-        job.brains.stopKeyboardObservation()
-        job.stopAccessibilityObservation()
+        job.releaseRuntimeOwnedResources(policy: policy)
 
         return stopTask
     }
@@ -102,12 +86,12 @@ final class InsideJobPollingRuntime {
         }
     }
 
-    func start(interval requestedInterval: TimeInterval, makeTask: (TimeInterval) -> Task<Void, Never>) {
+    func enableIntent(interval requestedInterval: TimeInterval, runtimeActive: Bool, makeTask: (TimeInterval) -> Task<Void, Never>) {
         if case .active(let existingTask, _) = phase {
             existingTask.cancel()
         }
         let interval = max(0.5, requestedInterval)
-        phase = .active(task: makeTask(interval), interval: interval)
+        phase = runtimeActive ? .active(task: makeTask(interval), interval: interval) : .paused(interval: interval)
     }
 
     func stop() {
@@ -126,6 +110,26 @@ final class InsideJobPollingRuntime {
     func resumeIfPaused(makeTask: (TimeInterval) -> Task<Void, Never>) {
         guard case .paused(let interval) = phase else { return }
         phase = .active(task: makeTask(interval), interval: interval)
+    }
+}
+
+@MainActor
+extension TheInsideJob {
+    func releaseRuntimeOwnedResources(policy: InsideJobRuntimeLease.ReleasePolicy) {
+        switch policy {
+        case .suspend:
+            pollingRuntime.pauseIfActive()
+            restoreIdleTimerProtection(clearBaseline: false)
+        case .stop:
+            stopPolling()
+            stopLifecycleObservation()
+            restoreIdleTimerProtection(clearBaseline: true)
+        }
+
+        tripwire.stopPulse()
+        tripwire.onTransition = nil
+        brains.stopKeyboardObservation()
+        stopAccessibilityObservation()
     }
 }
 

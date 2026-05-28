@@ -11,6 +11,7 @@ final class TripwireIntegrationTests: XCTestCase {
 
     override func setUp() async throws {
         tripwire = TheTripwire()
+        tripwire.startPulse()
     }
 
     override func tearDown() async throws {
@@ -141,8 +142,8 @@ final class TripwireIntegrationTests: XCTestCase {
     // MARK: - Pulse produces readings
 
     func testPulseProducesReadingAfterStart() async throws {
-        // waitForSettle starts the pulse and only returns once at least one
-        // tick has produced a reading — observable signal beats wall-clock sleep.
+        // waitForSettle only returns once the caller-owned pulse has produced
+        // a reading — observable signal beats wall-clock sleep.
         // requiredQuietFrames: 1 asks for the first produced reading and keeps
         // the test resilient to host noise.
         let settled = await tripwire.waitForSettle(timeout: 1.0, requiredQuietFrames: 1)

@@ -199,9 +199,12 @@ extension TheTripwire {
     /// registration, so post-action animations are captured even if the
     /// pulse was already settled.
     ///
+    /// The caller owns pulse lifetime. Runtime commands get their pulse from
+    /// `InsideJobRuntimeLease`; standalone tests and tools must start it
+    /// explicitly.
+    ///
     /// Returns true if settled before timeout, false if timed out.
     func waitForSettle(timeout: TimeInterval = 1.0, requiredQuietFrames: Int = 2) async -> Bool {
-        startPulse()
         guard let context = runningContext else { return false }
         return await withCheckedContinuation { continuation in
             context.settleWaiters.append(SettleWaiter(
@@ -215,7 +218,8 @@ extension TheTripwire {
 
     /// Wait for the interface to become all clear.
     ///
-    /// Delegates to `waitForSettle` — the persistent pulse handles monitoring.
+    /// Delegates to `waitForSettle`; the caller must already own a running
+    /// pulse.
     /// Returns true if settled before timeout, false if timed out.
     ///
     /// **Settle signal boundary.** This is the layer-level settle path: it

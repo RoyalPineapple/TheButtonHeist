@@ -194,12 +194,7 @@ extension TheInsideJob {
             pendingTransportStopTask = lease.release(from: self, policy: .suspend)
         case .resuming(_, let task):
             task.cancel()
-            pollingRuntime.pauseIfActive()
-            tripwire.stopPulse()
-            tripwire.onTransition = nil
-            brains.stopKeyboardObservation()
-            stopAccessibilityObservation()
-            restoreIdleTimerProtection(clearBaseline: false)
+            releaseRuntimeOwnedResources(policy: .suspend)
         case .stopped, .suspended:
             return false
         }
@@ -249,7 +244,7 @@ extension TheInsideJob {
                     return
                 }
 
-                self.activateRuntimeLease(lease, resumePolling: true)
+                self.activateRuntimeLease(lease)
                 startedTransport = nil
 
                 insideJobLogger.info("Server resumed on port \(lease.actualPort)")
