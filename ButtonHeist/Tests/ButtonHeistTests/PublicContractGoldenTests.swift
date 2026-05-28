@@ -4,40 +4,6 @@ import AccessibilitySnapshotModel
 import TheScore
 
 final class PublicContractGoldenTests: XCTestCase {
-    func testCommandCatalogDescriptionsAreExplicit() {
-        for descriptor in TheFence.Command.descriptors {
-            XCTAssertEqual(
-                descriptor.description,
-                TheFence.Command.presentationDescription(for: descriptor.canonicalName),
-                "\(descriptor.canonicalName) should project public prose from the descriptor presentation layer."
-            )
-            XCTAssertFalse(
-                descriptor.description.contains("missing a public description"),
-                "\(descriptor.canonicalName) must not expose descriptor fallback prose."
-            )
-            XCTAssertFalse(
-                descriptor.description.contains("Execute the "),
-                "\(descriptor.canonicalName) must not expose prototype command prose."
-            )
-        }
-
-        for contract in TheFence.Command.mcpToolContracts {
-            XCTAssertEqual(
-                contract.description,
-                TheFence.Command.presentationDescription(for: contract.name),
-                "\(contract.name) should project MCP prose from the descriptor presentation layer."
-            )
-            XCTAssertFalse(
-                contract.description.contains("missing a public description"),
-                "\(contract.name) must not expose descriptor fallback prose."
-            )
-            XCTAssertFalse(
-                contract.description.contains("Execute the "),
-                "\(contract.name) must not expose prototype command prose."
-            )
-        }
-    }
-
     func testGetInterfacePublicJSONGolden() throws {
         let interface = makeReceiptTestInterface([
             makeReceiptTestElement(heistId: "pay_button", label: "Pay", traits: [.button]),

@@ -4,7 +4,7 @@ import Testing
 import ButtonHeist
 
 struct ToolRoutingTests {
-    private typealias Argument = TheFence.CommandArgumentValue
+    private typealias Argument = HeistValue
 
     @Test("direct tools route to same command")
     func directToolRoutesToSameCommand() throws {
