@@ -10,7 +10,7 @@ extension FenceResponse {
         try PublicJSONSerializer.data(
             encoding: PublicResponseModel(response: self),
             outputFormatting: outputFormatting,
-            fallback: Self.jsonEncodingFailureResponse()
+            encodingFailureResponse: Self.jsonEncodingFailureResponse()
         )
     }
 
@@ -22,7 +22,7 @@ extension FenceResponse {
             encoding: PublicResponseModel(response: self),
             requestId: requestId,
             outputFormatting: outputFormatting,
-            fallback: Self.jsonEncodingFailureResponse()
+            encodingFailureResponse: Self.jsonEncodingFailureResponse()
         )
     }
 

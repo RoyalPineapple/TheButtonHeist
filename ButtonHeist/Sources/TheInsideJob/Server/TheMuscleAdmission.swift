@@ -83,9 +83,9 @@ enum MuscleAdmissionDecision {
 struct TheMuscleAdmission {
     typealias ResponseHandler = @Sendable (Data) -> Void
 
-    private var clientRegistry = TheMuscleClientRegistry()
-    private var tokenAdmission: SessionAdmission
-    private let tokenSource: SessionTokenSource
+    var clientRegistry = TheMuscleClientRegistry()
+    var tokenAdmission: SessionAdmission
+    let tokenSource: SessionTokenSource
 
     init(tokenSource: SessionTokenSource, maxFailedAttempts: Int, lockoutDuration: TimeInterval) {
         self.tokenSource = tokenSource
@@ -273,139 +273,6 @@ struct TheMuscleAdmission {
         return .client(.error(error), clientId: clientId, disconnect: true)
     }
 
-    private mutating func handleUnauthenticatedMessage(
-        _ clientId: Int,
-        envelope: RequestEnvelope,
-        respond: @escaping ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> MuscleAdmissionDecision {
-        guard envelope.buttonHeistVersion == buttonHeistVersion else {
-            admissionLogger.warning(
-                "Client \(clientId) buttonHeistVersion mismatch: server=\(buttonHeistVersion), client=\(envelope.buttonHeistVersion)"
-            )
-            return .handled(.response(
-                .protocolMismatch(ProtocolMismatchPayload(
-                    serverButtonHeistVersion: buttonHeistVersion,
-                    clientButtonHeistVersion: envelope.buttonHeistVersion
-                )),
-                respond: respond,
-                disconnect: clientId
-            ))
-        }
-
-        switch envelope.message {
-        case .clientHello:
-            guard clientRegistry.markHelloValidated(clientId) != nil else {
-                return .handled(rejectUnauthenticatedMessage(
-                    clientId,
-                    message: "Connection is not registered; reconnect before starting the auth handshake.",
-                    requestId: envelope.requestId,
-                    respond: respond
-                ))
-            }
-            return .handled(.response(.authRequired, respond: respond))
-
-        case .authenticate(let payload):
-            guard clientRegistry.phase(for: clientId)?.hasCompletedHello == true else {
-                return .handled(rejectUnauthenticatedMessage(
-                    clientId,
-                    message: "Authentication requires clientHello first.",
-                    requestId: envelope.requestId,
-                    respond: respond
-                ))
-            }
-            return processAuthentication(
-                clientId,
-                payload: payload,
-                respond: respond,
-                uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
-            )
-
-        default:
-            return .handled(rejectUnauthenticatedMessage(
-                clientId,
-                message: "Authentication required before \(envelope.message.canonicalName).",
-                requestId: envelope.requestId,
-                respond: respond
-            ))
-        }
-    }
-
-    private mutating func processAuthentication(
-        _ clientId: Int,
-        payload: AuthenticatePayload,
-        respond: @escaping ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> MuscleAdmissionDecision {
-        guard let phase = clientRegistry.phase(for: clientId) else {
-            admissionLogger.warning("Client \(clientId) has no registered address, rejecting auth")
-            return .handled(.response(
-                .error(ServerError(kind: .authFailure, message: "Connection rejected.")),
-                respond: respond,
-                disconnect: clientId
-            ))
-        }
-        let address = phase.address
-
-        if payload.token.isEmpty {
-            switch tokenAdmission.decideEmptyToken() {
-            case .rejectExplicitTokenRequired(let error):
-                admissionLogger.warning("Client \(clientId) requested UI approval while an explicit token is configured")
-                return .handled(.response(.error(error), respond: respond, disconnect: clientId))
-            case .requestUIApproval:
-                break
-            }
-
-            if let diagnostic = uiApprovalUnavailableDiagnostic {
-                return .handled(rejectForSessionLock(clientId, diagnostic: diagnostic, respond: respond))
-            }
-
-            guard !clientRegistry.hasPendingApproval else {
-                admissionLogger.warning("Client \(clientId) requested UI approval while approval is already pending")
-                return .handled(.response(
-                    .error(ServerError(
-                        kind: .authFailure,
-                        message: "UI approval is available only when no approval request is already active."
-                    )),
-                    respond: respond,
-                    disconnect: clientId
-                ))
-            }
-
-            admissionLogger.info("Client \(clientId) requesting UI approval (no token)")
-            clientRegistry.beginApproval(clientId, address: address, respond: respond, driverId: payload.driverId)
-            var effect = MuscleAdmissionEffect.response(.authApprovalPending(AuthApprovalPendingPayload()), respond: respond)
-            effect.approvalPromptClientId = clientId
-            return .handled(effect)
-        }
-
-        switch tokenAdmission.decideToken(payload.token, driverId: payload.driverId, address: address) {
-        case .lockedOut(let error):
-            admissionLogger.warning("Client \(clientId) locked out (address: \(address)), rejecting")
-            return .handled(.response(.error(error), respond: respond, disconnect: clientId))
-
-        case .rejected(let retryMessage, let attempts, let lockedOut):
-            if lockedOut {
-                admissionLogger.warning("Address \(address) locked out after \(attempts) failed attempts")
-            }
-            admissionLogger.warning("Client \(clientId) sent invalid token, rejected (attempt \(attempts))")
-            return .handled(.response(
-                .error(ServerError(kind: .authFailure, message: retryMessage)),
-                respond: respond,
-                disconnect: clientId
-            ))
-
-        case .accepted(let driverIdentity):
-            return .authenticate(MuscleAuthentication(
-                clientId: clientId,
-                address: address,
-                driverIdentity: driverIdentity,
-                respond: respond,
-                source: .token
-            ))
-        }
-    }
-
     private func rejectUndecodableUnauthenticatedMessage(
         _ clientId: Int,
         respond: @escaping ResponseHandler
@@ -454,7 +321,7 @@ struct TheMuscleAdmission {
         )
     }
 
-    private func rejectUnauthenticatedMessage(
+    func rejectUnauthenticatedMessage(
         _ clientId: Int,
         message: String,
         requestId: String?,

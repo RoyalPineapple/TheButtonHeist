@@ -15,6 +15,17 @@ final class AccessibilityTraceTests: XCTestCase {
         }
     }
 
+    func testDecodeRejectsEmbeddedDeltaTruth() {
+        let json = #"{"captures":[],"deltas":[{"kind":"noChange","elementCount":0}]}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue(
+                "\(error)".contains("Unsupported AccessibilityTrace field: deltas"),
+                "Expected unsupported field rejection, got \(error)"
+            )
+        }
+    }
+
     func testCaptureDecodeRejectsMissingContext() throws {
         let capture = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
         var payload = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(capture)) as? [String: Any])
