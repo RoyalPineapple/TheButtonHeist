@@ -214,7 +214,17 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { command in
                 events.append("action:\(command.canonicalName)")
-                return ActionResult(success: true, method: TheBrains.diagnosticMethod(for: command))
+                let method: ActionMethod
+                switch command {
+                case .explore:
+                    method = .explore
+                case .resignFirstResponder:
+                    method = .resignFirstResponder
+                default:
+                    XCTFail("Unexpected command \(command.canonicalName)")
+                    method = .batchExecutionPlan
+                }
+                return ActionResult(success: true, method: method)
             },
             waitForExpectation: { _, _ in
                 XCTFail("Delivery expectation should not wait")
