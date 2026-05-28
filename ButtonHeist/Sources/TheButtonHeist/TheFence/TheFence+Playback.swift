@@ -42,27 +42,18 @@ extension TheFence {
 
     struct PlaybackOperation: Sendable {
         let command: Command
-        let target: ElementMatcher?
-        let ordinal: Int?
-        let payload: PlaybackPayload
+        let target: SemanticActionTarget?
+        let arguments: [String: HeistValue]
 
         init(evidence: HeistEvidence, index: Int) throws {
-            let payload = PlaybackPayload(values: evidence.arguments)
-            if payload.values["heistId"] != nil {
+            if evidence.arguments["heistId"] != nil {
                 throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): top-level heistId is not valid playback identity; use matcher fields and _recorded.heistId metadata"
+                    "Invalid heist step \(index): top-level heistId is not valid playback identity; use target.matcher and _recorded.heistId metadata"
                 )
             }
-            if evidence.target?.heistId != nil {
-                throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): matcher must not carry heistId during playback; use _recorded.heistId metadata"
-                )
-            }
-
             let command: Command
             switch FenceOperationCatalog.normalizePlaybackStep(
-                commandName: evidence.command,
-                arguments: payload.values
+                commandName: evidence.command
             ) {
             case .success(let normalizedCommand):
                 command = normalizedCommand
@@ -75,21 +66,18 @@ extension TheFence {
             self.init(
                 command: command,
                 target: evidence.target,
-                ordinal: evidence.ordinal,
-                payload: payload
+                arguments: evidence.arguments
             )
         }
 
         private init(
             command: Command,
-            target: ElementMatcher?,
-            ordinal: Int?,
-            payload: PlaybackPayload
+            target: SemanticActionTarget?,
+            arguments: [String: HeistValue]
         ) {
             self.command = command
             self.target = target
-            self.ordinal = ordinal
-            self.payload = payload
+            self.arguments = arguments
         }
 
         var commandName: String {
@@ -104,34 +92,27 @@ extension TheFence {
         }
 
         func requestDecodeInputEnvelope() -> CommandArgumentEnvelope {
-            var arguments = payload.values.mapValues(CommandArgumentValue.init)
+            var requestArguments = arguments
 
             if let target {
-                if let label = target.label { arguments["label"] = .string(label) }
-                if let matchIdentifier = target.identifier { arguments["identifier"] = .string(matchIdentifier) }
-                if let matchValue = target.value { arguments["value"] = .string(matchValue) }
-                if let matchTraits = target.traits {
-                    arguments["traits"] = .array(matchTraits.map { .string($0.rawValue) })
+                var matcher: [String: HeistValue] = [:]
+                if let label = target.matcher.label { matcher["label"] = .string(label) }
+                if let matchIdentifier = target.matcher.identifier { matcher["identifier"] = .string(matchIdentifier) }
+                if let matchValue = target.matcher.value { matcher["value"] = .string(matchValue) }
+                if let matchTraits = target.matcher.traits {
+                    matcher["traits"] = .array(matchTraits.map { .string($0.rawValue) })
                 }
-                if let matchExclude = target.excludeTraits {
-                    arguments["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
+                if let matchExclude = target.matcher.excludeTraits {
+                    matcher["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
                 }
+                var targetArguments: [String: HeistValue] = ["matcher": .object(matcher)]
+                if let ordinal = target.ordinal {
+                    targetArguments["ordinal"] = .int(ordinal)
+                }
+                requestArguments["target"] = .object(targetArguments)
             }
-            if let ordinal { arguments["ordinal"] = .int(ordinal) }
 
-            return CommandArgumentEnvelope(values: arguments)
-        }
-    }
-
-    struct PlaybackPayload: Sendable, Equatable {
-        let values: [String: HeistValue]
-
-        init(values: [String: HeistValue]) {
-            self.values = values
-        }
-
-        subscript(key: String) -> HeistValue? {
-            values[key]
+            return CommandArgumentEnvelope(values: requestArguments)
         }
     }
 }

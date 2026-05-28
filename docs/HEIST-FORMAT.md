@@ -2,7 +2,7 @@
 
 **Extension**: `.heist`
 **Encoding**: JSON (UTF-8)
-**Version**: 2
+**Version**: 3
 
 A `.heist` file stores durable interaction steps, expected outcomes, and optional recording notes. Playback runs those steps deterministically, ignoring recording notes and removing the agent from the loop.
 
@@ -10,7 +10,7 @@ A `.heist` file stores durable interaction steps, expected outcomes, and optiona
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "recorded": "2026-04-03T18:00:59Z",
   "app": "com.buttonheist.testapp",
   "steps": [ ... ]
@@ -19,12 +19,12 @@ A `.heist` file stores durable interaction steps, expected outcomes, and optiona
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `Int` | Format version. Currently `2`. |
+| `version` | `Int` | Format version. Currently `3`. |
 | `recorded` | `String` | ISO 8601 timestamp of when the recording was made. |
 | `app` | `String` | Bundle identifier of the app that was running. |
 | `steps` | `[HeistEvidence]` | Ordered list of durable interaction steps. |
 
-Version 2 is the current heist contract. Prototype v1 expectation shapes are rejected; re-record prototype flows.
+Version 3 is the current heist contract. Older flat target shapes are rejected; re-record old flows.
 
 ## Accessibility Trace Evidence
 
@@ -40,15 +40,19 @@ how captures are grouped for derived segment views.
 
 ## Evidence (Steps)
 
-Each step is a flat JSON object using the same command names and argument fields as live Button Heist requests.
+Each step is a JSON object using the same command names as live Button Heist requests. Durable semantic replay identity lives under `target.matcher`; `_recorded.heistId` is recording evidence only.
 
 ### Element-targeting step
 
 ```json
 {
   "command": "activate",
-  "label": "Review PR, High priority",
-  "traits": ["button"],
+  "target": {
+    "matcher": {
+      "label": "Review PR, High priority",
+      "traits": ["button"]
+    }
+  },
   "expect": {
     "type": "compound",
     "expectations": [
@@ -91,12 +95,12 @@ Each step is a flat JSON object using the same command names and argument fields
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `command` | `String` | Yes | Button Heist command name (`activate`, `type_text`, `swipe`, etc.) |
-| `label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
-| `identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
-| `value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
-| `traits` | `[String]` | No | Element matcher: all listed traits must be present |
-| `excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
-| `ordinal` | `Int` | No | 0-based index among matcher results; only valid with at least one matcher field |
+| `target.matcher.label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
+| `target.matcher.identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
+| `target.matcher.value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
+| `target.matcher.traits` | `[String]` | No | Element matcher: all listed traits must be present |
+| `target.matcher.excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
+| `target.ordinal` | `Int` | No | 0-based index among matcher results; only valid with at least one matcher field |
 | `expect` | `Object` | No | Expected outcome — validated on playback |
 | `_recorded` | `Object` | No | Optional recording notes (ignored during playback) |
 | *(other keys)* | varies | No | Command-specific arguments (`text`, `direction`, `duration`, etc.) |
@@ -113,7 +117,7 @@ Ordinal-only steps are the least durable replay target. They are reserved for an
 
 **Workflow**: Call `get_interface` before recording actions so the recorder has current element data. Durable heist steps should be the interactions and waits you want to replay; inspection calls help the recorder build good matchers but are not themselves replay steps.
 
-**Example**: You activate `button_sign_in` in the current interface. The `.heist` step should store fields like `{"command":"activate","label":"Sign In","traits":["button"],"_recorded":{"heistId":"button_sign_in"}}`, not `heistId` as the replay target.
+**Example**: You activate `button_sign_in` in the current interface. The `.heist` step should store fields like `{"command":"activate","target":{"matcher":{"label":"Sign In","traits":["button"]}},"_recorded":{"heistId":"button_sign_in"}}`, not `heistId` as the replay target.
 
 ### Async operations
 

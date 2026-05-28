@@ -224,26 +224,6 @@ public final class TheFence {
         backgroundAccessibility.drainTraces()
     }
 
-    /// Execute a command from a dictionary request. Auto-connects if not
-    /// already connected.
-    ///
-    /// Reads as a pipeline: parse → optional wait-only background match
-    /// → dispatch → record post-dispatch effects → validate/wait against the
-    /// caller's expectation. Each step is its own private method.
-    public func execute(request: [String: Any]) async throws -> FenceResponse {
-        let parsed: ParsedRequest
-        do {
-            parsed = try parseRequest(request)
-        } catch let error as SchemaValidationError {
-            return .error(error.message)
-        } catch let error as MissingElementTarget {
-            return missingElementTargetResponse(command: error.command)
-        } catch let error as FenceError {
-            return .error(error.coreMessage, details: error.failureDetails)
-        }
-        return try await execute(parsed: parsed)
-    }
-
     /// Execute an operation that has already been normalized by the shared command catalog.
     ///
     /// This keeps adapters from rebuilding command dictionaries after routing.
@@ -294,65 +274,7 @@ public final class TheFence {
     // MARK: - Command Dispatch (thin router)
 
     func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
-        switch (parsed.command, parsed.payload) {
-        case (.ping, _):
-            return try await handlePing()
-        case (.listDevices, _):
-            return try await handleListDevices()
-        case (.getInterface, .getInterface(let request)):
-            return try await handleGetInterface(request)
-        case (.getScreen, .screen(let request)):
-            return try await handleGetScreen(request)
-        case (.oneFingerTap, .gesture(.oneFingerTap)),
-             (.longPress, .gesture(.longPress)),
-             (.swipe, .gesture(.swipe)),
-             (.drag, .gesture(.drag)),
-             (.pinch, .gesture(.pinch)),
-             (.rotate, .gesture(.rotate)),
-             (.twoFingerTap, .gesture(.twoFingerTap)),
-             (.drawPath, .gesture(.drawPath)),
-             (.drawBezier, .gesture(.drawBezier)),
-             (.scroll, .scroll(.scroll)),
-             (.scrollToVisible, .scroll(.scrollToVisible)),
-             (.elementSearch, .scroll(.elementSearch)),
-             (.scrollToEdge, .scroll(.scrollToEdge)),
-             (.activate, .accessibility(.activate)),
-             (.rotor, .rotor),
-             (.typeText, .typeText),
-             (.editAction, .editAction),
-             (.setPasteboard, .setPasteboard),
-             (.waitFor, .waitFor),
-             (.waitForChange, .waitForChange),
-             (.getPasteboard, .getPasteboard),
-             (.dismissKeyboard, .dismissKeyboard):
-            return try await handleClientActionRequest(parsed)
-        case (.startRecording, .startRecording(let config)):
-            return try await handleStartRecording(config)
-        case (.stopRecording, .artifact(let request)):
-            return try await handleStopRecording(request)
-        case (.runBatch, .runBatch(let request)):
-            return try await handleRunBatch(request)
-        case (.getSessionState, _):
-            return .sessionState(payload: currentSessionState())
-        case (.connect, .connect(let request)):
-            return try await handleConnect(request)
-        case (.listTargets, _):
-            return handleListTargets()
-        case (.getSessionLog, _):
-            return try handleGetSessionLog()
-        case (.archiveSession, .archiveSession(let request)):
-            return try await handleArchiveSession(request)
-        case (.startHeist, .startHeist(let request)):
-            return try handleStartHeist(request)
-        case (.stopHeist, .stopHeist(let request)):
-            return try handleStopHeist(request)
-        case (.playHeist, .playHeist(let request)):
-            return try await handlePlayHeist(request)
-        case (.help, _), (.quit, _):
-            return .error("Unexpected command in dispatch: \(parsed.command.rawValue)")
-        default:
-            return .error("Internal payload mismatch for command: \(parsed.command.rawValue)")
-        }
+        try await parsed.handler(self, parsed)
     }
 
     // Expectation parsing (`parseExpectation` and its helpers) lives in

@@ -251,9 +251,11 @@ enum FenceParameterBlocks: Sendable {
     ]
 
     static let elementTarget: [FenceParameterSpec] = [
-        param(.heistId, .string),
-    ] + matcherFields + [
-        param(.ordinal, .integer),
+        param(.target, .object, objectProperties: [
+            param(.heistId, .string),
+            param(.matcher, .object, objectProperties: matcherFields),
+            param(.ordinal, .integer, minimum: 0),
+        ]),
     ]
 
     static let elementFilter = matcherFields

@@ -7,7 +7,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Execute a batch of Button Heist steps from a JSON payload",
         discussion: """
-            Reads a steps array (`[{ "command": "activate", "heistId": "…" }, …]`)
+            Reads a steps array (`[{ "command": "activate", "target": { "heistId": "…" } }, …]`)
             either inline via --steps or from a JSON file. Each step is a full
             Button Heist request dictionary as produced by get_interface / session
             JSON mode.
@@ -19,7 +19,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
             Examples:
               buttonheist run_batch --steps-from-file steps.json
               buttonheist run_batch --steps-from-file steps.json --policy continue_on_error
-              buttonheist run_batch --steps '[{"command":"activate","heistId":"btn-OK"}]'
+              buttonheist run_batch --steps '[{"command":"activate","target":{"heistId":"btn-OK"}}]'
             """
     )
 
@@ -39,7 +39,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let batchSteps = try Self.serializedBatchSteps(inline: steps, fromFile: stepsFromFile)
 
-        var request = Self.fenceRequest([.steps: .array(batchSteps.map(\.value))])
+        var request: CLIRequestParameters = [.steps: .array(batchSteps.map(\.value))]
         if let policy {
             guard let parsedPolicy = Self.catalogCanonicalStringValue(policy, for: .policy) else {
                 throw ValidationError("Invalid policy '\(policy)'. Valid: \(Self.catalogAllowedValuesDescription(for: .policy))")
@@ -49,7 +49,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Running batch..."
         )
     }

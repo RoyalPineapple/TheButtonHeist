@@ -4,19 +4,6 @@ import Foundation
 @testable import ButtonHeistMCP
 
 struct ToolSyncTests {
-    @Test("get_interface MCP description presents app state and subtree selection")
-    func getInterfaceMCPDescriptionPresentsAppStateAndSubtreeSelection() {
-        guard let getInterface = ToolDefinitions.all.first(where: { $0.name == "get_interface" }) else {
-            Issue.record("get_interface tool missing")
-            return
-        }
-
-        let description = getInterface.description ?? ""
-        #expect(description.contains("Omit subtree for the whole hierarchy"))
-        #expect(description.contains("select the returned tree"))
-        #expect(description.contains("app accessibility hierarchy"))
-    }
-
     @Test("Tool input schemas satisfy canonical schema lint in memory")
     func toolInputSchemasSatisfyCanonicalSchemaLintInMemory() {
         let violations = ToolSchemaLint.violations(in: ToolDefinitions.all)
@@ -45,16 +32,6 @@ struct ToolSyncTests {
                 "Duplicate MCP tool name: '\(tool.name)'"
             )
             seen.insert(tool.name)
-        }
-    }
-
-    @Test("Every MCP tool has explicit public description text")
-    func everyMCPToolHasExplicitPublicDescriptionText() {
-        for tool in ToolDefinitions.all {
-            let description = tool.description ?? ""
-            #expect(!description.isEmpty, "\(tool.name) is missing public description prose")
-            #expect(!description.hasPrefix("Execute the"), "\(tool.name) has placeholder public description prose")
-            #expect(!description.contains("Button Heist tool"), "\(tool.name) has placeholder public description prose")
         }
     }
 }

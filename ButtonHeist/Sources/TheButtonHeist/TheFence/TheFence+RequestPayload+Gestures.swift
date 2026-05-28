@@ -2,71 +2,45 @@ import Foundation
 
 import TheScore
 
-extension TheFence.GesturePayload {
-
-    var clientMessage: ClientMessage {
-        switch self {
-        case .oneFingerTap(let payload):
-            return .oneFingerTap(payload.target)
-        case .longPress(let payload):
-            return .longPress(payload.target)
-        case .swipe(let payload):
-            return .swipe(payload.target)
-        case .drag(let payload):
-            return .drag(payload.target)
-        case .pinch(let payload):
-            return .pinch(payload.target)
-        case .rotate(let payload):
-            return .rotate(payload.target)
-        case .twoFingerTap(let payload):
-            return .twoFingerTap(payload.target)
-        case .drawPath(let payload):
-            return .drawPath(payload.target)
-        case .drawBezier(let payload):
-            return .drawBezier(payload.target)
-        }
-    }
-}
-
 extension TheFence {
 
-    func decodeGestureRequestPayload(
+    func decodeGestureRequestDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope
-    ) throws -> DecodedRequestPayload {
-        let payload = try decodeGesturePayload(command: command, request: GestureRequestInput(arguments))
-        return DecodedRequestPayload(
-            payload: .gesture(payload),
-            executableMessages: [payload.clientMessage]
-        )
+    ) throws -> DecodedRequestDispatch {
+        try decodeGestureAction(command: command, request: GestureRequestInput(arguments))
     }
 
-    private func decodeGesturePayload(
+    private func decodeGestureAction(
         command: Command,
         request: GestureRequestInput
-    ) throws -> GesturePayload {
+    ) throws -> DecodedRequestDispatch {
         switch command {
         case .oneFingerTap:
-            return .oneFingerTap(try decodeTapGesturePayload(request))
+            return decodedGestureAction(.oneFingerTap(try decodeTapTarget(request)))
         case .longPress:
-            return .longPress(try decodeLongPressGesturePayload(request))
+            return decodedGestureAction(.longPress(try decodeLongPressTarget(request)))
         case .swipe:
-            return .swipe(try decodeSwipeGesturePayload(request))
+            return decodedGestureAction(.swipe(try decodeSwipeTarget(request)))
         case .drag:
-            return .drag(try decodeDragGesturePayload(request))
+            return decodedGestureAction(.drag(try decodeDragTarget(request)))
         case .pinch:
-            return .pinch(try decodePinchGesturePayload(request))
+            return decodedGestureAction(.pinch(try decodePinchTarget(request)))
         case .rotate:
-            return .rotate(try decodeRotateGesturePayload(request))
+            return decodedGestureAction(.rotate(try decodeRotateTarget(request)))
         case .twoFingerTap:
-            return .twoFingerTap(try decodeTwoFingerTapGesturePayload(request))
+            return decodedGestureAction(.twoFingerTap(try decodeTwoFingerTapTarget(request)))
         case .drawPath:
-            return .drawPath(try decodeDrawPathGesturePayload(request))
+            return decodedGestureAction(.drawPath(try decodeDrawPathTarget(request)))
         case .drawBezier:
-            return .drawBezier(try decodeDrawBezierGesturePayload(request))
+            return decodedGestureAction(.drawBezier(try decodeDrawBezierTarget(request)))
         default:
             throw FenceError.invalidRequest("Unexpected gesture command: \(command.rawValue)")
         }
+    }
+
+    private func decodedGestureAction(_ message: ClientMessage) -> DecodedRequestDispatch {
+        Self.clientActionDispatch([message])
     }
 
     private struct GestureRequestInput {
@@ -103,7 +77,7 @@ extension TheFence {
 
         func requiredPositiveNumber(_ key: String) throws -> Double {
             guard let value = try positiveNumber(key) else {
-                throw SchemaValidationError(field: key, observed: nil, expected: "number > 0")
+                throw SchemaValidationError(field: key, observed: "missing", expected: "number > 0")
             }
             return value
         }
@@ -158,7 +132,7 @@ extension TheFence {
         func requiredNumber(_ key: String, field: String) throws -> Double {
             do {
                 guard let value = try object.schemaNumber(key) else {
-                    throw SchemaValidationError(field: field, observed: nil, expected: "number")
+                    throw SchemaValidationError(field: field, observed: "missing", expected: "number")
                 }
                 return value
             } catch let error as SchemaValidationError {
@@ -177,7 +151,7 @@ extension TheFence {
     ) throws -> GesturePointSelection {
         let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
         if elementTarget != nil, point != nil {
-            throw mixedGestureShape(field: field, expected: "element target or coordinates")
+            throw mixedGestureShape(field: field, expected: "target object or coordinates")
         }
         if let elementTarget {
             return .element(elementTarget)
@@ -197,7 +171,7 @@ extension TheFence {
     ) throws -> GesturePointSelection {
         let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
         if elementTarget != nil, point != nil {
-            throw mixedGestureShape(field: field, expected: "element target or coordinates")
+            throw mixedGestureShape(field: field, expected: "target object or coordinates")
         }
         if let elementTarget {
             return .element(elementTarget)
@@ -231,31 +205,31 @@ extension TheFence {
         SchemaValidationError(field: field, observed: "mixed gesture target shapes", expected: expected)
     }
 
-    private func decodeTapGesturePayload(_ request: GestureRequestInput) throws -> TapGesturePayload {
+    private func decodeTapTarget(_ request: GestureRequestInput) throws -> TapTarget {
         let selection = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "x",
             yKey: "y",
             field: "x/y",
-            missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
+            missingMessage: "Must specify target object or coordinates (x, y)"
         )
-        return TapGesturePayload(selection: selection)
+        return TapTarget(selection: selection)
     }
 
-    private func decodeLongPressGesturePayload(_ request: GestureRequestInput) throws -> LongPressGesturePayload {
+    private func decodeLongPressTarget(_ request: GestureRequestInput) throws -> LongPressTarget {
         let selection = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "x",
             yKey: "y",
             field: "x/y",
-            missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
+            missingMessage: "Must specify target object or coordinates (x, y)"
         )
-        return LongPressGesturePayload(selection: selection, duration: try request.gestureDuration() ?? 0.5)
+        return LongPressTarget(selection: selection, duration: try request.gestureDuration() ?? 0.5)
     }
 
-    private func decodeSwipeGesturePayload(_ request: GestureRequestInput) throws -> SwipeGesturePayload {
+    private func decodeSwipeTarget(_ request: GestureRequestInput) throws -> SwipeTarget {
         let start = try request.unitPoint("start")
         let end = try request.unitPoint("end")
         if (start != nil) != (end != nil) {
@@ -273,15 +247,15 @@ extension TheFence {
         }
         if let start, let end {
             guard let elementTarget else {
-                throw FenceError.invalidRequest("Unit-point swipe requires element target")
+                throw FenceError.invalidRequest("Unit-point swipe requires target object")
             }
-            return SwipeGesturePayload(
+            return SwipeTarget(
                 selection: .unitElement(elementTarget, start: start, end: end, direction: direction),
                 duration: try request.gestureDuration()
             )
         }
         if elementTarget != nil, startPoint != nil {
-            throw mixedGestureShape(field: "startX/startY", expected: "element target or absolute start coordinates")
+            throw mixedGestureShape(field: "startX/startY", expected: "target object or absolute start coordinates")
         }
         if endPoint != nil, direction != nil {
             throw mixedGestureShape(field: "endX/endY", expected: "end coordinates or direction")
@@ -293,7 +267,7 @@ extension TheFence {
             startSelection = .coordinate(ScreenPoint(x: startPoint.x, y: startPoint.y))
         } else {
             throw FenceError.invalidRequest(
-                "Swipe requires a semantic target (heistId or matcher) or start coordinates (startX, startY)"
+                "Swipe requires target object or start coordinates (startX, startY)"
             )
         }
         let endSelection: SwipeDestinationSelection
@@ -308,11 +282,10 @@ extension TheFence {
             start: startSelection,
             destination: endSelection
         )
-        let payload = SwipeGesturePayload(selection: selection, duration: try request.gestureDuration())
-        return payload
+        return SwipeTarget(selection: selection, duration: try request.gestureDuration())
     }
 
-    private func decodeDragGesturePayload(_ request: GestureRequestInput) throws -> DragGesturePayload {
+    private func decodeDragTarget(_ request: GestureRequestInput) throws -> DragTarget {
         let start = try decodeOptionalPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
@@ -320,61 +293,68 @@ extension TheFence {
             yKey: "startY",
             field: "startX/startY"
         )
-        return DragGesturePayload(
+        return DragTarget(
             start: start,
-            endX: try request.requiredNumber("endX"),
-            endY: try request.requiredNumber("endY"),
+            end: ScreenPoint(
+                x: try request.requiredNumber("endX"),
+                y: try request.requiredNumber("endY")
+            ),
             duration: try request.gestureDuration()
         )
     }
 
-    private func decodePinchGesturePayload(_ request: GestureRequestInput) throws -> PinchGesturePayload {
-        let center = try decodeOptionalPointIntent(
+    private func decodePinchTarget(_ request: GestureRequestInput) throws -> PinchTarget {
+        let scale = try request.requiredPositiveNumber("scale")
+        let center = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "centerX",
             yKey: "centerY",
-            field: "centerX/centerY"
+            field: "centerX/centerY",
+            missingMessage: "Pinch requires target object or center coordinates (centerX, centerY)"
         )
-        return PinchGesturePayload(
+        return PinchTarget(
             center: center,
-            scale: try request.requiredPositiveNumber("scale"),
+            scale: scale,
             spread: try request.positiveNumber("spread"),
             duration: try request.gestureDuration()
         )
     }
 
-    private func decodeRotateGesturePayload(_ request: GestureRequestInput) throws -> RotateGesturePayload {
-        let center = try decodeOptionalPointIntent(
+    private func decodeRotateTarget(_ request: GestureRequestInput) throws -> RotateTarget {
+        let angle = try request.requiredNumber("angle")
+        let center = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "centerX",
             yKey: "centerY",
-            field: "centerX/centerY"
+            field: "centerX/centerY",
+            missingMessage: "Rotate requires target object or center coordinates (centerX, centerY)"
         )
-        return RotateGesturePayload(
+        return RotateTarget(
             center: center,
-            angle: try request.requiredNumber("angle"),
+            angle: angle,
             radius: try request.positiveNumber("radius"),
             duration: try request.gestureDuration()
         )
     }
 
-    private func decodeTwoFingerTapGesturePayload(_ request: GestureRequestInput) throws -> TwoFingerTapGesturePayload {
-        let center = try decodeOptionalPointIntent(
+    private func decodeTwoFingerTapTarget(_ request: GestureRequestInput) throws -> TwoFingerTapTarget {
+        let center = try decodeRequiredPointIntent(
             request: request,
             elementTarget: try request.elementTarget(in: self),
             xKey: "centerX",
             yKey: "centerY",
-            field: "centerX/centerY"
+            field: "centerX/centerY",
+            missingMessage: "Two finger tap requires target object or center coordinates (centerX, centerY)"
         )
-        return TwoFingerTapGesturePayload(
+        return TwoFingerTapTarget(
             center: center,
             spread: try request.positiveNumber("spread")
         )
     }
 
-    private func decodeDrawPathGesturePayload(_ request: GestureRequestInput) throws -> DrawPathGesturePayload {
+    private func decodeDrawPathTarget(_ request: GestureRequestInput) throws -> DrawPathTarget {
         let pointsArray = try request.requiredObjectArray("points")
         try validateArrayCount(
             field: "points",
@@ -396,14 +376,14 @@ extension TheFence {
         )
         let velocity = try request.positiveNumber("velocity")
         try validateDrawTiming(duration: duration, velocity: velocity)
-        return DrawPathGesturePayload(
+        return DrawPathTarget(
             points: points,
             duration: duration,
             velocity: velocity
         )
     }
 
-    private func decodeDrawBezierGesturePayload(_ request: GestureRequestInput) throws -> DrawBezierGesturePayload {
+    private func decodeDrawBezierTarget(_ request: GestureRequestInput) throws -> DrawBezierTarget {
         let startX = try request.requiredNumber("startX")
         let startY = try request.requiredNumber("startY")
         let segmentsArray = try request.requiredObjectArray("segments")
@@ -448,7 +428,7 @@ extension TheFence {
         )
         let velocity = try request.positiveNumber("velocity")
         try validateDrawTiming(duration: duration, velocity: velocity)
-        return DrawBezierGesturePayload(
+        return DrawBezierTarget(
             startX: startX,
             startY: startY,
             segments: segments,

@@ -141,8 +141,8 @@ extension CLICommandContract {
         fenceCommand.cliCommandName
     }
 
-    static func fenceRequest(_ parameters: CLIRequestParameters = [:]) -> [String: Any] {
-        fenceCommand.cliRequest(parameters)
+    static func fenceOperation(_ parameters: CLIRequestParameters = [:]) throws -> NormalizedOperation {
+        try fenceCommand.cliOperation(parameters)
     }
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {
@@ -173,47 +173,14 @@ extension CLICommandContract {
 }
 
 extension TheFence.Command {
-    func cliRequest(_ parameters: CLIRequestParameters = [:]) -> [String: Any] {
-        CLIRequestBuilder.request(command: self, parameters: parameters)
+    func cliOperation(_ parameters: CLIRequestParameters = [:]) throws -> NormalizedOperation {
+        try CLIRequestBuilder.operation(command: self, parameters: parameters)
     }
 }
 
-extension FenceParameterKey {
-    static func rawDictionary(_ parameters: CLIRequestParameters) -> [String: Any] {
-        Dictionary(
-            parameters.map { ($0.key.rawValue, $0.value.cliRawValue) },
-            uniquingKeysWith: { _, newest in newest }
-        )
-    }
-}
-
-extension HeistValue {
-    var cliRawValue: Any {
-        switch self {
-        case .string(let value):
-            value
-        case .int(let value):
-            value
-        case .double(let value):
-            value
-        case .bool(let value):
-            value
-        case .array(let values):
-            values.map(\.cliRawValue)
-        case .object(let values):
-            values.mapValues(\.cliRawValue)
-        }
-    }
-}
-
-extension Dictionary where Key == String, Value == Any {
-    subscript(_ key: FenceParameterKey) -> Any? {
-        get { self[key.rawValue] }
-        set { self[key.rawValue] = newValue }
-    }
-
+extension Dictionary where Key == FenceParameterKey, Value == HeistValue {
     mutating func set(_ key: FenceParameterKey, _ value: HeistValue) {
-        self[key] = value.cliRawValue
+        self[key] = value
     }
 
     mutating func set(_ key: FenceParameterKey, _ value: String) {

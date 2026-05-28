@@ -67,7 +67,7 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
             }
         }
 
-        var request = Self.fenceRequest([.direction: .string(rotorDirection)])
+        var request: CLIRequestParameters = [.direction: .string(rotorDirection)]
         if let rotor { request.set(.rotor, rotor) }
         if let rotorIndex { request.set(.rotorIndex, rotorIndex) }
         if let currentHeistId { request.set(.currentHeistId, currentHeistId) }
@@ -80,7 +80,7 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Moving rotor..."
         )
     }

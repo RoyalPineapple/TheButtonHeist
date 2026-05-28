@@ -87,12 +87,22 @@ extension TheBookKeeper {
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
-        guard let step = buildStep(
-            request: request,
-            targetCapture: targetCapture,
-            actionResult: actionResult,
-            expectation: expectation
-        ) else {
+        let step: HeistEvidence?
+        do {
+            step = try buildStep(
+                request: request,
+                targetCapture: targetCapture,
+                actionResult: actionResult,
+                expectation: expectation
+            )
+        } catch {
+            heistRecordingLogger.error(
+                "Skipped heist evidence for \(request.command.rawValue): projection failed: \(String(describing: error))"
+            )
+            return
+        }
+
+        guard let step else {
             heistRecordingLogger.error(
                 "Skipped heist evidence for \(request.command.rawValue): target has no durable semantic replay identity"
             )
@@ -182,10 +192,9 @@ extension TheBookKeeper {
         targetCapture: AccessibilityTrace.Capture?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
-    ) -> HeistEvidence? {
-        let elementTarget = request.payload.bookKeeperElementTarget
-        var target: ElementMatcher?
-        var ordinal: Int?
+    ) throws -> HeistEvidence? {
+        let elementTarget = try request.heistRecordingElementTarget()
+        var target: SemanticActionTarget?
         var recordedHeistId: HeistId?
         var recordedFrame: RecordedFrame?
         var coordinateOnly: Bool?
@@ -195,8 +204,7 @@ extension TheBookKeeper {
                   let element = targetCapture.interface.elements.last(where: { $0.heistId == heistId }),
                   let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
             else { return nil }
-            target = minimumMatcher.matcher
-            ordinal = minimumMatcher.ordinal
+            target = SemanticActionTarget(minimumMatcher)
             recordedHeistId = heistId
             recordedFrame = RecordedFrame(
                 x: element.frameX, y: element.frameY,
@@ -204,9 +212,8 @@ extension TheBookKeeper {
             )
         } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
             guard matcher.hasPredicates else { return nil }
-            target = matcher
-            ordinal = matchedOrdinal
-        } else if request.payload.bookKeeperCoordinateOnly {
+            target = SemanticActionTarget(matcher: matcher, ordinal: matchedOrdinal)
+        } else if try request.heistRecordingCoordinateOnly() {
             coordinateOnly = true
         }
 
@@ -228,8 +235,7 @@ extension TheBookKeeper {
         return HeistEvidence(
             command: request.command.rawValue,
             target: target,
-            ordinal: ordinal,
-            arguments: request.heistEvidenceArguments,
+            arguments: try request.heistEvidenceArguments(),
             recorded: recorded
         )
     }

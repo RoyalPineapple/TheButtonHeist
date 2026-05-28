@@ -6,19 +6,10 @@ extension TheFence {
 
     /// Typed JSON-encodable command arguments after external routing has selected a command.
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
-        public let argumentValues: [String: CommandArgumentValue]
+        public let argumentValues: [String: HeistValue]
         let argumentFieldPrefix: String?
 
-        init(arguments: [String: Any], droppingCommandKey: Bool = true) throws {
-            var values: [String: CommandArgumentValue] = [:]
-            for (key, value) in arguments where !droppingCommandKey || key != "command" {
-                values[key] = try CommandArgumentValue(value, field: key)
-            }
-            self.argumentValues = values
-            argumentFieldPrefix = nil
-        }
-
-        public init(values: [String: CommandArgumentValue], fieldPrefix: String? = nil) {
+        public init(values: [String: HeistValue], fieldPrefix: String? = nil) {
             self.argumentValues = values
             argumentFieldPrefix = fieldPrefix
         }
@@ -31,119 +22,65 @@ extension TheFence {
     }
 
     public struct CommandArgumentObject: CommandArgumentReadable, Sendable {
-        public let argumentValues: [String: CommandArgumentValue]
+        public let argumentValues: [String: HeistValue]
         let argumentFieldPrefix: String?
 
-        public init(values: [String: CommandArgumentValue], fieldPrefix: String?) {
+        public init(values: [String: HeistValue], fieldPrefix: String?) {
             self.argumentValues = values
             self.argumentFieldPrefix = fieldPrefix
         }
     }
 
     protocol CommandArgumentReadable: Sendable {
-        var argumentValues: [String: CommandArgumentValue] { get }
+        var argumentValues: [String: HeistValue] { get }
         var argumentFieldPrefix: String? { get }
     }
+}
 
-    /// JSON-encodable command argument value used between routing and request decoding.
-    public enum CommandArgumentValue: Sendable, Equatable {
-        case string(String)
-        case int(Int)
-        case double(Double)
-        case bool(Bool)
-        case array([CommandArgumentValue])
-        case object([String: CommandArgumentValue])
-        case null
-
-        init(_ value: Any, field: String) throws {
-            if value is NSNull {
-                self = .null
-            } else if let value = value as? Bool {
-                self = .bool(value)
-            } else if let value = value as? Int {
-                self = .int(value)
-            } else if let value = value as? Double {
-                self = .double(value)
-            } else if let value = value as? String {
-                self = .string(value)
-            } else if let array = value as? [Any] {
-                self = .array(try array.enumerated().map { index, item in
-                    try CommandArgumentValue(item, field: "\(field)[\(index)]")
-                })
-            } else if let object = value as? [String: Any] {
-                var values: [String: CommandArgumentValue] = [:]
-                for (key, value) in object {
-                    values[key] = try CommandArgumentValue(value, field: "\(field).\(key)")
-                }
-                self = .object(values)
-            } else if let number = value as? NSNumber {
-                let doubleValue = number.doubleValue
-                if let integer = Int(exactly: doubleValue) {
-                    self = .int(integer)
-                } else {
-                    self = .double(doubleValue)
-                }
-            } else {
-                throw SchemaValidationError(field: field, observed: value, expected: "JSON value")
-            }
+extension HeistValue {
+    var schemaObservedDescription: String {
+        switch self {
+        case .string(let value):
+            return "string \"\(value)\""
+        case .int(let value):
+            return "integer \(value)"
+        case .double(let value):
+            return "number \(Self.schemaFormatNumber(value))"
+        case .bool(let value):
+            return "boolean \(value)"
+        case .array(let values):
+            return "array count \(values.count)"
+        case .object:
+            return "object"
         }
+    }
 
-        init(_ value: HeistValue) {
-            switch value {
-            case .string(let value):
-                self = .string(value)
-            case .int(let value):
-                self = .int(value)
-            case .double(let value):
-                self = .double(value)
-            case .bool(let value):
-                self = .bool(value)
-            case .array(let values):
-                self = .array(values.map(CommandArgumentValue.init))
-            case .object(let values):
-                self = .object(values.mapValues(CommandArgumentValue.init))
-            }
+    private static func schemaFormatNumber(_ value: Double) -> String {
+        if value.rounded(.towardZero) == value {
+            return String(format: "%.1f", value)
         }
+        return String(value)
+    }
 
-        var rawValue: Any {
-            switch self {
-            case .string(let value):
-                return value
-            case .int(let value):
-                return value
-            case .double(let value):
-                return value
-            case .bool(let value):
-                return value
-            case .array(let values):
-                return values.map(\.rawValue)
-            case .object(let values):
-                return values.mapValues(\.rawValue)
-            case .null:
-                return NSNull()
-            }
+    var integerValue: Int? {
+        switch self {
+        case .int(let value):
+            return value
+        case .double(let value) where value.isFinite:
+            return Int(exactly: value)
+        default:
+            return nil
         }
+    }
 
-        var integerValue: Int? {
-            switch self {
-            case .int(let value):
-                return value
-            case .double(let value) where value.isFinite:
-                return Int(exactly: value)
-            default:
-                return nil
-            }
-        }
-
-        var numberValue: Double? {
-            switch self {
-            case .int(let value):
-                return Double(value)
-            case .double(let value) where value.isFinite:
-                return value
-            default:
-                return nil
-            }
+    var numberValue: Double? {
+        switch self {
+        case .int(let value):
+            return Double(value)
+        case .double(let value) where value.isFinite:
+            return value
+        default:
+            return nil
         }
     }
 }
@@ -152,7 +89,7 @@ extension TheFence {
 /// This keeps raw dictionaries at public decode edges while preserving the
 /// field-qualified diagnostics expected by the current command contract.
 extension TheFence.CommandArgumentReadable {
-    var keys: Dictionary<String, TheFence.CommandArgumentValue>.Keys {
+    var keys: Dictionary<String, HeistValue>.Keys {
         argumentValues.keys
     }
 
@@ -161,12 +98,8 @@ extension TheFence.CommandArgumentReadable {
         return value
     }
 
-    func observedValue(for key: String) -> Any? {
-        argumentValues[key]?.rawValue
-    }
-
     func observedDescription(for key: String) -> String? {
-        argumentValues[key].map { SchemaValidationError.observedDescription($0.rawValue) }
+        argumentValues[key]?.schemaObservedDescription
     }
 
     var observedDescription: String {
@@ -176,7 +109,7 @@ extension TheFence.CommandArgumentReadable {
     func schemaInteger(_ key: String) throws -> Int? {
         guard let value = argumentValues[key] else { return nil }
         guard let integer = value.integerValue else {
-            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "integer")
+            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "integer")
         }
         return integer
     }
@@ -192,14 +125,14 @@ extension TheFence.CommandArgumentReadable {
     func schemaString(_ key: String) throws -> String? {
         guard let value = argumentValues[key] else { return nil }
         guard case .string(let string) = value else {
-            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "string")
+            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "string")
         }
         return string
     }
 
     func requiredSchemaString(_ key: String) throws -> String {
         guard let value = try schemaString(key) else {
-            throw SchemaValidationError(field: field(key), observed: nil, expected: "string")
+            throw SchemaValidationError(field: field(key), observed: "missing", expected: "string")
         }
         return value
     }
@@ -207,7 +140,7 @@ extension TheFence.CommandArgumentReadable {
     func schemaBoolean(_ key: String) throws -> Bool? {
         guard let value = argumentValues[key] else { return nil }
         guard case .bool(let bool) = value else {
-            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "boolean")
+            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "boolean")
         }
         return bool
     }
@@ -215,14 +148,14 @@ extension TheFence.CommandArgumentReadable {
     func schemaNumber(_ key: String) throws -> Double? {
         guard let value = argumentValues[key] else { return nil }
         guard let number = value.numberValue else {
-            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "number")
+            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "number")
         }
         return number
     }
 
     func requiredSchemaNumber(_ key: String) throws -> Double {
         guard let value = try schemaNumber(key) else {
-            throw SchemaValidationError(field: field(key), observed: nil, expected: "number")
+            throw SchemaValidationError(field: field(key), observed: "missing", expected: "number")
         }
         return value
     }
@@ -230,13 +163,13 @@ extension TheFence.CommandArgumentReadable {
     func schemaStringArray(_ key: String) throws -> [String]? {
         guard let value = argumentValues[key] else { return nil }
         guard case .array(let array) = value else {
-            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "array of strings")
+            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "array of strings")
         }
         return try array.enumerated().map { index, item in
             guard case .string(let string) = item else {
                 throw SchemaValidationError(
                     field: "\(field(key))[\(index)]",
-                    observed: item.rawValue,
+                    observed: item.schemaObservedDescription,
                     expected: "string"
                 )
             }
@@ -247,13 +180,13 @@ extension TheFence.CommandArgumentReadable {
     func schemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject]? {
         guard let value = argumentValues[key] else { return nil }
         guard case .array(let array) = value else {
-            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "array of objects")
+            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "array of objects")
         }
         return try array.enumerated().map { index, item in
             guard case .object(let object) = item else {
                 throw SchemaValidationError(
                     field: "\(field(key))[\(index)]",
-                    observed: item.rawValue,
+                    observed: item.schemaObservedDescription,
                     expected: "object"
                 )
             }
@@ -263,7 +196,7 @@ extension TheFence.CommandArgumentReadable {
 
     func requiredSchemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject] {
         guard let array = try schemaObjectArray(key) else {
-            throw SchemaValidationError(field: field(key), observed: nil, expected: "array of objects")
+            throw SchemaValidationError(field: field(key), observed: "missing", expected: "array of objects")
         }
         return array
     }
@@ -273,17 +206,17 @@ extension TheFence.CommandArgumentReadable {
         guard case .object(let values) = value else {
             throw SchemaValidationError(
                 field: field(key),
-                observed: value.rawValue,
+                observed: value.schemaObservedDescription,
                 expected: "object with numeric x and y"
             )
         }
         let object = TheFence.CommandArgumentObject(values: values, fieldPrefix: field(key))
         try object.rejectUnknownKeys(allowed: ["x", "y"], expected: "valid unit point field")
         guard let x = try object.schemaNumber("x") else {
-            throw SchemaValidationError(field: object.field("x"), observed: nil, expected: "number")
+            throw SchemaValidationError(field: object.field("x"), observed: "missing", expected: "number")
         }
         guard let y = try object.schemaNumber("y") else {
-            throw SchemaValidationError(field: object.field("y"), observed: nil, expected: "number")
+            throw SchemaValidationError(field: object.field("y"), observed: "missing", expected: "number")
         }
         guard (0...1).contains(x) else {
             throw SchemaValidationError(field: object.field("x"), observed: x, expected: "number in 0...1")
@@ -299,7 +232,7 @@ extension TheFence.CommandArgumentReadable {
         guard let unknownKey = unknownKeys.first else { return }
         throw SchemaValidationError(
             field: field(unknownKey),
-            observed: argumentValues[unknownKey]?.rawValue,
+            observed: argumentValues[unknownKey]?.schemaObservedDescription ?? "missing",
             expected: expected
         )
     }
@@ -307,7 +240,7 @@ extension TheFence.CommandArgumentReadable {
     func schemaDictionary(_ key: String) throws -> TheFence.CommandArgumentObject? {
         guard let value = argumentValues[key] else { return nil }
         guard case .object(let object) = value else {
-            throw SchemaValidationError(field: field(key), observed: value.rawValue, expected: "object")
+            throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "object")
         }
         return TheFence.CommandArgumentObject(values: object, fieldPrefix: field(key))
     }
@@ -320,7 +253,7 @@ extension TheFence.CommandArgumentReadable {
         guard let value = E(rawValue: rawValue) else {
             throw SchemaValidationError(
                 field: field(key),
-                observed: rawValue as Any,
+                observed: "string \"\(rawValue)\"",
                 expected: SchemaValidationError.expectedEnum(type)
             )
         }
@@ -334,14 +267,14 @@ extension TheFence.CommandArgumentReadable {
         guard let rawValue = try schemaString(key) else {
             throw SchemaValidationError(
                 field: field(key),
-                observed: nil,
+                observed: "missing",
                 expected: SchemaValidationError.expectedEnum(type)
             )
         }
         guard let value = E(rawValue: rawValue) else {
             throw SchemaValidationError(
                 field: field(key),
-                observed: rawValue as Any,
+                observed: "string \"\(rawValue)\"",
                 expected: SchemaValidationError.expectedEnum(type)
             )
         }

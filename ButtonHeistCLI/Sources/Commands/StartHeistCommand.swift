@@ -17,11 +17,11 @@ struct StartHeistCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        let request = Self.fenceRequest([.app: .string(app)])
+        let request: CLIRequestParameters = [.app: .string(app)]
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request
+            operation: try Self.fenceOperation(request)
         )
     }
 }

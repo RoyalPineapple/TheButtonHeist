@@ -644,7 +644,7 @@ final class TheBrainsActionTests: XCTestCase {
                 elementTarget: target,
                 actionName: "Archive"
             )), false),
-            ("rotor", .rotor(RotorTarget(elementTarget: target, rotor: "Links")), false),
+            ("rotor", .rotor(RotorTarget(elementTarget: target, selection: .named("Links"))), false),
             ("tap", .oneFingerTap(TapTarget(selection: .element(target))), false),
             ("swipe", .swipe(SwipeTarget(selection: .unitElement(
                 target,
@@ -998,7 +998,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -1028,7 +1028,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), rotor: "Live Rotor")
+            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Live Rotor"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -1057,7 +1057,7 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), rotor: "Live Rotor")
+            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Live Rotor"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -1082,7 +1082,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -1109,7 +1109,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -1132,7 +1132,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), rotor: "Errors")
+            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)

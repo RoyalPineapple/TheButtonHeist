@@ -9,10 +9,14 @@ final class CommandProjectionTests: XCTestCase {
         XCTAssertEqual(target.gesturePointSelection(), GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20)))
     }
 
-    func testSwipeProjectionConvertsElementDirectionIntoUnitFrameGesture() throws {
-        let target = try JSONDecoder().decode(
-            SwipeTarget.self,
-            from: Data(#"{"heistId":"carousel","direction":"left"}"#.utf8)
+    func testSwipeProjectionConvertsElementDirectionIntoUnitFrameGesture() {
+        let target = SwipeTarget(
+            selection: .unitElement(
+                .heistId("carousel"),
+                start: SwipeDirection.left.defaultStart,
+                end: SwipeDirection.left.defaultEnd,
+                direction: .left
+            )
         )
 
         XCTAssertEqual(

@@ -11,7 +11,7 @@ struct ButtonHeistApp: AsyncParsableCommand {
             Common starter flow:
               buttonheist list_devices                      # Find devices
               buttonheist get_interface                     # Inspect UI hierarchy
-              buttonheist activate --identifier "myButton"  # Tap a control
+              buttonheist activate myButton                 # Tap a control
               buttonheist type_text "hello"                 # Type text
               buttonheist get_screen                        # Capture screen
 

@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "app": "com.buttonheist.testapp",
   "recorded": "2026-04-03T18:08:55Z",
   "steps": [
@@ -8,7 +8,11 @@
       "expect": {
         "type": "screen_changed"
       },
-      "label": "Todo List"
+      "target": {
+        "matcher": {
+          "label": "Todo List"
+        }
+      }
     },
     {
       "command": "activate",
@@ -31,10 +35,14 @@
           }
         ]
       },
-      "label": "Review PR, High priority",
-      "traits": [
-        "button"
-      ]
+      "target": {
+        "matcher": {
+          "label": "Review PR, High priority",
+          "traits": [
+            "button"
+          ]
+        }
+      }
     },
     {
       "command": "activate",
@@ -57,19 +65,27 @@
           }
         ]
       },
-      "label": "Fix bug, Low priority",
-      "traits": [
-        "button"
-      ]
+      "target": {
+        "matcher": {
+          "label": "Fix bug, Low priority",
+          "traits": [
+            "button"
+          ]
+        }
+      }
     },
     {
       "command": "activate",
       "expect": {
         "type": "screen_changed"
       },
-      "traits": [
-        "textEntry"
-      ]
+      "target": {
+        "matcher": {
+          "traits": [
+            "textEntry"
+          ]
+        }
+      }
     },
     {
       "command": "type_text",
@@ -126,10 +142,14 @@
           }
         ]
       },
-      "label": "Add",
-      "traits": [
-        "button"
-      ]
+      "target": {
+        "matcher": {
+          "label": "Add",
+          "traits": [
+            "button"
+          ]
+        }
+      }
     },
     {
       "command": "activate",
@@ -186,25 +206,37 @@
           }
         ]
       },
-      "label": "Active"
+      "target": {
+        "matcher": {
+          "label": "Active"
+        }
+      }
     },
     {
       "command": "activate",
       "expect": {
         "type": "screen_changed"
       },
-      "label": "ButtonHeist Demo",
-      "traits": [
-        "button",
-        "backButton"
-      ]
+      "target": {
+        "matcher": {
+          "label": "ButtonHeist Demo",
+          "traits": [
+            "button",
+            "backButton"
+          ]
+        }
+      }
     },
     {
       "command": "activate",
       "expect": {
         "type": "screen_changed"
       },
-      "label": "Calculator"
+      "target": {
+        "matcher": {
+          "label": "Calculator"
+        }
+      }
     },
     {
       "command": "activate",
@@ -213,7 +245,11 @@
         "newValue": "1",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit1"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit1"
+        }
+      }
     },
     {
       "command": "activate",
@@ -222,7 +258,11 @@
         "newValue": "12",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit2"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit2"
+        }
+      }
     },
     {
       "command": "activate",
@@ -231,7 +271,11 @@
         "newValue": "123",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit3"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit3"
+        }
+      }
     },
     {
       "command": "activate",
@@ -240,7 +284,11 @@
         "newValue": "1234",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit4"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit4"
+        }
+      }
     },
     {
       "command": "activate",
@@ -249,7 +297,11 @@
         "newValue": "button, selected",
         "property": "traits"
       },
-      "identifier": "buttonheist.calc.multiply"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.multiply"
+        }
+      }
     },
     {
       "command": "activate",
@@ -258,7 +310,11 @@
         "newValue": "button",
         "property": "traits"
       },
-      "identifier": "buttonheist.calc.digit5"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit5"
+        }
+      }
     },
     {
       "command": "activate",
@@ -267,7 +323,11 @@
         "newValue": "56",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit6"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit6"
+        }
+      }
     },
     {
       "command": "activate",
@@ -276,7 +336,11 @@
         "newValue": "567",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit7"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit7"
+        }
+      }
     },
     {
       "command": "activate",
@@ -285,7 +349,11 @@
         "newValue": "5678",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit8"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit8"
+        }
+      }
     },
     {
       "command": "activate",
@@ -294,7 +362,11 @@
         "newValue": "7006652",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.equals"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.equals"
+        }
+      }
     },
     {
       "command": "activate",
@@ -303,7 +375,11 @@
         "newValue": "button, selected",
         "property": "traits"
       },
-      "identifier": "buttonheist.calc.divide"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.divide"
+        }
+      }
     },
     {
       "command": "activate",
@@ -312,7 +388,11 @@
         "newValue": "button",
         "property": "traits"
       },
-      "identifier": "buttonheist.calc.digit4"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit4"
+        }
+      }
     },
     {
       "command": "activate",
@@ -321,7 +401,11 @@
         "newValue": "42",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.digit2"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.digit2"
+        }
+      }
     },
     {
       "command": "activate",
@@ -330,25 +414,37 @@
         "newValue": "166825.04761905",
         "property": "label"
       },
-      "identifier": "buttonheist.calc.equals"
+      "target": {
+        "matcher": {
+          "identifier": "buttonheist.calc.equals"
+        }
+      }
     },
     {
       "command": "activate",
       "expect": {
         "type": "screen_changed"
       },
-      "label": "ButtonHeist Demo",
-      "traits": [
-        "button",
-        "backButton"
-      ]
+      "target": {
+        "matcher": {
+          "label": "ButtonHeist Demo",
+          "traits": [
+            "button",
+            "backButton"
+          ]
+        }
+      }
     },
     {
       "command": "activate",
       "expect": {
         "type": "screen_changed"
       },
-      "label": "Touch Canvas"
+      "target": {
+        "matcher": {
+          "label": "Touch Canvas"
+        }
+      }
     },
     {
       "_recorded": {
@@ -398,11 +494,15 @@
       "expect": {
         "type": "screen_changed"
       },
-      "label": "ButtonHeist Demo",
-      "traits": [
-        "button",
-        "backButton"
-      ]
+      "target": {
+        "matcher": {
+          "label": "ButtonHeist Demo",
+          "traits": [
+            "button",
+            "backButton"
+          ]
+        }
+      }
     }
   ]
 }

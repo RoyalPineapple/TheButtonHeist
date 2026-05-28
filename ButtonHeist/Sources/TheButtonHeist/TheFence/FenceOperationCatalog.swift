@@ -17,6 +17,9 @@ public struct NormalizedOperation {
     let request: TheFence.RoutedCommandRequest
 
     public func stringArgument(_ key: String) -> String? { request.string(key) }
+    public func argumentValue(_ key: String) -> HeistValue? {
+        request.argumentEnvelopeForRequestDecoding().argumentValues[key]
+    }
 
     init(
         command: TheFence.Command,
@@ -44,6 +47,13 @@ public enum FenceOperationCatalog {
         return normalizeToolOperation(command: contract.command, arguments: arguments)
     }
 
+    public static func normalizeCommand(
+        _ command: TheFence.Command,
+        arguments: TheFence.CommandArgumentEnvelope
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        normalizeToolOperation(command: command, arguments: arguments)
+    }
+
     public static func normalizeBatchStep(
         _ step: TheFence.CommandArgumentObject
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
@@ -54,10 +64,7 @@ public enum FenceOperationCatalog {
         )
     }
 
-    public static func normalizePlaybackStep(
-        commandName: String,
-        arguments _: [String: HeistValue]
-    ) -> Result<TheFence.Command, FenceOperationRoutingError> {
+    public static func normalizePlaybackStep(commandName: String) -> Result<TheFence.Command, FenceOperationRoutingError> {
         normalizeTypedPlaybackStep(
             commandName: commandName,
             context: "heist step"
@@ -158,7 +165,7 @@ public enum FenceOperationCatalog {
                 guard enumValues.contains(value) else {
                     return .init(message: SchemaValidationError(
                         field: parameter.key,
-                        observed: SchemaValidationError.observedDescription(value),
+                        observed: "string \"\(value)\"",
                         expected: SchemaValidationError.expectedEnumValues(enumValues)
                     ).message)
                 }

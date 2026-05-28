@@ -166,37 +166,90 @@ extension TextRangeReference: CustomStringConvertible {
     }
 }
 
+public enum RotorSelection: Equatable, Hashable, Sendable {
+    case automatic
+    case named(String)
+    case index(Int)
+
+    public var rotorName: String? {
+        guard case .named(let name) = self else { return nil }
+        return name
+    }
+
+    public var rotorIndex: Int? {
+        guard case .index(let index) = self else { return nil }
+        return index
+    }
+}
+
+extension RotorSelection: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .automatic:
+            return "automatic"
+        case .named(let name):
+            return ScoreDescription.stringField("name", name) ?? "name=\"\""
+        case .index(let index):
+            return ScoreDescription.valueField("index", index) ?? "index=\(index)"
+        }
+    }
+}
+
+public enum RotorContinuation: Equatable, Hashable, Sendable {
+    case none
+    case item(HeistId)
+    case textRange(HeistId, TextRangeReference)
+
+    public var currentHeistId: HeistId? {
+        switch self {
+        case .none:
+            return nil
+        case .item(let heistId), .textRange(let heistId, _):
+            return heistId
+        }
+    }
+
+    public var currentTextRange: TextRangeReference? {
+        guard case .textRange(_, let range) = self else { return nil }
+        return range
+    }
+}
+
+extension RotorContinuation: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .none:
+            return "noContinuation"
+        case .item(let heistId):
+            return ScoreDescription.stringField("currentHeistId", heistId) ?? "currentHeistId=\"\""
+        case .textRange(let heistId, let range):
+            return [
+                ScoreDescription.stringField("currentHeistId", heistId) ?? "currentHeistId=\"\"",
+                range.description,
+            ].joined(separator: ", ")
+        }
+    }
+}
+
 /// Target for moving through a rotor.
 public struct RotorTarget: Sendable {
     /// Element whose `accessibilityCustomRotors` should be used.
     public let elementTarget: ElementTarget
-    /// Select a rotor by display/name. When omitted, `rotorIndex` is used.
-    public let rotor: String?
-    /// Select a rotor by zero-based index when the name is omitted or ambiguous.
-    public let rotorIndex: Int?
+    public let selection: RotorSelection
     /// Direction to move.
     public let direction: RotorDirection
-    /// Optional heistId for the current rotor item. Use the previous result's
-    /// heistId to continue moving through a rotor like a VoiceOver user.
-    public let currentHeistId: HeistId?
-    /// Optional text-range cursor for continuing through text-range rotor
-    /// results inside the element identified by `currentHeistId`.
-    public let currentTextRange: TextRangeReference?
+    public let continuation: RotorContinuation
 
     public init(
         elementTarget: ElementTarget,
-        rotor: String? = nil,
-        rotorIndex: Int? = nil,
+        selection: RotorSelection = .automatic,
         direction: RotorDirection = .next,
-        currentHeistId: HeistId? = nil,
-        currentTextRange: TextRangeReference? = nil
+        continuation: RotorContinuation = .none
     ) {
         self.elementTarget = elementTarget
-        self.rotor = rotor
-        self.rotorIndex = rotorIndex
+        self.selection = selection
         self.direction = direction
-        self.currentHeistId = currentHeistId
-        self.currentTextRange = currentTextRange
+        self.continuation = continuation
     }
 
     public var resolvedDirection: RotorDirection { direction }
@@ -206,11 +259,9 @@ extension RotorTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("rotor", [
             elementTarget.description,
-            ScoreDescription.stringField("name", rotor),
-            ScoreDescription.valueField("index", rotorIndex),
+            selection == .automatic ? nil : selection.description,
             ScoreDescription.valueField("direction", direction),
-            ScoreDescription.stringField("currentHeistId", currentHeistId),
-            currentTextRange?.description,
+            continuation == .none ? nil : continuation.description,
         ].compactMap { $0 })
     }
 }
@@ -227,17 +278,30 @@ extension RotorTarget: Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         elementTarget = try ElementTarget(from: decoder)
-        rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
-        rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
-        direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
-        currentHeistId = try container.decodeIfPresent(HeistId.self, forKey: .currentHeistId)
-        currentTextRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .currentTextRange)
+        let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
+        let rotorIndex = try container.decodeIfPresent(Int.self, forKey: .rotorIndex)
+        if rotor != nil, rotorIndex != nil {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: "rotor accepts either rotor or rotorIndex, not both"
+            ))
+        }
         if let rotorIndex, rotorIndex < 0 {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
                 debugDescription: "rotorIndex must be non-negative, got \(rotorIndex)"
             ))
         }
+        selection = if let rotor {
+            .named(rotor)
+        } else if let rotorIndex {
+            .index(rotorIndex)
+        } else {
+            .automatic
+        }
+        direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
+        let currentHeistId = try container.decodeIfPresent(HeistId.self, forKey: .currentHeistId)
+        let currentTextRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .currentTextRange)
         if let currentTextRange {
             guard currentTextRange.startOffset >= 0,
                   currentTextRange.endOffset >= currentTextRange.startOffset else {
@@ -246,16 +310,40 @@ extension RotorTarget: Codable {
                     debugDescription: "currentTextRange must use non-negative offsets with endOffset >= startOffset"
                 ))
             }
+            guard let currentHeistId else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath + [CodingKeys.currentHeistId],
+                    debugDescription: "currentTextRange requires currentHeistId"
+                ))
+            }
+            continuation = .textRange(currentHeistId, currentTextRange)
+        } else if let currentHeistId {
+            continuation = .item(currentHeistId)
+        } else {
+            continuation = .none
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         try elementTarget.encode(to: encoder)
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(rotor, forKey: .rotor)
-        try container.encodeIfPresent(rotorIndex, forKey: .rotorIndex)
+        switch selection {
+        case .automatic:
+            break
+        case .named(let rotor):
+            try container.encode(rotor, forKey: .rotor)
+        case .index(let rotorIndex):
+            try container.encode(rotorIndex, forKey: .rotorIndex)
+        }
         try container.encode(direction, forKey: .direction)
-        try container.encodeIfPresent(currentHeistId, forKey: .currentHeistId)
-        try container.encodeIfPresent(currentTextRange, forKey: .currentTextRange)
+        switch continuation {
+        case .none:
+            break
+        case .item(let heistId):
+            try container.encode(heistId, forKey: .currentHeistId)
+        case .textRange(let heistId, let range):
+            try container.encode(heistId, forKey: .currentHeistId)
+            try container.encode(range, forKey: .currentTextRange)
+        }
     }
 }

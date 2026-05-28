@@ -50,15 +50,27 @@ struct PublicPlaybackFailure: Encodable {
 }
 
 struct PublicPlaybackTarget: Encodable {
+    let matcher: PublicPlaybackMatcher
+    let ordinal: Int?
+
+    init(target: SemanticActionTarget) {
+        self.matcher = PublicPlaybackMatcher(matcher: target.matcher)
+        self.ordinal = target.ordinal
+    }
+}
+
+struct PublicPlaybackMatcher: Encodable {
     let label: String?
     let identifier: String?
     let value: String?
     let traits: [String]?
+    let excludeTraits: [String]?
 
-    init(target: ElementMatcher) {
-        self.label = target.label
-        self.identifier = target.identifier
-        self.value = target.value
-        self.traits = target.traits?.map(\.rawValue)
+    init(matcher: ElementMatcher) {
+        self.label = matcher.label
+        self.identifier = matcher.identifier
+        self.value = matcher.value
+        self.traits = matcher.traits?.map(\.rawValue)
+        self.excludeTraits = matcher.excludeTraits?.map(\.rawValue)
     }
 }

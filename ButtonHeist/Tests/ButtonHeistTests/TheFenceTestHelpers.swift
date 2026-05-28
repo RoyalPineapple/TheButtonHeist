@@ -31,20 +31,66 @@ enum TheFenceFixtures {
 
 extension TheFence {
     @ButtonHeistActor
-    func parseRequest(command: Command, request: [String: Any]) throws -> ParsedRequest {
-        var arguments = request
-        arguments.removeValue(forKey: "command")
-        return try parseRequest(
+    func parseRequest(command: Command, values: [String: HeistValue] = [:]) throws -> ParsedRequest {
+        try parseRequest(
             command: command,
-            arguments: CommandArgumentEnvelope(arguments: arguments)
+            arguments: CommandArgumentEnvelope(values: values)
         )
+    }
+
+    @ButtonHeistActor
+    func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
+        try await execute(operation: NormalizedOperation(
+            command: command,
+            arguments: CommandArgumentEnvelope(values: values)
+        ))
     }
 }
 
-extension TheFence.PlaybackOperation {
-    func requestDecodeInputArguments() -> [String: Any] {
-        requestDecodeInputEnvelope().argumentValues.mapValues(\.rawValue)
-    }
+func semanticTarget(
+    sourceHeistId: HeistId? = nil,
+    label: String? = nil,
+    identifier: String? = nil,
+    value: String? = nil,
+    traits: [HeistTrait]? = nil,
+    excludeTraits: [HeistTrait]? = nil,
+    ordinal: Int? = nil
+) -> SemanticActionTarget {
+    SemanticActionTarget(
+        sourceHeistId: sourceHeistId,
+        matcher: ElementMatcher(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits
+        ),
+        ordinal: ordinal
+    )
+}
+
+func targetArgumentValue(heistId: String) -> HeistValue {
+    .object(["heistId": .string(heistId)])
+}
+
+func targetArgumentValue(
+    label: String? = nil,
+    identifier: String? = nil,
+    value: String? = nil,
+    traits: [String]? = nil,
+    excludeTraits: [String]? = nil,
+    ordinal: Int? = nil
+) -> HeistValue {
+    var matcher: [String: HeistValue] = [:]
+    if let label { matcher["label"] = .string(label) }
+    if let identifier { matcher["identifier"] = .string(identifier) }
+    if let value { matcher["value"] = .string(value) }
+    if let traits { matcher["traits"] = .array(traits.map { .string($0) }) }
+    if let excludeTraits { matcher["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
+
+    var target: [String: HeistValue] = ["matcher": .object(matcher)]
+    if let ordinal { target["ordinal"] = .int(ordinal) }
+    return .object(target)
 }
 
 @ButtonHeistActor

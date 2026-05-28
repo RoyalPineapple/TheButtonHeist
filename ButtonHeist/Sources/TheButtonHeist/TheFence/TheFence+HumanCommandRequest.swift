@@ -211,6 +211,6 @@ private struct FenceHumanRequestDraft {
 
     private mutating func applyElementTarget(_ tokens: [String]) {
         guard let first = tokens.first else { return }
-        self[.heistId] = .string(first)
+        self[.target] = .object([FenceParameterKey.heistId.rawValue: .string(first)])
     }
 }

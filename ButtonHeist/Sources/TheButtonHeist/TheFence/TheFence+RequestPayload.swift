@@ -8,30 +8,7 @@ extension TheFence {
         let command: String
     }
 
-    enum RequestPayload {
-        case none
-        case dismissKeyboard
-        case getPasteboard
-        case getInterface(GetInterfaceRequest)
-        case screen(ScreenRequest)
-        case artifact(ArtifactRequest)
-        case gesture(GesturePayload)
-        case scroll(ScrollPayload)
-        case accessibility(AccessibilityPayload)
-        case rotor(RotorTarget)
-        case typeText(TypeTextTarget)
-        case editAction(EditActionTarget)
-        case setPasteboard(SetPasteboardTarget)
-        case waitFor(WaitForTarget)
-        case waitForChange(ExpectationPayload)
-        case startRecording(RecordingConfig)
-        case connect(ConnectRequest)
-        case runBatch(RunBatchRequest)
-        case archiveSession(ArchiveSessionRequest)
-        case startHeist(StartHeistRequest)
-        case stopHeist(StopHeistRequest)
-        case playHeist(PlayHeistRequest)
-    }
+    typealias ParsedRequestHandler = @ButtonHeistActor (TheFence, ParsedRequest) async throws -> FenceResponse
 
     struct GetInterfaceRequest {
         let detail: InterfaceDetail
@@ -52,150 +29,6 @@ extension TheFence {
         let includeInteractionLog: Bool
     }
 
-    enum GesturePayload {
-        case oneFingerTap(TapGesturePayload)
-        case longPress(LongPressGesturePayload)
-        case swipe(SwipeGesturePayload)
-        case drag(DragGesturePayload)
-        case pinch(PinchGesturePayload)
-        case rotate(RotateGesturePayload)
-        case twoFingerTap(TwoFingerTapGesturePayload)
-        case drawPath(DrawPathGesturePayload)
-        case drawBezier(DrawBezierGesturePayload)
-    }
-
-    struct TapGesturePayload {
-        let selection: GesturePointSelection
-
-        var target: TapTarget {
-            TapTarget(selection: selection)
-        }
-    }
-
-    struct LongPressGesturePayload {
-        let selection: GesturePointSelection
-        let duration: Double
-
-        var target: LongPressTarget {
-            LongPressTarget(
-                selection: selection,
-                duration: duration
-            )
-        }
-    }
-
-    struct SwipeGesturePayload {
-        let selection: SwipeGestureSelection
-        let duration: Double?
-
-        var target: SwipeTarget {
-            SwipeTarget(
-                selection: selection,
-                duration: duration
-            )
-        }
-    }
-
-    struct DragGesturePayload {
-        let start: GesturePointSelection
-        let endX: Double
-        let endY: Double
-        let duration: Double?
-
-        var target: DragTarget {
-            DragTarget(
-                start: start,
-                end: ScreenPoint(x: endX, y: endY),
-                duration: duration
-            )
-        }
-    }
-
-    struct PinchGesturePayload {
-        let center: GesturePointSelection
-        let scale: Double
-        let spread: Double?
-        let duration: Double?
-
-        var target: PinchTarget {
-            PinchTarget(
-                center: center,
-                scale: scale,
-                spread: spread,
-                duration: duration
-            )
-        }
-    }
-
-    struct RotateGesturePayload {
-        let center: GesturePointSelection
-        let angle: Double
-        let radius: Double?
-        let duration: Double?
-
-        var target: RotateTarget {
-            RotateTarget(
-                center: center,
-                angle: angle,
-                radius: radius,
-                duration: duration
-            )
-        }
-    }
-
-    struct TwoFingerTapGesturePayload {
-        let center: GesturePointSelection
-        let spread: Double?
-
-        var target: TwoFingerTapTarget {
-            TwoFingerTapTarget(
-                center: center,
-                spread: spread
-            )
-        }
-    }
-
-    struct DrawPathGesturePayload {
-        let points: [PathPoint]
-        let duration: Double?
-        let velocity: Double?
-
-        var target: DrawPathTarget {
-            DrawPathTarget(points: points, duration: duration, velocity: velocity)
-        }
-    }
-
-    struct DrawBezierGesturePayload {
-        let startX: Double
-        let startY: Double
-        let segments: [BezierSegment]
-        let samplesPerSegment: Int?
-        let duration: Double?
-        let velocity: Double?
-
-        var target: DrawBezierTarget {
-            DrawBezierTarget(
-                startX: startX,
-                startY: startY,
-                segments: segments,
-                samplesPerSegment: samplesPerSegment,
-                duration: duration,
-                velocity: velocity
-            )
-        }
-    }
-
-    enum ScrollPayload {
-        case scroll(ScrollTarget)
-        case scrollToVisible(ScrollToVisibleTarget)
-        case elementSearch(ElementSearchTarget)
-        case scrollToEdge(ScrollToEdgeTarget)
-    }
-
-    enum AccessibilityPayload {
-        case activate(ElementTarget, actionName: String?, count: CountArgument)
-    }
-
     struct CountArgument {
         let value: Int?
         let observed: String?
@@ -214,35 +47,40 @@ extension TheFence {
 
     struct RunBatchPreparedStep {
         let originalIndex: Int
-        let commandName: String
+        let command: Command
         let typedStep: TheScore.BatchStep
 
         init(
             originalIndex: Int,
-            commandName: String,
+            command: Command,
             typedStep: TheScore.BatchStep
         ) {
             self.originalIndex = originalIndex
-            self.commandName = commandName
+            self.command = command
             self.typedStep = typedStep
         }
+
+        var commandName: String { command.rawValue }
     }
 
-    struct DecodedRequestPayload {
-        let payload: RequestPayload
+    struct DecodedRequestDispatch {
         let executableMessages: [ClientMessage]?
+        let handler: ParsedRequestHandler
 
-        init(payload: RequestPayload, executableMessages: [ClientMessage]? = nil) {
-            self.payload = payload
+        init(
+            executableMessages: [ClientMessage]? = nil,
+            handler: @escaping ParsedRequestHandler
+        ) {
             self.executableMessages = executableMessages
+            self.handler = handler
         }
     }
 
     struct ParsedRequest {
         let command: Command
         let requestId: String
-        let payload: RequestPayload
         let executableMessages: [ClientMessage]?
+        let handler: ParsedRequestHandler
         let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit).
         let immediateResponse: FenceResponse?
@@ -250,17 +88,28 @@ extension TheFence {
         init(
             command: Command,
             requestId: String,
-            payload: RequestPayload,
-            executableMessages: [ClientMessage]? = nil,
+            dispatch: DecodedRequestDispatch,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
-            self.payload = payload
-            self.executableMessages = executableMessages
+            self.executableMessages = dispatch.executableMessages
+            self.handler = dispatch.handler
             self.expectationPayload = expectationPayload
             self.immediateResponse = immediateResponse
+        }
+    }
+
+    static func clientActionDispatch(_ messages: [ClientMessage]) -> DecodedRequestDispatch {
+        DecodedRequestDispatch(executableMessages: messages) { fence, request in
+            try await fence.handleClientActionRequest(request)
+        }
+    }
+
+    static func emptyDispatch(command: Command) -> DecodedRequestDispatch {
+        DecodedRequestDispatch { _, _ in
+            .error("Unexpected command in dispatch: \(command.rawValue)")
         }
     }
 
@@ -304,29 +153,11 @@ extension TheFence {
         let inputPath: String
     }
 
-    /// Parse and validate a raw request dictionary into typed fields.
-    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit
-    /// so the caller short-circuits without logging or dispatching.
-    func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
-        let requestEnvelope = try CommandArgumentEnvelope(arguments: request, droppingCommandKey: false)
-        let commandString = try requestEnvelope.requiredSchemaString("command")
-        guard let command = Command(rawValue: commandString) else {
-            return ParsedRequest(
-                command: .help,
-                requestId: "",
-                payload: .none,
-                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-                immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
-            )
-        }
-        return try parseRequest(command: command, arguments: requestEnvelope.dropping("command"))
-    }
-
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
         guard command.descriptor.isPublicRequestContract else {
             throw SchemaValidationError(
                 field: "command",
-                observed: command.rawValue as Any,
+                observed: "string \"\(command.rawValue)\"",
                 expected: "public Button Heist command"
             )
         }
@@ -347,30 +178,28 @@ extension TheFence {
             return ParsedRequest(
                 command: command,
                 requestId: "",
-                payload: .none,
+                dispatch: Self.emptyDispatch(command: command),
                 expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
                 immediateResponse: immediate
             )
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
-        let decodedPayload: DecodedRequestPayload = if command.requestPayloadKind == .waitForChange {
-            DecodedRequestPayload(
-                payload: .waitForChange(expectationPayload),
-                executableMessages: [.waitForChange(WaitForChangeTarget(
-                    expect: expectationPayload.expectation,
-                    timeout: expectationPayload.timeout
-                ))]
+        let dispatch: DecodedRequestDispatch
+        if command.requestPayloadKind == .waitForChange {
+            let target = WaitForChangeTarget(
+                expect: expectationPayload.expectation,
+                timeout: expectationPayload.timeout
             )
+            dispatch = Self.clientActionDispatch([.waitForChange(target)])
         } else {
-            try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
+            dispatch = try decodeRequestDispatch(command: command, arguments: arguments, requestId: requestId)
         }
 
         return ParsedRequest(
             command: command,
             requestId: requestId,
-            payload: decodedPayload.payload,
-            executableMessages: decodedPayload.executableMessages,
+            dispatch: dispatch,
             expectationPayload: expectationPayload,
             immediateResponse: nil
         )
@@ -394,7 +223,7 @@ extension TheFence {
         }
         throw SchemaValidationError(
             field: unexpectedKey,
-            observed: arguments.observedValue(for: unexpectedKey),
+            observed: arguments.observedDescription(for: unexpectedKey) ?? "missing",
             expected: "valid \(command.rawValue) parameter"
         )
     }
@@ -403,34 +232,51 @@ extension TheFence {
         try parseRequest(operation: operation.normalizedOperation())
     }
 
-    func decodeRequestPayload(
+    func decodeRequestDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope,
         requestId: String
-    ) throws -> DecodedRequestPayload {
+    ) throws -> DecodedRequestDispatch {
         switch command.requestPayloadKind {
         case .none:
             if command == .dismissKeyboard {
-                return DecodedRequestPayload(payload: .dismissKeyboard, executableMessages: [.resignFirstResponder])
+                return Self.clientActionDispatch([.resignFirstResponder])
             }
             if command == .getPasteboard {
-                return DecodedRequestPayload(payload: .getPasteboard, executableMessages: [.getPasteboard])
+                return Self.clientActionDispatch([.getPasteboard])
             }
-            return DecodedRequestPayload(payload: .none)
+            return try decodeControlDispatch(command)
         case .observation:
-            return DecodedRequestPayload(payload: try decodeObservationPayload(
+            return try decodeObservationDispatch(
                 command: command,
                 arguments: arguments,
                 requestId: requestId
-            ))
+            )
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
         case .gesture:
-            return try decodeGestureRequestPayload(command: command, arguments: arguments)
+            return try decodeGestureRequestDispatch(command: command, arguments: arguments)
         case .elementAction:
-            return try decodeElementActionPayload(command: command, arguments: arguments)
+            return try decodeElementActionDispatch(command: command, arguments: arguments)
         case .session:
-            return DecodedRequestPayload(payload: try decodeSessionPayload(command: command, arguments: arguments))
+            return try decodeSessionDispatch(command: command, arguments: arguments)
+        }
+    }
+
+    private func decodeControlDispatch(_ command: Command) throws -> DecodedRequestDispatch {
+        switch command {
+        case .ping:
+            return DecodedRequestDispatch { fence, _ in try await fence.handlePing() }
+        case .listDevices:
+            return DecodedRequestDispatch { fence, _ in try await fence.handleListDevices() }
+        case .getSessionState:
+            return DecodedRequestDispatch { fence, _ in .sessionState(payload: fence.currentSessionState()) }
+        case .listTargets:
+            return DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
+        case .getSessionLog:
+            return DecodedRequestDispatch { fence, _ in try fence.handleGetSessionLog() }
+        default:
+            throw FenceError.invalidRequest("Unexpected no-payload command: \(command.rawValue)")
         }
     }
 }

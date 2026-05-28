@@ -1,5 +1,3 @@
-import CoreGraphics
-
 public struct DragTarget: Codable, Sendable {
     public static let defaultDuration = 0.5
 
@@ -12,35 +10,6 @@ public struct DragTarget: Codable, Sendable {
         self.start = start
         self.end = end
         self.duration = duration
-    }
-
-    public var elementTarget: ElementTarget? {
-        start.elementTarget
-    }
-
-    public var startX: Double? {
-        start.pointX
-    }
-
-    public var startY: Double? {
-        start.pointY
-    }
-
-    public var endX: Double {
-        end.x
-    }
-
-    public var endY: Double {
-        end.y
-    }
-
-    public var startPoint: CGPoint? {
-        guard let x = startX, let y = startY else { return nil }
-        return CGPoint(x: x, y: y)
-    }
-
-    public var endPoint: CGPoint {
-        end.cgPoint
     }
 
     public var resolvedDuration: Double { duration ?? Self.defaultDuration }
@@ -99,11 +68,8 @@ private enum DragPointCodingKeys: String, CodingKey {
 extension DragTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("drag", [
-            elementTarget?.description,
-            startX.map { "startX=\(ScoreDescription.decimal($0))" },
-            startY.map { "startY=\(ScoreDescription.decimal($0))" },
-            "endX=\(ScoreDescription.decimal(endX))",
-            "endY=\(ScoreDescription.decimal(endY))",
+            "start=\(start)",
+            "end=\(end)",
             duration.map { "duration=\(ScoreDescription.decimal($0))" },
         ].compactMap { $0 })
     }

@@ -7,7 +7,7 @@ import Foundation
 /// wire fields to typed commands before execution.
 public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     /// Current heist file format version.
     public let version: Int
@@ -82,24 +82,20 @@ extension HeistPlayback: CustomStringConvertible {
 
 // MARK: - Heist Step
 
-/// A single command in a heist playback. Contains the command name, matcher-based
-/// element targeting fields, command-specific arguments, and optional recording metadata.
+/// A single command in a heist playback. Contains the command name, durable
+/// semantic target, command-specific arguments, and optional recording metadata.
 ///
-/// The step is structured so that dropping `_recorded` yields a valid
-/// TheFence.execute(request:) dictionary — matcher fields sit at the top level
-/// alongside command-specific args, exactly as TheFence expects.
+/// The step is structured so that dropping `_recorded` yields typed command
+/// arguments for playback. Element identity lives under `target`; top-level
+/// matcher fields are not a playback contract.
 public struct HeistEvidence: Codable, Sendable, Equatable {
     /// The `TheFence.Command` raw value (e.g. `"activate"`, `"type_text"`,
     /// `"swipe"`). Stored as a string rather than the enum because `Command`
     /// lives in TheButtonHeist (iOS-only) and TheScore must be portable across
     /// iOS + macOS.
     public let command: String
-    /// Element matcher fields — nil means the command doesn't target an element.
-    /// Ordinal only disambiguates a non-empty matcher.
-    public let target: ElementMatcher?
-    /// 0-based selection index when the matcher is ambiguous (multiple elements
-    /// share the same label/traits). Nil when the matcher uniquely identifies the element.
-    public let ordinal: Int?
+    /// Durable semantic target — nil means the command doesn't target an element.
+    public let target: SemanticActionTarget?
     /// Command-specific arguments (direction, text, duration, etc.).
     /// Excludes command name and element targeting fields.
     public let arguments: [String: HeistValue]
@@ -108,65 +104,39 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
 
     public init(
         command: String,
-        target: ElementMatcher? = nil,
-        ordinal: Int? = nil,
+        target: SemanticActionTarget? = nil,
         arguments: [String: HeistValue] = [:],
         recorded: RecordedMetadata? = nil
     ) {
         self.command = command
         self.target = target
-        self.ordinal = ordinal
         self.arguments = arguments
         self.recorded = recorded
     }
 
-    // MARK: - Codable (flat wire format)
+    // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
-        case command
-        case label, identifier, value, traits, excludeTraits
-        case ordinal
+        case command, target
         case recorded = "_recorded"
     }
 
     /// Keys that belong to element targeting or step metadata, not command arguments.
     private static let reservedKeys: Set<String> = [
-        "command", "label", "identifier", "value", "traits", "excludeTraits", "ordinal", "_recorded",
+        "command", "target", "_recorded",
     ]
-    private static let forbiddenArgumentKeys: Set<String> = ["heistId"]
+    private static let forbiddenArgumentKeys: Set<String> = [
+        "heistId", "label", "identifier", "value", "traits", "excludeTraits", "ordinal",
+    ]
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         command = try container.decode(String.self, forKey: .command)
 
-        let matcher = ElementMatcher(
-            label: try container.decodeIfPresent(String.self, forKey: .label),
-            identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
-            value: try container.decodeIfPresent(String.self, forKey: .value),
-            traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
-            excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
-        )
-        let decodedOrdinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-        if let decodedOrdinal, decodedOrdinal < 0 {
-            throw DecodingError.dataCorruptedError(
-                forKey: .ordinal,
-                in: container,
-                debugDescription: "ordinal must be non-negative, got \(decodedOrdinal)"
-            )
-        }
-        ordinal = decodedOrdinal
-        if decodedOrdinal != nil, matcher.nonEmpty == nil {
-            throw DecodingError.dataCorruptedError(
-                forKey: .ordinal,
-                in: container,
-                debugDescription: "ordinal only disambiguates matcher results; playback steps require matcher fields"
-            )
-        }
-        target = matcher.nonEmpty
-
+        target = try container.decodeIfPresent(SemanticActionTarget.self, forKey: .target)
         recorded = try container.decodeIfPresent(RecordedMetadata.self, forKey: .recorded)
 
-        // Everything else in the flat object is a command argument.
+        // Everything else in the step object is a command argument.
         let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
         var extraArguments: [String: HeistValue] = [:]
         for key in dynamicContainer.allKeys {
@@ -175,8 +145,8 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: decoder.codingPath + [key],
                     debugDescription: """
-                    Heist playback step must not contain top-level heistId; use matcher fields for durable \
-                    playback identity and _recorded.heistId for metadata
+                    Heist playback step must not contain top-level \(key.stringValue); use target.matcher for \
+                    durable playback identity and _recorded.heistId for metadata
                     """
                 ))
             }
@@ -192,39 +162,15 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             throw EncodingError.invalidValue(arguments, .init(
                 codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: forbiddenKey)],
                 debugDescription: """
-                Heist playback step must not contain top-level \(forbiddenKey); use matcher fields for durable \
+                Heist playback step must not contain top-level \(forbiddenKey); use target.matcher for durable \
                 playback identity and _recorded.heistId for metadata
-                """
-            ))
-        }
-        if target?.heistId != nil {
-            throw EncodingError.invalidValue(target as Any, .init(
-                codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: "heistId")],
-                debugDescription: """
-                Heist playback target matcher must not contain heistId; use matcher fields for durable \
-                playback identity and _recorded.heistId for metadata
-                """
-            ))
-        }
-        if ordinal != nil, target?.nonEmpty == nil {
-            throw EncodingError.invalidValue(self, .init(
-                codingPath: encoder.codingPath + [DynamicCodingKey(stringValue: "ordinal")],
-                debugDescription: "ordinal only disambiguates matcher results; playback steps require matcher fields"
+            """
             ))
         }
 
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
-
-        if let target {
-            try container.encodeIfPresent(target.label, forKey: .label)
-            try container.encodeIfPresent(target.identifier, forKey: .identifier)
-            try container.encodeIfPresent(target.value, forKey: .value)
-            try container.encodeIfPresent(target.traits, forKey: .traits)
-            try container.encodeIfPresent(target.excludeTraits, forKey: .excludeTraits)
-        }
-        try container.encodeIfPresent(ordinal, forKey: .ordinal)
-
+        try container.encodeIfPresent(target, forKey: .target)
         try container.encodeIfPresent(recorded, forKey: .recorded)
 
         // Encode extra arguments as flat top-level keys.
@@ -242,7 +188,6 @@ extension HeistEvidence: CustomStringConvertible {
         return ScoreDescription.call("step", [
             ScoreDescription.stringField("command", command),
             target?.description,
-            ScoreDescription.valueField("ordinal", ordinal),
             argumentSummary,
             recorded?.description,
         ].compactMap { $0 })
@@ -257,8 +202,7 @@ extension HeistEvidence: CustomStringConvertible {
 
 // MARK: - Heist Value
 
-/// A JSON-encodable value type for command arguments.
-/// Supports the value types that TheFence.execute(request:) expects.
+/// A JSON-encodable value type for typed command arguments.
 public enum HeistValue: Codable, Sendable, Equatable {
     case string(String)
     case int(Int)

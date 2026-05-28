@@ -17,25 +17,13 @@ public struct PinchTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        center: GesturePointSelection = .unspecified,
+        center: GesturePointSelection,
         scale: Double, spread: Double? = nil, duration: Double? = nil
     ) {
         self.center = center
         self.scale = scale
         self.spread = spread
         self.duration = duration
-    }
-
-    public var elementTarget: ElementTarget? {
-        center.elementTarget
-    }
-
-    public var centerX: Double? {
-        center.pointX
-    }
-
-    public var centerY: Double? {
-        center.pointY
     }
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
@@ -46,7 +34,7 @@ public struct PinchTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.center = try decodeGestureCenterSelection(from: decoder)
+        self.center = try decodeRequiredGestureCenterSelection(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.scale = try container.decode(Double.self, forKey: .scale)
         self.spread = try container.decodeIfPresent(Double.self, forKey: .spread)
@@ -65,9 +53,7 @@ public struct PinchTarget: Codable, Sendable {
 extension PinchTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("pinch", [
-            elementTarget?.description,
-            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
-            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            center.description,
             "scale=\(ScoreDescription.decimal(scale))",
             spread.map { "spread=\(ScoreDescription.decimal($0))" },
             duration.map { "duration=\(ScoreDescription.decimal($0))" },
@@ -94,25 +80,13 @@ public struct RotateTarget: Codable, Sendable {
     public let duration: Double?
 
     public init(
-        center: GesturePointSelection = .unspecified,
+        center: GesturePointSelection,
         angle: Double, radius: Double? = nil, duration: Double? = nil
     ) {
         self.center = center
         self.angle = angle
         self.radius = radius
         self.duration = duration
-    }
-
-    public var elementTarget: ElementTarget? {
-        center.elementTarget
-    }
-
-    public var centerX: Double? {
-        center.pointX
-    }
-
-    public var centerY: Double? {
-        center.pointY
     }
 
     public var resolvedRadius: Double { radius ?? Self.defaultRadius }
@@ -123,7 +97,7 @@ public struct RotateTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.center = try decodeGestureCenterSelection(from: decoder)
+        self.center = try decodeRequiredGestureCenterSelection(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.angle = try container.decode(Double.self, forKey: .angle)
         self.radius = try container.decodeIfPresent(Double.self, forKey: .radius)
@@ -142,9 +116,7 @@ public struct RotateTarget: Codable, Sendable {
 extension RotateTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("rotate", [
-            elementTarget?.description,
-            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
-            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            center.description,
             "angle=\(ScoreDescription.decimal(angle))",
             radius.map { "radius=\(ScoreDescription.decimal($0))" },
             duration.map { "duration=\(ScoreDescription.decimal($0))" },
@@ -163,21 +135,9 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     /// Distance between the two fingers in points.
     public let spread: Double?
 
-    public init(center: GesturePointSelection = .unspecified, spread: Double? = nil) {
+    public init(center: GesturePointSelection, spread: Double? = nil) {
         self.center = center
         self.spread = spread
-    }
-
-    public var elementTarget: ElementTarget? {
-        center.elementTarget
-    }
-
-    public var centerX: Double? {
-        center.pointX
-    }
-
-    public var centerY: Double? {
-        center.pointY
     }
 
     public var resolvedSpread: Double { spread ?? Self.defaultSpread }
@@ -187,7 +147,7 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.center = try decodeGestureCenterSelection(from: decoder)
+        self.center = try decodeRequiredGestureCenterSelection(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.spread = try container.decodeIfPresent(Double.self, forKey: .spread)
     }
@@ -202,10 +162,19 @@ public struct TwoFingerTapTarget: Codable, Sendable {
 extension TwoFingerTapTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("twoFingerTap", [
-            elementTarget?.description,
-            centerX.map { "centerX=\(ScoreDescription.decimal($0))" },
-            centerY.map { "centerY=\(ScoreDescription.decimal($0))" },
+            center.description,
             spread.map { "spread=\(ScoreDescription.decimal($0))" },
         ].compactMap { $0 })
     }
+}
+
+private func decodeRequiredGestureCenterSelection(from decoder: Decoder) throws -> GesturePointSelection {
+    let center = try decodeGestureCenterSelection(from: decoder)
+    guard center.isSpecified else {
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath,
+            debugDescription: "center requires an element target or center coordinates"
+        ))
+    }
+    return center
 }

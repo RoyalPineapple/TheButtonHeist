@@ -112,16 +112,15 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserNormalizesChangeExpectationJsonObject() throws {
-        let request = try ReplSession.parseHumanInput(#"wait_for_change expect='{"type":"elements_changed"}'"#)
-        let expect = request[.expect] as? [String: Any]
+        let operation = try ReplSession.parseHumanInput(#"wait_for_change expect='{"type":"elements_changed"}'"#)
 
-        XCTAssertEqual(request[.command] as? String, TheFence.Command.waitForChange.rawValue)
-        XCTAssertEqual(expect?[.type] as? String, "elements_changed")
+        XCTAssertEqual(operation.command, .waitForChange)
+        XCTAssertNil(operation.argument(.expect))
     }
 
     func testRunBatchSerializesStepsBeforeSending() throws {
         let steps = try RunBatchCommand.serializedBatchSteps(
-            inline: #"[{"command":"activate","heistId":"button-login"}]"#,
+            inline: #"[{"command":"activate","target":{"heistId":"button-login"}}]"#,
             fromFile: nil
         )
 
@@ -130,7 +129,7 @@ final class CLICommandSyncTests: XCTestCase {
             return XCTFail("expected serialized batch step object")
         }
         XCTAssertEqual(object["command"], .string(TheFence.Command.activate.rawValue))
-        XCTAssertEqual(object["heistId"], .string("button-login"))
+        XCTAssertEqual(object["target"], .object(["heistId": .string("button-login")]))
     }
 
     func testRunBatchRejectsUnknownSerializedCommandAtEdge() {
@@ -164,7 +163,7 @@ final class CLICommandSyncTests: XCTestCase {
     func testRunBatchRejectsUnknownSerializedParameterAtEdge() {
         XCTAssertThrowsError(
             try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"scroll","unexpected":"value","label":"Done"}]"#,
+                inline: #"[{"command":"scroll","unexpected":"value","target":{"matcher":{"label":"Done"}}}]"#,
                 fromFile: nil
             )
         ) { error in
@@ -176,18 +175,21 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserPreservesKnownStringParameterValues() throws {
-        let request = try ReplSession.parseHumanInput("set_pasteboard text=false")
+        let operation = try ReplSession.parseHumanInput("set_pasteboard text=false")
 
-        XCTAssertEqual(request[.command] as? String, TheFence.Command.setPasteboard.rawValue)
-        XCTAssertEqual(request[.text] as? String, "false")
+        XCTAssertEqual(operation.command, .setPasteboard)
+        XCTAssertEqual(operation.argument(.text), .string("false"))
     }
 
     func testHumanParserCoercesKnownBooleanParametersOnly() throws {
-        let request = try ReplSession.parseHumanInput("wait_for label=true absent=true")
+        let operation = try ReplSession.parseHumanInput("wait_for loading-spinner absent=true")
+        guard case .object(let target)? = operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
 
-        XCTAssertEqual(request[.command] as? String, TheFence.Command.waitFor.rawValue)
-        XCTAssertEqual(request[.label] as? String, "true")
-        XCTAssertEqual(request[.absent] as? Bool, true)
+        XCTAssertEqual(operation.command, .waitFor)
+        XCTAssertEqual(target["heistId"], .string("loading-spinner"))
+        XCTAssertEqual(operation.argument(.absent), .bool(true))
     }
 
     func testSharedRequestBuilderParsesCanonicalMachineJSON() throws {
@@ -196,8 +198,8 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.mode, .machine)
-        XCTAssertEqual(parsed.request[.command] as? String, TheFence.Command.typeText.rawValue)
-        XCTAssertEqual(parsed.request[.text] as? String, "hello")
+        XCTAssertEqual(parsed.operation.command, .typeText)
+        XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
         XCTAssertEqual(parsed.command, .typeText)
     }
 
@@ -207,6 +209,21 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.requestId, .signedInteger(Int64.max))
+    }
+
+    func testSharedRequestBuilderCarriesMachineRequestIdOnValidationError() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(
+                from: #"{"id":"r1","command":"wait_for_change","expect":"screen_changed"}"#
+            )
+        ) { error in
+            let buildError = error as? CLIRequestBuildError
+            XCTAssertEqual(buildError?.requestId, .string("r1"))
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Invalid expectation type"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
     }
 
     func testSharedRequestBuilderRejectsNonScalarMachineRequestId() {
@@ -235,13 +252,16 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONSessionMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"activate","heistId":"button_save"}"#,
+            from: #"{"command":"activate","target":{"heistId":"button_save"}}"#,
             acceptsHumanInput: false
         )
 
         XCTAssertEqual(parsed.mode, .machine)
         XCTAssertEqual(parsed.command, .activate)
-        XCTAssertEqual(parsed.request[.heistId] as? String, "button_save")
+        guard case .object(let target)? = parsed.operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
+        XCTAssertEqual(target["heistId"], .string("button_save"))
     }
 
     func testSharedRequestBuilderParsesHumanCommand() throws {
@@ -249,7 +269,7 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(parsed.mode, .human)
         XCTAssertEqual(parsed.command, .getScreen)
-        XCTAssertEqual(parsed.request[.command] as? String, TheFence.Command.getScreen.rawValue)
+        XCTAssertEqual(parsed.operation.command, .getScreen)
     }
 
     func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {
@@ -257,8 +277,8 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(parsed.mode, .machine)
         XCTAssertEqual(parsed.command, .typeText)
-        XCTAssertEqual(parsed.request[.command] as? String, TheFence.Command.typeText.rawValue)
-        XCTAssertEqual(parsed.request[.text] as? String, "hello")
+        XCTAssertEqual(parsed.operation.command, .typeText)
+        XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
     }
 
     func testSharedRequestBuilderRejectsUnknownHumanCommand() {
@@ -295,34 +315,43 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testREPLParsesPositionalActivateTarget() throws {
-        let replRequest = try ReplSession.parseHumanInput("activate button_save")
+        let operation = try ReplSession.parseHumanInput("activate button_save")
+        guard case .object(let target)? = operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
 
-        XCTAssertEqual(replRequest[.command] as? String, TheFence.Command.activate.rawValue)
-        XCTAssertEqual(replRequest[.heistId] as? String, "button_save")
+        XCTAssertEqual(operation.command, .activate)
+        XCTAssertEqual(target["heistId"], .string("button_save"))
     }
 
     func testREPLParsesCoordinateGesture() throws {
-        let replRequest = try ReplSession.parseHumanInput("one_finger_tap x=100 y=200")
+        let operation = try ReplSession.parseHumanInput("one_finger_tap x=100 y=200")
 
-        XCTAssertEqual(replRequest[.command] as? String, TheFence.Command.oneFingerTap.rawValue)
-        XCTAssertEqual(replRequest[.x] as? Double, 100)
-        XCTAssertEqual(replRequest[.y] as? Double, 200)
+        XCTAssertEqual(operation.command, .oneFingerTap)
+        XCTAssertEqual(operation.argument(.x), .double(100))
+        XCTAssertEqual(operation.argument(.y), .double(200))
     }
 
     func testHumanParserUsesCatalogPositionalDirectionSyntax() throws {
-        let request = try ReplSession.parseHumanInput("swipe up checkout_list")
+        let operation = try ReplSession.parseHumanInput("swipe up checkout_list")
+        guard case .object(let target)? = operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
 
-        XCTAssertEqual(request[.command] as? String, TheFence.Command.swipe.rawValue)
-        XCTAssertEqual(request[.direction] as? String, "up")
-        XCTAssertEqual(request[.heistId] as? String, "checkout_list")
+        XCTAssertEqual(operation.command, .swipe)
+        XCTAssertEqual(operation.argument(.direction), .string("up"))
+        XCTAssertEqual(target["heistId"], .string("checkout_list"))
     }
 
     func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
-        let request = try ReplSession.parseHumanInput("scroll_to_edge top checkout_list")
+        let operation = try ReplSession.parseHumanInput("scroll_to_edge top checkout_list")
+        guard case .object(let target)? = operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
 
-        XCTAssertEqual(request[.command] as? String, TheFence.Command.scrollToEdge.rawValue)
-        XCTAssertEqual(request[.edge] as? String, "top")
-        XCTAssertEqual(request[.heistId] as? String, "checkout_list")
+        XCTAssertEqual(operation.command, .scrollToEdge)
+        XCTAssertEqual(operation.argument(.edge), .string("top"))
+        XCTAssertEqual(target["heistId"], .string("checkout_list"))
     }
 
     func testScrollCLIAllowsNoElementTarget() throws {
@@ -349,23 +378,32 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserMapsCoordinateTapCanonicalCommand() throws {
-        let request = try ReplSession.parseHumanInput("one_finger_tap x=100 y=200")
+        let operation = try ReplSession.parseHumanInput("one_finger_tap x=100 y=200")
 
-        XCTAssertEqual(request[.command] as? String, TheFence.Command.oneFingerTap.rawValue)
-        XCTAssertEqual(request[.x] as? Double, 100)
-        XCTAssertEqual(request[.y] as? Double, 200)
+        XCTAssertEqual(operation.command, .oneFingerTap)
+        XCTAssertEqual(operation.argument(.x), .double(100))
+        XCTAssertEqual(operation.argument(.y), .double(200))
     }
 
     func testHumanParserMapsHeistIdPositionalTarget() throws {
-        let request = try ReplSession.parseHumanInput("activate button_save")
+        let operation = try ReplSession.parseHumanInput("activate button_save")
+        guard case .object(let target)? = operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
 
-        XCTAssertEqual(request[.command] as? String, TheFence.Command.activate.rawValue)
-        XCTAssertEqual(request[.heistId] as? String, "button_save")
+        XCTAssertEqual(operation.command, .activate)
+        XCTAssertEqual(target["heistId"], .string("button_save"))
     }
 
     private func topLevelCommandNames() -> [String] {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)
         }
+    }
+}
+
+private extension NormalizedOperation {
+    func argument(_ key: FenceParameterKey) -> HeistValue? {
+        argumentValue(key.rawValue)
     }
 }

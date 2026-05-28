@@ -99,7 +99,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("cell_1"))
+        XCTAssertEqual(decoded.selection, .element(.heistId("cell_1")))
         XCTAssertEqual(decoded.duration, 1.5)
     }
 
@@ -108,22 +108,12 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
         XCTAssertEqual(decoded.selection, .coordinate(ScreenPoint(x: 100, y: 200)))
-        XCTAssertEqual(decoded.point, CGPoint(x: 100, y: 200))
         XCTAssertEqual(decoded.duration, 0.8)
-        XCTAssertNil(decoded.elementTarget)
     }
 
     func testLongPressTargetDefaultDuration() {
         let target = LongPressTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
         XCTAssertEqual(target.duration, 0.5)
-    }
-
-    func testLongPressTargetPointComputed() {
-        let withPoint = LongPressTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
-        XCTAssertEqual(withPoint.point, CGPoint(x: 10, y: 20))
-
-        let withoutPoint = LongPressTarget(selection: .element(.heistId("button")))
-        XCTAssertNil(withoutPoint.point)
     }
 
     // MARK: - DragTarget
@@ -136,23 +126,20 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("handle"))
         XCTAssertEqual(decoded.start, .element(.heistId("handle")))
         XCTAssertEqual(decoded.end, ScreenPoint(x: 200, y: 300))
-        XCTAssertEqual(decoded.endPoint, CGPoint(x: 200, y: 300))
         XCTAssertEqual(decoded.duration, 0.8)
     }
 
-    func testDragTargetComputedPoints() {
+    func testDragTargetCoordinateStartRoundTrip() throws {
         let target = DragTarget(
             start: .coordinate(ScreenPoint(x: 10, y: 20)),
             end: ScreenPoint(x: 30, y: 40)
         )
-        XCTAssertEqual(target.startPoint, CGPoint(x: 10, y: 20))
-        XCTAssertEqual(target.endPoint, CGPoint(x: 30, y: 40))
-
-        let noStart = DragTarget(start: .element(.heistId("handle")), end: ScreenPoint(x: 30, y: 40))
-        XCTAssertNil(noStart.startPoint)
+        let data = try encoder.encode(target)
+        let decoded = try decoder.decode(DragTarget.self, from: data)
+        XCTAssertEqual(decoded.start, .coordinate(ScreenPoint(x: 10, y: 20)))
+        XCTAssertEqual(decoded.end, ScreenPoint(x: 30, y: 40))
     }
 
     func testGestureResolvedDefaultsAreContractOwned() {
@@ -164,11 +151,11 @@ final class WireTypeRoundTripTests: XCTestCase {
             DragTarget(start: .coordinate(ScreenPoint(x: 10, y: 20)), end: ScreenPoint(x: 30, y: 40)).resolvedDuration,
             0.5
         )
-        XCTAssertEqual(PinchTarget(scale: 2).resolvedSpread, 100)
-        XCTAssertEqual(PinchTarget(scale: 2).resolvedDuration, 0.5)
-        XCTAssertEqual(RotateTarget(angle: 1).resolvedRadius, 100)
-        XCTAssertEqual(RotateTarget(angle: 1).resolvedDuration, 0.5)
-        XCTAssertEqual(TwoFingerTapTarget().resolvedSpread, 40)
+        XCTAssertEqual(PinchTarget(center: .coordinate(ScreenPoint(x: 0, y: 0)), scale: 2).resolvedSpread, 100)
+        XCTAssertEqual(PinchTarget(center: .coordinate(ScreenPoint(x: 0, y: 0)), scale: 2).resolvedDuration, 0.5)
+        XCTAssertEqual(RotateTarget(center: .coordinate(ScreenPoint(x: 0, y: 0)), angle: 1).resolvedRadius, 100)
+        XCTAssertEqual(RotateTarget(center: .coordinate(ScreenPoint(x: 0, y: 0)), angle: 1).resolvedDuration, 0.5)
+        XCTAssertEqual(TwoFingerTapTarget(center: .coordinate(ScreenPoint(x: 0, y: 0))).resolvedSpread, 40)
         XCTAssertEqual(DrawBezierTarget(startX: 0, startY: 0, segments: []).resolvedSamplesPerSegment, 20)
         XCTAssertEqual(
             DrawBezierTarget(startX: 0, startY: 0, segments: [], samplesPerSegment: 5_000).resolvedSamplesPerSegment,
@@ -185,24 +172,25 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(PinchTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("map"))
         XCTAssertEqual(decoded.center, GesturePointSelection.element(.heistId("map")))
-        XCTAssertNil(decoded.centerX)
-        XCTAssertNil(decoded.centerY)
         XCTAssertEqual(decoded.scale, 2.0)
         XCTAssertEqual(decoded.spread, 100)
         XCTAssertEqual(decoded.duration, 0.5)
     }
 
-    func testPinchTargetMinimalRoundTrip() throws {
-        let target = PinchTarget(scale: 0.5)
+    func testPinchTargetCoordinateCenterRoundTrip() throws {
+        let target = PinchTarget(center: .coordinate(ScreenPoint(x: 10, y: 20)), scale: 0.5)
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(PinchTarget.self, from: data)
         XCTAssertEqual(decoded.scale, 0.5)
-        XCTAssertNil(decoded.elementTarget)
-        XCTAssertNil(decoded.centerX)
+        XCTAssertEqual(decoded.center, .coordinate(ScreenPoint(x: 10, y: 20)))
         XCTAssertNil(decoded.spread)
         XCTAssertNil(decoded.duration)
+    }
+
+    func testPinchTargetRejectsMissingCenter() {
+        let json = #"{"scale":0.5}"#
+        XCTAssertThrowsError(try decoder.decode(PinchTarget.self, from: Data(json.utf8)))
     }
 
     // MARK: - RotateTarget
@@ -214,20 +202,24 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(RotateTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("dial"))
         XCTAssertEqual(decoded.center, GesturePointSelection.element(.heistId("dial")))
         XCTAssertEqual(decoded.angle, .pi / 4)
         XCTAssertEqual(decoded.radius, 80)
         XCTAssertEqual(decoded.duration, 0.6)
     }
 
-    func testRotateTargetMinimalRoundTrip() throws {
-        let target = RotateTarget(angle: 1.57)
+    func testRotateTargetCoordinateCenterRoundTrip() throws {
+        let target = RotateTarget(center: .coordinate(ScreenPoint(x: 10, y: 20)), angle: 1.57)
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(RotateTarget.self, from: data)
         XCTAssertEqual(decoded.angle, 1.57)
-        XCTAssertNil(decoded.elementTarget)
+        XCTAssertEqual(decoded.center, .coordinate(ScreenPoint(x: 10, y: 20)))
         XCTAssertNil(decoded.radius)
+    }
+
+    func testRotateTargetRejectsMissingCenter() {
+        let json = #"{"angle":1.57}"#
+        XCTAssertThrowsError(try decoder.decode(RotateTarget.self, from: Data(json.utf8)))
     }
 
     // MARK: - TwoFingerTapTarget
@@ -239,20 +231,21 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(TwoFingerTapTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, ElementTarget.heistId("canvas"))
         XCTAssertEqual(decoded.center, GesturePointSelection.element(.heistId("canvas")))
-        XCTAssertNil(decoded.centerX)
-        XCTAssertNil(decoded.centerY)
         XCTAssertEqual(decoded.spread, 60)
     }
 
-    func testTwoFingerTapTargetMinimalRoundTrip() throws {
-        let target = TwoFingerTapTarget()
+    func testTwoFingerTapTargetCoordinateCenterRoundTrip() throws {
+        let target = TwoFingerTapTarget(center: .coordinate(ScreenPoint(x: 10, y: 20)))
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(TwoFingerTapTarget.self, from: data)
-        XCTAssertNil(decoded.elementTarget)
-        XCTAssertNil(decoded.centerX)
+        XCTAssertEqual(decoded.center, .coordinate(ScreenPoint(x: 10, y: 20)))
         XCTAssertNil(decoded.spread)
+    }
+
+    func testTwoFingerTapTargetRejectsMissingCenter() {
+        let json = #"{}"#
+        XCTAssertThrowsError(try decoder.decode(TwoFingerTapTarget.self, from: Data(json.utf8)))
     }
 
     // MARK: - PathPoint

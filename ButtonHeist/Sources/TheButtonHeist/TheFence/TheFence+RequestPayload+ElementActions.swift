@@ -4,44 +4,16 @@ import TheScore
 
 private let accessibilityAdjustmentCountRange = 1...100
 
-extension TheFence.ScrollPayload {
-
-    var clientMessage: ClientMessage {
-        switch self {
-        case .scroll(let target):
-            return .scroll(target)
-        case .scrollToVisible(let target):
-            return .scrollToVisible(target)
-        case .elementSearch(let target):
-            return .elementSearch(target)
-        case .scrollToEdge(let target):
-            return .scrollToEdge(target)
-        }
-    }
-}
-
-extension TheFence.AccessibilityPayload {
-
-    func clientMessages() throws -> [ClientMessage] {
-        switch self {
-        case .activate(let target, let actionName, let count):
-            guard let actionName else {
-                try Self.rejectCount(count)
-                return [.activate(target)]
-            }
-            return try Self.namedAccessibilityCommands(
-                target: target,
-                actionName: actionName,
-                count: count
-            )
-        }
-    }
-
-    private static func namedAccessibilityCommands(
+private extension TheFence {
+    static func accessibilityClientMessages(
         target: ElementTarget,
-        actionName: String,
+        actionName: String?,
         count: TheFence.CountArgument
     ) throws -> [ClientMessage] {
+        guard let actionName else {
+            try rejectCount(count)
+            return [.activate(target)]
+        }
         switch actionName {
         case ElementAction.increment.description:
             return try repeatedAdjustmentCommands(.increment(target), count: count)
@@ -53,7 +25,7 @@ extension TheFence.AccessibilityPayload {
         }
     }
 
-    private static func repeatedAdjustmentCommands(
+    static func repeatedAdjustmentCommands(
         _ message: ClientMessage,
         count countArgument: TheFence.CountArgument
     ) throws -> [ClientMessage] {
@@ -61,7 +33,7 @@ extension TheFence.AccessibilityPayload {
         return Array(repeating: message, count: count)
     }
 
-    private static func accessibilityAdjustmentCount(_ countArgument: TheFence.CountArgument) throws -> Int {
+    static func accessibilityAdjustmentCount(_ countArgument: TheFence.CountArgument) throws -> Int {
         let count = countArgument.value ?? 1
         guard accessibilityAdjustmentCountRange.contains(count) else {
             throw SchemaValidationError(
@@ -73,7 +45,7 @@ extension TheFence.AccessibilityPayload {
         return count
     }
 
-    private static func rejectCount(_ countArgument: TheFence.CountArgument) throws {
+    static func rejectCount(_ countArgument: TheFence.CountArgument) throws {
         guard countArgument.observed != nil else { return }
         throw SchemaValidationError(
             field: "count",
@@ -85,52 +57,55 @@ extension TheFence.AccessibilityPayload {
 
 extension TheFence {
 
-    func decodeElementActionPayload(
+    func decodeElementActionDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope
-    ) throws -> DecodedRequestPayload {
+    ) throws -> DecodedRequestDispatch {
         let input = ElementActionRequestInput(arguments)
         switch command {
         case .scroll:
-            return decodedScrollPayload(.scroll(try ScrollRequestInput(input, fence: self).target))
+            let target = try ScrollRequestInput(input, fence: self).target
+            return decodedExecutablePayload(.scroll(target))
         case .scrollToVisible:
-            return decodedScrollPayload(.scrollToVisible(try ScrollToVisibleRequestInput(input, fence: self).target))
+            let target = try ScrollToVisibleRequestInput(input, fence: self).target
+            return decodedExecutablePayload(.scrollToVisible(target))
         case .elementSearch:
-            return decodedScrollPayload(.elementSearch(try ElementSearchRequestInput(input, fence: self).target))
+            let target = try ElementSearchRequestInput(input, fence: self).target
+            return decodedExecutablePayload(.elementSearch(target))
         case .scrollToEdge:
-            return decodedScrollPayload(.scrollToEdge(try ScrollToEdgeRequestInput(input, fence: self).target))
+            let target = try ScrollToEdgeRequestInput(input, fence: self).target
+            return decodedExecutablePayload(.scrollToEdge(target))
         case .activate:
-            let payload = try ActivateRequestInput(input, fence: self).payload
-            return DecodedRequestPayload(
-                payload: .accessibility(payload),
-                executableMessages: try payload.clientMessages()
+            let input = try ActivateRequestInput(input, fence: self)
+            return Self.clientActionDispatch(
+                try Self.accessibilityClientMessages(
+                    target: input.target,
+                    actionName: input.actionName,
+                    count: input.count
+                )
             )
         case .rotor:
             let target = try RotorRequestInput(input, fence: self).target
-            return decodedExecutablePayload(.rotor(target), message: .rotor(target))
+            return decodedExecutablePayload(.rotor(target))
         case .typeText:
             let target = try TypeTextRequestInput(input, fence: self).target
-            return decodedExecutablePayload(.typeText(target), message: .typeText(target))
+            return decodedExecutablePayload(.typeText(target))
         case .editAction:
             let target = try EditActionRequestInput(input).target
-            return decodedExecutablePayload(.editAction(target), message: .editAction(target))
+            return decodedExecutablePayload(.editAction(target))
         case .setPasteboard:
             let target = try SetPasteboardRequestInput(input).target
-            return decodedExecutablePayload(.setPasteboard(target), message: .setPasteboard(target))
+            return decodedExecutablePayload(.setPasteboard(target))
         case .waitFor:
             let target = try WaitForRequestInput(input, fence: self).target
-            return decodedExecutablePayload(.waitFor(target), message: .waitFor(target))
+            return decodedExecutablePayload(.waitFor(target))
         default:
             throw FenceError.invalidRequest("Unexpected element action command: \(command.rawValue)")
         }
     }
 
-    private func decodedScrollPayload(_ payload: ScrollPayload) -> DecodedRequestPayload {
-        decodedExecutablePayload(.scroll(payload), message: payload.clientMessage)
-    }
-
-    private func decodedExecutablePayload(_ payload: RequestPayload, message: ClientMessage) -> DecodedRequestPayload {
-        DecodedRequestPayload(payload: payload, executableMessages: [message])
+    private func decodedExecutablePayload(_ message: ClientMessage) -> DecodedRequestDispatch {
+        Self.clientActionDispatch([message])
     }
 
     func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {
@@ -150,7 +125,7 @@ extension TheFence {
             guard let trait = HeistTrait(rawValue: name) else {
                 throw SchemaValidationError(
                     field: "\(field)[\(index)]",
-                    observed: name as Any,
+                    observed: "string \"\(name)\"",
                     expected: SchemaValidationError.expectedEnum(HeistTrait.self)
                 )
             }
@@ -168,21 +143,51 @@ private extension TheFence {
             self.request = request
         }
 
+        var observedDescription: String {
+            request.observedDescription
+        }
+
         @ButtonHeistActor
         func elementTarget(in fence: TheFence) throws -> ElementTarget? {
-            let heistId = try string("heistId")
-            let matcher = try matcher()
-            let ordinal = try ordinal()
-            let hasMixedHeistIdTarget = ordinal != nil || hasMatcherFieldKeys
+            guard let target = try request.schemaDictionary("target") else { return nil }
+            try target.rejectUnknownKeys(
+                allowed: ["heistId", "matcher", "ordinal"],
+                expected: "valid target field"
+            )
+            let heistId = try target.schemaString("heistId")
+            let matcherObject = try target.schemaDictionary("matcher")
+            let ordinal = try target.schemaNonNegativeInteger("ordinal")
+            let hasMixedHeistIdTarget = ordinal != nil || matcherObject != nil
             if heistId != nil, hasMixedHeistIdTarget {
                 throw SchemaValidationError(
                     field: "target",
-                    observed: request.observedDescription,
-                    expected: "either heistId or matcher fields with optional ordinal"
+                    observed: target.observedDescription,
+                    expected: "either heistId or matcher with optional ordinal"
+                )
+            }
+            if let heistId {
+                return .heistId(heistId)
+            }
+            guard let matcherObject else {
+                throw SchemaValidationError(
+                    field: "target",
+                    observed: target.observedDescription,
+                    expected: "heistId or matcher"
+                )
+            }
+            try matcherObject.rejectUnknownKeys(
+                allowed: ["label", "identifier", "value", "traits", "excludeTraits"],
+                expected: "valid target.matcher field"
+            )
+            let matcher = try matcher(from: matcherObject)
+            guard matcher.nonEmpty != nil else {
+                throw SchemaValidationError(
+                    field: target.field("matcher"),
+                    observed: matcherObject.observedDescription,
+                    expected: "matcher with label, identifier, value, traits, or excludeTraits"
                 )
             }
             return ElementTarget(
-                heistId: heistId,
                 matcher: matcher,
                 ordinal: ordinal
             )
@@ -270,9 +275,7 @@ private extension TheFence {
         }
 
         var hasElementTargetFields: Bool {
-            if request.keys.contains("heistId") { return true }
-            if hasMatcherFieldKeys { return true }
-            return false
+            request.keys.contains("target")
         }
 
         var hasMatcherFieldKeys: Bool {
@@ -286,17 +289,22 @@ private extension TheFence {
 
         @ButtonHeistActor
         func matcher() throws -> ElementMatcher {
+            try matcher(from: request)
+        }
+
+        @ButtonHeistActor
+        func matcher(from source: some TheFence.CommandArgumentReadable) throws -> ElementMatcher {
             ElementMatcher(
-                label: try string("label"),
-                identifier: try string("identifier"),
-                value: try string("value"),
+                label: try source.schemaString("label"),
+                identifier: try source.schemaString("identifier"),
+                value: try source.schemaString("value"),
                 traits: try TheFence.parseTraitNames(
-                    try request.schemaStringArray("traits"),
-                    field: request.field("traits")
+                    try source.schemaStringArray("traits"),
+                    field: source.field("traits")
                 ),
                 excludeTraits: try TheFence.parseTraitNames(
-                    try request.schemaStringArray("excludeTraits"),
-                    field: request.field("excludeTraits")
+                    try source.schemaStringArray("excludeTraits"),
+                    field: source.field("excludeTraits")
                 )
             )
         }
@@ -312,7 +320,7 @@ private extension TheFence {
         func nonEmptyString(_ key: String) throws -> String {
             let value = try requiredString(key)
             if value.isEmpty {
-                throw SchemaValidationError(field: request.field(key), observed: value as Any, expected: "non-empty string")
+                throw SchemaValidationError(field: request.field(key), observed: "string \"\"", expected: "non-empty string")
             }
             return value
         }
@@ -320,7 +328,7 @@ private extension TheFence {
         func optionalNonEmptyString(_ key: String) throws -> String? {
             guard let value = try string(key) else { return nil }
             if value.isEmpty {
-                throw SchemaValidationError(field: request.field(key), observed: value as Any, expected: "non-empty string")
+                throw SchemaValidationError(field: request.field(key), observed: "string \"\"", expected: "non-empty string")
             }
             return value
         }
@@ -381,7 +389,7 @@ private extension TheFence {
                 return RotorTextCursorInput(currentHeistId: nil, currentTextRange: nil)
             }
             guard let currentHeistId = try string("currentHeistId") else {
-                throw SchemaValidationError(field: "currentHeistId", observed: nil, expected: "string")
+                throw SchemaValidationError(field: "currentHeistId", observed: "missing", expected: "string")
             }
             guard startOffset >= 0, endOffset >= startOffset else {
                 throw SchemaValidationError(
@@ -452,16 +460,15 @@ private extension TheFence {
     }
 
     struct ActivateRequestInput {
-        let payload: AccessibilityPayload
+        let target: ElementTarget
+        let actionName: String?
+        let count: TheFence.CountArgument
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let target = try request.requiredElementTarget(command: .activate, in: fence)
-            payload = .activate(
-                target,
-                actionName: try request.accessibilityActionName("action"),
-                count: try request.countArgument()
-            )
+            self.target = try request.requiredElementTarget(command: .activate, in: fence)
+            self.actionName = try request.accessibilityActionName("action")
+            self.count = try request.countArgument()
         }
     }
 
@@ -470,17 +477,38 @@ private extension TheFence {
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
+            let rotor = try request.string("rotor")
             let rotorIndex = try request.nonNegativeInteger("rotorIndex")
+            if rotor != nil, rotorIndex != nil {
+                throw SchemaValidationError(
+                    field: "rotor/rotorIndex",
+                    observed: request.observedDescription,
+                    expected: "either rotor or rotorIndex"
+                )
+            }
             let cursor = try request.rotorTextCursor()
             let currentHeistId = try cursor.currentHeistId ?? request.string("currentHeistId")
+            let selection: RotorSelection = if let rotor {
+                .named(rotor)
+            } else if let rotorIndex {
+                .index(rotorIndex)
+            } else {
+                .automatic
+            }
+            let continuation: RotorContinuation = if let range = cursor.currentTextRange,
+                                                     let currentHeistId {
+                .textRange(currentHeistId, range)
+            } else if let currentHeistId {
+                .item(currentHeistId)
+            } else {
+                .none
+            }
 
             target = RotorTarget(
                 elementTarget: try request.requiredElementTarget(command: .rotor, in: fence),
-                rotor: try request.string("rotor"),
-                rotorIndex: rotorIndex,
+                selection: selection,
                 direction: try request.enumValue("direction", as: RotorDirection.self) ?? .next,
-                currentHeistId: currentHeistId,
-                currentTextRange: cursor.currentTextRange
+                continuation: continuation
             )
         }
     }

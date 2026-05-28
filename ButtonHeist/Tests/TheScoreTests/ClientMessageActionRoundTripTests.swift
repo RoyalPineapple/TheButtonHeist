@@ -29,24 +29,32 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testClientMessageRotorPreviousEncoding() throws {
         let message = ClientMessage.rotor(RotorTarget(
             elementTarget: .heistId("form"),
-            rotor: "Errors",
+            selection: .named("Errors"),
             direction: .previous,
-            currentHeistId: "email",
-            currentTextRange: TextRangeReference(startOffset: 10, endOffset: 15)
+            continuation: .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .rotor(let target) = decoded {
-            XCTAssertEqual(target.elementTarget, .heistId("form"))
-            XCTAssertEqual(target.rotor, "Errors")
-            XCTAssertNil(target.rotorIndex)
-            XCTAssertEqual(target.direction, .previous)
-            XCTAssertEqual(target.currentHeistId, "email")
-            XCTAssertEqual(target.currentTextRange, TextRangeReference(startOffset: 10, endOffset: 15))
+            XCTAssertEqual(target.elementTarget, ElementTarget.heistId("form"))
+            XCTAssertEqual(target.selection, .named("Errors"))
+            XCTAssertEqual(target.direction, RotorDirection.previous)
+            XCTAssertEqual(
+                target.continuation,
+                .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
+            )
         } else {
             XCTFail("Expected rotor message")
         }
+    }
+
+    func testClientMessageRotorRejectsMixedSelectorShape() throws {
+        let json = """
+        {"type":"rotor","payload":{"heistId":"form","rotor":"Errors","rotorIndex":1}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
     }
 
     func testClientMessageRotorRejectsNegativeIndex() throws {
@@ -65,6 +73,14 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
     }
 
+    func testClientMessageRotorRejectsTextRangeWithoutCurrentItem() throws {
+        let json = """
+        {"type":"rotor","payload":{"heistId":"form","currentTextRange":{"startOffset":3,"endOffset":8}}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
+    }
+
     func testClientMessageOneFingerTapEncoding() throws {
         let message = ClientMessage.oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200))))
         let data = try JSONEncoder().encode(message)
@@ -72,7 +88,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
         if case .oneFingerTap(let target) = decoded {
             XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 100, y: 200)))
-            XCTAssertEqual(target.point, CGPoint(x: 100, y: 200))
         } else {
             XCTFail("Expected oneFingerTap message")
         }
@@ -88,7 +103,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
         if case .longPress(let target) = decoded {
             XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 50, y: 75)))
-            XCTAssertEqual(target.point, CGPoint(x: 50, y: 75))
             XCTAssertEqual(target.duration, 1.0)
         } else {
             XCTFail("Expected longPress message")

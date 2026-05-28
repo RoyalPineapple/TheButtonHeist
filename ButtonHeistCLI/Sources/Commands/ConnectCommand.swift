@@ -70,7 +70,7 @@ struct ConnectCommand: AsyncParsableCommand, CLICommandContract {
         }
         defer { fence.stop() }
 
-        let response = try await fence.execute(request: Self.fenceRequest())
+        let response = try await fence.execute(operation: try Self.fenceOperation())
         CLIRunner.outputResponse(response, format: output.format ?? .auto)
         if response.isFailure {
             throw ExitCode.failure

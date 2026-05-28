@@ -1,27 +1,8 @@
-import CoreGraphics
-
 public struct TapTarget: Codable, Sendable {
     public let selection: GesturePointSelection
 
     public init(selection: GesturePointSelection) {
         self.selection = selection
-    }
-
-    public var elementTarget: ElementTarget? {
-        selection.elementTarget
-    }
-
-    public var pointX: Double? {
-        selection.pointX
-    }
-
-    public var pointY: Double? {
-        selection.pointY
-    }
-
-    public var point: CGPoint? {
-        guard let x = selection.pointX, let y = selection.pointY else { return nil }
-        return CGPoint(x: x, y: y)
     }
 
     public func gesturePointSelection() -> GesturePointSelection {
@@ -40,10 +21,8 @@ public struct TapTarget: Codable, Sendable {
 extension TapTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("tap", [
-            elementTarget?.description,
-            pointX.map { "x=\(ScoreDescription.decimal($0))" },
-            pointY.map { "y=\(ScoreDescription.decimal($0))" },
-        ].compactMap { $0 })
+            selection.description,
+        ])
     }
 }
 
@@ -59,23 +38,6 @@ public struct LongPressTarget: Codable, Sendable {
     public init(selection: GesturePointSelection, duration: Double = 0.5) {
         self.selection = selection
         self.duration = duration
-    }
-
-    public var elementTarget: ElementTarget? {
-        selection.elementTarget
-    }
-
-    public var pointX: Double? {
-        selection.pointX
-    }
-
-    public var pointY: Double? {
-        selection.pointY
-    }
-
-    public var point: CGPoint? {
-        guard let x = selection.pointX, let y = selection.pointY else { return nil }
-        return CGPoint(x: x, y: y)
     }
 
     public func gesturePointSelection() -> GesturePointSelection {
@@ -98,10 +60,8 @@ public struct LongPressTarget: Codable, Sendable {
 extension LongPressTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("longPress", [
-            elementTarget?.description,
-            pointX.map { "x=\(ScoreDescription.decimal($0))" },
-            pointY.map { "y=\(ScoreDescription.decimal($0))" },
+            selection.description,
             "duration=\(ScoreDescription.decimal(duration))",
-        ].compactMap { $0 })
+        ])
     }
 }

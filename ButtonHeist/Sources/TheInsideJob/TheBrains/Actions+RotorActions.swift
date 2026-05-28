@@ -12,6 +12,8 @@ extension Actions {
         _ target: some RotorExecutionInput
     ) async -> TheSafecracker.InteractionResult {
         let direction = target.direction
+        let rotor = target.selection.rotorName
+        let rotorIndex = target.selection.rotorIndex
         let method: ActionMethod = .rotor
         return await performElementAction(
             target: target.rotorElementTarget,
@@ -19,17 +21,15 @@ extension Actions {
             requireInteractive: false
         ) { context in
             let outcome = self.stash.performRotor(
-                rotor: target.rotor,
-                rotorIndex: target.rotorIndex,
-                currentHeistId: target.currentHeistId,
-                currentTextRange: target.currentTextRange,
+                selection: target.selection,
+                continuation: target.continuation,
                 direction: direction,
                 on: context.liveTarget
             )
             return Self.rotorInteractionResult(
                 outcome: outcome,
-                rotor: target.rotor,
-                rotorIndex: target.rotorIndex,
+                rotor: rotor,
+                rotorIndex: rotorIndex,
                 direction: direction,
                 liveTarget: context.liveTarget
             )

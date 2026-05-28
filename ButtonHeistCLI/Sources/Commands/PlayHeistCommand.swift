@@ -21,12 +21,12 @@ struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     func run() async throws {
-        let request = Self.fenceRequest([.input: .string(input)])
+        let request: CLIRequestParameters = [.input: .string(input)]
 
         if let junitPath = junit {
             let (fence, response) = try await CLIRunner.execute(
                 connection: connection,
-                request: request
+                operation: try Self.fenceOperation(request)
             )
             defer { fence.stop() }
 
@@ -44,7 +44,7 @@ struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
             try await CLIRunner.run(
                 connection: connection,
                 format: output.format,
-                request: request
+                operation: try Self.fenceOperation(request)
             )
         }
     }

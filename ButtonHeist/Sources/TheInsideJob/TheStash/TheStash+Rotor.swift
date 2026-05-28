@@ -105,10 +105,8 @@ extension TheStash {
     }
 
     func performRotor(
-        rotor: String?,
-        rotorIndex: Int?,
-        currentHeistId: HeistId?,
-        currentTextRange: TextRangeReference?,
+        selection rotorSelection: RotorSelection,
+        continuation: RotorContinuation,
         direction: RotorDirection,
         on liveTarget: LiveActionTarget
     ) -> RotorOutcome {
@@ -118,12 +116,13 @@ extension TheStash {
 
         let availableNames = rotors.map { $0.bhInvocableName(locale: object.accessibilityLanguage) }
         let selection: UIAccessibilityCustomRotor
-        if let rotorIndex {
+        switch rotorSelection {
+        case .index(let rotorIndex):
             guard rotors.indices.contains(rotorIndex) else {
                 return .noSuchRotor(available: availableNames)
             }
             selection = rotors[rotorIndex]
-        } else if let rotorName = rotor {
+        case .named(let rotorName):
             let matches = rotors.enumerated().filter {
                 $0.element.bhInvocableName(locale: object.accessibilityLanguage) == rotorName
             }
@@ -135,31 +134,33 @@ extension TheStash {
             default:
                 return .ambiguousRotor(available: availableNames)
             }
-        } else if rotors.count == 1 {
-            selection = rotors[0]
-        } else {
-            return .ambiguousRotor(available: availableNames)
+        case .automatic:
+            if rotors.count == 1 {
+                selection = rotors[0]
+            } else {
+                return .ambiguousRotor(available: availableNames)
+            }
         }
 
         let predicate = UIAccessibilityCustomRotorSearchPredicate()
         predicate.searchDirection = direction.uiAccessibilityDirection
-        if let currentHeistId {
+        switch continuation {
+        case .none:
+            break
+        case .item(let currentHeistId):
             guard let currentObject = rotorCurrentObject(heistId: currentHeistId) else {
                 return .currentItemUnavailable(currentHeistId)
             }
-            let currentRange: UITextRange?
-            if let currentTextRange {
-                guard let input = currentObject as? UITextInput,
-                      let range = textRange(from: currentTextRange, in: input) else {
-                    return .currentTextRangeUnavailable
-                }
-                currentRange = range
-            } else {
-                currentRange = nil
+            predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: nil)
+        case .textRange(let currentHeistId, let currentTextRange):
+            guard let currentObject = rotorCurrentObject(heistId: currentHeistId) else {
+                return .currentItemUnavailable(currentHeistId)
             }
-            predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: currentRange)
-        } else if currentTextRange != nil {
-            return .currentTextRangeUnavailable
+            guard let input = currentObject as? UITextInput,
+                  let range = textRange(from: currentTextRange, in: input) else {
+                return .currentTextRangeUnavailable
+            }
+            predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: range)
         }
 
         let rotorName = selection.bhInvocableName(locale: object.accessibilityLanguage)

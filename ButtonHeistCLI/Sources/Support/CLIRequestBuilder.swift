@@ -8,7 +8,7 @@ enum CLIRequestInputMode: Equatable {
 }
 
 struct CLIParsedRequest {
-    let request: [String: Any]
+    let operation: NormalizedOperation
     let requestId: PublicRequestId?
     let descriptor: FenceCommandDescriptor?
     let mode: CLIRequestInputMode
@@ -18,15 +18,31 @@ struct CLIParsedRequest {
     }
 }
 
+struct CLIRequestBuildError: Error, CustomStringConvertible {
+    let message: String
+    let requestId: PublicRequestId?
+
+    var description: String { message }
+}
+
 enum CLIRequestBuilder {
 
-    static func request(
+    static func operation(
         command: TheFence.Command,
         parameters: CLIRequestParameters = [:]
-    ) -> [String: Any] {
-        var request = FenceParameterKey.rawDictionary(parameters)
-        request[.command] = command.descriptor.canonicalName
-        return request
+    ) throws -> NormalizedOperation {
+        let arguments = TheFence.CommandArgumentEnvelope(
+            values: Dictionary(
+                parameters.map { ($0.key.rawValue, $0.value) },
+                uniquingKeysWith: { _, newest in newest }
+            )
+        )
+        switch FenceOperationCatalog.normalizeCommand(command, arguments: arguments) {
+        case .success(let operation):
+            return operation
+        case .failure(let error):
+            throw ValidationError(error.message)
+        }
     }
 
     static func parsedRequest(from line: String, acceptsHumanInput: Bool = true) throws -> CLIParsedRequest {
@@ -40,10 +56,6 @@ enum CLIRequestBuilder {
         return try parseHumanTokens(tokenize(line))
     }
 
-    static func parseHumanInput(_ line: String) throws -> [String: Any] {
-        try parseHumanTokens(tokenize(line)).request
-    }
-
     static func parseHumanTokens(_ tokens: [String]) throws -> CLIParsedRequest {
         guard let first = tokens.first else {
             throw ValidationError("Unknown command. Type 'help' for available commands.")
@@ -55,7 +67,7 @@ enum CLIRequestBuilder {
         )
 
         return CLIParsedRequest(
-            request: request(command: fenceRequest.command, parameters: fenceRequest.parameters),
+            operation: try operation(command: fenceRequest.command, parameters: fenceRequest.parameters),
             requestId: nil,
             descriptor: fenceRequest.descriptor,
             mode: .human
@@ -95,18 +107,29 @@ enum CLIRequestBuilder {
     static func parseMachineRequest(_ line: String) throws -> CLIParsedRequest {
         let data = Data(line.utf8)
         let value = try JSONDecoder().decode(HeistValue.self, from: data)
-        guard case .object(let object) = value,
-              case .string(_)? = object[FenceParameterKey.command.rawValue] else {
+        guard case .object(let object) = value else {
             throw ValidationError("Expected JSON object with string field 'command'")
         }
-        let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
         let requestId = try object["id"].map(PublicRequestId.init(value:))
-        return CLIParsedRequest(
-            request: object.mapValues(\.cliRawValue),
-            requestId: requestId,
-            descriptor: descriptor,
-            mode: .machine
-        )
+        do {
+            guard case .string(_)? = object[FenceParameterKey.command.rawValue] else {
+                throw ValidationError("Expected JSON object with string field 'command'")
+            }
+            let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
+            return CLIParsedRequest(
+                operation: try operation(command: descriptor.command, parameters: commandParameters(from: object)),
+                requestId: requestId,
+                descriptor: descriptor,
+                mode: .machine
+            )
+        } catch let error as CLIRequestBuildError {
+            throw error
+        } catch {
+            throw CLIRequestBuildError(
+                message: diagnosticMessage(for: error),
+                requestId: requestId
+            )
+        }
     }
 
     @discardableResult
@@ -132,6 +155,20 @@ enum CLIRequestBuilder {
         }
 
         return descriptor
+    }
+
+    private static func commandParameters(from object: [String: HeistValue]) -> CLIRequestParameters {
+        Dictionary(
+            object.compactMap { key, value in
+                guard key != FenceParameterKey.command.rawValue,
+                      key != "id",
+                      let parameterKey = FenceParameterKey(rawValue: key) else {
+                    return nil
+                }
+                return (parameterKey, value)
+            },
+            uniquingKeysWith: { _, newest in newest }
+        )
     }
 
     static func diagnosticMessage(for error: Error) -> String {

@@ -39,17 +39,17 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
 
-        var request = Self.fenceRequest([
+        var request: CLIRequestParameters = [
             .direction: .string(scrollDirection),
             .timeout: .double(timeoutOption.timeout),
-        ])
+        ]
         if let stableId { request.set(.stableId, stableId) }
         try element.applyTo(&request)
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            request: request,
+            operation: try Self.fenceOperation(request),
             statusMessage: "Sending scroll..."
         )
     }

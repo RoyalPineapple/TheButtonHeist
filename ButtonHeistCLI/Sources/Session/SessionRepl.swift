@@ -105,15 +105,11 @@ final class ReplSession {
             )
         } catch {
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let requestId = (error as? CLIRequestBuildError)?.requestId
             if isMachineInput {
-                return (.error("Invalid JSON: \(message)"), nil)
+                return (.error("Invalid JSON: \(message)"), requestId)
             }
             return (.error(message), nil)
-        }
-
-        let request = parsedRequest.request
-        guard request[.command] is String else {
-            return (.error(Self.unknownCommandMessage), nil)
         }
 
         // Enhanced help for human mode
@@ -122,7 +118,7 @@ final class ReplSession {
         }
 
         do {
-            let response = try await fence.execute(request: request)
+            let response = try await fence.execute(operation: parsedRequest.operation)
             if parsedRequest.command == .quit {
                 if case .running(let idleMonitor) = state {
                     idleMonitor?.stop()
@@ -174,7 +170,7 @@ nonisolated extension ReplSession {
         TheFence.Command.cliSessionHelp
     }
 
-    static func parseHumanInput(_ line: String) throws -> [String: Any] {
-        try CLIRequestBuilder.parseHumanInput(line)
+    static func parseHumanInput(_ line: String) throws -> NormalizedOperation {
+        try CLIRequestBuilder.parseHumanTokens(CLIRequestBuilder.tokenize(line)).operation
     }
 }

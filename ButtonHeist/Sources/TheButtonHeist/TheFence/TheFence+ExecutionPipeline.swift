@@ -252,7 +252,7 @@ extension TheFence {
     }
 
     private func fullInterfaceCapture(from response: FenceResponse, parsed: ParsedRequest) -> Interface? {
-        guard case .getInterface = parsed.payload,
+        guard parsed.command == .getInterface,
               case .interface(let iface, _) = response else {
             return nil
         }

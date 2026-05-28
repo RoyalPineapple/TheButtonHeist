@@ -105,10 +105,8 @@ final class TheStashRotorTests: XCTestCase {
         let liveHost = try XCTUnwrap(liveTarget(for: resolvedHost))
 
         let outcome = stash.performRotor(
-            rotor: "Errors",
-            rotorIndex: nil,
-            currentHeistId: nil,
-            currentTextRange: nil,
+            selection: .named("Errors"),
+            continuation: .none,
             direction: .next,
             on: liveHost
         )
@@ -174,10 +172,8 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(resolvedHost.element.customRotors.map { $0.name }, ["Links"])
 
         let outcome = stash.performRotor(
-            rotor: "Links",
-            rotorIndex: nil,
-            currentHeistId: nil,
-            currentTextRange: nil,
+            selection: .named("Links"),
+            continuation: .none,
             direction: .next,
             on: liveHost
         )
@@ -228,7 +224,7 @@ final class TheStashRotorTests: XCTestCase {
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "activation_rotor_host")),
-                rotor: "Primary Action"
+                selection: .named("Primary Action")
             )
         ))
 
@@ -293,7 +289,7 @@ final class TheStashRotorTests: XCTestCase {
             let searchResult = await brains.executeCommand(.rotor(
                 RotorTarget(
                     elementTarget: .matcher(ElementMatcher(identifier: "virtual_activation_rotor_host")),
-                    rotor: "Primary Action"
+                    selection: .named("Primary Action")
                 )
             ))
 
@@ -372,7 +368,7 @@ final class TheStashRotorTests: XCTestCase {
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "virtual_scroll_rotor_host")),
-                rotor: "Reveal Result"
+                selection: .named("Reveal Result")
             )
         ))
 
@@ -451,7 +447,7 @@ final class TheStashRotorTests: XCTestCase {
         let search = await brains.actions.executeRotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "cached_rotor_host")),
-                rotor: "Cached Items"
+                selection: .named("Cached Items")
             )
         )
 
@@ -519,7 +515,7 @@ final class TheStashRotorTests: XCTestCase {
         let firstSearch = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "virtual_step_rotor_host")),
-                rotor: "Virtual Steps"
+                selection: .named("Virtual Steps")
             )
         ))
 
@@ -533,8 +529,8 @@ final class TheStashRotorTests: XCTestCase {
         let nextSearch = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "virtual_step_rotor_host")),
-                rotor: "Virtual Steps",
-                currentHeistId: firstElement.heistId
+                selection: .named("Virtual Steps"),
+                continuation: .item(firstElement.heistId)
             )
         ))
 
@@ -548,9 +544,9 @@ final class TheStashRotorTests: XCTestCase {
         let previousSearch = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "virtual_step_rotor_host")),
-                rotor: "Virtual Steps",
+                selection: .named("Virtual Steps"),
                 direction: .previous,
-                currentHeistId: nextElement.heistId
+                continuation: .item(nextElement.heistId)
             )
         ))
 
@@ -598,7 +594,7 @@ final class TheStashRotorTests: XCTestCase {
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "expiring_virtual_activation_rotor_host")),
-                rotor: "Primary Action"
+                selection: .named("Primary Action")
             )
         ))
 
@@ -614,8 +610,8 @@ final class TheStashRotorTests: XCTestCase {
         let nextSearch = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .matcher(ElementMatcher(identifier: "expiring_virtual_activation_rotor_host")),
-                rotor: "Primary Action",
-                currentHeistId: foundElement.heistId
+                selection: .named("Primary Action"),
+                continuation: .item(foundElement.heistId)
             )
         ))
 
@@ -656,10 +652,8 @@ final class TheStashRotorTests: XCTestCase {
         let liveTextView = try XCTUnwrap(liveTarget(for: resolvedTextView))
 
         let firstOutcome = stash.performRotor(
-            rotor: "Mentions",
-            rotorIndex: nil,
-            currentHeistId: nil,
-            currentTextRange: nil,
+            selection: .named("Mentions"),
+            continuation: .none,
             direction: .next,
             on: liveTextView
         )
@@ -676,10 +670,11 @@ final class TheStashRotorTests: XCTestCase {
         XCTAssertEqual(firstRange.rangeDescription, "[7..<13]")
 
         let secondOutcome = stash.performRotor(
-            rotor: "Mentions",
-            rotorIndex: nil,
-            currentHeistId: firstHit.screenElement?.heistId,
-            currentTextRange: TextRangeReference(startOffset: firstStart, endOffset: firstEnd),
+            selection: .named("Mentions"),
+            continuation: .textRange(
+                try XCTUnwrap(firstHit.screenElement?.heistId),
+                TextRangeReference(startOffset: firstStart, endOffset: firstEnd)
+            ),
             direction: .next,
             on: liveTextView
         )
@@ -725,10 +720,8 @@ final class TheStashRotorTests: XCTestCase {
         )
 
         let outcome = stash.performRotor(
-            rotor: "Errors",
-            rotorIndex: nil,
-            currentHeistId: nil,
-            currentTextRange: nil,
+            selection: .named("Errors"),
+            continuation: .none,
             direction: .next,
             on: try XCTUnwrap(liveTarget(for: screenElement))
         )

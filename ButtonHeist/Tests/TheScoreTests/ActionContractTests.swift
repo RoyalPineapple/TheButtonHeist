@@ -32,10 +32,14 @@ final class ActionContractTests: XCTestCase {
             timeout: 0.25
         ))
 
-        let data = try JSONEncoder().encode(["command": command])
+        let data = try JSONEncoder().encode(BatchStepCommandOnlyFixture(command: command))
         XCTAssertThrowsError(try JSONDecoder().decode(BatchStep.self, from: data)) { error in
             XCTAssertTrue("\(error)".contains("expect") || "\(error)".contains("deadline"))
         }
+    }
+
+    private struct BatchStepCommandOnlyFixture: Encodable {
+        let command: ClientMessage
     }
 
 }
