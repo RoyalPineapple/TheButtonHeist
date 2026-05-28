@@ -141,9 +141,9 @@ extension Actions {
     }
 
     func executeCustomAction(
-        _ target: some CustomActionExecutionInput
+        _ target: CustomActionTarget
     ) async -> TheSafecracker.InteractionResult {
-        switch target.customActionSelection {
+        switch target.selection {
         case .container(let containerTarget, let ordinal, let actionName):
             return await executeContainerCustomAction(
                 containerTarget,

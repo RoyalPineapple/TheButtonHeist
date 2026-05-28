@@ -58,13 +58,13 @@ extension Actions {
     // MARK: - Text Entry
 
     func executeTypeText(
-        _ target: some TypeTextExecutionInput
+        _ target: TypeTextTarget
     ) async -> TheSafecracker.InteractionResult {
         guard !target.text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
-        let normalizedTarget = target.typeTextElementTarget.map {
-            stash.normalizeTarget($0)
+        let normalizedTarget = target.elementTarget.map {
+            stash.normalizeTarget(.currentCapture($0))
         }
         if let failure = await focusTextInput(normalizedTarget) { return failure }
 
