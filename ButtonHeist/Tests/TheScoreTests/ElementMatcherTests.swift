@@ -40,7 +40,6 @@ final class ElementMatcherTests: XCTestCase {
 
     func testElementMatcherDescriptionComposesFields() {
         let matcher = ElementMatcher(
-            heistId: "save_button",
             label: #"Save "Now""#,
             identifier: "primary.save",
             value: "Ready",
@@ -50,7 +49,7 @@ final class ElementMatcherTests: XCTestCase {
 
         XCTAssertEqual(
             matcher.description,
-            #"matcher(heistId="save_button" label="Save \"Now\"" identifier="primary.save" value="Ready" traits=[button, selected] excludeTraits=[notEnabled])"#
+            #"matcher(label="Save \"Now\"" identifier="primary.save" value="Ready" traits=[button, selected] excludeTraits=[notEnabled])"#
         )
     }
 
@@ -58,6 +57,17 @@ final class ElementMatcherTests: XCTestCase {
         let matcher = ElementMatcher(label: "", identifier: "", value: "", traits: [])
 
         XCTAssertEqual(matcher.description, "matcher(*)")
+    }
+
+    func testElementMatcherRejectsHeistIdField() {
+        let json = #"{"heistId":"save_button"}"#
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementMatcher.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("does not accept heistId"))
+        }
     }
 
     func testElementTargetDescriptionComposesMatcherAndOrdinal() {

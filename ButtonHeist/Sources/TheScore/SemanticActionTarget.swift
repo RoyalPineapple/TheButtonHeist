@@ -55,13 +55,6 @@ public struct SemanticActionTarget: Codable, Sendable, Equatable {
         }
         let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
         let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-        if matcher.heistId != nil {
-            throw DecodingError.dataCorruptedError(
-                forKey: .matcher,
-                in: container,
-                debugDescription: "SemanticActionTarget matcher must not carry heistId; use _recorded.heistId metadata"
-            )
-        }
         if let ordinal, ordinal < 0 {
             throw DecodingError.dataCorruptedError(
                 forKey: .ordinal,

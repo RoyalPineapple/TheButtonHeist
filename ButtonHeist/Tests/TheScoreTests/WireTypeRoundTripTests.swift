@@ -511,8 +511,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testSubtreeSelectorElementUsesToolSchemaShape() throws {
         let selector = SubtreeSelector.element(
-            ElementMatcher(heistId: "button_save", label: "Save", traits: [.button]),
-            ordinal: 2
+            .matcher(ElementMatcher(label: "Save", traits: [.button]), ordinal: 2)
         )
 
         let data = try encoder.encode(selector)
@@ -520,9 +519,20 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(payload["ordinal"] as? Int, 2)
         let element = try XCTUnwrap(payload["element"] as? [String: Any])
         XCTAssertNil(payload["container"])
-        XCTAssertEqual(element["heistId"] as? String, "button_save")
+        XCTAssertNil(element["heistId"])
         XCTAssertEqual(element["label"] as? String, "Save")
         XCTAssertEqual(element["traits"] as? [String], ["button"])
+        XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
+    }
+
+    func testSubtreeSelectorElementUsesCurrentCaptureHandleShape() throws {
+        let selector = SubtreeSelector.element(.heistId("button_save"))
+
+        let data = try encoder.encode(selector)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(payload["ordinal"])
+        let element = try XCTUnwrap(payload["element"] as? [String: Any])
+        XCTAssertEqual(element["heistId"] as? String, "button_save")
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 

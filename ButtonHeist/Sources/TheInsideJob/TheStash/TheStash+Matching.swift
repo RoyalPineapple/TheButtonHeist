@@ -203,10 +203,6 @@ extension TheStash {
 
 private extension Screen.ScreenElement {
     func matches(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
-        if let matchHeistId = matcher.heistId {
-            if matchHeistId.isEmpty { return false }
-            guard heistId == matchHeistId else { return false }
-        }
         return element.matches(matcher, mode: mode)
     }
 }
