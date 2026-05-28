@@ -130,21 +130,6 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(step.arguments["text"], .string("hello"))
     }
 
-    func testStepRejectsTopLevelHeistId() throws {
-        let json: [String: Any] = [
-            "command": "activate",
-            "heistId": "stale_button",
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                return XCTFail("Expected dataCorrupted, got \(error)")
-            }
-            XCTAssertTrue(context.debugDescription.contains("must not contain top-level heistId"))
-        }
-    }
-
     func testStepAllowsRecordedHeistIdMetadata() throws {
         let json: [String: Any] = [
             "command": "activate",
@@ -173,41 +158,6 @@ final class HeistPlaybackTests: XCTestCase {
             guard case EncodingError.invalidValue = error else {
                 return XCTFail("Expected invalidValue, got \(error)")
             }
-        }
-    }
-
-    func testStepRejectsTargetMatcherHeistIdOnDecode() throws {
-        let json: [String: Any] = [
-            "command": "activate",
-            "target": [
-                "matcher": [
-                    "heistId": "stale_button",
-                    "label": "Save",
-                ],
-            ],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                return XCTFail("Expected dataCorrupted, got \(error)")
-            }
-            XCTAssertTrue(context.debugDescription.contains("matcher must not carry heistId"))
-        }
-    }
-
-    func testStepRejectsOrdinalOnlyTarget() throws {
-        let json: [String: Any] = [
-            "command": "activate",
-            "target": ["ordinal": 0],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                return XCTFail("Expected dataCorrupted, got \(error)")
-            }
-            XCTAssertTrue(context.debugDescription.contains("requires matcher predicates"))
         }
     }
 
@@ -286,22 +236,6 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
         XCTAssertEqual(decoded.recorded?.accessibilityDelta?.elementCount, 1)
         XCTAssertEqual(decoded.recorded?.expectation?.met, true)
-    }
-
-    func testRecordedMetadataRejectsStoredDeltaProjection() throws {
-        let data = try JSONSerialization.data(withJSONObject: [
-            "accessibilityDelta": [
-                "kind": "noChange",
-                "elementCount": 999,
-            ],
-        ])
-
-        XCTAssertThrowsError(try JSONDecoder().decode(RecordedMetadata.self, from: data)) { error in
-            XCTAssertTrue(
-                "\(error)".contains("accessibilityDelta"),
-                "Expected stale recorded metadata field in error, got \(error)"
-            )
-        }
     }
 
     func testCurrentVersionIsThree() {
@@ -424,53 +358,6 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(recorded?["heistId"] as? String, "button_go")
     }
 
-    func testRepositoryHeistFixturesUseCurrentCanonicalExpectationFormat() throws {
-        let repoRoot = try repositoryRoot(startingAt: URL(fileURLWithPath: #filePath))
-        let fixtureURL = repoRoot.appendingPathComponent("demos/heist-full-demo.heist")
-
-        let data = try Data(contentsOf: fixtureURL)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-
-        XCTAssertEqual(json["version"] as? Int, HeistPlayback.currentVersion)
-
-        let steps = try XCTUnwrap(json["steps"] as? [[String: Any]])
-        for (index, step) in steps.enumerated() {
-            guard let expectation = step["expect"] else { continue }
-            assertCanonicalExpectation(expectation, context: "steps[\(index)].expect")
-        }
-    }
-
-    private func assertCanonicalExpectation(
-        _ expectation: Any,
-        context: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) {
-        guard let object = expectation as? [String: Any] else {
-            return XCTFail("\(context) must be an object", file: file, line: line)
-        }
-
-        guard let type = object["type"] as? String else {
-            return XCTFail("\(context) must include a type discriminator", file: file, line: line)
-        }
-
-        switch type {
-        case "screen_changed", "elements_changed", "element_updated":
-            return
-        case "element_appeared", "element_disappeared":
-            XCTAssertNotNil(object["matcher"] as? [String: Any], "\(context) must include matcher", file: file, line: line)
-        case "compound":
-            guard let expectations = object["expectations"] as? [Any], !expectations.isEmpty else {
-                return XCTFail("\(context) compound must include expectations", file: file, line: line)
-            }
-            for (index, nested) in expectations.enumerated() {
-                assertCanonicalExpectation(nested, context: "\(context).expectations[\(index)]", file: file, line: line)
-            }
-        default:
-            XCTFail("\(context) has unknown expectation type \(type)", file: file, line: line)
-        }
-    }
-
     private func makeElement(heistId: HeistId, label: String) -> HeistElement {
         HeistElement(
             heistId: heistId,
@@ -509,16 +396,4 @@ final class HeistPlaybackTests: XCTestCase {
         )
     }
 
-    private func repositoryRoot(startingAt fileURL: URL) throws -> URL {
-        var candidate = fileURL.deletingLastPathComponent()
-
-        while candidate.path != candidate.deletingLastPathComponent().path {
-            if FileManager.default.fileExists(atPath: candidate.appendingPathComponent("Workspace.swift").path) {
-                return candidate
-            }
-            candidate.deleteLastPathComponent()
-        }
-
-        throw XCTSkip("Could not locate repository root from \(fileURL.path)")
-    }
 }

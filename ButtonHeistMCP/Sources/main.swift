@@ -69,20 +69,20 @@ struct ButtonHeistMCPServer {
     }
 
     private static func decodeArguments(_ arguments: [String: Value]?) throws -> TheFence.CommandArgumentEnvelope {
-        var values: [String: TheFence.CommandArgumentValue] = [:]
+        var values: [String: HeistValue] = [:]
         for (key, value) in arguments ?? [:] {
-            values[key] = try commandArgumentValue(from: value, field: key)
+            values[key] = try heistValue(from: value, field: key)
         }
         return TheFence.CommandArgumentEnvelope(values: values)
     }
 
-    private static func commandArgumentValue(
+    private static func heistValue(
         from value: Value,
         field: String
-    ) throws -> TheFence.CommandArgumentValue {
+    ) throws -> HeistValue {
         switch value {
         case .null:
-            return .null
+            throw SchemaValidationError(field: field, observed: "null", expected: "JSON scalar, array, or object")
         case .bool(let bool):
             return .bool(bool)
         case .int(let int):
@@ -98,16 +98,16 @@ struct ButtonHeistMCPServer {
             throw SchemaValidationError(
                 field: field,
                 observed: "data",
-                expected: "JSON null, boolean, number, string, array, or object"
+                expected: "JSON boolean, number, string, array, or object"
             )
         case .array(let values):
             return .array(try values.enumerated().map { index, nested in
-                try commandArgumentValue(from: nested, field: "\(field)[\(index)]")
+                try heistValue(from: nested, field: "\(field)[\(index)]")
             })
         case .object(let object):
-            var result: [String: TheFence.CommandArgumentValue] = [:]
+            var result: [String: HeistValue] = [:]
             for (key, nested) in object {
-                result[key] = try commandArgumentValue(from: nested, field: "\(field).\(key)")
+                result[key] = try heistValue(from: nested, field: "\(field).\(key)")
             }
             return .object(result)
         }

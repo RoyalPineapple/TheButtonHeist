@@ -18,6 +18,13 @@ struct CLIParsedRequest {
     }
 }
 
+struct CLIRequestBuildError: Error, CustomStringConvertible {
+    let message: String
+    let requestId: PublicRequestId?
+
+    var description: String { message }
+}
+
 enum CLIRequestBuilder {
 
     static func operation(
@@ -100,18 +107,29 @@ enum CLIRequestBuilder {
     static func parseMachineRequest(_ line: String) throws -> CLIParsedRequest {
         let data = Data(line.utf8)
         let value = try JSONDecoder().decode(HeistValue.self, from: data)
-        guard case .object(let object) = value,
-              case .string(_)? = object[FenceParameterKey.command.rawValue] else {
+        guard case .object(let object) = value else {
             throw ValidationError("Expected JSON object with string field 'command'")
         }
-        let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
         let requestId = try object["id"].map(PublicRequestId.init(value:))
-        return CLIParsedRequest(
-            operation: try operation(command: descriptor.command, parameters: commandParameters(from: object)),
-            requestId: requestId,
-            descriptor: descriptor,
-            mode: .machine
-        )
+        do {
+            guard case .string(_)? = object[FenceParameterKey.command.rawValue] else {
+                throw ValidationError("Expected JSON object with string field 'command'")
+            }
+            let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
+            return CLIParsedRequest(
+                operation: try operation(command: descriptor.command, parameters: commandParameters(from: object)),
+                requestId: requestId,
+                descriptor: descriptor,
+                mode: .machine
+            )
+        } catch let error as CLIRequestBuildError {
+            throw error
+        } catch {
+            throw CLIRequestBuildError(
+                message: diagnosticMessage(for: error),
+                requestId: requestId
+            )
+        }
     }
 
     @discardableResult

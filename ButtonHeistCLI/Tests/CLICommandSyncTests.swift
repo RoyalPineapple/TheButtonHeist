@@ -211,6 +211,21 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.requestId, .signedInteger(Int64.max))
     }
 
+    func testSharedRequestBuilderCarriesMachineRequestIdOnValidationError() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(
+                from: #"{"id":"r1","command":"wait_for_change","expect":"screen_changed"}"#
+            )
+        ) { error in
+            let buildError = error as? CLIRequestBuildError
+            XCTAssertEqual(buildError?.requestId, .string("r1"))
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Invalid expectation type"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
     func testSharedRequestBuilderRejectsNonScalarMachineRequestId() {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(

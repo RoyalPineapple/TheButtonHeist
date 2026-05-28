@@ -105,8 +105,9 @@ final class ReplSession {
             )
         } catch {
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
+            let requestId = (error as? CLIRequestBuildError)?.requestId
             if isMachineInput {
-                return (.error("Invalid JSON: \(message)"), nil)
+                return (.error("Invalid JSON: \(message)"), requestId)
             }
             return (.error(message), nil)
         }

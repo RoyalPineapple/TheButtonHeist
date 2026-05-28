@@ -134,6 +134,57 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    private func assertOperationValidationError(
+        command: TheFence.Command,
+        arguments: [String: HeistValue] = [:],
+        equals expected: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            let response = try await fence.execute(operation: normalizedOperation(command: command, arguments: arguments))
+            if case .error(let message, _) = response {
+                XCTAssertEqual(message, expected, file: file, line: line)
+            } else {
+                XCTFail("Expected .error response, got: \(response)", file: file, line: line)
+            }
+        } catch {
+            XCTFail("Unexpected throw: \(error)", file: file, line: line)
+        }
+    }
+
+    @ButtonHeistActor
+    private func assertOperationPassesValidation(
+        command: TheFence.Command,
+        arguments: [String: HeistValue] = [:],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let (fence, _) = makeConnectedFence()
+        do {
+            let response = try await fence.execute(operation: normalizedOperation(command: command, arguments: arguments))
+            if case .error(let message, _) = response {
+                XCTFail("Got validation error: \(message)", file: file, line: line)
+            }
+        } catch {
+            XCTFail("Unexpected throw: \(error)", file: file, line: line)
+        }
+    }
+
+    @ButtonHeistActor
+    private func decodedElementTarget(
+        _ fence: TheFence,
+        target: HeistValue? = nil
+    ) throws -> ElementTarget? {
+        var arguments: [String: HeistValue] = [:]
+        if let target {
+            arguments["target"] = target
+        }
+        return try fence.decodedElementTarget(TheFence.CommandArgumentEnvelope(values: arguments))
+    }
+
+    @ButtonHeistActor
     private func decodedRunBatch(
         _ fence: TheFence,
         steps: [[String: Any]],
@@ -612,8 +663,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithIdentifier() async throws {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["target": matcherTarget(identifier: "myButton")]
-        guard let target = try fence.decodedElementTarget(try TheFence.CommandArgumentEnvelope(arguments: dict)),
+        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(identifier: "myButton")),
               case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -623,8 +673,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithHeistId() async throws {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["target": heistTarget("button_save")]
-        guard let target = try fence.decodedElementTarget(try TheFence.CommandArgumentEnvelope(arguments: dict)),
+        guard let target = try decodedElementTarget(fence, target: heistTargetValue("button_save")),
               case .heistId(let id) = target else {
             return XCTFail("Expected .heistId")
         }
@@ -634,8 +683,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithMatcherFields() async throws {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["target": matcherTarget(label: "Save", traits: ["button"])]
-        guard let target = try fence.decodedElementTarget(try TheFence.CommandArgumentEnvelope(arguments: dict)),
+        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(label: "Save", traits: ["button"])),
               case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -646,8 +694,15 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetRejectsHeistIdAndMatcher() async throws {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["target": ["heistId": "button_save", "matcher": ["label": "Save"]]]
-        XCTAssertThrowsError(try fence.decodedElementTarget(try TheFence.CommandArgumentEnvelope(arguments: dict))) { error in
+        XCTAssertThrowsError(
+            try decodedElementTarget(
+                fence,
+                target: elementTargetValue([
+                    "heistId": .string("button_save"),
+                    "matcher": .object(["label": .string("Save")]),
+                ])
+            )
+        ) { error in
             XCTAssertTrue(
                 "\(error)".contains("either heistId or matcher"),
                 "Expected mixed selector rejection, got \(error)"
@@ -658,8 +713,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["target": matcherTarget(label: "Save", ordinal: 2)]
-        guard let target = try fence.decodedElementTarget(try TheFence.CommandArgumentEnvelope(arguments: dict)),
+        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(label: "Save", ordinal: 2)),
               case .matcher(let matcher, let ordinal) = target else {
             return XCTFail("Expected .matcher with ordinal")
         }
@@ -669,8 +723,9 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testRequestTargetRejectsNegativeOrdinal() async {
-        await assertValidationError(
-            ["command": "activate", "target": ["matcher": ["label": "Save"], "ordinal": -1]],
+        await assertOperationValidationError(
+            command: .activate,
+            arguments: ["target": matcherTargetValue(label: "Save", ordinal: -1)],
             equals: "schema validation failed for target.ordinal: observed integer -1; expected integer >= 0"
         )
     }
@@ -678,8 +733,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithoutOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
-        let dict: [String: Any] = ["target": matcherTarget(label: "Save")]
-        guard let target = try fence.decodedElementTarget(try TheFence.CommandArgumentEnvelope(arguments: dict)),
+        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(label: "Save")),
               case .matcher(_, let ordinal) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -689,57 +743,64 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetMissing() async throws {
         let (fence, _) = makeConnectedFence()
-        XCTAssertNil(try fence.decodedElementTarget(try TheFence.CommandArgumentEnvelope(arguments: [:])))
+        XCTAssertNil(try decodedElementTarget(fence))
     }
 
     // MARK: - Schema Validation Diagnostics
 
     @ButtonHeistActor
     func testSchemaValidationReportsBadFieldType() async {
-        await assertValidationError(
-            ["command": "type_text", "text": 3],
+        await assertOperationValidationError(
+            command: .typeText,
+            arguments: ["text": .int(3)],
             equals: "schema validation failed for text: observed integer 3; expected string"
         )
     }
 
     @ButtonHeistActor
     func testSchemaValidationReportsBadCoercedValue() async {
-        await assertValidationError(
-            ["command": "wait_for_change", "timeout": "forever"],
+        await assertOperationValidationError(
+            command: .waitForChange,
+            arguments: ["timeout": .string("forever")],
             equals: "schema validation failed for timeout: observed string \"forever\"; expected number"
         )
     }
 
     @ButtonHeistActor
     func testSchemaValidationReportsRangeFailure() async {
-        await assertValidationError(
-            ["command": "start_recording", "fps": 16],
+        await assertOperationValidationError(
+            command: .startRecording,
+            arguments: ["fps": .int(16)],
             equals: "schema validation failed for fps: observed integer 16; expected integer in 1...15"
         )
     }
 
     @ButtonHeistActor
     func testSchemaValidatedStrictTypesStillWork() async {
-        await assertPassesValidation(
-            ["command": "start_recording", "fps": 5]
+        await assertOperationPassesValidation(
+            command: .startRecording,
+            arguments: ["fps": .int(5)]
         )
-        await assertPassesValidation(
-            ["command": "start_recording", "scale": 0.5]
+        await assertOperationPassesValidation(
+            command: .startRecording,
+            arguments: ["scale": .double(0.5)]
         )
     }
 
     @ButtonHeistActor
     func testSchemaValidationRejectsStringIntegerCoercion() async {
-        await assertValidationError(
-            ["command": "start_recording", "fps": "5"],
+        await assertOperationValidationError(
+            command: .startRecording,
+            arguments: ["fps": .string("5")],
             equals: "schema validation failed for fps: observed string \"5\"; expected integer"
         )
     }
 
     @ButtonHeistActor
     func testSchemaValidationRejectsStringNumberCoercion() async {
-        await assertValidationError(
-            ["command": "start_recording", "scale": "0.5"],
+        await assertOperationValidationError(
+            command: .startRecording,
+            arguments: ["scale": .string("0.5")],
             equals: "schema validation failed for scale: observed string \"0.5\"; expected number"
         )
     }
@@ -4068,6 +4129,44 @@ private func matcherTarget(
     var target: [String: Any] = ["matcher": matcher]
     target["ordinal"] = ordinal
     return target
+}
+
+private func normalizedOperation(
+    command: TheFence.Command,
+    arguments: [String: HeistValue] = [:]
+) -> NormalizedOperation {
+    NormalizedOperation(
+        command: command,
+        arguments: TheFence.CommandArgumentEnvelope(values: arguments)
+    )
+}
+
+private func heistTargetValue(_ heistId: String) -> HeistValue {
+    elementTargetValue(["heistId": .string(heistId)])
+}
+
+private func matcherTargetValue(
+    label: String? = nil,
+    identifier: String? = nil,
+    value: String? = nil,
+    traits: [String]? = nil,
+    excludeTraits: [String]? = nil,
+    ordinal: Int? = nil
+) -> HeistValue {
+    var matcher: [String: HeistValue] = [:]
+    if let label { matcher["label"] = .string(label) }
+    if let identifier { matcher["identifier"] = .string(identifier) }
+    if let value { matcher["value"] = .string(value) }
+    if let traits { matcher["traits"] = .array(traits.map { .string($0) }) }
+    if let excludeTraits { matcher["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
+
+    var target: [String: HeistValue] = ["matcher": .object(matcher)]
+    if let ordinal { target["ordinal"] = .int(ordinal) }
+    return elementTargetValue(target)
+}
+
+private func elementTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
+    .object(fields)
 }
 
 private func parseExpectation(_ request: [String: Any]) throws -> ActionExpectation? {
