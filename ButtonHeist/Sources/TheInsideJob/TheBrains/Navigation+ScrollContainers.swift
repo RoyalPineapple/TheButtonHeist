@@ -43,7 +43,7 @@ extension Navigation {
             return .resolved(plan.target)
         case .element(let elementTarget):
             guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-                return .failed(liveScrollElementFailureMessage(elementTarget, commandName: commandName))
+                return .failed(liveScrollElementFailureMessage(.currentCapture(elementTarget), commandName: commandName))
             }
             let targetDescription = Self.describeScrollTarget(resolved.screenElement)
             guard let scrollView = stash.liveScrollView(for: resolved.screenElement) else {

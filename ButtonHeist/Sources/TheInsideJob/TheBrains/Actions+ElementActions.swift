@@ -152,7 +152,7 @@ extension Actions {
             )
         case .element(let elementTarget, let actionName):
             return await performElementAction(
-                target: elementTarget,
+                target: .currentCapture(elementTarget),
                 method: .customAction,
                 deallocatedBoundary: "custom action"
             ) { context in

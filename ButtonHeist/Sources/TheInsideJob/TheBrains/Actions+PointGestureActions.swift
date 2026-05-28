@@ -93,7 +93,7 @@ extension Actions {
         }
         switch selection {
         case .unitElement(let elementTarget, let start, let end, _):
-            let normalizedTarget = normalizePointGestureTarget(elementTarget)
+            let normalizedTarget = normalizePointGestureTarget(.currentCapture(elementTarget))
             let actionableTarget: SemanticActionability.SemanticActionableTarget
             switch await actionability.makeActionable(
                 for: normalizedTarget,

@@ -651,7 +651,7 @@ final class TheBrainsScrollTests: XCTestCase {
         var didDispatch = false
 
         let result = await brains.actions.performElementAction(
-            target: ElementTarget.heistId("offscreen_button"),
+            target: .currentCapture(.heistId("offscreen_button")),
             method: .activate,
             requireInteractive: false
         ) { _ in

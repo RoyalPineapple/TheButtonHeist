@@ -242,7 +242,7 @@ extension TheBrains {
         let message = waitForTimeoutMessage(
             absent: absent,
             elapsed: elapsed,
-            target: executableTarget,
+            target: elementTarget,
             resolution: resolution
         )
         return .failure(.waitFor, message: message, failureKind: .timeout)
