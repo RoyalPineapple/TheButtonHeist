@@ -4,11 +4,15 @@ import ButtonHeist
 
 final class ElementTargetOptionsTests: XCTestCase {
 
-    func testOrdinalOnlyDoesNotCountAsTapTarget() throws {
+    func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {
         let command = try TapSubcommand.parse(["--ordinal", "0"])
 
-        XCTAssertFalse(try command.element.hasTarget)
-        XCTAssertNil(try command.element.parsedTarget())
+        XCTAssertThrowsError(try command.element.parsedTarget()) { error in
+            XCTAssertTrue(
+                String(describing: error).contains("ElementTarget requires heistId or matcher"),
+                "Unexpected error: \(error)"
+            )
+        }
     }
 
     func testTapWithoutTargetOrCoordinatesStillFailsValidation() async throws {

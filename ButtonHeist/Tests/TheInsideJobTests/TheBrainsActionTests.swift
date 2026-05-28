@@ -70,20 +70,6 @@ private final class AdjustableGeometryView: UIView {
     }
 }
 
-private struct TypedEndpointDragInput: DragExecutionInput {
-    let start: GesturePointSelection
-    let end: ScreenPoint
-    let duration: Double?
-
-    var resolvedDuration: Double {
-        duration ?? DragTarget.defaultDuration
-    }
-
-    func dragStartSelection() throws -> GesturePointSelection {
-        start
-    }
-}
-
 @MainActor
 final class TheBrainsActionTests: XCTestCase {
 
@@ -973,9 +959,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(dispatchedPoint, rawPoint)
     }
 
-    func testExecuteDragReadsTypedEndpointFromExecutionInput() async {
+    func testExecuteDragReadsTypedEndpointFromDragTarget() async {
         let result = await brains.actions.executeDrag(
-            TypedEndpointDragInput(
+            DragTarget(
                 start: .coordinate(ScreenPoint(x: 10, y: 10)),
                 end: ScreenPoint(x: .infinity, y: 20),
                 duration: 0.01

@@ -23,13 +23,12 @@ public struct DragTarget: Codable, Sendable {
         let container = try decoder.container(keyedBy: DragPointCodingKeys.self)
         let startX = try container.decodeIfPresent(Double.self, forKey: .startX)
         let startY = try container.decodeIfPresent(Double.self, forKey: .startY)
-        let startSelection = try makeGesturePointSelection(
+        guard let startSelection = try makeGesturePointSelection(
             elementTarget: elementTarget,
             x: startX,
             y: startY,
             field: "startPoint"
-        )
-        guard startSelection.isSpecified else {
+        ) else {
             throw GestureProjectionError.missingGesturePoint(field: "startPoint")
         }
         self.start = startSelection
@@ -48,8 +47,6 @@ public struct DragTarget: Codable, Sendable {
         case .coordinate(let point):
             try container.encode(point.x, forKey: .startX)
             try container.encode(point.y, forKey: .startY)
-        case .unspecified:
-            break
         }
         try container.encode(end.x, forKey: .endX)
         try container.encode(end.y, forKey: .endY)

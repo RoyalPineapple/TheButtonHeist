@@ -169,8 +169,7 @@ extension TwoFingerTapTarget: CustomStringConvertible {
 }
 
 private func decodeRequiredGestureCenterSelection(from decoder: Decoder) throws -> GesturePointSelection {
-    let center = try decodeGestureCenterSelection(from: decoder)
-    guard center.isSpecified else {
+    guard let center = try decodeGestureCenterSelection(from: decoder) else {
         throw DecodingError.dataCorrupted(.init(
             codingPath: decoder.codingPath,
             debugDescription: "center requires an element target or center coordinates"

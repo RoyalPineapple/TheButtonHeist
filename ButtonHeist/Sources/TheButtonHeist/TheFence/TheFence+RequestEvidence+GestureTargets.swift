@@ -3,7 +3,10 @@ import TheScore
 extension TapTarget {
     func heistRecordingProjection() throws -> HeistRecordingProjection {
         try HeistRecordingProjection(
-            arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
+            arguments: heistEvidenceArguments(
+                accepting: ["pointX", "pointY"],
+                renaming: ["pointX": "x", "pointY": "y"]
+            ),
             elementTarget: selection.elementTarget,
             coordinateOnly: selection.screenPoint != nil
         )
@@ -13,7 +16,10 @@ extension TapTarget {
 extension LongPressTarget {
     func heistRecordingProjection() throws -> HeistRecordingProjection {
         try HeistRecordingProjection(
-            arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
+            arguments: heistEvidenceArguments(
+                accepting: ["pointX", "pointY", "duration"],
+                renaming: ["pointX": "x", "pointY": "y"]
+            ),
             elementTarget: selection.elementTarget,
             coordinateOnly: selection.screenPoint != nil
         )
@@ -23,7 +29,9 @@ extension LongPressTarget {
 extension SwipeTarget {
     func heistRecordingProjection() throws -> HeistRecordingProjection {
         try HeistRecordingProjection(
-            arguments: heistEvidenceArguments(),
+            arguments: heistEvidenceArguments(
+                accepting: ["startX", "startY", "endX", "endY", "direction", "duration", "start", "end"]
+            ),
             elementTarget: selection.bookKeeperElementTarget,
             coordinateOnly: selection.bookKeeperElementTarget == nil
         )
@@ -33,7 +41,9 @@ extension SwipeTarget {
 extension DragTarget {
     func heistRecordingProjection() throws -> HeistRecordingProjection {
         try HeistRecordingProjection(
-            arguments: heistEvidenceArguments(),
+            arguments: heistEvidenceArguments(
+                accepting: ["startX", "startY", "endX", "endY", "duration"]
+            ),
             elementTarget: start.elementTarget,
             coordinateOnly: start.elementTarget == nil
         )
@@ -43,7 +53,9 @@ extension DragTarget {
 extension PinchTarget {
     func heistRecordingProjection() throws -> HeistRecordingProjection {
         try HeistRecordingProjection(
-            arguments: heistEvidenceArguments(),
+            arguments: heistEvidenceArguments(
+                accepting: ["centerX", "centerY", "scale", "spread", "duration"]
+            ),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
         )
@@ -53,7 +65,9 @@ extension PinchTarget {
 extension RotateTarget {
     func heistRecordingProjection() throws -> HeistRecordingProjection {
         try HeistRecordingProjection(
-            arguments: heistEvidenceArguments(),
+            arguments: heistEvidenceArguments(
+                accepting: ["centerX", "centerY", "angle", "radius", "duration"]
+            ),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
         )
@@ -63,7 +77,9 @@ extension RotateTarget {
 extension TwoFingerTapTarget {
     func heistRecordingProjection() throws -> HeistRecordingProjection {
         try HeistRecordingProjection(
-            arguments: heistEvidenceArguments(),
+            arguments: heistEvidenceArguments(
+                accepting: ["centerX", "centerY", "spread"]
+            ),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
         )

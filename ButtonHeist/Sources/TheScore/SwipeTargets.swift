@@ -1,14 +1,6 @@
 public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConvertible {
     case coordinate(ScreenPoint)
     case direction(SwipeDirection)
-    case unspecified
-
-    public var isSpecified: Bool {
-        if case .unspecified = self {
-            return false
-        }
-        return true
-    }
 
     public var description: String {
         switch self {
@@ -16,8 +8,6 @@ public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConverti
             return point.description
         case .direction(let direction):
             return "\(direction)"
-        case .unspecified:
-            return "unspecified"
         }
     }
 }
@@ -78,7 +68,7 @@ private func swipeDestinationSelection(
     x: Double?,
     y: Double?,
     direction: SwipeDirection?
-) throws -> SwipeDestinationSelection {
+) throws -> SwipeDestinationSelection? {
     if direction != nil, x != nil || y != nil {
         throw GestureProjectionError.mixedCoordinateAndDirection(field: "endPoint")
     }
@@ -91,7 +81,7 @@ private func swipeDestinationSelection(
     if let direction {
         return .direction(direction)
     }
-    return .unspecified
+    return nil
 }
 
 public struct SwipeTarget: Codable, Sendable {
@@ -175,7 +165,7 @@ public struct SwipeTarget: Codable, Sendable {
             field: "startPoint"
         )
         let destination = try swipeDestinationSelection(x: endX, y: endY, direction: direction)
-        guard startSelection.isSpecified, destination.isSpecified else {
+        guard let startSelection, let destination else {
             throw GestureProjectionError.missingSwipeIntent
         }
         self.selection = .point(start: startSelection, destination: destination)
@@ -207,8 +197,6 @@ public struct SwipeTarget: Codable, Sendable {
             case .coordinate(let point):
                 try container.encode(point.x, forKey: .startX)
                 try container.encode(point.y, forKey: .startY)
-            case .unspecified:
-                break
             }
             switch destination {
             case .coordinate(let point):
@@ -216,8 +204,6 @@ public struct SwipeTarget: Codable, Sendable {
                 try container.encode(point.y, forKey: .endY)
             case .direction(let direction):
                 try container.encode(direction, forKey: .direction)
-            case .unspecified:
-                break
             }
             try container.encodeIfPresent(duration, forKey: .duration)
         }

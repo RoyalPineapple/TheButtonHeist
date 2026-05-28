@@ -11,60 +11,52 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
-        let pendingRotorResultToken = stash.preparePendingRotorResult(
-            targetedHeistId: message.pendingRotorResultTargetHeistId
-        )
-        defer {
-            if let pendingRotorResultToken {
-                stash.clearPendingRotorResult(consumedToken: pendingRotorResultToken)
-            }
-        }
-
+        expireRotorContinuationIfCommandCannotConsumeIt(message)
         switch message {
         case .activate(let target):
-            return await performInteraction(command: message) { await self.actions.executeActivate(target) }
+            return await performInteraction(method: .activate) { await self.actions.executeActivate(target) }
         case .increment(let target):
-            return await performInteraction(command: message) { await self.actions.executeIncrement(target) }
+            return await performInteraction(method: .increment) { await self.actions.executeIncrement(target) }
         case .decrement(let target):
-            return await performInteraction(command: message) { await self.actions.executeDecrement(target) }
+            return await performInteraction(method: .decrement) { await self.actions.executeDecrement(target) }
         case .performCustomAction(let target):
-            return await performInteraction(command: message) { await self.actions.executeCustomAction(target) }
+            return await performInteraction(method: .customAction) { await self.actions.executeCustomAction(target) }
         case .rotor(let target):
-            return await performInteraction(command: message) { await self.actions.executeRotor(target) }
+            return await performRotor(target)
         case .editAction(let target):
-            return await performInteraction(command: message) { await self.actions.executeEditAction(target) }
+            return await performInteraction(method: .editAction) { await self.actions.executeEditAction(target) }
         case .setPasteboard(let target):
-            return await performInteraction(command: message) { await self.actions.executeSetPasteboard(target) }
+            return await performInteraction(method: .setPasteboard) { await self.actions.executeSetPasteboard(target) }
         case .resignFirstResponder:
-            return await performInteraction(command: message) { await self.actions.executeResignFirstResponder() }
+            return await performInteraction(method: .resignFirstResponder) { await self.actions.executeResignFirstResponder() }
         case .oneFingerTap(let target):
-            return await performInteraction(command: message) { await self.actions.executeTap(target) }
+            return await performInteraction(method: .syntheticTap) { await self.actions.executeTap(target) }
         case .longPress(let target):
-            return await performInteraction(command: message) { await self.actions.executeLongPress(target) }
+            return await performInteraction(method: .syntheticLongPress) { await self.actions.executeLongPress(target) }
         case .swipe(let target):
-            return await performInteraction(command: message) { await self.actions.executeSwipe(target) }
+            return await performInteraction(method: .syntheticSwipe) { await self.actions.executeSwipe(target) }
         case .drag(let target):
-            return await performInteraction(command: message) { await self.actions.executeDrag(target) }
+            return await performInteraction(method: .syntheticDrag) { await self.actions.executeDrag(target) }
         case .pinch(let target):
-            return await performInteraction(command: message) { await self.actions.executePinch(target) }
+            return await performInteraction(method: .syntheticPinch) { await self.actions.executePinch(target) }
         case .rotate(let target):
-            return await performInteraction(command: message) { await self.actions.executeRotate(target) }
+            return await performInteraction(method: .syntheticRotate) { await self.actions.executeRotate(target) }
         case .twoFingerTap(let target):
-            return await performInteraction(command: message) { await self.actions.executeTwoFingerTap(target) }
+            return await performInteraction(method: .syntheticTwoFingerTap) { await self.actions.executeTwoFingerTap(target) }
         case .drawPath(let target):
-            return await performInteraction(command: message) { await self.actions.executeDrawPath(target) }
+            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawPath(target) }
         case .drawBezier(let target):
-            return await performInteraction(command: message) { await self.actions.executeDrawBezier(target) }
+            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawBezier(target) }
         case .typeText(let target):
-            return await performInteraction(command: message) { await self.actions.executeTypeText(target) }
+            return await performInteraction(method: .typeText) { await self.actions.executeTypeText(target) }
         case .scroll(let target):
-            return await performInteraction(command: message) { await self.navigation.executeScroll(target) }
+            return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
-            return await performInteraction(command: message) { await self.navigation.executeScrollToVisible(target) }
+            return await performInteraction(method: .scrollToVisible) { await self.navigation.executeScrollToVisible(target) }
         case .elementSearch(let target):
-            return await performElementSearch(target: target, command: message)
+            return await performElementSearch(target: target, method: .elementSearch)
         case .scrollToEdge(let target):
-            return await performInteraction(command: message) { await self.navigation.executeScrollToEdge(target) }
+            return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
         case .waitFor(let target):
             return await performWaitFor(target: target)
         case .waitForIdle(let target):
@@ -100,12 +92,11 @@ extension TheBrains {
 
     // MARK: - Interaction Pipeline
 
-    /// Standard interaction: refresh → snapshot → execute → delta.
-    func performInteraction(
-        command: ClientMessage,
-        interaction: () async -> TheSafecracker.InteractionResult
-    ) async -> ActionResult {
-        await performInteraction(method: Self.diagnosticMethod(for: command), interaction: interaction)
+    private func expireRotorContinuationIfCommandCannotConsumeIt(_ message: ClientMessage) {
+        if case .rotor = message {
+            return
+        }
+        clearPendingRotorResult()
     }
 
     func performInteraction(
@@ -128,27 +119,32 @@ extension TheBrains {
         )
     }
 
-    /// Element search: dedicated path because the scroll loop manages its own refresh/settle.
-    func performElementSearch(
-        target: ElementSearchTarget,
-        command: ClientMessage
-    ) async -> ActionResult {
-        await performElementSearch(target: target, method: Self.diagnosticMethod(for: command))
+    func performRotor(_ target: RotorTarget) async -> ActionResult {
+        let pendingRotorResultToken = stash.preparePendingRotorResult(
+            targetedHeistId: target.continuation.currentHeistId
+        )
+        defer {
+            if let pendingRotorResultToken {
+                stash.clearPendingRotorResult(consumedToken: pendingRotorResultToken)
+            }
+        }
+        return await performInteraction(method: .rotor) { await self.actions.executeRotor(target) }
     }
 
+    /// Element search: dedicated path because the scroll loop manages its own refresh/settle.
     func performElementSearch(
         target: ElementSearchTarget,
         method: ActionMethod
     ) async -> ActionResult {
         await performElementSearch(
-            elementTarget: target.elementTarget,
+            elementTarget: .currentCapture(target.elementTarget),
             direction: target.direction,
             method: method
         )
     }
 
     func performElementSearch(
-        elementTarget: (any SemanticElementTarget)?,
+        elementTarget: SemanticElementTarget?,
         direction: ScrollSearchDirection,
         method: ActionMethod
     ) async -> ActionResult {
@@ -171,14 +167,14 @@ extension TheBrains {
     /// Wait for an element to appear or disappear.
     func performWaitFor(target: WaitForTarget) async -> ActionResult {
         await performWaitFor(
-            elementTarget: target.elementTarget,
+            elementTarget: .currentCapture(target.elementTarget),
             absent: target.absent,
             timeout: target.timeout
         )
     }
 
     func performWaitFor(
-        elementTarget: any SemanticElementTarget,
+        elementTarget: SemanticElementTarget,
         absent: Bool?,
         timeout: Double?
     ) async -> ActionResult {
@@ -204,7 +200,7 @@ extension TheBrains {
 
     /// Execute the wait_for polling loop.
     private func executeWaitFor(
-        elementTarget: any SemanticElementTarget,
+        elementTarget: SemanticElementTarget,
         absent: Bool,
         timeout: Double
     ) async -> TheSafecracker.InteractionResult {
@@ -242,7 +238,7 @@ extension TheBrains {
         let message = waitForTimeoutMessage(
             absent: absent,
             elapsed: elapsed,
-            target: executableTarget,
+            target: elementTarget,
             resolution: resolution
         )
         return .failure(.waitFor, message: message, failureKind: .timeout)
@@ -273,7 +269,7 @@ extension TheBrains {
     private func waitForTimeoutMessage(
         absent: Bool,
         elapsed: String,
-        target: any SemanticElementTarget,
+        target: SemanticElementTarget,
         resolution: TheStash.TargetResolution
     ) -> String {
         let expected = absent ? "element to disappear" : "element to appear"
@@ -299,18 +295,20 @@ extension TheBrains {
         return parts.joined(separator: "; ")
     }
 
-    private func waitForTargetDescription(_ target: any SemanticElementTarget) -> String {
-        if let heistId = target.exactHeistId {
-            return "heistId=\"\(heistId)\""
-        }
-        guard let matcher = target.semanticMatcher?.nonEmpty else {
+    private func waitForTargetDescription(_ target: SemanticElementTarget) -> String {
+        guard let executableTarget = target.executableTarget else {
             return "<missing semantic matcher>"
         }
-        var description = stash.formatMatcher(matcher)
-        if let ordinal = target.semanticOrdinal {
-            description += " ordinal=\(ordinal)"
+        switch executableTarget {
+        case .heistId(let heistId):
+            return "heistId=\"\(heistId)\""
+        case .matcher(let matcher, let ordinal):
+            var description = stash.formatMatcher(matcher)
+            if let ordinal {
+                description += " ordinal=\(ordinal)"
+            }
+            return description
         }
-        return description
     }
 
     static func waitForErrorKind(for failureKind: TheSafecracker.FailureKind?) -> ErrorKind {
@@ -375,94 +373,6 @@ extension TheBrains {
         )
     }
 
-    /// Map an executable ClientMessage to the ActionMethod that identifies it
-    /// for diagnostic output. Protocol/control messages are rejected before
-    /// action execution and must not produce ActionResult values.
-    static func diagnosticMethod(for message: ClientMessage) -> ActionMethod {
-        switch message {
-        case .activate: return .activate
-        case .increment: return .increment
-        case .decrement: return .decrement
-        case .performCustomAction: return .customAction
-        case .rotor: return .rotor
-        case .editAction: return .editAction
-        case .setPasteboard: return .setPasteboard
-        case .getPasteboard: return .getPasteboard
-        case .resignFirstResponder: return .resignFirstResponder
-        case .oneFingerTap: return .syntheticTap
-        case .longPress: return .syntheticLongPress
-        case .swipe: return .syntheticSwipe
-        case .drag: return .syntheticDrag
-        case .pinch: return .syntheticPinch
-        case .rotate: return .syntheticRotate
-        case .twoFingerTap: return .syntheticTwoFingerTap
-        case .drawPath, .drawBezier: return .syntheticDrawPath
-        case .typeText: return .typeText
-        case .scroll: return .scroll
-        case .scrollToVisible: return .scrollToVisible
-        case .elementSearch: return .elementSearch
-        case .scrollToEdge: return .scrollToEdge
-        case .waitForIdle: return .waitForIdle
-        case .waitFor: return .waitFor
-        case .waitForChange: return .waitForChange
-        case .batchExecutionPlan: return .batchExecutionPlan
-        case .explore: return .explore
-        case .clientHello, .authenticate, .requestInterface,
-             .ping, .status, .requestScreen,
-             .startRecording, .stopRecording:
-            preconditionFailure("Non-executable client message reached action diagnostics: \(message.canonicalName)")
-        }
-    }
-
-}
-
-private extension ClientMessage {
-
-    var pendingRotorResultTargetHeistId: HeistId? {
-        switch self {
-        case .rotor(let target):
-            // Retained out-of-tree rotor results are cursor state only. They
-            // may seed the next rotor predicate, but never semantic actions.
-            return target.continuation.currentHeistId
-        case .activate,
-             .increment,
-             .decrement,
-             .performCustomAction,
-             .oneFingerTap,
-             .longPress,
-             .swipe,
-             .drag,
-             .pinch,
-             .rotate,
-             .twoFingerTap,
-             .typeText,
-             .scrollToVisible:
-            return nil
-        case .clientHello,
-             .authenticate,
-             .requestInterface,
-             .ping,
-             .status,
-             .drawPath,
-             .drawBezier,
-             .editAction,
-             .scroll,
-             .elementSearch,
-             .scrollToEdge,
-             .resignFirstResponder,
-             .setPasteboard,
-             .getPasteboard,
-             .waitForIdle,
-             .waitFor,
-             .waitForChange,
-             .batchExecutionPlan,
-             .requestScreen,
-             .explore,
-             .startRecording,
-             .stopRecording:
-            return nil
-        }
-    }
 }
 
 #endif // DEBUG

@@ -13,11 +13,11 @@ extension Navigation {
     /// Iterative search: page through scroll content looking for an element.
     /// `element_search` never delegates to semantic reveal/actionability commands.
     func executeElementSearch(_ target: ElementSearchTarget) async -> TheSafecracker.InteractionResult {
-        await executeElementSearch(elementTarget: target.elementTarget, direction: target.direction)
+        await executeElementSearch(elementTarget: .currentCapture(target.elementTarget), direction: target.direction)
     }
 
     func executeElementSearch(
-        elementTarget: (any SemanticElementTarget)?,
+        elementTarget: SemanticElementTarget?,
         direction: ScrollSearchDirection
     ) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = elementTarget else {

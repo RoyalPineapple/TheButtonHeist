@@ -9,14 +9,14 @@ extension Actions {
     // MARK: - Rotor Actions
 
     func executeRotor(
-        _ target: some RotorExecutionInput
+        _ target: RotorTarget
     ) async -> TheSafecracker.InteractionResult {
         let direction = target.direction
         let rotor = target.selection.rotorName
         let rotorIndex = target.selection.rotorIndex
         let method: ActionMethod = .rotor
         return await performElementAction(
-            target: target.rotorElementTarget,
+            target: .currentCapture(target.elementTarget),
             method: method,
             requireInteractive: false
         ) { context in

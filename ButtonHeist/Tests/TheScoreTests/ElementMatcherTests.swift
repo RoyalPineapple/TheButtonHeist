@@ -23,28 +23,6 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(ElementMatcher(label: "Save").nonEmpty, ElementMatcher(label: "Save"))
     }
 
-    func testElementTargetMatcherInitializerDropsEmptyMatcher() {
-        XCTAssertNil(ElementTarget(matcher: ElementMatcher()))
-
-        let target = ElementTarget(heistId: "save_button", matcher: ElementMatcher())
-        guard case .heistId(let id) = target else {
-            return XCTFail("Expected .heistId")
-        }
-        XCTAssertEqual(id, "save_button")
-    }
-
-    func testElementTargetMatcherInitializerRejectsHeistIdWithOrdinal() {
-        XCTAssertNil(ElementTarget(heistId: "save_button", matcher: ElementMatcher(), ordinal: 1))
-    }
-
-    func testElementTargetMatcherInitializerRejectsHeistIdWithMatcherFields() {
-        XCTAssertNil(ElementTarget(heistId: "save_button", matcher: ElementMatcher(label: "Save")))
-    }
-
-    func testElementTargetMatcherInitializerRejectsOrdinalOnlySelector() {
-        XCTAssertNil(ElementTarget(matcher: ElementMatcher(), ordinal: 2))
-    }
-
     func testElementMatcherDescriptionComposesFields() {
         let matcher = ElementMatcher(
             label: #"Save "Now""#,
@@ -91,6 +69,17 @@ final class ElementMatcherTests: XCTestCase {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
             XCTAssertTrue(context.debugDescription.contains("requires heistId or matcher"))
+        }
+    }
+
+    func testElementTargetRejectsEmptyMatcherSelector() throws {
+        let data = Data(#"{"traits":[]}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: data)) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("matcher requires"))
         }
     }
 

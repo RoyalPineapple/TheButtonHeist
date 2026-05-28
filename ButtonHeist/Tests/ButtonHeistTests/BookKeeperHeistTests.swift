@@ -388,6 +388,25 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testEvidenceArgumentsAcceptOnlyCommandFields() async throws {
+        let bookKeeper = makeBookKeeper()
+        try bookKeeper.beginSession(identifier: "evidence-fields")
+        try bookKeeper.startHeistRecording(app: "com.example.app")
+
+        try recordHeistEvidence(bookKeeper, command: .typeText,
+            args: [
+                "text": .string("hello world"),
+                "target": targetArgumentValue(identifier: "login.email"),
+            ],
+            targetCapture: nil
+        )
+        let script = try bookKeeper.stopHeistRecording()
+
+        XCTAssertEqual(script.steps[0].target?.matcher.identifier, "login.email")
+        XCTAssertEqual(script.steps[0].arguments, ["text": .string("hello world")])
+    }
+
+    @ButtonHeistActor
     func testRecordsTypedExpectationArguments() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
