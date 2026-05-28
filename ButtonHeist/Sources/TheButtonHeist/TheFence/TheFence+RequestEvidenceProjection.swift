@@ -2,11 +2,6 @@ import Foundation
 
 import TheScore
 
-private let evidenceTargetKeys: Set<String> = [
-    "heistId", "label", "identifier", "value", "traits", "excludeTraits",
-    "ordinal", "elementTarget",
-]
-
 extension HeistValue {
     static func encoded<T: Encodable>(_ value: T) throws -> HeistValue {
         let data = try JSONEncoder().encode(value)
@@ -15,7 +10,10 @@ extension HeistValue {
 }
 
 extension Encodable {
-    func heistEvidenceArguments(renaming renamedKeys: [String: String] = [:]) throws -> [String: HeistValue] {
+    func heistEvidenceArguments(
+        accepting acceptedKeys: Set<String>,
+        renaming renamedKeys: [String: String] = [:]
+    ) throws -> [String: HeistValue] {
         guard case .object(let encoded) = try HeistValue.encoded(self) else {
             throw DecodingError.typeMismatch(
                 [String: HeistValue].self,
@@ -26,7 +24,7 @@ extension Encodable {
             )
         }
         var arguments = encoded.reduce(into: [String: HeistValue]()) { result, pair in
-            guard !evidenceTargetKeys.contains(pair.key) else { return }
+            guard acceptedKeys.contains(pair.key) else { return }
             result[renamedKeys[pair.key] ?? pair.key] = pair.value
         }
         arguments.flattenRotorTextRange()
