@@ -19,13 +19,13 @@ struct ToolRoutingTests {
         let operation = try routed(
             TheFence.Command.swipe.rawValue,
             [
-                "heistId": .string("element-1"),
+                "target": .object(["heistId": .string("element-1")]),
                 "direction": .string("left"),
             ]
         )
 
         #expect(operation.command == .swipe)
-        #expect(operation.stringArgument("heistId") == "element-1")
+        #expect(operation.stringArgument("heistId") == nil)
         #expect(operation.stringArgument("direction") == "left")
     }
 
@@ -49,18 +49,21 @@ struct ToolRoutingTests {
         let steps = try normalizeBatchSteps([
             [
                 "command": .string(TheFence.Command.swipe.rawValue),
-                "heistId": .string("element-1"),
+                "target": .object(["heistId": .string("element-1")]),
                 "direction": .string("right"),
             ],
-            ["command": .string(TheFence.Command.scrollToVisible.rawValue), "heistId": .string("element-1")],
+            [
+                "command": .string(TheFence.Command.scrollToVisible.rawValue),
+                "target": .object(["heistId": .string("element-1")]),
+            ],
             ["command": .string(TheFence.Command.dismissKeyboard.rawValue)],
         ])
 
         #expect(steps[0].command == .swipe)
-        #expect(steps[0].stringArgument("heistId") == "element-1")
+        #expect(steps[0].stringArgument("heistId") == nil)
         #expect(steps[0].stringArgument("direction") == "right")
         #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].stringArgument("heistId") == "element-1")
+        #expect(steps[1].stringArgument("heistId") == nil)
         #expect(steps[2].command == .dismissKeyboard)
     }
 

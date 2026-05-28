@@ -121,7 +121,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testRunBatchSerializesStepsBeforeSending() throws {
         let steps = try RunBatchCommand.serializedBatchSteps(
-            inline: #"[{"command":"activate","heistId":"button-login"}]"#,
+            inline: #"[{"command":"activate","target":{"heistId":"button-login"}}]"#,
             fromFile: nil
         )
 
@@ -130,7 +130,7 @@ final class CLICommandSyncTests: XCTestCase {
             return XCTFail("expected serialized batch step object")
         }
         XCTAssertEqual(object["command"], .string(TheFence.Command.activate.rawValue))
-        XCTAssertEqual(object["heistId"], .string("button-login"))
+        XCTAssertEqual(object["target"], .object(["heistId": .string("button-login")]))
     }
 
     func testRunBatchRejectsUnknownSerializedCommandAtEdge() {
@@ -164,7 +164,7 @@ final class CLICommandSyncTests: XCTestCase {
     func testRunBatchRejectsUnknownSerializedParameterAtEdge() {
         XCTAssertThrowsError(
             try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"scroll","unexpected":"value","label":"Done"}]"#,
+                inline: #"[{"command":"scroll","unexpected":"value","target":{"matcher":{"label":"Done"}}}]"#,
                 fromFile: nil
             )
         ) { error in
@@ -183,10 +183,11 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserCoercesKnownBooleanParametersOnly() throws {
-        let request = try ReplSession.parseHumanInput("wait_for label=true absent=true")
+        let request = try ReplSession.parseHumanInput("wait_for loading-spinner absent=true")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.waitFor.rawValue)
-        XCTAssertEqual(request[.label] as? String, "true")
+        let target = try XCTUnwrap(request[.target] as? [String: Any])
+        XCTAssertEqual(target[.heistId] as? String, "loading-spinner")
         XCTAssertEqual(request[.absent] as? Bool, true)
     }
 
@@ -235,13 +236,14 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONSessionMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"activate","heistId":"button_save"}"#,
+            from: #"{"command":"activate","target":{"heistId":"button_save"}}"#,
             acceptsHumanInput: false
         )
 
         XCTAssertEqual(parsed.mode, .machine)
         XCTAssertEqual(parsed.command, .activate)
-        XCTAssertEqual(parsed.request[.heistId] as? String, "button_save")
+        let target = try XCTUnwrap(parsed.request[.target] as? [String: Any])
+        XCTAssertEqual(target[.heistId] as? String, "button_save")
     }
 
     func testSharedRequestBuilderParsesHumanCommand() throws {
@@ -298,7 +300,8 @@ final class CLICommandSyncTests: XCTestCase {
         let replRequest = try ReplSession.parseHumanInput("activate button_save")
 
         XCTAssertEqual(replRequest[.command] as? String, TheFence.Command.activate.rawValue)
-        XCTAssertEqual(replRequest[.heistId] as? String, "button_save")
+        let target = try XCTUnwrap(replRequest[.target] as? [String: Any])
+        XCTAssertEqual(target[.heistId] as? String, "button_save")
     }
 
     func testREPLParsesCoordinateGesture() throws {
@@ -314,7 +317,8 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.swipe.rawValue)
         XCTAssertEqual(request[.direction] as? String, "up")
-        XCTAssertEqual(request[.heistId] as? String, "checkout_list")
+        let target = try XCTUnwrap(request[.target] as? [String: Any])
+        XCTAssertEqual(target[.heistId] as? String, "checkout_list")
     }
 
     func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
@@ -322,7 +326,8 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.scrollToEdge.rawValue)
         XCTAssertEqual(request[.edge] as? String, "top")
-        XCTAssertEqual(request[.heistId] as? String, "checkout_list")
+        let target = try XCTUnwrap(request[.target] as? [String: Any])
+        XCTAssertEqual(target[.heistId] as? String, "checkout_list")
     }
 
     func testScrollCLIAllowsNoElementTarget() throws {
@@ -360,7 +365,8 @@ final class CLICommandSyncTests: XCTestCase {
         let request = try ReplSession.parseHumanInput("activate button_save")
 
         XCTAssertEqual(request[.command] as? String, TheFence.Command.activate.rawValue)
-        XCTAssertEqual(request[.heistId] as? String, "button_save")
+        let target = try XCTUnwrap(request[.target] as? [String: Any])
+        XCTAssertEqual(target[.heistId] as? String, "button_save")
     }
 
     private func topLevelCommandNames() -> [String] {

@@ -177,7 +177,7 @@ extension TheFence {
     ) throws -> GesturePointSelection {
         let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
         if elementTarget != nil, point != nil {
-            throw mixedGestureShape(field: field, expected: "element target or coordinates")
+            throw mixedGestureShape(field: field, expected: "target object or coordinates")
         }
         if let elementTarget {
             return .element(elementTarget)
@@ -197,7 +197,7 @@ extension TheFence {
     ) throws -> GesturePointSelection {
         let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
         if elementTarget != nil, point != nil {
-            throw mixedGestureShape(field: field, expected: "element target or coordinates")
+            throw mixedGestureShape(field: field, expected: "target object or coordinates")
         }
         if let elementTarget {
             return .element(elementTarget)
@@ -238,7 +238,7 @@ extension TheFence {
             xKey: "x",
             yKey: "y",
             field: "x/y",
-            missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
+            missingMessage: "Must specify target object or coordinates (x, y)"
         )
         return TapGesturePayload(selection: selection)
     }
@@ -250,7 +250,7 @@ extension TheFence {
             xKey: "x",
             yKey: "y",
             field: "x/y",
-            missingMessage: "Must specify element (heistId or matcher) or coordinates (x, y)"
+            missingMessage: "Must specify target object or coordinates (x, y)"
         )
         return LongPressGesturePayload(selection: selection, duration: try request.gestureDuration() ?? 0.5)
     }
@@ -273,7 +273,7 @@ extension TheFence {
         }
         if let start, let end {
             guard let elementTarget else {
-                throw FenceError.invalidRequest("Unit-point swipe requires element target")
+                throw FenceError.invalidRequest("Unit-point swipe requires target object")
             }
             return SwipeGesturePayload(
                 selection: .unitElement(elementTarget, start: start, end: end, direction: direction),
@@ -281,7 +281,7 @@ extension TheFence {
             )
         }
         if elementTarget != nil, startPoint != nil {
-            throw mixedGestureShape(field: "startX/startY", expected: "element target or absolute start coordinates")
+            throw mixedGestureShape(field: "startX/startY", expected: "target object or absolute start coordinates")
         }
         if endPoint != nil, direction != nil {
             throw mixedGestureShape(field: "endX/endY", expected: "end coordinates or direction")
@@ -293,7 +293,7 @@ extension TheFence {
             startSelection = .coordinate(ScreenPoint(x: startPoint.x, y: startPoint.y))
         } else {
             throw FenceError.invalidRequest(
-                "Swipe requires a semantic target (heistId or matcher) or start coordinates (startX, startY)"
+                "Swipe requires target object or start coordinates (startX, startY)"
             )
         }
         let endSelection: SwipeDestinationSelection
@@ -336,7 +336,7 @@ extension TheFence {
             xKey: "centerX",
             yKey: "centerY",
             field: "centerX/centerY",
-            missingMessage: "Pinch requires element target or center coordinates (centerX, centerY)"
+            missingMessage: "Pinch requires target object or center coordinates (centerX, centerY)"
         )
         return PinchGesturePayload(
             center: center,
@@ -354,7 +354,7 @@ extension TheFence {
             xKey: "centerX",
             yKey: "centerY",
             field: "centerX/centerY",
-            missingMessage: "Rotate requires element target or center coordinates (centerX, centerY)"
+            missingMessage: "Rotate requires target object or center coordinates (centerX, centerY)"
         )
         return RotateGesturePayload(
             center: center,
@@ -371,7 +371,7 @@ extension TheFence {
             xKey: "centerX",
             yKey: "centerY",
             field: "centerX/centerY",
-            missingMessage: "Two finger tap requires element target or center coordinates (centerX, centerY)"
+            missingMessage: "Two finger tap requires target object or center coordinates (centerX, centerY)"
         )
         return TwoFingerTapGesturePayload(
             center: center,

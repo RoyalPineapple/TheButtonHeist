@@ -168,7 +168,7 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
 
         if hasUnitStart {
             guard try element.hasTarget else {
-                throw ValidationError("Unit-point swipe requires an element target (heistId, --identifier, or -l)")
+                throw ValidationError("Unit-point swipe requires a semantic target (heistId, --identifier, or -l)")
             }
         } else {
             guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {

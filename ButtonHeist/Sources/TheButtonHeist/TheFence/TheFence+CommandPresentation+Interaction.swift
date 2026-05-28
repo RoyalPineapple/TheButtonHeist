@@ -43,10 +43,10 @@ extension TheFence.Command {
             return "Scroll the selected container, or the target's owning scroll ancestor, to a requested edge."
 
         case Self.oneFingerTap.rawValue:
-            return "Tap a coordinate or semantic element target after actionability resolution."
+            return "Tap a coordinate or semantic target after actionability resolution."
 
         case Self.longPress.rawValue:
-            return "Long-press a coordinate or semantic element target for a resolved duration."
+            return "Long-press a coordinate or semantic target for a resolved duration."
 
         case Self.swipe.rawValue:
             return "Swipe in a direction or between explicit points; semantic targets are made actionable first."

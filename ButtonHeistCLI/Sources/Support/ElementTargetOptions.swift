@@ -78,26 +78,44 @@ struct ElementTargetOptions: ParsableArguments {
     /// Apply targeting options to a TheFence request dictionary.
     /// Uses the raw CLI option values so TheFence can parse them natively.
     func applyTo(_ request: inout [String: Any]) throws {
-        if let resolved = try resolvedHeistId { request.set(.heistId, resolved) }
-        if let identifier { request.set(.identifier, identifier) }
-        if let label { request.set(.label, label) }
-        if let value { request.set(.value, value) }
-        if !traits.isEmpty { request.set(.traits, traits) }
-        if !excludeTraits.isEmpty { request.set(.excludeTraits, excludeTraits) }
-        if let ordinal { request.set(.ordinal, ordinal) }
+        if let target = try targetParameterValue() {
+            request.set(.target, target)
+        }
     }
 
     /// Typed equivalent of `applyTo` — returns element targeting as `CLIRequestParameters`.
     func targetParameters() throws -> CLIRequestParameters {
         var parameters: CLIRequestParameters = [:]
-        if let resolved = try resolvedHeistId { parameters[.heistId] = .string(resolved) }
-        if let identifier { parameters[.identifier] = .string(identifier) }
-        if let label { parameters[.label] = .string(label) }
-        if let value { parameters[.value] = .string(value) }
-        if !traits.isEmpty { parameters[.traits] = .array(traits.map(HeistValue.string)) }
-        if !excludeTraits.isEmpty { parameters[.excludeTraits] = .array(excludeTraits.map(HeistValue.string)) }
-        if let ordinal { parameters[.ordinal] = .int(ordinal) }
+        if let target = try targetParameterValue() {
+            parameters[.target] = target
+        }
         return parameters
+    }
+
+    private func targetParameterValue() throws -> HeistValue? {
+        if let resolved = try resolvedHeistId {
+            var target: [String: HeistValue] = [FenceParameterKey.heistId.rawValue: .string(resolved)]
+            if let ordinal {
+                target[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
+            }
+            return .object(target)
+        }
+
+        var matcher: [String: HeistValue] = [:]
+        if let identifier { matcher[FenceParameterKey.identifier.rawValue] = .string(identifier) }
+        if let label { matcher[FenceParameterKey.label.rawValue] = .string(label) }
+        if let value { matcher[FenceParameterKey.value.rawValue] = .string(value) }
+        if !traits.isEmpty { matcher[FenceParameterKey.traits.rawValue] = .array(traits.map(HeistValue.string)) }
+        if !excludeTraits.isEmpty {
+            matcher[FenceParameterKey.excludeTraits.rawValue] = .array(excludeTraits.map(HeistValue.string))
+        }
+        guard !matcher.isEmpty else { return nil }
+
+        var target: [String: HeistValue] = [FenceParameterKey.matcher.rawValue: .object(matcher)]
+        if let ordinal {
+            target[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
+        }
+        return .object(target)
     }
 
     /// Returns true when the supplied options construct a valid ElementTarget.

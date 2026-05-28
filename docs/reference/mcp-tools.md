@@ -22,8 +22,8 @@ _Generated from `TheFence.Command.mcpToolContracts`._
 | `get_session_state` | `get_session_state` | Inspect the current Button Heist session: connection status, device/app identity, recording state, client timeouts, and a lightweight summary of the last action. |
 | `list_devices` | `list_devices` | List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly. |
 | `list_targets` | `list_targets` | List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), including each target's address and which one is the default. |
-| `long_press` | `long_press` | Long-press a coordinate or semantic element target for a resolved duration. |
-| `one_finger_tap` | `one_finger_tap` | Tap a coordinate or semantic element target after actionability resolution. |
+| `long_press` | `long_press` | Long-press a coordinate or semantic target for a resolved duration. |
+| `one_finger_tap` | `one_finger_tap` | Tap a coordinate or semantic target after actionability resolution. |
 | `pinch` | `pinch` | Pinch around a resolved center point using scale, angle, and duration. |
 | `ping` | `ping` | Check Button Heist connection health. Returns cheap static app/server identity facts without reading UI hierarchy or accessibility state. |
 | `play_heist` | `play_heist` | Play back a .heist file. Steps execute sequentially; playback stops on the first failed step. On failure, returns full diagnostics: command, target, error, action result, expectation result, and a complete interface snapshot at the failure point. |
@@ -56,13 +56,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `action` | `string` | no | - | - |
 | `count` | `integer` | no | - | - |
 | `expect` | `object` | no | - | - |
@@ -117,13 +111,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `endX` | `number` | yes | - | - |
 | `endY` | `number` | yes | - | - |
 | `startX` | `number` | no | - | - |
@@ -191,13 +179,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `direction` | `string` | no | - | `down`, `up`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -286,7 +268,7 @@ _None._
 
 ### `long_press`
 
-Long-press a coordinate or semantic element target for a resolved duration.
+Long-press a coordinate or semantic target for a resolved duration.
 
 - Command: `long_press`
 
@@ -294,13 +276,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `x` | `number` | no | - | - |
 | `y` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
@@ -309,7 +285,7 @@ Parameters:
 
 ### `one_finger_tap`
 
-Tap a coordinate or semantic element target after actionability resolution.
+Tap a coordinate or semantic target after actionability resolution.
 
 - Command: `one_finger_tap`
 
@@ -317,13 +293,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `x` | `number` | no | - | - |
 | `y` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
@@ -339,13 +309,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `scale` | `number` | yes | - | - |
 | `centerX` | `number` | no | - | - |
 | `centerY` | `number` | no | - | - |
@@ -386,13 +350,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `angle` | `number` | yes | - | - |
 | `centerX` | `number` | no | - | - |
 | `centerY` | `number` | no | - | - |
@@ -411,13 +369,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `rotor` | `string` | no | - | - |
 | `rotorIndex` | `integer` | no | - | - |
 | `direction` | `string` | no | `"next"` | `next`, `previous` |
@@ -453,13 +405,7 @@ Parameters:
 | `stableId` | `string` | no | - | - |
 | `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -477,13 +423,7 @@ Parameters:
 | `stableId` | `string` | no | - | - |
 | `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -498,13 +438,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -586,13 +520,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `direction` | `string` | no | - | `up`, `down`, `left`, `right` |
 | `start` | `object` | no | - | - |
 | `end` | `object` | no | - | - |
@@ -614,13 +542,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `centerX` | `number` | no | - | - |
 | `centerY` | `number` | no | - | - |
 | `spread` | `number` | no | - | - |
@@ -637,13 +559,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `text` | `string` | yes | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -658,13 +574,7 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `heistId` | `string` | no | - | - |
-| `label` | `string` | no | - | - |
-| `identifier` | `string` | no | - | - |
-| `value` | `string` | no | - | - |
-| `traits` | `stringArray` | no | - | - |
-| `excludeTraits` | `stringArray` | no | - | - |
-| `ordinal` | `integer` | no | - | - |
+| `target` | `object` | no | - | - |
 | `absent` | `boolean` | no | - | - |
 | `timeout` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |

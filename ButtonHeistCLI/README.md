@@ -99,7 +99,7 @@ with canonical Fence command names.
 ```bash
 buttonheist session --format json
 echo '{"command":"get_interface"}' | buttonheist session --format json
-echo '{"command":"run_batch","steps":[{"command":"activate","label":"Sign In","traits":["button"]}]}' | buttonheist session --format json
+echo '{"command":"run_batch","steps":[{"command":"activate","target":{"matcher":{"label":"Sign In","traits":["button"]}}}]}' | buttonheist session --format json
 ```
 
 Session mode auto-reconnects after connection loss, then the next command

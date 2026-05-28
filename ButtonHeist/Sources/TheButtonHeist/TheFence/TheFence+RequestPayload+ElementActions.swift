@@ -174,19 +174,45 @@ private extension TheFence {
 
         @ButtonHeistActor
         func elementTarget(in fence: TheFence) throws -> ElementTarget? {
-            let heistId = try string("heistId")
-            let matcher = try matcher()
-            let ordinal = try ordinal()
-            let hasMixedHeistIdTarget = ordinal != nil || hasMatcherFieldKeys
+            guard let target = try request.schemaDictionary("target") else { return nil }
+            try target.rejectUnknownKeys(
+                allowed: ["heistId", "matcher", "ordinal"],
+                expected: "valid target field"
+            )
+            let heistId = try target.schemaString("heistId")
+            let matcherObject = try target.schemaDictionary("matcher")
+            let ordinal = try target.schemaNonNegativeInteger("ordinal")
+            let hasMixedHeistIdTarget = ordinal != nil || matcherObject != nil
             if heistId != nil, hasMixedHeistIdTarget {
                 throw SchemaValidationError(
                     field: "target",
-                    observed: request.observedDescription,
-                    expected: "either heistId or matcher fields with optional ordinal"
+                    observed: target.observedDescription,
+                    expected: "either heistId or matcher with optional ordinal"
+                )
+            }
+            if let heistId {
+                return .heistId(heistId)
+            }
+            guard let matcherObject else {
+                throw SchemaValidationError(
+                    field: "target",
+                    observed: target.observedDescription,
+                    expected: "heistId or matcher"
+                )
+            }
+            try matcherObject.rejectUnknownKeys(
+                allowed: ["label", "identifier", "value", "traits", "excludeTraits"],
+                expected: "valid target.matcher field"
+            )
+            let matcher = try matcher(from: matcherObject)
+            guard matcher.nonEmpty != nil else {
+                throw SchemaValidationError(
+                    field: target.field("matcher"),
+                    observed: matcherObject.observedDescription,
+                    expected: "matcher with label, identifier, value, traits, or excludeTraits"
                 )
             }
             return ElementTarget(
-                heistId: heistId,
                 matcher: matcher,
                 ordinal: ordinal
             )
@@ -274,9 +300,7 @@ private extension TheFence {
         }
 
         var hasElementTargetFields: Bool {
-            if request.keys.contains("heistId") { return true }
-            if hasMatcherFieldKeys { return true }
-            return false
+            request.keys.contains("target")
         }
 
         var hasMatcherFieldKeys: Bool {
@@ -290,17 +314,22 @@ private extension TheFence {
 
         @ButtonHeistActor
         func matcher() throws -> ElementMatcher {
+            try matcher(from: request)
+        }
+
+        @ButtonHeistActor
+        func matcher(from source: some TheFence.CommandArgumentReadable) throws -> ElementMatcher {
             ElementMatcher(
-                label: try string("label"),
-                identifier: try string("identifier"),
-                value: try string("value"),
+                label: try source.schemaString("label"),
+                identifier: try source.schemaString("identifier"),
+                value: try source.schemaString("value"),
                 traits: try TheFence.parseTraitNames(
-                    try request.schemaStringArray("traits"),
-                    field: request.field("traits")
+                    try source.schemaStringArray("traits"),
+                    field: source.field("traits")
                 ),
                 excludeTraits: try TheFence.parseTraitNames(
-                    try request.schemaStringArray("excludeTraits"),
-                    field: request.field("excludeTraits")
+                    try source.schemaStringArray("excludeTraits"),
+                    field: source.field("excludeTraits")
                 )
             )
         }
