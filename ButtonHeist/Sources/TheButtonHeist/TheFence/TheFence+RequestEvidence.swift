@@ -45,29 +45,150 @@ private extension Dictionary where Key == String, Value == HeistValue {
     }
 }
 
-struct ActivateEvidenceArguments: Encodable {
+private struct ActivateEvidenceArguments: Encodable {
     let action: String?
     let count: Int?
 }
 
-extension TheFence.RequestEvidence {
+private struct HeistRecordingProjection {
+    let arguments: [String: HeistValue]
+    let elementTarget: ElementTarget?
+    let coordinateOnly: Bool
+
+    static let empty = HeistRecordingProjection(arguments: [:])
+
     static func target(
-        arguments: [String: HeistValue],
-        elementTarget: ElementTarget?
+        arguments: [String: HeistValue] = [:],
+        elementTarget: ElementTarget?,
+        coordinateOnly: Bool = false
     ) -> Self {
-        Self(arguments: arguments, elementTarget: elementTarget)
+        Self(arguments: arguments, elementTarget: elementTarget, coordinateOnly: coordinateOnly)
+    }
+
+    init(
+        arguments: [String: HeistValue] = [:],
+        elementTarget: ElementTarget? = nil,
+        coordinateOnly: Bool = false
+    ) {
+        self.arguments = arguments
+        self.elementTarget = elementTarget
+        self.coordinateOnly = coordinateOnly
     }
 }
 
-extension Encodable {
-    func heistEvidenceArguments() -> [String: HeistValue] {
-        heistEvidenceArguments(renaming: [:])
+extension TheFence.ParsedRequest {
+    var heistRecordingElementTarget: ElementTarget? {
+        heistRecordingProjection.elementTarget
+    }
+
+    var heistRecordingCoordinateOnly: Bool {
+        heistRecordingProjection.coordinateOnly
+    }
+
+    var heistRecordingArguments: [String: HeistValue] {
+        heistRecordingProjection.arguments
+    }
+
+    private var heistRecordingProjection: HeistRecordingProjection {
+        guard let messages = executableMessages else { return .empty }
+        guard command == .activate else {
+            return messages.first?.heistRecordingProjection ?? .empty
+        }
+        return .activate(messages)
     }
 }
 
-extension TapTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
+private extension HeistRecordingProjection {
+    static func activate(_ messages: [ClientMessage]) -> HeistRecordingProjection {
+        guard let first = messages.first else { return .empty }
+        switch first {
+        case .activate(let target):
+            return .target(elementTarget: target)
+        case .increment(let target):
+            return .target(
+                arguments: ActivateEvidenceArguments(
+                    action: ElementAction.increment.description,
+                    count: messages.count > 1 ? messages.count : nil
+                ).heistEvidenceArguments(),
+                elementTarget: target
+            )
+        case .decrement(let target):
+            return .target(
+                arguments: ActivateEvidenceArguments(
+                    action: ElementAction.decrement.description,
+                    count: messages.count > 1 ? messages.count : nil
+                ).heistEvidenceArguments(),
+                elementTarget: target
+            )
+        case .performCustomAction(let target):
+            return .target(
+                arguments: ActivateEvidenceArguments(action: target.actionName, count: nil)
+                    .heistEvidenceArguments(),
+                elementTarget: target.elementTarget
+            )
+        default:
+            return first.heistRecordingProjection
+        }
+    }
+}
+
+private extension ClientMessage {
+    var heistRecordingProjection: HeistRecordingProjection {
+        switch self {
+        case .activate(let target), .increment(let target), .decrement(let target):
+            return .target(elementTarget: target)
+        case .performCustomAction(let target):
+            return .target(
+                arguments: target.heistEvidenceArguments(),
+                elementTarget: target.elementTarget
+            )
+        case .rotor(let target):
+            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+        case .typeText(let target):
+            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+        case .editAction(let target):
+            return HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+        case .setPasteboard(let target):
+            return HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+        case .oneFingerTap(let target):
+            return target.heistRecordingProjection
+        case .longPress(let target):
+            return target.heistRecordingProjection
+        case .swipe(let target):
+            return target.heistRecordingProjection
+        case .drag(let target):
+            return target.heistRecordingProjection
+        case .pinch(let target):
+            return target.heistRecordingProjection
+        case .rotate(let target):
+            return target.heistRecordingProjection
+        case .twoFingerTap(let target):
+            return target.heistRecordingProjection
+        case .drawPath(let target):
+            return HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
+        case .drawBezier(let target):
+            return HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
+        case .scroll(let target):
+            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+        case .scrollToVisible(let target):
+            return .target(elementTarget: target.elementTarget)
+        case .elementSearch(let target):
+            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+        case .scrollToEdge(let target):
+            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+        case .waitFor(let target):
+            return .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+        case .waitForChange(let target):
+            return HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+        default:
+            return .empty
+        }
+    }
+}
+
+private extension TapTarget {
+    var heistRecordingProjection: HeistRecordingProjection {
+        HeistRecordingProjection(
             arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
             elementTarget: selection.elementTarget,
             coordinateOnly: selection.screenPoint != nil
@@ -75,9 +196,9 @@ extension TapTarget {
     }
 }
 
-extension LongPressTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
+private extension LongPressTarget {
+    var heistRecordingProjection: HeistRecordingProjection {
+        HeistRecordingProjection(
             arguments: heistEvidenceArguments(renaming: ["pointX": "x", "pointY": "y"]),
             elementTarget: selection.elementTarget,
             coordinateOnly: selection.screenPoint != nil
@@ -85,9 +206,9 @@ extension LongPressTarget {
     }
 }
 
-extension SwipeTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
+private extension SwipeTarget {
+    var heistRecordingProjection: HeistRecordingProjection {
+        HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: selection.bookKeeperElementTarget,
             coordinateOnly: selection.bookKeeperElementTarget == nil
@@ -95,9 +216,9 @@ extension SwipeTarget {
     }
 }
 
-extension DragTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
+private extension DragTarget {
+    var heistRecordingProjection: HeistRecordingProjection {
+        HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: start.elementTarget,
             coordinateOnly: start.elementTarget == nil
@@ -105,9 +226,9 @@ extension DragTarget {
     }
 }
 
-extension PinchTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
+private extension PinchTarget {
+    var heistRecordingProjection: HeistRecordingProjection {
+        HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
@@ -115,9 +236,9 @@ extension PinchTarget {
     }
 }
 
-extension RotateTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
+private extension RotateTarget {
+    var heistRecordingProjection: HeistRecordingProjection {
+        HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
@@ -125,25 +246,13 @@ extension RotateTarget {
     }
 }
 
-extension TwoFingerTapTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
+private extension TwoFingerTapTarget {
+    var heistRecordingProjection: HeistRecordingProjection {
+        HeistRecordingProjection(
             arguments: heistEvidenceArguments(),
             elementTarget: center.elementTarget,
             coordinateOnly: center.elementTarget == nil
         )
-    }
-}
-
-extension DrawPathTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(arguments: heistEvidenceArguments(), coordinateOnly: true)
-    }
-}
-
-extension DrawBezierTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(arguments: heistEvidenceArguments(), coordinateOnly: true)
     }
 }
 
@@ -155,38 +264,5 @@ private extension SwipeGestureSelection {
         case .point(let start, _):
             return start.elementTarget
         }
-    }
-}
-
-extension ScrollTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
-            arguments: heistEvidenceArguments(),
-            elementTarget: elementTarget
-        )
-    }
-}
-
-extension ScrollToVisibleTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(elementTarget: elementTarget)
-    }
-}
-
-extension ElementSearchTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
-            arguments: heistEvidenceArguments(),
-            elementTarget: elementTarget
-        )
-    }
-}
-
-extension ScrollToEdgeTarget {
-    var requestEvidence: TheFence.RequestEvidence {
-        TheFence.RequestEvidence(
-            arguments: heistEvidenceArguments(),
-            elementTarget: elementTarget
-        )
     }
 }

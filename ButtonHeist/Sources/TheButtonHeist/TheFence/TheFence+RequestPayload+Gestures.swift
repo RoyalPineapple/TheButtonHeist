@@ -17,42 +17,30 @@ extension TheFence {
     ) throws -> DecodedRequestPayload {
         switch command {
         case .oneFingerTap:
-            let target = try decodeTapTarget(request)
-            return decodedGestureAction(.oneFingerTap(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.oneFingerTap(try decodeTapTarget(request)))
         case .longPress:
-            let target = try decodeLongPressTarget(request)
-            return decodedGestureAction(.longPress(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.longPress(try decodeLongPressTarget(request)))
         case .swipe:
-            let target = try decodeSwipeTarget(request)
-            return decodedGestureAction(.swipe(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.swipe(try decodeSwipeTarget(request)))
         case .drag:
-            let target = try decodeDragTarget(request)
-            return decodedGestureAction(.drag(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.drag(try decodeDragTarget(request)))
         case .pinch:
-            let target = try decodePinchTarget(request)
-            return decodedGestureAction(.pinch(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.pinch(try decodePinchTarget(request)))
         case .rotate:
-            let target = try decodeRotateTarget(request)
-            return decodedGestureAction(.rotate(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.rotate(try decodeRotateTarget(request)))
         case .twoFingerTap:
-            let target = try decodeTwoFingerTapTarget(request)
-            return decodedGestureAction(.twoFingerTap(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.twoFingerTap(try decodeTwoFingerTapTarget(request)))
         case .drawPath:
-            let target = try decodeDrawPathTarget(request)
-            return decodedGestureAction(.drawPath(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.drawPath(try decodeDrawPathTarget(request)))
         case .drawBezier:
-            let target = try decodeDrawBezierTarget(request)
-            return decodedGestureAction(.drawBezier(target), evidence: target.requestEvidence)
+            return decodedGestureAction(.drawBezier(try decodeDrawBezierTarget(request)))
         default:
             throw FenceError.invalidRequest("Unexpected gesture command: \(command.rawValue)")
         }
     }
 
-    private func decodedGestureAction(
-        _ message: ClientMessage,
-        evidence: RequestEvidence
-    ) -> DecodedRequestPayload {
-        DecodedRequestPayload(payload: .clientAction([message]), evidence: evidence)
+    private func decodedGestureAction(_ message: ClientMessage) -> DecodedRequestPayload {
+        DecodedRequestPayload(payload: .clientAction([message]))
     }
 
     private struct GestureRequestInput {

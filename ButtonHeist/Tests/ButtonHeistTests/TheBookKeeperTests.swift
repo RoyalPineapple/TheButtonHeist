@@ -565,7 +565,7 @@ final class TheBookKeeperTests: XCTestCase {
         )
 
         XCTAssertEqual(activate.command, .activate)
-        XCTAssertEqual(activate.evidence.elementTarget, .heistId("login_button"))
+        XCTAssertEqual(activate.heistRecordingElementTarget, .heistId("login_button"))
         XCTAssertNil(activate.heistEvidenceArguments["target"])
     }
 
