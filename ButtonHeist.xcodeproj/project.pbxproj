@@ -136,7 +136,6 @@
 		4256CB616B986CB49F6C2E6D /* TheSafecrackerScrollTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */; };
 		426FC537EAF1DAACB13285DC /* TheFence+BookKeeperLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71251320324067B05B606FAA /* TheFence+BookKeeperLogging.swift */; };
 		43FAA429064665630FF0445A /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */; };
-		441B31C82157E5F9BF047E3C /* TheFence+RequestPayload+ClientMessages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A9EE462E26E03927C49167A /* TheFence+RequestPayload+ClientMessages.swift */; };
 		444E8A980C32638FC69394E6 /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */; };
 		44CDD6DBEDD1C8C245D41CAA /* TheGetaway+Status.swift in Sources */ = {isa = PBXBuildFile; fileRef = F81D4AD108F70379DBD8DB42 /* TheGetaway+Status.swift */; };
 		4514B88CC3887BD7B9BA0850 /* TheGetaway+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD05EE261CD3684BED556896 /* TheGetaway+Recording.swift */; };
@@ -721,7 +720,6 @@
 		58E7E75DF4223ED8E9EB7ABB /* InterfaceComputedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceComputedTests.swift; sourceTree = "<group>"; };
 		594A7F8340C7B335C8033319 /* TheMuscleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheMuscleTests.swift; sourceTree = "<group>"; };
 		5A8F77D0F95CF04EEBA42DC8 /* TheGetaway+Transport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheGetaway+Transport.swift"; sourceTree = "<group>"; };
-		5A9EE462E26E03927C49167A /* TheFence+RequestPayload+ClientMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+ClientMessages.swift"; sourceTree = "<group>"; };
 		5AC8E3D28B23077213FB6074 /* TheBurglar+ContentContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBurglar+ContentContext.swift"; sourceTree = "<group>"; };
 		5B12846943603FCF34BBBFCA /* Mocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mocks.swift; sourceTree = "<group>"; };
 		5B14C4160E5DFB62BCCF0A84 /* Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Actions.swift; sourceTree = "<group>"; };
@@ -1174,7 +1172,6 @@
 				4B0A2A0866EE7E1975FF7580 /* TheFence+Playback.swift */,
 				2924FE026C9DF2E1DB5EC466 /* TheFence+RecordingWaits.swift */,
 				AF4D1427EF2EC061E0CD0A4B /* TheFence+RequestPayload.swift */,
-				5A9EE462E26E03927C49167A /* TheFence+RequestPayload+ClientMessages.swift */,
 				C563F9006A5994C60474596B /* TheFence+RequestPayload+ElementActions.swift */,
 				6D23ED6450908FC41AA710DD /* TheFence+RequestPayload+Gestures.swift */,
 				35CB7DADF77498D30A91CC4A /* TheFence+RequestPayload+Observation.swift */,
@@ -2289,7 +2286,6 @@
 				B3A7E0DD9341201CC97ED43F /* TheFence+PendingRequestTrackers.swift in Sources */,
 				C140A15F6C6D720933A5FA2B /* TheFence+Playback.swift in Sources */,
 				105EF8A018D51B68A3ED1C45 /* TheFence+RecordingWaits.swift in Sources */,
-				441B31C82157E5F9BF047E3C /* TheFence+RequestPayload+ClientMessages.swift in Sources */,
 				182D08F34A032A4555C8B88C /* TheFence+RequestPayload+ElementActions.swift in Sources */,
 				AA1B8B5F7613FE5A793280A5 /* TheFence+RequestPayload+Gestures.swift in Sources */,
 				4EE6A6798E30E502E1877994 /* TheFence+RequestPayload+Observation.swift in Sources */,

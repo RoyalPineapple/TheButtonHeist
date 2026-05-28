@@ -88,32 +88,49 @@ extension TheFence {
     func decodeElementActionPayload(
         command: Command,
         arguments: CommandArgumentEnvelope
-    ) throws -> RequestPayload {
+    ) throws -> DecodedRequestPayload {
         let input = ElementActionRequestInput(arguments)
         switch command {
         case .scroll:
-            return .scroll(.scroll(try ScrollRequestInput(input, fence: self).target))
+            return decodedScrollPayload(.scroll(try ScrollRequestInput(input, fence: self).target))
         case .scrollToVisible:
-            return .scroll(.scrollToVisible(try ScrollToVisibleRequestInput(input, fence: self).target))
+            return decodedScrollPayload(.scrollToVisible(try ScrollToVisibleRequestInput(input, fence: self).target))
         case .elementSearch:
-            return .scroll(.elementSearch(try ElementSearchRequestInput(input, fence: self).target))
+            return decodedScrollPayload(.elementSearch(try ElementSearchRequestInput(input, fence: self).target))
         case .scrollToEdge:
-            return .scroll(.scrollToEdge(try ScrollToEdgeRequestInput(input, fence: self).target))
+            return decodedScrollPayload(.scrollToEdge(try ScrollToEdgeRequestInput(input, fence: self).target))
         case .activate:
-            return .accessibility(try ActivateRequestInput(input, fence: self).payload)
+            let payload = try ActivateRequestInput(input, fence: self).payload
+            return DecodedRequestPayload(
+                payload: .accessibility(payload),
+                executableMessages: try payload.clientMessages()
+            )
         case .rotor:
-            return .rotor(try RotorRequestInput(input, fence: self).target)
+            let target = try RotorRequestInput(input, fence: self).target
+            return decodedExecutablePayload(.rotor(target), message: .rotor(target))
         case .typeText:
-            return .typeText(try TypeTextRequestInput(input, fence: self).target)
+            let target = try TypeTextRequestInput(input, fence: self).target
+            return decodedExecutablePayload(.typeText(target), message: .typeText(target))
         case .editAction:
-            return .editAction(try EditActionRequestInput(input).target)
+            let target = try EditActionRequestInput(input).target
+            return decodedExecutablePayload(.editAction(target), message: .editAction(target))
         case .setPasteboard:
-            return .setPasteboard(try SetPasteboardRequestInput(input).target)
+            let target = try SetPasteboardRequestInput(input).target
+            return decodedExecutablePayload(.setPasteboard(target), message: .setPasteboard(target))
         case .waitFor:
-            return .waitFor(try WaitForRequestInput(input, fence: self).target)
+            let target = try WaitForRequestInput(input, fence: self).target
+            return decodedExecutablePayload(.waitFor(target), message: .waitFor(target))
         default:
             throw FenceError.invalidRequest("Unexpected element action command: \(command.rawValue)")
         }
+    }
+
+    private func decodedScrollPayload(_ payload: ScrollPayload) -> DecodedRequestPayload {
+        decodedExecutablePayload(.scroll(payload), message: payload.clientMessage)
+    }
+
+    private func decodedExecutablePayload(_ payload: RequestPayload, message: ClientMessage) -> DecodedRequestPayload {
+        DecodedRequestPayload(payload: payload, executableMessages: [message])
     }
 
     func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {

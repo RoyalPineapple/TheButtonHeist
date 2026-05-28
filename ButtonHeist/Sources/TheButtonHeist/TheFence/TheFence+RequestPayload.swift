@@ -228,10 +228,21 @@ extension TheFence {
         }
     }
 
+    struct DecodedRequestPayload {
+        let payload: RequestPayload
+        let executableMessages: [ClientMessage]?
+
+        init(payload: RequestPayload, executableMessages: [ClientMessage]? = nil) {
+            self.payload = payload
+            self.executableMessages = executableMessages
+        }
+    }
+
     struct ParsedRequest {
         let command: Command
         let requestId: String
         let payload: RequestPayload
+        let executableMessages: [ClientMessage]?
         let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit).
         let immediateResponse: FenceResponse?
@@ -240,12 +251,14 @@ extension TheFence {
             command: Command,
             requestId: String,
             payload: RequestPayload,
+            executableMessages: [ClientMessage]? = nil,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
             self.payload = payload
+            self.executableMessages = executableMessages
             self.expectationPayload = expectationPayload
             self.immediateResponse = immediateResponse
         }
@@ -341,8 +354,14 @@ extension TheFence {
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
-        let payload: RequestPayload = if command.requestPayloadKind == .waitForChange {
-            .waitForChange(expectationPayload)
+        let decodedPayload: DecodedRequestPayload = if command.requestPayloadKind == .waitForChange {
+            DecodedRequestPayload(
+                payload: .waitForChange(expectationPayload),
+                executableMessages: [.waitForChange(WaitForChangeTarget(
+                    expect: expectationPayload.expectation,
+                    timeout: expectationPayload.timeout
+                ))]
+            )
         } else {
             try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
         }
@@ -350,7 +369,8 @@ extension TheFence {
         return ParsedRequest(
             command: command,
             requestId: requestId,
-            payload: payload,
+            payload: decodedPayload.payload,
+            executableMessages: decodedPayload.executableMessages,
             expectationPayload: expectationPayload,
             immediateResponse: nil
         )
@@ -387,14 +407,22 @@ extension TheFence {
         command: Command,
         arguments: CommandArgumentEnvelope,
         requestId: String
-    ) throws -> RequestPayload {
+    ) throws -> DecodedRequestPayload {
         switch command.requestPayloadKind {
         case .none:
-            if command == .dismissKeyboard { return .dismissKeyboard }
-            if command == .getPasteboard { return .getPasteboard }
-            return .none
+            if command == .dismissKeyboard {
+                return DecodedRequestPayload(payload: .dismissKeyboard, executableMessages: [.resignFirstResponder])
+            }
+            if command == .getPasteboard {
+                return DecodedRequestPayload(payload: .getPasteboard, executableMessages: [.getPasteboard])
+            }
+            return DecodedRequestPayload(payload: .none)
         case .observation:
-            return try decodeObservationPayload(command: command, arguments: arguments, requestId: requestId)
+            return DecodedRequestPayload(payload: try decodeObservationPayload(
+                command: command,
+                arguments: arguments,
+                requestId: requestId
+            ))
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
         case .gesture:
@@ -402,7 +430,7 @@ extension TheFence {
         case .elementAction:
             return try decodeElementActionPayload(command: command, arguments: arguments)
         case .session:
-            return try decodeSessionPayload(command: command, arguments: arguments)
+            return DecodedRequestPayload(payload: try decodeSessionPayload(command: command, arguments: arguments))
         }
     }
 }
