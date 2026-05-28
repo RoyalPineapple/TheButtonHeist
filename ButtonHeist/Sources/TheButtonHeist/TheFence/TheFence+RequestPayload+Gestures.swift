@@ -4,17 +4,17 @@ import TheScore
 
 extension TheFence {
 
-    func decodeGestureRequestPayload(
+    func decodeGestureRequestDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope
-    ) throws -> DecodedRequestPayload {
+    ) throws -> DecodedRequestDispatch {
         try decodeGestureAction(command: command, request: GestureRequestInput(arguments))
     }
 
     private func decodeGestureAction(
         command: Command,
         request: GestureRequestInput
-    ) throws -> DecodedRequestPayload {
+    ) throws -> DecodedRequestDispatch {
         switch command {
         case .oneFingerTap:
             return decodedGestureAction(.oneFingerTap(try decodeTapTarget(request)))
@@ -39,8 +39,8 @@ extension TheFence {
         }
     }
 
-    private func decodedGestureAction(_ message: ClientMessage) -> DecodedRequestPayload {
-        DecodedRequestPayload(payload: .clientAction([message]))
+    private func decodedGestureAction(_ message: ClientMessage) -> DecodedRequestDispatch {
+        Self.clientActionDispatch([message])
     }
 
     private struct GestureRequestInput {

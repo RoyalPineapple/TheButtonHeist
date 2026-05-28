@@ -8,20 +8,7 @@ extension TheFence {
         let command: String
     }
 
-    enum RequestPayload {
-        case none
-        case clientAction([ClientMessage])
-        case getInterface(GetInterfaceRequest)
-        case screen(ScreenRequest)
-        case artifact(ArtifactRequest)
-        case startRecording(RecordingConfig)
-        case connect(ConnectRequest)
-        case runBatch(RunBatchRequest)
-        case archiveSession(ArchiveSessionRequest)
-        case startHeist(StartHeistRequest)
-        case stopHeist(StopHeistRequest)
-        case playHeist(PlayHeistRequest)
-    }
+    typealias ParsedRequestHandler = @ButtonHeistActor (TheFence, ParsedRequest) async throws -> FenceResponse
 
     struct GetInterfaceRequest {
         let detail: InterfaceDetail
@@ -76,18 +63,24 @@ extension TheFence {
         var commandName: String { command.rawValue }
     }
 
-    struct DecodedRequestPayload {
-        let payload: RequestPayload
+    struct DecodedRequestDispatch {
+        let executableMessages: [ClientMessage]?
+        let handler: ParsedRequestHandler
 
-        init(payload: RequestPayload) {
-            self.payload = payload
+        init(
+            executableMessages: [ClientMessage]? = nil,
+            handler: @escaping ParsedRequestHandler
+        ) {
+            self.executableMessages = executableMessages
+            self.handler = handler
         }
     }
 
     struct ParsedRequest {
         let command: Command
         let requestId: String
-        let payload: RequestPayload
+        let executableMessages: [ClientMessage]?
+        let handler: ParsedRequestHandler
         let expectationPayload: ExpectationPayload
         /// Non-nil when the command short-circuits before dispatch (help/quit).
         let immediateResponse: FenceResponse?
@@ -95,20 +88,28 @@ extension TheFence {
         init(
             command: Command,
             requestId: String,
-            payload: RequestPayload,
+            dispatch: DecodedRequestDispatch,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
-            self.payload = payload
+            self.executableMessages = dispatch.executableMessages
+            self.handler = dispatch.handler
             self.expectationPayload = expectationPayload
             self.immediateResponse = immediateResponse
         }
+    }
 
-        var executableMessages: [ClientMessage]? {
-            guard case .clientAction(let messages) = payload else { return nil }
-            return messages
+    static func clientActionDispatch(_ messages: [ClientMessage]) -> DecodedRequestDispatch {
+        DecodedRequestDispatch(executableMessages: messages) { fence, request in
+            try await fence.handleClientActionRequest(request)
+        }
+    }
+
+    static func emptyDispatch(command: Command) -> DecodedRequestDispatch {
+        DecodedRequestDispatch { _, _ in
+            .error("Unexpected command in dispatch: \(command.rawValue)")
         }
     }
 
@@ -162,7 +163,7 @@ extension TheFence {
             return ParsedRequest(
                 command: .help,
                 requestId: "",
-                payload: .none,
+                dispatch: Self.emptyDispatch(command: .help),
                 expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
                 immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
             )
@@ -195,30 +196,28 @@ extension TheFence {
             return ParsedRequest(
                 command: command,
                 requestId: "",
-                payload: .none,
+                dispatch: Self.emptyDispatch(command: command),
                 expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
                 immediateResponse: immediate
             )
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
-        let decodedPayload: DecodedRequestPayload
+        let dispatch: DecodedRequestDispatch
         if command.requestPayloadKind == .waitForChange {
             let target = WaitForChangeTarget(
                 expect: expectationPayload.expectation,
                 timeout: expectationPayload.timeout
             )
-            decodedPayload = DecodedRequestPayload(
-                payload: .clientAction([.waitForChange(target)])
-            )
+            dispatch = Self.clientActionDispatch([.waitForChange(target)])
         } else {
-            decodedPayload = try decodeRequestPayload(command: command, arguments: arguments, requestId: requestId)
+            dispatch = try decodeRequestDispatch(command: command, arguments: arguments, requestId: requestId)
         }
 
         return ParsedRequest(
             command: command,
             requestId: requestId,
-            payload: decodedPayload.payload,
+            dispatch: dispatch,
             expectationPayload: expectationPayload,
             immediateResponse: nil
         )
@@ -251,34 +250,51 @@ extension TheFence {
         try parseRequest(operation: operation.normalizedOperation())
     }
 
-    func decodeRequestPayload(
+    func decodeRequestDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope,
         requestId: String
-    ) throws -> DecodedRequestPayload {
+    ) throws -> DecodedRequestDispatch {
         switch command.requestPayloadKind {
         case .none:
             if command == .dismissKeyboard {
-                return DecodedRequestPayload(payload: .clientAction([.resignFirstResponder]))
+                return Self.clientActionDispatch([.resignFirstResponder])
             }
             if command == .getPasteboard {
-                return DecodedRequestPayload(payload: .clientAction([.getPasteboard]))
+                return Self.clientActionDispatch([.getPasteboard])
             }
-            return DecodedRequestPayload(payload: .none)
+            return try decodeControlDispatch(command)
         case .observation:
-            return DecodedRequestPayload(payload: try decodeObservationPayload(
+            return try decodeObservationDispatch(
                 command: command,
                 arguments: arguments,
                 requestId: requestId
-            ))
+            )
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
         case .gesture:
-            return try decodeGestureRequestPayload(command: command, arguments: arguments)
+            return try decodeGestureRequestDispatch(command: command, arguments: arguments)
         case .elementAction:
-            return try decodeElementActionPayload(command: command, arguments: arguments)
+            return try decodeElementActionDispatch(command: command, arguments: arguments)
         case .session:
-            return DecodedRequestPayload(payload: try decodeSessionPayload(command: command, arguments: arguments))
+            return try decodeSessionDispatch(command: command, arguments: arguments)
+        }
+    }
+
+    private func decodeControlDispatch(_ command: Command) throws -> DecodedRequestDispatch {
+        switch command {
+        case .ping:
+            return DecodedRequestDispatch { fence, _ in try await fence.handlePing() }
+        case .listDevices:
+            return DecodedRequestDispatch { fence, _ in try await fence.handleListDevices() }
+        case .getSessionState:
+            return DecodedRequestDispatch { fence, _ in .sessionState(payload: fence.currentSessionState()) }
+        case .listTargets:
+            return DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
+        case .getSessionLog:
+            return DecodedRequestDispatch { fence, _ in try fence.handleGetSessionLog() }
+        default:
+            throw FenceError.invalidRequest("Unexpected no-payload command: \(command.rawValue)")
         }
     }
 }
