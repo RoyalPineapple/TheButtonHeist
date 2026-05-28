@@ -56,13 +56,13 @@ public enum FenceCommandReference {
             "",
             "## Summary",
             "",
-            "| Tool | Command | Description |",
-            "|------|---------|-------------|",
+            "| Tool | Description |",
+            "|------|-------------|",
         ]
 
         for contract in sortedContracts {
             lines.append(
-                "| `\(contract.name)` | `\(contract.command.rawValue)` | \(markdownCell(firstLine(of: contract.description))) |"
+                "| `\(contract.name)` | \(markdownCell(firstLine(of: contract.description))) |"
             )
         }
 
@@ -99,8 +99,6 @@ public enum FenceCommandReference {
             "### `\(contract.name)`",
             "",
             contract.description,
-            "",
-            "- Command: `\(contract.command.rawValue)`",
         ]
 
         lines.append(contentsOf: ["", "Parameters:", ""])

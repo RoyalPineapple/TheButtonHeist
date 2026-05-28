@@ -14,6 +14,24 @@ final class TheFenceTests: XCTestCase {
 
     // MARK: - Command Enum
 
+    func testMCPContractsUseToolNameAsCommandIdentity() {
+        for contract in TheFence.Command.mcpToolContracts {
+            guard let command = TheFence.Command(rawValue: contract.name) else {
+                XCTFail("MCP tool name must be the canonical Fence command name: \(contract.name)")
+                continue
+            }
+
+            XCTAssertEqual(command.descriptor.mcpExposure, .directTool)
+        }
+    }
+
+    func testMCPReferenceDoesNotRenderDuplicateCommandIdentity() {
+        let markdown = FenceCommandReference.mcpMarkdown()
+
+        XCTAssertFalse(markdown.contains("| Tool | Command |"))
+        XCTAssertFalse(markdown.contains("- Command:"))
+    }
+
     // MARK: - Element Matcher Validation
 
     @ButtonHeistActor
