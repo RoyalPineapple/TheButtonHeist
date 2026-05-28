@@ -6,7 +6,7 @@ import TheScore
 
 // MARK: - Semantic Actionability
 
-private struct ActionabilityLoopPlan {
+private struct RevealGeometryCheck {
     let activationPoint: CGPoint
     let scrollView: UIScrollView?
     let noRevealPathMessage: String
@@ -15,17 +15,17 @@ private struct ActionabilityLoopPlan {
     let scrollFailedMessage: String
 }
 
-private enum ActionabilityLoopOutcome {
+private enum RevealGeometryOutcome {
     case ready
     case refreshAndRetry
     case failed(SemanticActionability.SemanticActionabilityFailure)
 }
 
-private struct ActionabilityRetryState {
+private struct FreshGeometryRetryState {
     let canRefreshLiveTargetState: Bool = true
 
-    func afterRefresh() -> ActionabilityRetryState {
-        ActionabilityRetryState(canRefreshLiveTargetState: false)
+    func afterRefresh() -> FreshGeometryRetryState {
+        FreshGeometryRetryState(canRefreshLiveTargetState: false)
     }
 }
 
@@ -43,7 +43,7 @@ private enum FreshLiveTargetResolution<Target> {
     case failed(SemanticActionability.SemanticActionabilityFailure)
 }
 
-private enum RevealRefreshGeometryLoopResult<SemanticTarget, LiveTarget> {
+private enum ActionableTargetResolution<SemanticTarget, LiveTarget> {
     case actionable(SemanticTarget, LiveTarget)
     case failed(SemanticActionability.SemanticActionabilityFailure)
 
@@ -54,7 +54,7 @@ private enum RevealRefreshGeometryLoopResult<SemanticTarget, LiveTarget> {
 }
 
 @MainActor
-private protocol ActionabilityAdapter {
+private protocol SemanticActionSubject {
     associatedtype SemanticTarget
     associatedtype LiveTarget
 
@@ -62,7 +62,7 @@ private protocol ActionabilityAdapter {
 
     func resolveSemanticTarget() async -> SemanticTargetResolution<SemanticTarget>
     func resolveFreshLiveTarget(for semanticTarget: SemanticTarget) -> FreshLiveTargetResolution<LiveTarget>
-    func viewportAdjustmentPlan(for liveTarget: LiveTarget) -> ActionabilityLoopPlan
+    func revealGeometry(for liveTarget: LiveTarget) -> RevealGeometryCheck
 }
 
 /// Central semantic actionability path.
@@ -231,7 +231,7 @@ final class SemanticActionability {
         }
     }
 
-    private struct ElementActionabilityAdapter: ActionabilityAdapter {
+    private struct ElementActionSubject: SemanticActionSubject {
         let owner: SemanticActionability
         let normalizedTarget: TheStash.NormalizedTarget
         let method: ActionMethod
@@ -288,12 +288,12 @@ final class SemanticActionability {
             }
         }
 
-        func viewportAdjustmentPlan(
+        func revealGeometry(
             for liveTarget: TheStash.LiveActionTarget
-        ) -> ActionabilityLoopPlan {
+        ) -> RevealGeometryCheck {
             let resolved = liveTarget.resolvedTarget
             let description = SemanticActionability.describeScrollTarget(resolved.screenElement)
-            return ActionabilityLoopPlan(
+            return RevealGeometryCheck(
                 activationPoint: liveTarget.activationPoint,
                 scrollView: owner.stash.liveScrollView(for: resolved.screenElement),
                 noRevealPathMessage: normalizedTarget.diagnostics(
@@ -311,7 +311,7 @@ final class SemanticActionability {
         }
     }
 
-    private struct ContainerActionabilityAdapter: ActionabilityAdapter {
+    private struct ContainerActionSubject: SemanticActionSubject {
         let owner: SemanticActionability
         let matcher: ContainerMatcher
         let ordinal: Int?
@@ -347,12 +347,12 @@ final class SemanticActionability {
             }
         }
 
-        func viewportAdjustmentPlan(
+        func revealGeometry(
             for liveTarget: TheStash.LiveContainerTarget
-        ) -> ActionabilityLoopPlan {
+        ) -> RevealGeometryCheck {
             let resolvedTarget = liveTarget.resolvedTarget
             let description = TheStash.containerCandidateSummary(resolvedTarget)
-            return ActionabilityLoopPlan(
+            return RevealGeometryCheck(
                 activationPoint: liveTarget.activationPoint,
                 scrollView: owner.stash.liveScrollView(forContainerPath: resolvedTarget.path),
                 noRevealPathMessage: "container target \(description) has no live scrollable ancestor to make actionable",
@@ -411,13 +411,13 @@ final class SemanticActionability {
         method: ActionMethod,
         deallocatedBoundary: String
     ) async -> SemanticActionabilityResult {
-        let adapter = ElementActionabilityAdapter(
+        let subject = ElementActionSubject(
             owner: self,
             normalizedTarget: normalizedTarget,
             method: method,
             deallocatedBoundary: deallocatedBoundary
         )
-        switch await runRevealRefreshGeometryLoop(adapter, retryState: .init()) {
+        switch await makeSubjectActionable(subject, retryState: .init()) {
         case .actionable(let resolvedTarget, let liveTarget):
             return .actionable(SemanticActionableTarget(
                 normalizedTarget: normalizedTarget,
@@ -429,30 +429,30 @@ final class SemanticActionability {
         }
     }
 
-    private func runRevealRefreshGeometryLoop<Adapter: ActionabilityAdapter>(
-        _ adapter: Adapter,
-        retryState: ActionabilityRetryState
-    ) async -> RevealRefreshGeometryLoopResult<Adapter.SemanticTarget, Adapter.LiveTarget> {
-        let semanticTarget: Adapter.SemanticTarget
-        switch await adapter.resolveSemanticTarget() {
+    private func makeSubjectActionable<Subject: SemanticActionSubject>(
+        _ subject: Subject,
+        retryState: FreshGeometryRetryState
+    ) async -> ActionableTargetResolution<Subject.SemanticTarget, Subject.LiveTarget> {
+        let semanticTarget: Subject.SemanticTarget
+        switch await subject.resolveSemanticTarget() {
         case .resolved(let target):
             semanticTarget = target
         case .failed(let failure):
             return .failed(failure)
         }
 
-        switch adapter.resolveFreshLiveTarget(for: semanticTarget) {
+        switch subject.resolveFreshLiveTarget(for: semanticTarget) {
         case .resolved(let liveTarget):
-            switch await executeActionabilityLoop(
-                adapter.viewportAdjustmentPlan(for: liveTarget),
-                method: adapter.method,
+            switch await revealUntilActivationPointIsUsable(
+                subject.revealGeometry(for: liveTarget),
+                method: subject.method,
                 allowingReveal: retryState.canRefreshLiveTargetState
             ) {
             case .ready:
                 return .actionable(semanticTarget, liveTarget)
             case .refreshAndRetry:
-                return await runRevealRefreshGeometryLoop(
-                    adapter,
+                return await makeSubjectActionable(
+                    subject,
                     retryState: retryState.afterRefresh()
                 )
             case .failed(let failure):
@@ -463,8 +463,8 @@ final class SemanticActionability {
                 return .failed(reason.failure)
             }
             refresh()
-            let refreshed = await runRevealRefreshGeometryLoop(
-                adapter,
+            let refreshed = await makeSubjectActionable(
+                subject,
                 retryState: retryState.afterRefresh()
             )
             guard includeObservedFailure,
@@ -476,44 +476,44 @@ final class SemanticActionability {
         }
     }
 
-    private func executeActionabilityLoop(
-        _ plan: ActionabilityLoopPlan,
+    private func revealUntilActivationPointIsUsable(
+        _ geometry: RevealGeometryCheck,
         method: ActionMethod,
         allowingReveal: Bool
-    ) async -> ActionabilityLoopOutcome {
-        if Self.activationPointHasPreferredPlacement(plan.activationPoint) {
+    ) async -> RevealGeometryOutcome {
+        if Self.activationPointHasPreferredPlacement(geometry.activationPoint) {
             return .ready
         }
         if !allowingReveal {
-            if Self.activationPointIsOnScreen(plan.activationPoint) {
+            if Self.activationPointIsOnScreen(geometry.activationPoint) {
                 return .ready
             }
-            return .failed(.geometryNotActionable(plan.notActionableAfterRevealMessage, method: method))
+            return .failed(.geometryNotActionable(geometry.notActionableAfterRevealMessage, method: method))
         }
-        guard let scrollView = plan.scrollView else {
-            if Self.activationPointIsOnScreen(plan.activationPoint) {
+        guard let scrollView = geometry.scrollView else {
+            if Self.activationPointIsOnScreen(geometry.activationPoint) {
                 return .ready
             }
-            return .failed(.noRevealPath(plan.noRevealPathMessage))
+            return .failed(.noRevealPath(geometry.noRevealPathMessage))
         }
         if scrollView.bhIsUnsafeForProgrammaticScrolling,
-           let message = plan.unsafeProgrammaticScrollMessage {
-            if Self.activationPointIsOnScreen(plan.activationPoint) {
+           let message = geometry.unsafeProgrammaticScrollMessage {
+            if Self.activationPointIsOnScreen(geometry.activationPoint) {
                 return .ready
             }
             return .failed(.geometryNotActionable(message, method: method))
         }
         guard safecracker.scrollToMakeActivationPointVisible(
-            plan.activationPoint,
+            geometry.activationPoint,
             in: scrollView,
             animated: false,
             preferredScreenRect: Self.interactionComfortZone,
             minimumScreenRect: ScreenMetrics.current.bounds
         ) else {
-            if Self.activationPointIsOnScreen(plan.activationPoint) {
+            if Self.activationPointIsOnScreen(geometry.activationPoint) {
                 return .ready
             }
-            return .failed(.geometryNotActionable(plan.scrollFailedMessage, method: method))
+            return .failed(.geometryNotActionable(geometry.scrollFailedMessage, method: method))
         }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
         refresh()
@@ -551,13 +551,13 @@ final class SemanticActionability {
         ordinal: Int?,
         method: ActionMethod
     ) async -> SemanticContainerActionabilityResult {
-        let adapter = ContainerActionabilityAdapter(
+        let subject = ContainerActionSubject(
             owner: self,
             matcher: matcher,
             ordinal: ordinal,
             method: method
         )
-        switch await runRevealRefreshGeometryLoop(adapter, retryState: .init()) {
+        switch await makeSubjectActionable(subject, retryState: .init()) {
         case .actionable(let resolvedTarget, let liveTarget):
             return .actionable(SemanticContainerActionableTarget(
                 resolvedTarget: resolvedTarget,
