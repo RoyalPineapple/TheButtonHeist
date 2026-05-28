@@ -294,6 +294,10 @@ public final class TheFence {
     // MARK: - Command Dispatch (thin router)
 
     func dispatch(_ parsed: ParsedRequest) async throws -> FenceResponse {
+        if parsed.executableMessages != nil {
+            return try await handleClientActionRequest(parsed)
+        }
+
         switch (parsed.command, parsed.payload) {
         case (.ping, _):
             return try await handlePing()
@@ -303,29 +307,6 @@ public final class TheFence {
             return try await handleGetInterface(request)
         case (.getScreen, .screen(let request)):
             return try await handleGetScreen(request)
-        case (.oneFingerTap, .gesture(.oneFingerTap)),
-             (.longPress, .gesture(.longPress)),
-             (.swipe, .gesture(.swipe)),
-             (.drag, .gesture(.drag)),
-             (.pinch, .gesture(.pinch)),
-             (.rotate, .gesture(.rotate)),
-             (.twoFingerTap, .gesture(.twoFingerTap)),
-             (.drawPath, .gesture(.drawPath)),
-             (.drawBezier, .gesture(.drawBezier)),
-             (.scroll, .scroll(.scroll)),
-             (.scrollToVisible, .scroll(.scrollToVisible)),
-             (.elementSearch, .scroll(.elementSearch)),
-             (.scrollToEdge, .scroll(.scrollToEdge)),
-             (.activate, .accessibility(.activate)),
-             (.rotor, .rotor),
-             (.typeText, .typeText),
-             (.editAction, .editAction),
-             (.setPasteboard, .setPasteboard),
-             (.waitFor, .waitFor),
-             (.waitForChange, .waitForChange),
-             (.getPasteboard, .getPasteboard),
-             (.dismissKeyboard, .dismissKeyboard):
-            return try await handleClientActionRequest(parsed)
         case (.startRecording, .startRecording(let config)):
             return try await handleStartRecording(config)
         case (.stopRecording, .artifact(let request)):

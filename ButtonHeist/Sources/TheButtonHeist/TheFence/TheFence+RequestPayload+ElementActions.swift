@@ -102,35 +102,54 @@ extension TheFence {
         case .activate:
             let payload = try ActivateRequestInput(input, fence: self).payload
             return DecodedRequestPayload(
-                payload: .accessibility(payload),
-                executableMessages: try payload.clientMessages()
+                payload: .clientAction,
+                executableMessages: try payload.clientMessages(),
+                evidence: payload.requestEvidence
             )
         case .rotor:
             let target = try RotorRequestInput(input, fence: self).target
-            return decodedExecutablePayload(.rotor(target), message: .rotor(target))
+            return decodedExecutablePayload(
+                message: .rotor(target),
+                evidence: .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            )
         case .typeText:
             let target = try TypeTextRequestInput(input, fence: self).target
-            return decodedExecutablePayload(.typeText(target), message: .typeText(target))
+            return decodedExecutablePayload(
+                message: .typeText(target),
+                evidence: .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            )
         case .editAction:
             let target = try EditActionRequestInput(input).target
-            return decodedExecutablePayload(.editAction(target), message: .editAction(target))
+            return decodedExecutablePayload(
+                message: .editAction(target),
+                evidence: RequestEvidence(arguments: target.heistEvidenceArguments())
+            )
         case .setPasteboard:
             let target = try SetPasteboardRequestInput(input).target
-            return decodedExecutablePayload(.setPasteboard(target), message: .setPasteboard(target))
+            return decodedExecutablePayload(
+                message: .setPasteboard(target),
+                evidence: RequestEvidence(arguments: target.heistEvidenceArguments())
+            )
         case .waitFor:
             let target = try WaitForRequestInput(input, fence: self).target
-            return decodedExecutablePayload(.waitFor(target), message: .waitFor(target))
+            return decodedExecutablePayload(
+                message: .waitFor(target),
+                evidence: .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            )
         default:
             throw FenceError.invalidRequest("Unexpected element action command: \(command.rawValue)")
         }
     }
 
     private func decodedScrollPayload(_ payload: ScrollPayload) -> DecodedRequestPayload {
-        decodedExecutablePayload(.scroll(payload), message: payload.clientMessage)
+        decodedExecutablePayload(message: payload.clientMessage, evidence: payload.requestEvidence)
     }
 
-    private func decodedExecutablePayload(_ payload: RequestPayload, message: ClientMessage) -> DecodedRequestPayload {
-        DecodedRequestPayload(payload: payload, executableMessages: [message])
+    private func decodedExecutablePayload(
+        message: ClientMessage,
+        evidence: RequestEvidence
+    ) -> DecodedRequestPayload {
+        DecodedRequestPayload(payload: .clientAction, executableMessages: [message], evidence: evidence)
     }
 
     func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {

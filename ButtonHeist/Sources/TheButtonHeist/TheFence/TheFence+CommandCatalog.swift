@@ -149,16 +149,15 @@ extension FenceCommandDescriptor {
             return Timeouts.longActionSeconds
         }
         if actionResultMethod == .waitFor {
-            guard case .waitFor(let target) = request.payload else {
+            guard case .waitFor(let target)? = request.executableMessages?.first else {
                 throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for payload")
             }
             return target.resolvedTimeout + 5
         }
         if actionResultMethod == .waitForChange {
-            guard case .waitForChange(let payload) = request.payload else {
+            guard case .waitForChange(let target)? = request.executableMessages?.first else {
                 throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for_change payload")
             }
-            let target = WaitForChangeTarget(expect: payload.expectation, timeout: payload.timeout)
             return target.resolvedTimeout + 5
         }
         return Timeouts.actionSeconds
