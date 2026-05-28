@@ -55,16 +55,29 @@ extension ElementTarget: CustomStringConvertible {
 // MARK: - ElementTarget Codable (flat wire format)
 
 extension ElementTarget: Codable {
-    fileprivate enum CodingKeys: String, CodingKey {
+    enum CodingKeys: String, CodingKey {
         case heistId
         case label, identifier, value, traits, excludeTraits
         case ordinal
 
         /// The matcher / heistId keys whose presence in a parent container
         /// indicates an `ElementTarget` is flattened at that level.
-        static let allInlineKeys: [CodingKeys] = [
-            .heistId, .label, .identifier, .value, .traits, .excludeTraits, .ordinal,
-        ]
+        static let allInlineKeys = ElementTargetGrammar.inlineFieldNames.compactMap(CodingKeys.init(rawValue:))
+    }
+
+    private struct UnknownCodingKey: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
     }
 
     /// Decode an optional `ElementTarget` flattened into the same JSON object
@@ -75,33 +88,50 @@ extension ElementTarget: Codable {
         let probe = try decoder.container(keyedBy: CodingKeys.self)
         let hasTargetFields = CodingKeys.allInlineKeys.contains { probe.contains($0) }
         guard hasTargetFields else { return nil }
-        return try ElementTarget(from: decoder)
+        return try decodeFlat(from: decoder, shouldRejectUnknownKeys: false)
+    }
+
+    /// Decode a required `ElementTarget` flattened into a command payload that
+    /// may also contain command-specific fields.
+    public static func decodeInline(from decoder: Decoder) throws -> ElementTarget {
+        try decodeFlat(from: decoder, shouldRejectUnknownKeys: false)
     }
 
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-        if let ordinal, ordinal < 0 {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "ordinal must be non-negative, got \(ordinal)"
-            ))
+        self = try Self.decodeFlat(from: decoder, shouldRejectUnknownKeys: true)
+    }
+
+    static func decodeSubtreeElement(from decoder: Decoder, ordinal: Int?) throws -> ElementTarget {
+        try decodeFlat(
+            from: decoder,
+            externalOrdinal: ordinal,
+            allowsInlineOrdinal: false,
+            shouldRejectUnknownKeys: true
+        )
+    }
+
+    private static func decodeFlat(
+        from decoder: Decoder,
+        externalOrdinal: Int? = nil,
+        allowsInlineOrdinal: Bool = true,
+        shouldRejectUnknownKeys: Bool
+    ) throws -> ElementTarget {
+        if shouldRejectUnknownKeys {
+            try rejectUnknownKeys(from: decoder, allowsInlineOrdinal: allowsInlineOrdinal)
         }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let ordinal = allowsInlineOrdinal
+            ? try container.decodeIfPresent(Int.self, forKey: .ordinal)
+            : externalOrdinal
         if let heistId = try container.decodeIfPresent(HeistId.self, forKey: .heistId) {
-            let hasMatcherFields = [
-                CodingKeys.label, .identifier, .value, .traits, .excludeTraits,
-            ].contains { container.contains($0) }
-            if ordinal != nil || hasMatcherFields {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: container.codingPath,
-                    debugDescription: """
-                    ElementTarget heistId cannot be combined with matcher fields or ordinal; \
-                    use either a capture handle or a semantic matcher
-                    """
-                ))
-            }
-            self = .heistId(heistId)
-            return
+            return try targetOrDecodingError(
+                heistId: heistId,
+                matcher: nil,
+                matcherWasProvided: hasMatcherFields(in: container),
+                ordinal: ordinal,
+                codingPath: container.codingPath
+            )
         }
         let matcher = ElementMatcher(
             label: try container.decodeIfPresent(String.self, forKey: .label),
@@ -110,16 +140,54 @@ extension ElementTarget: Codable {
             traits: try container.decodeIfPresent([HeistTrait].self, forKey: .traits),
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
         )
-        guard let match = matcher.nonEmpty else {
+        return try targetOrDecodingError(
+            heistId: nil,
+            matcher: matcher,
+            matcherWasProvided: hasMatcherFields(in: container),
+            ordinal: ordinal,
+            codingPath: container.codingPath
+        )
+    }
+
+    private static func rejectUnknownKeys(from decoder: Decoder, allowsInlineOrdinal: Bool) throws {
+        let allowedKeys = Set(CodingKeys.allInlineKeys
+            .filter { allowsInlineOrdinal || $0 != .ordinal }
+            .map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown element target field \"\(unknownKey.stringValue)\""
+        ))
+    }
+
+    private static func hasMatcherFields(in container: KeyedDecodingContainer<CodingKeys>) -> Bool {
+        [CodingKeys.label, .identifier, .value, .traits, .excludeTraits]
+            .contains { container.contains($0) }
+    }
+
+    private static func targetOrDecodingError(
+        heistId: HeistId?,
+        matcher: ElementMatcher?,
+        matcherWasProvided: Bool,
+        ordinal: Int?,
+        codingPath: [CodingKey]
+    ) throws -> ElementTarget {
+        do {
+            return try ElementTargetGrammar.validatedTarget(
+                heistId: heistId,
+                matcher: matcher,
+                matcherWasProvided: matcherWasProvided,
+                ordinal: ordinal
+            )
+        } catch let error as ElementTargetGrammarError {
             throw DecodingError.dataCorrupted(.init(
-                codingPath: decoder.codingPath,
-                debugDescription: """
-                ElementTarget requires heistId or at least one matcher field \
-                (label, identifier, value, traits, excludeTraits); ordinal only disambiguates a matcher
-                """
+                codingPath: codingPath,
+                debugDescription: error.diagnosticDescription
             ))
         }
-        self = .matcher(match, ordinal: ordinal)
     }
 
     public func encode(to encoder: Encoder) throws {

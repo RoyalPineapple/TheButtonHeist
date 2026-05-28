@@ -448,4 +448,25 @@ final class ActionExpectationTests: XCTestCase {
         let json = Data("{}".utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json))
     }
+
+    func testExpectationMatcherRejectsHeistIdAtCodableBoundary() {
+        let json = Data(#"{"type":"element_appeared","matcher":{"heistId":"button_save"}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json)) { error in
+            XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
+        }
+    }
+
+    func testExpectationMatcherRejectsOrdinalAtCodableBoundary() {
+        let json = Data(#"{"type":"element_appeared","matcher":{"label":"Save","ordinal":1}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json)) { error in
+            XCTAssertTrue("\(error)".contains("ordinal"), "\(error)")
+        }
+    }
+
+    func testExpectationMatcherRejectsUnknownFieldAtCodableBoundary() {
+        let json = Data(#"{"type":"element_appeared","matcher":{"label":"Save","legacyTarget":"button_save"}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionExpectation.self, from: json)) { error in
+            XCTAssertTrue("\(error)".contains("legacyTarget"), "\(error)")
+        }
+    }
 }

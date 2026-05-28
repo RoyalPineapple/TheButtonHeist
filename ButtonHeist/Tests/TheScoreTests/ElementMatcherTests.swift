@@ -3,6 +3,13 @@ import XCTest
 
 final class ElementMatcherTests: XCTestCase {
 
+    func testElementTargetInlineKeysMatchSharedGrammar() {
+        XCTAssertEqual(
+            Set(ElementTarget.CodingKeys.allInlineKeys.map(\.stringValue)),
+            Set(ElementTargetGrammar.inlineFieldNames)
+        )
+    }
+
     func testHasPredicatesIgnoresEmptyTraitArrays() {
         XCTAssertFalse(ElementMatcher(traits: []).hasPredicates)
         XCTAssertFalse(ElementMatcher(excludeTraits: []).hasPredicates)
@@ -83,7 +90,7 @@ final class ElementMatcherTests: XCTestCase {
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("ordinal only disambiguates"))
+            XCTAssertTrue(context.debugDescription.contains("requires heistId or matcher"))
         }
     }
 

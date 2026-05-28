@@ -112,6 +112,27 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertTrue(step.arguments.isEmpty)
     }
 
+    func testPlaybackTargetRejectsHeistIdAsDurableIdentity() {
+        let json = #"{"command":"activate","target":{"heistId":"button_save"}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
+        }
+    }
+
+    func testPlaybackTargetRejectsMatcherWithHeistId() {
+        let json = #"{"command":"activate","target":{"matcher":{"heistId":"button_save"}}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
+        }
+    }
+
+    func testPlaybackTargetRejectsUnknownTargetField() {
+        let json = #"{"command":"activate","target":{"matcher":{"label":"Save"},"legacyTarget":"button_save"}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("legacyTarget"), "\(error)")
+        }
+    }
+
     func testStepWithNoTarget() throws {
         let original = HeistEvidence(
             command: "type_text",

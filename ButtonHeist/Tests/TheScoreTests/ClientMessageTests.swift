@@ -590,6 +590,36 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    func testElementTargetRejectsHeistIdWithMatcherFieldsAtCodableBoundary() {
+        let json = #"{"heistId":"button_save","label":"Save"}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("cannot be combined"))
+        }
+    }
+
+    func testElementTargetRejectsHeistIdWithOrdinalAtCodableBoundary() {
+        let json = #"{"heistId":"button_save","ordinal":1}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("cannot be combined"))
+        }
+    }
+
+    func testElementTargetRejectsUnknownFieldAtCodableBoundary() {
+        let json = #"{"label":"Save","legacyTarget":"button_save"}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertTrue(context.debugDescription.contains("legacyTarget"))
+        }
+    }
+
     func testElementTargetOrdinalEquality() {
         let withOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 1)
         let withoutOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"))

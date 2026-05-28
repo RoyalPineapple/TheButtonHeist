@@ -17,44 +17,27 @@ extension TheFence {
         func elementTarget(in fence: TheFence) throws -> ElementTarget? {
             guard let target = try request.schemaDictionary("target") else { return nil }
             try target.rejectUnknownKeys(
-                allowed: ["heistId", "matcher", "ordinal"],
+                allowed: Set(ElementTargetGrammar.wrappedTargetFieldNames),
                 expected: "valid target field"
             )
             let heistId = try target.schemaString("heistId")
             let matcherObject = try target.schemaDictionary("matcher")
             let ordinal = try target.schemaNonNegativeInteger("ordinal")
-            let hasMixedHeistIdTarget = ordinal != nil || matcherObject != nil
-            if heistId != nil, hasMixedHeistIdTarget {
-                throw SchemaValidationError(
-                    field: "target",
-                    observed: target.observedDescription,
-                    expected: "either heistId or matcher with optional ordinal"
+            let elementMatcher: ElementMatcher?
+            if let matcherObject {
+                try matcherObject.rejectUnknownKeys(
+                    allowed: Set(ElementTargetGrammar.matcherFieldNames),
+                    expected: "valid target.matcher field"
                 )
+                elementMatcher = try matcher(from: matcherObject)
+            } else {
+                elementMatcher = nil
             }
-            if let heistId {
-                return .heistId(heistId)
-            }
-            guard let matcherObject else {
-                throw SchemaValidationError(
-                    field: "target",
-                    observed: target.observedDescription,
-                    expected: "heistId or matcher"
-                )
-            }
-            try matcherObject.rejectUnknownKeys(
-                allowed: ["label", "identifier", "value", "traits", "excludeTraits"],
-                expected: "valid target.matcher field"
-            )
-            let matcher = try matcher(from: matcherObject)
-            guard matcher.nonEmpty != nil else {
-                throw SchemaValidationError(
-                    field: target.field("matcher"),
-                    observed: matcherObject.observedDescription,
-                    expected: "matcher with label, identifier, value, traits, or excludeTraits"
-                )
-            }
-            return ElementTarget(
-                matcher: matcher,
+
+            return try validatedElementTarget(
+                heistId: heistId,
+                matcher: elementMatcher,
+                matcherWasProvided: matcherObject != nil,
                 ordinal: ordinal
             )
         }
@@ -225,6 +208,41 @@ extension TheFence {
                 value: try integer("count"),
                 observed: request.observedDescription(for: "count")
             )
+        }
+
+        private func validatedElementTarget(
+            heistId: HeistId?,
+            matcher: ElementMatcher?,
+            matcherWasProvided: Bool,
+            ordinal: Int?
+        ) throws -> ElementTarget {
+            do {
+                return try ElementTargetGrammar.validatedTarget(
+                    heistId: heistId,
+                    matcher: matcher,
+                    matcherWasProvided: matcherWasProvided,
+                    ordinal: ordinal
+                )
+            } catch let error as ElementTargetGrammarError {
+                throw SchemaValidationError(
+                    field: "target",
+                    observed: request.observedDescription,
+                    expected: schemaExpectedDescription(for: error)
+                )
+            }
+        }
+
+        private func schemaExpectedDescription(for error: ElementTargetGrammarError) -> String {
+            switch error {
+            case .missingTarget:
+                return "heistId or matcher"
+            case .emptyMatcher:
+                return "matcher with label, identifier, value, traits, or excludeTraits"
+            case .mixedHeistIdWithMatcherOrOrdinal:
+                return "either heistId or matcher with optional ordinal"
+            case .negativeOrdinal:
+                return "integer >= 0"
+            }
         }
     }
 

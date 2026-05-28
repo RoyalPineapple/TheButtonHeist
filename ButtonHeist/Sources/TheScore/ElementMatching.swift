@@ -122,18 +122,42 @@ public struct ElementMatcher: Sendable, Equatable {
 }
 
 extension ElementMatcher: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case label, identifier, value, traits, excludeTraits
         case heistId
+        case ordinal
+    }
+
+    private struct UnknownCodingKey: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
     }
 
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         if container.contains(.heistId) {
             throw DecodingError.dataCorruptedError(
                 forKey: .heistId,
                 in: container,
                 debugDescription: "ElementMatcher does not accept heistId; use ElementTarget.heistId for current-capture handles"
+            )
+        }
+        if container.contains(.ordinal) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .ordinal,
+                in: container,
+                debugDescription: "ElementMatcher does not accept ordinal; use ElementTarget.matcher for matcher disambiguation"
             )
         }
         self.init(
@@ -152,6 +176,18 @@ extension ElementMatcher: Codable {
         try container.encodeIfPresent(value, forKey: .value)
         try container.encodeIfPresent(traits, forKey: .traits)
         try container.encodeIfPresent(excludeTraits, forKey: .excludeTraits)
+    }
+
+    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown element matcher field \"\(unknownKey.stringValue)\""
+        ))
     }
 }
 
@@ -177,18 +213,29 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
     case element(ElementTarget)
     case container(ContainerMatcher, ordinal: Int? = nil)
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case element
         case container
         case ordinal
     }
 
-    private enum ElementCodingKeys: String, CodingKey {
-        case heistId
-        case label, identifier, value, traits, excludeTraits
+    private struct UnknownCodingKey: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
     }
 
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let hasElement = container.contains(.element)
         let hasContainer = container.contains(.container)
@@ -200,37 +247,18 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
             )
         }
         let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        if let ordinal, ordinal < 0 {
+            throw DecodingError.dataCorruptedError(
+                forKey: .ordinal,
+                in: container,
+                debugDescription: "ordinal must be non-negative, got \(ordinal)"
+            )
+        }
         if hasElement {
-            let element = try container.nestedContainer(keyedBy: ElementCodingKeys.self, forKey: .element)
-            if let heistId = try element.decodeIfPresent(HeistId.self, forKey: .heistId) {
-                let hasMatcherFields = [
-                    ElementCodingKeys.label, .identifier, .value, .traits, .excludeTraits,
-                ].contains { element.contains($0) }
-                guard ordinal == nil, !hasMatcherFields else {
-                    throw DecodingError.dataCorruptedError(
-                        forKey: .element,
-                        in: container,
-                        debugDescription: "Subtree element heistId cannot be combined with matcher fields or ordinal"
-                    )
-                }
-                self = .element(.heistId(heistId))
-            } else {
-                let matcher = ElementMatcher(
-                    label: try element.decodeIfPresent(String.self, forKey: .label),
-                    identifier: try element.decodeIfPresent(String.self, forKey: .identifier),
-                    value: try element.decodeIfPresent(String.self, forKey: .value),
-                    traits: try element.decodeIfPresent([HeistTrait].self, forKey: .traits),
-                    excludeTraits: try element.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits)
-                )
-                guard let target = ElementTarget(heistId: nil, matcher: matcher, ordinal: ordinal) else {
-                    throw DecodingError.dataCorruptedError(
-                        forKey: .element,
-                        in: container,
-                        debugDescription: "Subtree element requires heistId or at least one matcher field"
-                    )
-                }
-                self = .element(target)
-            }
+            self = .element(try ElementTarget.decodeSubtreeElement(
+                from: container.superDecoder(forKey: .element),
+                ordinal: ordinal
+            ))
         } else {
             self = .container(try container.decode(ContainerMatcher.self, forKey: .container), ordinal: ordinal)
         }
@@ -240,7 +268,7 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .element(let target):
-            var element = container.nestedContainer(keyedBy: ElementCodingKeys.self, forKey: .element)
+            var element = container.nestedContainer(keyedBy: ElementTarget.CodingKeys.self, forKey: .element)
             switch target {
             case .heistId(let heistId):
                 try element.encode(heistId, forKey: .heistId)
@@ -256,6 +284,18 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
             try container.encode(matcher, forKey: .container)
             try container.encodeIfPresent(ordinal, forKey: .ordinal)
         }
+    }
+
+    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
+        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown subtree selector field \"\(unknownKey.stringValue)\""
+        ))
     }
 
     public var ordinal: Int? {
