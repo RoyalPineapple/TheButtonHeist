@@ -211,6 +211,39 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.requestId, .signedInteger(Int64.max))
     }
 
+    func testSharedRequestBuilderParsesNullMachineRequestId() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"id":null,"command":"ping"}"#
+        )
+
+        XCTAssertEqual(parsed.requestId, .null)
+        XCTAssertEqual(parsed.operation.command, .ping)
+    }
+
+    func testSharedRequestBuilderParsesUnsignedMachineRequestId() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"id":18446744073709551615,"command":"ping"}"#
+        )
+
+        XCTAssertEqual(parsed.requestId, .unsignedInteger(UInt64.max))
+    }
+
+    func testSharedRequestBuilderParsesDecimalMachineRequestId() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"id":1.25,"command":"ping"}"#
+        )
+
+        XCTAssertEqual(parsed.requestId, .double(1.25))
+    }
+
+    func testSharedRequestBuilderParsesWholeNumberDecimalMachineRequestId() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"id":1.0,"command":"ping"}"#
+        )
+
+        XCTAssertEqual(parsed.requestId, .double(1.0))
+    }
+
     func testSharedRequestBuilderCarriesMachineRequestIdOnValidationError() {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(
@@ -233,7 +266,33 @@ final class CLICommandSyncTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Public JSON request id must be a finite JSON scalar"),
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Public JSON request id must be string"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
+    func testSharedRequestBuilderRejectsBoolMachineRequestId() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(
+                from: #"{"id":true,"command":"ping"}"#
+            )
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("does not support bool"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
+    func testSharedRequestBuilderRejectsArrayMachineRequestId() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(
+                from: #"{"id":["r1"],"command":"ping"}"#
+            )
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Public JSON request id"),
                 CLIRequestBuilder.diagnosticMessage(for: error)
             )
         }

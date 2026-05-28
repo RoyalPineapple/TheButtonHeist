@@ -105,12 +105,18 @@ enum CLIRequestBuilder {
     }
 
     static func parseMachineRequest(_ line: String) throws -> CLIParsedRequest {
+        let requestId = try CLIMachineRequestIdScanner.requestId(in: line)
         let data = Data(line.utf8)
-        let value = try JSONDecoder().decode(HeistValue.self, from: data)
-        guard case .object(let object) = value else {
+        let envelope: CLIMachineRequestEnvelope
+        do {
+            envelope = try JSONDecoder().decode(CLIMachineRequestEnvelope.self, from: data)
+        } catch let error as DecodingError {
+            throw ValidationError(diagnosticMessage(for: error))
+        }
+        let object = envelope.commandObject
+        guard !object.isEmpty else {
             throw ValidationError("Expected JSON object with string field 'command'")
         }
-        let requestId = try object["id"].map(PublicRequestId.init(value:))
         do {
             guard case .string(_)? = object[FenceParameterKey.command.rawValue] else {
                 throw ValidationError("Expected JSON object with string field 'command'")
@@ -174,5 +180,227 @@ enum CLIRequestBuilder {
     static func diagnosticMessage(for error: Error) -> String {
         let description = String(describing: error)
         return description.isEmpty ? error.localizedDescription : description
+    }
+}
+
+private struct CLIMachineRequestEnvelope: Decodable {
+    let commandObject: [String: HeistValue]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        var commandObject: [String: HeistValue] = [:]
+        for key in container.allKeys {
+            if key.stringValue == "id" {
+                continue
+            } else {
+                commandObject[key.stringValue] = try container.decode(HeistValue.self, forKey: key)
+            }
+        }
+        self.commandObject = commandObject
+    }
+}
+
+private enum CLIMachineRequestIdScanner {
+    static func requestId(in line: String) throws -> PublicRequestId? {
+        var parser = Parser(line)
+        try parser.skipWhitespace()
+        guard parser.consume("{") else { return nil }
+        try parser.skipWhitespace()
+        guard !parser.consume("}") else { return nil }
+        while true {
+            let key = try parser.readString()
+            try parser.skipWhitespace()
+            try parser.expect(":")
+            try parser.skipWhitespace()
+            if key == "id" {
+                return try parser.readRequestId()
+            }
+            try parser.skipValue()
+            try parser.skipWhitespace()
+            if parser.consume(",") {
+                try parser.skipWhitespace()
+                continue
+            }
+            return nil
+        }
+    }
+
+    private struct Parser {
+        var index: String.Index
+        let line: String
+
+        init(_ line: String) {
+            self.line = line
+            self.index = line.startIndex
+        }
+
+        mutating func skipWhitespace() throws {
+            while let character = current, character == " " || character == "\n" || character == "\r" || character == "\t" {
+                advance()
+            }
+        }
+
+        mutating func consume(_ character: Character) -> Bool {
+            guard current == character else { return false }
+            advance()
+            return true
+        }
+
+        mutating func expect(_ character: Character) throws {
+            guard consume(character) else {
+                throw ValidationError("Invalid JSON request id metadata")
+            }
+        }
+
+        mutating func readRequestId() throws -> PublicRequestId {
+            if consumeLiteral("null") {
+                return .null
+            }
+            if consumeLiteral("true") || consumeLiteral("false") {
+                throw ValidationError("Public JSON request id does not support bool")
+            }
+            if current == "\"" {
+                return try .string(readString())
+            }
+            guard current != "{" && current != "[" else {
+                throw ValidationError("Public JSON request id must be string, integer, unsigned integer, finite decimal, or null")
+            }
+            return try readNumberRequestId()
+        }
+
+        mutating func readNumberRequestId() throws -> PublicRequestId {
+            let token = readNumberToken()
+            guard !token.isEmpty else {
+                throw ValidationError("Public JSON request id must be string, integer, unsigned integer, finite decimal, or null")
+            }
+            if token.contains(".") || token.contains("e") || token.contains("E") {
+                guard let value = Double(token), value.isFinite else {
+                    throw ValidationError("Public JSON request id must be finite")
+                }
+                return .double(value)
+            }
+            if token.hasPrefix("-") {
+                guard let value = Int64(token) else {
+                    throw ValidationError("Public JSON request id integer is outside Int64 range")
+                }
+                return .signedInteger(value)
+            }
+            if let value = Int64(token) {
+                return .signedInteger(value)
+            }
+            guard let value = UInt64(token) else {
+                throw ValidationError("Public JSON request id integer is outside UInt64 range")
+            }
+            return .unsignedInteger(value)
+        }
+
+        mutating func skipValue() throws {
+            try skipWhitespace()
+            if current == "\"" {
+                _ = try readStringToken()
+            } else if consume("{") {
+                try skipObjectBody()
+            } else if consume("[") {
+                try skipArrayBody()
+            } else if consumeLiteral("true") || consumeLiteral("false") || consumeLiteral("null") {
+                return
+            } else {
+                _ = readNumberToken()
+            }
+        }
+
+        mutating func skipObjectBody() throws {
+            try skipWhitespace()
+            guard !consume("}") else { return }
+            while true {
+                _ = try readString()
+                try skipWhitespace()
+                try expect(":")
+                try skipValue()
+                try skipWhitespace()
+                if consume("}") { return }
+                try expect(",")
+                try skipWhitespace()
+            }
+        }
+
+        mutating func skipArrayBody() throws {
+            try skipWhitespace()
+            guard !consume("]") else { return }
+            while true {
+                try skipValue()
+                try skipWhitespace()
+                if consume("]") { return }
+                try expect(",")
+                try skipWhitespace()
+            }
+        }
+
+        mutating func readString() throws -> String {
+            let token = try readStringToken()
+            do {
+                return try JSONDecoder().decode(String.self, from: Data(token.utf8))
+            } catch {
+                throw ValidationError("Invalid JSON string in request metadata")
+            }
+        }
+
+        mutating func readStringToken() throws -> Substring {
+            guard consume("\"") else {
+                throw ValidationError("Invalid JSON request id metadata")
+            }
+            let start = line.index(before: index)
+            var isEscaped = false
+            while current != nil {
+                let character = current
+                advance()
+                if isEscaped {
+                    isEscaped = false
+                } else if character == "\\" {
+                    isEscaped = true
+                } else if character == "\"" {
+                    return line[start..<index]
+                }
+            }
+            throw ValidationError("Unterminated JSON string in request metadata")
+        }
+
+        mutating func readNumberToken() -> String {
+            let start = index
+            while let character = current,
+                  character == "-" || character == "+" || character == "." || character == "e" || character == "E" || character.isNumber {
+                advance()
+            }
+            return String(line[start..<index])
+        }
+
+        mutating func consumeLiteral(_ literal: String) -> Bool {
+            guard line[index...].hasPrefix(literal) else { return false }
+            index = line.index(index, offsetBy: literal.count)
+            return true
+        }
+
+        var current: Character? {
+            index < line.endIndex ? line[index] : nil
+        }
+
+        mutating func advance() {
+            index = line.index(after: index)
+        }
+    }
+}
+
+private struct DynamicCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(intValue: Int) {
+        self.stringValue = String(intValue)
+        self.intValue = intValue
     }
 }

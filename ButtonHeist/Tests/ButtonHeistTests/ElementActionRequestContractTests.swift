@@ -58,6 +58,19 @@ final class ElementActionRequestContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testScrollRejectsMixedElementAndContainerTargetsAtTypedBoundary() async {
+        await assertExecutionError(
+            command: .scroll,
+            arguments: [
+                "target": matcherTargetValue(identifier: "row"),
+                "container": .object(["stableId": .string("list")]),
+            ],
+            contains: "schema validation failed for target: observed"
+                + " object; expected at most one of container or element target"
+        )
+    }
+
+    @ButtonHeistActor
     private func assertExecutionError(
         command: TheFence.Command,
         arguments: [String: HeistValue] = [:],
