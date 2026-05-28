@@ -111,7 +111,7 @@ final class TheGetawayTests: XCTestCase {
     /// admission has no registered address. If `clientConnected` ran first,
     /// the same `clientHello` gets an `authRequired` response.
     func testClientConnectedIsObservedBeforeDataReceived() async throws {
-        let (getaway, muscle, transport) = await makeGetaway()
+        let (getaway, _, transport) = await makeGetaway()
         // The consumer Task captures `self` weakly, so we must retain
         // `getaway` for the lifetime of the test or the for-await loop
         // exits on the very first event.
