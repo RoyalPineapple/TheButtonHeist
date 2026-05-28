@@ -201,6 +201,27 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.command, .typeText)
     }
 
+    func testSharedRequestBuilderParsesTypedMachineRequestId() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"id":9223372036854775807,"command":"type_text","text":"hello"}"#
+        )
+
+        XCTAssertEqual(parsed.requestId, .signedInteger(Int64.max))
+    }
+
+    func testSharedRequestBuilderRejectsNonScalarMachineRequestId() {
+        XCTAssertThrowsError(
+            try CLIRequestBuilder.parsedRequest(
+                from: #"{"id":{"nested":true},"command":"type_text","text":"hello"}"#
+            )
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Public JSON request id must be a finite JSON scalar"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
     func testSharedRequestBuilderRejectsHumanTextInJSONSessionMode() {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(from: "activate button_save", acceptsHumanInput: false)

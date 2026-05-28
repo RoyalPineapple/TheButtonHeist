@@ -1138,7 +1138,7 @@ final class TheFenceTests: XCTestCase {
             )
         )
 
-        let json = try Self.jsonObject(from: response.jsonData(requestId: "req-json-failure"))
+        let json = try Self.jsonObject(from: response.jsonData(requestId: .string("req-json-failure")))
 
         XCTAssertEqual(json["id"] as? String, "req-json-failure")
         XCTAssertEqual(json["status"] as? String, "error")

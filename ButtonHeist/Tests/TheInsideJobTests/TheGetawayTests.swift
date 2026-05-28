@@ -107,13 +107,11 @@ final class TheGetawayTests: XCTestCase {
     /// arriving on the heels of TCP-ready could be dropped because the muscle
     /// had no record of the client.
     ///
-    /// Observable: a `clientHello` from an unknown client is silently ignored
-    /// (the `if let phase = clients[clientId]` guard fails and the phase is
-    /// never updated). If `clientConnected` ran first, the same `clientHello`
-    /// transitions the client to `.helloValidated`, which `helloValidatedClients`
-    /// reflects.
+    /// Observable: a `clientHello` from an unknown client is rejected because
+    /// admission has no registered address. If `clientConnected` ran first,
+    /// the same `clientHello` gets an `authRequired` response.
     func testClientConnectedIsObservedBeforeDataReceived() async throws {
-        let (getaway, muscle, transport) = await makeGetaway()
+        let (getaway, _, transport) = await makeGetaway()
         // The consumer Task captures `self` weakly, so we must retain
         // `getaway` for the lifetime of the test or the for-await loop
         // exits on the very first event.
@@ -130,11 +128,12 @@ final class TheGetawayTests: XCTestCase {
         // originally manifested: events arriving from off-main queue racing
         // each other to bridge onto the main actor.
         let callbacks = transport.makeCallbacks()
+        let responses = SentBox()
         // Reproduce the production path: SimpleSocketServer invokes these callbacks off-main-actor on its network queue, not from MainActor.
         // swiftlint:disable:next agent_no_task_detached
         await Task.detached {
             callbacks.onClientConnected?(1, "192.168.1.1")
-            callbacks.onDataReceived?(1, helloData) { _ in }
+            callbacks.onDataReceived?(1, helloData) { data in responses.append(data, clientId: 1) }
         }.value
 
         // Wait for the consumer task to drain both events. The for-await loop
@@ -142,14 +141,20 @@ final class TheGetawayTests: XCTestCase {
         // next; we poll the observable side effect rather than counting hops
         // because XCTest's main-actor scheduling can interleave variably.
         try await waitFor {
-            let validated = await muscle.helloValidatedClients
-            return validated.contains(1)
+            responses.all.contains { entry in
+                guard let envelope = try? decodeResponseEnvelope(from: entry.0) else { return false }
+                guard case .authRequired = envelope.message else { return false }
+                return true
+            }
         }
 
-        let validated = await muscle.helloValidatedClients
         XCTAssertTrue(
-            validated.contains(1),
-            "Client 1 should have transitioned to helloValidated, which means clientConnected was observed before the dataReceived/clientHello"
+            responses.all.contains { entry in
+                guard let envelope = try? decodeResponseEnvelope(from: entry.0) else { return false }
+                guard case .authRequired = envelope.message else { return false }
+                return true
+            },
+            "Client 1 should receive authRequired, which means clientConnected was observed before the dataReceived/clientHello"
         )
     }
 
@@ -157,35 +162,42 @@ final class TheGetawayTests: XCTestCase {
     /// is processed in FIFO order. This guards against any future regression
     /// where someone reintroduces a per-event `Task` and reopens the race.
     func testEventOrderingIsFIFOForBurstYield() async throws {
-        let (getaway, muscle, transport) = await makeGetaway()
+        let (getaway, _, transport) = await makeGetaway()
         _ = getaway
 
         let helloEnvelope = RequestEnvelope(message: .clientHello)
         let helloData = try JSONEncoder().encode(helloEnvelope)
 
         let callbacks = transport.makeCallbacks()
+        let responses = SentBox()
         // Three clients connect and immediately send hello. Each pair must
-        // process in order or the helloValidated transition is dropped.
+        // process in order or the authRequired response is missing.
         // Drive from off-main to mirror the production network queue.
         // Detached intentionally simulates SimpleSocketServer's off-main-actor callback dispatch.
         // swiftlint:disable:next agent_no_task_detached
         await Task.detached {
             for clientId in 1...3 {
                 callbacks.onClientConnected?(clientId, "addr-\(clientId)")
-                callbacks.onDataReceived?(clientId, helloData) { _ in }
+                callbacks.onDataReceived?(clientId, helloData) { data in responses.append(data, clientId: clientId) }
             }
         }.value
 
         try await waitFor {
-            let validated = await muscle.helloValidatedClients
-            return validated == Set([1, 2, 3])
+            responses.all.filter { entry in
+                guard let envelope = try? decodeResponseEnvelope(from: entry.0) else { return false }
+                guard case .authRequired = envelope.message else { return false }
+                return true
+            }.count == 3
         }
 
-        let validated = await muscle.helloValidatedClients
         XCTAssertEqual(
-            validated,
-            Set([1, 2, 3]),
-            "All three clients must reach helloValidated; if any clientConnected lost its race against its dataReceived, that client would be missing"
+            responses.all.filter { entry in
+                guard let envelope = try? decodeResponseEnvelope(from: entry.0) else { return false }
+                guard case .authRequired = envelope.message else { return false }
+                return true
+            }.count,
+            3,
+            "All three clients must receive authRequired; if any clientConnected lost its race against its dataReceived, that response would be missing"
         )
     }
 

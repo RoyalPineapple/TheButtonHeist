@@ -71,8 +71,52 @@ final class PublicContractGoldenTests: XCTestCase {
 
     func testPublicJSONRequestIdIsAddedAtSerializerBoundary() throws {
         XCTAssertEqual(
-            try jsonString(FenceResponse.ok(message: "done"), requestId: "req-1"),
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .string("req-1")),
             #"{"id":"req-1","message":"done","status":"ok"}"#
+        )
+    }
+
+    func testPublicJSONRequestIdPreservesExactScalarIdentity() throws {
+        XCTAssertEqual(
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .signedInteger(42)),
+            #"{"id":42,"message":"done","status":"ok"}"#
+        )
+        XCTAssertEqual(
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .signedInteger(Int64.max)),
+            #"{"id":9223372036854775807,"message":"done","status":"ok"}"#
+        )
+        XCTAssertEqual(
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .unsignedInteger(UInt64.max)),
+            #"{"id":18446744073709551615,"message":"done","status":"ok"}"#
+        )
+        XCTAssertEqual(
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .double(1.25)),
+            #"{"id":1.25,"message":"done","status":"ok"}"#
+        )
+        XCTAssertEqual(
+            try jsonString(FenceResponse.ok(message: "done"), requestId: .null),
+            #"{"id":null,"message":"done","status":"ok"}"#
+        )
+    }
+
+    func testPublicJSONRequestIdRejectsNonScalarValues() {
+        XCTAssertThrowsError(
+            try PublicRequestId(value: ["nested": "object"])
+        )
+        XCTAssertThrowsError(
+            try PublicRequestId(value: ["array"])
+        )
+        XCTAssertThrowsError(
+            try PublicRequestId(value: true)
+        )
+    }
+
+    func testPublicJSONRequestIdRejectsNonFiniteNumbers() {
+        XCTAssertThrowsError(
+            try PublicRequestId(value: Double.nan)
+        )
+        XCTAssertThrowsError(
+            try PublicRequestId(value: Double.infinity)
         )
     }
 
@@ -374,7 +418,7 @@ final class PublicContractGoldenTests: XCTestCase {
         return try XCTUnwrap(String(data: data, encoding: .utf8))
     }
 
-    private func jsonString(_ response: FenceResponse, requestId: Any) throws -> String {
+    private func jsonString(_ response: FenceResponse, requestId: PublicRequestId) throws -> String {
         let data = try response.jsonData(requestId: requestId)
         return try XCTUnwrap(String(data: data, encoding: .utf8))
     }

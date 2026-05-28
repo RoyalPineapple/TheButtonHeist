@@ -6,12 +6,12 @@ import TheScore
 extension TheFence {
 
     func clientMessageExecutionPlan(for request: ParsedRequest) throws -> ClientMessageExecutionPlan {
-        let timeout = try request.executionTimeout
+        let descriptor = request.command.descriptor
         let messages = try request.command.descriptor.clientMessages(for: request)
         return ClientMessageExecutionPlan(
             messages: messages,
-            timeout: timeout,
-            recordsCompletion: request.command.descriptor.recordsActionCompletion
+            timeout: try descriptor.executionTimeout(for: request),
+            recordsCompletion: descriptor.recordsActionCompletion
         )
     }
 }
@@ -61,27 +61,6 @@ private extension TheFence.RequestPayload {
         case .none, .getInterface, .screen, .artifact, .startRecording, .connect,
              .runBatch, .archiveSession, .startHeist, .stopHeist, .playHeist:
             throw FenceError.invalidRequest("command \"\(command.rawValue)\" is not an executable action command")
-        }
-    }
-}
-
-private extension TheFence.ParsedRequest {
-
-    var executionTimeout: TimeInterval {
-        get throws {
-            switch payload {
-            case .scroll(.elementSearch), .typeText:
-                return Timeouts.longActionSeconds
-            case .waitFor(let target):
-                return target.resolvedTimeout + 5
-            case .waitForChange(let payload):
-                let target = WaitForChangeTarget(expect: payload.expectation, timeout: payload.timeout)
-                return target.resolvedTimeout + 5
-            case .getPasteboard:
-                return Timeouts.healthSeconds
-            default:
-                return Timeouts.actionSeconds
-            }
         }
     }
 }

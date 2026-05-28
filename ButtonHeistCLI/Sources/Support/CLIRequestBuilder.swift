@@ -9,15 +9,12 @@ enum CLIRequestInputMode: Equatable {
 
 struct CLIParsedRequest {
     let request: [String: Any]
+    let requestId: PublicRequestId?
     let descriptor: FenceCommandDescriptor?
     let mode: CLIRequestInputMode
 
     var command: TheFence.Command? {
         descriptor?.command
-    }
-
-    var requestId: Any? {
-        request["id"]
     }
 }
 
@@ -59,6 +56,7 @@ enum CLIRequestBuilder {
 
         return CLIParsedRequest(
             request: request(command: fenceRequest.command, parameters: fenceRequest.parameters),
+            requestId: nil,
             descriptor: fenceRequest.descriptor,
             mode: .human
         )
@@ -102,8 +100,10 @@ enum CLIRequestBuilder {
             throw ValidationError("Expected JSON object with string field 'command'")
         }
         let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
+        let requestId = try object["id"].map(PublicRequestId.init(value:))
         return CLIParsedRequest(
             request: object.mapValues(\.cliRawValue),
+            requestId: requestId,
             descriptor: descriptor,
             mode: .machine
         )

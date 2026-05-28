@@ -20,33 +20,12 @@ public extension AccessibilityTrace.AccessibilityPatch {
         context: AccessibilityTrace.Context,
         transition: AccessibilityTrace.Transition = .empty
     ) -> AccessibilityTrace.AccessibilityPatch? {
-        let structuralOperations = before.tree.hasSameShape(as: after.tree) ? [] :
-            AccessibilityTrace.AccessibilityPatchOperation.structuralOperations(between: before, and: after)
-        let structurallyPatched = AccessibilityTrace.AccessibilityPatch(
-            operations: structuralOperations,
-            timestamp: after.timestamp,
-            annotations: after.annotations,
+        AccessibilityTracePatchProjection.project(
+            between: before,
+            and: after,
             context: context,
             transition: transition
-        ).apply(to: before)
-        let operations = structuralOperations + valueOperations(between: structurallyPatched, and: after)
-        let patch = AccessibilityTrace.AccessibilityPatch(
-            operations: operations,
-            timestamp: after.timestamp,
-            annotations: after.annotations,
-            context: context,
-            transition: transition
-        )
-        guard patch.apply(to: before) == after else {
-            return AccessibilityTrace.AccessibilityPatch(
-                operations: [.replaceTree(tree: after.tree)],
-                timestamp: after.timestamp,
-                annotations: after.annotations,
-                context: context,
-                transition: transition
-            )
-        }
-        return patch
+        ).patch
     }
 
     func apply(
@@ -92,6 +71,71 @@ public extension AccessibilityTrace.AccessibilityPatch {
             timestamp: timestamp,
             tree: tree,
             annotations: annotations
+        )
+    }
+}
+
+enum AccessibilityTracePatchProjection {
+    enum FullReplacementReason: String, Sendable {
+        case incrementalProjectionDidNotReconstructTarget
+    }
+
+    enum Decision: Sendable, Equatable {
+        case incremental(AccessibilityTrace.AccessibilityPatch)
+        case fullReplacement(AccessibilityTrace.AccessibilityPatch, reason: FullReplacementReason)
+
+        var patch: AccessibilityTrace.AccessibilityPatch {
+            switch self {
+            case .incremental(let patch),
+                 .fullReplacement(let patch, _):
+                return patch
+            }
+        }
+    }
+
+    static func project(
+        between before: Interface,
+        and after: Interface,
+        context: AccessibilityTrace.Context,
+        transition: AccessibilityTrace.Transition = .empty
+    ) -> Decision {
+        let structuralOperations = before.tree.hasSameShape(as: after.tree) ? [] :
+            AccessibilityTrace.AccessibilityPatchOperation.structuralOperations(between: before, and: after)
+        let structurallyPatched = AccessibilityTrace.AccessibilityPatch(
+            operations: structuralOperations,
+            timestamp: after.timestamp,
+            annotations: after.annotations,
+            context: context,
+            transition: transition
+        ).apply(to: before)
+        let operations = structuralOperations + valueOperations(between: structurallyPatched, and: after)
+        let patch = AccessibilityTrace.AccessibilityPatch(
+            operations: operations,
+            timestamp: after.timestamp,
+            annotations: after.annotations,
+            context: context,
+            transition: transition
+        )
+        guard patch.apply(to: before) == after else {
+            return .fullReplacement(
+                fullReplacementPatch(for: after, context: context, transition: transition),
+                reason: .incrementalProjectionDidNotReconstructTarget
+            )
+        }
+        return .incremental(patch)
+    }
+
+    private static func fullReplacementPatch(
+        for after: Interface,
+        context: AccessibilityTrace.Context,
+        transition: AccessibilityTrace.Transition
+    ) -> AccessibilityTrace.AccessibilityPatch {
+        AccessibilityTrace.AccessibilityPatch(
+            operations: [.replaceTree(tree: after.tree)],
+            timestamp: after.timestamp,
+            annotations: after.annotations,
+            context: context,
+            transition: transition
         )
     }
 }
