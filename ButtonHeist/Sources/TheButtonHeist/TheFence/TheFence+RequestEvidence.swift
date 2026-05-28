@@ -38,7 +38,7 @@ private extension HeistRecordingProjection {
                 arguments: try ActivateEvidenceArguments(
                     action: ElementAction.increment.description,
                     count: messages.count > 1 ? messages.count : nil
-                ).heistEvidenceArguments(),
+                ).heistEvidenceArguments(accepting: ["action", "count"]),
                 elementTarget: target
             )
         case .decrement(let target):
@@ -46,13 +46,13 @@ private extension HeistRecordingProjection {
                 arguments: try ActivateEvidenceArguments(
                     action: ElementAction.decrement.description,
                     count: messages.count > 1 ? messages.count : nil
-                ).heistEvidenceArguments(),
+                ).heistEvidenceArguments(accepting: ["action", "count"]),
                 elementTarget: target
             )
         case .performCustomAction(let target):
             return .target(
                 arguments: try ActivateEvidenceArguments(action: target.actionName, count: nil)
-                    .heistEvidenceArguments(),
+                    .heistEvidenceArguments(accepting: ["action", "count"]),
                 elementTarget: target.elementTarget
             )
         default:
@@ -68,17 +68,25 @@ private extension ClientMessage {
             return .target(elementTarget: target)
         case .performCustomAction(let target):
             return .target(
-                arguments: try target.heistEvidenceArguments(),
+                arguments: try target.heistEvidenceArguments(accepting: ["actionName", "container"]),
                 elementTarget: target.elementTarget
             )
         case .rotor(let target):
-            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(
+                arguments: target.heistEvidenceArguments(
+                    accepting: ["rotor", "rotorIndex", "direction", "currentHeistId", "currentTextRange"]
+                ),
+                elementTarget: target.elementTarget
+            )
         case .typeText(let target):
-            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(
+                arguments: target.heistEvidenceArguments(accepting: ["text"]),
+                elementTarget: target.elementTarget
+            )
         case .editAction(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(accepting: ["action"]))
         case .setPasteboard(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(accepting: ["text"]))
         case .oneFingerTap(let target):
             return try target.heistRecordingProjection()
         case .longPress(let target):
@@ -94,21 +102,41 @@ private extension ClientMessage {
         case .twoFingerTap(let target):
             return try target.heistRecordingProjection()
         case .drawPath(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
+            return try HeistRecordingProjection(
+                arguments: target.heistEvidenceArguments(accepting: ["points", "duration", "velocity"]),
+                coordinateOnly: true
+            )
         case .drawBezier(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(), coordinateOnly: true)
+            return try HeistRecordingProjection(
+                arguments: target.heistEvidenceArguments(
+                    accepting: ["startX", "startY", "segments", "samplesPerSegment", "duration", "velocity"]
+                ),
+                coordinateOnly: true
+            )
         case .scroll(let target):
-            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(
+                arguments: target.heistEvidenceArguments(accepting: ["direction", "container"]),
+                elementTarget: target.elementTarget
+            )
         case .scrollToVisible(let target):
             return .target(elementTarget: target.elementTarget)
         case .elementSearch(let target):
-            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(
+                arguments: target.heistEvidenceArguments(accepting: ["direction"]),
+                elementTarget: target.elementTarget
+            )
         case .scrollToEdge(let target):
-            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(
+                arguments: target.heistEvidenceArguments(accepting: ["edge", "container"]),
+                elementTarget: target.elementTarget
+            )
         case .waitFor(let target):
-            return try .target(arguments: target.heistEvidenceArguments(), elementTarget: target.elementTarget)
+            return try .target(
+                arguments: target.heistEvidenceArguments(accepting: ["absent", "timeout"]),
+                elementTarget: target.elementTarget
+            )
         case .waitForChange(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments())
+            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(accepting: ["expect", "timeout"]))
         default:
             return .empty
         }
