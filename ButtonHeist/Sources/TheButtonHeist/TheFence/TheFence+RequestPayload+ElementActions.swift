@@ -4,44 +4,16 @@ import TheScore
 
 private let accessibilityAdjustmentCountRange = 1...100
 
-extension TheFence.ScrollPayload {
-
-    var clientMessage: ClientMessage {
-        switch self {
-        case .scroll(let target):
-            return .scroll(target)
-        case .scrollToVisible(let target):
-            return .scrollToVisible(target)
-        case .elementSearch(let target):
-            return .elementSearch(target)
-        case .scrollToEdge(let target):
-            return .scrollToEdge(target)
-        }
-    }
-}
-
-extension TheFence.AccessibilityPayload {
-
-    func clientMessages() throws -> [ClientMessage] {
-        switch self {
-        case .activate(let target, let actionName, let count):
-            guard let actionName else {
-                try Self.rejectCount(count)
-                return [.activate(target)]
-            }
-            return try Self.namedAccessibilityCommands(
-                target: target,
-                actionName: actionName,
-                count: count
-            )
-        }
-    }
-
-    private static func namedAccessibilityCommands(
+private extension TheFence {
+    static func accessibilityClientMessages(
         target: ElementTarget,
-        actionName: String,
+        actionName: String?,
         count: TheFence.CountArgument
     ) throws -> [ClientMessage] {
+        guard let actionName else {
+            try rejectCount(count)
+            return [.activate(target)]
+        }
         switch actionName {
         case ElementAction.increment.description:
             return try repeatedAdjustmentCommands(.increment(target), count: count)
@@ -53,7 +25,19 @@ extension TheFence.AccessibilityPayload {
         }
     }
 
-    private static func repeatedAdjustmentCommands(
+    static func accessibilityEvidence(
+        target: ElementTarget,
+        actionName: String?,
+        count: TheFence.CountArgument
+    ) -> TheFence.RequestEvidence {
+        TheFence.RequestEvidence(
+            arguments: ActivateEvidenceArguments(action: actionName, count: count.value)
+                .heistEvidenceArguments(),
+            elementTarget: target
+        )
+    }
+
+    static func repeatedAdjustmentCommands(
         _ message: ClientMessage,
         count countArgument: TheFence.CountArgument
     ) throws -> [ClientMessage] {
@@ -61,7 +45,7 @@ extension TheFence.AccessibilityPayload {
         return Array(repeating: message, count: count)
     }
 
-    private static func accessibilityAdjustmentCount(_ countArgument: TheFence.CountArgument) throws -> Int {
+    static func accessibilityAdjustmentCount(_ countArgument: TheFence.CountArgument) throws -> Int {
         let count = countArgument.value ?? 1
         guard accessibilityAdjustmentCountRange.contains(count) else {
             throw SchemaValidationError(
@@ -73,7 +57,7 @@ extension TheFence.AccessibilityPayload {
         return count
     }
 
-    private static func rejectCount(_ countArgument: TheFence.CountArgument) throws {
+    static func rejectCount(_ countArgument: TheFence.CountArgument) throws {
         guard countArgument.observed != nil else { return }
         throw SchemaValidationError(
             field: "count",
@@ -92,19 +76,31 @@ extension TheFence {
         let input = ElementActionRequestInput(arguments)
         switch command {
         case .scroll:
-            return decodedScrollPayload(.scroll(try ScrollRequestInput(input, fence: self).target))
+            let target = try ScrollRequestInput(input, fence: self).target
+            return decodedExecutablePayload(message: .scroll(target), evidence: target.requestEvidence)
         case .scrollToVisible:
-            return decodedScrollPayload(.scrollToVisible(try ScrollToVisibleRequestInput(input, fence: self).target))
+            let target = try ScrollToVisibleRequestInput(input, fence: self).target
+            return decodedExecutablePayload(message: .scrollToVisible(target), evidence: target.requestEvidence)
         case .elementSearch:
-            return decodedScrollPayload(.elementSearch(try ElementSearchRequestInput(input, fence: self).target))
+            let target = try ElementSearchRequestInput(input, fence: self).target
+            return decodedExecutablePayload(message: .elementSearch(target), evidence: target.requestEvidence)
         case .scrollToEdge:
-            return decodedScrollPayload(.scrollToEdge(try ScrollToEdgeRequestInput(input, fence: self).target))
+            let target = try ScrollToEdgeRequestInput(input, fence: self).target
+            return decodedExecutablePayload(message: .scrollToEdge(target), evidence: target.requestEvidence)
         case .activate:
-            let payload = try ActivateRequestInput(input, fence: self).payload
+            let input = try ActivateRequestInput(input, fence: self)
             return DecodedRequestPayload(
                 payload: .clientAction,
-                executableMessages: try payload.clientMessages(),
-                evidence: payload.requestEvidence
+                executableMessages: try Self.accessibilityClientMessages(
+                    target: input.target,
+                    actionName: input.actionName,
+                    count: input.count
+                ),
+                evidence: Self.accessibilityEvidence(
+                    target: input.target,
+                    actionName: input.actionName,
+                    count: input.count
+                )
             )
         case .rotor:
             let target = try RotorRequestInput(input, fence: self).target
@@ -139,10 +135,6 @@ extension TheFence {
         default:
             throw FenceError.invalidRequest("Unexpected element action command: \(command.rawValue)")
         }
-    }
-
-    private func decodedScrollPayload(_ payload: ScrollPayload) -> DecodedRequestPayload {
-        decodedExecutablePayload(message: payload.clientMessage, evidence: payload.requestEvidence)
     }
 
     private func decodedExecutablePayload(
@@ -504,16 +496,15 @@ private extension TheFence {
     }
 
     struct ActivateRequestInput {
-        let payload: AccessibilityPayload
+        let target: ElementTarget
+        let actionName: String?
+        let count: TheFence.CountArgument
 
         @ButtonHeistActor
         init(_ request: ElementActionRequestInput, fence: TheFence) throws {
-            let target = try request.requiredElementTarget(command: .activate, in: fence)
-            payload = .activate(
-                target,
-                actionName: try request.accessibilityActionName("action"),
-                count: try request.countArgument()
-            )
+            self.target = try request.requiredElementTarget(command: .activate, in: fence)
+            self.actionName = try request.accessibilityActionName("action")
+            self.count = try request.countArgument()
         }
     }
 
