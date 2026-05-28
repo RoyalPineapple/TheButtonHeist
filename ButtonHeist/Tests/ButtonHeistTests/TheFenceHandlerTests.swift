@@ -759,12 +759,12 @@ final class TheFenceHandlerTests: XCTestCase {
                 fence,
                 target: elementTargetValue([
                     "matcher": .object(["label": .string("Save")]),
-                    "legacyTarget": .string("button_save"),
+                    "unexpectedTargetField": .string("button_save"),
                 ])
             )
         ) { error in
             XCTAssertTrue(
-                "\(error)".contains("legacyTarget"),
+                "\(error)".contains("unexpectedTargetField"),
                 "Expected unknown target field rejection, got \(error)"
             )
         }
@@ -3465,11 +3465,11 @@ final class TheFenceHandlerTests: XCTestCase {
                 "subtree": .object([
                     "element": .object([
                         "label": .string("Save"),
-                        "legacyTarget": .string("button_save"),
+                        "unexpectedTargetField": .string("button_save"),
                     ]),
                 ]),
             ],
-            contains: "legacyTarget"
+            contains: "unexpectedTargetField"
         )
     }
 
@@ -3856,6 +3856,17 @@ final class TheFenceHandlerTests: XCTestCase {
                     index: 0
                 ),
                 "schema validation failed for unexpected: observed string \"value\"; expected valid scroll parameter"
+            ),
+            (
+                "unknown activate parameter",
+                try TheFence.PlaybackOperation(
+                    evidence: HeistEvidence(
+                        command: "activate",
+                        arguments: ["heistId": .string("stale_button")]
+                    ),
+                    index: 0
+                ),
+                "schema validation failed for heistId: observed string \"stale_button\"; expected valid activate parameter"
             ),
             (
                 "edit_action invalid action type",

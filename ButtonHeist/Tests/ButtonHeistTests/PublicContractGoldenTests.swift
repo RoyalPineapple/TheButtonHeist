@@ -368,7 +368,7 @@ final class PublicContractGoldenTests: XCTestCase {
             golden(
                 #"{"app":"com.buttonheist.testapp","recorded":"1970-01-01T00:00:00Z","steps":["#,
                 #"{"command":"activate","target":{"matcher":{"label":"Pay","traits":["button"]}}},"#,
-                #"{"command":"type_text","target":{"matcher":{"label":"Note"}},"text":"hello"}],"version":3}"#
+                #"{"arguments":{"text":"hello"},"command":"type_text","target":{"matcher":{"label":"Note"}}}],"version":4}"#
             )
         )
     }

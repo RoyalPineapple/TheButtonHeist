@@ -568,9 +568,9 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testSubtreeSelectorElementRejectsUnknownTargetField() {
-        let json = #"{"element":{"label":"Save","legacyTarget":"button_save"}}"#
+        let json = #"{"element":{"label":"Save","unexpectedTargetField":"button_save"}}"#
         XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("legacyTarget"), "\(error)")
+            XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
         }
     }
 

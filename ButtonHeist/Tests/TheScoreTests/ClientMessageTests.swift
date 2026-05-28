@@ -611,12 +611,12 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testElementTargetRejectsUnknownFieldAtCodableBoundary() {
-        let json = #"{"label":"Save","legacyTarget":"button_save"}"#
+        let json = #"{"label":"Save","unexpectedTargetField":"button_save"}"#
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("legacyTarget"))
+            XCTAssertTrue(context.debugDescription.contains("unexpectedTargetField"))
         }
     }
 
