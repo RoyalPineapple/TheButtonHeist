@@ -53,7 +53,7 @@ private extension TheFence.Command {
     }
 
     static func mcpToolName(for command: TheFence.Command) -> String {
-        mcpToolContracts.first { $0.command == command }?.name ?? command.canonicalName
+        command.canonicalName
     }
 
     static func inlineList(_ values: [String]) -> String {

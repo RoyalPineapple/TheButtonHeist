@@ -40,11 +40,12 @@ public enum FenceOperationCatalog {
         name: String,
         arguments: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        guard let contract = TheFence.Command.mcpToolContract(named: name) else {
+        guard let command = TheFence.Command(rawValue: name),
+              command.descriptor.mcpExposure == .directTool else {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
 
-        return normalizeToolOperation(command: contract.command, arguments: arguments)
+        return normalizeToolOperation(command: command, arguments: arguments)
     }
 
     public static func normalizeCommand(

@@ -171,24 +171,20 @@ public struct MCPToolAnnotationSpec: Sendable, Equatable {
 
 public struct MCPToolContract: Sendable, Equatable {
     public let name: String
-    public let command: TheFence.Command
     public let description: String
+    public let parameters: [FenceParameterSpec]
     public let annotations: MCPToolAnnotationSpec?
 
     public init(
         name: String,
-        command: TheFence.Command,
         description: String,
+        parameters: [FenceParameterSpec],
         annotations: MCPToolAnnotationSpec? = nil
     ) {
         self.name = name
-        self.command = command
         self.description = description
+        self.parameters = parameters
         self.annotations = annotations
-    }
-
-    public var parameters: [FenceParameterSpec] {
-        command.parameters
     }
 
     public var requiredParameterKeys: [String] {
