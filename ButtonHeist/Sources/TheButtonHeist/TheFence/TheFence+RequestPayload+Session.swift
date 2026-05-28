@@ -2,34 +2,41 @@ import Foundation
 
 extension TheFence {
 
-    func decodeSessionPayload(
+    func decodeSessionDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope
-    ) throws -> RequestPayload {
+    ) throws -> DecodedRequestDispatch {
         switch command {
         case .startRecording:
-            return .startRecording(try decodeRecordingConfig(arguments))
+            let config = try decodeRecordingConfig(arguments)
+            return DecodedRequestDispatch { fence, _ in try await fence.handleStartRecording(config) }
         case .runBatch:
-            return .runBatch(try decodeRunBatchRequest(arguments))
+            let request = try decodeRunBatchRequest(arguments)
+            return DecodedRequestDispatch { fence, _ in try await fence.handleRunBatch(request) }
         case .connect:
-            return .connect(try decodeConnectRequest(arguments))
+            let request = try decodeConnectRequest(arguments)
+            return DecodedRequestDispatch { fence, _ in try await fence.handleConnect(request) }
         case .archiveSession:
-            return .archiveSession(ArchiveSessionRequest(
+            let request = ArchiveSessionRequest(
                 deleteSource: try arguments.schemaBoolean("delete_source") ?? false
-            ))
+            )
+            return DecodedRequestDispatch { fence, _ in try await fence.handleArchiveSession(request) }
         case .startHeist:
-            return .startHeist(StartHeistRequest(
+            let request = StartHeistRequest(
                 app: try arguments.schemaString("app") ?? "com.buttonheist.testapp",
                 identifier: try arguments.schemaString("identifier") ?? "heist"
-            ))
+            )
+            return DecodedRequestDispatch { fence, _ in try fence.handleStartHeist(request) }
         case .stopHeist:
-            return .stopHeist(StopHeistRequest(
+            let request = StopHeistRequest(
                 outputPath: try arguments.requiredSchemaString("output")
-            ))
+            )
+            return DecodedRequestDispatch { fence, _ in try fence.handleStopHeist(request) }
         case .playHeist:
-            return .playHeist(PlayHeistRequest(
+            let request = PlayHeistRequest(
                 inputPath: try arguments.requiredSchemaString("input")
-            ))
+            )
+            return DecodedRequestDispatch { fence, _ in try await fence.handlePlayHeist(request) }
         default:
             throw FenceError.invalidRequest("Unexpected session command: \(command.rawValue)")
         }

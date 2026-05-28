@@ -57,10 +57,10 @@ private extension TheFence {
 
 extension TheFence {
 
-    func decodeElementActionPayload(
+    func decodeElementActionDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope
-    ) throws -> DecodedRequestPayload {
+    ) throws -> DecodedRequestDispatch {
         let input = ElementActionRequestInput(arguments)
         switch command {
         case .scroll:
@@ -77,12 +77,12 @@ extension TheFence {
             return decodedExecutablePayload(.scrollToEdge(target))
         case .activate:
             let input = try ActivateRequestInput(input, fence: self)
-            return DecodedRequestPayload(
-                payload: .clientAction(try Self.accessibilityClientMessages(
+            return Self.clientActionDispatch(
+                try Self.accessibilityClientMessages(
                     target: input.target,
                     actionName: input.actionName,
                     count: input.count
-                ))
+                )
             )
         case .rotor:
             let target = try RotorRequestInput(input, fence: self).target
@@ -104,8 +104,8 @@ extension TheFence {
         }
     }
 
-    private func decodedExecutablePayload(_ message: ClientMessage) -> DecodedRequestPayload {
-        DecodedRequestPayload(payload: .clientAction([message]))
+    private func decodedExecutablePayload(_ message: ClientMessage) -> DecodedRequestDispatch {
+        Self.clientActionDispatch([message])
     }
 
     func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {

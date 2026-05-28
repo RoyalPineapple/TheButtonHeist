@@ -4,18 +4,21 @@ import TheScore
 
 extension TheFence {
 
-    func decodeObservationPayload(
+    func decodeObservationDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope,
         requestId: String
-    ) throws -> RequestPayload {
+    ) throws -> DecodedRequestDispatch {
         switch command {
         case .getInterface:
-            return .getInterface(try decodeGetInterfaceRequest(arguments))
+            let request = try decodeGetInterfaceRequest(arguments)
+            return DecodedRequestDispatch { fence, _ in try await fence.handleGetInterface(request) }
         case .getScreen:
-            return .screen(try decodeScreenRequest(arguments, requestId: requestId))
+            let request = try decodeScreenRequest(arguments, requestId: requestId)
+            return DecodedRequestDispatch { fence, _ in try await fence.handleGetScreen(request) }
         case .stopRecording:
-            return .artifact(try decodeArtifactRequest(arguments, requestId: requestId))
+            let request = try decodeArtifactRequest(arguments, requestId: requestId)
+            return DecodedRequestDispatch { fence, _ in try await fence.handleStopRecording(request) }
         default:
             throw FenceError.invalidRequest("Unexpected observation command: \(command.rawValue)")
         }
@@ -68,10 +71,12 @@ extension TheFence {
         ParsedRequest(
             command: .getInterface,
             requestId: UUID().uuidString,
-            payload: .getInterface(GetInterfaceRequest(
-                detail: .summary,
-                query: InterfaceQuery()
-            )),
+            dispatch: DecodedRequestDispatch { fence, _ in
+                try await fence.handleGetInterface(GetInterfaceRequest(
+                    detail: .summary,
+                    query: InterfaceQuery()
+                ))
+            },
             expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
             immediateResponse: nil
         )

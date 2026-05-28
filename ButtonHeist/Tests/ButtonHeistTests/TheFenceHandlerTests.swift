@@ -146,11 +146,11 @@ final class TheFenceHandlerTests: XCTestCase {
         if let policy {
             request["policy"] = policy
         }
-        let parsed = try fence.parseRequest(request)
-        guard case .runBatch(let batch) = parsed.payload else {
-            throw XCTSkip("Expected run_batch payload")
-        }
-        return batch
+        let arguments = try TheFence.CommandArgumentEnvelope(
+            arguments: request,
+            droppingCommandKey: true
+        )
+        return try fence.decodeRunBatchRequest(arguments)
     }
 
     @ButtonHeistActor
