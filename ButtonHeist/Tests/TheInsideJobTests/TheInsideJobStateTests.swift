@@ -96,7 +96,7 @@ final class TheInsideJobStateTests: XCTestCase {
             return Task {}
         }
         let lease = runtimeLease(transport: transport)
-        lease.activate(on: job, resumePolling: false)
+        lease.activate(on: job)
 
         if let releaseTask = lease.release(from: job, policy: .stop) {
             await releaseTask.value
@@ -226,13 +226,13 @@ final class TheInsideJobStateTests: XCTestCase {
 
     // MARK: - PollingPhase: startPolling / stopPolling
 
-    func testStartPollingTransitionsToActive() {
+    func testStartPollingStoresIntentWhileStopped() {
         let job = TheInsideJob()
 
         job.startPolling(interval: 3.0)
 
-        guard case .active(_, let interval) = job.pollingPhase else {
-            XCTFail("Expected .active, got \(job.pollingPhase)")
+        guard case .paused(let interval) = job.pollingPhase else {
+            XCTFail("Expected .paused intent, got \(job.pollingPhase)")
             return
         }
         XCTAssertEqual(interval, 3.0)
@@ -247,8 +247,8 @@ final class TheInsideJobStateTests: XCTestCase {
 
         job.startPolling(interval: 0.1)
 
-        guard case .active(_, let interval) = job.pollingPhase else {
-            XCTFail("Expected .active, got \(job.pollingPhase)")
+        guard case .paused(let interval) = job.pollingPhase else {
+            XCTFail("Expected .paused intent, got \(job.pollingPhase)")
             return
         }
         XCTAssertEqual(interval, 0.5)
@@ -256,8 +256,24 @@ final class TheInsideJobStateTests: XCTestCase {
         job.stopPolling()
     }
 
+    func testRuntimeLeaseActivationStartsStoredPollingIntent() {
+        let job = TheInsideJob()
+
+        job.startPolling(interval: 3.0)
+        runtimeLease().activate(on: job)
+
+        guard case .active(_, let interval) = job.pollingPhase else {
+            XCTFail("Expected lease activation to start polling intent, got \(job.pollingPhase)")
+            return
+        }
+        XCTAssertEqual(interval, 3.0)
+
+        job.releaseRuntimeOwnedResources(policy: .stop)
+    }
+
     func testStopPollingFromActiveTransitionsToDisabled() {
         let job = TheInsideJob()
+        runtimeLease().activate(on: job)
         job.startPolling(interval: 2.0)
 
         job.stopPolling()
@@ -267,6 +283,8 @@ final class TheInsideJobStateTests: XCTestCase {
             return
         }
         XCTAssertFalse(job.isPollingEnabled)
+
+        job.releaseRuntimeOwnedResources(policy: .stop)
     }
 
     func testStopPollingFromDisabledIsNoOp() {
@@ -297,7 +315,7 @@ final class TheInsideJobStateTests: XCTestCase {
     func testSuspendPausesActivePollingPreservingInterval() async {
         let job = TheInsideJob()
         let transport = ServerTransport()
-        runtimeLease(transport: transport).activate(on: job, resumePolling: false)
+        runtimeLease(transport: transport).activate(on: job)
         job.startPolling(interval: 5.0)
 
         await job.suspend()
@@ -521,11 +539,12 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testPollingTimeoutReturnsIntervalWhenActive() {
         let job = TheInsideJob()
+        runtimeLease().activate(on: job)
         job.startPolling(interval: 7.0)
 
         XCTAssertEqual(job.pollingTimeoutSeconds, 7.0)
 
-        job.stopPolling()
+        job.releaseRuntimeOwnedResources(policy: .stop)
     }
 
     func testPollingTimeoutReturnsIntervalWhenPaused() {

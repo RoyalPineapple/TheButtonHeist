@@ -248,7 +248,7 @@ public final class TheInsideJob {
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let lease = try await startRuntimeLeaseForStartup()
-        activateRuntimeLease(lease, resumePolling: false)
+        activateRuntimeLease(lease)
 
         insideJobLogger.info("Server started successfully")
     }
@@ -272,7 +272,7 @@ public final class TheInsideJob {
     }
 
     public func startPolling(interval timeout: TimeInterval = 2.0) {
-        pollingRuntime.start(interval: timeout, makeTask: makePollingTask(interval:))
+        pollingRuntime.enableIntent(interval: timeout, runtimeActive: transport != nil, makeTask: makePollingTask(interval:))
         insideJobLogger.info("Polling enabled (settle timeout: \(self.pollingTimeoutSeconds)s)")
     }
 
