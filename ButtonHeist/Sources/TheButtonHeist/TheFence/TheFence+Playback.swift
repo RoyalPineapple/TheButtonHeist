@@ -8,7 +8,7 @@ private let playbackLogger = Logger(subsystem: "com.buttonheist.fence", category
 extension TheFence {
     struct TypedHeistPlayback: Sendable {
         let app: String
-        let steps: [PlaybackOperation]
+        let steps: [HeistEvidence]
 
         @ButtonHeistActor
         init(contentsOf url: URL) throws {
@@ -31,7 +31,14 @@ extension TheFence {
 
             app = playback.app
             steps = try playback.steps.enumerated().map { index, evidence in
-                try PlaybackOperation(evidence: evidence, index: index)
+                switch FenceOperationCatalog.normalizePlaybackStep(commandName: evidence.command) {
+                case .success:
+                    return evidence
+                case .failure(let error):
+                    throw FenceError.invalidRequest(
+                        "Invalid heist step \(index): \(error.message)"
+                    )
+                }
             }
         }
 
@@ -39,75 +46,42 @@ extension TheFence {
             steps.count
         }
     }
+}
 
-    struct PlaybackOperation: Sendable {
-        let command: Command
-        let target: SemanticActionTarget?
-        let arguments: [String: HeistValue]
+extension HeistEvidence {
+    func playbackArgumentEnvelope() -> TheFence.CommandArgumentEnvelope {
+        var requestArguments = arguments
 
-        init(evidence: HeistEvidence, index: Int) throws {
-            let command: Command
-            switch FenceOperationCatalog.normalizePlaybackStep(
-                commandName: evidence.command
-            ) {
-            case .success(let normalizedCommand):
-                command = normalizedCommand
-            case .failure(let error):
-                throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): \(error.message)"
-                )
+        if let target {
+            var matcher: [String: HeistValue] = [:]
+            if let label = target.matcher.label { matcher["label"] = .string(label) }
+            if let matchIdentifier = target.matcher.identifier { matcher["identifier"] = .string(matchIdentifier) }
+            if let matchValue = target.matcher.value { matcher["value"] = .string(matchValue) }
+            if let matchTraits = target.matcher.traits {
+                matcher["traits"] = .array(matchTraits.map { .string($0.rawValue) })
             }
-
-            self.init(
-                command: command,
-                target: evidence.target,
-                arguments: evidence.arguments
-            )
+            if let matchExclude = target.matcher.excludeTraits {
+                matcher["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
+            }
+            var targetArguments: [String: HeistValue] = ["matcher": .object(matcher)]
+            if let ordinal = target.ordinal {
+                targetArguments["ordinal"] = .int(ordinal)
+            }
+            requestArguments["target"] = .object(targetArguments)
         }
 
-        private init(
-            command: Command,
-            target: SemanticActionTarget?,
-            arguments: [String: HeistValue]
+        return TheFence.CommandArgumentEnvelope(values: requestArguments)
+    }
+
+    func normalizedPlaybackOperation() throws -> NormalizedOperation {
+        switch FenceOperationCatalog.normalizePlaybackStep(
+            commandName: command,
+            arguments: playbackArgumentEnvelope()
         ) {
-            self.command = command
-            self.target = target
-            self.arguments = arguments
-        }
-
-        var commandName: String {
-            command.rawValue
-        }
-
-        func normalizedOperation() -> NormalizedOperation {
-            NormalizedOperation(
-                command: command,
-                arguments: requestDecodeInputEnvelope()
-            )
-        }
-
-        func requestDecodeInputEnvelope() -> CommandArgumentEnvelope {
-            var requestArguments = arguments
-
-            if let target {
-                var matcher: [String: HeistValue] = [:]
-                if let label = target.matcher.label { matcher["label"] = .string(label) }
-                if let matchIdentifier = target.matcher.identifier { matcher["identifier"] = .string(matchIdentifier) }
-                if let matchValue = target.matcher.value { matcher["value"] = .string(matchValue) }
-                if let matchTraits = target.matcher.traits {
-                    matcher["traits"] = .array(matchTraits.map { .string($0.rawValue) })
-                }
-                if let matchExclude = target.matcher.excludeTraits {
-                    matcher["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
-                }
-                var targetArguments: [String: HeistValue] = ["matcher": .object(matcher)]
-                if let ordinal = target.ordinal {
-                    targetArguments["ordinal"] = .int(ordinal)
-                }
-                requestArguments["target"] = .object(targetArguments)
-            }
-
-            return CommandArgumentEnvelope(values: requestArguments)
+        case .success(let operation):
+            return operation
+        case .failure(let error):
+            throw FenceError.invalidRequest(error.message)
         }
     }
 }
@@ -143,19 +117,19 @@ extension TheFence {
 
         try await primePlaybackInterface()
 
-        for (index, operation) in typedPlayback.steps.enumerated() {
+        for (index, evidence) in typedPlayback.steps.enumerated() {
             let stepStart = CFAbsoluteTimeGetCurrent()
             var stepFailure: PlaybackFailure?
 
             do {
-                let response = try await execute(playback: operation)
-                stepFailure = playbackFailure(operation: operation, response: response)
+                let response = try await execute(playback: evidence)
+                stepFailure = playbackFailure(evidence: evidence, response: response)
             } catch {
-                stepFailure = playbackFailure(operation: operation, error: error)
+                stepFailure = playbackFailure(evidence: evidence, error: error)
             }
 
             let stepTime = CFAbsoluteTimeGetCurrent() - stepStart
-            stepResults.append(stepResult(index: index, operation: operation, timeSeconds: stepTime, failure: stepFailure))
+            stepResults.append(stepResult(index: index, evidence: evidence, timeSeconds: stepTime, failure: stepFailure))
 
             if let stepFailure {
                 failedIndex = index
@@ -197,7 +171,7 @@ extension TheFence {
 
     private func stepResult(
         index: Int,
-        operation: PlaybackOperation,
+        evidence: HeistEvidence,
         timeSeconds: Double,
         failure: PlaybackFailure?
     ) -> HeistPlaybackReport.StepResult {
@@ -205,15 +179,15 @@ extension TheFence {
         if let failure {
             outcome = .failed(
                 message: failure.errorMessage,
-                errorKind: failure.step.command == operation.commandName ? failureErrorKind(failure) : nil
+                errorKind: failure.step.command == evidence.command ? failureErrorKind(failure) : nil
             )
         } else {
             outcome = .passed
         }
         return HeistPlaybackReport.StepResult(
             index: index,
-            command: operation.commandName,
-            target: operation.target,
+            command: evidence.command,
+            target: evidence.target,
             timeSeconds: timeSeconds,
             outcome: outcome
         )
@@ -231,8 +205,8 @@ extension TheFence {
         }
     }
 
-    private func playbackFailure(operation: PlaybackOperation, response: FenceResponse) -> PlaybackFailure? {
-        let failedStep = PlaybackFailure.FailedStep(command: operation.commandName, target: operation.target)
+    private func playbackFailure(evidence: HeistEvidence, response: FenceResponse) -> PlaybackFailure? {
+        let failedStep = PlaybackFailure.FailedStep(command: evidence.command, target: evidence.target)
         switch response {
         case .error(let message, _):
             return .fenceError(
@@ -254,8 +228,8 @@ extension TheFence {
         }
     }
 
-    private func playbackFailure(operation: PlaybackOperation, error: Error) -> PlaybackFailure {
-        let failedStep = PlaybackFailure.FailedStep(command: operation.commandName, target: operation.target)
+    private func playbackFailure(evidence: HeistEvidence, error: Error) -> PlaybackFailure {
+        let failedStep = PlaybackFailure.FailedStep(command: evidence.command, target: evidence.target)
         if let fenceError = error as? FenceError {
             return .fenceError(
                 step: failedStep,

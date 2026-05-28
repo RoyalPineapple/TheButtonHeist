@@ -71,6 +71,18 @@ public enum FenceOperationCatalog {
         )
     }
 
+    public static func normalizePlaybackStep(
+        commandName: String,
+        arguments: TheFence.CommandArgumentEnvelope
+    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        switch normalizeTypedPlaybackStep(commandName: commandName, context: "heist step") {
+        case .success(let command):
+            return normalizeToolOperation(command: command, arguments: arguments)
+        case .failure(let error):
+            return .failure(error)
+        }
+    }
+
     private static func normalizeCanonicalStep(
         _ step: TheFence.CommandArgumentObject,
         context: String,

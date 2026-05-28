@@ -228,10 +228,6 @@ extension TheFence {
         )
     }
 
-    func parsePlaybackOperation(_ operation: PlaybackOperation) throws -> ParsedRequest {
-        try parseRequest(operation: operation.normalizedOperation())
-    }
-
     func decodeRequestDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope,

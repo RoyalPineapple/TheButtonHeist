@@ -2396,22 +2396,19 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testParseExpectationFromTypedPlaybackRequestArguments() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "activate",
-                arguments: [
-                    "expect": .object([
-                        "type": .string("element_updated"),
-                        "heistId": .string("counter"),
-                        "property": .string("value"),
-                        "newValue": .string("5"),
-                    ]),
-                ]
-            ),
-            index: 0
+        let evidence = HeistEvidence(
+            command: "activate",
+            arguments: [
+                "expect": .object([
+                    "type": .string("element_updated"),
+                    "heistId": .string("counter"),
+                    "property": .string("value"),
+                    "newValue": .string("5"),
+                ]),
+            ]
         )
 
-        let result = try parseTypedExpectation(operation.requestDecodeInputEnvelope().argumentValues["expect"])
+        let result = try parseTypedExpectation(evidence.playbackArgumentEnvelope().argumentValues["expect"])
 
         XCTAssertEqual(
             result,
@@ -3769,12 +3766,12 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.totalStepCount, 2)
-        XCTAssertEqual(operation.command, .typeText)
-        XCTAssertEqual(playback.steps[1].command, .activate)
+        XCTAssertEqual(operation.command, "type_text")
+        XCTAssertEqual(playback.steps[1].command, "activate")
         XCTAssertEqual(operation.target?.matcher.identifier, "email")
         XCTAssertEqual(operation.target?.ordinal, 1)
 
-        let normalizedOperation = operation.normalizedOperation()
+        let normalizedOperation = try operation.normalizedPlaybackOperation()
         XCTAssertEqual(normalizedOperation.command, .typeText)
         XCTAssertNil(normalizedOperation.stringArgument("identifier"))
         XCTAssertEqual(normalizedOperation.stringArgument("text"), "user@example.com")
@@ -3799,9 +3796,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let playback = try TheFence.TypedHeistPlayback(contentsOf: heistURL)
 
         XCTAssertEqual(playback.app, "com.test.mock")
-        XCTAssertEqual(playback.steps.map(\.command), [.activate])
+        XCTAssertEqual(playback.steps.map(\.command), ["activate"])
         XCTAssertEqual(playback.steps.first?.target?.matcher.identifier, "submit")
-        let expect = playback.steps.first?.requestDecodeInputEnvelope().argumentValues["expect"]
+        let expect = playback.steps.first?.playbackArgumentEnvelope().argumentValues["expect"]
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
@@ -3825,17 +3822,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackOperationPreservesCanonicalExpectationPayload() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "type_text",
-                target: semanticTarget(identifier: "email"),
-                arguments: ["expect": .object(["type": .string("screen_changed")])]
-            ),
-            index: 0
+    func testHeistEvidencePreservesCanonicalExpectationPayload() async throws {
+        let evidence = HeistEvidence(
+            command: "type_text",
+            target: semanticTarget(identifier: "email"),
+            arguments: ["expect": .object(["type": .string("screen_changed")])]
         )
 
-        let expect = operation.requestDecodeInputEnvelope().argumentValues["expect"]
+        let expect = evidence.playbackArgumentEnvelope().argumentValues["expect"]
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
@@ -3850,7 +3844,7 @@ final class TheFenceHandlerTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases)
+        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases.map(\.rawValue))
     }
 
     @ButtonHeistActor
@@ -3881,37 +3875,28 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlaybackInvalidCurrentShapeUsesRequestValidation() async throws {
-        let cases: [(name: String, operation: TheFence.PlaybackOperation, message: String)] = [
+        let cases: [(name: String, evidence: HeistEvidence, message: String)] = [
             (
                 "unknown scroll parameter",
-                try TheFence.PlaybackOperation(
-                    evidence: HeistEvidence(
-                        command: "scroll",
-                        arguments: ["unexpected": .string("value")]
-                    ),
-                    index: 0
+                HeistEvidence(
+                    command: "scroll",
+                    arguments: ["unexpected": .string("value")]
                 ),
                 "schema validation failed for unexpected: observed string \"value\"; expected valid scroll parameter"
             ),
             (
                 "unknown activate parameter",
-                try TheFence.PlaybackOperation(
-                    evidence: HeistEvidence(
-                        command: "activate",
-                        arguments: ["heistId": .string("stale_button")]
-                    ),
-                    index: 0
+                HeistEvidence(
+                    command: "activate",
+                    arguments: ["heistId": .string("stale_button")]
                 ),
                 "schema validation failed for heistId: observed string \"stale_button\"; expected valid activate parameter"
             ),
             (
                 "edit_action invalid action type",
-                try TheFence.PlaybackOperation(
-                    evidence: HeistEvidence(
-                        command: "edit_action",
-                        arguments: ["action": .int(7)]
-                    ),
-                    index: 0
+                HeistEvidence(
+                    command: "edit_action",
+                    arguments: ["action": .int(7)]
                 ),
                 "schema validation failed for action: observed integer 7; expected string"
             ),
@@ -3919,7 +3904,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let (fence, _) = makeConnectedFence()
         for testCase in cases {
-            let response = try await fence.execute(playback: testCase.operation)
+            let response = try await fence.execute(playback: testCase.evidence)
             guard case .error(let message, _) = response else {
                 XCTFail("Expected playback validation error for \(testCase.name), got \(response)")
                 continue
@@ -3950,14 +3935,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testExecutePlaybackOperationUsesTypedCommand() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
-            index: 0
-        )
+    func testExecutePlaybackEvidenceUsesTypedCommand() async throws {
+        let evidence = HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1"))
 
         let (fence, mockConn) = makeConnectedFence()
-        let response = try await fence.execute(playback: operation)
+        let response = try await fence.execute(playback: evidence)
 
         guard case .action(let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
@@ -4128,16 +4110,13 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlaybackDoesNotUseRecordedHeistIdAsAuthority() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "activate",
-                target: semanticTarget(identifier: "btn1"),
-                recorded: RecordedMetadata(heistId: "stale_debug_id")
-            ),
-            index: 0
+        let evidence = HeistEvidence(
+            command: "activate",
+            target: semanticTarget(identifier: "btn1"),
+            recorded: RecordedMetadata(heistId: "stale_debug_id")
         )
 
-        let arguments = operation.requestDecodeInputEnvelope().argumentValues
+        let arguments = evidence.playbackArgumentEnvelope().argumentValues
         guard case .object(let target)? = arguments["target"],
               case .object(let matcher)? = target["matcher"] else {
             return XCTFail("Expected matcher target")
@@ -4146,7 +4125,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(arguments["heistId"])
 
         let (fence, mockConn) = makeConnectedFence()
-        let response = try await fence.execute(playback: operation)
+        let response = try await fence.execute(playback: evidence)
 
         guard case .action(let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
