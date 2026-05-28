@@ -77,7 +77,7 @@ extension TheFence {
 
         func requiredPositiveNumber(_ key: String) throws -> Double {
             guard let value = try positiveNumber(key) else {
-                throw SchemaValidationError(field: key, observed: nil, expected: "number > 0")
+                throw SchemaValidationError(field: key, observed: "missing", expected: "number > 0")
             }
             return value
         }
@@ -132,7 +132,7 @@ extension TheFence {
         func requiredNumber(_ key: String, field: String) throws -> Double {
             do {
                 guard let value = try object.schemaNumber(key) else {
-                    throw SchemaValidationError(field: field, observed: nil, expected: "number")
+                    throw SchemaValidationError(field: field, observed: "missing", expected: "number")
                 }
                 return value
             } catch let error as SchemaValidationError {

@@ -1,12 +1,13 @@
 import XCTest
 @testable import ButtonHeist
+import TheScore
 
 final class ElementActionRequestContractTests: XCTestCase {
 
     @ButtonHeistActor
     func testActivateMissingTargetKeepsContractDiagnostics() async throws {
         let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(request: ["command": "activate"])
+        let response = try await fence.execute(operation: normalizedOperation(command: .activate))
 
         guard case .error(let message, let details) = response else {
             return XCTFail("Expected error response")
@@ -22,7 +23,8 @@ final class ElementActionRequestContractTests: XCTestCase {
     @ButtonHeistActor
     func testTypeTextEmptyStringKeepsObservedValueDiagnostic() async {
         await assertExecutionError(
-            ["command": "type_text", "text": ""],
+            command: .typeText,
+            arguments: ["text": .string("")],
             contains: "schema validation failed for text: observed string \"\"; expected non-empty string"
         )
     }
@@ -30,11 +32,11 @@ final class ElementActionRequestContractTests: XCTestCase {
     @ButtonHeistActor
     func testAdjustmentCountRangeDiagnosticKeepsObservedValue() async {
         await assertExecutionError(
-            [
-                "command": "activate",
-                "target": targetArgument(identifier: "counter"),
-                "action": "increment",
-                "count": 0,
+            command: .activate,
+            arguments: [
+                "target": matcherTargetValue(identifier: "counter"),
+                "action": .string("increment"),
+                "count": .int(0),
             ],
             contains: "schema validation failed for count: observed integer 0; expected integer in 1...100"
         )
@@ -43,12 +45,12 @@ final class ElementActionRequestContractTests: XCTestCase {
     @ButtonHeistActor
     func testRotorInvalidTextRangeDiagnosticKeepsObservedRange() async {
         await assertExecutionError(
-            [
-                "command": "rotor",
-                "target": targetArgument(identifier: "body"),
-                "currentHeistId": "body-current",
-                "currentTextStartOffset": 10,
-                "currentTextEndOffset": 4,
+            command: .rotor,
+            arguments: [
+                "target": matcherTargetValue(identifier: "body"),
+                "currentHeistId": .string("body-current"),
+                "currentTextStartOffset": .int(10),
+                "currentTextEndOffset": .int(4),
             ],
             contains: "schema validation failed for currentTextStartOffset/currentTextEndOffset: " +
                 "observed 10..<4; expected integer range with start >= 0 and end >= start"
@@ -57,14 +59,17 @@ final class ElementActionRequestContractTests: XCTestCase {
 
     @ButtonHeistActor
     private func assertExecutionError(
-        _ request: [String: Any],
+        command: TheFence.Command,
+        arguments: [String: HeistValue] = [:],
         contains expected: String,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         let (fence, _) = makeConnectedFence()
         do {
-            let response = try await fence.execute(request: request)
+            let response = try await fence.execute(
+                operation: normalizedOperation(command: command, arguments: arguments)
+            )
             guard case .error(let message, _) = response else {
                 return XCTFail("Expected error response", file: file, line: line)
             }
@@ -78,4 +83,20 @@ final class ElementActionRequestContractTests: XCTestCase {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
         }
     }
+}
+
+private func normalizedOperation(
+    command: TheFence.Command,
+    arguments: [String: HeistValue] = [:]
+) -> NormalizedOperation {
+    NormalizedOperation(
+        command: command,
+        arguments: TheFence.CommandArgumentEnvelope(values: arguments)
+    )
+}
+
+private func matcherTargetValue(identifier: String) -> HeistValue {
+    .object([
+        "matcher": .object(["identifier": .string(identifier)]),
+    ])
 }

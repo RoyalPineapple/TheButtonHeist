@@ -12,14 +12,17 @@ final class TheFenceSecurityTests: XCTestCase {
 
     @ButtonHeistActor
     private func assertValidationError(
-        _ request: [String: Any],
+        command: TheFence.Command,
+        arguments: [String: HeistValue] = [:],
         contains substring: String,
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
         let (fence, _) = makeConnectedFence()
         do {
-            let response = try await fence.execute(request: request)
+            let response = try await fence.execute(
+                operation: normalizedOperation(command: command, arguments: arguments)
+            )
             if case .error(let message, _) = response {
                 XCTAssertTrue(
                     message.contains(substring),
@@ -48,7 +51,8 @@ final class TheFenceSecurityTests: XCTestCase {
     @ButtonHeistActor
     func testGetScreenRejectsPathTraversal() async {
         await assertValidationError(
-            ["command": "get_screen", "output": "/tmp/../etc/passwd"],
+            command: .getScreen,
+            arguments: ["output": .string("/tmp/../etc/passwd")],
             contains: "must not contain '..'"
         )
     }
@@ -56,7 +60,8 @@ final class TheFenceSecurityTests: XCTestCase {
     @ButtonHeistActor
     func testGetScreenRejectsNestedPathTraversal() async {
         await assertValidationError(
-            ["command": "get_screen", "output": "/tmp/safe/../../etc/shadow"],
+            command: .getScreen,
+            arguments: ["output": .string("/tmp/safe/../../etc/shadow")],
             contains: "must not contain '..'"
         )
     }
@@ -86,12 +91,15 @@ final class TheFenceSecurityTests: XCTestCase {
         do {
             try await fence.start()
             // Trigger recording so TheFence's recording phase becomes active.
-            _ = try await fence.execute(request: ["command": "start_recording"])
+            _ = try await fence.execute(operation: normalizedOperation(command: .startRecording))
             // Allow the mock's Task-dispatched recordingStarted message to arrive
             for _ in 0..<5 { await Task.yield() }
-            _ = try await fence.execute(request: [
-                "command": "stop_recording", "output": "/tmp/../etc/passwd",
-            ])
+            _ = try await fence.execute(
+                operation: normalizedOperation(
+                    command: .stopRecording,
+                    arguments: ["output": .string("/tmp/../etc/passwd")]
+                )
+            )
             XCTFail("Expected invalid output path to throw")
         } catch let error as FenceError {
             guard case .invalidRequest(let message) = error else {
@@ -112,7 +120,9 @@ final class TheFenceSecurityTests: XCTestCase {
         let outputPath = tmpDir + "test_screenshot.png"
         let (fence, _) = makeConnectedFence()
         do {
-            let response = try await fence.execute(request: ["command": "get_screen", "output": outputPath])
+            let response = try await fence.execute(
+                operation: normalizedOperation(command: .getScreen, arguments: ["output": .string(outputPath)])
+            )
             if case .screenshot(let path, _, _) = response {
                 XCTAssertFalse(path.contains(".."), "Resolved path should not contain '..'")
             }
@@ -127,7 +137,7 @@ final class TheFenceSecurityTests: XCTestCase {
     @ButtonHeistActor
     func testStartRecordingWhenConnected() async throws {
         let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(request: ["command": "start_recording"])
+        let response = try await fence.execute(operation: normalizedOperation(command: .startRecording))
         switch response {
         case .ok:
             break
@@ -148,7 +158,7 @@ final class TheFenceSecurityTests: XCTestCase {
 
         for command in TheFence.Command.allCases where !skipCommands.contains(command) {
             do {
-                let response = try await fence.execute(request: ["command": command.rawValue])
+                let response = try await fence.execute(operation: normalizedOperation(command: command))
                 if case .error(let message, _) = response {
                     XCTAssertFalse(
                         message.hasPrefix("Unknown command"),
@@ -168,17 +178,27 @@ final class TheFenceSecurityTests: XCTestCase {
     // MARK: - Edge Cases: Arg Parsing with Mixed Types
 
     func testIntegerFromInvalidStringThrowsTypedSchemaError() throws {
-        let envelope = try TheFence.CommandArgumentEnvelope(arguments: ["count": "not_a_number"])
+        let envelope = TheFence.CommandArgumentEnvelope(values: ["count": .string("not_a_number")])
         XCTAssertThrowsError(try envelope.schemaInteger("count")) { error in
             XCTAssertEqual((error as? SchemaValidationError)?.expected, "integer")
         }
     }
 
     func testNumberFromInvalidStringThrowsTypedSchemaError() throws {
-        let envelope = try TheFence.CommandArgumentEnvelope(arguments: ["x": "not_a_number"])
+        let envelope = TheFence.CommandArgumentEnvelope(values: ["x": .string("not_a_number")])
         XCTAssertThrowsError(try envelope.schemaNumber("x")) { error in
             XCTAssertEqual((error as? SchemaValidationError)?.expected, "number")
         }
     }
 
+}
+
+private func normalizedOperation(
+    command: TheFence.Command,
+    arguments: [String: HeistValue] = [:]
+) -> NormalizedOperation {
+    NormalizedOperation(
+        command: command,
+        arguments: TheFence.CommandArgumentEnvelope(values: arguments)
+    )
 }

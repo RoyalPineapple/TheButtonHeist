@@ -390,7 +390,7 @@ final class TargetConfigTests: XCTestCase {
         )
         let fence = makeMockFence(fileConfig: config)
 
-        let response = try await fence.execute(request: ["command": "connect", "target": "sim2"])
+        let response = try await fence.execute(command: .connect, values: ["target": .string("sim2")])
         guard case .sessionState(let payload) = response else {
             XCTFail("Expected sessionState response, got \(response)")
             return
@@ -405,10 +405,9 @@ final class TargetConfigTests: XCTestCase {
         let fence = makeMockFence()
         fence.handoff.setupAutoReconnect(filter: "stale-target")
 
-        let response = try await fence.execute(request: [
-            "command": "connect",
-            "device": "127.0.0.1:9999",
-            "token": "direct-tok",
+        let response = try await fence.execute(command: .connect, values: [
+            "device": .string("127.0.0.1:9999"),
+            "token": .string("direct-tok"),
         ])
         guard case .sessionState(let payload) = response else {
             XCTFail("Expected sessionState response, got \(response)")
@@ -466,10 +465,9 @@ final class TargetConfigTests: XCTestCase {
             return probe
         }
 
-        let response = try await fence.execute(request: [
-            "command": "connect",
-            "device": "127.0.0.1:9999",
-            "token": "bad-tok",
+        let response = try await fence.execute(command: .connect, values: [
+            "device": .string("127.0.0.1:9999"),
+            "token": .string("bad-tok"),
         ])
         if case .error(let message, _) = response {
             XCTAssertTrue(message.contains("Connect failed; disconnected from previous target"))
@@ -487,7 +485,7 @@ final class TargetConfigTests: XCTestCase {
     func testConnectWithoutTargetOrDeviceReturnsError() async throws {
         let fence = TheFence(configuration: .init())
         do {
-            _ = try await fence.execute(request: ["command": "connect"])
+            _ = try await fence.execute(command: .connect)
             XCTFail("Expected invalid request")
         } catch let error as FenceError {
             guard case .invalidRequest(let message) = error else {
@@ -505,7 +503,7 @@ final class TargetConfigTests: XCTestCase {
         )
         let fence = TheFence(configuration: .init(fileConfig: config))
         do {
-            _ = try await fence.execute(request: ["command": "connect", "target": "nonexistent"])
+            _ = try await fence.execute(command: .connect, values: ["target": .string("nonexistent")])
             XCTFail("Expected invalid request")
         } catch let error as FenceError {
             guard case .invalidRequest(let message) = error else {
@@ -520,7 +518,7 @@ final class TargetConfigTests: XCTestCase {
     func testConnectWithNoConfigFileReturnsError() async throws {
         let fence = TheFence(configuration: .init())
         do {
-            _ = try await fence.execute(request: ["command": "connect", "target": "sim1"])
+            _ = try await fence.execute(command: .connect, values: ["target": .string("sim1")])
             XCTFail("Expected invalid request")
         } catch let error as FenceError {
             guard case .invalidRequest(let message) = error else {
@@ -533,7 +531,7 @@ final class TargetConfigTests: XCTestCase {
     @ButtonHeistActor
     func testListTargetsWithNoConfig() async throws {
         let fence = TheFence(configuration: .init())
-        let response = try await fence.execute(request: ["command": "list_targets"])
+        let response = try await fence.execute(command: .listTargets)
         if case .targets(let targets, _) = response {
             XCTAssertTrue(targets.isEmpty)
         } else {
@@ -551,7 +549,7 @@ final class TargetConfigTests: XCTestCase {
             defaultTarget: "sim1"
         )
         let fence = TheFence(configuration: .init(fileConfig: config))
-        let response = try await fence.execute(request: ["command": "list_targets"])
+        let response = try await fence.execute(command: .listTargets)
         if case .targets(let targets, let defaultTarget) = response {
             XCTAssertEqual(targets.count, 2)
             XCTAssertEqual(defaultTarget, "sim1")

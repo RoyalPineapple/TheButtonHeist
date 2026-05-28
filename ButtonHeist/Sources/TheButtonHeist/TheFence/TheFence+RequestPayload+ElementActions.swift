@@ -125,7 +125,7 @@ extension TheFence {
             guard let trait = HeistTrait(rawValue: name) else {
                 throw SchemaValidationError(
                     field: "\(field)[\(index)]",
-                    observed: name as Any,
+                    observed: "string \"\(name)\"",
                     expected: SchemaValidationError.expectedEnum(HeistTrait.self)
                 )
             }
@@ -320,7 +320,7 @@ private extension TheFence {
         func nonEmptyString(_ key: String) throws -> String {
             let value = try requiredString(key)
             if value.isEmpty {
-                throw SchemaValidationError(field: request.field(key), observed: value as Any, expected: "non-empty string")
+                throw SchemaValidationError(field: request.field(key), observed: "string \"\"", expected: "non-empty string")
             }
             return value
         }
@@ -328,7 +328,7 @@ private extension TheFence {
         func optionalNonEmptyString(_ key: String) throws -> String? {
             guard let value = try string(key) else { return nil }
             if value.isEmpty {
-                throw SchemaValidationError(field: request.field(key), observed: value as Any, expected: "non-empty string")
+                throw SchemaValidationError(field: request.field(key), observed: "string \"\"", expected: "non-empty string")
             }
             return value
         }
@@ -389,7 +389,7 @@ private extension TheFence {
                 return RotorTextCursorInput(currentHeistId: nil, currentTextRange: nil)
             }
             guard let currentHeistId = try string("currentHeistId") else {
-                throw SchemaValidationError(field: "currentHeistId", observed: nil, expected: "string")
+                throw SchemaValidationError(field: "currentHeistId", observed: "missing", expected: "string")
             }
             guard startOffset >= 0, endOffset >= startOffset else {
                 throw SchemaValidationError(

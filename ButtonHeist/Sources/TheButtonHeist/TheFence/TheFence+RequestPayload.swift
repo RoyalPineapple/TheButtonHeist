@@ -153,29 +153,11 @@ extension TheFence {
         let inputPath: String
     }
 
-    /// Parse and validate a raw request dictionary into typed fields.
-    /// Returns an ImmediateResponse-bearing `ParsedRequest` for help/quit
-    /// so the caller short-circuits without logging or dispatching.
-    func parseRequest(_ request: [String: Any]) throws -> ParsedRequest {
-        let requestEnvelope = try CommandArgumentEnvelope(arguments: request, droppingCommandKey: false)
-        let commandString = try requestEnvelope.requiredSchemaString("command")
-        guard let command = Command(rawValue: commandString) else {
-            return ParsedRequest(
-                command: .help,
-                requestId: "",
-                dispatch: Self.emptyDispatch(command: .help),
-                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-                immediateResponse: .error("Unknown command: \(commandString). Use 'help' for available commands.")
-            )
-        }
-        return try parseRequest(command: command, arguments: requestEnvelope.dropping("command"))
-    }
-
     func parseRequest(command: Command, arguments: CommandArgumentEnvelope) throws -> ParsedRequest {
         guard command.descriptor.isPublicRequestContract else {
             throw SchemaValidationError(
                 field: "command",
-                observed: command.rawValue as Any,
+                observed: "string \"\(command.rawValue)\"",
                 expected: "public Button Heist command"
             )
         }
@@ -241,7 +223,7 @@ extension TheFence {
         }
         throw SchemaValidationError(
             field: unexpectedKey,
-            observed: arguments.observedValue(for: unexpectedKey),
+            observed: arguments.observedDescription(for: unexpectedKey) ?? "missing",
             expected: "valid \(command.rawValue) parameter"
         )
     }

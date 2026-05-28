@@ -448,7 +448,7 @@ final class TheBookKeeperTests: XCTestCase {
             bookKeeper,
             requestId: "req-1",
             command: .activate,
-            arguments: ["target": targetArgument(identifier: "loginButton")]
+            arguments: ["target": targetArgumentValue(identifier: "loginButton")]
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
@@ -544,7 +544,7 @@ final class TheBookKeeperTests: XCTestCase {
         try logCommand(bookKeeper,
             requestId: "r1",
             command: .getScreen,
-            arguments: ["output": "screen.png"]
+            arguments: ["output": .string("screen.png")]
         )
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
@@ -561,7 +561,7 @@ final class TheBookKeeperTests: XCTestCase {
         let activate = try parsedRequest(
             requestId: "r1",
             command: .activate,
-            arguments: ["target": targetArgument(heistId: "login_button")]
+            arguments: ["target": targetArgumentValue(heistId: "login_button")]
         )
 
         XCTAssertEqual(activate.command, .activate)
@@ -574,7 +574,7 @@ final class TheBookKeeperTests: XCTestCase {
         let tap = try parsedRequest(
             requestId: "r1",
             command: .oneFingerTap,
-            arguments: ["x": 10.5, "y": 20.25]
+            arguments: ["x": .double(10.5), "y": .double(20.25)]
         )
         let arguments = try tap.heistEvidenceArguments()
 
@@ -590,8 +590,8 @@ final class TheBookKeeperTests: XCTestCase {
             requestId: "r1",
             command: .activate,
             arguments: [
-                "target": targetArgument(label: "Row"),
-                "action": "Archive",
+                "target": targetArgumentValue(label: "Row"),
+                "action": .string("Archive"),
             ]
         )
         let arguments = try action.heistEvidenceArguments()
@@ -608,11 +608,11 @@ final class TheBookKeeperTests: XCTestCase {
             requestId: "r1",
             command: .rotor,
             arguments: [
-                "target": targetArgument(heistId: "field"),
-                "rotor": "Words",
-                "currentHeistId": "word_1",
-                "currentTextStartOffset": 4,
-                "currentTextEndOffset": 9,
+                "target": targetArgumentValue(heistId: "field"),
+                "rotor": .string("Words"),
+                "currentHeistId": .string("word_1"),
+                "currentTextStartOffset": .int(4),
+                "currentTextEndOffset": .int(9),
             ]
         )
         let arguments = try rotor.heistEvidenceArguments()
@@ -634,8 +634,8 @@ final class TheBookKeeperTests: XCTestCase {
             requestId: "r1",
             command: .connect,
             arguments: [
-                "device": "127.0.0.1:1455",
-                "token": "user-specified-token",
+                "device": .string("127.0.0.1:1455"),
+                "token": .string("user-specified-token"),
             ]
         )
 
@@ -660,13 +660,13 @@ final class TheBookKeeperTests: XCTestCase {
             requestId: "r1",
             command: .runBatch,
             arguments: [
-                "steps": [
-                    [
-                        "command": "connect",
-                        "device": "127.0.0.1:1455",
-                        "token": "nested-user-token",
-                    ],
-                ],
+                "steps": .array([
+                    .object([
+                        "command": .string("connect"),
+                        "device": .string("127.0.0.1:1455"),
+                        "token": .string("nested-user-token"),
+                    ]),
+                ]),
             ]
         )) { _ in }
 
@@ -690,8 +690,8 @@ final class TheBookKeeperTests: XCTestCase {
             requestId: "r1",
             command: .activate,
             arguments: [
-                "target": targetArgument(label: "Submit"),
-                "metadata": Data([0x01]),
+                "target": targetArgumentValue(label: "Submit"),
+                "metadata": .string("not allowed"),
             ]
         )) { error in
             let validation = error as? SchemaValidationError
@@ -705,14 +705,14 @@ final class TheBookKeeperTests: XCTestCase {
             requestId: "r1",
             command: .waitForChange,
             arguments: [
-                "timeout": 2.5,
-                "expect": [
-                    "type": "element_appeared",
-                    "matcher": [
-                        "label": "Submit",
-                        "traits": ["button"],
-                    ],
-                ],
+                "timeout": .double(2.5),
+                "expect": .object([
+                    "type": .string("element_appeared"),
+                    "matcher": .object([
+                        "label": .string("Submit"),
+                        "traits": .array([.string("button")]),
+                    ]),
+                ]),
             ]
         )
 
@@ -737,7 +737,7 @@ final class TheBookKeeperTests: XCTestCase {
             bookKeeper,
             requestId: "r1",
             command: .typeText,
-            arguments: ["metadata": Data([0x01, 0x02])]
+            arguments: ["metadata": .string("not allowed")]
         )) { error in
             let validation = error as? SchemaValidationError
             XCTAssertEqual(validation?.field, "metadata")
@@ -946,7 +946,7 @@ final class TheBookKeeperTests: XCTestCase {
     func testLogCommandAndResponseProduceCorrelatedEntries() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-correlation")
-        try logCommand(bookKeeper, requestId: "req-42", command: .getScreen, arguments: ["command": "get_screen"])
+        try logCommand(bookKeeper, requestId: "req-42", command: .getScreen, arguments: [:])
         try bookKeeper.logResponse(
             requestId: "req-42",
             status: .ok,
@@ -1252,7 +1252,7 @@ private func logCommand(
     _ bookKeeper: TheBookKeeper,
     requestId: String,
     command: TheFence.Command,
-    arguments: [String: Any]
+    arguments: [String: HeistValue]
 ) throws {
     try bookKeeper.logCommand(parsedRequest(requestId: requestId, command: command, arguments: arguments))
 }
@@ -1261,12 +1261,14 @@ private func logCommand(
 private func parsedRequest(
     requestId: String,
     command: TheFence.Command,
-    arguments: [String: Any]
+    arguments: [String: HeistValue]
 ) throws -> TheFence.ParsedRequest {
     var request = arguments
-    request["command"] = command.rawValue
-    request["requestId"] = requestId
-    return try TheFence(configuration: .init()).parseRequest(command: command, request: request)
+    request["requestId"] = .string(requestId)
+    return try TheFence(configuration: .init()).parseRequest(
+        command: command,
+        arguments: TheFence.CommandArgumentEnvelope(values: request)
+    )
 }
 
 private func XCTAssertHasNoStoredPhaseTimingMirrors<T>(

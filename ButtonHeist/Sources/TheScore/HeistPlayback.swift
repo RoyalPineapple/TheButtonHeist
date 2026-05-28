@@ -85,9 +85,9 @@ extension HeistPlayback: CustomStringConvertible {
 /// A single command in a heist playback. Contains the command name, durable
 /// semantic target, command-specific arguments, and optional recording metadata.
 ///
-/// The step is structured so that dropping `_recorded` yields a valid
-/// TheFence.execute(request:) dictionary. Element identity lives under
-/// `target`; top-level matcher fields are not a playback contract.
+/// The step is structured so that dropping `_recorded` yields typed command
+/// arguments for playback. Element identity lives under `target`; top-level
+/// matcher fields are not a playback contract.
 public struct HeistEvidence: Codable, Sendable, Equatable {
     /// The `TheFence.Command` raw value (e.g. `"activate"`, `"type_text"`,
     /// `"swipe"`). Stored as a string rather than the enum because `Command`
@@ -202,8 +202,7 @@ extension HeistEvidence: CustomStringConvertible {
 
 // MARK: - Heist Value
 
-/// A JSON-encodable value type for command arguments.
-/// Supports the value types that TheFence.execute(request:) expects.
+/// A JSON-encodable value type for typed command arguments.
 public enum HeistValue: Codable, Sendable, Equatable {
     case string(String)
     case int(Int)

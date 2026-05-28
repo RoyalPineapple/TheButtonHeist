@@ -11,12 +11,12 @@ public struct SchemaValidationError: Error, LocalizedError, Equatable, Sendable 
         self.expected = expected
     }
 
-    public init(field: String, observed value: Any?, expected: String) {
-        self.init(
-            field: field,
-            observed: Self.observedDescription(value),
-            expected: expected
-        )
+    public init(field: String, observed: Int, expected: String) {
+        self.init(field: field, observed: "integer \(observed)", expected: expected)
+    }
+
+    public init(field: String, observed: Double, expected: String) {
+        self.init(field: field, observed: "number \(Self.formatNumber(observed))", expected: expected)
     }
 
     public var message: String {
@@ -31,18 +31,6 @@ public struct SchemaValidationError: Error, LocalizedError, Equatable, Sendable 
 
     public static func expectedEnumValues(_ values: [String]) -> String {
         "enum one of \(values.joined(separator: ", "))"
-    }
-
-    public static func observedDescription(_ value: Any?) -> String {
-        guard let value else { return "missing" }
-        if value is NSNull { return "null" }
-        if let value = value as? Bool { return "boolean \(value)" }
-        if let value = value as? Int { return "integer \(value)" }
-        if let value = value as? Double { return "number \(Self.formatNumber(value))" }
-        if let value = value as? String { return "string \"\(value)\"" }
-        if let value = value as? [Any] { return "array count \(value.count)" }
-        if value is [String: Any] { return "object" }
-        return String(describing: type(of: value))
     }
 
     private static func formatNumber(_ value: Double) -> String {

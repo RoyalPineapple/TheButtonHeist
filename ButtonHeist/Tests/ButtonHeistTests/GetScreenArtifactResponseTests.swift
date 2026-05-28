@@ -19,7 +19,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             interface: interface
         )
 
-        let response = try await fence.execute(request: ["command": "get_screen"])
+        let response = try await fence.execute(command: .getScreen)
 
         guard case .screenshot(let path, let payload, let options) = response else {
             return XCTFail("Expected screenshot artifact response, got \(response)")
@@ -50,9 +50,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         ])
         let fence = Self.makeFence(tempDirectory: tempDirectory, pngData: pngData, interface: interface)
 
-        let inlineResponse = try await fence.execute(request: [
-            "command": "get_screen",
-            "inlineData": true,
+        let inlineResponse = try await fence.execute(command: .getScreen, values: [
+            "inlineData": .bool(true),
         ])
 
         guard case .screenshotData(let inlinePayload, let inlineOptions) = inlineResponse else {
@@ -67,10 +66,9 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         XCTAssertNil(inlineJson["path"])
         XCTAssertNil(inlineJson["interface"])
 
-        let includedInterfaceResponse = try await fence.execute(request: [
-            "command": "get_screen",
-            "inlineData": true,
-            "includeInterface": true,
+        let includedInterfaceResponse = try await fence.execute(command: .getScreen, values: [
+            "inlineData": .bool(true),
+            "includeInterface": .bool(true),
         ])
 
         guard case .screenshotData(let includedInterfacePayload, let includedInterfaceOptions) = includedInterfaceResponse else {
@@ -86,10 +84,9 @@ final class GetScreenArtifactResponseTests: XCTestCase {
     func testInlineGetScreenRejectsOutputBeforeDispatch() async throws {
         let (fence, mockConnection) = makeConnectedFence()
 
-        let response = try await fence.execute(request: [
-            "command": "get_screen",
-            "inlineData": true,
-            "output": "/tmp/buttonheist-screen.png",
+        let response = try await fence.execute(command: .getScreen, values: [
+            "inlineData": .bool(true),
+            "output": .string("/tmp/buttonheist-screen.png"),
         ])
 
         guard case .error(let message, _) = response else {
@@ -118,9 +115,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             interface: Interface(timestamp: Date(), tree: [])
         )
 
-        let response = try await fence.execute(request: [
-            "command": "get_screen",
-            "inlineData": true,
+        let response = try await fence.execute(command: .getScreen, values: [
+            "inlineData": .bool(true),
         ])
 
         guard case .error(let message, let details) = response else {
@@ -150,9 +146,8 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         )
 
         do {
-            _ = try await fence.execute(request: [
-                "command": "get_screen",
-                "output": "/tmp/../buttonheist-screen.png",
+            _ = try await fence.execute(command: .getScreen, values: [
+                "output": .string("/tmp/../buttonheist-screen.png"),
             ])
             XCTFail("Expected invalid output path to throw")
         } catch let error as FenceError {
@@ -177,7 +172,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         )
 
         do {
-            _ = try await fence.execute(request: ["command": "get_screen"])
+            _ = try await fence.execute(command: .getScreen)
             XCTFail("Expected invalid screenshot base64 to throw")
         } catch let error as FenceError {
             guard case .serverError(let serverError) = error else {

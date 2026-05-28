@@ -224,26 +224,6 @@ public final class TheFence {
         backgroundAccessibility.drainTraces()
     }
 
-    /// Execute a command from a dictionary request. Auto-connects if not
-    /// already connected.
-    ///
-    /// Reads as a pipeline: parse → optional wait-only background match
-    /// → dispatch → record post-dispatch effects → validate/wait against the
-    /// caller's expectation. Each step is its own private method.
-    public func execute(request: [String: Any]) async throws -> FenceResponse {
-        let parsed: ParsedRequest
-        do {
-            parsed = try parseRequest(request)
-        } catch let error as SchemaValidationError {
-            return .error(error.message)
-        } catch let error as MissingElementTarget {
-            return missingElementTargetResponse(command: error.command)
-        } catch let error as FenceError {
-            return .error(error.coreMessage, details: error.failureDetails)
-        }
-        return try await execute(parsed: parsed)
-    }
-
     /// Execute an operation that has already been normalized by the shared command catalog.
     ///
     /// This keeps adapters from rebuilding command dictionaries after routing.

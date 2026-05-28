@@ -16,7 +16,7 @@ final class RecordingArtifactResponseTests: XCTestCase {
         )
         let fence = Self.makeFence(tempDirectory: tempDirectory, payload: payload)
 
-        let response = try await fence.execute(request: ["command": "stop_recording"])
+        let response = try await fence.execute(command: .stopRecording)
 
         guard case .recording(let path, let recording) = response else {
             return XCTFail("Expected recording artifact response, got \(response)")
@@ -42,10 +42,9 @@ final class RecordingArtifactResponseTests: XCTestCase {
         let payload = Self.makeRecordingPayload(videoData: videoData, interactionCount: 2)
         let fence = Self.makeFence(tempDirectory: tempDirectory, payload: payload)
 
-        let response = try await fence.execute(request: [
-            "command": "stop_recording",
-            "inlineData": true,
-            "includeInteractionLog": true,
+        let response = try await fence.execute(command: .stopRecording, values: [
+            "inlineData": .bool(true),
+            "includeInteractionLog": .bool(true),
         ])
 
         guard case .recordingExpanded(let path, let recording, let options) = response else {
@@ -78,9 +77,8 @@ final class RecordingArtifactResponseTests: XCTestCase {
         let payload = Self.makeRecordingPayload(videoData: oversizedPayload, interactionCount: 0)
         let fence = Self.makeFence(tempDirectory: tempDirectory, payload: payload)
 
-        let response = try await fence.execute(request: [
-            "command": "stop_recording",
-            "inlineData": true,
+        let response = try await fence.execute(command: .stopRecording, values: [
+            "inlineData": .bool(true),
         ])
 
         guard case .error(let message, let details) = response else {
@@ -105,9 +103,8 @@ final class RecordingArtifactResponseTests: XCTestCase {
         let fence = Self.makeFence(tempDirectory: tempDirectory, payload: payload)
 
         do {
-            _ = try await fence.execute(request: [
-                "command": "stop_recording",
-                "output": "/tmp/../buttonheist-recording.mp4",
+            _ = try await fence.execute(command: .stopRecording, values: [
+                "output": .string("/tmp/../buttonheist-recording.mp4"),
             ])
             XCTFail("Expected invalid output path to throw")
         } catch let error as FenceError {
@@ -129,7 +126,7 @@ final class RecordingArtifactResponseTests: XCTestCase {
         let fence = Self.makeFence(tempDirectory: tempDirectory, payload: payload)
 
         do {
-            _ = try await fence.execute(request: ["command": "stop_recording"])
+            _ = try await fence.execute(command: .stopRecording)
             XCTFail("Expected invalid recording base64 to throw")
         } catch let error as FenceError {
             guard case .serverError(let serverError) = error else {

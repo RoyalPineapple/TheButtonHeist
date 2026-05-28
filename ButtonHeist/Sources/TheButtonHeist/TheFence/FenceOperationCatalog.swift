@@ -165,7 +165,7 @@ public enum FenceOperationCatalog {
                 guard enumValues.contains(value) else {
                     return .init(message: SchemaValidationError(
                         field: parameter.key,
-                        observed: SchemaValidationError.observedDescription(value),
+                        observed: "string \"\(value)\"",
                         expected: SchemaValidationError.expectedEnumValues(enumValues)
                     ).message)
                 }

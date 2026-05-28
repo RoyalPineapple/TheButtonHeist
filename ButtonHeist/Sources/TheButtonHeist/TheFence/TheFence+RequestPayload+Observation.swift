@@ -126,7 +126,7 @@ extension TheFence {
         }
         throw SchemaValidationError(
             field: subtree.field(unexpectedKey),
-            observed: subtree.observedValue(for: unexpectedKey),
+            observed: subtree.observedDescription(for: unexpectedKey) ?? "missing",
             expected: "valid get_interface subtree parameter"
         )
     }
@@ -138,7 +138,7 @@ extension TheFence {
         }
         throw SchemaValidationError(
             field: element.field(unexpectedKey),
-            observed: element.observedValue(for: unexpectedKey),
+            observed: element.observedDescription(for: unexpectedKey) ?? "missing",
             expected: "valid get_interface subtree element parameter"
         )
     }
@@ -150,7 +150,7 @@ extension TheFence {
         }
         throw SchemaValidationError(
             field: container.field(unexpectedKey),
-            observed: container.observedValue(for: unexpectedKey),
+            observed: container.observedDescription(for: unexpectedKey) ?? "missing",
             expected: "valid get_interface subtree container parameter"
         )
     }

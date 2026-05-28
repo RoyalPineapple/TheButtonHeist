@@ -98,17 +98,12 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(matcher["traits"] as? [String], ["adjustable"])
     }
 
-    func testStepDecodesFromTargetJson() throws {
-        let json: [String: Any] = [
-            "command": "activate",
-            "target": [
-                "matcher": [
-                    "label": "Submit",
-                    "traits": ["button"],
-                ],
-            ],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
+    func testStepRoundTripsTarget() throws {
+        let original = HeistEvidence(
+            command: "activate",
+            target: semanticTarget(label: "Submit", traits: [.button])
+        )
+        let data = try JSONEncoder().encode(original)
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.command, "activate")
@@ -118,11 +113,11 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepWithNoTarget() throws {
-        let json: [String: Any] = [
-            "command": "type_text",
-            "text": "hello",
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
+        let original = HeistEvidence(
+            command: "type_text",
+            arguments: ["text": .string("hello")]
+        )
+        let data = try JSONEncoder().encode(original)
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.command, "type_text")
@@ -131,16 +126,12 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepAllowsRecordedHeistIdMetadata() throws {
-        let json: [String: Any] = [
-            "command": "activate",
-            "target": [
-                "matcher": ["label": "Save"],
-            ],
-            "_recorded": [
-                "heistId": "recorded_save",
-            ],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
+        let original = HeistEvidence(
+            command: "activate",
+            target: semanticTarget(label: "Save"),
+            recorded: RecordedMetadata(heistId: "recorded_save")
+        )
+        let data = try JSONEncoder().encode(original)
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.target?.matcher.label, "Save")
@@ -162,14 +153,11 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepRejectsNegativeOrdinal() throws {
-        let json: [String: Any] = [
-            "command": "activate",
-            "target": [
-                "matcher": ["label": "Save"],
-                "ordinal": -1,
-            ],
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
+        let step = HeistEvidence(
+            command: "activate",
+            target: semanticTarget(label: "Save", ordinal: -1)
+        )
+        let data = try JSONEncoder().encode(step)
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {

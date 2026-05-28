@@ -19,10 +19,12 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testElementMatcherRejectsUnknownTrait() async {
         let fence = TheFence(configuration: .init())
-        let args: [String: Any] = ["traits": ["madeUpTrait"]]
+        let args = TheFence.CommandArgumentEnvelope(values: [
+            "traits": .array([.string("madeUpTrait")]),
+        ])
         let expectedError = "schema validation failed for traits[0]: observed string \"madeUpTrait\"; " +
             "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.decodedElementMatcher(try TheFence.CommandArgumentEnvelope(arguments: args))) { error in
+        XCTAssertThrowsError(try fence.decodedElementMatcher(args)) { error in
             XCTAssertEqual(
                 error.localizedDescription,
                 expectedError
@@ -33,10 +35,12 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testElementMatcherRejectsUnknownExcludeTrait() async {
         let fence = TheFence(configuration: .init())
-        let args: [String: Any] = ["excludeTraits": ["bogus"]]
+        let args = TheFence.CommandArgumentEnvelope(values: [
+            "excludeTraits": .array([.string("bogus")]),
+        ])
         let expectedError = "schema validation failed for excludeTraits[0]: observed string \"bogus\"; " +
             "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.decodedElementMatcher(try TheFence.CommandArgumentEnvelope(arguments: args))) { error in
+        XCTAssertThrowsError(try fence.decodedElementMatcher(args)) { error in
             XCTAssertEqual(
                 error.localizedDescription,
                 expectedError
@@ -47,8 +51,11 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testElementMatcherAcceptsKnownTraits() async throws {
         let fence = TheFence(configuration: .init())
-        let args: [String: Any] = ["traits": ["button", "header"], "excludeTraits": ["selected"]]
-        let matcher = try fence.decodedElementMatcher(try TheFence.CommandArgumentEnvelope(arguments: args))
+        let args = TheFence.CommandArgumentEnvelope(values: [
+            "traits": .array([.string("button"), .string("header")]),
+            "excludeTraits": .array([.string("selected")]),
+        ])
+        let matcher = try fence.decodedElementMatcher(args)
         XCTAssertEqual(matcher.traits, [.button, .header])
         XCTAssertEqual(matcher.excludeTraits, [.selected])
     }
@@ -1753,21 +1760,21 @@ final class TheFenceTests: XCTestCase {
     // MARK: - TheFence execute (error cases)
 
     @ButtonHeistActor
-    func testExecuteWithMissingCommandReturnsSchemaError() async throws {
-        let fence = TheFence(configuration: .init())
-        let response = try await fence.execute(request: [:])
+    func testMissingCommandReturnsSchemaError() async throws {
+        let arguments = TheFence.CommandArgumentEnvelope(values: [:])
 
-        if case .error(let message, _) = response {
-            XCTAssertEqual(message, "schema validation failed for command: observed missing; expected string")
-        } else {
-            XCTFail("Expected .error response, got \(response)")
+        XCTAssertThrowsError(try arguments.requiredSchemaString("command")) { error in
+            XCTAssertEqual(
+                (error as? SchemaValidationError)?.message,
+                "schema validation failed for command: observed missing; expected string"
+            )
         }
     }
 
     @ButtonHeistActor
     func testExecuteHelp() async throws {
         let fence = TheFence(configuration: .init())
-        let response = try await fence.execute(request: ["command": "help"])
+        let response = try await fence.execute(command: .help)
         if case .help(let commands) = response {
             XCTAssertFalse(commands.isEmpty)
             XCTAssertTrue(commands.contains("one_finger_tap"))
@@ -1779,7 +1786,7 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testExecuteQuit() async throws {
         let fence = TheFence(configuration: .init())
-        let response = try await fence.execute(request: ["command": "quit"])
+        let response = try await fence.execute(command: .quit)
         if case .ok(let message) = response {
             XCTAssertEqual(message, "bye")
         } else {
@@ -1803,7 +1810,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeDiscovery = { mockDiscovery }
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
 
-        let response = try await fence.execute(request: ["command": "get_session_state"])
+        let response = try await fence.execute(command: .getSessionState)
 
         if case .sessionState(let payload) = response {
             XCTAssertEqual(payload.connected, false)
@@ -1826,7 +1833,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
-        let response = try await fence.execute(request: ["command": "get_session_state"])
+        let response = try await fence.execute(command: .getSessionState)
 
         guard case .sessionState(let payload) = response else {
             return XCTFail("Expected sessionState response, got \(response)")
@@ -1852,14 +1859,14 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
         fence.handoff.handleServerMessage(.recordingStarted, requestId: nil)
-        let recordingState = try await fence.execute(request: ["command": "get_session_state"])
+        let recordingState = try await fence.execute(command: .getSessionState)
         guard case .sessionState(let recordingPayload) = recordingState else {
             return XCTFail("Expected sessionState response, got \(recordingState)")
         }
         XCTAssertEqual(recordingPayload.isRecording, true)
 
         fence.handoff.handleServerMessage(.recordingStopped, requestId: nil)
-        let stoppedState = try await fence.execute(request: ["command": "get_session_state"])
+        let stoppedState = try await fence.execute(command: .getSessionState)
         guard case .sessionState(let stoppedPayload) = stoppedState else {
             return XCTFail("Expected sessionState response, got \(stoppedState)")
         }
@@ -1877,7 +1884,7 @@ final class TheFenceTests: XCTestCase {
             endTime: Date(),
             stopReason: .manual
         )), requestId: nil)
-        let completedState = try await fence.execute(request: ["command": "get_session_state"])
+        let completedState = try await fence.execute(command: .getSessionState)
         guard case .sessionState(let completedPayload) = completedState else {
             return XCTFail("Expected sessionState response, got \(completedState)")
         }
@@ -1896,7 +1903,7 @@ final class TheFenceTests: XCTestCase {
 
         mockConnection.onEvent?(.disconnected(.serverClosed))
 
-        let response = try await fence.execute(request: ["command": "get_session_state"])
+        let response = try await fence.execute(command: .getSessionState)
         guard case .sessionState(let payload) = response else {
             return XCTFail("Expected sessionState response, got \(response)")
         }
@@ -1912,7 +1919,7 @@ final class TheFenceTests: XCTestCase {
             requestId: nil
         )
 
-        let response = try await fence.execute(request: ["command": "get_session_state"])
+        let response = try await fence.execute(command: .getSessionState)
 
         guard case .sessionState(let payload) = response else {
             return XCTFail("Expected sessionState response, got \(response)")
@@ -1939,7 +1946,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.makeConnection = { _, _, _ in mockConnection }
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
-        let response = try await fence.execute(request: ["command": "get_session_state"])
+        let response = try await fence.execute(command: .getSessionState)
 
         guard case .sessionState(let payload) = response else {
             return XCTFail("Expected sessionState response, got \(response)")
@@ -1963,7 +1970,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
         mockConnection.sent.removeAll()
 
-        _ = try await fence.execute(request: ["command": "get_session_state"])
+        _ = try await fence.execute(command: .getSessionState)
 
         let hierarchyMessages = mockConnection.sent.filter { message, _ in
             switch message {
@@ -1981,7 +1988,7 @@ final class TheFenceTests: XCTestCase {
     @ButtonHeistActor
     func testExecuteGetSessionLogReturnsErrorWhenIdle() async throws {
         let fence = TheFence(configuration: .init())
-        let response = try await fence.execute(request: ["command": "get_session_log"])
+        let response = try await fence.execute(command: .getSessionLog)
         if case .error(let message, let details) = response {
             XCTAssertTrue(message.contains("No active session"))
             XCTAssertEqual(details?.errorCode, "request.invalid")
@@ -1996,7 +2003,7 @@ final class TheFenceTests: XCTestCase {
     func testExecuteArchiveSessionReturnsErrorWhenIdle() async throws {
         let fence = TheFence(configuration: .init())
         do {
-            _ = try await fence.execute(request: ["command": "archive_session"])
+            _ = try await fence.execute(command: .archiveSession)
             XCTFail("Expected error for archive_session when idle")
         } catch let error as BookKeeperError {
             if case .invalidPhase = error {
@@ -2011,12 +2018,12 @@ final class TheFenceTests: XCTestCase {
     func testExecuteArchiveSessionAutoClosesActiveSession() async throws {
         let fence = TheFence(configuration: .init())
         try fence.bookKeeper.beginSession(identifier: "archive-auto-close")
-        try fence.bookKeeper.logCommand(fence.parseRequest(command: .getSessionState, request: [
-            "command": "get_session_state",
-            "requestId": "r1",
-        ]))
+        try fence.bookKeeper.logCommand(fence.parseRequest(
+            command: .getSessionState,
+            values: ["requestId": .string("r1")]
+        ))
 
-        let response = try await fence.execute(request: ["command": "archive_session"])
+        let response = try await fence.execute(command: .archiveSession)
 
         guard case .archiveResult(let path, let snapshot) = response else {
             return XCTFail("Expected archiveResult response, got \(response)")
@@ -2081,7 +2088,10 @@ final class TheFenceTests: XCTestCase {
         }
 
         do {
-            _ = try await fence.execute(request: activateArguments(identifier: "button"))
+            _ = try await fence.execute(
+                command: .activate,
+                values: ["target": targetArgumentValue(identifier: "button")]
+            )
             XCTFail("Expected FenceError.serverError")
         } catch {
             guard case FenceError.serverError(let serverError) = error else {
@@ -2187,7 +2197,7 @@ final class TheFenceTests: XCTestCase {
         XCTAssertTrue(fence.isWaitingForRecordingCompletion)
 
         do {
-            _ = try await fence.execute(request: ["command": "start_recording"])
+            _ = try await fence.execute(command: .startRecording)
             XCTFail("Expected start_recording conflict while completion wait is pending")
         } catch let error as FenceError {
             guard case .invalidRequest(let message) = error else {
@@ -2221,7 +2231,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.onRecordingEvent?(.started)
 
         do {
-            _ = try await fence.execute(request: ["command": "start_recording"])
+            _ = try await fence.execute(command: .startRecording)
             XCTFail("Expected start_recording conflict while recording")
         } catch let error as FenceError {
             guard case .invalidRequest(let message) = error else {
@@ -2441,10 +2451,10 @@ final class TheFenceTests: XCTestCase {
         try await fence.start()
         XCTAssertFalse(fence.isRecording)
 
-        let response = try await fence.execute(request: [
-            "command": "stop_recording",
-            "output": outputURL.path,
-        ])
+        let response = try await fence.execute(
+            command: .stopRecording,
+            values: ["output": .string(outputURL.path)]
+        )
 
         XCTAssertTrue(mockConn.sent.contains { sent in
             if case .stopRecording = sent.0 { return true }
@@ -2475,7 +2485,7 @@ final class TheFenceTests: XCTestCase {
         var didReturn = false
         var responseMessage: String?
         let task = Task { @ButtonHeistActor in
-            let response = try await fence.execute(request: ["command": "start_recording"])
+            let response = try await fence.execute(command: .startRecording)
             guard case .ok(let message) = response else {
                 didReturn = true
                 return XCTFail("Expected .ok response, got \(response)")
@@ -2838,7 +2848,7 @@ final class TheFenceTests: XCTestCase {
         }
         defer { makeReachabilityConnection = previousFactory }
 
-        let response = try await fence.execute(request: ["command": "list_devices"])
+        let response = try await fence.execute(command: .listDevices)
 
         if case .devices(let devices) = response {
             XCTAssertEqual(devices, [reachableDevice])
@@ -2938,16 +2948,17 @@ final class TheFenceTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "stale_button"),
-            "expect": [
-                "type": "element_updated",
-                "heistId": "counter",
-                "property": "value",
-                "newValue": "5",
-            ],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(heistId: "stale_button"),
+                "expect": expectationValue(type: "element_updated", fields: [
+                    "heistId": .string("counter"),
+                    "property": .string("value"),
+                    "newValue": .string("5"),
+                ]),
+            ]
+        )
         if case .action(_, let expectation) = response {
             XCTAssertEqual(expectation?.met, false)
         } else {
@@ -2988,10 +2999,10 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundElementsChangedTrace(elementCount: 2))
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
-        let response = try await fence.execute(request: [
-            "command": "wait_for_change",
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .waitForChange,
+            values: ["expect": expectationValue(type: "screen_changed")]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
@@ -3075,10 +3086,10 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.onBackgroundAccessibilityTrace?(trace)
 
         // wait_for_change may satisfy a late call from a queued background trace.
-        let response = try await fence.execute(request: [
-            "command": "wait_for_change",
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .waitForChange,
+            values: ["expect": expectationValue(type: "screen_changed")]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
@@ -3118,10 +3129,10 @@ final class TheFenceTests: XCTestCase {
         )
         fence.handoff.onBackgroundAccessibilityTrace?(trace)
 
-        let response = try await fence.execute(request: [
-            "command": "wait_for_change",
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .waitForChange,
+            values: ["expect": expectationValue(type: "screen_changed")]
+        )
 
         guard case .action(let result, let expectation) = response else {
             return XCTFail("Expected action response, got \(response)")
@@ -3163,11 +3174,13 @@ final class TheFenceTests: XCTestCase {
         }
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "stale_button"),
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(heistId: "stale_button"),
+                "expect": expectationValue(type: "screen_changed"),
+            ]
+        )
 
         XCTAssertTrue(mockConn.sent.contains { sent, _ in
             if case .activate = sent { return true }
@@ -3215,14 +3228,15 @@ final class TheFenceTests: XCTestCase {
             }
         }
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "button"),
-            "expect": [
-                "type": "element_appeared",
-                "matcher": ["label": "Ready"],
-            ],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(heistId: "button"),
+                "expect": expectationValue(type: "element_appeared", fields: [
+                    "matcher": .object(["label": .string("Ready")]),
+                ]),
+            ]
+        )
 
         let sentNames = mockConn.sent.map { $0.0.canonicalName }
         XCTAssertTrue(sentNames.contains("activate"))
@@ -3259,11 +3273,13 @@ final class TheFenceTests: XCTestCase {
             }
         }
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "button"),
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(heistId: "button"),
+                "expect": expectationValue(type: "screen_changed"),
+            ]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertFalse(result.success)
@@ -3294,12 +3310,14 @@ final class TheFenceTests: XCTestCase {
             }
         }
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "button"),
-            "timeout": 0.01,
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(heistId: "button"),
+                "timeout": .double(0.01),
+                "expect": expectationValue(type: "screen_changed"),
+            ]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
@@ -3332,11 +3350,13 @@ final class TheFenceTests: XCTestCase {
             }
         }
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "button"),
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(heistId: "button"),
+                "expect": expectationValue(type: "screen_changed"),
+            ]
+        )
 
         let waitMessages = mockConn.sent.filter { sent, _ in
             if case .waitForChange = sent { return true }
@@ -3363,10 +3383,10 @@ final class TheFenceTests: XCTestCase {
         // surface as a thrown connection error or an error response, but it
         // must not return the synthetic "expectation already met" action.
         do {
-            let response = try await fence.execute(request: [
-                "command": "activate",
-                "target": targetArgument(heistId: "some_button"),
-            ])
+            let response = try await fence.execute(
+                command: .activate,
+                values: ["target": targetArgumentValue(heistId: "some_button")]
+            )
             if case .action(let result, _) = response {
                 XCTAssertFalse(result.success)
                 XCTAssertNotEqual(result.message, "expectation already met by background change")
@@ -3398,12 +3418,14 @@ final class TheFenceTests: XCTestCase {
         }
         try await startHeistRecording(on: fence)
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(label: "No Change"),
-            "timeout": 0.01,
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(label: "No Change"),
+                "timeout": .double(0.01),
+                "expect": expectationValue(type: "screen_changed"),
+            ]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
@@ -3442,11 +3464,13 @@ final class TheFenceTests: XCTestCase {
         }
         try await startHeistRecording(on: fence)
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(label: "Continue"),
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(label: "Continue"),
+                "expect": expectationValue(type: "screen_changed"),
+            ]
+        )
 
         if case .action(_, let expectation) = response {
             XCTAssertEqual(expectation?.met, true)
@@ -3459,10 +3483,10 @@ final class TheFenceTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("heist")
         defer { try? FileManager.default.removeItem(at: output) }
-        let stopResponse = try await fence.execute(request: [
-            "command": "stop_heist",
-            "output": output.path,
-        ])
+        let stopResponse = try await fence.execute(
+            command: .stopHeist,
+            values: ["output": .string(output.path)]
+        )
         if case .heistStopped(_, let stepCount) = stopResponse {
             XCTAssertEqual(stepCount, 1)
         } else {
@@ -3536,11 +3560,13 @@ final class TheFenceTests: XCTestCase {
         }
         try await startHeistRecording(on: fence)
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(label: "Continue"),
-            "expect": ["type": "screen_changed"],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(label: "Continue"),
+                "expect": expectationValue(type: "screen_changed"),
+            ]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertEqual(result.method, .waitForChange)
@@ -3553,10 +3579,10 @@ final class TheFenceTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("heist")
         defer { try? FileManager.default.removeItem(at: output) }
-        _ = try await fence.execute(request: [
-            "command": "stop_heist",
-            "output": output.path,
-        ])
+        _ = try await fence.execute(
+            command: .stopHeist,
+            values: ["output": .string(output.path)]
+        )
 
         let heist = try TheBookKeeper.readHeist(from: output)
         XCTAssertEqual(heist.steps.count, 1)
@@ -3602,14 +3628,15 @@ final class TheFenceTests: XCTestCase {
         }
         try await startHeistRecording(on: fence)
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "pay_button"),
-            "expect": [
-                "type": "element_disappeared",
-                "matcher": ["label": "Pay"],
-            ],
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: [
+                "target": targetArgumentValue(heistId: "pay_button"),
+                "expect": expectationValue(type: "element_disappeared", fields: [
+                    "matcher": .object(["label": .string("Pay")]),
+                ]),
+            ]
+        )
         guard case .action(let result, let expectation) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
@@ -3620,10 +3647,10 @@ final class TheFenceTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("heist")
         defer { try? FileManager.default.removeItem(at: output) }
-        _ = try await fence.execute(request: [
-            "command": "stop_heist",
-            "output": output.path,
-        ])
+        _ = try await fence.execute(
+            command: .stopHeist,
+            values: ["output": .string(output.path)]
+        )
 
         let heist = try TheBookKeeper.readHeist(from: output)
         XCTAssertEqual(heist.steps.count, 1)
@@ -3647,10 +3674,10 @@ final class TheFenceTests: XCTestCase {
         }
         try await startHeistRecording(on: fence)
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(label: "Plain Success"),
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: ["target": targetArgumentValue(label: "Plain Success")]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertTrue(result.success)
@@ -3686,10 +3713,10 @@ final class TheFenceTests: XCTestCase {
         }
         try await startHeistRecording(on: fence)
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(heistId: "pay_button"),
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: ["target": targetArgumentValue(heistId: "pay_button")]
+        )
         guard case .action(let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
@@ -3720,10 +3747,10 @@ final class TheFenceTests: XCTestCase {
         }
         try await startHeistRecording(on: fence)
 
-        let response = try await fence.execute(request: [
-            "command": "activate",
-            "target": targetArgument(label: "Missing"),
-        ])
+        let response = try await fence.execute(
+            command: .activate,
+            values: ["target": targetArgumentValue(label: "Missing")]
+        )
 
         if case .action(let result, let expectation) = response {
             XCTAssertFalse(result.success)
@@ -3960,14 +3987,22 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     private func startHeistRecording(on fence: TheFence) async throws {
-        let response = try await fence.execute(request: [
-            "command": "start_heist",
-            "identifier": "record-verified-actions-\(UUID().uuidString)",
-            "app": "com.example.app",
-        ])
+        let response = try await fence.execute(
+            command: .startHeist,
+            values: [
+                "identifier": .string("record-verified-actions-\(UUID().uuidString)"),
+                "app": .string("com.example.app"),
+            ]
+        )
         guard case .heistStarted = response else {
             return XCTFail("Expected heistStarted response, got \(response)")
         }
+    }
+
+    private func expectationValue(type: String, fields: [String: HeistValue] = [:]) -> HeistValue {
+        var values = fields
+        values["type"] = .string(type)
+        return .object(values)
     }
 
     @ButtonHeistActor

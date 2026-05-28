@@ -145,9 +145,7 @@ final class PublicContractGoldenTests: XCTestCase {
     @ButtonHeistActor
     func testMissingTargetFailurePublicJSONGolden() async throws {
         let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(request: [
-            "command": TheFence.Command.activate.rawValue,
-        ])
+        let response = try await fence.execute(command: .activate)
 
         XCTAssertEqual(
             try jsonString(response),

@@ -130,7 +130,7 @@ private enum FenceExpectationParser {
             throw FenceError.invalidRequest(
                 "Expectation object requires a string \"type\" discriminator " +
                     "(e.g. {\"type\": \"element_updated\", …}). " +
-                    "Got \(object.field("type")): \(value.rawValue)"
+                    "Got \(object.field("type")): \(value.schemaObservedDescription)"
             )
         }
         guard ActionExpectation.wireTypeValues.contains(type) else {
@@ -203,7 +203,7 @@ private enum FenceExpectationParser {
         guard case .array(let values) = value else {
             throw SchemaValidationError(
                 field: object.field("expectations"),
-                observed: value.rawValue,
+                observed: value.schemaObservedDescription,
                 expected: "array of objects"
             )
         }

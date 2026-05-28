@@ -413,15 +413,7 @@ final class ServerMessageTests: XCTestCase {
             after,
             context: AccessibilityTrace.Context(screenId: "trace_screen")
         )
-        let traceJSON = try JSONSerialization.jsonObject(with: JSONEncoder().encode(trace))
-        let json: [String: Any] = [
-            "success": true,
-            "method": "activate",
-            "screenName": "stored screen",
-            "screenId": "stored_screen",
-            "accessibilityTrace": traceJSON,
-        ]
-        let data = try JSONSerialization.data(withJSONObject: json)
+        let data = try JSONEncoder().encode(StoredActionResultScreenContextFixture(accessibilityTrace: trace))
 
         let result = try JSONDecoder().decode(ActionResult.self, from: data)
 
@@ -627,6 +619,14 @@ final class ServerMessageTests: XCTestCase {
         } else {
             XCTFail("Expected screen, got \(decoded)")
         }
+    }
+
+    private struct StoredActionResultScreenContextFixture: Encodable {
+        let success = true
+        let method = ActionMethod.activate
+        let screenName = "stored screen"
+        let screenId = "stored_screen"
+        let accessibilityTrace: AccessibilityTrace
     }
 
     private func interfaceWithHeader(
