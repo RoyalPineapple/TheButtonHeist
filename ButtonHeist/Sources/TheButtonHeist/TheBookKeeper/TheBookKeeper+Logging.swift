@@ -94,8 +94,9 @@ extension TheFence.RequestPayload {
         case .waitForChange(let payload):
             return WaitForChangeTarget(expect: payload.expectation, timeout: payload.timeout)
                 .heistEvidenceArguments()
-        case .none, .getInterface, .screen, .artifact, .startRecording, .connect,
-             .runBatch, .archiveSession, .startHeist, .stopHeist, .playHeist:
+        case .none, .dismissKeyboard, .getPasteboard, .getInterface, .screen,
+             .artifact, .startRecording, .connect, .runBatch, .archiveSession,
+             .startHeist, .stopHeist, .playHeist:
             return [:]
         }
     }
@@ -114,8 +115,9 @@ extension TheFence.RequestPayload {
             return target.elementTarget
         case .waitFor(let target):
             return target.elementTarget
-        case .none, .getInterface, .screen, .artifact, .editAction, .setPasteboard,
-             .waitForChange, .startRecording, .connect, .runBatch, .archiveSession,
+        case .none, .dismissKeyboard, .getPasteboard, .getInterface, .screen,
+             .artifact, .editAction, .setPasteboard, .waitForChange,
+             .startRecording, .connect, .runBatch, .archiveSession,
              .startHeist, .stopHeist, .playHeist:
             return nil
         }

@@ -11,7 +11,7 @@ extension TheFence {
         return ClientMessageExecutionPlan(
             messages: messages,
             timeout: timeout,
-            recordsCompletion: request.command != .getPasteboard
+            recordsCompletion: request.command.descriptor.recordsActionCompletion
         )
     }
 }
@@ -47,9 +47,9 @@ private extension TheFence.RequestPayload {
             return [.editAction(target)]
         case .setPasteboard(let target):
             return [.setPasteboard(target)]
-        case .none where command == .dismissKeyboard:
+        case .dismissKeyboard:
             return [.resignFirstResponder]
-        case .none where command == .getPasteboard:
+        case .getPasteboard:
             return [.getPasteboard]
         case .waitFor(let target):
             return [.waitFor(target)]
@@ -77,7 +77,7 @@ private extension TheFence.ParsedRequest {
             case .waitForChange(let payload):
                 let target = WaitForChangeTarget(expect: payload.expectation, timeout: payload.timeout)
                 return target.resolvedTimeout + 5
-            case .none where command == .getPasteboard:
+            case .getPasteboard:
                 return Timeouts.healthSeconds
             default:
                 return Timeouts.actionSeconds

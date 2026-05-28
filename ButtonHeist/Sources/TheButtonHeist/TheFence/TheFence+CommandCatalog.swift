@@ -66,6 +66,8 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let requiresConnectionBeforeDispatch: Bool
     public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
+    public let mcpAnnotations: MCPToolAnnotationSpec?
+    public let recordsActionCompletion: Bool
     public let description: String
 
     public var isPublicRequestContract: Bool {
@@ -91,6 +93,8 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         requiresConnectionBeforeDispatch: Bool = true,
         humanPositionalSyntax: FenceHumanPositionalSyntax = .target,
         parameters: [FenceParameterSpec],
+        mcpAnnotations: MCPToolAnnotationSpec? = nil,
+        recordsActionCompletion: Bool = true,
         description: String
     ) {
         self.command = command
@@ -102,6 +106,8 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.humanPositionalSyntax = humanPositionalSyntax
         self.parameters = parameters
+        self.mcpAnnotations = mcpAnnotations
+        self.recordsActionCompletion = recordsActionCompletion
         self.description = description
     }
 }
@@ -245,7 +251,7 @@ public extension TheFence.Command {
                 name: descriptor.canonicalName,
                 command: descriptor.command,
                 description: descriptor.description,
-                annotations: mcpAnnotations(for: descriptor.canonicalName)
+                annotations: descriptor.mcpAnnotations
             )
         }
     }
@@ -267,6 +273,8 @@ extension TheFence.Command {
             requiresConnectionBeforeDispatch: command.catalogRequiresConnectionBeforeDispatch,
             humanPositionalSyntax: command.catalogHumanPositionalSyntax,
             parameters: command.catalogParameters,
+            mcpAnnotations: command.catalogMCPAnnotations,
+            recordsActionCompletion: command.catalogRecordsActionCompletion,
             description: presentationDescription(for: command.rawValue)
         )
     }
@@ -410,23 +418,32 @@ extension TheFence.Command {
         }
     }
 
-    private static func mcpAnnotations(for toolName: String) -> MCPToolAnnotationSpec? {
-        switch toolName {
-        case Self.ping.rawValue,
-             Self.getInterface.rawValue,
-             Self.getScreen.rawValue,
-             Self.listDevices.rawValue,
-             Self.getSessionState.rawValue,
-             Self.listTargets.rawValue,
-             Self.getSessionLog.rawValue:
+    var catalogMCPAnnotations: MCPToolAnnotationSpec? {
+        switch self {
+        case .ping,
+             .getInterface,
+             .getScreen,
+             .listDevices,
+             .getSessionState,
+             .listTargets,
+             .getSessionLog:
             return MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
 
-        case Self.waitForChange.rawValue,
-             Self.getPasteboard.rawValue:
+        case .waitForChange,
+             .getPasteboard:
             return MCPToolAnnotationSpec(readOnlyHint: true)
 
         default:
             return nil
+        }
+    }
+
+    var catalogRecordsActionCompletion: Bool {
+        switch self {
+        case .getPasteboard:
+            return false
+        default:
+            return true
         }
     }
 }

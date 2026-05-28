@@ -62,6 +62,33 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         })
     }
 
+    func testFunctionalTreeMoveDoesNotReportRemoveInsertChurn() {
+        let before = makeTestInterface(nodes: [
+            testContainer(makeContainer(), stableId: "list", children: [
+                testElement(makeElement(heistId: "generated-a", label: "Pasta", traits: [.button])),
+                testElement(makeElement(heistId: "stable-item", label: "Sauce", traits: [.button])),
+            ]),
+        ])
+        let after = makeTestInterface(nodes: [
+            testContainer(makeContainer(), stableId: "list", children: [
+                testElement(makeElement(heistId: "stable-item", label: "Sauce", traits: [.button])),
+                testElement(makeElement(heistId: "generated-b", label: "Pasta", traits: [.button])),
+            ]),
+        ])
+
+        let edits = ElementEdits.between(before, after)
+
+        XCTAssertTrue(edits.added.isEmpty)
+        XCTAssertTrue(edits.removed.isEmpty)
+        XCTAssertTrue(edits.treeInserted.isEmpty)
+        XCTAssertTrue(edits.treeRemoved.isEmpty)
+        XCTAssertTrue(edits.treeMoved.contains {
+            $0.ref == TreeNodeRef(id: "generated-a", kind: .element)
+                && $0.from == TreeLocation(parentId: "list", index: 0)
+                && $0.to == TreeLocation(parentId: "list", index: 1)
+        })
+    }
+
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {
         let beforeInterface = makeTestInterface(
             nodes: [

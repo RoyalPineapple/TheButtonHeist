@@ -323,8 +323,8 @@ public final class TheFence {
              (.setPasteboard, .setPasteboard),
              (.waitFor, .waitFor),
              (.waitForChange, .waitForChange),
-             (.getPasteboard, .none),
-             (.dismissKeyboard, .none):
+             (.getPasteboard, .getPasteboard),
+             (.dismissKeyboard, .dismissKeyboard):
             return try await handleClientActionRequest(parsed)
         case (.startRecording, .startRecording(let config)):
             return try await handleStartRecording(config)

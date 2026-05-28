@@ -1127,6 +1127,25 @@ final class TheFenceTests: XCTestCase {
         XCTAssertNil(json["path"])
     }
 
+    func testJSONEncodingFailurePreservesRequestId() throws {
+        let response = FenceResponse.screenshot(
+            path: "/tmp/shot.png",
+            payload: ScreenPayload(
+                pngData: "",
+                width: .nan,
+                height: 844,
+                interface: Interface(timestamp: Date(), tree: [])
+            )
+        )
+
+        let json = try Self.jsonObject(from: response.jsonData(requestId: "req-json-failure"))
+
+        XCTAssertEqual(json["id"] as? String, "req-json-failure")
+        XCTAssertEqual(json["status"] as? String, "error")
+        XCTAssertEqual(json["errorCode"] as? String, "formatting.json_encoding_failed")
+        XCTAssertNil(json["path"])
+    }
+
     // MARK: - Compact Delta Geometry Filtering
 
     func testCompactDeltaOmitsFrameChanges() {

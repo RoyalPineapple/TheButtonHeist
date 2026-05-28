@@ -10,6 +10,8 @@ extension TheFence {
 
     enum RequestPayload {
         case none
+        case dismissKeyboard
+        case getPasteboard
         case getInterface(GetInterfaceRequest)
         case screen(ScreenRequest)
         case artifact(ArtifactRequest)
@@ -388,6 +390,8 @@ extension TheFence {
     ) throws -> RequestPayload {
         switch command.requestPayloadKind {
         case .none:
+            if command == .dismissKeyboard { return .dismissKeyboard }
+            if command == .getPasteboard { return .getPasteboard }
             return .none
         case .observation:
             return try decodeObservationPayload(command: command, arguments: arguments, requestId: requestId)

@@ -7,12 +7,12 @@ enum PublicJSONSerializer {
     static func data<T: Encodable>(
         encoding response: T,
         outputFormatting: JSONEncoder.OutputFormatting,
-        fallback: PublicErrorResponse
+        encodingFailureResponse: PublicErrorResponse
     ) throws -> Data {
         do {
             return try encode(response, outputFormatting: outputFormatting)
         } catch {
-            return try encode(fallback, outputFormatting: outputFormatting)
+            return try encode(encodingFailureResponse, outputFormatting: outputFormatting)
         }
     }
 
@@ -20,19 +20,23 @@ enum PublicJSONSerializer {
         encoding response: T,
         requestId: Any?,
         outputFormatting: JSONEncoder.OutputFormatting,
-        fallback: PublicErrorResponse
+        encodingFailureResponse: PublicErrorResponse
     ) throws -> Data {
-        let data = try data(
-            encoding: response,
-            outputFormatting: outputFormatting,
-            fallback: fallback
-        )
-        guard let requestId else { return data }
-        return try objectData(
-            addingRequestId: requestId,
-            to: data,
-            outputFormatting: outputFormatting
-        )
+        guard let requestId else {
+            return try data(
+                encoding: response,
+                outputFormatting: outputFormatting,
+                encodingFailureResponse: encodingFailureResponse
+            )
+        }
+        let publicRequestId = try PublicRequestId(value: requestId)
+        let envelope = PublicResponseEnvelope(requestId: publicRequestId, response: response)
+        let failureEnvelope = PublicResponseEnvelope(requestId: publicRequestId, response: encodingFailureResponse)
+        do {
+            return try encode(envelope, outputFormatting: outputFormatting)
+        } catch {
+            return try encode(failureEnvelope, outputFormatting: outputFormatting)
+        }
     }
 
     private static func encode<T: Encodable>(
@@ -44,46 +48,68 @@ enum PublicJSONSerializer {
         encoder.dateEncodingStrategy = .iso8601
         return try encoder.encode(response)
     }
+}
 
-    private static func objectData(
-        addingRequestId requestId: Any,
-        to data: Data,
-        outputFormatting: JSONEncoder.OutputFormatting
-    ) throws -> Data {
-        guard var dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw objectEncodingError(data)
-        }
-        dict["id"] = requestId
-        return try JSONSerialization.data(
-            withJSONObject: dict,
-            options: jsonSerializationOptions(from: outputFormatting)
-        )
+private struct PublicResponseEnvelope<Response: Encodable>: Encodable {
+    let requestId: PublicRequestId
+    let response: Response
+
+    private enum CodingKeys: String, CodingKey {
+        case requestId = "id"
     }
 
-    private static func objectEncodingError(_ data: Data) -> EncodingError {
-        EncodingError.invalidValue(
-            String(data: data, encoding: .utf8) ?? "<non-utf8>",
-            EncodingError.Context(
-                codingPath: [],
-                debugDescription: "Encoded public JSON response was not an object"
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(requestId, forKey: .requestId)
+        try response.encode(to: encoder)
+    }
+}
+
+private enum PublicRequestId: Encodable {
+    case string(String)
+    case integer(Int)
+    case double(Double)
+    case bool(Bool)
+    case null
+
+    init(value: Any) throws {
+        switch value {
+        case let value as String:
+            self = .string(value)
+        case let value as NSNumber:
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                self = .bool(value.boolValue)
+            } else if CFNumberIsFloatType(value) {
+                self = .double(value.doubleValue)
+            } else {
+                self = .integer(value.intValue)
+            }
+        case is NSNull:
+            self = .null
+        default:
+            throw EncodingError.invalidValue(
+                value,
+                EncodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Public JSON request id must be a JSON scalar"
+                )
             )
-        )
+        }
     }
 
-    private static func jsonSerializationOptions(
-        from outputFormatting: JSONEncoder.OutputFormatting
-    ) -> JSONSerialization.WritingOptions {
-        var options: JSONSerialization.WritingOptions = []
-        if outputFormatting.contains(.prettyPrinted) {
-            options.insert(.prettyPrinted)
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .integer(let value):
+            try container.encode(value)
+        case .double(let value):
+            try container.encode(value)
+        case .bool(let value):
+            try container.encode(value)
+        case .null:
+            try container.encodeNil()
         }
-        if outputFormatting.contains(.sortedKeys) {
-            options.insert(.sortedKeys)
-        }
-        if outputFormatting.contains(.withoutEscapingSlashes) {
-            options.insert(.withoutEscapingSlashes)
-        }
-        return options
     }
-
 }
