@@ -20,8 +20,8 @@ extension TheInsideJob {
         try await startRuntimeLease(phase: "resume", leavesStoppedOnFailure: false)
     }
 
-    func activateRuntimeLease(_ lease: InsideJobRuntimeLease, resumePolling: Bool) {
-        lease.activate(on: self, resumePolling: resumePolling)
+    func activateRuntimeLease(_ lease: InsideJobRuntimeLease) {
+        lease.activate(on: self)
     }
 
     func stopRuntime() async {
@@ -37,9 +37,7 @@ extension TheInsideJob {
         if case .running(let lease) = serverPhase {
             pendingTransportStopTask = lease.release(from: self, policy: .stop)
         } else {
-            stopPolling()
-            stopLifecycleObservation()
-            restoreIdleTimerProtection(clearBaseline: true)
+            releaseRuntimeOwnedResources(policy: .stop)
         }
 
         serverPhase = .stopped

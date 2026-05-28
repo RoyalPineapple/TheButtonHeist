@@ -241,6 +241,13 @@ final class TheTripwireTests: XCTestCase {
         // No crash, no double-registration
     }
 
+    func testWaitForSettleRequiresCallerOwnedPulse() async {
+        let settled = await tripwire.waitForSettle(timeout: 0.01)
+
+        XCTAssertFalse(settled)
+        XCTAssertFalse(tripwire.isPulseRunning)
+    }
+
     func testFirstTickBaselineDoesNotEmitTripwireTransition() {
         let reading = pulseReading(tripwireSignal: tripwireSignal(navigationDepth: 1))
 
