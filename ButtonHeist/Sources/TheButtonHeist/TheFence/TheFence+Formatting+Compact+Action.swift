@@ -4,8 +4,8 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
-        let commandName = TheFence.Command.canonicalName(forActionResultMethod: result.method)
+    func compactActionResult(command: TheFence.Command, _ result: ActionResult, expectation: ExpectationResult?) -> String {
+        let commandName = command.rawValue
         guard result.success else {
             if case .scrollSearch(let search) = result.payload {
                 return Self.compactScrollSearchNotFound(

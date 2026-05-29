@@ -55,8 +55,6 @@ extension TheFence {
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public var canonicalName: String { command.rawValue }
-    /// The server action method that unambiguously projects back to this public command.
-    public let actionResultMethod: ActionMethod?
     public let requestPayloadKind: FenceRequestPayloadKind
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
@@ -82,7 +80,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
 
     public init(
         command: TheFence.Command,
-        actionResultMethod: ActionMethod? = nil,
         requestPayloadKind: FenceRequestPayloadKind,
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
@@ -94,7 +91,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         description: String
     ) {
         self.command = command
-        self.actionResultMethod = actionResultMethod
         self.requestPayloadKind = requestPayloadKind
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
@@ -136,7 +132,6 @@ public enum FenceHumanPositionalSyntax: Sendable, Equatable {
 }
 
 private struct FenceCommandCatalogEntry {
-    var actionResultMethod: ActionMethod?
     var requestPayloadKind: FenceRequestPayloadKind = .none
     var cliExposure: CLIExposure = .directCommand
     var mcpExposure: MCPExposure = .directTool
@@ -150,19 +145,19 @@ private struct FenceCommandCatalogEntry {
 
 extension FenceCommandDescriptor {
     func executionTimeout(for request: TheFence.ParsedRequest) throws -> TimeInterval {
-        if actionResultMethod == .getPasteboard {
+        if command == .getPasteboard {
             return Timeouts.healthSeconds
         }
-        if actionResultMethod == .elementSearch || actionResultMethod == .typeText {
+        if command == .elementSearch || command == .typeText {
             return Timeouts.longActionSeconds
         }
-        if actionResultMethod == .waitFor {
+        if command == .waitFor {
             guard case .waitFor(let target)? = request.executableMessages?.first else {
                 throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for payload")
             }
             return target.resolvedTimeout + 5
         }
-        if actionResultMethod == .waitForChange {
+        if command == .waitForChange {
             guard case .waitForChange(let target)? = request.executableMessages?.first else {
                 throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for_change payload")
             }
@@ -175,26 +170,6 @@ extension FenceCommandDescriptor {
 public extension TheFence.Command {
     var descriptor: FenceCommandDescriptor {
         Self.descriptor(for: self)
-    }
-
-    static func descriptor(forActionResultMethod method: ActionMethod) -> FenceCommandDescriptor? {
-        descriptors.first { $0.actionResultMethod == method }
-    }
-
-    static func canonicalName(forActionResultMethod method: ActionMethod) -> String {
-        switch method {
-        case .increment, .decrement, .customAction:
-            return Self.activate.rawValue
-        case .syntheticTap:
-            return Self.oneFingerTap.rawValue
-        case .syntheticDrawPath:
-            return Self.drawPath.rawValue
-        case .batchExecutionPlan:
-            return Self.runBatch.rawValue
-        default:
-            break
-        }
-        return descriptor(forActionResultMethod: method)?.canonicalName ?? method.rawValue
     }
 
     static var descriptors: [FenceCommandDescriptor] {
@@ -281,7 +256,6 @@ extension TheFence.Command {
         let entry = command.catalogEntry
         return FenceCommandDescriptor(
             command: command,
-            actionResultMethod: entry.actionResultMethod,
             requestPayloadKind: entry.requestPayloadKind,
             cliExposure: entry.cliExposure,
             mcpExposure: entry.mcpExposure,
@@ -350,7 +324,6 @@ extension TheFence.Command {
                 to include the fresh visible accessibility tree.
                 """
         case .waitForChange:
-            entry.actionResultMethod = .waitForChange
             entry.requestPayloadKind = .waitForChange
             entry.isBatchExecutable = true
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
@@ -366,13 +339,11 @@ extension TheFence.Command {
             entry.parameters = target + FenceParameterBlocks.coordinateXY + expectation
             entry.description = "Tap a coordinate or semantic target after actionability resolution."
         case .longPress:
-            entry.actionResultMethod = .syntheticLongPress
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.coordinateXY + [duration] + expectation
             entry.description = "Long-press a coordinate or semantic target for a resolved duration."
         case .swipe:
-            entry.actionResultMethod = .syntheticSwipe
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
@@ -383,13 +354,11 @@ extension TheFence.Command {
             ] + FenceParameterBlocks.optionalStart + FenceParameterBlocks.optionalEnd + [duration] + expectation
             entry.description = "Swipe in a direction or between explicit points; semantic targets are made actionable first."
         case .drag:
-            entry.actionResultMethod = .syntheticDrag
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.requiredEnd + FenceParameterBlocks.optionalStart + [duration] + expectation
             entry.description = "Drag from one point to another using explicit coordinates or a semantic target."
         case .pinch:
-            entry.actionResultMethod = .syntheticPinch
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.scale, .number, required: true)] + FenceParameterBlocks.center + [
@@ -397,7 +366,6 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Pinch around a resolved center point using scale, angle, and duration."
         case .rotate:
-            entry.actionResultMethod = .syntheticRotate
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.angle, .number, required: true)] + FenceParameterBlocks.center + [
@@ -405,7 +373,6 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Rotate around a resolved center point using angle, radius, and duration."
         case .twoFingerTap:
-            entry.actionResultMethod = .syntheticTwoFingerTap
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.center + [param(.spread, .number)] + expectation
@@ -446,7 +413,6 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Draw a Bezier path from a start point through one or more curve segments."
         case .scroll:
-            entry.actionResultMethod = .scroll
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
@@ -462,7 +428,6 @@ extension TheFence.Command {
                 element_search, or scroll_to_edge for those canonical operations.
                 """
         case .scrollToVisible:
-            entry.actionResultMethod = .scrollToVisible
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + expectation
@@ -471,7 +436,6 @@ extension TheFence.Command {
                 refreshing the hierarchy, and returning fresh live geometry.
                 """
         case .elementSearch:
-            entry.actionResultMethod = .elementSearch
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [
@@ -479,7 +443,6 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Search scrollable content for a semantic element match without performing an action."
         case .scrollToEdge:
-            entry.actionResultMethod = .scrollToEdge
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .leadingEdgeThenTarget(Self.humanScrollEdgeValues)
@@ -492,7 +455,6 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Scroll the selected container, or the target's owning scroll ancestor, to a requested edge."
         case .activate:
-            entry.actionResultMethod = .activate
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation
@@ -502,7 +464,6 @@ extension TheFence.Command {
                 any entry from the element's actions array.
                 """
         case .rotor:
-            entry.actionResultMethod = .rotor
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
@@ -525,7 +486,6 @@ extension TheFence.Command {
                 the returned start and end offsets.
                 """
         case .typeText:
-            entry.actionResultMethod = .typeText
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .joinedText(.text)
@@ -535,7 +495,6 @@ extension TheFence.Command {
                 element to focus it first and read back the resulting value.
                 """
         case .editAction:
-            entry.actionResultMethod = .editAction
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .firstToken(.action)
@@ -545,7 +504,6 @@ extension TheFence.Command {
                 Actions: copy, paste, cut, select, selectAll, delete. Use dismiss_keyboard to dismiss the keyboard.
                 """
         case .setPasteboard:
-            entry.actionResultMethod = .setPasteboard
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = [param(.text, .string, required: true)] + expectation
@@ -554,14 +512,12 @@ extension TheFence.Command {
                 itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
                 """
         case .getPasteboard:
-            entry.actionResultMethod = .getPasteboard
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
             entry.description = """
                 Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
                 was written by another app.
                 """
         case .waitFor:
-            entry.actionResultMethod = .waitFor
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.absent, .boolean), FenceParameterBlocks.expectationTimeout, expect]
@@ -570,7 +526,6 @@ extension TheFence.Command {
                 Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
                 """
         case .dismissKeyboard:
-            entry.actionResultMethod = .resignFirstResponder
             entry.isBatchExecutable = true
             entry.parameters = expectation
             entry.description = "Dismiss the on-screen keyboard through the current first responder or keyboard action path."

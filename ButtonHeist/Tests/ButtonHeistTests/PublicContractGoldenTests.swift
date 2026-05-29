@@ -30,7 +30,7 @@ final class PublicContractGoldenTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            try jsonString(FenceResponse.action(result: result)),
+            try jsonString(FenceResponse.action(command: .getPasteboard, result: result)),
             #"{"method":"get_pasteboard","screenId":"receipt","screenName":"Receipt","status":"ok","value":"copied"}"#
         )
     }
@@ -116,7 +116,7 @@ final class PublicContractGoldenTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            try jsonString(FenceResponse.action(result: result)),
+            try jsonString(FenceResponse.action(command: .activate, result: result)),
             #"{"errorClass":"elementNotFound","message":"No element matching label \"Buy\"","method":"activate","status":"error"}"#
         )
     }

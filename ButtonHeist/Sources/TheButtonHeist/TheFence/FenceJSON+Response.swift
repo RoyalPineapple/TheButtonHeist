@@ -50,8 +50,8 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicDevicesResponse(devices: devices).encode(to: encoder)
         case .interface(let interface, let detail):
             try PublicInterfaceResponse(interface: interface, detail: detail).encode(to: encoder)
-        case .action(let result, let expectation):
-            try PublicActionResponse(result: result, expectation: expectation).encode(to: encoder)
+        case .action(let command, let result, let expectation):
+            try PublicActionResponse(commandName: command.rawValue, result: result, expectation: expectation).encode(to: encoder)
         case .screenshot(let path, let payload, let options):
             try PublicScreenshotResponse(
                 path: path,

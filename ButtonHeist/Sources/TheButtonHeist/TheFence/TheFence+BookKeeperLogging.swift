@@ -16,7 +16,7 @@ private extension FenceResponse {
     }
 
     var heistRecordingReceipt: HeistRecordingReceipt? {
-        guard case .action(let result, let expectation) = self else { return nil }
+        guard case .action(_, let result, let expectation) = self else { return nil }
         return HeistRecordingReceipt(actionResult: result, expectation: expectation)
     }
 }

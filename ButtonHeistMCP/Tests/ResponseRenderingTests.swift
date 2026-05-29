@@ -88,7 +88,7 @@ struct ResponseRenderingTests {
             message: "No element matching label \"Buy\"",
             errorKind: .elementNotFound
         )
-        let response = FenceResponse.action(result: actionResult)
+        let response = FenceResponse.action(command: .activate, result: actionResult)
 
         let result = ButtonHeistMCPServer.renderResponse(response, backgroundAccessibilityTraces: [])
         let texts = textContents(result)

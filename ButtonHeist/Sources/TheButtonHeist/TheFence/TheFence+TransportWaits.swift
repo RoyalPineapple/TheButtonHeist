@@ -6,12 +6,6 @@ extension TheFence {
 
     // MARK: - Send Action
 
-    func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
-        let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
-        commandExecutionState.completeAction(result)
-        return .action(result: result)
-    }
-
     func sendAndAwaitAction(_ message: ClientMessage, timeout: TimeInterval) async throws -> ActionResult {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
