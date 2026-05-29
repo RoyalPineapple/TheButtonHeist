@@ -94,9 +94,8 @@ final class HeistPlaybackTests: XCTestCase {
         let arguments = try XCTUnwrap(json?["arguments"] as? [String: Any])
         XCTAssertEqual(arguments["direction"] as? String, "up")
         let target = try XCTUnwrap(json?["target"] as? [String: Any])
-        let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
-        XCTAssertEqual(matcher["label"] as? String, "List")
-        XCTAssertEqual(matcher["traits"] as? [String], ["adjustable"])
+        XCTAssertEqual(target["label"] as? String, "List")
+        XCTAssertEqual(target["traits"] as? [String], ["adjustable"])
     }
 
     func testStepRoundTripsTarget() throws {
@@ -120,15 +119,15 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testPlaybackTargetRejectsMatcherWithHeistId() {
-        let json = #"{"command":"activate","target":{"matcher":{"heistId":"button_save"}}}"#
+    func testPlaybackTargetRejectsWrappedMatcher() {
+        let json = #"{"command":"activate","target":{"matcher":{"label":"Save"}}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
+            XCTAssertTrue("\(error)".contains("matcher"), "\(error)")
         }
     }
 
     func testPlaybackTargetRejectsUnknownTargetField() {
-        let json = #"{"command":"activate","target":{"matcher":{"label":"Save"},"unexpectedTargetField":"button_save"}}"#
+        let json = #"{"command":"activate","target":{"label":"Save","unexpectedTargetField":"button_save"}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
         }
@@ -355,8 +354,7 @@ final class HeistPlaybackTests: XCTestCase {
         let firstStep = steps?.first
         XCTAssertEqual(firstStep?["command"] as? String, "activate")
         let target = try XCTUnwrap(firstStep?["target"] as? [String: Any])
-        let matcher = try XCTUnwrap(target["matcher"] as? [String: Any])
-        XCTAssertEqual(matcher["label"] as? String, "Go")
+        XCTAssertEqual(target["label"] as? String, "Go")
 
         let recorded = firstStep?["_recorded"] as? [String: Any]
         XCTAssertEqual(recorded?["heistId"] as? String, "button_go")

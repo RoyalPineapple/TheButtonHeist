@@ -48,7 +48,7 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        _ = try element.requireTarget()
+        let target = try element.requireTarget()
         if let rotorIndex, rotorIndex < 0 {
             throw ValidationError("rotor-index must be non-negative")
         }
@@ -74,13 +74,12 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
         if let currentTextStartOffset { request.set(.currentTextStartOffset, currentTextStartOffset) }
         if let currentTextEndOffset { request.set(.currentTextEndOffset, currentTextEndOffset) }
 
-        try element.applyTo(&request)
         request.set(.timeout, timeoutOption.timeout)
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request),
+            operation: try Self.fenceOperation(request, target: target),
             statusMessage: "Moving rotor..."
         )
     }

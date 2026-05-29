@@ -29,14 +29,17 @@ enum CLIRequestBuilder {
 
     static func operation(
         command: TheFence.Command,
-        parameters: CLIRequestParameters = [:]
+        parameters: CLIRequestParameters = [:],
+        target: ElementTarget? = nil
     ) throws -> NormalizedOperation {
-        let arguments = TheFence.CommandArgumentEnvelope(
-            values: Dictionary(
-                parameters.map { ($0.key.rawValue, $0.value) },
-                uniquingKeysWith: { _, newest in newest }
-            )
+        var values = Dictionary(
+            parameters.map { ($0.key.rawValue, $0.value) },
+            uniquingKeysWith: { _, newest in newest }
         )
+        if let target {
+            values[FenceParameterKey.target.rawValue] = target.fenceArgumentValue
+        }
+        let arguments = TheFence.CommandArgumentEnvelope(values: values)
         switch FenceOperationCatalog.normalizeCommand(command, arguments: arguments) {
         case .success(let operation):
             return operation
@@ -105,27 +108,27 @@ enum CLIRequestBuilder {
     }
 
     static func parseMachineRequest(_ line: String) throws -> CLIParsedRequest {
-        let requestId = try CLIMachineRequestIdScanner.requestId(in: line)
-        let data = Data(line.utf8)
         let envelope: CLIMachineRequestEnvelope
         do {
-            envelope = try JSONDecoder().decode(CLIMachineRequestEnvelope.self, from: data)
+            envelope = try CLIMachineRequestEnvelope.decode(from: line)
+        } catch let error as CLIRequestBuildError {
+            throw error
         } catch let error as DecodingError {
             throw ValidationError(diagnosticMessage(for: error))
         }
-        let object = envelope.commandObject
-        guard !object.isEmpty else {
-            throw ValidationError("Expected JSON object with string field 'command'")
-        }
+        let requestId = envelope.requestId
         do {
-            guard case .string(_)? = object[FenceParameterKey.command.rawValue] else {
-                throw ValidationError("Expected JSON object with string field 'command'")
+            let operation: NormalizedOperation
+            switch FenceOperationCatalog.normalizeCommandObject(envelope.arguments, context: "JSON input") {
+            case .success(let normalizedOperation):
+                operation = normalizedOperation
+            case .failure(let error):
+                throw ValidationError(error.message)
             }
-            let descriptor = try validateCanonicalCommandObject(object, context: "JSON input")
             return CLIParsedRequest(
-                operation: try operation(command: descriptor.command, parameters: commandParameters(from: object)),
+                operation: operation,
                 requestId: requestId,
-                descriptor: descriptor,
+                descriptor: operation.command.descriptor,
                 mode: .machine
             )
         } catch let error as CLIRequestBuildError {
@@ -138,255 +141,270 @@ enum CLIRequestBuilder {
         }
     }
 
-    @discardableResult
-    static func validateCanonicalCommandObject(
-        _ object: [String: HeistValue],
-        context: String,
-        requireBatchExecutable: Bool = false
-    ) throws -> FenceCommandDescriptor {
-        guard case .string(let commandName)? = object[FenceParameterKey.command.rawValue] else {
-            throw ValidationError("\(context) must include string field 'command'")
-        }
-        guard let descriptor = FenceCommandDescriptor.descriptor(canonicalName: commandName) else {
-            throw ValidationError("Unknown command '\(commandName)'. \(context) requires a canonical command name.")
-        }
-        if requireBatchExecutable, !descriptor.isBatchExecutable {
-            throw ValidationError("\(context) command '\(commandName)' is not supported in run_batch")
-        }
-
-        let allowedKeys = Set([FenceParameterKey.command.rawValue, "id"] + descriptor.parameters.map(\.key))
-        let unsupportedKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
-        if let unsupportedKey = unsupportedKeys.first {
-            throw ValidationError("Unknown parameter '\(unsupportedKey)' for \(commandName)")
-        }
-
-        return descriptor
-    }
-
-    private static func commandParameters(from object: [String: HeistValue]) -> CLIRequestParameters {
-        Dictionary(
-            object.compactMap { key, value in
-                guard key != FenceParameterKey.command.rawValue,
-                      key != "id",
-                      let parameterKey = FenceParameterKey(rawValue: key) else {
-                    return nil
-                }
-                return (parameterKey, value)
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
-    }
-
     static func diagnosticMessage(for error: Error) -> String {
         let description = String(describing: error)
         return description.isEmpty ? error.localizedDescription : description
     }
 }
 
-private struct CLIMachineRequestEnvelope: Decodable {
-    let commandObject: [String: HeistValue]
+private extension ElementTarget {
+    var fenceArgumentValue: HeistValue {
+        switch self {
+        case .heistId(let heistId):
+            return .object([FenceParameterKey.heistId.rawValue: .string(heistId)])
+        case .matcher(let matcher, let ordinal):
+            var targetValue: [String: HeistValue] = [:]
+            if let label = matcher.label { targetValue[FenceParameterKey.label.rawValue] = .string(label) }
+            if let identifier = matcher.identifier { targetValue[FenceParameterKey.identifier.rawValue] = .string(identifier) }
+            if let value = matcher.value { targetValue[FenceParameterKey.value.rawValue] = .string(value) }
+            if let traits = matcher.traits {
+                targetValue[FenceParameterKey.traits.rawValue] = .array(traits.map { .string($0.rawValue) })
+            }
+            if let excludeTraits = matcher.excludeTraits {
+                targetValue[FenceParameterKey.excludeTraits.rawValue] = .array(excludeTraits.map { .string($0.rawValue) })
+            }
+            if let ordinal {
+                targetValue[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
+            }
+            return .object(targetValue)
+        }
+    }
+}
+
+private struct CLIMachineRequestEnvelope {
+    let requestId: PublicRequestId?
+    let arguments: TheFence.CommandArgumentObject
+
+    static func decode(from line: String) throws -> Self {
+        let requestId = try CLIMachineRequestIdBoundary.requestId(in: line)
+        do {
+            let decoded = try JSONDecoder().decode(CLIMachineRequestArguments.self, from: Data(line.utf8))
+            return Self(requestId: requestId, arguments: decoded.arguments)
+        } catch let error as CLIRequestBuildError {
+            throw error
+        } catch let error as DecodingError {
+            throw CLIRequestBuildError(
+                message: CLIRequestBuilder.diagnosticMessage(for: error),
+                requestId: requestId
+            )
+        }
+    }
+}
+
+private struct CLIMachineRequestArguments: Decodable {
+    let arguments: TheFence.CommandArgumentObject
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
-        var commandObject: [String: HeistValue] = [:]
+        var values: [String: HeistValue] = [:]
         for key in container.allKeys {
             if key.stringValue == "id" {
                 continue
             } else {
-                commandObject[key.stringValue] = try container.decode(HeistValue.self, forKey: key)
+                values[key.stringValue] = try container.decode(HeistValue.self, forKey: key)
             }
         }
-        self.commandObject = commandObject
+        arguments = TheFence.CommandArgumentObject(values: values, fieldPrefix: nil)
     }
 }
 
-private enum CLIMachineRequestIdScanner {
+private enum CLIMachineRequestIdBoundary {
     static func requestId(in line: String) throws -> PublicRequestId? {
-        var parser = Parser(line)
-        try parser.skipWhitespace()
-        guard parser.consume("{") else { return nil }
-        try parser.skipWhitespace()
-        guard !parser.consume("}") else { return nil }
-        while true {
-            let key = try parser.readString()
-            try parser.skipWhitespace()
-            try parser.expect(":")
-            try parser.skipWhitespace()
-            if key == "id" {
-                return try parser.readRequestId()
+        var reader = JSONTopLevelObjectReader(line)
+        guard let lexeme = try reader.valueLexeme(forKey: "id") else {
+            return nil
+        }
+        return try PublicRequestId(machineMetadataLexeme: lexeme)
+    }
+}
+
+private extension PublicRequestId {
+    init(machineMetadataLexeme lexeme: Substring) throws {
+        if lexeme == "null" {
+            self = .null
+        } else if lexeme == "true" || lexeme == "false" {
+            throw ValidationError("Public JSON request id does not support bool")
+        } else if lexeme.first == "\"" {
+            do {
+                self = try .string(JSONDecoder().decode(String.self, from: Data(lexeme.utf8)))
+            } catch {
+                throw ValidationError("Invalid JSON string in request id metadata")
             }
-            try parser.skipValue()
-            try parser.skipWhitespace()
-            if parser.consume(",") {
-                try parser.skipWhitespace()
+        } else if lexeme.first == "{" || lexeme.first == "[" {
+            throw ValidationError("Public JSON request id must be string, integer, unsigned integer, finite decimal, or null")
+        } else {
+            self = try Self(numberLexeme: String(lexeme))
+        }
+    }
+
+    private init(numberLexeme token: String) throws {
+        guard !token.isEmpty else {
+            throw ValidationError("Public JSON request id must be string, integer, unsigned integer, finite decimal, or null")
+        }
+        if token.contains(".") || token.contains("e") || token.contains("E") {
+            guard let value = Double(token), value.isFinite else {
+                throw ValidationError("Public JSON request id must be finite")
+            }
+            self = .double(value)
+        } else if token.hasPrefix("-") {
+            guard let value = Int64(token) else {
+                throw ValidationError("Public JSON request id integer is outside Int64 range")
+            }
+            self = .signedInteger(value)
+        } else if let value = Int64(token) {
+            self = .signedInteger(value)
+        } else if let value = UInt64(token) {
+            self = .unsignedInteger(value)
+        } else {
+            throw ValidationError("Public JSON request id integer is outside UInt64 range")
+        }
+    }
+}
+
+private struct JSONTopLevelObjectReader {
+    private var index: String.Index
+    private let source: String
+
+    init(_ source: String) {
+        self.source = source
+        self.index = source.startIndex
+    }
+
+    mutating func valueLexeme(forKey expectedKey: String) throws -> Substring? {
+        skipWhitespace()
+        guard consume("{") else { return nil }
+        skipWhitespace()
+        guard !consume("}") else { return nil }
+        while true {
+            let key = try readString()
+            skipWhitespace()
+            try expect(":")
+            skipWhitespace()
+            let valueStart = index
+            try skipValue()
+            let value = source[valueStart..<index]
+            if key == expectedKey {
+                return value
+            }
+            skipWhitespace()
+            if consume(",") {
+                skipWhitespace()
                 continue
             }
             return nil
         }
     }
 
-    private struct Parser {
-        var index: String.Index
-        let line: String
-
-        init(_ line: String) {
-            self.line = line
-            self.index = line.startIndex
-        }
-
-        mutating func skipWhitespace() throws {
-            while let character = current, character == " " || character == "\n" || character == "\r" || character == "\t" {
-                advance()
-            }
-        }
-
-        mutating func consume(_ character: Character) -> Bool {
-            guard current == character else { return false }
+    private mutating func skipWhitespace() {
+        while let character = current, character == " " || character == "\n" || character == "\r" || character == "\t" {
             advance()
-            return true
         }
+    }
 
-        mutating func expect(_ character: Character) throws {
-            guard consume(character) else {
-                throw ValidationError("Invalid JSON request id metadata")
-            }
-        }
+    private mutating func consume(_ character: Character) -> Bool {
+        guard current == character else { return false }
+        advance()
+        return true
+    }
 
-        mutating func readRequestId() throws -> PublicRequestId {
-            if consumeLiteral("null") {
-                return .null
-            }
-            if consumeLiteral("true") || consumeLiteral("false") {
-                throw ValidationError("Public JSON request id does not support bool")
-            }
-            if current == "\"" {
-                return try .string(readString())
-            }
-            guard current != "{" && current != "[" else {
-                throw ValidationError("Public JSON request id must be string, integer, unsigned integer, finite decimal, or null")
-            }
-            return try readNumberRequestId()
+    private mutating func expect(_ character: Character) throws {
+        guard consume(character) else {
+            throw ValidationError("Invalid JSON request metadata")
         }
+    }
 
-        mutating func readNumberRequestId() throws -> PublicRequestId {
-            let token = readNumberToken()
-            guard !token.isEmpty else {
-                throw ValidationError("Public JSON request id must be string, integer, unsigned integer, finite decimal, or null")
-            }
-            if token.contains(".") || token.contains("e") || token.contains("E") {
-                guard let value = Double(token), value.isFinite else {
-                    throw ValidationError("Public JSON request id must be finite")
-                }
-                return .double(value)
-            }
-            if token.hasPrefix("-") {
-                guard let value = Int64(token) else {
-                    throw ValidationError("Public JSON request id integer is outside Int64 range")
-                }
-                return .signedInteger(value)
-            }
-            if let value = Int64(token) {
-                return .signedInteger(value)
-            }
-            guard let value = UInt64(token) else {
-                throw ValidationError("Public JSON request id integer is outside UInt64 range")
-            }
-            return .unsignedInteger(value)
+    private mutating func skipValue() throws {
+        skipWhitespace()
+        if current == "\"" {
+            _ = try readStringToken()
+        } else if current == "{" || current == "[" {
+            try skipCompositeValue()
+        } else if consumeLiteral("true") || consumeLiteral("false") || consumeLiteral("null") {
+            return
+        } else {
+            try skipNumber()
         }
+    }
 
-        mutating func skipValue() throws {
-            try skipWhitespace()
-            if current == "\"" {
-                _ = try readStringToken()
-            } else if consume("{") {
-                try skipObjectBody()
-            } else if consume("[") {
-                try skipArrayBody()
-            } else if consumeLiteral("true") || consumeLiteral("false") || consumeLiteral("null") {
-                return
-            } else {
-                _ = readNumberToken()
+    private mutating func readString() throws -> String {
+        let token = try readStringToken()
+        do {
+            return try JSONDecoder().decode(String.self, from: Data(token.utf8))
+        } catch {
+            throw ValidationError("Invalid JSON string in request metadata")
+        }
+    }
+
+    private mutating func readStringToken() throws -> Substring {
+        guard consume("\"") else {
+            throw ValidationError("Invalid JSON request metadata")
+        }
+        let start = source.index(before: index)
+        var isEscaped = false
+        while current != nil {
+            let character = current
+            advance()
+            if isEscaped {
+                isEscaped = false
+            } else if character == "\\" {
+                isEscaped = true
+            } else if character == "\"" {
+                return source[start..<index]
             }
         }
+        throw ValidationError("Unterminated JSON string in request metadata")
+    }
 
-        mutating func skipObjectBody() throws {
-            try skipWhitespace()
-            guard !consume("}") else { return }
-            while true {
-                _ = try readString()
-                try skipWhitespace()
-                try expect(":")
-                try skipValue()
-                try skipWhitespace()
-                if consume("}") { return }
-                try expect(",")
-                try skipWhitespace()
+    private mutating func skipCompositeValue() throws {
+        let start = current
+        let firstCloser: Character = start == "{" ? "}" : "]"
+        var closers = [firstCloser]
+        advance()
+        var isEscaped = false
+        var isInsideString = false
+        while let character = current {
+            advance()
+            if isEscaped {
+                isEscaped = false
+            } else if character == "\\" {
+                isEscaped = isInsideString
+            } else if character == "\"" {
+                isInsideString.toggle()
+            } else if !isInsideString, character == "{" {
+                closers.append("}")
+            } else if !isInsideString, character == "[" {
+                closers.append("]")
+            } else if !isInsideString, character == closers.last {
+                closers.removeLast()
+                if closers.isEmpty { return }
             }
         }
+        throw ValidationError("Unterminated JSON request metadata")
+    }
 
-        mutating func skipArrayBody() throws {
-            try skipWhitespace()
-            guard !consume("]") else { return }
-            while true {
-                try skipValue()
-                try skipWhitespace()
-                if consume("]") { return }
-                try expect(",")
-                try skipWhitespace()
-            }
+    private mutating func skipNumber() throws {
+        let start = index
+        while let character = current,
+              character == "-" || character == "+" || character == "." || character == "e" || character == "E" || character.isNumber {
+            advance()
         }
+        guard start != index else {
+            throw ValidationError("Invalid JSON request metadata")
+        }
+    }
 
-        mutating func readString() throws -> String {
-            let token = try readStringToken()
-            do {
-                return try JSONDecoder().decode(String.self, from: Data(token.utf8))
-            } catch {
-                throw ValidationError("Invalid JSON string in request metadata")
-            }
-        }
+    private mutating func consumeLiteral(_ literal: String) -> Bool {
+        guard source[index...].hasPrefix(literal) else { return false }
+        index = source.index(index, offsetBy: literal.count)
+        return true
+    }
 
-        mutating func readStringToken() throws -> Substring {
-            guard consume("\"") else {
-                throw ValidationError("Invalid JSON request id metadata")
-            }
-            let start = line.index(before: index)
-            var isEscaped = false
-            while current != nil {
-                let character = current
-                advance()
-                if isEscaped {
-                    isEscaped = false
-                } else if character == "\\" {
-                    isEscaped = true
-                } else if character == "\"" {
-                    return line[start..<index]
-                }
-            }
-            throw ValidationError("Unterminated JSON string in request metadata")
-        }
+    private var current: Character? {
+        index < source.endIndex ? source[index] : nil
+    }
 
-        mutating func readNumberToken() -> String {
-            let start = index
-            while let character = current,
-                  character == "-" || character == "+" || character == "." || character == "e" || character == "E" || character.isNumber {
-                advance()
-            }
-            return String(line[start..<index])
-        }
-
-        mutating func consumeLiteral(_ literal: String) -> Bool {
-            guard line[index...].hasPrefix(literal) else { return false }
-            index = line.index(index, offsetBy: literal.count)
-            return true
-        }
-
-        var current: Character? {
-            index < line.endIndex ? line[index] : nil
-        }
-
-        mutating func advance() {
-            index = line.index(after: index)
-        }
+    private mutating func advance() {
+        index = source.index(after: index)
     }
 }
 

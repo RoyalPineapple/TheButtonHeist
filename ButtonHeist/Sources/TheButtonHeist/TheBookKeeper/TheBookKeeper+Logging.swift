@@ -2,6 +2,13 @@ import Foundation
 
 import TheScore
 
+private extension HeistValue {
+    static func encoded<T: Encodable>(_ value: T) throws -> HeistValue {
+        let data = try JSONEncoder().encode(value)
+        return try JSONDecoder().decode(HeistValue.self, from: data)
+    }
+}
+
 private extension Dictionary where Key == String, Value == HeistValue {
     mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) throws {
         if let expectation {
@@ -15,11 +22,9 @@ private extension Dictionary where Key == String, Value == HeistValue {
 
 extension TheFence.ParsedRequest {
     func heistEvidenceArguments() throws -> [String: HeistValue] {
-        var arguments = try heistRecordingArguments()
-        if command != .waitForChange {
-            let timeout = expectationPayload.expectation == nil ? nil : expectationPayload.timeout
-            try arguments.appendExpectation(expectationPayload.expectation, timeout: timeout)
-        }
+        var arguments = heistRecordingArguments()
+        let timeout = expectationPayload.expectation == nil ? nil : expectationPayload.timeout
+        try arguments.appendExpectation(expectationPayload.expectation, timeout: timeout)
         return arguments
     }
 }

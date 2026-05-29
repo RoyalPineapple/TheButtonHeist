@@ -21,7 +21,7 @@ struct PublicPlaybackResponse: FencePublicJSONResponse {
 struct PublicPlaybackFailure: Encodable {
     let command: String
     let error: String
-    let target: PublicPlaybackTarget?
+    let target: SemanticActionTarget?
     let actionResult: PublicActionResponse?
     let expectation: PublicExpectationResult?
     let interface: PublicInterface?
@@ -30,7 +30,7 @@ struct PublicPlaybackFailure: Encodable {
     init(failure: PlaybackFailure) {
         self.command = failure.step.command
         self.error = failure.errorMessage
-        self.target = failure.step.target.map(PublicPlaybackTarget.init)
+        self.target = failure.step.target
         self.diagnosticCaptureFailure = failure.diagnosticCaptureFailure
         switch failure {
         case .actionFailed(_, let result, let expectation, let interface, _):
@@ -46,31 +46,5 @@ struct PublicPlaybackFailure: Encodable {
             self.expectation = nil
             self.interface = interface.map { PublicInterface(interface: $0, detail: .summary) }
         }
-    }
-}
-
-struct PublicPlaybackTarget: Encodable {
-    let matcher: PublicPlaybackMatcher
-    let ordinal: Int?
-
-    init(target: SemanticActionTarget) {
-        self.matcher = PublicPlaybackMatcher(matcher: target.matcher)
-        self.ordinal = target.ordinal
-    }
-}
-
-struct PublicPlaybackMatcher: Encodable {
-    let label: String?
-    let identifier: String?
-    let value: String?
-    let traits: [String]?
-    let excludeTraits: [String]?
-
-    init(matcher: ElementMatcher) {
-        self.label = matcher.label
-        self.identifier = matcher.identifier
-        self.value = matcher.value
-        self.traits = matcher.traits?.map(\.rawValue)
-        self.excludeTraits = matcher.excludeTraits?.map(\.rawValue)
     }
 }

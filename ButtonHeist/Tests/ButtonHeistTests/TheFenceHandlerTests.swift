@@ -685,7 +685,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithIdentifier() async throws {
         let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(identifier: "myButton")),
+        guard let target = try decodedElementTarget(fence, target: targetValue(identifier: "myButton")),
               case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -705,7 +705,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithMatcherFields() async throws {
         let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(label: "Save", traits: ["button"])),
+        guard let target = try decodedElementTarget(fence, target: targetValue(label: "Save", traits: ["button"])),
               case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -721,12 +721,12 @@ final class TheFenceHandlerTests: XCTestCase {
                 fence,
                 target: elementTargetValue([
                     "heistId": .string("button_save"),
-                    "matcher": .object(["label": .string("Save")]),
+                    "label": .string("Save"),
                 ])
             )
         ) { error in
             XCTAssertTrue(
-                "\(error)".contains("either heistId or matcher"),
+                "\(error)".contains("ElementTarget heistId cannot be combined with matcher fields or ordinal"),
                 "Expected mixed selector rejection, got \(error)"
             )
         }
@@ -745,7 +745,7 @@ final class TheFenceHandlerTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(
-                "\(error)".contains("either heistId or matcher"),
+                "\(error)".contains("ElementTarget heistId cannot be combined with matcher fields or ordinal"),
                 "Expected heistId+ordinal rejection, got \(error)"
             )
         }
@@ -758,7 +758,7 @@ final class TheFenceHandlerTests: XCTestCase {
             try decodedElementTarget(
                 fence,
                 target: elementTargetValue([
-                    "matcher": .object(["label": .string("Save")]),
+                    "label": .string("Save"),
                     "unexpectedTargetField": .string("button_save"),
                 ])
             )
@@ -773,7 +773,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetWithOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(label: "Save", ordinal: 2)),
+        guard let target = try decodedElementTarget(fence, target: targetValue(label: "Save", ordinal: 2)),
               case .matcher(let matcher, let ordinal) = target else {
             return XCTFail("Expected .matcher with ordinal")
         }
@@ -785,15 +785,15 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRequestTargetRejectsNegativeOrdinal() async {
         await assertOperationValidationError(
             command: .activate,
-            arguments: ["target": matcherTargetValue(label: "Save", ordinal: -1)],
-            equals: "schema validation failed for target.ordinal: observed integer -1; expected integer >= 0"
+            arguments: ["target": targetValue(label: "Save", ordinal: -1)],
+            equals: "schema validation failed for target: observed object; expected ordinal must be non-negative, got -1"
         )
     }
 
     @ButtonHeistActor
     func testElementTargetWithoutOrdinal() async throws {
         let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: matcherTargetValue(label: "Save")),
+        guard let target = try decodedElementTarget(fence, target: targetValue(label: "Save")),
               case .matcher(_, let ordinal) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -914,7 +914,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapWithIdentifierPassesValidation() async {
         await assertOperationPassesValidation(
             command: .oneFingerTap,
-            arguments: ["target": matcherTargetValue(identifier: "myButton")]
+            arguments: ["target": targetValue(identifier: "myButton")]
         )
     }
 
@@ -925,10 +925,10 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: [
                 "target": elementTargetValue([
                     "heistId": .string("button_save"),
-                    "matcher": .object(["label": .string("Save")]),
+                    "label": .string("Save"),
                 ]),
             ],
-            contains: "either heistId or matcher"
+            contains: "ElementTarget heistId cannot be combined with matcher fields or ordinal"
         )
     }
 
@@ -1086,7 +1086,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPinchMissingScale() async {
         await assertOperationValidationError(
             command: .pinch,
-            equals: "schema validation failed for scale: observed missing; expected number > 0"
+            equals: "schema validation failed for scale: observed missing; expected number"
         )
     }
 
@@ -1095,7 +1095,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .pinch,
             arguments: ["scale": .double(2.0)],
-            equals: "Pinch requires target object or center coordinates (centerX, centerY)"
+            equals: "center requires an element target or center coordinates"
         )
     }
 
@@ -1119,6 +1119,24 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPinchWithIdentifierDispatchesCanonicalPayload() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(operation: normalizedOperation(
+            command: .pinch,
+            arguments: [
+                "scale": .double(2.0),
+                "target": targetValue(identifier: "map"),
+            ]
+        ))
+        guard let (message, _) = mockConn.sent.last,
+              case .pinch(let target) = message else {
+            XCTFail("Expected pinch message")
+            return
+        }
+        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "map"))))
+    }
+
+    @ButtonHeistActor
     func testRotateWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(operation: normalizedOperation(
@@ -1138,6 +1156,24 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRotateWithIdentifierDispatchesCanonicalPayload() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(operation: normalizedOperation(
+            command: .rotate,
+            arguments: [
+                "angle": .double(1.57),
+                "target": targetValue(identifier: "dial"),
+            ]
+        ))
+        guard let (message, _) = mockConn.sent.last,
+              case .rotate(let target) = message else {
+            XCTFail("Expected rotate message")
+            return
+        }
+        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "dial"))))
+    }
+
+    @ButtonHeistActor
     func testRotateMissingAngle() async {
         await assertOperationValidationError(
             command: .rotate,
@@ -1150,7 +1186,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .rotate,
             arguments: ["angle": .double(1.57)],
-            equals: "Rotate requires target object or center coordinates (centerX, centerY)"
+            equals: "center requires an element target or center coordinates"
         )
     }
 
@@ -1172,6 +1208,21 @@ final class TheFenceHandlerTests: XCTestCase {
             return
         }
         XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
+    }
+
+    @ButtonHeistActor
+    func testTwoFingerTapWithIdentifierDispatchesCanonicalPayload() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(operation: normalizedOperation(
+            command: .twoFingerTap,
+            arguments: ["target": targetValue(identifier: "photo")]
+        ))
+        guard let (message, _) = mockConn.sent.last,
+              case .twoFingerTap(let target) = message else {
+            XCTFail("Expected two finger tap message")
+            return
+        }
+        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "photo"))))
     }
 
     // MARK: - Draw Path Validation
@@ -1217,7 +1268,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     .object(["x": .double(1.0), "y": .double(1.0)]),
                 ]),
             ],
-            equals: "schema validation failed for points[0].pressure: observed number 0.5; expected valid draw path point field"
+            equals: "schema validation failed for points[0].pressure: observed number 0.5; expected Unknown draw path point field \"pressure\""
         )
     }
 
@@ -1267,7 +1318,16 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDrawBezierMissingStart() async {
         await assertValidationError(
             command: .drawBezier,
-            equals: "schema validation failed for startX: observed missing; expected number"
+            arguments: [
+                "segments": .array([
+                    .object([
+                        "cp1X": .double(10.0), "cp1Y": .double(20.0),
+                        "cp2X": .double(30.0), "cp2Y": .double(40.0),
+                        "endX": .double(50.0), "endY": .double(60.0),
+                    ]),
+                ]),
+            ],
+            equals: "schema validation failed for startX: observed missing; expected present"
         )
     }
 
@@ -1298,7 +1358,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "startY": .double(0.0),
                 "segments": .array([.object(["cp1X": .double(1.0), "cp1Y": .double(2.0)])]),
             ],
-            equals: "schema validation failed for segments[0].cp2X: observed missing; expected number"
+            equals: "schema validation failed for segments[0].cp2X: observed missing; expected present"
         )
     }
 
@@ -1318,7 +1378,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     ]),
                 ]),
             ],
-            equals: "schema validation failed for segments[0].weight: observed number 0.5; expected valid bezier segment field"
+            equals: "schema validation failed for segments[0].weight: observed number 0.5; expected Unknown bezier segment field \"weight\""
         )
     }
 
@@ -1399,7 +1459,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollDefaultsDirection() async {
         await assertPassesValidation(
             command: .scroll,
-            arguments: ["target": matcherTargetValue(identifier: "scrollView")]
+            arguments: ["target": targetValue(identifier: "scrollView")]
         )
     }
 
@@ -1407,7 +1467,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollInvalidDirection() async {
         await assertValidationError(
             command: .scroll,
-            arguments: ["target": matcherTargetValue(identifier: "scrollView"), "direction": .string("diagonal")],
+            arguments: ["target": targetValue(identifier: "scrollView"), "direction": .string("diagonal")],
             equals: "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
         )
     }
@@ -1424,7 +1484,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollValidPassesValidation() async {
         await assertPassesValidation(
             command: .scroll,
-            arguments: ["direction": .string("down"), "target": matcherTargetValue(identifier: "scrollView")]
+            arguments: ["direction": .string("down"), "target": targetValue(identifier: "scrollView")]
         )
     }
 
@@ -1453,7 +1513,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToVisibleValidPassesValidation() async {
         await assertPassesValidation(
             command: .scrollToVisible,
-            arguments: ["target": matcherTargetValue(identifier: "targetElement")]
+            arguments: ["target": targetValue(identifier: "targetElement")]
         )
     }
 
@@ -1469,7 +1529,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToEdgeDefaultsEdge() async {
         await assertPassesValidation(
             command: .scrollToEdge,
-            arguments: ["target": matcherTargetValue(identifier: "scrollView")]
+            arguments: ["target": targetValue(identifier: "scrollView")]
         )
     }
 
@@ -1477,7 +1537,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToEdgeInvalidEdge() async {
         await assertValidationError(
             command: .scrollToEdge,
-            arguments: ["target": matcherTargetValue(identifier: "scrollView"), "edge": .string("middle")],
+            arguments: ["target": targetValue(identifier: "scrollView"), "edge": .string("middle")],
             equals: "schema validation failed for edge: observed string \"middle\"; expected enum one of top, bottom, left, right"
         )
     }
@@ -1508,7 +1568,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToEdgeValidPassesValidation() async {
         await assertPassesValidation(
             command: .scrollToEdge,
-            arguments: ["edge": .string("bottom"), "target": matcherTargetValue(identifier: "scrollView")]
+            arguments: ["edge": .string("bottom"), "target": targetValue(identifier: "scrollView")]
         )
     }
 
@@ -1532,7 +1592,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testActivateWithElementPassesValidation() async {
         await assertPassesValidation(
             command: .activate,
-            arguments: ["target": matcherTargetValue(identifier: "myElement")]
+            arguments: ["target": targetValue(identifier: "myElement")]
         )
     }
 
@@ -1555,7 +1615,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRotorNegativeIndex() async {
         await assertValidationError(
             command: .rotor,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "rotorIndex": .int(-1)],
+            arguments: ["target": targetValue(identifier: "myElement"), "rotorIndex": .int(-1)],
             equals: "schema validation failed for rotorIndex: observed integer -1; expected integer >= 0"
         )
     }
@@ -1565,7 +1625,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .rotor,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "rotor": .string("Errors"),
                 "rotorIndex": .int(1),
             ],
@@ -1577,7 +1637,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRotorInvalidDirection() async {
         await assertValidationError(
             command: .rotor,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "direction": .string("sideways")],
+            arguments: ["target": targetValue(identifier: "myElement"), "direction": .string("sideways")],
             equals: "schema validation failed for direction: observed string \"sideways\"; expected enum one of next, previous"
         )
     }
@@ -1586,7 +1646,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRotorTextRangeRequiresBothOffsets() async {
         await assertValidationError(
             command: .rotor,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "currentTextStartOffset": .int(4)],
+            arguments: ["target": targetValue(identifier: "myElement"), "currentTextStartOffset": .int(4)],
             contains: "currentTextStartOffset and currentTextEndOffset"
         )
     }
@@ -1596,7 +1656,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .rotor,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "currentTextStartOffset": .int(4),
                 "currentTextEndOffset": .int(8),
             ],
@@ -1611,7 +1671,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .rotor,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "currentHeistId": .string("notes"),
                 "currentTextStartOffset": .int(8),
                 "currentTextEndOffset": .int(4),
@@ -1624,7 +1684,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testRotorValidPassesValidation() async {
         await assertPassesValidation(
             command: .rotor,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "rotor": .string("Errors")]
+            arguments: ["target": targetValue(identifier: "myElement"), "rotor": .string("Errors")]
         )
     }
 
@@ -1633,7 +1693,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertPassesValidation(
             command: .rotor,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "rotor": .string("Mentions"),
                 "direction": .string("previous"),
                 "currentHeistId": .string("notes"),
@@ -1647,7 +1707,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testActivateWithCustomActionDispatches() async {
         await assertPassesValidation(
             command: .activate,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "action": .string("Delete")]
+            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("Delete")]
         )
     }
 
@@ -1655,7 +1715,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testActivateWithIncrementDispatches() async {
         await assertPassesValidation(
             command: .activate,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "action": .string("increment")]
+            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("increment")]
         )
     }
 
@@ -1663,7 +1723,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testActivateWithDecrementDispatches() async {
         await assertPassesValidation(
             command: .activate,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "action": .string("decrement")]
+            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("decrement")]
         )
     }
 
@@ -1672,7 +1732,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
 
         let response = try await fence.execute(command: .activate, values: [
-            "target": matcherTargetValue(identifier: "myElement"),
+            "target": targetValue(identifier: "myElement"),
             "action": .string("increment"),
         ])
 
@@ -1688,7 +1748,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
 
         let response = try await fence.execute(command: .activate, values: [
-            "target": matcherTargetValue(identifier: "myElement"),
+            "target": targetValue(identifier: "myElement"),
             "action": .string("increment"),
             "count": .int(1),
         ])
@@ -1705,7 +1765,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
 
         let response = try await fence.execute(command: .activate, values: [
-            "target": matcherTargetValue(identifier: "myElement"),
+            "target": targetValue(identifier: "myElement"),
             "action": .string("increment"),
             "count": .int(3),
         ])
@@ -1722,7 +1782,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
 
         let response = try await fence.execute(command: .activate, values: [
-            "target": matcherTargetValue(identifier: "myElement"),
+            "target": targetValue(identifier: "myElement"),
             "action": .string("decrement"),
             "count": .int(2),
         ])
@@ -1739,7 +1799,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .activate,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "action": .string("increment"),
                 "count": .int(0),
             ],
@@ -1752,7 +1812,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .activate,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "action": .string("increment"),
                 "count": .int(-1),
             ],
@@ -1765,7 +1825,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .activate,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "action": .string("increment"),
                 "count": .int(101),
             ],
@@ -1777,7 +1837,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testActivateRejectsCountWithoutAdjustmentAction() async {
         await assertValidationError(
             command: .activate,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "count": .int(2)],
+            arguments: ["target": targetValue(identifier: "myElement"), "count": .int(2)],
             contains: "schema validation failed for count: observed integer 2; expected only valid with increment or decrement"
         )
     }
@@ -1787,7 +1847,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .activate,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "action": .string("Delete"),
                 "count": .int(2),
             ],
@@ -1800,7 +1860,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .activate,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "action": .string("Delete"),
                 "count": .int(200),
             ],
@@ -1813,7 +1873,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .activate,
             arguments: [
-                "target": matcherTargetValue(identifier: "myElement"),
+                "target": targetValue(identifier: "myElement"),
                 "action": .string("action:increment"),
                 "count": .int(2),
             ],
@@ -1825,7 +1885,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testActivateRejectsEmptyActionNameAtRequestBoundary() async {
         await assertValidationError(
             command: .activate,
-            arguments: ["target": matcherTargetValue(identifier: "myElement"), "action": .string("")],
+            arguments: ["target": targetValue(identifier: "myElement"), "action": .string("")],
             equals: "schema validation failed for action: observed string \"\"; expected non-empty string"
         )
     }
@@ -1849,7 +1909,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await fence.execute(command: .activate, values: [
-            "target": matcherTargetValue(identifier: "myElement"),
+            "target": targetValue(identifier: "myElement"),
             "action": .string("increment"),
             "count": .int(3),
         ])
@@ -1882,7 +1942,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await fence.execute(command: .activate, values: [
-            "target": matcherTargetValue(identifier: "myElement"),
+            "target": targetValue(identifier: "myElement"),
             "action": .string("increment"),
             "count": .int(3),
         ])
@@ -2099,7 +2159,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testWaitForWithLabelPassesValidation() async {
         await assertPassesValidation(
             command: .waitFor,
-            arguments: ["target": matcherTargetValue(label: "Loading")]
+            arguments: ["target": targetValue(label: "Loading")]
         )
     }
 
@@ -2107,7 +2167,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testWaitForWithIdentifierPassesValidation() async {
         await assertPassesValidation(
             command: .waitFor,
-            arguments: ["target": matcherTargetValue(identifier: "spinner")]
+            arguments: ["target": targetValue(identifier: "spinner")]
         )
     }
 
@@ -2115,7 +2175,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testWaitForWithTraitsPassesValidation() async {
         await assertPassesValidation(
             command: .waitFor,
-            arguments: ["target": matcherTargetValue(traits: ["button"])]
+            arguments: ["target": targetValue(traits: ["button"])]
         )
     }
 
@@ -2123,7 +2183,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testWaitForWithAbsentPassesValidation() async {
         await assertPassesValidation(
             command: .waitFor,
-            arguments: ["target": matcherTargetValue(label: "Loading"), "absent": .bool(true), "timeout": .double(5.0)]
+            arguments: ["target": targetValue(label: "Loading"), "absent": .bool(true), "timeout": .double(5.0)]
         )
     }
 
@@ -2256,7 +2316,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
 
         let response = try await fence.execute(command: .activate, values: [
-            "target": matcherTargetValue(identifier: "myElement"),
+            "target": targetValue(identifier: "myElement"),
             "expect": .string("screen_changed"),
         ])
 
@@ -2282,12 +2342,13 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(result, .screenChanged)
     }
 
-    func testNormalizeToolCallParsesExpectationPayloadAtCatalogEdge() throws {
+    func testNormalizeToolCallRoutesWithoutParsingRequestArguments() throws {
+        let expectation: HeistValue = .object(["type": .string("screen_changed")])
         let result = FenceOperationCatalog.normalizeToolCall(
             name: "activate",
             arguments: TheFence.CommandArgumentEnvelope(values: [
-                "target": .object(["matcher": .object(["identifier": .string("submit")])]),
-                "expect": .object(["type": .string("screen_changed")]),
+                "target": .object(["identifier": .string("submit")]),
+                "expect": expectation,
                 "timeout": .double(0.25),
             ])
         )
@@ -2298,51 +2359,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(operation.command, .activate)
         XCTAssertNil(operation.stringArgument("identifier"))
-        XCTAssertNil(operation.stringArgument("expect"))
-        XCTAssertEqual(operation.request.expectationPayload?.expectation, .screenChanged)
-        XCTAssertEqual(operation.request.expectationPayload?.timeout, 0.25)
-    }
-
-    @ButtonHeistActor
-    func testNormalizedToolOperationUsesTypedExpectationPayload() async throws {
-        let result = FenceOperationCatalog.normalizeToolCall(
-            name: "wait_for_change",
-            arguments: TheFence.CommandArgumentEnvelope(values: [
-                "expect": .object(["type": .string("elements_changed")]),
-            ])
-        )
-
-        guard case .success(let operation) = result else {
-            return XCTFail("Expected successful operation, got \(result)")
-        }
-
-        XCTAssertNil(operation.stringArgument("expect"))
-        XCTAssertEqual(operation.request.expectationPayload?.expectation, .elementsChanged)
-    }
-
-    func testNormalizeToolCallReportsExpectationParseFailure() {
-        let result = FenceOperationCatalog.normalizeToolCall(
-            name: "activate",
-            arguments: TheFence.CommandArgumentEnvelope(values: ["expect": .string("screen_changed")])
-        )
-
-        guard case .failure(let error) = result else {
-            return XCTFail("Expected routing failure, got \(result)")
-        }
-        XCTAssertEqual(error.message, "Invalid expectation type: expected object with a \"type\" discriminator")
-    }
-
-    func testNormalizeToolCallLeavesUnsupportedExpectationForRequestValidation() throws {
-        let result = FenceOperationCatalog.normalizeToolCall(
-            name: "get_screen",
-            arguments: TheFence.CommandArgumentEnvelope(values: ["expect": .string("screen_changed")])
-        )
-
-        guard case .success(let operation) = result else {
-            return XCTFail("Expected successful operation, got \(result)")
-        }
-        XCTAssertEqual(operation.stringArgument("expect"), "screen_changed")
-        XCTAssertNil(operation.request.expectationPayload)
+        XCTAssertEqual(operation.argumentValue("expect"), expectation)
+        XCTAssertEqual(operation.argumentValue("timeout"), .double(0.25))
     }
 
     @ButtonHeistActor
@@ -2396,22 +2414,19 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testParseExpectationFromTypedPlaybackRequestArguments() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "activate",
-                arguments: [
-                    "expect": .object([
-                        "type": .string("element_updated"),
-                        "heistId": .string("counter"),
-                        "property": .string("value"),
-                        "newValue": .string("5"),
-                    ]),
-                ]
-            ),
-            index: 0
+        let evidence = HeistEvidence(
+            command: "activate",
+            arguments: [
+                "expect": .object([
+                    "type": .string("element_updated"),
+                    "heistId": .string("counter"),
+                    "property": .string("value"),
+                    "newValue": .string("5"),
+                ]),
+            ]
         )
 
-        let result = try parseTypedExpectation(operation.requestDecodeInputEnvelope().argumentValues["expect"])
+        let result = try parseTypedExpectation(try evidence.normalizedPlaybackOperation().argumentValue("expect"))
 
         XCTAssertEqual(
             result,
@@ -2536,7 +2551,7 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"expectation matcher does not accept "matcher.unknown""#)
+            XCTAssertEqual(message, #"Unknown element matcher field "unknown""#)
         }
     }
 
@@ -2551,7 +2566,7 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"expectation matcher does not accept "matcher.heistId""#)
+            XCTAssertEqual(message, #"Unknown element matcher field "heistId""#)
         }
     }
 
@@ -2592,11 +2607,13 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testParseExpectationDiscriminatorElementAppearedWithoutMatcherThrows() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object(["type": .string("element_appeared")]))) { error in
-            guard case FenceError.invalidRequest(let msg) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            guard let error = error as? SchemaValidationError else {
+                XCTFail("Expected SchemaValidationError, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("matcher"))
+            XCTAssertEqual(error.field, "matcher")
+            XCTAssertEqual(error.observed, "missing")
+            XCTAssertEqual(error.expected, "present")
         }
     }
 
@@ -2627,11 +2644,13 @@ final class TheFenceHandlerTests: XCTestCase {
                 .object(["type": .string("elements_changed")]),
             ]),
         ]))) { error in
-            guard case FenceError.invalidRequest(let msg) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            guard let error = error as? SchemaValidationError else {
+                XCTFail("Expected SchemaValidationError, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("must be objects"))
+            XCTAssertEqual(error.field, "expectations[0]")
+            XCTAssertEqual(error.observed, #"string "screen_changed""#)
+            XCTAssertEqual(error.expected, "object")
         }
     }
 
@@ -2656,7 +2675,7 @@ final class TheFenceHandlerTests: XCTestCase {
             fence,
             steps: [
                 batchStepValue(.activate, [
-                    "target": matcherTargetValue(identifier: "save-button"),
+                    "target": targetValue(identifier: "save-button"),
                     "expect": .object(["type": .string("elements_changed")]),
                 ]),
             ]
@@ -2671,7 +2690,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let singlePlan = try fence.clientMessageExecutionPlan(for: try fence.parseRequest(
             command: .activate,
-            values: ["target": matcherTargetValue(identifier: "save-button")]
+            values: ["target": targetValue(identifier: "save-button")]
         ))
         XCTAssertEqual(singlePlan.messages.count, 1)
 
@@ -2691,8 +2710,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let cases: [(command: TheFence.Command, arguments: [String: HeistValue])] = [
             (.oneFingerTap, ["x": .double(12.0), "y": .double(34.0)]),
             (.scroll, ["direction": .string("up")]),
-            (.activate, ["target": matcherTargetValue(identifier: "save-button")]),
-            (.waitFor, ["target": matcherTargetValue(identifier: "toast")]),
+            (.activate, ["target": targetValue(identifier: "save-button")]),
+            (.waitFor, ["target": targetValue(identifier: "toast")]),
             (.setPasteboard, ["text": .string("copied")]),
         ]
 
@@ -2719,7 +2738,7 @@ final class TheFenceHandlerTests: XCTestCase {
             _ = try decodedRunBatch(
                 fence,
                 steps: [
-                    batchStepValue(.activate, ["target": matcherTargetValue(label: "Save")]),
+                    batchStepValue(.activate, ["target": targetValue(label: "Save")]),
                     batchStepValue(.getScreen),
                 ]
             )
@@ -2733,8 +2752,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let validBatch = try decodedRunBatch(
             fence,
             steps: [
-                batchStepValue(.activate, ["target": matcherTargetValue(label: "Save")]),
-                batchStepValue(.waitFor, ["target": matcherTargetValue(identifier: "toast")]),
+                batchStepValue(.activate, ["target": targetValue(label: "Save")]),
+                batchStepValue(.waitFor, ["target": targetValue(identifier: "toast")]),
                 batchStepValue(.waitForChange, ["expect": .object(["type": .string("screen_changed")])]),
             ]
         )
@@ -2749,7 +2768,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let batch = try decodedRunBatch(
             fence,
             steps: [
-                batchStepValue(.waitFor, ["target": matcherTargetValue(identifier: "toast")]),
+                batchStepValue(.waitFor, ["target": targetValue(identifier: "toast")]),
                 batchStepValue(.waitForChange),
             ]
         )
@@ -2803,7 +2822,7 @@ final class TheFenceHandlerTests: XCTestCase {
             fence,
             steps: [
                 batchStepValue(.activate, [
-                    "target": matcherTargetValue(
+                    "target": targetValue(
                         traits: ["button"],
                         excludeTraits: ["header"],
                         ordinal: 1
@@ -2827,10 +2846,10 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertRunBatchDecodeError(
             steps: [
                 batchStepValue(.activate, [
-                    "target": .object(["matcher": .object(["traits": .array([.string("notATrait")])])]),
+                    "target": .object(["traits": .array([.string("notATrait")])]),
                 ]),
             ],
-            contains: "schema validation failed for steps[0].target.matcher.traits[0]: observed string \"notATrait\"; expected enum one of"
+            contains: "schema validation failed for steps[0].target.traits[0]: observed string \"notATrait\"; expected"
         )
     }
 
@@ -2840,7 +2859,7 @@ final class TheFenceHandlerTests: XCTestCase {
             steps: [
                 batchStepValue(.activate, [
                     "target": .object([
-                        "matcher": .object(["label": .string("Save")]),
+                        "label": .string("Save"),
                         "ordinal": .string("first"),
                     ]),
                 ]),
@@ -2855,7 +2874,7 @@ final class TheFenceHandlerTests: XCTestCase {
             steps: [
                 .object([
                     "command": .int(7),
-                    "target": matcherTargetValue(identifier: "btn"),
+                    "target": targetValue(identifier: "btn"),
                 ]),
             ],
             contains: "run_batch step 0: schema validation failed for steps[0].command: observed integer 7; expected string"
@@ -2868,12 +2887,12 @@ final class TheFenceHandlerTests: XCTestCase {
             steps: [
                 batchStepValue(.activate, [
                     "target": .object([
-                        "matcher": .object(["label": .string("Save")]),
+                        "label": .string("Save"),
                         "ordinal": .int(-1),
                     ]),
                 ]),
             ],
-            contains: "schema validation failed for steps[0].target.ordinal: observed integer -1; expected integer >= 0"
+            contains: "schema validation failed for steps[0].target: observed object; expected ordinal must be non-negative, got -1"
         )
     }
 
@@ -2889,10 +2908,10 @@ final class TheFenceHandlerTests: XCTestCase {
         // Step 1 has expect → should count. Step 2 has no expect → should NOT count.
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue(.activate, [
-                "target": matcherTargetValue(identifier: "btn1"),
+                "target": targetValue(identifier: "btn1"),
                 "expect": .object(["type": .string("elements_changed")]),
             ]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn2")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
         ])
 
         guard let batch = inspectBatch(response) else {
@@ -2915,11 +2934,11 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue(.activate, [
-                "target": matcherTargetValue(identifier: "btn1"),
+                "target": targetValue(identifier: "btn1"),
                 "expect": .object(["type": .string("screen_changed")]),
             ]),
             batchStepValue(.activate, [
-                "target": matcherTargetValue(identifier: "btn2"),
+                "target": targetValue(identifier: "btn2"),
                 "expect": .object(["type": .string("elements_changed")]),
             ]),
         ])
@@ -2960,8 +2979,8 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "first")]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "second")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "first")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "second")]),
         ])
 
         guard let batch = inspectBatch(response) else {
@@ -3021,8 +3040,8 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "first")]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "second")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "first")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "second")]),
         ])
 
         guard let batch = inspectBatch(response) else {
@@ -3051,7 +3070,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue("not_a_real_command"),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn1")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn1")]),
         ], policy: "stop_on_error")
 
         guard case .error(let message, let details) = response else {
@@ -3086,8 +3105,8 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "stale-button")]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "later-button")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "stale-button")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "later-button")]),
         ], policy: "stop_on_error")
 
         guard let batch = inspectBatch(response) else {
@@ -3119,9 +3138,9 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn1")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn1")]),
             batchStepValue("not_a_real_command"),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn2")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
         ], policy: "stop_on_error")
 
         guard case .error(let message, let details) = response else {
@@ -3142,10 +3161,10 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue(.activate, [
-                "target": matcherTargetValue(identifier: "btn1"),
+                "target": targetValue(identifier: "btn1"),
                 "expect": .object(["type": .string("screen_changed")]),
             ]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn2")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
         ], policy: "stop_on_error")
 
         guard let batch = inspectBatch(response) else {
@@ -3169,10 +3188,10 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: ["steps": .array([
                 batchStepValue(.scroll, [
                     "unexpected": .string("value"),
-                    "target": matcherTargetValue(label: "Done"),
+                    "target": targetValue(label: "Done"),
                 ]),
             ])],
-            contains: "run_batch step 0: Unknown parameter 'unexpected' for scroll"
+            contains: #"schema validation failed for unexpected: observed string "value"; expected valid scroll parameter"#
         )
     }
 
@@ -3212,7 +3231,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testBatchRejectsTooManyStepsBeforeExecution() async {
         let steps = Array(
-            repeating: batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn")]),
+            repeating: batchStepValue(.activate, ["target": targetValue(identifier: "btn")]),
             count: TheFence.DecodeLimits.maxRunBatchSteps + 1
         )
         await assertValidationError(
@@ -3233,7 +3252,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .runBatch,
             arguments: ["steps": .array([
                 batchStepValue(.activate, [
-                    "target": matcherTargetValue(identifier: "btn"),
+                    "target": targetValue(identifier: "btn"),
                     "expect": nested(TheFence.DecodeLimits.maxRunBatchNestingDepth),
                 ]),
             ])],
@@ -3247,7 +3266,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertValidationError(
             command: .runBatch,
             arguments: ["steps": .array([
-                batchStepValue(.activate, ["target": matcherTargetValue(identifier: payload)]),
+                batchStepValue(.activate, ["target": targetValue(identifier: payload)]),
             ])],
             contains: "expected JSON request <= \(TheFence.DecodeLimits.maxRunBatchRequestBytes) bytes"
         )
@@ -3274,7 +3293,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue(.getScreen, ["inlineData": .bool(true)]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "skipped")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "skipped")]),
         ])
 
         guard case .error(let message, _) = response else {
@@ -3296,7 +3315,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue(.swipe, ["target": heistTargetValue("row_1"), "direction": .string("left")]),
-            batchStepValue(.scrollToVisible, ["target": matcherTargetValue(label: "Done")]),
+            batchStepValue(.scrollToVisible, ["target": targetValue(label: "Done")]),
             batchStepValue(.dismissKeyboard),
         ])
 
@@ -3315,7 +3334,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue(.typeText, ["text": .string("")]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn")]),
         ], policy: "continue_on_error")
 
         guard case .error(let message, _) = response else {
@@ -3331,9 +3350,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
 
         let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "first")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "first")]),
             batchStepValue("unknown_command"),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "skipped")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "skipped")]),
         ], policy: "stop_on_error")
 
         guard case .error(let message, _) = response else {
@@ -3350,7 +3369,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await executeRunBatch(fence, steps: [
             batchStepValue(.waitFor),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "skipped")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "skipped")]),
         ], policy: "stop_on_error")
 
         guard case .error(let message, let details) = response else {
@@ -3379,7 +3398,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testUnexpectedParameterIsRejectedByCommandContract() async {
         await assertValidationError(
             command: .activate,
-            arguments: ["target": matcherTargetValue(identifier: "save"), "mode": .string("tap")],
+            arguments: ["target": targetValue(identifier: "save"), "mode": .string("tap")],
             equals: "schema validation failed for mode: observed string \"tap\"; expected valid activate parameter"
         )
     }
@@ -3489,7 +3508,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "ordinal": .int(1),
                 ]),
             ],
-            contains: "heistId or matcher fields"
+            contains: "ElementTarget heistId cannot be combined with matcher fields or ordinal"
         )
     }
 
@@ -3583,8 +3602,8 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn1")]),
-            batchStepValue(.activate, ["target": matcherTargetValue(identifier: "btn2")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn1")]),
+            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
         ])
 
         guard let batch = inspectBatch(response) else {
@@ -3769,16 +3788,17 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.totalStepCount, 2)
-        XCTAssertEqual(operation.command, .typeText)
-        XCTAssertEqual(playback.steps[1].command, .activate)
+        XCTAssertEqual(operation.command, "type_text")
+        XCTAssertEqual(playback.steps[1].command, "activate")
         XCTAssertEqual(operation.target?.matcher.identifier, "email")
         XCTAssertEqual(operation.target?.ordinal, 1)
 
-        let normalizedOperation = operation.normalizedOperation()
+        let normalizedOperation = try operation.normalizedPlaybackOperation()
         XCTAssertEqual(normalizedOperation.command, .typeText)
         XCTAssertNil(normalizedOperation.stringArgument("identifier"))
         XCTAssertEqual(normalizedOperation.stringArgument("text"), "user@example.com")
         XCTAssertNil(normalizedOperation.stringArgument("_recorded"))
+        XCTAssertEqual(normalizedOperation.arguments.playbackSemanticTarget?.matcher.identifier, "email")
     }
 
     @ButtonHeistActor
@@ -3799,9 +3819,9 @@ final class TheFenceHandlerTests: XCTestCase {
         let playback = try TheFence.TypedHeistPlayback(contentsOf: heistURL)
 
         XCTAssertEqual(playback.app, "com.test.mock")
-        XCTAssertEqual(playback.steps.map(\.command), [.activate])
+        XCTAssertEqual(playback.steps.map(\.command), ["activate"])
         XCTAssertEqual(playback.steps.first?.target?.matcher.identifier, "submit")
-        let expect = playback.steps.first?.requestDecodeInputEnvelope().argumentValues["expect"]
+        let expect = try playback.steps.first?.normalizedPlaybackOperation().argumentValue("expect")
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
@@ -3825,17 +3845,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackOperationPreservesCanonicalExpectationPayload() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "type_text",
-                target: semanticTarget(identifier: "email"),
-                arguments: ["expect": .object(["type": .string("screen_changed")])]
-            ),
-            index: 0
+    func testHeistEvidencePreservesCanonicalExpectationPayload() async throws {
+        let evidence = HeistEvidence(
+            command: "type_text",
+            target: semanticTarget(identifier: "email"),
+            arguments: ["expect": .object(["type": .string("screen_changed")])]
         )
 
-        let expect = operation.requestDecodeInputEnvelope().argumentValues["expect"]
+        let expect = try evidence.normalizedPlaybackOperation().argumentValue("expect")
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
@@ -3850,7 +3867,7 @@ final class TheFenceHandlerTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases)
+        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases.map(\.rawValue))
     }
 
     @ButtonHeistActor
@@ -3881,45 +3898,54 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlaybackInvalidCurrentShapeUsesRequestValidation() async throws {
-        let cases: [(name: String, operation: TheFence.PlaybackOperation, message: String)] = [
+        let cases: [(name: String, evidence: HeistEvidence, message: String)] = [
             (
                 "unknown scroll parameter",
-                try TheFence.PlaybackOperation(
-                    evidence: HeistEvidence(
-                        command: "scroll",
-                        arguments: ["unexpected": .string("value")]
-                    ),
-                    index: 0
+                HeistEvidence(
+                    command: "scroll",
+                    arguments: ["unexpected": .string("value")]
                 ),
-                "schema validation failed for unexpected: observed string \"value\"; expected valid scroll parameter"
+                "schema validation failed for unexpected: observed string \"value\"; expected valid scroll playback argument"
             ),
             (
                 "unknown activate parameter",
-                try TheFence.PlaybackOperation(
-                    evidence: HeistEvidence(
-                        command: "activate",
-                        arguments: ["heistId": .string("stale_button")]
-                    ),
-                    index: 0
+                HeistEvidence(
+                    command: "activate",
+                    arguments: ["heistId": .string("stale_button")]
                 ),
-                "schema validation failed for heistId: observed string \"stale_button\"; expected valid activate parameter"
+                "schema validation failed for heistId: observed string \"stale_button\"; expected valid activate playback argument"
+            ),
+            (
+                "request target object is not playback identity",
+                HeistEvidence(
+                    command: "activate",
+                    arguments: ["target": targetValue(identifier: "argument_button")]
+                ),
+                "schema validation failed for target: observed object; expected valid activate playback argument"
             ),
             (
                 "edit_action invalid action type",
-                try TheFence.PlaybackOperation(
-                    evidence: HeistEvidence(
-                        command: "edit_action",
-                        arguments: ["action": .int(7)]
-                    ),
-                    index: 0
+                HeistEvidence(
+                    command: "edit_action",
+                    arguments: ["action": .int(7)]
                 ),
                 "schema validation failed for action: observed integer 7; expected string"
+            ),
+            (
+                "non-target command carries playback target",
+                HeistEvidence(
+                    command: "edit_action",
+                    target: semanticTarget(identifier: "ignored"),
+                    arguments: ["action": .string("copy")]
+                ),
+                "schema validation failed for target: observed semanticTarget(matcher(identifier=\"ignored\")); "
+                    + "expected edit_action command without playback target"
             ),
         ]
 
         let (fence, _) = makeConnectedFence()
         for testCase in cases {
-            let response = try await fence.execute(playback: testCase.operation)
+            let response = try await fence.execute(playback: testCase.evidence)
             guard case .error(let message, _) = response else {
                 XCTFail("Expected playback validation error for \(testCase.name), got \(response)")
                 continue
@@ -3950,14 +3976,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testExecutePlaybackOperationUsesTypedCommand() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1")),
-            index: 0
-        )
+    func testExecutePlaybackEvidenceUsesTypedCommand() async throws {
+        let evidence = HeistEvidence(command: "activate", target: semanticTarget(identifier: "btn1"))
 
         let (fence, mockConn) = makeConnectedFence()
-        let response = try await fence.execute(playback: operation)
+        let response = try await fence.execute(playback: evidence)
 
         guard case .action(let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
@@ -4128,25 +4151,19 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlaybackDoesNotUseRecordedHeistIdAsAuthority() async throws {
-        let operation = try TheFence.PlaybackOperation(
-            evidence: HeistEvidence(
-                command: "activate",
-                target: semanticTarget(identifier: "btn1"),
-                recorded: RecordedMetadata(heistId: "stale_debug_id")
-            ),
-            index: 0
+        let evidence = HeistEvidence(
+            command: "activate",
+            target: semanticTarget(identifier: "btn1"),
+            recorded: RecordedMetadata(heistId: "stale_debug_id")
         )
 
-        let arguments = operation.requestDecodeInputEnvelope().argumentValues
-        guard case .object(let target)? = arguments["target"],
-              case .object(let matcher)? = target["matcher"] else {
-            return XCTFail("Expected matcher target")
-        }
-        XCTAssertEqual(matcher["identifier"], .string("btn1"))
-        XCTAssertNil(arguments["heistId"])
+        let operation = try evidence.normalizedPlaybackOperation()
+        XCTAssertEqual(operation.arguments.playbackSemanticTarget?.matcher.identifier, "btn1")
+        XCTAssertNil(operation.argumentValue("heistId"))
+        XCTAssertNil(operation.argumentValue("target"))
 
         let (fence, mockConn) = makeConnectedFence()
-        let response = try await fence.execute(playback: operation)
+        let response = try await fence.execute(playback: evidence)
 
         guard case .action(let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
@@ -4344,7 +4361,7 @@ private func heistTargetValue(_ heistId: String) -> HeistValue {
     elementTargetValue(["heistId": .string(heistId)])
 }
 
-private func matcherTargetValue(
+private func targetValue(
     label: String? = nil,
     identifier: String? = nil,
     value: String? = nil,
@@ -4352,14 +4369,12 @@ private func matcherTargetValue(
     excludeTraits: [String]? = nil,
     ordinal: Int? = nil
 ) -> HeistValue {
-    var matcher: [String: HeistValue] = [:]
-    if let label { matcher["label"] = .string(label) }
-    if let identifier { matcher["identifier"] = .string(identifier) }
-    if let value { matcher["value"] = .string(value) }
-    if let traits { matcher["traits"] = .array(traits.map { .string($0) }) }
-    if let excludeTraits { matcher["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
-
-    var target: [String: HeistValue] = ["matcher": .object(matcher)]
+    var target: [String: HeistValue] = [:]
+    if let label { target["label"] = .string(label) }
+    if let identifier { target["identifier"] = .string(identifier) }
+    if let value { target["value"] = .string(value) }
+    if let traits { target["traits"] = .array(traits.map { .string($0) }) }
+    if let excludeTraits { target["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return elementTargetValue(target)
 }

@@ -1,144 +1,33 @@
 import TheScore
 
-private struct ActivateEvidenceArguments: Encodable {
-    let action: String?
-    let count: Int?
-}
-
 extension TheFence.ParsedRequest {
+    @ButtonHeistActor
     func heistRecordingElementTarget() throws -> ElementTarget? {
-        try heistRecordingProjection().elementTarget
+        try arguments.elementTarget()
     }
 
+    @ButtonHeistActor
     func heistRecordingCoordinateOnly() throws -> Bool {
-        try heistRecordingProjection().coordinateOnly
+        guard try arguments.elementTarget() == nil else { return false }
+        return command.requestPayloadKind == .gesture
     }
 
-    func heistRecordingArguments() throws -> [String: HeistValue] {
-        try heistRecordingProjection().arguments
-    }
+    func heistRecordingArguments() -> [String: HeistValue] {
+        var values = arguments.argumentValues
+        values.removeValue(forKey: "requestId")
+        values.removeValue(forKey: "target")
+        values.removeValue(forKey: "expect")
 
-    private func heistRecordingProjection() throws -> HeistRecordingProjection {
-        guard let messages = executableMessages else { return .empty }
-        guard command == .activate else {
-            return try messages.first?.heistRecordingProjection() ?? .empty
+        if !command.recordsTimeoutAsHeistArgument {
+            values.removeValue(forKey: "timeout")
         }
-        return try .activate(messages)
+
+        return values
     }
 }
 
-private extension HeistRecordingProjection {
-    static func activate(_ messages: [ClientMessage]) throws -> HeistRecordingProjection {
-        guard let first = messages.first else { return .empty }
-        switch first {
-        case .activate(let target):
-            return .target(elementTarget: target)
-        case .increment(let target):
-            return .target(
-                arguments: try ActivateEvidenceArguments(
-                    action: ElementAction.increment.description,
-                    count: messages.count > 1 ? messages.count : nil
-                ).heistEvidenceArguments(accepting: ["action", "count"]),
-                elementTarget: target
-            )
-        case .decrement(let target):
-            return .target(
-                arguments: try ActivateEvidenceArguments(
-                    action: ElementAction.decrement.description,
-                    count: messages.count > 1 ? messages.count : nil
-                ).heistEvidenceArguments(accepting: ["action", "count"]),
-                elementTarget: target
-            )
-        case .performCustomAction(let target):
-            return .target(
-                arguments: try ActivateEvidenceArguments(action: target.actionName, count: nil)
-                    .heistEvidenceArguments(accepting: ["action", "count"]),
-                elementTarget: target.elementTarget
-            )
-        default:
-            return try first.heistRecordingProjection()
-        }
-    }
-}
-
-private extension ClientMessage {
-    func heistRecordingProjection() throws -> HeistRecordingProjection {
-        switch self {
-        case .activate(let target), .increment(let target), .decrement(let target):
-            return .target(elementTarget: target)
-        case .performCustomAction(let target):
-            return .target(
-                arguments: try target.heistEvidenceArguments(accepting: ["actionName", "container"]),
-                elementTarget: target.elementTarget
-            )
-        case .rotor(let target):
-            return try .target(
-                arguments: target.heistEvidenceArguments(
-                    accepting: ["rotor", "rotorIndex", "direction", "currentHeistId", "currentTextRange"]
-                ),
-                elementTarget: target.elementTarget
-            )
-        case .typeText(let target):
-            return try .target(
-                arguments: target.heistEvidenceArguments(accepting: ["text"]),
-                elementTarget: target.elementTarget
-            )
-        case .editAction(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(accepting: ["action"]))
-        case .setPasteboard(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(accepting: ["text"]))
-        case .oneFingerTap(let target):
-            return try target.heistRecordingProjection()
-        case .longPress(let target):
-            return try target.heistRecordingProjection()
-        case .swipe(let target):
-            return try target.heistRecordingProjection()
-        case .drag(let target):
-            return try target.heistRecordingProjection()
-        case .pinch(let target):
-            return try target.heistRecordingProjection()
-        case .rotate(let target):
-            return try target.heistRecordingProjection()
-        case .twoFingerTap(let target):
-            return try target.heistRecordingProjection()
-        case .drawPath(let target):
-            return try HeistRecordingProjection(
-                arguments: target.heistEvidenceArguments(accepting: ["points", "duration", "velocity"]),
-                coordinateOnly: true
-            )
-        case .drawBezier(let target):
-            return try HeistRecordingProjection(
-                arguments: target.heistEvidenceArguments(
-                    accepting: ["startX", "startY", "segments", "samplesPerSegment", "duration", "velocity"]
-                ),
-                coordinateOnly: true
-            )
-        case .scroll(let target):
-            return try .target(
-                arguments: target.heistEvidenceArguments(accepting: ["direction", "container"]),
-                elementTarget: target.elementTarget
-            )
-        case .scrollToVisible(let target):
-            return .target(elementTarget: target.elementTarget)
-        case .elementSearch(let target):
-            return try .target(
-                arguments: target.heistEvidenceArguments(accepting: ["direction"]),
-                elementTarget: target.elementTarget
-            )
-        case .scrollToEdge(let target):
-            return try .target(
-                arguments: target.heistEvidenceArguments(accepting: ["edge", "container"]),
-                elementTarget: target.elementTarget
-            )
-        case .waitFor(let target):
-            return try .target(
-                arguments: target.heistEvidenceArguments(accepting: ["absent", "timeout"]),
-                elementTarget: target.elementTarget
-            )
-        case .waitForChange(let target):
-            return try HeistRecordingProjection(arguments: target.heistEvidenceArguments(accepting: ["expect", "timeout"]))
-        default:
-            return .empty
-        }
+private extension TheFence.Command {
+    var recordsTimeoutAsHeistArgument: Bool {
+        descriptor.actionResultMethod == .waitFor || descriptor.actionResultMethod == .waitForChange
     }
 }

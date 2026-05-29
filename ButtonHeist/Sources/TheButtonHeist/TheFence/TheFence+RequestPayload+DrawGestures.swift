@@ -4,7 +4,7 @@ import TheScore
 
 extension TheFence {
 
-    func decodeDrawPathTarget(_ request: GestureRequestInput) throws -> DrawPathTarget {
+    func decodeDrawPathTarget(_ request: some CommandArgumentReadable) throws -> DrawPathTarget {
         let pointsArray = try request.requiredObjectArray("points")
         try validateArrayCount(
             field: "points",
@@ -13,29 +13,12 @@ extension TheFence {
             max: DecodeLimits.maxDrawPathPoints,
             note: "at least 2 points"
         )
-        let points = try pointsArray.enumerated().map { index, point -> PathPoint in
-            try point.rejectUnknownKeys(["x", "y"], expected: "valid draw path point field")
-            return PathPoint(
-                x: try point.requiredNumber("x", field: "points[\(index)].x"),
-                y: try point.requiredNumber("y", field: "points[\(index)].y")
-            )
-        }
-        let duration = try request.boundedPositiveNumber(
-            "duration",
-            maximum: DecodeLimits.maxDrawGestureDurationSeconds
-        )
-        let velocity = try request.positiveNumber("velocity")
-        try validateDrawTiming(duration: duration, velocity: velocity)
-        return DrawPathTarget(
-            points: points,
-            duration: duration,
-            velocity: velocity
-        )
+        let target = try request.decodeCommandPayload(DrawPathTarget.self)
+        try validateDrawGestureTiming(duration: target.duration, velocity: target.velocity)
+        return target
     }
 
-    func decodeDrawBezierTarget(_ request: GestureRequestInput) throws -> DrawBezierTarget {
-        let startX = try request.requiredNumber("startX")
-        let startY = try request.requiredNumber("startY")
+    func decodeDrawBezierTarget(_ request: some CommandArgumentReadable) throws -> DrawBezierTarget {
         let segmentsArray = try request.requiredObjectArray("segments")
         try validateArrayCount(
             field: "segments",
@@ -44,27 +27,11 @@ extension TheFence {
             max: DecodeLimits.maxDrawBezierSegments,
             note: "At least 1 bezier segment is required"
         )
-        let segments = try segmentsArray.enumerated().map { index, segment -> BezierSegment in
-            try segment.rejectUnknownKeys(
-                ["cp1X", "cp1Y", "cp2X", "cp2Y", "endX", "endY"],
-                expected: "valid bezier segment field"
-            )
-            return BezierSegment(
-                cp1X: try segment.requiredNumber("cp1X", field: "segments[\(index)].cp1X"),
-                cp1Y: try segment.requiredNumber("cp1Y", field: "segments[\(index)].cp1Y"),
-                cp2X: try segment.requiredNumber("cp2X", field: "segments[\(index)].cp2X"),
-                cp2Y: try segment.requiredNumber("cp2Y", field: "segments[\(index)].cp2Y"),
-                endX: try segment.requiredNumber("endX", field: "segments[\(index)].endX"),
-                endY: try segment.requiredNumber("endY", field: "segments[\(index)].endY")
-            )
-        }
-        let samplesPerSegment = try request.boundedPositiveInteger(
-            "samplesPerSegment",
-            minimum: DecodeLimits.minDrawBezierSamplesPerSegment,
-            maximum: DecodeLimits.maxDrawBezierSamplesPerSegment
-        )
-        let resolvedSamplesPerSegment = samplesPerSegment ?? DrawBezierTarget.defaultSamplesPerSegment
-        let generatedPointCount = segments.count * (resolvedSamplesPerSegment - 1) + 1
+        let target = try request.decodeCommandPayload(DrawBezierTarget.self)
+        try validateDrawBezierSamples(target.samplesPerSegment)
+        try validateDrawGestureTiming(duration: target.duration, velocity: target.velocity)
+        let resolvedSamplesPerSegment = target.samplesPerSegment ?? DrawBezierTarget.defaultSamplesPerSegment
+        let generatedPointCount = target.segments.count * (resolvedSamplesPerSegment - 1) + 1
         guard generatedPointCount <= DecodeLimits.maxDrawBezierGeneratedPathPoints else {
             throw SchemaValidationError(
                 field: "segments",
@@ -72,19 +39,35 @@ extension TheFence {
                 expected: "generated path point count <= \(DecodeLimits.maxDrawBezierGeneratedPathPoints)"
             )
         }
-        let duration = try request.boundedPositiveNumber(
-            "duration",
-            maximum: DecodeLimits.maxDrawGestureDurationSeconds
-        )
-        let velocity = try request.positiveNumber("velocity")
-        try validateDrawTiming(duration: duration, velocity: velocity)
-        return DrawBezierTarget(
-            startX: startX,
-            startY: startY,
-            segments: segments,
-            samplesPerSegment: samplesPerSegment,
-            duration: duration,
-            velocity: velocity
-        )
+        return target
+    }
+
+    private func validateDrawGestureTiming(duration: Double?, velocity: Double?) throws {
+        if let duration {
+            guard duration > 0, duration <= DecodeLimits.maxDrawGestureDurationSeconds else {
+                throw SchemaValidationError(
+                    field: "duration",
+                    observed: duration,
+                    expected: "number in 0...\(DecodeLimits.maxDrawGestureDurationSeconds)"
+                )
+            }
+        }
+        if let velocity {
+            guard velocity > 0 else {
+                throw SchemaValidationError(field: "velocity", observed: velocity, expected: "number > 0")
+            }
+        }
+    }
+
+    private func validateDrawBezierSamples(_ samplesPerSegment: Int?) throws {
+        guard let samplesPerSegment else { return }
+        guard samplesPerSegment >= DecodeLimits.minDrawBezierSamplesPerSegment,
+              samplesPerSegment <= DecodeLimits.maxDrawBezierSamplesPerSegment else {
+            throw SchemaValidationError(
+                field: "samplesPerSegment",
+                observed: samplesPerSegment,
+                expected: "integer in \(DecodeLimits.minDrawBezierSamplesPerSegment)...\(DecodeLimits.maxDrawBezierSamplesPerSegment)"
+            )
+        }
     }
 }

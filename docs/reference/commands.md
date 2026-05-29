@@ -312,7 +312,7 @@ Return descriptor-backed help for the current Button Heist command surface.
 - MCP: not exposed
 - Batch: no
 - Playback: no
-- Connection before dispatch: yes
+- Connection before dispatch: no
 
 Parameters:
 

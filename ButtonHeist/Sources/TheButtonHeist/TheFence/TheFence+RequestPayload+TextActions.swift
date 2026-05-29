@@ -4,13 +4,13 @@ extension TheFence {
 
     func decodeTextActionDispatch(
         command: Command,
-        input: ElementActionRequestInput
+        input: some CommandArgumentReadable
     ) throws -> DecodedRequestDispatch {
         switch command {
         case .typeText:
             return try decodedExecutablePayload(.typeText(TypeTextTarget(
                 text: input.nonEmptyString("text"),
-                elementTarget: input.elementTarget(in: self)
+                elementTarget: input.elementTarget()
             )))
         case .editAction:
             return try decodedExecutablePayload(.editAction(EditActionTarget(

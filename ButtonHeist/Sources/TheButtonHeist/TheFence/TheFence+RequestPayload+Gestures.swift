@@ -8,12 +8,12 @@ extension TheFence {
         command: Command,
         arguments: CommandArgumentEnvelope
     ) throws -> DecodedRequestDispatch {
-        try decodeGestureAction(command: command, request: GestureRequestInput(arguments))
+        try decodeGestureAction(command: command, request: arguments)
     }
 
     private func decodeGestureAction(
         command: Command,
-        request: GestureRequestInput
+        request: some CommandArgumentReadable
     ) throws -> DecodedRequestDispatch {
         switch command {
         case .oneFingerTap:

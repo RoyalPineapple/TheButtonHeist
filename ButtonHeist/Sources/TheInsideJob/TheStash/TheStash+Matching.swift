@@ -48,14 +48,6 @@ extension AccessibilityElement {
 /// ElementMatcher are resolved to parser trait bitmasks so comparisons
 /// happen at the source data level.
 
-extension AccessibilityHierarchy {
-
-    /// Match result: the leaf element that matched.
-    struct MatchResult {
-        let element: AccessibilityElement
-    }
-}
-
 /// String-comparison strategy for matcher fields (label/identifier/value).
 /// Trait predicates ignore this — they always compare bitmasks exactly.
 ///
@@ -79,7 +71,7 @@ extension AccessibilityHierarchy {
     /// Match a single node against a matcher. For leaf elements, returns the match
     /// if the element satisfies the predicate. For containers, returns the first
     /// matching leaf descendant.
-    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> MatchResult? {
+    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> AccessibilityElement? {
         [self].firstMatch(matcher, mode: mode)
     }
 }
@@ -87,7 +79,7 @@ extension AccessibilityHierarchy {
 extension Array where Element == AccessibilityHierarchy {
 
     /// First leaf element in the tree that satisfies all property predicates.
-    func firstMatch(_ matcher: ElementMatcher, mode: MatchMode) -> AccessibilityHierarchy.MatchResult? {
+    func firstMatch(_ matcher: ElementMatcher, mode: MatchMode) -> AccessibilityElement? {
         matches(matcher, mode: mode, limit: 1).first
     }
 
@@ -98,10 +90,10 @@ extension Array where Element == AccessibilityHierarchy {
         _ matcher: ElementMatcher,
         mode: MatchMode,
         limit: Int
-    ) -> [AccessibilityHierarchy.MatchResult] {
+    ) -> [AccessibilityElement] {
         guard limit > 0, matcher.hasPredicates else { return [] }
         return compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
-            element.matches(matcher, mode: mode) ? AccessibilityHierarchy.MatchResult(element: element) : nil
+            element.matches(matcher, mode: mode) ? element : nil
         })
     }
 

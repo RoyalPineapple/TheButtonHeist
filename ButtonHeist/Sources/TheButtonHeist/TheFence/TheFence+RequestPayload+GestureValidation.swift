@@ -2,16 +2,6 @@ import Foundation
 
 extension TheFence {
 
-    func validateDrawTiming(duration: Double?, velocity: Double?) throws {
-        guard duration == nil || velocity == nil else {
-            throw SchemaValidationError(
-                field: "duration/velocity",
-                observed: "both duration and velocity",
-                expected: "duration or velocity"
-            )
-        }
-    }
-
     func validateArrayCount(
         field: String,
         count: Int,
@@ -24,6 +14,25 @@ extension TheFence {
                 field: field,
                 observed: "array count \(count)",
                 expected: "array count \(min)...\(max) (\(note))"
+            )
+        }
+    }
+
+    func validatePositiveGestureNumber(_ value: Double?, field: String) throws {
+        guard let value else { return }
+        guard value > 0 else {
+            throw SchemaValidationError(field: field, observed: value, expected: "number > 0")
+        }
+    }
+
+    func validateGestureDuration(_ duration: Double?) throws {
+        try validatePositiveGestureNumber(duration, field: "duration")
+        guard let duration else { return }
+        guard duration <= DecodeLimits.maxDrawGestureDurationSeconds else {
+            throw SchemaValidationError(
+                field: "duration",
+                observed: duration,
+                expected: "number in 0...\(DecodeLimits.maxDrawGestureDurationSeconds)"
             )
         }
     }

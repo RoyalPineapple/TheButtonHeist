@@ -193,6 +193,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(PinchTarget.self, from: Data(json.utf8)))
     }
 
+    func testPinchTargetRejectsUnknownField() {
+        let json = #"{"scale":0.5,"centerX":10,"centerY":20,"unexpectedScale":2}"#
+        XCTAssertThrowsError(try decoder.decode(PinchTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown pinch target field"), "\(error)")
+        }
+    }
+
     // MARK: - RotateTarget
 
     func testRotateTargetRoundTrip() throws {
@@ -222,6 +229,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(RotateTarget.self, from: Data(json.utf8)))
     }
 
+    func testRotateTargetRejectsUnknownField() {
+        let json = #"{"angle":1.57,"centerX":10,"centerY":20,"unexpectedRadius":100}"#
+        XCTAssertThrowsError(try decoder.decode(RotateTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown rotate target field"), "\(error)")
+        }
+    }
+
     // MARK: - TwoFingerTapTarget
 
     func testTwoFingerTapTargetRoundTrip() throws {
@@ -248,6 +262,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(TwoFingerTapTarget.self, from: Data(json.utf8)))
     }
 
+    func testTwoFingerTapTargetRejectsUnknownField() {
+        let json = #"{"centerX":10,"centerY":20,"unexpectedSpread":60}"#
+        XCTAssertThrowsError(try decoder.decode(TwoFingerTapTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown two finger tap target field"), "\(error)")
+        }
+    }
+
     // MARK: - PathPoint
 
     func testPathPointRoundTrip() throws {
@@ -260,6 +281,13 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testPathPointCGPoint() {
         let point = PathPoint(x: 10, y: 20)
         XCTAssertEqual(point.cgPoint, CGPoint(x: 10, y: 20))
+    }
+
+    func testPathPointRejectsUnknownField() {
+        let json = #"{"x":10,"y":20,"pressure":0.5}"#
+        XCTAssertThrowsError(try decoder.decode(PathPoint.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown draw path point field"), "\(error)")
+        }
     }
 
     // MARK: - BezierSegment
@@ -282,6 +310,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(segment.cp1, CGPoint(x: 1, y: 2))
         XCTAssertEqual(segment.cp2, CGPoint(x: 3, y: 4))
         XCTAssertEqual(segment.end, CGPoint(x: 5, y: 6))
+    }
+
+    func testBezierSegmentRejectsUnknownField() {
+        let json = """
+        {"cp1X":1,"cp1Y":2,"cp2X":3,"cp2Y":4,"endX":5,"endY":6,"weight":0.5}
+        """
+        XCTAssertThrowsError(try decoder.decode(BezierSegment.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown bezier segment field"), "\(error)")
+        }
     }
 
     // MARK: - DrawPathTarget

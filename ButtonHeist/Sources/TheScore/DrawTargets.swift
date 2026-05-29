@@ -9,6 +9,20 @@ public struct PathPoint: Codable, Sendable, Equatable {
         self.y = y
     }
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x
+        case y
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "draw path point")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decode(Double.self, forKey: .x),
+            y: try container.decode(Double.self, forKey: .y)
+        )
+    }
+
     public var cgPoint: CGPoint {
         CGPoint(x: x, y: y)
     }
@@ -34,13 +48,14 @@ public struct DrawPathTarget: Codable, Sendable {
         self.velocity = velocity
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case points
         case duration
         case velocity
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "draw path target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let duration = try container.decodeIfPresent(Double.self, forKey: .duration)
         let velocity = try container.decodeIfPresent(Double.self, forKey: .velocity)
@@ -103,6 +118,28 @@ public struct BezierSegment: Codable, Sendable {
         self.endY = endY
     }
 
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case cp1X
+        case cp1Y
+        case cp2X
+        case cp2Y
+        case endX
+        case endY
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "bezier segment")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            cp1X: try container.decode(Double.self, forKey: .cp1X),
+            cp1Y: try container.decode(Double.self, forKey: .cp1Y),
+            cp2X: try container.decode(Double.self, forKey: .cp2X),
+            cp2Y: try container.decode(Double.self, forKey: .cp2Y),
+            endX: try container.decode(Double.self, forKey: .endX),
+            endY: try container.decode(Double.self, forKey: .endY)
+        )
+    }
+
     public var cp1: CGPoint { CGPoint(x: cp1X, y: cp1Y) }
     public var cp2: CGPoint { CGPoint(x: cp2X, y: cp2Y) }
     public var end: CGPoint { CGPoint(x: endX, y: endY) }
@@ -148,7 +185,7 @@ public struct DrawBezierTarget: Codable, Sendable {
         self.velocity = velocity
     }
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case startX
         case startY
         case segments
@@ -158,6 +195,7 @@ public struct DrawBezierTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "draw bezier target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let duration = try container.decodeIfPresent(Double.self, forKey: .duration)
         let velocity = try container.decodeIfPresent(Double.self, forKey: .velocity)

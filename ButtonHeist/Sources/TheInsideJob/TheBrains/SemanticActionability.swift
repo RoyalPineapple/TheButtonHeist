@@ -33,13 +33,13 @@ final class SemanticActionability {
     }
 
     struct SemanticActionableTarget {
-        let normalizedTarget: TheStash.NormalizedTarget
-        let resolvedTarget: TheStash.ResolvedTarget
+        let target: SemanticElementTarget
+        let screenElement: TheStash.ScreenElement
         let liveTarget: TheStash.LiveActionTarget
     }
 
     struct SemanticContainerActionableTarget {
-        let resolvedTarget: TheStash.ResolvedContainerTarget
+        let containerTarget: SemanticScreen.Container
         let liveTarget: TheStash.LiveContainerTarget
     }
 
@@ -169,9 +169,8 @@ final class SemanticActionability {
 
         stash.refresh()
 
-        let normalizedTarget = stash.normalizeTarget(elementTarget)
         switch await makeActionable(
-            for: normalizedTarget,
+            for: elementTarget,
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         ) {
@@ -191,19 +190,21 @@ final class SemanticActionability {
     }
 
     func makeActionable(
-        for normalizedTarget: TheStash.NormalizedTarget,
+        for target: SemanticElementTarget,
         method: ActionMethod,
         deallocatedBoundary: String
     ) async -> SemanticActionabilityResult {
-        guard let executableTarget = normalizedTarget.executableTarget else {
-            return .failed(.notFound(normalizedTarget.validationFailureMessage))
+        guard let executableTarget = target.executableTarget else {
+            return .failed(.notFound(target.diagnostics(
+                target.validationFailureMessage ?? "target requires heistId or semantic matcher predicates"
+            )))
         }
-        if let failure = await prepareActionability(for: normalizedTarget) {
+        if let failure = await prepareActionability(for: target) {
             return .failed(failure)
         }
 
         return await makeElementActionable(
-            normalizedTarget: normalizedTarget,
+            target: target,
             executableTarget: executableTarget,
             method: method,
             deallocatedBoundary: deallocatedBoundary,
@@ -212,41 +213,41 @@ final class SemanticActionability {
     }
 
     private func makeElementActionable(
-        normalizedTarget: TheStash.NormalizedTarget,
+        target: SemanticElementTarget,
         executableTarget: ElementTarget,
         method: ActionMethod,
         deallocatedBoundary: String,
         canRefreshLiveTarget: Bool
     ) async -> SemanticActionabilityResult {
-        let resolvedTarget: TheStash.ResolvedTarget
+        let screenElement: TheStash.ScreenElement
         switch stash.resolveVisibleTarget(executableTarget) {
         case .resolved(let target):
-            resolvedTarget = target
+            screenElement = target
         case .notFound(let diagnostics):
             return .failed(.staleRefresh(
-                normalizedTarget.diagnostics("target was not found in fresh live geometry: \(diagnostics)")
+                target.diagnostics("target was not found in fresh live geometry: \(diagnostics)")
             ))
         case .ambiguous(_, let diagnostics):
-            return .failed(.ambiguous(normalizedTarget.diagnostics(diagnostics)))
+            return .failed(.ambiguous(target.diagnostics(diagnostics)))
         }
 
-        switch stash.resolveLiveActionTarget(for: resolvedTarget) {
+        switch stash.resolveLiveActionTarget(for: screenElement) {
         case .resolved(let liveTarget):
             switch await placeElementActivationPoint(
                 liveTarget,
-                normalizedTarget: normalizedTarget,
+                target: target,
                 method: method,
                 canAdjustPlacement: canRefreshLiveTarget
             ) {
             case .usable:
                 return .actionable(SemanticActionableTarget(
-                    normalizedTarget: normalizedTarget,
-                    resolvedTarget: resolvedTarget,
+                    target: target,
+                    screenElement: screenElement,
                     liveTarget: liveTarget
                 ))
             case .refreshed:
                 return await makeElementActionable(
-                    normalizedTarget: normalizedTarget,
+                    target: target,
                     executableTarget: executableTarget,
                     method: method,
                     deallocatedBoundary: deallocatedBoundary,
@@ -256,11 +257,11 @@ final class SemanticActionability {
                 return .failed(failure)
             }
         case .objectUnavailable:
-            let message = normalizedTarget.diagnostics(
+            let message = target.diagnostics(
                 ActionCapabilityDiagnostic.elementDeallocated(
                     boundary: deallocatedBoundary,
-                    element: resolvedTarget.screenElement,
-                    isInflated: stash.visibleIds.contains(resolvedTarget.screenElement.heistId)
+                    element: screenElement,
+                    isInflated: stash.visibleIds.contains(screenElement.heistId)
                 )
             )
             guard canRefreshLiveTarget else {
@@ -268,7 +269,7 @@ final class SemanticActionability {
             }
             refresh()
             let refreshed = await makeElementActionable(
-                normalizedTarget: normalizedTarget,
+                target: target,
                 executableTarget: executableTarget,
                 method: method,
                 deallocatedBoundary: deallocatedBoundary,
@@ -281,11 +282,11 @@ final class SemanticActionability {
             ))
         case .geometryUnavailable:
             return .failed(.geometryNotActionable(
-                normalizedTarget.diagnostics(
+                target.diagnostics(
                     ActionCapabilityDiagnostic.gestureTargetUnavailable(
                         method: method,
-                        element: resolvedTarget.screenElement,
-                        isVisible: stash.visibleIds.contains(resolvedTarget.screenElement.heistId)
+                        element: screenElement,
+                        isVisible: stash.visibleIds.contains(screenElement.heistId)
                     )
                 ),
                 method: method
@@ -295,26 +296,26 @@ final class SemanticActionability {
 
     private func placeElementActivationPoint(
         _ liveTarget: TheStash.LiveActionTarget,
-        normalizedTarget: TheStash.NormalizedTarget,
+        target: SemanticElementTarget,
         method: ActionMethod,
         canAdjustPlacement: Bool
     ) async -> ActivationPointPlacement {
-        let resolved = liveTarget.resolvedTarget
-        let description = Self.describeScrollTarget(resolved.screenElement)
+        let screenElement = liveTarget.screenElement
+        let description = Self.describeScrollTarget(screenElement)
         return await placeActivationPoint(
             liveTarget.activationPoint,
-            in: stash.liveScrollView(for: resolved.screenElement),
+            in: stash.liveScrollView(for: screenElement),
             method: method,
             canAdjustPlacement: canAdjustPlacement,
-            noRevealPathMessage: normalizedTarget.diagnostics(
+            noRevealPathMessage: target.diagnostics(
                 "target \(description) has no live scrollable ancestor to make activation point actionable"
             ),
-            notActionableAfterRevealMessage: normalizedTarget.diagnostics(
+            notActionableAfterRevealMessage: target.diagnostics(
                 "target \(description) did not become actionable after semantic reveal; "
                     + Self.liveGeometrySummary(liveTarget)
             ),
             unsafeProgrammaticScrollMessage: nil,
-            scrollFailedMessage: normalizedTarget.diagnostics(
+            scrollFailedMessage: target.diagnostics(
                 "target \(description) activation point could not be brought on-screen"
             )
         )
@@ -325,11 +326,11 @@ final class SemanticActionability {
         method: ActionMethod,
         canAdjustPlacement: Bool
     ) async -> ActivationPointPlacement {
-        let resolvedTarget = liveTarget.resolvedTarget
-        let description = TheStash.containerCandidateSummary(resolvedTarget)
+        let containerTarget = liveTarget.containerTarget
+        let description = TheStash.containerCandidateSummary(containerTarget)
         return await placeActivationPoint(
             liveTarget.activationPoint,
-            in: stash.liveScrollView(forContainerPath: resolvedTarget.path),
+            in: stash.liveScrollView(forContainerPath: containerTarget.path),
             method: method,
             canAdjustPlacement: canAdjustPlacement,
             noRevealPathMessage: "container target \(description) has no live scrollable ancestor to make actionable",
@@ -391,18 +392,20 @@ final class SemanticActionability {
     }
 
     private func prepareActionability(
-        for normalizedTarget: TheStash.NormalizedTarget
+        for target: SemanticElementTarget
     ) async -> SemanticActionabilityFailure? {
-        guard let executableTarget = normalizedTarget.executableTarget else {
-            return .notFound(normalizedTarget.validationFailureMessage)
+        guard let executableTarget = target.executableTarget else {
+            return .notFound(target.diagnostics(
+                target.validationFailureMessage ?? "target requires heistId or semantic matcher predicates"
+            ))
         }
         // Source screens derive only semantic identity. Reveal and geometry
         // authority always come from the current live graph.
         switch stash.resolveTarget(executableTarget) {
-        case .resolved(let semanticTarget):
-            let reveal = stash.executeSemanticRevealPlan(for: semanticTarget.screenElement)
+        case .resolved(let screenElement):
+            let reveal = stash.executeSemanticRevealPlan(for: screenElement)
             if case .failed = reveal {
-                return .noRevealPath(semanticRevealPlanFailureMessage(semanticTarget.screenElement))
+                return .noRevealPath(semanticRevealPlanFailureMessage(screenElement))
             }
             if reveal.didReveal {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
@@ -410,9 +413,9 @@ final class SemanticActionability {
             }
             return nil
         case .notFound(let diagnostics):
-            return .notFound(normalizedTarget.diagnostics(diagnostics))
+            return .notFound(target.diagnostics(diagnostics))
         case .ambiguous(_, let diagnostics):
-            return .ambiguous(normalizedTarget.diagnostics(diagnostics))
+            return .ambiguous(target.diagnostics(diagnostics))
         }
     }
 
@@ -435,17 +438,17 @@ final class SemanticActionability {
         method: ActionMethod,
         canRefreshLiveTarget: Bool
     ) async -> SemanticContainerActionabilityResult {
-        let resolvedTarget: TheStash.ResolvedContainerTarget
+        let containerTarget: SemanticScreen.Container
         switch stash.resolveContainerTarget(matcher, ordinal: ordinal) {
         case .resolved(let target):
-            resolvedTarget = target
+            containerTarget = target
         case .notFound(let diagnostics):
             return .failed(.notFound("container target could not be made actionable: \(diagnostics)"))
         case .ambiguous(_, let diagnostics):
             return .failed(.ambiguous("container target is ambiguous: \(diagnostics)"))
         }
 
-        switch stash.resolveLiveContainerTarget(for: resolvedTarget) {
+        switch stash.resolveLiveContainerTarget(for: containerTarget) {
         case .resolved(let liveTarget):
             switch await placeContainerActivationPoint(
                 liveTarget,
@@ -454,7 +457,7 @@ final class SemanticActionability {
             ) {
             case .usable:
                 return .actionable(SemanticContainerActionableTarget(
-                    resolvedTarget: resolvedTarget,
+                    containerTarget: containerTarget,
                     liveTarget: liveTarget
                 ))
             case .refreshed:
@@ -500,9 +503,8 @@ final class SemanticActionability {
 
     func makeFirstResponderActionable(method: ActionMethod) async -> SemanticActionabilityFailure? {
         guard let heistId = stash.firstResponderHeistId else { return nil }
-        let normalizedTarget = stash.normalizeTarget(.heistId(heistId))
         switch await makeActionable(
-            for: normalizedTarget,
+            for: .currentCapture(.heistId(heistId)),
             method: method,
             deallocatedBoundary: "first responder actionability"
         ) {

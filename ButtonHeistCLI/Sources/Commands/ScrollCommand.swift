@@ -44,12 +44,12 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             .timeout: .double(timeoutOption.timeout),
         ]
         if let stableId { request.set(.stableId, stableId) }
-        try element.applyTo(&request)
+        let target = try element.parsedTarget()
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request),
+            operation: try Self.fenceOperation(request, target: target),
             statusMessage: "Sending scroll..."
         )
     }

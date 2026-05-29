@@ -20,13 +20,11 @@ extension Actions {
         case .coordinate:
             elementTarget = nil
         }
-        let normalizedTarget = elementTarget.map {
-            normalizePointGestureTarget(.currentCapture($0))
-        }
+        let semanticTarget = elementTarget.map(SemanticElementTarget.currentCapture)
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
-        if let normalizedTarget {
+        if let semanticTarget {
             switch await actionability.makeActionable(
-                for: normalizedTarget,
+                for: semanticTarget,
                 method: method,
                 deallocatedBoundary: "gesture action"
             ) {
@@ -78,10 +76,9 @@ extension Actions {
         let selection = target.gestureSelection()
         switch selection {
         case .unitElement(let elementTarget, let start, let end, _):
-            let normalizedTarget = normalizePointGestureTarget(.currentCapture(elementTarget))
             let actionableTarget: SemanticActionability.SemanticActionableTarget
             switch await actionability.makeActionable(
-                for: normalizedTarget,
+                for: .currentCapture(elementTarget),
                 method: .syntheticSwipe,
                 deallocatedBoundary: "gesture action"
             ) {
@@ -202,10 +199,6 @@ extension Actions {
         ) { center in
             await self.safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
         }
-    }
-
-    func normalizePointGestureTarget(_ target: SemanticElementTarget) -> TheStash.NormalizedTarget {
-        stash.normalizeTarget(target)
     }
 
     func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult {

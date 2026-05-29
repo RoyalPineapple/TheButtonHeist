@@ -162,7 +162,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("button_ok"), "Should suggest similar heistId")
     }
 
-    func testNormalizeHeistIdKeepsCurrentCaptureHandle() throws {
+    func testCurrentCaptureHeistIdKeepsCurrentCaptureHandle() throws {
         let currentElement = element(
             label: "Quantity",
             value: "1",
@@ -171,22 +171,22 @@ final class TheStashResolutionTests: XCTestCase {
         )
         bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
 
-        let normalized = bagman.normalizeTarget(.heistId("quantity_0"))
+        let target = SemanticElementTarget.currentCapture(.heistId("quantity_0"))
 
-        XCTAssertEqual(normalized.executableTarget, .heistId("quantity_0"))
-        XCTAssertNil(normalized.sourceHeistId)
-        let executableTarget = try XCTUnwrap(normalized.executableTarget)
+        XCTAssertEqual(target.executableTarget, .heistId("quantity_0"))
+        XCTAssertNil(target.sourceHeistId)
+        let executableTarget = try XCTUnwrap(target.executableTarget)
         XCTAssertNil(
             bagman.resolveTarget(executableTarget).resolved,
             "Runtime heistIds are current-capture handles and must not replay through source-screen matchers"
         )
     }
 
-    func testNormalizeHeistIdDoesNotAddSourceMetadata() {
-        let normalized = bagman.normalizeTarget(.heistId("missing_button"))
+    func testCurrentCaptureHeistIdDoesNotAddSourceMetadata() {
+        let target = SemanticElementTarget.currentCapture(.heistId("missing_button"))
 
-        XCTAssertEqual(normalized.executableTarget, .heistId("missing_button"))
-        XCTAssertNil(normalized.sourceHeistId)
+        XCTAssertEqual(target.executableTarget, .heistId("missing_button"))
+        XCTAssertNil(target.sourceHeistId)
     }
 
     func testSemanticActionTargetAcquiresFreshLiveGeometry() throws {
@@ -229,10 +229,10 @@ final class TheStashResolutionTests: XCTestCase {
             element: sourceWireElement,
             in: capture
         )))
-        let normalized = bagman.normalizeTarget(semanticTarget)
+        let runtimeTarget = SemanticElementTarget.durable(semanticTarget)
 
-        XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
-        let executableTarget = try XCTUnwrap(normalized.executableTarget)
+        XCTAssertEqual(runtimeTarget.sourceHeistId, "quantity_0")
+        let executableTarget = try XCTUnwrap(runtimeTarget.executableTarget)
         guard case .matcher(let matcher, let ordinal) = executableTarget else {
             XCTFail("Expected semantic replay target to carry matcher identity, got \(executableTarget)")
             return
@@ -244,7 +244,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected semantic replay selector to resolve against current screen")
             return
         }
-        XCTAssertEqual(resolved.screenElement.heistId, "quantity_1")
+        XCTAssertEqual(resolved.heistId, "quantity_1")
 
         guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Expected current accessibility capture to provide action geometry")
@@ -283,7 +283,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected .resolved, got \(result)")
             return
         }
-        XCTAssertEqual(resolved.screenElement.heistId, "button_cancel")
+        XCTAssertEqual(resolved.heistId, "button_cancel")
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
@@ -518,9 +518,9 @@ final class TheStashResolutionTests: XCTestCase {
 
         let limit3 = bagman.currentHierarchy.matches(ElementMatcher(label: "Item"), mode: .substring, limit: 3)
         XCTAssertEqual(limit3.count, 3)
-        XCTAssertEqual(limit3[0].element.value, "0")
-        XCTAssertEqual(limit3[1].element.value, "1")
-        XCTAssertEqual(limit3[2].element.value, "2")
+        XCTAssertEqual(limit3[0].value, "0")
+        XCTAssertEqual(limit3[1].value, "1")
+        XCTAssertEqual(limit3[2].value, "2")
     }
 
     func testMatchesWithLimitExceedingCountReturnsAll() {
@@ -567,7 +567,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected known semantic match, got \(result)")
             return
         }
-        XCTAssertEqual(target.screenElement.heistId, "long_list_button")
+        XCTAssertEqual(target.heistId, "long_list_button")
     }
 
     func testScopedHeistIdsSeparateVisibleFromKnownUnion() {
@@ -630,7 +630,7 @@ final class TheStashResolutionTests: XCTestCase {
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
         let knownResult = bagman.resolveTarget(.matcher(ElementMatcher(label: "Below Fold")))
-        XCTAssertEqual(knownResult.resolved?.screenElement.heistId, "below_fold_button")
+        XCTAssertEqual(knownResult.resolved?.heistId, "below_fold_button")
 
         let visibleResult = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Below Fold")))
         guard case .notFound(let diagnostics) = visibleResult else {
@@ -650,7 +650,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNil(bagman.resolveFirstVisibleMatch(.heistId("below_fold_button")))
         XCTAssertNil(bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Below Fold"))))
         XCTAssertEqual(
-            bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Visible")))?.screenElement.heistId,
+            bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Visible")))?.heistId,
             "button_visible"
         )
     }
@@ -681,7 +681,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Known-only heistId should still resolve")
             return
         }
-        XCTAssertEqual(resolved.screenElement.heistId, "below_fold_button")
+        XCTAssertEqual(resolved.heistId, "below_fold_button")
         XCTAssertNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
         guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Known-only target should not have a live action target")

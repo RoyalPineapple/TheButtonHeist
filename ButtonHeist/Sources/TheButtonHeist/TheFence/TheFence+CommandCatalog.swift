@@ -285,16 +285,13 @@ public extension TheFence.Command {
             guard descriptor.mcpExposure == .directTool else { return nil }
             return MCPToolContract(
                 name: descriptor.canonicalName,
-                command: descriptor.command,
                 description: descriptor.description,
+                parameters: descriptor.parameters,
                 annotations: descriptor.mcpAnnotations
             )
         }
     }
 
-    static func mcpToolContract(named name: String) -> MCPToolContract? {
-        mcpToolContracts.first { $0.name == name }
-    }
 }
 
 extension TheFence.Command {

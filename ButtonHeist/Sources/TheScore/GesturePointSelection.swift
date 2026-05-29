@@ -81,6 +81,9 @@ private enum GestureCenterCodingKeys: String, CodingKey {
     case centerY
 }
 
+let gesturePointFieldNames = Set(["pointX", "pointY"])
+let gestureCenterFieldNames = Set(["centerX", "centerY"])
+
 func makeGesturePointSelection(
     elementTarget: ElementTarget?,
     x: Double?,

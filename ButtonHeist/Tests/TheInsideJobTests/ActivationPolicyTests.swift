@@ -71,7 +71,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return activateCount == 1 ? .refused : .success
             },
             refreshAndResolve: {
-                .resolved(resolvedTarget: retryTarget.resolvedTarget, liveTarget: retryTarget)
+                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
             syntheticTap: { point in
                 tappedPoints.append(point)
@@ -129,7 +129,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(resolvedTarget: retryTarget.resolvedTarget, liveTarget: retryTarget)
+                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
             syntheticTap: { point in
                 tappedPoints.append(point)
@@ -198,7 +198,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(resolvedTarget: retryTarget.resolvedTarget, liveTarget: retryTarget)
+                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
             syntheticTap: { point in
                 tappedPoints.append(point)
@@ -222,66 +222,6 @@ final class ActivationPolicyTests: XCTestCase {
             "frame: 12,30,80,44",
             "activationPoint: 52,52",
             "traits: button",
-        ])
-    }
-
-    func testLiveTargetRecoveryDiagnosticBuildsTypedRefreshReresolveFailure() {
-        let diagnostic = LiveActionTargetRecoveryDiagnostic.refreshReresolveFailed(
-            initialFailure: .failure(
-                .elementDeallocated,
-                message: "element action failed: observed liveObject=deallocated"
-            ),
-            recoveryObservation: "semantic actionability failed [noRevealPath]: known target offscreen",
-            method: .customAction
-        )
-
-        XCTAssertEqual(
-            diagnostic.contractFailed,
-            "live action target must be reachable after refresh"
-        )
-        XCTAssertEqual(
-            diagnostic.knownState,
-            "refresh/re-resolve failed; observed semantic actionability failed [noRevealPath]: known target offscreen"
-        )
-        XCTAssertEqual(
-            diagnostic.nextValidCommand,
-            "retry customAction against the same semantic target after UI settles"
-        )
-    }
-
-    func testLiveTargetRecoveryDiagnosticResultKeepsRecoveryObservation() {
-        let result = LiveActionTargetRecoveryDiagnostic.recoveryFailed(
-            initialFailure: .failure(
-                .elementDeallocated,
-                message: "element action failed: observed liveObject=deallocated"
-            ),
-            recoveryObservation: "semantic actionability failed [noRevealPath]: known target offscreen",
-            method: .customAction
-        )
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementDeallocated)
-        XCTAssertDiagnostic(result.message, contains: [
-            "element action failed: observed liveObject=deallocated",
-            "contractFailed: live action target must be reachable after refresh",
-            "knownState: refresh/re-resolve failed",
-            "semantic actionability failed [noRevealPath]: known target offscreen",
-            "nextValidCommand: retry customAction against the same semantic target after UI settles",
-        ])
-    }
-
-    func testLiveTargetRecoveryDiagnosticHandlesMissingObservation() {
-        let result = LiveActionTargetRecoveryDiagnostic.recoveryFailed(
-            initialFailure: .failure(.activate, message: "activate failed"),
-            recoveryObservation: nil,
-            method: .activate
-        )
-
-        XCTAssertFalse(result.success)
-        XCTAssertDiagnostic(result.message, contains: [
-            "activate failed",
-            "knownState: refresh/re-resolve failed; observed unknown",
-            "nextValidCommand: retry activate against the same semantic target after UI settles",
         ])
     }
 
@@ -321,11 +261,10 @@ final class ActivationPolicyTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: element
         )
-        let resolvedTarget = TheStash.ResolvedTarget(screenElement: screenElement)
         let object = ActivationObject()
         object.accessibilityFrame = frame
         return TheStash.LiveActionTarget(
-            resolvedTarget: resolvedTarget,
+            screenElement: screenElement,
             object: object,
             frame: frame,
             activationPoint: activationPoint

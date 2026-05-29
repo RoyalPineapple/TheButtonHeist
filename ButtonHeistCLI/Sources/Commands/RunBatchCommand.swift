@@ -7,7 +7,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Execute a batch of Button Heist steps from a JSON payload",
         discussion: """
-            Reads a steps array (`[{ "command": "activate", "target": { "heistId": "…" } }, …]`)
+            Reads a steps array (`[{ "command": "activate", "target": { "label": "Sign In", "traits": ["button"] } }, …]`)
             either inline via --steps or from a JSON file. Each step is a full
             Button Heist request dictionary as produced by get_interface / session
             JSON mode.
@@ -19,7 +19,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
             Examples:
               buttonheist run_batch --steps-from-file steps.json
               buttonheist run_batch --steps-from-file steps.json --policy continue_on_error
-              buttonheist run_batch --steps '[{"command":"activate","target":{"heistId":"btn-OK"}}]'
+              buttonheist run_batch --steps '[{"command":"activate","target":{"label":"OK","traits":["button"]}}]'
             """
     )
 
@@ -39,7 +39,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
     mutating func run() async throws {
         let batchSteps = try Self.serializedBatchSteps(inline: steps, fromFile: stepsFromFile)
 
-        var request: CLIRequestParameters = [.steps: .array(batchSteps.map(\.value))]
+        var request: CLIRequestParameters = [.steps: .array(batchSteps)]
         if let policy {
             guard let parsedPolicy = Self.catalogCanonicalStringValue(policy, for: .policy) else {
                 throw ValidationError("Invalid policy '\(policy)'. Valid: \(Self.catalogAllowedValuesDescription(for: .policy))")
@@ -54,29 +54,16 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         )
     }
 
-    static func serializedBatchSteps(inline: String?, fromFile path: String?) throws -> [SerializedBatchStep] {
+    static func serializedBatchSteps(inline: String?, fromFile path: String?) throws -> [HeistValue] {
         try loadJSONArray(
             inline: inline,
             fromFile: path,
             optionName: "steps"
         ).enumerated().map { index, value in
-            try SerializedBatchStep(value: value, index: index)
+            guard case .object = value else {
+                throw ValidationError("steps[\(index)] must be a JSON object")
+            }
+            return value
         }
-    }
-}
-
-struct SerializedBatchStep {
-    let value: HeistValue
-
-    init(value: HeistValue, index: Int) throws {
-        guard case .object(let object) = value else {
-            throw ValidationError("steps[\(index)] must be a JSON object")
-        }
-        try CLIRequestBuilder.validateCanonicalCommandObject(
-            object,
-            context: "steps[\(index)]",
-            requireBatchExecutable: true
-        )
-        self.value = value
     }
 }

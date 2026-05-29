@@ -4,28 +4,28 @@ extension TheFence {
 
     func decodeScrollActionDispatch(
         command: Command,
-        input: ElementActionRequestInput
+        input: some CommandArgumentReadable
     ) throws -> DecodedRequestDispatch {
         switch command {
         case .scroll:
             let direction = try input.enumValue("direction", as: ScrollDirection.self) ?? .down
             return try decodedExecutablePayload(.scroll(ScrollTarget(
-                selection: input.scrollContainerSelection(in: self),
+                selection: input.scrollContainerSelection(),
                 direction: direction
             )))
         case .scrollToVisible:
             return try decodedExecutablePayload(.scrollToVisible(ScrollToVisibleTarget(
-                elementTarget: input.requiredElementTarget(command: .scrollToVisible, in: self)
+                elementTarget: input.requiredElementTarget(command: .scrollToVisible)
             )))
         case .elementSearch:
             return try decodedExecutablePayload(.elementSearch(ElementSearchTarget(
-                elementTarget: input.requiredElementTarget(command: .elementSearch, in: self),
+                elementTarget: input.requiredElementTarget(command: .elementSearch),
                 direction: input.enumValue("direction", as: ScrollSearchDirection.self) ?? .down
             )))
         case .scrollToEdge:
             let edge = try input.enumValue("edge", as: ScrollEdge.self) ?? .top
             return try decodedExecutablePayload(.scrollToEdge(ScrollToEdgeTarget(
-                selection: input.scrollContainerSelection(in: self),
+                selection: input.scrollContainerSelection(),
                 edge: edge
             )))
         default:

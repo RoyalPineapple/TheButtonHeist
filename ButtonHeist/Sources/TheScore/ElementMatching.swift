@@ -124,8 +124,6 @@ public struct ElementMatcher: Sendable, Equatable {
 extension ElementMatcher: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case label, identifier, value, traits, excludeTraits
-        case heistId
-        case ordinal
     }
 
     private struct UnknownCodingKey: CodingKey {
@@ -146,20 +144,6 @@ extension ElementMatcher: Codable {
     public init(from decoder: Decoder) throws {
         try Self.rejectUnknownKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        if container.contains(.heistId) {
-            throw DecodingError.dataCorruptedError(
-                forKey: .heistId,
-                in: container,
-                debugDescription: "ElementMatcher does not accept heistId; use ElementTarget.heistId for current-capture handles"
-            )
-        }
-        if container.contains(.ordinal) {
-            throw DecodingError.dataCorruptedError(
-                forKey: .ordinal,
-                in: container,
-                debugDescription: "ElementMatcher does not accept ordinal; use ElementTarget.matcher for matcher disambiguation"
-            )
-        }
         self.init(
             label: try container.decodeIfPresent(String.self, forKey: .label),
             identifier: try container.decodeIfPresent(String.self, forKey: .identifier),

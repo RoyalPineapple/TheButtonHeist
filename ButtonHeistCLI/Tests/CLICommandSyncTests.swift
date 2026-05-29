@@ -111,11 +111,11 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testHumanParserNormalizesChangeExpectationJsonObject() throws {
+    func testHumanParserPreservesChangeExpectationJsonObjectForRequestParsing() throws {
         let operation = try ReplSession.parseHumanInput(#"wait_for_change expect='{"type":"elements_changed"}'"#)
 
         XCTAssertEqual(operation.command, .waitForChange)
-        XCTAssertNil(operation.argument(.expect))
+        XCTAssertEqual(operation.argument(.expect), .object(["type": .string("elements_changed")]))
     }
 
     func testRunBatchSerializesStepsBeforeSending() throws {
@@ -125,53 +125,11 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(steps.count, 1)
-        guard case .object(let object) = steps[0].value else {
+        guard case .object(let object) = steps[0] else {
             return XCTFail("expected serialized batch step object")
         }
         XCTAssertEqual(object["command"], .string(TheFence.Command.activate.rawValue))
         XCTAssertEqual(object["target"], .object(["heistId": .string("button-login")]))
-    }
-
-    func testRunBatchRejectsUnknownSerializedCommandAtEdge() {
-        XCTAssertThrowsError(
-            try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"not_a_command"}]"#,
-                fromFile: nil
-            )
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown command 'not_a_command'"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testRunBatchRejectsNestedRunBatchCommandAtEdge() {
-        XCTAssertThrowsError(
-            try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"run_batch","steps":[]}]"#,
-                fromFile: nil
-            )
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("steps[0] command 'run_batch' is not supported in run_batch"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testRunBatchRejectsUnknownSerializedParameterAtEdge() {
-        XCTAssertThrowsError(
-            try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"scroll","unexpected":"value","target":{"matcher":{"label":"Done"}}}]"#,
-                fromFile: nil
-            )
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown parameter 'unexpected' for scroll"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
     }
 
     func testHumanParserPreservesKnownStringParameterValues() throws {
@@ -201,6 +159,16 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.operation.command, .typeText)
         XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
         XCTAssertEqual(parsed.command, .typeText)
+    }
+
+    func testSharedRequestBuilderParsesStringMachineRequestIdAsMetadata() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"id":"request-1","command":"type_text","text":"hello"}"#
+        )
+
+        XCTAssertEqual(parsed.requestId, .string("request-1"))
+        XCTAssertNil(parsed.operation.argumentValue("id"))
+        XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
     }
 
     func testSharedRequestBuilderParsesTypedMachineRequestId() throws {
@@ -242,21 +210,6 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.requestId, .double(1.0))
-    }
-
-    func testSharedRequestBuilderCarriesMachineRequestIdOnValidationError() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(
-                from: #"{"id":"r1","command":"wait_for_change","expect":"screen_changed"}"#
-            )
-        ) { error in
-            let buildError = error as? CLIRequestBuildError
-            XCTAssertEqual(buildError?.requestId, .string("r1"))
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Invalid expectation type"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
     }
 
     func testSharedRequestBuilderRejectsNonScalarMachineRequestId() {
@@ -381,6 +334,24 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(operation.command, .activate)
         XCTAssertEqual(target["heistId"], .string("button_save"))
+    }
+
+    func testCLIBuilderSerializesMatcherTargetAsFlatTarget() throws {
+        let operation = try TheFence.Command.activate.cliOperation(
+            target: .matcher(
+                ElementMatcher(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
+                ordinal: 1
+            )
+        )
+        guard case .object(let target)? = operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
+
+        XCTAssertNil(target["matcher"])
+        XCTAssertEqual(target["label"], .string("Rotor Host"))
+        XCTAssertEqual(target["identifier"], .string("rotor.host"))
+        XCTAssertEqual(target["traits"], .array([.string("button")]))
+        XCTAssertEqual(target["ordinal"], .int(1))
     }
 
     func testREPLParsesCoordinateGesture() throws {

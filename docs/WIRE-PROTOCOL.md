@@ -236,7 +236,7 @@ selectors and matchers.
 ### Semantic Action
 
 ```json
-{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"activate","payload":{"target":{"matcher":{"label":"Sign In","traits":["button"]}}}}
+{"buttonHeistVersion":"<semver>","requestId":"act-1","type":"activate","payload":{"label":"Sign In","traits":["button"]}}
 ```
 
 Semantic action messages identify elements semantically. The host resolves the

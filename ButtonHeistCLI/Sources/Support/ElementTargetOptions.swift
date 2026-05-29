@@ -85,51 +85,6 @@ struct ElementTargetOptions: ParsableArguments {
         }
     }
 
-    func applyTo(_ parameters: inout CLIRequestParameters) throws {
-        if let target = try targetParameterValue() {
-            parameters.set(.target, target)
-        }
-    }
-
-    /// Typed equivalent of `applyTo` — returns element targeting as `CLIRequestParameters`.
-    func targetParameters() throws -> CLIRequestParameters {
-        var parameters: CLIRequestParameters = [:]
-        if let target = try targetParameterValue() {
-            parameters[.target] = target
-        }
-        return parameters
-    }
-
-    private func targetParameterValue() throws -> HeistValue? {
-        guard let elementTarget = try parsedTarget() else {
-            return nil
-        }
-        switch elementTarget {
-        case .heistId(let heistId):
-            return .object([FenceParameterKey.heistId.rawValue: .string(heistId)])
-        case .matcher(let matcher, let ordinal):
-            var matcherValue: [String: HeistValue] = [:]
-            if let identifier = matcher.identifier {
-                matcherValue[FenceParameterKey.identifier.rawValue] = .string(identifier)
-            }
-            if let label = matcher.label { matcherValue[FenceParameterKey.label.rawValue] = .string(label) }
-            if let value = matcher.value { matcherValue[FenceParameterKey.value.rawValue] = .string(value) }
-            if let traits = matcher.traits {
-                matcherValue[FenceParameterKey.traits.rawValue] = .array(traits.map { .string($0.rawValue) })
-            }
-            if let excludeTraits = matcher.excludeTraits {
-                matcherValue[FenceParameterKey.excludeTraits.rawValue] = .array(
-                    excludeTraits.map { .string($0.rawValue) }
-                )
-            }
-            var target: [String: HeistValue] = [FenceParameterKey.matcher.rawValue: .object(matcherValue)]
-            if let ordinal {
-                target[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
-            }
-            return .object(target)
-        }
-    }
-
     /// Returns true when the supplied options construct a valid ElementTarget.
     var hasTarget: Bool {
         get throws {

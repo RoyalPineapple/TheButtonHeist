@@ -81,14 +81,12 @@ func targetArgumentValue(
     excludeTraits: [String]? = nil,
     ordinal: Int? = nil
 ) -> HeistValue {
-    var matcher: [String: HeistValue] = [:]
-    if let label { matcher["label"] = .string(label) }
-    if let identifier { matcher["identifier"] = .string(identifier) }
-    if let value { matcher["value"] = .string(value) }
-    if let traits { matcher["traits"] = .array(traits.map { .string($0) }) }
-    if let excludeTraits { matcher["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
-
-    var target: [String: HeistValue] = ["matcher": .object(matcher)]
+    var target: [String: HeistValue] = [:]
+    if let label { target["label"] = .string(label) }
+    if let identifier { target["identifier"] = .string(identifier) }
+    if let value { target["value"] = .string(value) }
+    if let traits { target["traits"] = .array(traits.map { .string($0) }) }
+    if let excludeTraits { target["excludeTraits"] = .array(excludeTraits.map { .string($0) }) }
     if let ordinal { target["ordinal"] = .int(ordinal) }
     return .object(target)
 }

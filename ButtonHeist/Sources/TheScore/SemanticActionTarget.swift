@@ -11,10 +11,6 @@ import Foundation
 /// boundaries such as heist recording, playback construction, or explicit
 /// SemanticActionTarget creation.
 public struct SemanticActionTarget: Codable, Sendable, Equatable {
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case matcher, ordinal
-    }
-
     public let sourceHeistId: HeistId?
     public let matcher: ElementMatcher
     public let ordinal: Int?
@@ -44,44 +40,19 @@ public struct SemanticActionTarget: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(decoder)
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        guard container.contains(.matcher) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .matcher,
-                in: container,
-                debugDescription: "SemanticActionTarget requires matcher predicates; ordinal only disambiguates matcher results"
-            )
+        let target = try ElementTarget(from: decoder)
+        switch target {
+        case .matcher(let matcher, let ordinal):
+            self.init(matcher: matcher, ordinal: ordinal)
+        case .heistId:
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: """
+                SemanticActionTarget requires matcher fields; heistId is a capture-local handle and belongs under \
+                _recorded.heistId evidence
+                """
+            ))
         }
-        let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
-        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-        if let ordinal, ordinal < 0 {
-            throw DecodingError.dataCorruptedError(
-                forKey: .ordinal,
-                in: container,
-                debugDescription: "ordinal must be non-negative, got \(ordinal)"
-            )
-        }
-        self.init(matcher: matcher, ordinal: ordinal)
-        guard self.matcher.hasPredicates else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .matcher,
-                in: container,
-                debugDescription: "SemanticActionTarget requires matcher predicates; ordinal only disambiguates matcher results"
-            )
-        }
-    }
-
-    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown semantic action target field \"\(unknownKey.stringValue)\""
-        ))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -91,9 +62,7 @@ public struct SemanticActionTarget: Codable, Sendable, Equatable {
                 debugDescription: "SemanticActionTarget requires matcher predicates; ordinal only disambiguates matcher results"
             ))
         }
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(matcher, forKey: .matcher)
-        try container.encodeIfPresent(ordinal, forKey: .ordinal)
+        try ElementTarget.matcher(matcher, ordinal: ordinal).encode(to: encoder)
     }
 }
 
@@ -104,20 +73,5 @@ extension SemanticActionTarget: CustomStringConvertible {
             matcher.description,
             ScoreDescription.valueField("ordinal", ordinal),
         ].compactMap { $0 })
-    }
-}
-
-private struct DynamicCodingKey: CodingKey {
-    var stringValue: String
-    var intValue: Int?
-
-    init(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
     }
 }

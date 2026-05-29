@@ -25,13 +25,16 @@ extension Navigation {
         }
         let searchDirection = direction
         let requestedAxis = Self.requiredAxis(for: searchDirection)
-        let normalizedTarget = stash.normalizeTarget(searchTarget)
-        guard let executableSearchTarget = normalizedTarget.executableTarget else {
-            return .failure(.elementSearch, message: normalizedTarget.validationFailureMessage)
+        guard let executableSearchTarget = searchTarget.executableTarget else {
+            return .failure(
+                .elementSearch,
+                message: searchTarget.validationFailureMessage
+                    ?? "element_search target requires heistId or semantic matcher predicates"
+            )
         }
 
         var candidates = scrollSearchCandidates(requiredAxis: requestedAxis)
-        if let seed = scrollSearchSeedCandidate(for: normalizedTarget, requiredAxis: requestedAxis),
+        if let seed = scrollSearchSeedCandidate(for: searchTarget, requiredAxis: requestedAxis),
            !candidates.contains(where: { $0.container == seed.container }) {
             candidates.insert(seed, at: 0)
         }
@@ -119,11 +122,11 @@ extension Navigation {
     }
 
     private func searchFoundResult(
-        _ found: TheStash.ResolvedTarget,
+        _ found: TheStash.ScreenElement,
         scrollCount: Int,
         uniqueElementsSeen: Int
     ) -> TheSafecracker.InteractionResult {
-        let wire = TheStash.WireConversion.toWire(found.screenElement)
+        let wire = TheStash.WireConversion.toWire(found)
         return .success(
             method: .elementSearch,
             payload: .scrollSearch(ScrollSearchResult(

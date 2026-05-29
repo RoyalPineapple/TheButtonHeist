@@ -241,12 +241,14 @@ public final class TheFence {
         return try await execute(parsed: parsed)
     }
 
-    func execute(playback operation: PlaybackOperation) async throws -> FenceResponse {
+    func execute(playback evidence: HeistEvidence) async throws -> FenceResponse {
         let parsed: ParsedRequest
         do {
-            parsed = try parsePlaybackOperation(operation)
+            parsed = try parseRequest(operation: evidence.normalizedPlaybackOperation())
         } catch let error as SchemaValidationError {
             return .error(error.message)
+        } catch let error as FenceError {
+            return .error(error.coreMessage, details: error.failureDetails)
         }
         return try await execute(parsed: parsed)
     }

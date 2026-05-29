@@ -10,17 +10,6 @@ import TheScore
 
 extension TheStash {
 
-    /// Result of resolving an ElementTarget to known semantic target data.
-    ///
-    /// This does not prove the backing UIKit object, frame, or activation
-    /// point are still live. Actions must resolve a `LiveActionTarget`
-    /// immediately before dispatch.
-    struct ResolvedTarget {
-        let screenElement: ScreenElement
-
-        var element: AccessibilityElement { screenElement.element }
-    }
-
     /// Which part of the committed interface state a lookup should read.
     enum InterfaceElementScope {
         /// Elements in the live accessibility hierarchy from the most recent parse.
@@ -38,11 +27,11 @@ extension TheStash {
     /// Three-case result from `resolveTarget` — diagnostics are produced
     /// inline during resolution, not via a separate re-scan.
     enum TargetResolution {
-        case resolved(ResolvedTarget)
+        case resolved(ScreenElement)
         case notFound(diagnostics: String)
         case ambiguous(candidates: [String], diagnostics: String)
 
-        var resolved: ResolvedTarget? {
+        var resolved: ScreenElement? {
             if case .resolved(let resolved) = self { return resolved }
             return nil
         }
@@ -56,19 +45,8 @@ extension TheStash {
         }
     }
 
-    /// Semantic container match selected from committed screen state.
-    ///
-    /// The backing UIKit object is intentionally excluded. Container actions
-    /// must acquire a `LiveContainerTarget` immediately before dispatch.
-    struct ResolvedContainerTarget {
-        let container: AccessibilityContainer
-        let path: TreePath
-        let stableId: HeistContainer?
-        let contentFrame: CGRect?
-    }
-
     enum ContainerTargetResolution {
-        case resolved(ResolvedContainerTarget)
+        case resolved(SemanticScreen.Container)
         case notFound(diagnostics: String)
         case ambiguous(candidates: [String], diagnostics: String)
 
@@ -78,28 +56,6 @@ extension TheStash {
             case .notFound(let message): return message
             case .ambiguous(_, let message): return message
             }
-        }
-    }
-
-    /// Executable form of a caller-provided element target.
-    ///
-    /// A direct heistId is a current-capture handle, not durable replay
-    /// identity. Durable replay/batch identity arrives as matcher+ordinal via
-    /// SemanticActionTarget; this wrapper only carries source heistId metadata
-    /// for diagnostics.
-    struct NormalizedTarget {
-        let executableTarget: ElementTarget?
-        let sourceHeistId: HeistId?
-        let validationFailure: String?
-
-        func diagnostics(_ message: String) -> String {
-            guard let sourceHeistId else { return message }
-            guard !message.contains(sourceHeistId) else { return message }
-            return "\(message)\nSource heistId: \(sourceHeistId)"
-        }
-
-        var validationFailureMessage: String {
-            diagnostics(validationFailure ?? "target requires heistId or semantic matcher predicates")
         }
     }
 
@@ -133,18 +89,13 @@ extension TheStash {
         }
         let matches = currentScreen.semantic.containers.values
             .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
-            .compactMap { item -> ResolvedContainerTarget? in
+            .compactMap { item -> SemanticScreen.Container? in
                 let annotation = InterfaceContainerAnnotation(
                     path: item.path,
                     stableId: item.stableId
                 )
                 guard item.container.matches(matcher, annotation: annotation) else { return nil }
-                return ResolvedContainerTarget(
-                    container: item.container,
-                    path: item.path,
-                    stableId: annotation.stableId,
-                    contentFrame: item.contentFrame
-                )
+                return item
             }
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
@@ -164,19 +115,6 @@ extension TheStash {
                 diagnostics: "container target matched \(matches.count) containers; provide ordinal. Candidates: \(candidates.joined(separator: "; "))"
             )
         }
-    }
-
-    /// Wrap a public element target for semantic actionability execution.
-    ///
-    /// This does not rewrite heistIds. A heistId remains an exact handle into
-    /// the current capture; durable replay identity must arrive as matcher
-    /// fields produced by recording or SemanticActionTarget creation.
-    func normalizeTarget(_ target: ElementTarget) -> NormalizedTarget {
-        NormalizedTarget(
-            executableTarget: target,
-            sourceHeistId: nil,
-            validationFailure: nil
-        )
     }
 
     /// HeistIds for either the live hierarchy or the committed known screen.
@@ -215,7 +153,7 @@ extension TheStash {
     }
 
     /// Resolve a target using first-match semantics against only the live hierarchy.
-    func resolveFirstVisibleMatch(_ target: ElementTarget) -> ResolvedTarget? {
+    func resolveFirstVisibleMatch(_ target: ElementTarget) -> ScreenElement? {
         let effectiveTarget: ElementTarget
         switch target {
         case .heistId:
@@ -284,7 +222,7 @@ private extension TheStash {
                     knownCount: screen.semantic.elements.count
                 ))
             }
-            return .resolved(ResolvedTarget(screenElement: entry))
+            return .resolved(entry)
         case .matcher(let matcher, let ordinal):
             return resolveMatcher(matcher, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
         }
@@ -318,7 +256,7 @@ private extension TheStash {
                     \(nextMove)
                     """)
             }
-            return .resolved(ResolvedTarget(screenElement: matches[ordinal]))
+            return .resolved(matches[ordinal])
         }
         let matches = matchScreenElements(matcher, limit: 2, in: screen)
         switch matches.count {
@@ -329,7 +267,7 @@ private extension TheStash {
                 resolutionScope: resolutionScope
             ))
         case 1:
-            return .resolved(ResolvedTarget(screenElement: matches[0]))
+            return .resolved(matches[0])
         default:
             let capped = matchScreenElements(matcher, limit: 11, in: screen)
             return ambiguousResolution(
@@ -372,7 +310,7 @@ private extension TheStash {
 
 extension TheStash {
 
-    static func containerCandidateSummary(_ target: ResolvedContainerTarget) -> String {
+    static func containerCandidateSummary(_ target: SemanticScreen.Container) -> String {
         [
             target.stableId.map { "stableId=\"\($0)\"" },
             "type=\(target.container.typeName.rawValue)",

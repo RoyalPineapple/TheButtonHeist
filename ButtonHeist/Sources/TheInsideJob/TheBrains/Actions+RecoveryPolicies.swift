@@ -17,11 +17,11 @@ extension Actions {
 /// stale-object failures.
 struct LiveActionTargetRecoveryPolicy {
     struct Request {
-        let normalizedTarget: TheStash.NormalizedTarget
+        let target: SemanticElementTarget
         let method: ActionMethod
         let requireInteractive: Bool
         let deallocatedBoundary: String
-        let preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)?
+        let preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)?
     }
 
     enum Resolution {
@@ -35,7 +35,7 @@ struct LiveActionTargetRecoveryPolicy {
     @MainActor
     func resolve(_ request: Request) async -> Resolution {
         switch await actionability.makeActionable(
-            for: request.normalizedTarget,
+            for: request.target,
             method: request.method,
             deallocatedBoundary: request.deallocatedBoundary
         ) {
@@ -48,17 +48,17 @@ struct LiveActionTargetRecoveryPolicy {
 
     @MainActor
     func refreshActivationTarget(
-        _ normalizedTarget: TheStash.NormalizedTarget
+        _ target: SemanticElementTarget
     ) async -> ActivationPolicy.RefreshResult {
         _ = refresh()
         switch await actionability.makeActionable(
-            for: normalizedTarget,
+            for: target,
             method: .activate,
             deallocatedBoundary: "activation retry"
         ) {
         case .actionable(let actionableTarget):
             return .resolved(
-                resolvedTarget: actionableTarget.resolvedTarget,
+                screenElement: actionableTarget.screenElement,
                 liveTarget: actionableTarget.liveTarget
             )
         case .failed(let failure):
@@ -71,24 +71,24 @@ struct LiveActionTargetRecoveryPolicy {
         _ request: Request,
         actionableTarget: SemanticActionability.SemanticActionableTarget
     ) -> Resolution {
-        let resolved = actionableTarget.resolvedTarget
+        let screenElement = actionableTarget.screenElement
         let liveTarget = actionableTarget.liveTarget
-        if let failure = request.preflight?(resolved) {
+        if let failure = request.preflight?(screenElement) {
             return .failure(failure)
         }
         if request.requireInteractive {
-            switch TheStash.Interactivity.checkInteractivity(resolved.element, object: liveTarget.object) {
+            switch TheStash.Interactivity.checkInteractivity(screenElement.element, object: liveTarget.object) {
             case .blocked(let reason):
                 return .failure(.failure(request.method, message: reason))
             case .interactive(let warning):
                 if let warning { insideJobLogger.warning("\(warning)") }
             }
-            guard TheStash.Interactivity.isInteractive(element: resolved.element, object: liveTarget.object) else {
+            guard TheStash.Interactivity.isInteractive(element: screenElement.element, object: liveTarget.object) else {
                 return .failure(.failure(
                     request.method,
                     message: ActionCapabilityDiagnostic.unsupportedElementAction(
                         request.method,
-                        element: resolved.screenElement
+                        element: screenElement
                     )
                 ))
             }
@@ -97,63 +97,5 @@ struct LiveActionTargetRecoveryPolicy {
     }
 }
 
-struct LiveActionTargetRecoveryDiagnostic: Equatable {
-    let initialFailureMessage: String
-    let contractFailed: String
-    let knownState: String
-    let nextValidCommand: String
-
-    var message: String {
-        [
-            initialFailureMessage,
-            "- contractFailed: \(contractFailed)",
-            "- knownState: \(knownState)",
-            "- nextValidCommand: \(nextValidCommand)",
-        ].joined(separator: "\n")
-    }
-
-    static func refreshReresolveFailed(
-        initialFailure: TheSafecracker.InteractionResult,
-        recoveryObservation: String?,
-        method: ActionMethod
-    ) -> LiveActionTargetRecoveryDiagnostic {
-        let initialMessage: String
-        if let message = initialFailure.message, !message.isEmpty {
-            initialMessage = message
-        } else {
-            initialMessage = "\(method.rawValue) failed without diagnostic message"
-        }
-        let observed: String
-        if let recoveryObservation, !recoveryObservation.isEmpty {
-            observed = recoveryObservation
-        } else {
-            observed = "unknown"
-        }
-        return LiveActionTargetRecoveryDiagnostic(
-            initialFailureMessage: initialMessage,
-            contractFailed: "live action target must be reachable after refresh",
-            knownState: "refresh/re-resolve failed; observed \(observed)",
-            nextValidCommand: "retry \(method.rawValue) against the same semantic target after UI settles"
-        )
-    }
-
-    static func recoveryFailed(
-        initialFailure: TheSafecracker.InteractionResult,
-        recoveryObservation: String?,
-        method: ActionMethod
-    ) -> TheSafecracker.InteractionResult {
-        let diagnostic = refreshReresolveFailed(
-            initialFailure: initialFailure,
-            recoveryObservation: recoveryObservation,
-            method: method
-        )
-        return .failure(
-            initialFailure.method,
-            message: diagnostic.message,
-            payload: initialFailure.payload,
-            failureKind: initialFailure.failureKind
-        )
-    }
-}
 #endif // DEBUG
 #endif // canImport(UIKit)

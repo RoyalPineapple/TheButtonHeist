@@ -17,12 +17,11 @@ extension Actions {
         method: ActionMethod,
         requireInteractive: Bool = true,
         deallocatedBoundary: String = "element action",
-        preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)? = nil,
+        preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (SemanticActionability.SemanticActionableTarget) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
-        let normalizedTarget = stash.normalizeTarget(target)
         switch await liveActionTargetRecoveryPolicy.resolve(.init(
-            normalizedTarget: normalizedTarget,
+            target: target,
             method: method,
             requireInteractive: requireInteractive,
             deallocatedBoundary: deallocatedBoundary,
@@ -53,7 +52,7 @@ extension Actions {
             await ActivationPolicy(
                 activate: stash.activate,
                 refreshAndResolve: {
-                    await self.liveActionTargetRecoveryPolicy.refreshActivationTarget(context.normalizedTarget)
+                    await self.liveActionTargetRecoveryPolicy.refreshActivationTarget(context.target)
                 },
                 syntheticTap: safecracker.tap,
                 showFingerprint: safecracker.showFingerprint,
@@ -76,13 +75,13 @@ extension Actions {
             target: target,
             method: .increment,
             deallocatedBoundary: "adjustable action",
-            preflight: { resolved in
-                guard resolved.element.traits.contains(.adjustable) else {
+            preflight: { screenElement in
+                guard screenElement.element.traits.contains(.adjustable) else {
                     return .failure(
                         .increment,
                         message: ActionCapabilityDiagnostic.nonAdjustableAction(
                             .increment,
-                            element: resolved.screenElement
+                            element: screenElement
                         )
                     )
                 }
@@ -110,13 +109,13 @@ extension Actions {
             target: target,
             method: .decrement,
             deallocatedBoundary: "adjustable action",
-            preflight: { resolved in
-                guard resolved.element.traits.contains(.adjustable) else {
+            preflight: { screenElement in
+                guard screenElement.element.traits.contains(.adjustable) else {
                     return .failure(
                         .decrement,
                         message: ActionCapabilityDiagnostic.nonAdjustableAction(
                             .decrement,
-                            element: resolved.screenElement
+                            element: screenElement
                         )
                     )
                 }
@@ -147,7 +146,7 @@ extension Actions {
                 method: .customAction,
                 deallocatedBoundary: "custom action"
             ) { context in
-                let resolved = context.resolvedTarget
+                let screenElement = context.screenElement
                 let liveTarget = context.liveTarget
                 switch self.stash.performCustomAction(named: actionName, on: liveTarget) {
                 case .deallocated:
@@ -157,7 +156,7 @@ extension Actions {
                         .customAction,
                         message: ActionCapabilityDiagnostic.missingCustomAction(
                             actionName,
-                            element: resolved.screenElement
+                            element: screenElement
                         )
                     )
                 case .declined:
@@ -165,7 +164,7 @@ extension Actions {
                         .customAction,
                         message: ActionCapabilityDiagnostic.declinedCustomAction(
                             actionName,
-                            element: resolved.screenElement
+                            element: screenElement
                         )
                     )
                 case .succeeded:
@@ -196,7 +195,7 @@ extension Actions {
         case .deallocated:
             return .failure(.customAction, message: "custom action failed: container object deallocated")
         case .noSuchAction:
-            let available = containerTarget.resolvedTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
+            let available = containerTarget.containerTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
             let suffix = available.isEmpty ? "" : "; available custom actions: \(available.map { "\"\($0)\"" }.joined(separator: ", "))"
             return .failure(
                 .customAction,

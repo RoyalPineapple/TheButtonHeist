@@ -10,65 +10,18 @@ import TheScore
 
 extension TheStash {
 
-    /// Geometry sampled from the current accessibility capture at dispatch time.
-    ///
-    /// Invariant: this value is created from the current accessibility capture
-    /// after rejecting unusable frames and non-finite activation points.
-    /// Persisted selectors, source heistIds, and replay metadata never provide
-    /// this data.
-    struct LiveElementGeometry {
-        let frame: CGRect
-        let activationPoint: CGPoint
-
-        init?(element: AccessibilityElement) {
-            let frame = element.bhFrame
-            let activationPoint = element.bhResolvedActivationPoint
-            guard Self.isUsableFrame(frame),
-                  Self.isUsablePoint(activationPoint) else {
-                return nil
-            }
-            self.frame = frame
-            self.activationPoint = activationPoint
-        }
-
-        init?(container: AccessibilityContainer) {
-            let frame = container.frame.cgRect
-            let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
-            guard Self.isUsableFrame(frame),
-                  Self.isUsablePoint(activationPoint) else {
-                return nil
-            }
-            self.frame = frame
-            self.activationPoint = activationPoint
-        }
-
-        private static func isUsableFrame(_ frame: CGRect) -> Bool {
-            !frame.isNull
-                && !frame.isEmpty
-                && frame.origin.x.isFinite
-                && frame.origin.y.isFinite
-                && frame.size.width.isFinite
-                && frame.size.height.isFinite
-        }
-
-        private static func isUsablePoint(_ point: CGPoint) -> Bool {
-            point.x.isFinite && point.y.isFinite
-        }
-    }
-
     /// Dispatch-only action target.
     ///
-    /// The `resolvedTarget` is semantic identity; `object`, `frame`, and
+    /// The `screenElement` is semantic identity; `object`, `frame`, and
     /// `activationPoint` are live accessibility authority freshly sampled by
     /// `resolveLiveActionTarget(for:)`.
     struct LiveActionTarget {
-        let resolvedTarget: ResolvedTarget
+        let screenElement: ScreenElement
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
 
-        var screenElement: ScreenElement { resolvedTarget.screenElement }
-        var element: AccessibilityElement { resolvedTarget.element }
+        var element: AccessibilityElement { screenElement.element }
     }
 
     enum LiveActionTargetResolution {
@@ -79,15 +32,15 @@ extension TheStash {
 
     /// Dispatch-only container target.
     ///
-    /// `resolvedTarget` is semantic container identity. The backing object is
+    /// `containerTarget` is semantic container identity. The backing object is
     /// acquired from the latest live interface immediately before dispatch.
     struct LiveContainerTarget {
-        let resolvedTarget: ResolvedContainerTarget
+        let containerTarget: SemanticScreen.Container
         let object: NSObject
         let frame: CGRect
         let activationPoint: CGPoint
 
-        var container: AccessibilityContainer { resolvedTarget.container }
+        var container: AccessibilityContainer { containerTarget.container }
     }
 
     enum LiveContainerTargetResolution {
@@ -96,30 +49,30 @@ extension TheStash {
         case geometryUnavailable
     }
 
-    func resolveLiveActionTarget(for resolvedTarget: ResolvedTarget) -> LiveActionTargetResolution {
-        guard let object = dispatchObject(for: resolvedTarget.screenElement) else {
+    func resolveLiveActionTarget(for screenElement: ScreenElement) -> LiveActionTargetResolution {
+        guard let object = dispatchObject(for: screenElement) else {
             return .objectUnavailable
         }
-        guard let geometry = LiveElementGeometry(element: resolvedTarget.element) else {
+        guard let geometry = Self.liveGeometry(for: screenElement.element) else {
             return .geometryUnavailable
         }
         return .resolved(LiveActionTarget(
-            resolvedTarget: resolvedTarget,
+            screenElement: screenElement,
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint
         ))
     }
 
-    func resolveLiveContainerTarget(for resolvedTarget: ResolvedContainerTarget) -> LiveContainerTargetResolution {
-        guard let object = currentScreen.liveCapture.containerObject(forPath: resolvedTarget.path) else {
+    func resolveLiveContainerTarget(for containerTarget: SemanticScreen.Container) -> LiveContainerTargetResolution {
+        guard let object = currentScreen.liveCapture.containerObject(forPath: containerTarget.path) else {
             return .objectUnavailable
         }
-        guard let geometry = LiveElementGeometry(container: resolvedTarget.container) else {
+        guard let geometry = Self.liveGeometry(for: containerTarget.container) else {
             return .geometryUnavailable
         }
         return .resolved(LiveContainerTarget(
-            resolvedTarget: resolvedTarget,
+            containerTarget: containerTarget,
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint
@@ -153,6 +106,39 @@ extension TheStash {
             return currentScreen.liveCapture.object(for: screenElement.heistId)
         }
         return nil
+    }
+
+    private static func liveGeometry(for element: AccessibilityElement) -> (frame: CGRect, activationPoint: CGPoint)? {
+        let frame = element.bhFrame
+        let activationPoint = element.bhResolvedActivationPoint
+        guard isUsableFrame(frame),
+              isUsablePoint(activationPoint) else {
+            return nil
+        }
+        return (frame, activationPoint)
+    }
+
+    private static func liveGeometry(for container: AccessibilityContainer) -> (frame: CGRect, activationPoint: CGPoint)? {
+        let frame = container.frame.cgRect
+        let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
+        guard isUsableFrame(frame),
+              isUsablePoint(activationPoint) else {
+            return nil
+        }
+        return (frame, activationPoint)
+    }
+
+    private static func isUsableFrame(_ frame: CGRect) -> Bool {
+        !frame.isNull
+            && !frame.isEmpty
+            && frame.origin.x.isFinite
+            && frame.origin.y.isFinite
+            && frame.size.width.isFinite
+            && frame.size.height.isFinite
+    }
+
+    private static func isUsablePoint(_ point: CGPoint) -> Bool {
+        point.x.isFinite && point.y.isFinite
     }
 }
 

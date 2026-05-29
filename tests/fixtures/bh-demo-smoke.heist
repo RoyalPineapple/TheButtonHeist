@@ -6,12 +6,10 @@
     {
       "command": "activate",
       "target": {
-        "matcher": {
-          "label": "Controls Demo",
-          "traits": [
-            "button"
-          ]
-        }
+        "label": "Controls Demo",
+        "traits": [
+          "button"
+        ]
       },
       "arguments": {
         "expect": {
@@ -22,12 +20,10 @@
     {
       "command": "activate",
       "target": {
-        "matcher": {
-          "label": "Display",
-          "traits": [
-            "button"
-          ]
-        }
+        "label": "Display",
+        "traits": [
+          "button"
+        ]
       },
       "arguments": {
         "expect": {
@@ -38,13 +34,11 @@
     {
       "command": "activate",
       "target": {
-        "matcher": {
-          "label": "Controls Demo",
-          "traits": [
-            "button",
-            "backButton"
-          ]
-        }
+        "label": "Controls Demo",
+        "traits": [
+          "button",
+          "backButton"
+        ]
       },
       "arguments": {
         "expect": {

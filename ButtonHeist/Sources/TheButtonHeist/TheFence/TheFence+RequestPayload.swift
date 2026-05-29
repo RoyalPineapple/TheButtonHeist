@@ -79,6 +79,7 @@ extension TheFence {
     struct ParsedRequest {
         let command: Command
         let requestId: String
+        let arguments: CommandArgumentEnvelope
         let executableMessages: [ClientMessage]?
         let handler: ParsedRequestHandler
         let expectationPayload: ExpectationPayload
@@ -88,12 +89,14 @@ extension TheFence {
         init(
             command: Command,
             requestId: String,
+            arguments: CommandArgumentEnvelope,
             dispatch: DecodedRequestDispatch,
             expectationPayload: ExpectationPayload,
             immediateResponse: FenceResponse?
         ) {
             self.command = command
             self.requestId = requestId
+            self.arguments = arguments
             self.executableMessages = dispatch.executableMessages
             self.handler = dispatch.handler
             self.expectationPayload = expectationPayload
@@ -117,23 +120,6 @@ extension TheFence {
         let messages: [ClientMessage]
         let timeout: TimeInterval
         let recordsCompletion: Bool
-    }
-
-    struct RoutedCommandRequest {
-        private let arguments: CommandArgumentEnvelope
-        let expectationPayload: ExpectationPayload?
-
-        init(arguments: CommandArgumentEnvelope, expectationPayload: ExpectationPayload? = nil) {
-            self.arguments = arguments
-            self.expectationPayload = expectationPayload
-        }
-
-        func string(_ key: String) -> String? { arguments.string(key) }
-
-        func argumentEnvelopeForRequestDecoding() -> CommandArgumentEnvelope {
-            arguments
-        }
-
     }
 
     struct ArchiveSessionRequest {
@@ -161,30 +147,20 @@ extension TheFence {
                 expected: "public Button Heist command"
             )
         }
-        return try parseRequest(
-            command: command,
-            arguments: arguments,
-            expectationPayload: nil
-        )
-    }
-
-    private func parseRequest(
-        command: Command,
-        arguments: CommandArgumentEnvelope,
-        expectationPayload typedExpectationPayload: ExpectationPayload?
-    ) throws -> ParsedRequest {
         try validateRequestKeys(command: command, arguments: arguments)
+        try validateSemanticPlaybackTarget(command: command, arguments: arguments)
         if let immediate = handleImmediateCommand(command) {
             return ParsedRequest(
                 command: command,
                 requestId: "",
+                arguments: arguments,
                 dispatch: Self.emptyDispatch(command: command),
                 expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
                 immediateResponse: immediate
             )
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
-        let expectationPayload = try typedExpectationPayload ?? parseExpectationPayload(arguments)
+        let expectationPayload = try parseExpectationPayload(arguments)
         let dispatch: DecodedRequestDispatch
         if command.requestPayloadKind == .waitForChange {
             let target = WaitForChangeTarget(
@@ -199,6 +175,7 @@ extension TheFence {
         return ParsedRequest(
             command: command,
             requestId: requestId,
+            arguments: arguments,
             dispatch: dispatch,
             expectationPayload: expectationPayload,
             immediateResponse: nil
@@ -206,17 +183,29 @@ extension TheFence {
     }
 
     func parseRequest(operation: NormalizedOperation) throws -> ParsedRequest {
-        let request = operation.request
         return try parseRequest(
             command: operation.command,
-            arguments: request.argumentEnvelopeForRequestDecoding(),
-            expectationPayload: request.expectationPayload
+            arguments: operation.arguments
         )
+    }
+
+    private func validateSemanticPlaybackTarget(command: Command, arguments: CommandArgumentEnvelope) throws {
+        guard let playbackSemanticTarget = arguments.playbackSemanticTarget else { return }
+        guard !command.descriptor.elementTargetParameterKeys.isEmpty else {
+            throw SchemaValidationError(
+                field: "target",
+                observed: playbackSemanticTarget.description,
+                expected: "\(command.rawValue) command without playback target"
+            )
+        }
     }
 
     private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
         let metadataKeys = Set(["requestId"])
-        let parameterKeys = Set(command.parameters.map(\.key))
+        var parameterKeys = Set(command.parameters.map(\.key))
+        if arguments.isPlaybackStep {
+            parameterKeys.subtract(command.descriptor.elementTargetParameterKeys)
+        }
         let allowedKeys = metadataKeys.union(parameterKeys)
         guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
@@ -224,12 +213,10 @@ extension TheFence {
         throw SchemaValidationError(
             field: unexpectedKey,
             observed: arguments.observedDescription(for: unexpectedKey) ?? "missing",
-            expected: "valid \(command.rawValue) parameter"
+            expected: arguments.isPlaybackStep
+                ? "valid \(command.rawValue) playback argument"
+                : "valid \(command.rawValue) parameter"
         )
-    }
-
-    func parsePlaybackOperation(_ operation: PlaybackOperation) throws -> ParsedRequest {
-        try parseRequest(operation: operation.normalizedOperation())
     }
 
     func decodeRequestDispatch(

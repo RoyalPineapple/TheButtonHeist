@@ -37,20 +37,19 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        _ = try element.requireTarget()
+        let target = try element.requireTarget()
 
         var request: CLIRequestParameters = [:]
         if let action {
             request.set(.action, action)
         }
 
-        try element.applyTo(&request)
         request.set(.timeout, timeoutOption.timeout)
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request),
+            operation: try Self.fenceOperation(request, target: target),
             statusMessage: action.map { "Sending \($0)..." } ?? "Activating element..."
         )
     }
