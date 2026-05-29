@@ -37,7 +37,7 @@ extension TheFence {
             field: "centerX/centerY",
             missingMessage: "center requires an element target or center coordinates"
         )
-        let target = TwoFingerTapTarget(center: center, spread: try request.number("spread"))
+        let target = TwoFingerTapTarget(center: center, spread: try request.schemaNumber("spread"))
         try validatePositiveGestureNumber(target.spread, field: "spread")
         return target
     }

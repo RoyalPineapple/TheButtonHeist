@@ -10,7 +10,7 @@ extension TheFence {
             throw FenceError.invalidRequest("Unexpected rotor action command: \(command.rawValue)")
         }
         let rotor = try input.schemaString("rotor")
-        let rotorIndex = try input.nonNegativeInteger("rotorIndex")
+        let rotorIndex = try input.schemaNonNegativeInteger("rotorIndex")
         if rotor != nil, rotorIndex != nil {
             throw SchemaValidationError(
                 field: "rotor/rotorIndex",
@@ -29,7 +29,7 @@ extension TheFence {
         return try decodedExecutablePayload(.rotor(RotorTarget(
             elementTarget: input.requiredElementTarget(command: .rotor),
             selection: selection,
-            direction: input.enumValue("direction", as: RotorDirection.self) ?? .next,
+            direction: input.schemaEnum("direction", as: RotorDirection.self) ?? .next,
             continuation: continuation
         )))
     }
@@ -37,8 +37,8 @@ extension TheFence {
 
 extension TheFence.CommandArgumentReadable {
     func rotorContinuation() throws -> RotorContinuation {
-        let startOffset = try integer("currentTextStartOffset")
-        let endOffset = try integer("currentTextEndOffset")
+        let startOffset = try schemaInteger("currentTextStartOffset")
+        let endOffset = try schemaInteger("currentTextEndOffset")
         if (startOffset == nil) != (endOffset == nil) {
             throw FenceError.invalidRequest("currentTextStartOffset and currentTextEndOffset must be provided together")
         }

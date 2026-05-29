@@ -14,11 +14,11 @@ extension TheFence {
             )))
         case .editAction:
             return try decodedExecutablePayload(.editAction(EditActionTarget(
-                action: input.requiredEnumValue("action", as: EditAction.self)
+                action: input.requiredSchemaEnum("action", as: EditAction.self)
             )))
         case .setPasteboard:
             return try decodedExecutablePayload(.setPasteboard(SetPasteboardTarget(
-                text: input.requiredString("text")
+                text: input.requiredSchemaString("text")
             )))
         default:
             throw FenceError.invalidRequest("Unexpected text action command: \(command.rawValue)")

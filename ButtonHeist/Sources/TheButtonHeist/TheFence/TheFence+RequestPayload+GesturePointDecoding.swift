@@ -31,8 +31,8 @@ extension TheFence {
         yKey: String,
         field: String
     ) throws -> ScreenPoint? {
-        let x = try request.number(xKey)
-        let y = try request.number(yKey)
+        let x = try request.schemaNumber(xKey)
+        let y = try request.schemaNumber(yKey)
         guard (x != nil) == (y != nil) else {
             throw SchemaValidationError(
                 field: field,

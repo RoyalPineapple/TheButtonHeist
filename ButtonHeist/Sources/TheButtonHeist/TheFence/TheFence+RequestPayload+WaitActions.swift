@@ -11,8 +11,8 @@ extension TheFence {
         }
         return try decodedExecutablePayload(.waitFor(WaitForTarget(
             elementTarget: input.requiredElementTarget(command: .waitFor),
-            absent: input.boolean("absent"),
-            timeout: input.number("timeout")
+            absent: input.schemaBoolean("absent"),
+            timeout: input.schemaNumber("timeout")
         )))
     }
 }
