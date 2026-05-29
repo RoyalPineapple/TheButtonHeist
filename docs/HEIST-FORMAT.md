@@ -154,7 +154,7 @@ The `expect` field uses the same format as `run_batch` expectations. On playback
 
 Expectations use a `type` discriminator that matches the wire Codable shape for `ActionExpectation`, so JSON from a wire log can be pasted straight into a heist file.
 
-Prototype v1 shorthand strings, top-level expectation arrays, and compiler-derived enum wrapper objects are rejected by the persisted format.
+Expectations use the current object grammar at every persisted boundary.
 
 ```json
 {"type": "element_updated", "property": "value", "newValue": "50%"}

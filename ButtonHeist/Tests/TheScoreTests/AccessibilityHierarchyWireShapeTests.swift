@@ -5,7 +5,7 @@ import XCTest
 /// Wire-shape tests for the public `Interface` tree.
 ///
 /// The canonical wire payload is the parser's full-fidelity hierarchy plus
-/// Button Heist annotations.
+/// Button Heist annotations. These tests pin the accepted public shape.
 final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
     private let encoder = JSONEncoder()

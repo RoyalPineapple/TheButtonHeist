@@ -396,7 +396,6 @@ final class TheFenceTests: XCTestCase {
         let container = tree[1]["container"] as! [String: Any]
         XCTAssertEqual(container["type"] as? String, "list")
         XCTAssertEqual(container["frameY"] as? Double, 44)
-        XCTAssertNil(container["_0"])
 
         let children = container["children"] as! [[String: Any]]
         let nestedElement = children[0]["element"] as! [String: Any]

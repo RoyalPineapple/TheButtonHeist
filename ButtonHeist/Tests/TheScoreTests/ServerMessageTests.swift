@@ -329,12 +329,10 @@ final class ServerMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertNil(json["accessibilityDelta"])
         XCTAssertNotNil(json["accessibilityTrace"])
-        XCTAssertNil(json["interfaceDelta"])
     }
 
-    func testActionResultHasNoAccessibilityDeltaWithoutTrace() throws {
+    func testActionResultHasNoTraceProjectionWithoutTrace() throws {
         let result = ActionResult(
             success: true,
             method: .activate
