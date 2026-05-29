@@ -27,6 +27,28 @@ final class WireCommandParityTests: XCTestCase {
         }
     }
 
+    @ButtonHeistActor
+    func testEveryPlaybackStepLowersToTheSameClientMessageAsSingleCommand() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for command in TheFence.Command.batchExecutableCases {
+            let arguments = sampleArguments(for: command)
+            let singleRequest = try fence.parseRequest(command: command, values: arguments)
+            let singleMessages = try fence.executableActionMessages(for: singleRequest)
+            XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
+
+            let evidence = try playbackEvidence(command: command, fields: arguments)
+            let playbackRequest = try fence.parsePlaybackEvidence(evidence)
+            let playbackMessages = try fence.executableActionMessages(for: playbackRequest)
+
+            XCTAssertEqual(
+                String(reflecting: playbackMessages),
+                String(reflecting: singleMessages),
+                command.rawValue
+            )
+        }
+    }
+
     func testEveryTypedClientMessageOwnsItsWireIdentity() throws {
         let samples = sampleClientMessages()
         XCTAssertEqual(Set(samples.map(\.wireType)), Set(ClientWireMessageType.allCases))
@@ -165,6 +187,23 @@ final class WireCommandParityTests: XCTestCase {
         var object = fields
         object["command"] = .string(command.rawValue)
         return .object(object)
+    }
+
+    @ButtonHeistActor
+    private func playbackEvidence(
+        command: TheFence.Command,
+        fields: [String: HeistValue]
+    ) throws -> HeistEvidence {
+        var arguments = fields
+        let target = try playbackTarget(from: &arguments)
+        return try HeistEvidence(command: command.rawValue, target: target, arguments: arguments)
+    }
+
+    @ButtonHeistActor
+    private func playbackTarget(from fields: inout [String: HeistValue]) throws -> ElementTarget? {
+        guard let targetValue = fields.removeValue(forKey: "target") else { return nil }
+        return try TheFence.CommandArgumentEnvelope(values: ["target": targetValue])
+            .decodedElementTarget()
     }
 }
 
