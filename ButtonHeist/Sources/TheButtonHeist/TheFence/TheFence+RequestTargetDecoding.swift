@@ -1,3 +1,5 @@
+import Foundation
+
 import TheScore
 
 extension TheFence.CommandArgumentReadable {
@@ -14,31 +16,15 @@ extension TheFence.CommandArgumentReadable {
             }
             return playbackSemanticTarget.playbackElementTarget
         }
-        guard let target = try schemaDictionary("target") else { return nil }
-        try target.rejectUnknownKeys(
-            allowed: Set(ElementTargetGrammar.wrappedTargetFieldNames),
-            expected: "valid target field"
-        )
-        let heistId = try target.schemaString("heistId")
-        let matcherObject = try target.schemaDictionary("matcher")
-        let ordinal = try target.schemaNonNegativeInteger("ordinal")
-        let elementMatcher: ElementMatcher?
-        if let matcherObject {
-            try matcherObject.rejectUnknownKeys(
-                allowed: Set(ElementTargetGrammar.matcherFieldNames),
-                expected: "valid target.matcher field"
+        guard let targetValue = argumentValues["target"] else { return nil }
+        guard case .object = targetValue else {
+            throw SchemaValidationError(
+                field: field("target"),
+                observed: targetValue.schemaObservedDescription,
+                expected: "object"
             )
-            elementMatcher = try matcher(from: matcherObject)
-        } else {
-            elementMatcher = nil
         }
-
-        return try validatedElementTarget(
-            heistId: heistId,
-            matcher: elementMatcher,
-            matcherWasProvided: matcherObject != nil,
-            ordinal: ordinal
-        )
+        return try decodeElementTargetCommandValue(targetValue)
     }
 
     @ButtonHeistActor
@@ -126,28 +112,6 @@ extension TheFence.CommandArgumentReadable {
         playbackSemanticTarget != nil || keys.contains("target")
     }
 
-    @ButtonHeistActor
-    func matcher() throws -> ElementMatcher {
-        try matcher(from: self)
-    }
-
-    @ButtonHeistActor
-    func matcher(from source: some TheFence.CommandArgumentReadable) throws -> ElementMatcher {
-        ElementMatcher(
-            label: try source.schemaString("label"),
-            identifier: try source.schemaString("identifier"),
-            value: try source.schemaString("value"),
-            traits: try TheFence.parseTraitNames(
-                try source.schemaStringArray("traits"),
-                field: source.field("traits")
-            ),
-            excludeTraits: try TheFence.parseTraitNames(
-                try source.schemaStringArray("excludeTraits"),
-                field: source.field("excludeTraits")
-            )
-        )
-    }
-
     func requiredString(_ key: String) throws -> String {
         try requiredSchemaString(key)
     }
@@ -194,38 +158,59 @@ extension TheFence.CommandArgumentReadable {
         )
     }
 
-    private func validatedElementTarget(
-        heistId: HeistId?,
-        matcher: ElementMatcher?,
-        matcherWasProvided: Bool,
-        ordinal: Int?
-    ) throws -> ElementTarget {
+    private func decodeElementTargetCommandValue(_ targetValue: HeistValue) throws -> ElementTarget {
         do {
-            return try ElementTargetGrammar.validatedTarget(
-                heistId: heistId,
-                matcher: matcher,
-                matcherWasProvided: matcherWasProvided,
-                ordinal: ordinal
-            )
-        } catch let error as ElementTargetGrammarError {
+            return try ElementTarget.decodeCommandTarget(from: targetValue)
+        } catch let error as DecodingError {
+            let context = decodingContext(from: error)
             throw SchemaValidationError(
-                field: "target",
-                observed: observedDescription,
-                expected: schemaExpectedDescription(for: error)
+                field: elementTargetField(codingPath: context.codingPath),
+                observed: elementTargetValue(targetValue, at: context.codingPath)?.schemaObservedDescription
+                    ?? targetValue.schemaObservedDescription,
+                expected: context.debugDescription
+            )
+        } catch {
+            throw SchemaValidationError(
+                field: field("target"),
+                observed: targetValue.schemaObservedDescription,
+                expected: "valid element target"
             )
         }
     }
 
-    private func schemaExpectedDescription(for error: ElementTargetGrammarError) -> String {
+    private func elementTargetField(codingPath: [CodingKey]) -> String {
+        var path = "target"
+        for key in codingPath {
+            if let index = key.intValue {
+                path += "[\(index)]"
+            } else {
+                path += ".\(key.stringValue)"
+            }
+        }
+        return field(path)
+    }
+
+    private func elementTargetValue(_ value: HeistValue, at codingPath: [CodingKey]) -> HeistValue? {
+        codingPath.reduce(Optional(value)) { current, key in
+            guard let current else { return nil }
+            if let index = key.intValue {
+                guard case .array(let values) = current, values.indices.contains(index) else { return nil }
+                return values[index]
+            }
+            guard case .object(let values) = current else { return nil }
+            return values[key.stringValue]
+        }
+    }
+
+    private func decodingContext(from error: DecodingError) -> DecodingError.Context {
         switch error {
-        case .missingTarget:
-            return "heistId or matcher"
-        case .emptyMatcher:
-            return "matcher with label, identifier, value, traits, or excludeTraits"
-        case .mixedHeistIdWithMatcherOrOrdinal:
-            return "either heistId or matcher with optional ordinal"
-        case .negativeOrdinal:
-            return "integer >= 0"
+        case .typeMismatch(_, let context),
+             .valueNotFound(_, let context),
+             .keyNotFound(_, let context),
+             .dataCorrupted(let context):
+            return context
+        @unknown default:
+            return DecodingError.Context(codingPath: [], debugDescription: error.localizedDescription)
         }
     }
 }

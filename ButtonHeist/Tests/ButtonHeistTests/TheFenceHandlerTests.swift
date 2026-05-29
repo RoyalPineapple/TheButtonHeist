@@ -726,7 +726,7 @@ final class TheFenceHandlerTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(
-                "\(error)".contains("either heistId or matcher"),
+                "\(error)".contains("ElementTarget heistId cannot be combined with matcher fields or ordinal"),
                 "Expected mixed selector rejection, got \(error)"
             )
         }
@@ -745,7 +745,7 @@ final class TheFenceHandlerTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(
-                "\(error)".contains("either heistId or matcher"),
+                "\(error)".contains("ElementTarget heistId cannot be combined with matcher fields or ordinal"),
                 "Expected heistId+ordinal rejection, got \(error)"
             )
         }

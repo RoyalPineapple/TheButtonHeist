@@ -40,7 +40,7 @@ extension ElementTarget: CustomStringConvertible {
     }
 }
 
-// MARK: - ElementTarget Codable (flat wire format)
+// MARK: - ElementTarget Codable
 
 extension ElementTarget: Codable {
     enum CodingKeys: String, CodingKey {
@@ -66,6 +66,13 @@ extension ElementTarget: Codable {
             self.stringValue = "\(intValue)"
             self.intValue = intValue
         }
+    }
+
+    /// Decode the command argument shape used at request boundaries:
+    /// `{ "heistId": ... }` or `{ "matcher": { ... }, "ordinal": ... }`.
+    public static func decodeCommandTarget(from value: HeistValue) throws -> ElementTarget {
+        let data = try JSONEncoder().encode(value)
+        return try JSONDecoder().decode(ElementCommandTargetShape.self, from: data).target
     }
 
     /// Decode an optional `ElementTarget` flattened into the same JSON object
@@ -191,5 +198,61 @@ extension ElementTarget: Codable {
             try container.encodeIfPresent(matcher.excludeTraits, forKey: .excludeTraits)
             try container.encodeIfPresent(ordinal, forKey: .ordinal)
         }
+    }
+}
+
+private struct ElementCommandTargetShape: Decodable {
+    let target: ElementTarget
+
+    init(from decoder: Decoder) throws {
+        try Self.rejectUnknownKeys(from: decoder)
+        let container = try decoder.container(keyedBy: ElementCommandTargetCodingKey.self)
+        let heistId = try container.decodeIfPresent(HeistId.self, forKey: .heistId)
+        let matcher = try container.decodeIfPresent(ElementMatcher.self, forKey: .matcher)
+        let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+        do {
+            target = try ElementTargetGrammar.validatedTarget(
+                heistId: heistId,
+                matcher: matcher,
+                matcherWasProvided: container.contains(.matcher),
+                ordinal: ordinal
+            )
+        } catch let error as ElementTargetGrammarError {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: container.codingPath,
+                debugDescription: error.diagnosticDescription
+            ))
+        }
+    }
+
+    private static func rejectUnknownKeys(from decoder: Decoder) throws {
+        let allowedKeys = Set(ElementCommandTargetCodingKey.allCases.map(\.stringValue))
+        let dynamicContainer = try decoder.container(keyedBy: DynamicElementCommandTargetCodingKey.self)
+        guard let unknownKey = dynamicContainer.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown element target field \"\(unknownKey.stringValue)\""
+        ))
+    }
+}
+
+private enum ElementCommandTargetCodingKey: String, CodingKey, CaseIterable {
+    case heistId, matcher, ordinal
+}
+
+private struct DynamicElementCommandTargetCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init(stringValue: String) {
+        self.stringValue = stringValue
+        intValue = nil
+    }
+
+    init?(intValue: Int) {
+        stringValue = "\(intValue)"
+        self.intValue = intValue
     }
 }

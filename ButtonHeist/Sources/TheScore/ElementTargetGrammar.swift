@@ -2,13 +2,12 @@ import Foundation
 
 /// Shared validation for the public element target choice.
 ///
-/// The wire shape may be flat (`ElementTarget`) or wrapped by an adapter
-/// (`target.matcher`), but the product rule is singular: a current-capture
-/// `heistId` stands alone; `ordinal` only disambiguates a semantic matcher.
+/// The public wire shape may be inline or wrapped by a request payload, but the
+/// product rule is singular: a current-capture `heistId` stands alone;
+/// `ordinal` only disambiguates a semantic matcher.
 public enum ElementTargetGrammar {
     public static let matcherFieldNames: [String] = ["label", "identifier", "value", "traits", "excludeTraits"]
     public static let inlineFieldNames: [String] = ["heistId"] + matcherFieldNames + ["ordinal"]
-    public static let wrappedTargetFieldNames: [String] = ["heistId", "matcher", "ordinal"]
 
     public static func validatedTarget(
         heistId: HeistId?,

@@ -32,52 +32,6 @@ final class TheFenceTests: XCTestCase {
         XCTAssertFalse(markdown.contains("- Command:"))
     }
 
-    // MARK: - Element Matcher Validation
-
-    @ButtonHeistActor
-    func testElementMatcherRejectsUnknownTrait() async {
-        let fence = TheFence(configuration: .init())
-        let args = TheFence.CommandArgumentEnvelope(values: [
-            "traits": .array([.string("madeUpTrait")]),
-        ])
-        let expectedError = "schema validation failed for traits[0]: observed string \"madeUpTrait\"; " +
-            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.decodedElementMatcher(args)) { error in
-            XCTAssertEqual(
-                error.localizedDescription,
-                expectedError
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    func testElementMatcherRejectsUnknownExcludeTrait() async {
-        let fence = TheFence(configuration: .init())
-        let args = TheFence.CommandArgumentEnvelope(values: [
-            "excludeTraits": .array([.string("bogus")]),
-        ])
-        let expectedError = "schema validation failed for excludeTraits[0]: observed string \"bogus\"; " +
-            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.decodedElementMatcher(args)) { error in
-            XCTAssertEqual(
-                error.localizedDescription,
-                expectedError
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    func testElementMatcherAcceptsKnownTraits() async throws {
-        let fence = TheFence(configuration: .init())
-        let args = TheFence.CommandArgumentEnvelope(values: [
-            "traits": .array([.string("button"), .string("header")]),
-            "excludeTraits": .array([.string("selected")]),
-        ])
-        let matcher = try fence.decodedElementMatcher(args)
-        XCTAssertEqual(matcher.traits, [.button, .header])
-        XCTAssertEqual(matcher.excludeTraits, [.selected])
-    }
-
     // MARK: - Auth Token Status
 
     func testAuthApprovedStatusEmitsGeneratedTokenWhenNoTokenWasConfigured() {
