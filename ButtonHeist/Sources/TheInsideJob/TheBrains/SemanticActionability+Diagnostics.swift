@@ -9,16 +9,17 @@ extension SemanticActionability {
             + "screenBounds=\(formatRect(ScreenMetrics.current.bounds))"
     }
 
-    func semanticRevealPlanFailureMessage(_ entry: Screen.ScreenElement) -> String {
+    func semanticRevealFailureMessage(
+        _ failure: TheStash.SemanticRevealFailure,
+        entry: Screen.ScreenElement
+    ) -> String {
         let description = Navigation.describeScrollTarget(entry)
-        switch stash.resolveSemanticRevealScrollView(for: entry) {
-        case .resolved:
-            return "semantic reveal plan for known target \(description) could not be executed"
-        case .failed(.missingContentOrigin):
+        switch failure {
+        case .missingContentOrigin:
             return "known target \(description) has no content-space position"
-        case .failed(.noLiveScrollableAncestor):
+        case .noLiveScrollableAncestor:
             return "known target \(description) has no live scrollable ancestor in the current semantic graph"
-        case .failed(.unsafeProgrammaticScroll):
+        case .unsafeProgrammaticScroll:
             return "known target \(description) is inside a scroll view that is unsafe for programmatic semantic reveal"
         }
     }
