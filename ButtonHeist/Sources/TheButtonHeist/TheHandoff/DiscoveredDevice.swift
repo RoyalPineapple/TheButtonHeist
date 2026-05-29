@@ -132,8 +132,8 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return trimmed.isEmpty ? nil : trimmed.lowercased()
     }
 
-    /// Short instance ID parsed from service name (e.g., "a1b2c3d4")
-    /// Service name format: "AppName-DeviceName#shortId"
+    /// Instance ID parsed from service name suffix (e.g., "a1b2c3d4").
+    /// Service name format: "AppName#instanceId".
     var shortId: String? {
         guard let hashIndex = name.firstIndex(of: "#") else { return nil }
         let id = String(name[name.index(after: hashIndex)...])
@@ -148,26 +148,14 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         return name
     }
 
-    /// Parse the service name to extract app name and device name
-    /// Service name format: "AppName#instanceId" (v3) or "AppName-DeviceName#shortId" (v2)
-    var parsedName: (appName: String, deviceName: String)? {
-        let baseName = nameWithoutId
-        guard let lastDashIndex = baseName.lastIndex(of: "-") else { return nil }
-        let appName = String(baseName[..<lastDashIndex])
-        let deviceName = String(baseName[baseName.index(after: lastDashIndex)...])
-        guard !appName.isEmpty && !deviceName.isEmpty else { return nil }
-        return (appName, deviceName)
-    }
-
     /// App name extracted from service name
-    /// For v3 format "AppName#id", returns the part before #
     var appName: String {
-        parsedName?.appName ?? nameWithoutId
+        nameWithoutId
     }
 
-    /// Device name extracted from service name (empty for v3 format)
+    /// Device name advertised through the TXT record.
     var deviceName: String {
-        displayDeviceName ?? parsedName?.deviceName ?? ""
+        displayDeviceName ?? ""
     }
 
     var discoveryIdentity: String {

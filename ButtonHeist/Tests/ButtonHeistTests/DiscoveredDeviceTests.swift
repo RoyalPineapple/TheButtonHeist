@@ -45,56 +45,56 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testDeviceProperties() {
         let endpoint = NWEndpoint.service(name: "my-service", type: "_buttonheist._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "device-123", name: "TestApp-iPhone", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "device-123", name: "TestApp", endpoint: endpoint)
 
         XCTAssertEqual(device.id, "device-123")
-        XCTAssertEqual(device.name, "TestApp-iPhone")
+        XCTAssertEqual(device.name, "TestApp")
     }
 
     // MARK: - Short ID Parsing
 
     func testShortIdParsing() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#a1b2c3d4", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp#a1b2c3d4", endpoint: endpoint)
 
         XCTAssertEqual(device.shortId, "a1b2c3d4")
     }
 
     func testShortIdNilWithoutHash() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
 
         XCTAssertNil(device.shortId)
     }
 
     func testShortIdNilWithEmptyHash() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone#", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp#", endpoint: endpoint)
 
         XCTAssertNil(device.shortId)
     }
 
-    // MARK: - Name Parsing with Short ID
+    // MARK: - Service Name Identity
 
-    func testParsedNameWithShortId() {
+    func testAppNameUsesServiceNameWithoutInstanceId() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#a1b2c3d4", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp#a1b2c3d4", endpoint: endpoint)
 
         XCTAssertEqual(device.appName, "TestApp")
-        XCTAssertEqual(device.deviceName, "iPhone 16 Pro")
+        XCTAssertEqual(device.deviceName, "")
         XCTAssertEqual(device.shortId, "a1b2c3d4")
     }
 
-    func testParsedNameWithoutShortId() {
+    func testAppNameWithoutShortIdUsesServiceName() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
 
         XCTAssertEqual(device.appName, "TestApp")
-        XCTAssertEqual(device.deviceName, "iPhone 16 Pro")
+        XCTAssertEqual(device.deviceName, "")
         XCTAssertNil(device.shortId)
     }
 
-    func testAppNameFallbackNoDash() {
+    func testAppNameStripsInstanceIdSuffix() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(id: "test", name: "NoDashName#abc123", endpoint: endpoint)
 
@@ -103,13 +103,12 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertEqual(device.shortId, "abc123")
     }
 
-    func testAppNameWithDashesInDeviceName() {
+    func testAppNameMayContainDashes() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "My-App-iPhone#ff00ff00", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "My-App#ff00ff00", endpoint: endpoint)
 
-        // Last dash splits: "My-App" and "iPhone"
         XCTAssertEqual(device.appName, "My-App")
-        XCTAssertEqual(device.deviceName, "iPhone")
+        XCTAssertEqual(device.deviceName, "")
         XCTAssertEqual(device.shortId, "ff00ff00")
     }
 
@@ -118,7 +117,7 @@ final class DiscoveredDeviceTests: XCTestCase {
     func testSimulatorUDID() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone#abc",
+            id: "test", name: "TestApp#abc",
             endpoint: endpoint,
             simulatorUDID: "DEADBEEF-1234-5678-9ABC-DEF012345678"
         )
@@ -128,7 +127,7 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testDefaultIdentifiersNil() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
 
         XCTAssertNil(device.simulatorUDID)
         XCTAssertNil(device.installationId)
@@ -139,7 +138,7 @@ final class DiscoveredDeviceTests: XCTestCase {
     func testAllTXTRecordFields() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone#abc",
+            id: "test", name: "TestApp#abc",
             endpoint: endpoint,
             simulatorUDID: "SIM-UUID",
             installationId: "install-1",
@@ -171,7 +170,7 @@ final class DiscoveredDeviceTests: XCTestCase {
     func testSessionActiveFalse() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone",
+            id: "test", name: "TestApp",
             endpoint: endpoint,
             sessionActive: false
         )
@@ -183,16 +182,15 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testMatchesByName() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#abc123", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
         XCTAssertTrue(device.matches(filter: "TestApp"))
-        XCTAssertTrue(device.matches(filter: "iPhone"))
         XCTAssertTrue(device.matches(filter: "testapp")) // case-insensitive
     }
 
     func testMatchesByAppName() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "MyApp-iPhone#abc", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "MyApp#abc", endpoint: endpoint)
 
         XCTAssertTrue(device.matches(filter: "MyApp"))
         XCTAssertTrue(device.matches(filter: "myapp"))
@@ -201,7 +199,12 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testMatchesByDeviceName() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone 16 Pro#abc", endpoint: endpoint)
+        let device = DiscoveredDevice(
+            id: "test",
+            name: "TestApp#abc",
+            endpoint: endpoint,
+            displayDeviceName: "iPhone 16 Pro"
+        )
 
         XCTAssertTrue(device.matches(filter: "iPhone 16"))
         XCTAssertTrue(device.matches(filter: "iphone 16 pro"))
@@ -209,7 +212,7 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testMatchesByShortIdPrefix() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone#abc123", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp#abc123", endpoint: endpoint)
 
         XCTAssertTrue(device.matches(filter: "abc"))
         XCTAssertTrue(device.matches(filter: "abc123"))
@@ -220,7 +223,7 @@ final class DiscoveredDeviceTests: XCTestCase {
     func testMatchesByInstanceIdPrefix() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone",
+            id: "test", name: "TestApp",
             endpoint: endpoint,
             instanceId: "my-instance-42"
         )
@@ -232,7 +235,7 @@ final class DiscoveredDeviceTests: XCTestCase {
     func testMatchesBySimulatorUDIDPrefix() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone",
+            id: "test", name: "TestApp",
             endpoint: endpoint,
             simulatorUDID: "DEADBEEF-1234-5678-9ABC-DEF012345678"
         )
@@ -244,7 +247,7 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testNoMatch() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone#abc", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp#abc", endpoint: endpoint)
 
         XCTAssertFalse(device.matches(filter: "Android"))
         XCTAssertFalse(device.matches(filter: "zzzzz"))
@@ -438,7 +441,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let fingerprint = "sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
         let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone#abc",
+            id: "test", name: "TestApp#abc",
             endpoint: endpoint,
             certFingerprint: fingerprint
         )
@@ -448,7 +451,7 @@ final class DiscoveredDeviceTests: XCTestCase {
 
     func testCertFingerprintDefaultsToNil() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(id: "test", name: "TestApp-iPhone", endpoint: endpoint)
+        let device = DiscoveredDevice(id: "test", name: "TestApp", endpoint: endpoint)
 
         XCTAssertNil(device.certFingerprint)
     }
@@ -463,7 +466,7 @@ final class DiscoveredDeviceTests: XCTestCase {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
         let device = DiscoveredDevice(
-            id: "test", name: "TestApp-iPhone#abc",
+            id: "test", name: "TestApp#abc",
             endpoint: endpoint,
             simulatorUDID: "SIM-UUID",
             installationId: "install-1",

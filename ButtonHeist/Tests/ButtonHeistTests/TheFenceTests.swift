@@ -1,6 +1,7 @@
 import XCTest
 import AccessibilitySnapshotModel
 @testable import ButtonHeist
+import Network
 import TheScore
 
 final class TheFenceTests: XCTestCase {
@@ -243,6 +244,17 @@ final class TheFenceTests: XCTestCase {
     func testDevicesResponseEmpty() {
         let response = FenceResponse.devices([])
         XCTAssertEqual(response.humanFormatted(), "No devices found")
+    }
+
+    func testDevicesFormattingOmitsEmptyDeviceNameParentheses() {
+        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
+        let response = FenceResponse.devices([
+            DiscoveredDevice(id: "test", name: "TestApp#abc", endpoint: endpoint),
+        ])
+
+        XCTAssertTrue(response.humanFormatted().contains("TestApp  [network]"))
+        XCTAssertFalse(response.humanFormatted().contains("()"))
+        XCTAssertEqual(response.compactFormatted(), "TestApp [network]")
     }
 
     // MARK: - FenceResponse JSON Serialization

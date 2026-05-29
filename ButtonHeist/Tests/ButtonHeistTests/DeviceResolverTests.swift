@@ -9,7 +9,7 @@ final class DeviceResolverTests: XCTestCase {
 
     @ButtonHeistActor
     func testSelectDeviceSingleDeviceNoFilter() async {
-        let device = makeDevice(id: "dev1", name: "MyApp-iPhone#abc")
+        let device = makeDevice(id: "dev1", name: "MyApp#abc")
         let result = DeviceResolver.selectDevice(from: [device], filter: nil)
         XCTAssertEqual(result?.id, "dev1")
     }
@@ -17,8 +17,8 @@ final class DeviceResolverTests: XCTestCase {
     @ButtonHeistActor
     func testSelectDeviceMultipleDevicesNoFilterReturnsNil() async {
         let devices = [
-            makeDevice(id: "dev1", name: "App1-Phone#a"),
-            makeDevice(id: "dev2", name: "App2-Pad#b"),
+            makeDevice(id: "dev1", name: "App1#a"),
+            makeDevice(id: "dev2", name: "App2#b"),
         ]
         let result = DeviceResolver.selectDevice(from: devices, filter: nil)
         XCTAssertNil(result)
@@ -33,8 +33,8 @@ final class DeviceResolverTests: XCTestCase {
     @ButtonHeistActor
     func testSelectDeviceWithFilterMatchesFirst() async {
         let devices = [
-            makeDevice(id: "dev1", name: "MyApp-iPhone#abc"),
-            makeDevice(id: "dev2", name: "OtherApp-iPad#def"),
+            makeDevice(id: "dev1", name: "MyApp#abc"),
+            makeDevice(id: "dev2", name: "OtherApp#def"),
         ]
         let result = DeviceResolver.selectDevice(from: devices, filter: "MyApp")
         XCTAssertEqual(result?.id, "dev1")
@@ -43,7 +43,7 @@ final class DeviceResolverTests: XCTestCase {
     @ButtonHeistActor
     func testSelectDeviceWithFilterNoMatch() async {
         let devices = [
-            makeDevice(id: "dev1", name: "MyApp-iPhone#abc"),
+            makeDevice(id: "dev1", name: "MyApp#abc"),
         ]
         let result = DeviceResolver.selectDevice(from: devices, filter: "Nonexistent")
         XCTAssertNil(result)
@@ -119,8 +119,8 @@ final class DeviceResolverTests: XCTestCase {
         }
         defer { makeReachabilityConnection = previousFactory }
 
-        let otherDevice = makeDevice(id: "other", name: "OtherApp-iPhone#aaa")
-        let targetDevice = makeDevice(id: "target", name: "DemoApp-iPhone#bbb")
+        let otherDevice = makeDevice(id: "other", name: "OtherApp#aaa")
+        let targetDevice = makeDevice(id: "target", name: "DemoApp#bbb")
         var discoveryCallCount = 0
         let resolver = DeviceResolver(
             filter: "DemoApp",

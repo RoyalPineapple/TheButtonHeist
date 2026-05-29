@@ -24,7 +24,10 @@ extension FenceResponse {
             return "pong: \(name) \(bundle) [ButtonHeist \(payload.buttonHeistVersion)]"
         case .devices(let devices):
             if devices.isEmpty { return "no devices" }
-            return devices.map { "\($0.appName) (\($0.deviceName)) [\($0.connectionType.rawValue)]" }
+            return devices.map {
+                let name = $0.deviceName.isEmpty ? $0.appName : "\($0.appName) (\($0.deviceName))"
+                return "\(name) [\($0.connectionType.rawValue)]"
+            }
                 .joined(separator: "\n")
         case .interface(let interface, let detail):
             let header = "\(interface.elements.count) elements"
