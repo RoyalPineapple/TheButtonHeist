@@ -119,7 +119,7 @@ final class HandoffReconnectController {
             }
         }
 
-        let failure = policy.terminalFailure(targetDisplayName: target.displayName)
+        let failure = policy.terminalFailure(targetDisplayName: target.device.name)
         runtime.publishReconnectStatus(failure.errorDescription ?? "Auto-reconnect gave up")
         guard isCurrentRunningTarget(target) else { return }
         phase = .disabled
