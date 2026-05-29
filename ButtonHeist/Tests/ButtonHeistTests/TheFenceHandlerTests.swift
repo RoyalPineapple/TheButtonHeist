@@ -786,7 +786,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .activate,
             arguments: ["target": targetValue(label: "Save", ordinal: -1)],
-            equals: "schema validation failed for target: observed object; expected ordinal must be non-negative, got -1"
+            equals: "schema validation failed for target.ordinal: observed integer -1; expected integer >= 0"
         )
     }
 
@@ -2892,7 +2892,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     ]),
                 ]),
             ],
-            contains: "schema validation failed for steps[0].target: observed object; expected ordinal must be non-negative, got -1"
+            contains: "schema validation failed for steps[0].target.ordinal: observed integer -1; expected integer >= 0"
         )
     }
 

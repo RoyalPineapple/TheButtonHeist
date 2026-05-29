@@ -42,13 +42,14 @@ final class TheFenceTests: XCTestCase {
                 "traits": .array([.string("madeUpTrait")]),
             ]),
         ])
-        let expectedError = "schema validation failed for target.traits[0]: observed string \"madeUpTrait\"; " +
-            "expected Unknown HeistTrait: \"madeUpTrait\""
         XCTAssertThrowsError(try fence.decodedElementTarget(args)) { error in
-            XCTAssertEqual(
-                error.localizedDescription,
-                expectedError
-            )
+            let message = error.localizedDescription
+            XCTAssertTrue(message.hasPrefix(
+                "schema validation failed for target.traits[0]: observed string \"madeUpTrait\"; expected enum one of"
+            ))
+            XCTAssertTrue(message.contains("button"))
+            XCTAssertTrue(message.contains("header"))
+            XCTAssertTrue(message.contains("selected"))
         }
     }
 
@@ -60,13 +61,14 @@ final class TheFenceTests: XCTestCase {
                 "excludeTraits": .array([.string("bogus")]),
             ]),
         ])
-        let expectedError = "schema validation failed for target.excludeTraits[0]: observed string \"bogus\"; " +
-            "expected Unknown HeistTrait: \"bogus\""
         XCTAssertThrowsError(try fence.decodedElementTarget(args)) { error in
-            XCTAssertEqual(
-                error.localizedDescription,
-                expectedError
-            )
+            let message = error.localizedDescription
+            XCTAssertTrue(message.hasPrefix(
+                "schema validation failed for target.excludeTraits[0]: observed string \"bogus\"; expected enum one of"
+            ))
+            XCTAssertTrue(message.contains("button"))
+            XCTAssertTrue(message.contains("header"))
+            XCTAssertTrue(message.contains("selected"))
         }
     }
 
