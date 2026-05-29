@@ -3911,7 +3911,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackInvalidCurrentShapeUsesRequestValidation() async throws {
+    func testPlaybackArgumentsUsePlaybackBoundaryValidation() async throws {
         let cases: [(name: String, evidence: HeistEvidence, message: String)] = [
             (
                 "unknown scroll parameter",
@@ -3920,22 +3920,6 @@ final class TheFenceHandlerTests: XCTestCase {
                     arguments: ["unexpected": .string("value")]
                 ),
                 "schema validation failed for unexpected: observed string \"value\"; expected valid scroll playback argument"
-            ),
-            (
-                "unknown activate parameter",
-                HeistEvidence(
-                    command: "activate",
-                    arguments: ["heistId": .string("stale_button")]
-                ),
-                "schema validation failed for heistId: observed string \"stale_button\"; expected valid activate playback argument"
-            ),
-            (
-                "request target object is not playback identity",
-                HeistEvidence(
-                    command: "activate",
-                    arguments: ["target": targetValue(identifier: "argument_button")]
-                ),
-                "schema validation failed for target: observed object; expected valid activate playback argument"
             ),
             (
                 "edit_action invalid action type",

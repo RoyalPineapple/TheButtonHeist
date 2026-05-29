@@ -8,18 +8,15 @@ extension TheFence {
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
         public let elementTarget: ElementTarget?
-        let isPlaybackStep: Bool
         let argumentFieldPrefix: String?
 
         public init(
             values: [String: HeistValue],
             elementTarget: ElementTarget? = nil,
-            isPlaybackStep: Bool = false,
             fieldPrefix: String? = nil
         ) {
             self.argumentValues = values
             self.elementTarget = elementTarget
-            self.isPlaybackStep = isPlaybackStep
             argumentFieldPrefix = fieldPrefix
         }
 
@@ -33,7 +30,6 @@ extension TheFence {
             return CommandArgumentEnvelope(
                 values: values,
                 elementTarget: elementTarget,
-                isPlaybackStep: isPlaybackStep,
                 fieldPrefix: argumentFieldPrefix
             )
         }
