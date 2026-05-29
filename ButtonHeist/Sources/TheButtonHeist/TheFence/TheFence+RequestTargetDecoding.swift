@@ -64,7 +64,7 @@ extension TheFence.CommandArgumentReadable {
             identifier: try container.schemaString("identifier"),
             isModalBoundary: try container.schemaBoolean("isModalBoundary")
         )
-        let ordinal = try nonNegativeInteger("ordinal")
+        let ordinal = try schemaNonNegativeInteger("ordinal")
         guard matcher.hasPredicates else {
             throw SchemaValidationError(
                 field: "container",
@@ -103,12 +103,8 @@ extension TheFence.CommandArgumentReadable {
         elementTarget != nil || keys.contains("target")
     }
 
-    func requiredString(_ key: String) throws -> String {
-        try requiredSchemaString(key)
-    }
-
     func nonEmptyString(_ key: String) throws -> String {
-        let value = try requiredString(key)
+        let value = try requiredSchemaString(key)
         if value.isEmpty {
             throw SchemaValidationError(field: field(key), observed: "string \"\"", expected: "non-empty string")
         }
@@ -123,28 +119,9 @@ extension TheFence.CommandArgumentReadable {
         return value
     }
 
-    func integer(_ key: String) throws -> Int? {
-        try schemaInteger(key)
-    }
-
-    func nonNegativeInteger(_ key: String) throws -> Int? {
-        try schemaNonNegativeInteger(key)
-    }
-
-    func boolean(_ key: String) throws -> Bool? {
-        try schemaBoolean(key)
-    }
-
-    func requiredEnumValue<E>(
-        _ key: String,
-        as type: E.Type
-    ) throws -> E where E: CaseIterable & RawRepresentable, E.RawValue == String {
-        try requiredSchemaEnum(key, as: type)
-    }
-
     func countArgument() throws -> TheFence.CountArgument {
         TheFence.CountArgument(
-            value: try integer("count"),
+            value: try schemaInteger("count"),
             observed: observedDescription(for: "count")
         )
     }

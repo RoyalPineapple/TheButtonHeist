@@ -3,20 +3,12 @@ import Foundation
 import TheScore
 
 extension TheFence.CommandArgumentReadable {
-    func number(_ key: String) throws -> Double? {
-        try schemaNumber(key)
-    }
-
     func hasAny(_ keys: String...) -> Bool {
         keys.contains { argumentValues[$0] != nil }
     }
 
-    func requiredNumber(_ key: String) throws -> Double {
-        try requiredSchemaNumber(key)
-    }
-
     func positiveNumber(_ key: String) throws -> Double? {
-        guard let value = try number(key) else { return nil }
+        guard let value = try schemaNumber(key) else { return nil }
         guard value > 0 else {
             throw SchemaValidationError(field: key, observed: value, expected: "number > 0")
         }
@@ -50,18 +42,4 @@ extension TheFence.CommandArgumentReadable {
         return value
     }
 
-    func unitPoint(_ key: String) throws -> UnitPoint? {
-        try schemaUnitPoint(key)
-    }
-
-    func enumValue<E>(
-        _ key: String,
-        as type: E.Type
-    ) throws -> E? where E: CaseIterable & RawRepresentable, E.RawValue == String {
-        try schemaEnum(key, as: type)
-    }
-
-    func requiredObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject] {
-        try requiredSchemaObjectArray(key)
-    }
 }

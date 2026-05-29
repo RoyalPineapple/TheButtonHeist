@@ -8,7 +8,7 @@ extension TheFence {
     ) throws -> DecodedRequestDispatch {
         switch command {
         case .scroll:
-            let direction = try input.enumValue("direction", as: ScrollDirection.self) ?? .down
+            let direction = try input.schemaEnum("direction", as: ScrollDirection.self) ?? .down
             return try decodedExecutablePayload(.scroll(ScrollTarget(
                 selection: input.scrollContainerSelection(),
                 direction: direction
@@ -20,10 +20,10 @@ extension TheFence {
         case .elementSearch:
             return try decodedExecutablePayload(.elementSearch(ElementSearchTarget(
                 elementTarget: input.requiredElementTarget(command: .elementSearch),
-                direction: input.enumValue("direction", as: ScrollSearchDirection.self) ?? .down
+                direction: input.schemaEnum("direction", as: ScrollSearchDirection.self) ?? .down
             )))
         case .scrollToEdge:
-            let edge = try input.enumValue("edge", as: ScrollEdge.self) ?? .top
+            let edge = try input.schemaEnum("edge", as: ScrollEdge.self) ?? .top
             return try decodedExecutablePayload(.scrollToEdge(ScrollToEdgeTarget(
                 selection: input.scrollContainerSelection(),
                 edge: edge

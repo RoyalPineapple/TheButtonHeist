@@ -5,7 +5,7 @@ import TheScore
 extension TheFence {
 
     func decodePinchTarget(_ request: some CommandArgumentReadable) throws -> PinchTarget {
-        let scale = try request.requiredNumber("scale")
+        let scale = try request.requiredSchemaNumber("scale")
         let target = PinchTarget(
             center: try decodeRequiredPointIntent(
                 request: request,
@@ -16,7 +16,7 @@ extension TheFence {
                 missingMessage: "center requires an element target or center coordinates"
             ),
             scale: scale,
-            spread: try request.number("spread"),
+            spread: try request.schemaNumber("spread"),
             duration: try request.gestureDuration()
         )
         try validatePositiveGestureNumber(target.scale, field: "scale")
@@ -25,7 +25,7 @@ extension TheFence {
     }
 
     func decodeRotateTarget(_ request: some CommandArgumentReadable) throws -> RotateTarget {
-        let angle = try request.requiredNumber("angle")
+        let angle = try request.requiredSchemaNumber("angle")
         let target = RotateTarget(
             center: try decodeRequiredPointIntent(
                 request: request,
@@ -36,7 +36,7 @@ extension TheFence {
                 missingMessage: "center requires an element target or center coordinates"
             ),
             angle: angle,
-            radius: try request.number("radius"),
+            radius: try request.schemaNumber("radius"),
             duration: try request.gestureDuration()
         )
         try validatePositiveGestureNumber(target.radius, field: "radius")

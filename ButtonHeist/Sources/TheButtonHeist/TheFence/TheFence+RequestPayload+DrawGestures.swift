@@ -5,7 +5,7 @@ import TheScore
 extension TheFence {
 
     func decodeDrawPathTarget(_ request: some CommandArgumentReadable) throws -> DrawPathTarget {
-        let pointsArray = try request.requiredObjectArray("points")
+        let pointsArray = try request.requiredSchemaObjectArray("points")
         try validateArrayCount(
             field: "points",
             count: pointsArray.count,
@@ -19,7 +19,7 @@ extension TheFence {
     }
 
     func decodeDrawBezierTarget(_ request: some CommandArgumentReadable) throws -> DrawBezierTarget {
-        let segmentsArray = try request.requiredObjectArray("segments")
+        let segmentsArray = try request.requiredSchemaObjectArray("segments")
         try validateArrayCount(
             field: "segments",
             count: segmentsArray.count,
