@@ -406,7 +406,7 @@ final class TheBrains {
             parentCapture: baseline.capture,
             classification: classification
         )
-        guard accessibilityTrace.backgroundDeltaProjection != nil else { return nil }
+        guard accessibilityTrace.meaningfulEndpointDeltaProjection != nil else { return nil }
         return accessibilityTrace
     }
 

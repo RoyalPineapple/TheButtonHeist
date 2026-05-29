@@ -143,7 +143,7 @@ final class AccessibilityTraceHistoryTests: XCTestCase {
         XCTAssertEqual(pending.index, 0)
         XCTAssertEqual(pending.cursor, history.pendingCursor(at: 0))
         XCTAssertEqual(pending.trace, history.pendingTrace(at: 0)?.trace)
-        XCTAssertEqual(pending.delta, pending.trace.backgroundDeltaProjection)
+        XCTAssertEqual(pending.delta, pending.trace.meaningfulEndpointDeltaProjection)
         XCTAssertEqual(pending.trace.captures.map(\.hash), sourceTrace.captures.map(\.hash))
         XCTAssertEqual(history.elementLookup(captureRef: pending.firstRef)["title"]?.label, "Menu")
     }

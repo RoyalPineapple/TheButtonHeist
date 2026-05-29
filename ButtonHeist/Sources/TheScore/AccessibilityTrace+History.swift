@@ -35,7 +35,7 @@ public extension AccessibilityTrace {
         public var firstRef: AccessibilityTrace.CaptureRef? { cursor.first }
         public var lastRef: AccessibilityTrace.CaptureRef? { cursor.last }
         public var endpointEdge: AccessibilityTrace.CaptureEdge? { cursor.endpointEdge }
-        public var delta: AccessibilityTrace.Delta? { trace.backgroundDeltaProjection }
+        public var delta: AccessibilityTrace.Delta? { trace.meaningfulEndpointDeltaProjection }
     }
 
     /// Append-only accessibility capture history between explicit prune points.

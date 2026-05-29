@@ -2936,8 +2936,8 @@ final class TheFenceTests: XCTestCase {
 
         let first = fence.drainBackgroundAccessibilityTrace()
         XCTAssertNotNil(first)
-        XCTAssertEqual(first?.backgroundDeltaProjection?.isScreenChanged, true)
-        XCTAssertEqual(first?.backgroundDeltaProjection?.elementCount, 7)
+        XCTAssertEqual(first?.meaningfulEndpointDeltaProjection?.isScreenChanged, true)
+        XCTAssertEqual(first?.meaningfulEndpointDeltaProjection?.elementCount, 7)
 
         let second = fence.drainBackgroundAccessibilityTrace()
         XCTAssertNil(second)
@@ -2949,11 +2949,11 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundElementsChangedTrace(elementCount: 2))
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
-        let first = fence.drainBackgroundAccessibilityTrace()?.backgroundDeltaProjection
+        let first = fence.drainBackgroundAccessibilityTrace()?.meaningfulEndpointDeltaProjection
         XCTAssertEqual(first?.kindRawValue, "elementsChanged")
         XCTAssertEqual(first?.elementCount, 2)
 
-        let second = fence.drainBackgroundAccessibilityTrace()?.backgroundDeltaProjection
+        let second = fence.drainBackgroundAccessibilityTrace()?.meaningfulEndpointDeltaProjection
         XCTAssertEqual(second?.isScreenChanged, true)
         XCTAssertEqual(second?.elementCount, 7)
 
@@ -2967,7 +2967,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundScreenChangedTrace(elementCount: 7))
 
         let traces = fence.drainBackgroundAccessibilityTraces()
-        let deltas = traces.compactMap(\.backgroundDeltaProjection)
+        let deltas = traces.compactMap(\.meaningfulEndpointDeltaProjection)
 
         XCTAssertEqual(deltas.map(\.kindRawValue), ["elementsChanged", "screenChanged"])
         XCTAssertEqual(deltas.map(\.elementCount), [2, 7])
@@ -2993,7 +2993,7 @@ final class TheFenceTests: XCTestCase {
 
         let drained = fence.drainBackgroundAccessibilityTrace()
         XCTAssertEqual(drained, trace)
-        let derived = drained?.backgroundDeltaProjection
+        let derived = drained?.meaningfulEndpointDeltaProjection
         guard case .elementsChanged(let payload)? = derived else {
             return XCTFail("Expected trace-derived elementsChanged delta, got \(String(describing: derived))")
         }
@@ -3024,7 +3024,7 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected action response, got \(response)")
         }
 
-        let queued = fence.drainBackgroundAccessibilityTrace()?.backgroundDeltaProjection
+        let queued = fence.drainBackgroundAccessibilityTrace()?.meaningfulEndpointDeltaProjection
         XCTAssertEqual(queued?.isScreenChanged, true)
         XCTAssertEqual(queued?.elementCount, 7)
         XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
@@ -3073,7 +3073,7 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected action response, got \(response)")
         }
 
-        let remaining = fence.drainBackgroundAccessibilityTrace()?.backgroundDeltaProjection
+        let remaining = fence.drainBackgroundAccessibilityTrace()?.meaningfulEndpointDeltaProjection
         XCTAssertEqual(remaining?.kindRawValue, "elementsChanged")
         XCTAssertEqual(remaining?.elementCount, 2)
         XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
@@ -3086,11 +3086,11 @@ final class TheFenceTests: XCTestCase {
             fence.handoff.onBackgroundAccessibilityTrace?(makeBackgroundElementsChangedTrace(elementCount: count))
         }
 
-        let first = fence.drainBackgroundAccessibilityTrace()?.backgroundDeltaProjection
+        let first = fence.drainBackgroundAccessibilityTrace()?.meaningfulEndpointDeltaProjection
         XCTAssertEqual(first?.elementCount, 6)
 
         for expectedCount in 7...25 {
-            XCTAssertEqual(fence.drainBackgroundAccessibilityTrace()?.backgroundDeltaProjection?.elementCount, expectedCount)
+            XCTAssertEqual(fence.drainBackgroundAccessibilityTrace()?.meaningfulEndpointDeltaProjection?.elementCount, expectedCount)
         }
         XCTAssertNil(fence.drainBackgroundAccessibilityTrace())
     }
@@ -3251,7 +3251,7 @@ final class TheFenceTests: XCTestCase {
             XCTFail("Expected action response, got \(response)")
         }
 
-        let queued = fence.drainBackgroundAccessibilityTrace()?.backgroundDeltaProjection
+        let queued = fence.drainBackgroundAccessibilityTrace()?.meaningfulEndpointDeltaProjection
         XCTAssertEqual(queued?.isScreenChanged, true)
         XCTAssertEqual(queued?.elementCount, 7)
     }

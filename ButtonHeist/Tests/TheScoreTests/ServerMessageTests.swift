@@ -546,8 +546,8 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
         let receipt = try XCTUnwrap(decoded.accessibilityTrace?.receipts.first)
         XCTAssertEqual(receipt.kind, .capture)
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.kindRawValue, "screenChanged")
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.elementCount, 1)
+        XCTAssertEqual(decoded.accessibilityTrace?.meaningfulEndpointDeltaProjection?.kindRawValue, "screenChanged")
+        XCTAssertEqual(decoded.accessibilityTrace?.meaningfulEndpointDeltaProjection?.elementCount, 1)
 
         let reencoded = try JSONEncoder().encode(decoded)
         let reencodedJson = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])

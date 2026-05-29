@@ -71,7 +71,7 @@ final class FenceBackgroundAccessibilityLifecycleTests: XCTestCase {
         XCTAssertEqual(match.result.accessibilityDelta?.isScreenChanged, true)
         XCTAssertEqual(match.validation.met, true)
         XCTAssertEqual(lifecycle.snapshot.pendingTraceCount, 1)
-        XCTAssertEqual(lifecycle.drainTrace()?.backgroundDeltaProjection?.kindRawValue, "elementsChanged")
+        XCTAssertEqual(lifecycle.drainTrace()?.meaningfulEndpointDeltaProjection?.kindRawValue, "elementsChanged")
 
         lifecycle.enqueue(makeBackgroundScreenChangedTrace(elementCount: 3))
         lifecycle.reset()

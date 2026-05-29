@@ -348,7 +348,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
         let endpointDelta = try XCTUnwrap(trace.endpointDeltaProjection)
 
-        XCTAssertEqual(trace.backgroundDeltaProjection, endpointDelta)
+        XCTAssertEqual(trace.meaningfulEndpointDeltaProjection, endpointDelta)
         XCTAssertEqual(trace.captures.first?.hash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.parentHash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.hash, after.capture.hash)
