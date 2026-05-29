@@ -142,7 +142,7 @@ public final class TheFence {
         switch handoff.connectionPhase {
         case .disconnected:
             return .disconnected
-        case .connecting:
+        case .reconnecting, .connecting:
             return .connecting
         case .connected:
             return .connected

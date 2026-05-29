@@ -210,6 +210,28 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRetryableDisconnectEntersConnectionLifecycleReconnectPhase() async {
+        let handoff = TheHandoff()
+        handoff.reconnectInterval = 60
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        handoff.makeConnection = { _, _, _ in
+            let connection = MockConnection()
+            connection.connectEventsOverride = [
+                .connected,
+                .disconnected(.serverClosed),
+            ]
+            return connection
+        }
+
+        handoff.setupAutoReconnect(filter: nil)
+        handoff.connect(to: device)
+
+        assertReconnecting(handoff.connectionPhase, device: device)
+        handoff.disableAutoReconnect()
+    }
+
+    @ButtonHeistActor
     func testNonRetryableDisconnectDoesNotTriggerReconnect() async throws {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 0.01
@@ -427,7 +449,7 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAutoReconnectPreservesOriginalDiscoveredDeviceIdentity() async {
+    func testAutoReconnectRetriesOriginalDeviceWithoutDiscoverySelection() async {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 0
         handoff.reconnectMaxAttempts = 1
@@ -469,7 +491,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         await fulfillment(of: [gaveUp], timeout: 5)
 
-        XCTAssertEqual(connectedIDs, [originalDevice.id])
+        XCTAssertEqual(connectedIDs, [originalDevice.id, originalDevice.id])
         assertFailed(
             handoff.connectionPhase,
             failure: .connectionFailed(

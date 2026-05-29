@@ -1,10 +1,22 @@
 import Foundation
 
+@ButtonHeistActor
+protocol HandoffReconnectRuntime: AnyObject {
+    var isConnected: Bool { get }
+
+    func publishReconnectStatus(_ message: String)
+    func connectForAutoReconnect(to device: DiscoveredDevice) -> UUID
+    func waitForAutoReconnectResult(timeout: TimeInterval) async throws
+    func disconnectAutoReconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError)
+}
+
 /// Invariant: connection phase, attempt failure, and result waiters advance together.
 @ButtonHeistActor
 final class HandoffConnectionLifecycle {
     private(set) var phase: HandoffConnectionPhase = .disconnected
     private var attemptFailure: HandoffConnectionError?
+    private var reconnectPlan: HandoffReconnectPlan?
+    private var reconnectRunnerTask: Task<Void, Never>?
     private let waiters = ConnectionResultWaiters()
 
     var onPhaseChanged: (@ButtonHeistActor (HandoffConnectionPhase) -> Void)?
@@ -15,7 +27,7 @@ final class HandoffConnectionLifecycle {
             return attempt.id
         case .connected(let session):
             return session.attemptID
-        case .disconnected, .failed:
+        case .disconnected, .reconnecting, .failed:
             return nil
         }
     }
@@ -29,7 +41,7 @@ final class HandoffConnectionLifecycle {
         switch phase {
         case .failed(let failure):
             return failure
-        case .disconnected:
+        case .disconnected, .reconnecting:
             return attemptFailure
         case .connecting, .connected:
             return nil
@@ -86,7 +98,6 @@ final class HandoffConnectionLifecycle {
         attemptFailure = failure
         let attemptID = activeAttemptID
         let wasActive = phase.isActive
-        cancelConnectedKeepalive()
         setPhase(.failed(failure))
         if wasActive, let attemptID {
             waiters.resolve(attemptID: attemptID, with: .failure(failure))
@@ -102,7 +113,6 @@ final class HandoffConnectionLifecycle {
         if let expectedAttemptID, attemptID != expectedAttemptID { return false }
 
         let wasActive = phase.isActive
-        cancelConnectedKeepalive()
         if wasActive {
             if let reason {
                 let failure = HandoffConnectionError.disconnected(reason)
@@ -134,7 +144,6 @@ final class HandoffConnectionLifecycle {
     func disconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError) -> Bool {
         guard activeAttemptID == attemptID else { return false }
         attemptFailure = failure
-        cancelConnectedKeepalive()
         setPhase(.disconnected)
         waiters.resolve(attemptID: attemptID, with: .failure(failure))
         return true
@@ -142,6 +151,66 @@ final class HandoffConnectionLifecycle {
 
     func recordAttemptFailure(_ failure: HandoffConnectionError) {
         attemptFailure = failure
+    }
+
+    func setupAutoReconnect(filter: String?) {
+        guard var plan = reconnectPlan else {
+            reconnectPlan = HandoffReconnectPlan(filter: filter, target: nil)
+            return
+        }
+
+        guard plan.filter != filter else { return }
+        cancelReconnectRunner()
+        plan.filter = filter
+        plan.target = nil
+        reconnectPlan = plan
+        if case .reconnecting = phase {
+            setPhase(.disconnected)
+        }
+    }
+
+    func disableAutoReconnect() {
+        cancelReconnectRunner()
+        reconnectPlan = nil
+        if case .reconnecting = phase {
+            setPhase(.disconnected)
+        }
+    }
+
+    func cancelAutoReconnect(clearTarget: Bool) {
+        cancelReconnectRunner()
+        guard var plan = reconnectPlan else { return }
+        if clearTarget {
+            plan.target = nil
+        }
+        reconnectPlan = plan
+        if case .reconnecting = phase {
+            setPhase(.disconnected)
+        }
+    }
+
+    func scheduleAutoReconnectIfNeeded(
+        disconnectedDevice: DiscoveredDevice,
+        policy: AutoReconnectRecoveryPolicy,
+        attemptTimeout: TimeInterval,
+        runtime: any HandoffReconnectRuntime
+    ) {
+        guard reconnectRunnerTask == nil, var plan = reconnectPlan else { return }
+
+        let target = plan.target ?? HandoffReconnectTarget(filter: plan.filter, device: disconnectedDevice)
+        plan.target = target
+        reconnectPlan = plan
+        setPhase(.reconnecting(HandoffReconnectAttempt(id: UUID(), target: target)))
+
+        reconnectRunnerTask = Task<Void, Never> { @ButtonHeistActor [weak self, weak runtime] in
+            guard let self, let runtime else { return }
+            await self.runAutoReconnect(
+                target: target,
+                policy: policy,
+                attemptTimeout: attemptTimeout,
+                runtime: runtime
+            )
+        }
     }
 
     func recordServerInfo(_ info: ServerInfo) {
@@ -165,7 +234,7 @@ final class HandoffConnectionLifecycle {
             return
         case .failed(let failure):
             throw failure
-        case .disconnected:
+        case .disconnected, .reconnecting:
             if let failure = attemptFailure {
                 throw failure
             }
@@ -211,17 +280,80 @@ final class HandoffConnectionLifecycle {
         return count
     }
 
-    private func cancelConnectedKeepalive() {
-        if case .connected(let session) = phase {
-            session.keepaliveTask.cancel()
+    private func runAutoReconnect(
+        target: HandoffReconnectTarget,
+        policy: AutoReconnectRecoveryPolicy,
+        attemptTimeout: TimeInterval,
+        runtime: any HandoffReconnectRuntime
+    ) async {
+        runtime.publishReconnectStatus("Device disconnected — watching for reconnection...")
+
+        for _ in policy.attempts {
+            guard isCurrentReconnectTarget(target) else { return }
+            setPhase(.reconnecting(HandoffReconnectAttempt(id: UUID(), target: target)))
+
+            let sleepDuration = policy.sleepDuration(afterConsecutiveDiscoveryMisses: 0)
+            guard await Task.cancellableSleep(for: .seconds(sleepDuration)) else { return }
+            guard isCurrentReconnectTarget(target) else { return }
+
+            let device = target.device
+            runtime.publishReconnectStatus("Reconnecting to \(device.name)...")
+            let attemptID = runtime.connectForAutoReconnect(to: device)
+            do {
+                try await runtime.waitForAutoReconnectResult(timeout: attemptTimeout)
+            } catch let error as HandoffConnectionError where error == .timeout {
+                runtime.disconnectAutoReconnectAttempt(attemptID, failure: .timeout)
+            } catch is CancellationError {
+                return
+            } catch {
+                // The connection phase already recorded the attempt failure; keep retrying until the bounded policy expires.
+            }
+
+            guard isCurrentReconnectTarget(target) else { return }
+            if runtime.isConnected {
+                runtime.publishReconnectStatus("Reconnected to \(device.name)")
+                reconnectRunnerTask = nil
+                reconnectPlan?.target = target
+                return
+            }
         }
+
+        let failure = policy.terminalFailure(targetDisplayName: target.device.name)
+        runtime.publishReconnectStatus(failure.errorDescription ?? "Auto-reconnect gave up")
+        guard isCurrentReconnectTarget(target) else { return }
+        reconnectRunnerTask = nil
+        reconnectPlan = nil
+        markFailed(failure)
+    }
+
+    private func cancelReconnectRunner() {
+        reconnectRunnerTask?.cancel()
+        reconnectRunnerTask = nil
+    }
+
+    private func isCurrentReconnectTarget(_ target: HandoffReconnectTarget) -> Bool {
+        guard !Task.isCancelled,
+              reconnectRunnerTask != nil,
+              reconnectPlan?.target == target
+        else { return false }
+        return true
     }
 
     private func setPhase(_ nextPhase: HandoffConnectionPhase) {
         let previousPhase = phase
+        cancelOwnedTasksLeaving(previousPhase, for: nextPhase)
         phase = nextPhase
         guard !Self.isSameConnectionPhase(previousPhase, nextPhase) else { return }
         onPhaseChanged?(nextPhase)
+    }
+
+    private func cancelOwnedTasksLeaving(
+        _ previousPhase: HandoffConnectionPhase,
+        for nextPhase: HandoffConnectionPhase
+    ) {
+        guard case .connected(let session) = previousPhase else { return }
+        if case .connected = nextPhase { return }
+        session.keepaliveTask.cancel()
     }
 
     private static func isSameConnectionPhase(
@@ -230,6 +362,7 @@ final class HandoffConnectionLifecycle {
     ) -> Bool {
         switch (lhs, rhs) {
         case (.disconnected, .disconnected),
+             (.reconnecting, .reconnecting),
              (.connecting, .connecting),
              (.connected, .connected),
              (.failed, .failed):
@@ -248,8 +381,13 @@ private extension HandoffConnectionPhase {
         switch self {
         case .connecting, .connected:
             return true
-        case .disconnected, .failed:
+        case .disconnected, .reconnecting, .failed:
             return false
         }
     }
+}
+
+private struct HandoffReconnectPlan {
+    var filter: String?
+    var target: HandoffReconnectTarget?
 }
