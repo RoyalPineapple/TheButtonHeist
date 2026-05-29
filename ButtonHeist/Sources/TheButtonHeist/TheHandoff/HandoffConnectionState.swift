@@ -1,4 +1,7 @@
 import Foundation
+import os.log
+
+private let driverIdentityLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "driver-identity")
 
 /// Why a connection attempt failed. TheFence maps this domain error at the boundary.
 ///
@@ -113,8 +116,14 @@ struct HandoffConnectionAttempt {
     let device: DiscoveredDevice
 }
 
+struct HandoffReconnectAttempt {
+    let id: UUID
+    let target: HandoffReconnectTarget
+}
+
 enum HandoffConnectionPhase {
     case disconnected
+    case reconnecting(HandoffReconnectAttempt)
     case connecting(HandoffConnectionAttempt)
     case connected(HandoffConnectedSession)
     case failed(HandoffConnectionError)
@@ -124,25 +133,62 @@ enum HandoffConnectionPhase {
 struct HandoffReconnectTarget: Equatable {
     let filter: String?
     let device: DiscoveredDevice
-
-    func resolve(from discoveredDevices: [DiscoveredDevice]) -> DiscoveredDevice? {
-        if device.reconnectsWithoutDiscovery {
-            return device
-        }
-
-        return discoveredDevices.first { candidate in
-            candidate.discoveryIdentity == device.discoveryIdentity && (
-                filter.map { candidate.matches(filter: $0) } ?? true
-            )
-        }
-    }
 }
 
-private extension DiscoveredDevice {
-    var reconnectsWithoutDiscovery: Bool {
-        if case .hostPort = endpoint {
-            return true
+enum HandoffDriverIdentity {
+    static func effectiveDriverId(explicit driverId: String?) -> String {
+        if let driverId, !driverId.isEmpty { return driverId }
+        return persistentDriverId
+    }
+
+    private static let driverIdFile: URL = {
+        let configDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".buttonheist", isDirectory: true)
+        return configDir.appendingPathComponent("driver-id")
+    }()
+
+    private static let persistentDriverId: String = {
+        let fileURL = driverIdFile
+        let existingValue: String?
+        do {
+            existingValue = try String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            existingValue = nil
         }
-        return false
+        if let existing = existingValue, !existing.isEmpty {
+            repairDriverIdPermissions(fileURL)
+            return existing
+        }
+
+        let generated = UUID().uuidString.lowercased()
+        let dir = fileURL.deletingLastPathComponent()
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        } catch {
+            driverIdentityLogger.warning("Failed to create driver-id directory: \(error.localizedDescription)")
+        }
+        if !FileManager.default.createFile(
+            atPath: fileURL.path,
+            contents: Data(generated.utf8),
+            attributes: [.posixPermissions: 0o600]
+        ) {
+            driverIdentityLogger.warning("Failed to persist driver-id to \(fileURL.path)")
+        }
+        return generated
+    }()
+
+    private static func repairDriverIdPermissions(_ fileURL: URL) {
+        let fileManager = FileManager.default
+        let dir = fileURL.deletingLastPathComponent()
+        do {
+            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        } catch {
+            driverIdentityLogger.warning("Failed to repair driver-id directory permissions: \(error.localizedDescription)")
+        }
+        do {
+            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        } catch {
+            driverIdentityLogger.warning("Failed to repair driver-id file permissions: \(error.localizedDescription)")
+        }
     }
 }

@@ -7,13 +7,12 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 ///
 /// TheFence owns a TheHandoff and delegates connection management here.
 @ButtonHeistActor
-final class TheHandoff {
+final class TheHandoff: HandoffReconnectRuntime {
 
     // MARK: - State
 
-    private let connectionLifecycle = HandoffConnectionLifecycle()
+    let connectionLifecycle = HandoffConnectionLifecycle()
     private let discoveryLifecycle = HandoffDiscoveryLifecycle()
-    private let reconnectController = HandoffReconnectController()
 
     // MARK: - Derived State
 
@@ -94,7 +93,7 @@ final class TheHandoff {
     var reconnectMaxAttempts = 60
     /// Per-attempt connection timeout used by the reconnect runner.
     var reconnectAttemptTimeout: TimeInterval = 10
-    private var autoReconnectRecoveryPolicy: AutoReconnectRecoveryPolicy {
+    var autoReconnectRecoveryPolicy: AutoReconnectRecoveryPolicy {
         AutoReconnectRecoveryPolicy(maxAttempts: reconnectMaxAttempts, baseInterval: reconnectInterval)
     }
     private static let keepaliveInterval: Duration = .seconds(5)
@@ -117,58 +116,7 @@ final class TheHandoff {
 
     /// Resolved driver ID: explicit override if set, otherwise a persistent auto-generated UUID.
     var effectiveDriverId: String {
-        if let driverId, !driverId.isEmpty { return driverId }
-        return Self.persistentDriverId
-    }
-
-    private static let driverIdFile: URL = {
-        let configDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".buttonheist", isDirectory: true)
-        return configDir.appendingPathComponent("driver-id")
-    }()
-
-    private static let persistentDriverId: String = {
-        let fileURL = driverIdFile
-        let existingValue: String?
-        do {
-            existingValue = try String(contentsOf: fileURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            existingValue = nil
-        }
-        if let existing = existingValue, !existing.isEmpty {
-            repairDriverIdPermissions(fileURL)
-            return existing
-        }
-        let generated = UUID().uuidString.lowercased()
-        let dir = fileURL.deletingLastPathComponent()
-        do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        } catch {
-            logger.warning("Failed to create driver-id directory: \(error.localizedDescription)")
-        }
-        if !FileManager.default.createFile(
-            atPath: fileURL.path,
-            contents: Data(generated.utf8),
-            attributes: [.posixPermissions: 0o600]
-        ) {
-            logger.warning("Failed to persist driver-id to \(fileURL.path)")
-        }
-        return generated
-    }()
-
-    private static func repairDriverIdPermissions(_ fileURL: URL) {
-        let fileManager = FileManager.default
-        let dir = fileURL.deletingLastPathComponent()
-        do {
-            try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
-        } catch {
-            logger.warning("Failed to repair driver-id directory permissions: \(error.localizedDescription)")
-        }
-        do {
-            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
-        } catch {
-            logger.warning("Failed to repair driver-id file permissions: \(error.localizedDescription)")
-        }
+        HandoffDriverIdentity.effectiveDriverId(explicit: driverId)
     }
 
     // MARK: - Init
@@ -230,8 +178,13 @@ final class TheHandoff {
     // MARK: - Connection
 
     @discardableResult
-    func connect(to device: DiscoveredDevice, cancelReconnectTaskOnReplacement: Bool = true) -> UUID {
-        disconnectForReplacement(cancelReconnectTask: cancelReconnectTaskOnReplacement)
+    func connect(to device: DiscoveredDevice) -> UUID {
+        disconnectForReplacement()
+        return openConnection(to: device)
+    }
+
+    @discardableResult
+    func openConnection(to device: DiscoveredDevice) -> UUID {
         let attemptID = connectionLifecycle.beginConnecting(device: device)
 
         connection = makeConnection(device, token, effectiveDriverId)
@@ -350,27 +303,33 @@ final class TheHandoff {
     }
 
     func disconnect() {
-        reconnectController.cancelRunnerAndClearTarget()
-        connection?.disconnect()
-        connection = nil
-        connectionLifecycle.markDisconnected()
+        tearDownConnection(cancelAutoReconnect: true)
     }
 
-    @discardableResult
-    private func disconnectForReplacement(cancelReconnectTask: Bool = true) -> Bool {
-        let hadActiveSession = connectionLifecycle.activeAttemptID != nil
-        if cancelReconnectTask {
-            reconnectController.cancelRunnerAndClearTarget()
-        }
-        connection?.disconnect()
-        connection = nil
+    func disconnectForReplacement() {
+        tearDownConnection(cancelAutoReconnect: true, replacementReason: .localDisconnect)
+    }
 
-        if hadActiveSession {
-            connectionLifecycle.markDisconnected(reason: .localDisconnect)
+    private func tearDownConnection(
+        cancelAutoReconnect: Bool,
+        replacementReason: DisconnectReason? = nil
+    ) {
+        let hadActiveAttempt = connectionLifecycle.activeAttemptID != nil
+        if cancelAutoReconnect {
+            connectionLifecycle.cancelAutoReconnect(clearTarget: true)
+        }
+        closeConnection()
+
+        if hadActiveAttempt, let replacementReason {
+            connectionLifecycle.markDisconnected(reason: replacementReason)
         } else {
             connectionLifecycle.markDisconnected()
         }
-        return hadActiveSession
+    }
+
+    func closeConnection() {
+        connection?.disconnect()
+        connection = nil
     }
 
     /// Tear down an in-flight connection attempt after its owner reaches a setup
@@ -379,12 +338,11 @@ final class TheHandoff {
     /// drop, only a failed setup attempt.
     func abortConnectionAttempt(_ attemptID: UUID, failure: HandoffConnectionError) {
         guard connectionLifecycle.disconnectAttempt(attemptID, failure: failure) else { return }
-        connection?.disconnect()
-        connection = nil
+        closeConnection()
     }
 
     func disableAutoReconnect() {
-        reconnectController.disable()
+        connectionLifecycle.disableAutoReconnect()
     }
 
     /// Suspend until the connection phase transitions to `.connected` (returns),
@@ -406,10 +364,7 @@ final class TheHandoff {
         guard isConnected else { return }
         logger.warning("Force-disconnecting stale connection")
         let reconnectDevice = connectedDevice
-        reconnectController.cancelRunnerAndClearTarget()
-        connection?.disconnect()
-        connection = nil
-        connectionLifecycle.markDisconnected(reason: .localDisconnect)
+        tearDownConnection(cancelAutoReconnect: true, replacementReason: .localDisconnect)
         if let reconnectDevice {
             scheduleAutoReconnectIfNeeded(disconnectedDevice: reconnectDevice)
         }
@@ -459,120 +414,4 @@ final class TheHandoff {
 
     /// Status callback for session management progress messages.
     var onStatus: (@ButtonHeistActor (String) -> Void)?
-
-    /// Discover a device (optionally matching a filter) and connect to it.
-    /// Starts discovery if not already active, polls until a matching device appears
-    /// or the bounded resolution window expires. Suspends on
-    /// `waitForConnectionResult` for the connection outcome.
-    func connectWithDiscovery(
-        filter: String?,
-        timeout: TimeInterval = 30
-    ) async throws {
-        disconnectForReplacement()
-        onStatus?("Searching for iOS devices...")
-        let startedDiscovery = !hasActiveDiscoverySession
-        if startedDiscovery { startDiscovery() }
-
-        let resolutionTimeout = Self.connectionResolutionTimeout(for: timeout)
-        let discoveryTimeout = UInt64(resolutionTimeout * 1_000_000_000)
-        let device: DiscoveredDevice
-        do {
-            device = try await resolveReachableDevice(
-                filter: filter,
-                discoveryTimeout: discoveryTimeout,
-                reachabilityTimeout: resolutionTimeout
-            )
-        } catch {
-            if startedDiscovery { stopDiscovery() }
-            if let connectionError = error as? HandoffConnectionError {
-                connectionLifecycle.recordAttemptFailure(connectionError)
-            }
-            throw error
-        }
-
-        onStatus?("Found: \(displayName(for: device))")
-        onStatus?("Connecting...")
-
-        let attemptID = connect(to: device)
-        do {
-            try await waitForConnectionResult(timeout: timeout)
-        } catch let error as HandoffConnectionError where error == .timeout {
-            abortConnectionAttempt(attemptID, failure: .timeout)
-            throw error
-        }
-        onStatus?("Connected to \(displayName(for: device))")
-    }
-
-    private func resolveReachableDevice(
-        filter: String?,
-        discoveryTimeout: UInt64,
-        reachabilityTimeout: TimeInterval
-    ) async throws -> DiscoveredDevice {
-        let resolver = DeviceResolver(
-            filter: filter,
-            discoveryTimeout: discoveryTimeout,
-            reachabilityTimeout: reachabilityTimeout,
-            getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
-        )
-        return try await resolver.resolve()
-    }
-
-    static func connectionResolutionTimeout(for timeout: TimeInterval) -> TimeInterval {
-        min(max(timeout, 0.05), 2.0)
-    }
-
-    func setupAutoReconnect(filter: String?) {
-        reconnectController.setup(filter: filter)
-    }
-
-    private func scheduleAutoReconnectIfNeeded(disconnectedDevice: DiscoveredDevice) {
-        reconnectController.scheduleIfNeeded(
-            disconnectedDevice: disconnectedDevice,
-            policy: autoReconnectRecoveryPolicy,
-            attemptTimeout: reconnectAttemptTimeout,
-            runtime: self
-        )
-    }
-
-    // MARK: - Display Names
-
-    /// Compute display name with disambiguation when multiple devices have the same app
-    func displayName(for device: DiscoveredDevice) -> String {
-        let appName = device.appName
-        let deviceSuffix = device.deviceName.isEmpty ? "" : " (\(device.deviceName))"
-
-        let sameAppDevices = discoveredDevices.filter { $0.appName == appName }
-
-        if sameAppDevices.count > 1 {
-            let sameAppAndDevice = sameAppDevices.filter { $0.deviceName == device.deviceName }
-            if sameAppAndDevice.count > 1, let shortId = device.shortId {
-                return "\(appName)\(deviceSuffix) [\(shortId)]"
-            }
-            return "\(appName)\(deviceSuffix)"
-        } else {
-            return appName
-        }
-    }
-}
-
-extension TheHandoff: HandoffReconnectRuntime {
-    func publishReconnectStatus(_ message: String) {
-        onStatus?(message)
-    }
-
-    func connectForAutoReconnect(to device: DiscoveredDevice) -> UUID {
-        connect(to: device, cancelReconnectTaskOnReplacement: false)
-    }
-
-    func waitForAutoReconnectResult(timeout: TimeInterval) async throws {
-        try await waitForConnectionResult(timeout: timeout)
-    }
-
-    func disconnectAutoReconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError) {
-        abortConnectionAttempt(attemptID, failure: failure)
-    }
-
-    func failAutoReconnect(_ failure: HandoffConnectionError) {
-        connectionLifecycle.markFailed(failure)
-    }
 }

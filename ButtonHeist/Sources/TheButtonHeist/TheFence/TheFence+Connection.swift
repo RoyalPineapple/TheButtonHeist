@@ -34,7 +34,7 @@ extension TheFence {
                   case .disconnected = failure
             else { return }
             clearClientSessionState(error: sessionStateError(for: failure))
-        case .connecting, .connected:
+        case .reconnecting, .connecting, .connected:
             break
         }
     }
