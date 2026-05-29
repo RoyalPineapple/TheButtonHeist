@@ -125,8 +125,6 @@ struct HandoffReconnectTarget: Equatable {
     let filter: String?
     let device: DiscoveredDevice
 
-    var displayName: String { device.name }
-
     func resolve(from discoveredDevices: [DiscoveredDevice]) -> DiscoveredDevice? {
         if device.reconnectsWithoutDiscovery {
             return device
