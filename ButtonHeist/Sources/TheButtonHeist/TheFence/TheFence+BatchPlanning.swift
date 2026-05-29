@@ -41,7 +41,7 @@ extension TheFence {
 
 private extension TheFence {
 
-    func decodeRunBatchStep(_ step: CommandArgumentObject, index: Int) throws -> RunBatchPreparedStep {
+    func decodeRunBatchStep(_ step: CommandArgumentEnvelope, index: Int) throws -> RunBatchPreparedStep {
         switch FenceOperationCatalog.normalizeBatchStep(step) {
         case .success(let operation):
             return try decodeRunBatchStep(operation: operation, index: index)
@@ -129,7 +129,7 @@ private extension TheFence {
     }
 
     static func validateJSONEnvelope(
-        _ arguments: some CommandArgumentReadable,
+        _ arguments: CommandArgumentEnvelope,
         field: String,
         maxBytes: Int,
         maxDepth: Int

@@ -4,7 +4,7 @@ extension TheFence {
 
     func decodeWaitActionDispatch(
         command: Command,
-        input: some CommandArgumentReadable
+        input: CommandArgumentEnvelope
     ) throws -> DecodedRequestDispatch {
         guard command == .waitFor else {
             throw FenceError.invalidRequest("Unexpected wait action command: \(command.rawValue)")

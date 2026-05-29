@@ -170,7 +170,7 @@ final class TheBrains {
         // accessibility signature below decides no-change, element-change,
         // or screen-change.
         let settleResult = await settleSession.run(start: start, baselineTripwireSignal: before.tripwireSignal)
-        var didSettle = settleResult.outcome.didSettleCleanly
+        let didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
             var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
             builder.message = "cancelled after \(cancelMs)ms"

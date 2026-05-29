@@ -39,13 +39,13 @@ public enum FenceOperationCatalog {
     }
 
     public static func normalizeBatchStep(
-        _ step: TheFence.CommandArgumentObject
+        _ step: TheFence.CommandArgumentEnvelope
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         normalizeBatchStep(step, context: "run_batch step")
     }
 
     public static func normalizeBatchStep(
-        _ step: TheFence.CommandArgumentObject,
+        _ step: TheFence.CommandArgumentEnvelope,
         context: String
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         normalizeCanonicalStep(
@@ -55,12 +55,12 @@ public enum FenceOperationCatalog {
         )
     }
 
-    public static func normalizeCommandObject(
-        _ object: TheFence.CommandArgumentObject,
+    public static func normalizeCommandEnvelope(
+        _ arguments: TheFence.CommandArgumentEnvelope,
         context: String
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
         normalizeCanonicalStep(
-            object,
+            arguments,
             context: context,
             isExecutable: nil
         )
@@ -74,7 +74,7 @@ public enum FenceOperationCatalog {
     }
 
     private static func normalizeCanonicalStep(
-        _ step: TheFence.CommandArgumentObject,
+        _ step: TheFence.CommandArgumentEnvelope,
         context: String,
         isExecutable: KeyPath<TheFence.Command, Bool>?
     ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
@@ -87,16 +87,9 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
 
-        var argumentValues = step.argumentValues
-        argumentValues.removeValue(forKey: "command")
-        let arguments = TheFence.CommandArgumentEnvelope(
-            values: argumentValues,
-            fieldPrefix: step.argumentFieldPrefix
-        )
-
         return normalizeCanonicalStep(
             commandName: commandName,
-            arguments: arguments,
+            arguments: step.dropping("command"),
             context: context,
             isExecutable: isExecutable
         )

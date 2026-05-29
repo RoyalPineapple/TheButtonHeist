@@ -12,7 +12,7 @@ extension TheFence {
             self.timeout = timeout
         }
 
-        init(arguments: some CommandArgumentReadable) throws {
+        init(arguments: CommandArgumentEnvelope) throws {
             self.init(
                 expectation: try Self.parseExpectation(arguments.argumentValues["expect"]),
                 timeout: try arguments.schemaNumber("timeout")

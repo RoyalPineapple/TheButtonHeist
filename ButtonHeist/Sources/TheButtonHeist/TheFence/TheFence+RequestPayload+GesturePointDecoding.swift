@@ -5,7 +5,7 @@ import TheScore
 extension TheFence {
 
     func decodeRequiredPointIntent(
-        request: some CommandArgumentReadable,
+        request: CommandArgumentEnvelope,
         elementTarget: ElementTarget?,
         xKey: String,
         yKey: String,
@@ -26,7 +26,7 @@ extension TheFence {
     }
 
     func decodeCoordinatePair(
-        request: some CommandArgumentReadable,
+        request: CommandArgumentEnvelope,
         xKey: String,
         yKey: String,
         field: String

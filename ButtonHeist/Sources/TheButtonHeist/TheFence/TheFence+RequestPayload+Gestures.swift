@@ -6,7 +6,7 @@ extension TheFence {
 
     func decodeGestureAction(
         command: Command,
-        request: some CommandArgumentReadable
+        request: CommandArgumentEnvelope
     ) throws -> DecodedRequestDispatch {
         switch command {
         case .oneFingerTap:

@@ -65,7 +65,7 @@ final class TheFenceTests: XCTestCase {
                 "traits": .array([.string("madeUpTrait")]),
             ]),
         ])
-        XCTAssertThrowsError(try args.elementTarget()) { error in
+        XCTAssertThrowsError(try args.decodedElementTarget()) { error in
             let message = error.localizedDescription
             XCTAssertTrue(message.hasPrefix(
                 "schema validation failed for target.traits[0]: observed string \"madeUpTrait\"; expected enum one of"
@@ -83,7 +83,7 @@ final class TheFenceTests: XCTestCase {
                 "excludeTraits": .array([.string("bogus")]),
             ]),
         ])
-        XCTAssertThrowsError(try args.elementTarget()) { error in
+        XCTAssertThrowsError(try args.decodedElementTarget()) { error in
             let message = error.localizedDescription
             XCTAssertTrue(message.hasPrefix(
                 "schema validation failed for target.excludeTraits[0]: observed string \"bogus\"; expected enum one of"
@@ -102,7 +102,7 @@ final class TheFenceTests: XCTestCase {
                 "excludeTraits": .array([.string("selected")]),
             ]),
         ])
-        guard case .matcher(let matcher, nil)? = try args.elementTarget() else {
+        guard case .matcher(let matcher, nil)? = try args.decodedElementTarget() else {
             return XCTFail("Expected matcher target")
         }
         XCTAssertEqual(matcher.traits, [.button, .header])
