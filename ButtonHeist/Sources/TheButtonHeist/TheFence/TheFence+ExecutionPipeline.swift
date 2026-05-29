@@ -237,6 +237,8 @@ extension TheFence {
             let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(
                 response: .action(
+                    // The wait produced this result. Preserve that command identity
+                    // instead of reporting the command that requested the wait.
                     command: .waitForChange,
                     result: waitResult,
                     expectation: waitValidation

@@ -113,6 +113,9 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         if case .heistId = target {
             preconditionFailure("HeistEvidence target must be a durable matcher; record source heistId under _recorded")
         }
+        if case .matcher(let matcher, _) = target, !matcher.hasPredicates {
+            preconditionFailure("HeistEvidence target must include durable matcher predicates")
+        }
         self.command = command
         self.target = target
         self.arguments = arguments
