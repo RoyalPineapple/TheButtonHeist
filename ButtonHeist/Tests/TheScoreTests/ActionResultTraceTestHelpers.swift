@@ -2,34 +2,9 @@ import AccessibilitySnapshotModel
 import Foundation
 @testable import TheScore
 
-extension ActionResult {
-    init(
-        success: Bool,
-        method: ActionMethod,
-        message: String? = nil,
-        errorKind: ErrorKind? = nil,
-        payload: ResultPayload? = nil,
-        traceProjecting: AccessibilityTrace.Delta? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        animating: Bool? = nil,
-        screenName: String? = nil,
-        screenId: String? = nil,
-        settled: Bool? = nil,
-        settleTimeMs: Int? = nil
-    ) {
-        self.init(
-            success: success,
-            method: method,
-            message: message,
-            errorKind: errorKind,
-            payload: payload,
-            accessibilityTrace: accessibilityTrace ?? traceProjecting.map(TestActionResultTrace.projecting),
-            animating: animating,
-            screenName: screenName,
-            screenId: screenId,
-            settled: settled,
-            settleTimeMs: settleTimeMs
-        )
+extension AccessibilityTrace {
+    static func projectingForTests(_ delta: AccessibilityTrace.Delta) -> AccessibilityTrace {
+        TestActionResultTrace.projecting(delta)
     }
 }
 

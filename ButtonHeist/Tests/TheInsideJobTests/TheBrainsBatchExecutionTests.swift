@@ -46,7 +46,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                     success: true,
                     method: .waitForChange,
                     message: expectation.summaryDescription,
-                    traceProjecting: trace
+                    accessibilityTrace: AccessibilityTrace.projectingForTests(trace)
                 )
             },
             settleRefreshRecordBaseline: {
@@ -264,10 +264,10 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
-                    traceProjecting: .screenChanged(.init(
+                    accessibilityTrace: .projectingForTests(.screenChanged(.init(
                         elementCount: 1,
                         newInterface: Interface(timestamp: Date(), tree: [])
-                    ))
+                    )))
                 )
             },
             waitForExpectation: { expectation, _ in

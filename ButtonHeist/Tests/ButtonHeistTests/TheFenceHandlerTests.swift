@@ -2237,7 +2237,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 success: true,
                 method: .waitForChange,
                 message: "expectation met after observed change",
-                traceProjecting: .noChange(.init(elementCount: 1))
+                accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
             ))
         }
 
@@ -2267,7 +2267,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .waitForChange,
                 message: "timed out after 0.2s — expectation not met",
                 errorKind: .timeout,
-                traceProjecting: .noChange(.init(elementCount: 1))
+                accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
             ))
         }
 
@@ -2893,7 +2893,7 @@ final class TheFenceHandlerTests: XCTestCase {
         // Mock returns a successful action result with an elementsChanged delta (updates only)
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, traceProjecting: delta))
+            .actionResult(ActionResult(success: true, method: .activate, accessibilityTrace: AccessibilityTrace.projectingForTests(delta)))
         }
 
         // Step 1 has expect → should count. Step 2 has no expect → should NOT count.
@@ -2920,7 +2920,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
         let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 10, newInterface: interface))
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, traceProjecting: delta))
+            .actionResult(ActionResult(success: true, method: .activate, accessibilityTrace: AccessibilityTrace.projectingForTests(delta)))
         }
 
         let response = try await executeRunBatch(fence, steps: [
@@ -3005,17 +3005,12 @@ final class TheFenceHandlerTests: XCTestCase {
                 success: true,
                 method: .activate,
                 message: "first",
-                traceProjecting: .screenChanged(.init(
-                    elementCount: 0,
-                    newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-                )),
                 accessibilityTrace: makeReceiptTestTrace(before: counter0, after: counter1)
             ),
             ActionResult(
                 success: true,
                 method: .activate,
                 message: "second",
-                traceProjecting: .noChange(.init(elementCount: 0)),
                 accessibilityTrace: makeReceiptTestTrace(before: counter1, after: counter2)
             ),
         ]
@@ -3091,7 +3086,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 method: .activate,
                 message: "activate failed: target could not be made actionable",
                 errorKind: .actionFailed,
-                traceProjecting: delta
+                accessibilityTrace: AccessibilityTrace.projectingForTests(delta)
             ))
         }
 
@@ -3147,7 +3142,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
         mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, traceProjecting: delta))
+            .actionResult(ActionResult(success: true, method: .activate, accessibilityTrace: AccessibilityTrace.projectingForTests(delta)))
         }
 
         let response = try await executeRunBatch(fence, steps: [

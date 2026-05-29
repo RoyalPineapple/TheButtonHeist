@@ -677,7 +677,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testActionWithExpectationFailedFormatting() {
-        let result = ActionResult(success: true, method: .activate, traceProjecting: .noChange(.init(elementCount: 5)))
+        let result = ActionResult(success: true, method: .activate, accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 5))))
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
         let response = FenceResponse.action(result: result, expectation: expectation)
         let text = response.humanFormatted()
@@ -689,7 +689,7 @@ final class TheFenceTests: XCTestCase {
         let result = ActionResult(
             success: true,
             method: .activate,
-            traceProjecting: .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
+            accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits())))
         )
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "elementsChanged")
         let response = FenceResponse.action(result: result, expectation: expectation)
@@ -3207,14 +3207,14 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    traceProjecting: .noChange(.init(elementCount: 1))
+                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
                 ))
             case .waitForChange:
                 return .actionResult(ActionResult(
                     success: true,
                     method: .waitForChange,
                     message: "expectation met after observed change",
-                    traceProjecting: .noChange(.init(elementCount: 1))
+                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -3259,17 +3259,17 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    traceProjecting: .noChange(.init(elementCount: 1))
+                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
                 ))
             case .waitForChange:
                 return .actionResult(ActionResult(
                     success: true,
                     method: .waitForChange,
                     message: "expectation met after 0.1s",
-                    traceProjecting: .elementsChanged(.init(
+                    accessibilityTrace: .projectingForTests(.elementsChanged(.init(
                         elementCount: 2,
                         edits: ElementEdits(added: [appeared])
-                    ))
+                    )))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -3306,7 +3306,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    traceProjecting: .noChange(.init(elementCount: 1))
+                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
                 ))
             case .waitForChange:
                 return .actionResult(ActionResult(
@@ -3314,7 +3314,7 @@ final class TheFenceTests: XCTestCase {
                     method: .waitForChange,
                     message: "expectation not met after 0.1s",
                     errorKind: .timeout,
-                    traceProjecting: .elementsChanged(.init(elementCount: 3, edits: ElementEdits()))
+                    accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 3, edits: ElementEdits())))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -3351,7 +3351,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    traceProjecting: .noChange(.init(elementCount: 1))
+                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
                 ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
@@ -3385,10 +3385,10 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    traceProjecting: .screenChanged(.init(
+                    accessibilityTrace: .projectingForTests(.screenChanged(.init(
                         elementCount: 1,
                         newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-                    ))
+                    )))
                 ))
             case .waitForChange:
                 XCTFail("Immediate expectation should not send wait_for_change")
@@ -3456,7 +3456,7 @@ final class TheFenceTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true,
                     method: .activate,
-                    traceProjecting: .noChange(.init(elementCount: 1))
+                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
                 ))
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
