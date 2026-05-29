@@ -333,7 +333,7 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
-        let excluded = TheFence.Command.allCases.filter { !$0.isHeistRecordable }
+        let excluded = TheFence.Command.allCases.filter { !$0.isBatchExecutable }
         for command in excluded {
             let args = minimalHeistTestArguments(for: command)
             try recordHeistEvidence(bookKeeper, command: command, args: args, targetCapture: nil)
