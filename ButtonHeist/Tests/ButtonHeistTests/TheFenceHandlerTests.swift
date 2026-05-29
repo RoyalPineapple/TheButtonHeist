@@ -2345,9 +2345,9 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         XCTAssertEqual(operation.command, .activate)
-        XCTAssertNil(operation.stringArgument("identifier"))
-        XCTAssertEqual(operation.argumentValue("expect"), expectation)
-        XCTAssertEqual(operation.argumentValue("timeout"), .double(0.25))
+        XCTAssertNil(operation.arguments.string("identifier"))
+        XCTAssertEqual(operation.arguments.argumentValues["expect"], expectation)
+        XCTAssertEqual(operation.arguments.argumentValues["timeout"], .double(0.25))
     }
 
     @ButtonHeistActor
@@ -2413,7 +2413,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ]
         )
 
-        let result = try parseTypedExpectation(try evidence.normalizedPlaybackOperation().argumentValue("expect"))
+        let result = try parseTypedExpectation(try evidence.normalizedPlaybackOperation().arguments.argumentValues["expect"])
 
         XCTAssertEqual(
             result,
@@ -3803,9 +3803,9 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let normalizedOperation = try operation.normalizedPlaybackOperation()
         XCTAssertEqual(normalizedOperation.command, .typeText)
-        XCTAssertNil(normalizedOperation.stringArgument("identifier"))
-        XCTAssertEqual(normalizedOperation.stringArgument("text"), "user@example.com")
-        XCTAssertNil(normalizedOperation.stringArgument("_recorded"))
+        XCTAssertNil(normalizedOperation.arguments.string("identifier"))
+        XCTAssertEqual(normalizedOperation.arguments.string("text"), "user@example.com")
+        XCTAssertNil(normalizedOperation.arguments.string("_recorded"))
         guard case .matcher(let matcher, let ordinal)? = normalizedOperation.arguments.elementTarget else {
             return XCTFail("Expected playback target to bind as typed matcher")
         }
@@ -3833,7 +3833,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.map(\.command), ["activate"])
         XCTAssertEqual(playback.steps.first?.target?.matcher.identifier, "submit")
-        let expect = try playback.steps.first?.normalizedPlaybackOperation().argumentValue("expect")
+        let expect = try playback.steps.first?.normalizedPlaybackOperation().arguments.argumentValues["expect"]
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
@@ -3864,7 +3864,7 @@ final class TheFenceHandlerTests: XCTestCase {
             arguments: ["expect": .object(["type": .string("screen_changed")])]
         )
 
-        let expect = try evidence.normalizedPlaybackOperation().argumentValue("expect")
+        let expect = try evidence.normalizedPlaybackOperation().arguments.argumentValues["expect"]
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
@@ -4174,8 +4174,8 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected playback target to bind as typed matcher")
         }
         XCTAssertEqual(matcher.identifier, "btn1")
-        XCTAssertNil(operation.argumentValue("heistId"))
-        XCTAssertNil(operation.argumentValue("target"))
+        XCTAssertNil(operation.arguments.argumentValues["heistId"])
+        XCTAssertNil(operation.arguments.argumentValues["target"])
 
         let (fence, mockConn) = makeConnectedFence()
         let response = try await fence.execute(playback: evidence)

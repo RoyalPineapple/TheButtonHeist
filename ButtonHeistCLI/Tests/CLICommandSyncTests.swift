@@ -143,7 +143,7 @@ final class CLICommandSyncTests: XCTestCase {
         let operation = try ReplSession.parseHumanInput("wait_for loading-spinner absent=true")
 
         XCTAssertEqual(operation.command, .waitFor)
-        XCTAssertEqual(operation.elementTarget, .heistId("loading-spinner"))
+        XCTAssertEqual(operation.arguments.elementTarget, .heistId("loading-spinner"))
         XCTAssertEqual(operation.argument(.absent), .bool(true))
     }
 
@@ -164,7 +164,7 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.requestId, .string("request-1"))
-        XCTAssertNil(parsed.operation.argumentValue("id"))
+        XCTAssertNil(parsed.operation.arguments.argumentValues["id"])
         XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
     }
 
@@ -327,7 +327,7 @@ final class CLICommandSyncTests: XCTestCase {
         let operation = try ReplSession.parseHumanInput("activate button_save")
 
         XCTAssertEqual(operation.command, .activate)
-        XCTAssertEqual(operation.elementTarget, .heistId("button_save"))
+        XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
     }
 
     func testCLIBuilderCarriesMatcherTargetAsTypedTarget() throws {
@@ -339,7 +339,7 @@ final class CLICommandSyncTests: XCTestCase {
             target: expectedTarget
         )
 
-        XCTAssertEqual(operation.elementTarget, expectedTarget)
+        XCTAssertEqual(operation.arguments.elementTarget, expectedTarget)
         XCTAssertNil(operation.argument(.target))
     }
 
@@ -356,7 +356,7 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(operation.command, .swipe)
         XCTAssertEqual(operation.argument(.direction), .string("up"))
-        XCTAssertEqual(operation.elementTarget, .heistId("checkout_list"))
+        XCTAssertEqual(operation.arguments.elementTarget, .heistId("checkout_list"))
     }
 
     func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
@@ -364,7 +364,7 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertEqual(operation.command, .scrollToEdge)
         XCTAssertEqual(operation.argument(.edge), .string("top"))
-        XCTAssertEqual(operation.elementTarget, .heistId("checkout_list"))
+        XCTAssertEqual(operation.arguments.elementTarget, .heistId("checkout_list"))
     }
 
     func testScrollCLIAllowsNoElementTarget() throws {
@@ -402,7 +402,7 @@ final class CLICommandSyncTests: XCTestCase {
         let operation = try ReplSession.parseHumanInput("activate button_save")
 
         XCTAssertEqual(operation.command, .activate)
-        XCTAssertEqual(operation.elementTarget, .heistId("button_save"))
+        XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
     }
 
     func testHumanParserRejectsDuplicateElementTarget() {
@@ -436,6 +436,6 @@ final class CLICommandSyncTests: XCTestCase {
 
 private extension NormalizedOperation {
     func argument(_ key: FenceParameterKey) -> HeistValue? {
-        argumentValue(key.rawValue)
+        arguments.argumentValues[key.rawValue]
     }
 }

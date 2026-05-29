@@ -11,7 +11,7 @@ struct ToolRoutingTests {
         let operation = try routed(TheFence.Command.startHeist.rawValue, ["identifier": .string("demo")])
 
         #expect(operation.command == .startHeist)
-        #expect(operation.stringArgument("identifier") == "demo")
+        #expect(operation.arguments.argumentValues["identifier"] == .string("demo"))
     }
 
     @Test("canonical gesture tools route directly")
@@ -25,8 +25,8 @@ struct ToolRoutingTests {
         )
 
         #expect(operation.command == .swipe)
-        #expect(operation.stringArgument("heistId") == nil)
-        #expect(operation.stringArgument("direction") == "left")
+        #expect(operation.arguments.argumentValues["heistId"] == nil)
+        #expect(operation.arguments.argumentValues["direction"] == .string("left"))
     }
 
     @Test("dismiss_keyboard routes directly")
@@ -41,7 +41,7 @@ struct ToolRoutingTests {
         let operation = try routed(TheFence.Command.editAction.rawValue, ["action": .string("copy")])
 
         #expect(operation.command == .editAction)
-        #expect(operation.stringArgument("action") == "copy")
+        #expect(operation.arguments.argumentValues["action"] == .string("copy"))
     }
 
     @Test("run_batch still accepts canonical Fence command shapes")
@@ -60,10 +60,10 @@ struct ToolRoutingTests {
         ])
 
         #expect(steps[0].command == .swipe)
-        #expect(steps[0].stringArgument("heistId") == nil)
-        #expect(steps[0].stringArgument("direction") == "right")
+        #expect(steps[0].arguments.argumentValues["heistId"] == nil)
+        #expect(steps[0].arguments.argumentValues["direction"] == .string("right"))
         #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].stringArgument("heistId") == nil)
+        #expect(steps[1].arguments.argumentValues["heistId"] == nil)
         #expect(steps[2].command == .dismissKeyboard)
     }
 
