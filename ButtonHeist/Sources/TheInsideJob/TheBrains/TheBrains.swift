@@ -79,10 +79,6 @@ final class TheBrains {
         stash.refresh()
     }
 
-    func clearPendingRotorResult() {
-        stash.clearPendingRotorResult()
-    }
-
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
         var builder = ActionResultBuilder(method: method, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
         builder.message = TheBrains.treeUnavailableMessage
@@ -368,14 +364,9 @@ final class TheBrains {
         )
     }
 
-    /// Build an Interface payload from the current semantic state.
-    func currentInterface() -> Interface {
-        stash.interface()
-    }
-
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
-        clearPendingRotorResult()
+        stash.clearPendingRotorResult()
 
         guard refresh() != nil else {
             return .failure(.rootViewUnavailable)
@@ -383,7 +374,7 @@ final class TheBrains {
 
         _ = await navigation.exploreAndPrune()
         do {
-            let interface = try InterfaceSelector(interface: currentInterface()).select(query)
+            let interface = try InterfaceSelector(interface: stash.interface()).select(query)
             return .success(interface)
         } catch {
             return .failure(.selection(error))
@@ -550,16 +541,6 @@ final class TheBrains {
         _ = await navigation.exploreAndPrune()
         current = captureSemanticState()
         return current
-    }
-
-    // MARK: - Screen Capture
-
-    func captureScreen() -> (image: UIImage, bounds: CGRect)? {
-        stash.captureScreen()
-    }
-
-    func captureScreenForRecording() -> UIImage? {
-        stash.captureScreenForRecording()
     }
 
     // MARK: - Recording Wiring
