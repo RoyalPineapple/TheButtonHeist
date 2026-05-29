@@ -50,8 +50,7 @@ final class TheStashRotorTests: XCTestCase {
     private func liveTarget(
         for screenElement: TheStash.ScreenElement
     ) -> TheStash.LiveActionTarget? {
-        let resolved = TheStash.ResolvedTarget(screenElement: screenElement)
-        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: resolved) else {
+        guard case .resolved(let liveTarget) = stash.resolveLiveActionTarget(for: screenElement) else {
             return nil
         }
         return liveTarget
@@ -97,7 +96,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.currentScreen = screen
 
-        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "rotor_host"))).resolved?.screenElement
+        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -161,7 +160,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.currentScreen = screen
 
-        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "system_rotor_host"))).resolved?.screenElement
+        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "system_rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -644,7 +643,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.currentScreen = screen
 
-        let resolvedTextView = stash.resolveTarget(.matcher(ElementMatcher(identifier: "mentions_text"))).resolved?.screenElement
+        let resolvedTextView = stash.resolveTarget(.matcher(ElementMatcher(identifier: "mentions_text"))).resolved
         guard let resolvedTextView else {
             XCTFail("Expected text view to resolve")
             return

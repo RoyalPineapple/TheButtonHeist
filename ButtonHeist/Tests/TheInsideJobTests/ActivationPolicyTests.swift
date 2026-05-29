@@ -71,7 +71,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return activateCount == 1 ? .refused : .success
             },
             refreshAndResolve: {
-                .resolved(resolvedTarget: retryTarget.resolvedTarget, liveTarget: retryTarget)
+                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
             syntheticTap: { point in
                 tappedPoints.append(point)
@@ -129,7 +129,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(resolvedTarget: retryTarget.resolvedTarget, liveTarget: retryTarget)
+                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
             syntheticTap: { point in
                 tappedPoints.append(point)
@@ -198,7 +198,7 @@ final class ActivationPolicyTests: XCTestCase {
                 return .refused
             },
             refreshAndResolve: {
-                .resolved(resolvedTarget: retryTarget.resolvedTarget, liveTarget: retryTarget)
+                .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
             syntheticTap: { point in
                 tappedPoints.append(point)
@@ -261,11 +261,10 @@ final class ActivationPolicyTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: element
         )
-        let resolvedTarget = TheStash.ResolvedTarget(screenElement: screenElement)
         let object = ActivationObject()
         object.accessibilityFrame = frame
         return TheStash.LiveActionTarget(
-            resolvedTarget: resolvedTarget,
+            screenElement: screenElement,
             object: object,
             frame: frame,
             activationPoint: activationPoint
