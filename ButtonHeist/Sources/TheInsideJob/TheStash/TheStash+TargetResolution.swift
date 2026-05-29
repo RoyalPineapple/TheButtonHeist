@@ -81,28 +81,6 @@ extension TheStash {
         }
     }
 
-    /// Executable form of a caller-provided element target.
-    ///
-    /// A direct heistId is a current-capture handle, not durable replay
-    /// identity. Durable replay/batch identity arrives as matcher+ordinal via
-    /// SemanticActionTarget; this wrapper only carries source heistId metadata
-    /// for diagnostics.
-    struct NormalizedTarget {
-        let executableTarget: ElementTarget?
-        let sourceHeistId: HeistId?
-        let validationFailure: String?
-
-        func diagnostics(_ message: String) -> String {
-            guard let sourceHeistId else { return message }
-            guard !message.contains(sourceHeistId) else { return message }
-            return "\(message)\nSource heistId: \(sourceHeistId)"
-        }
-
-        var validationFailureMessage: String {
-            diagnostics(validationFailure ?? "target requires heistId or semantic matcher predicates")
-        }
-    }
-
     /// Resolve a target to a unique element. Returns `.resolved` on success,
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
     ///
@@ -164,19 +142,6 @@ extension TheStash {
                 diagnostics: "container target matched \(matches.count) containers; provide ordinal. Candidates: \(candidates.joined(separator: "; "))"
             )
         }
-    }
-
-    /// Wrap a public element target for semantic actionability execution.
-    ///
-    /// This does not rewrite heistIds. A heistId remains an exact handle into
-    /// the current capture; durable replay identity must arrive as matcher
-    /// fields produced by recording or SemanticActionTarget creation.
-    func normalizeTarget(_ target: ElementTarget) -> NormalizedTarget {
-        NormalizedTarget(
-            executableTarget: target,
-            sourceHeistId: nil,
-            validationFailure: nil
-        )
     }
 
     /// HeistIds for either the live hierarchy or the committed known screen.

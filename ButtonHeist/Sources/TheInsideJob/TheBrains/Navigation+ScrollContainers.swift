@@ -114,10 +114,10 @@ extension Navigation {
     }
 
     func scrollSearchSeedCandidate(
-        for normalizedTarget: TheStash.NormalizedTarget,
+        for target: SemanticElementTarget,
         requiredAxis axis: ScrollAxis
     ) -> ScrollPlan? {
-        guard let executableTarget = normalizedTarget.executableTarget,
+        guard let executableTarget = target.executableTarget,
               let resolved = stash.resolveTarget(executableTarget).resolved,
               let scrollView = stash.liveScrollView(for: resolved.screenElement),
               !scrollView.bhIsUnsafeForProgrammaticScrolling else {

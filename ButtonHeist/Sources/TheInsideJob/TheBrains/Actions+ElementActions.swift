@@ -20,9 +20,8 @@ extension Actions {
         preflight: (@MainActor (TheStash.ResolvedTarget) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (SemanticActionability.SemanticActionableTarget) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
-        let normalizedTarget = stash.normalizeTarget(target)
         switch await liveActionTargetRecoveryPolicy.resolve(.init(
-            normalizedTarget: normalizedTarget,
+            target: target,
             method: method,
             requireInteractive: requireInteractive,
             deallocatedBoundary: deallocatedBoundary,
@@ -53,7 +52,7 @@ extension Actions {
             await ActivationPolicy(
                 activate: stash.activate,
                 refreshAndResolve: {
-                    await self.liveActionTargetRecoveryPolicy.refreshActivationTarget(context.normalizedTarget)
+                    await self.liveActionTargetRecoveryPolicy.refreshActivationTarget(context.target)
                 },
                 syntheticTap: safecracker.tap,
                 showFingerprint: safecracker.showFingerprint,
