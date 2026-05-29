@@ -396,7 +396,7 @@
 		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		D8AA40696432289C348E49A1 /* GestureDirections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CFBB40A1FC23933CF59662 /* GestureDirections.swift */; };
-		D8F9CDE24C7A3A02AD68C533 /* TheStash+SemanticRevealPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851FD7CC291222D18DEDA172 /* TheStash+SemanticRevealPlan.swift */; };
+		D8F9CDE24C7A3A02AD68C533 /* TheStash+SemanticReveal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851FD7CC291222D18DEDA172 /* TheStash+SemanticReveal.swift */; };
 		D96119B2F1E73803018CDE95 /* ServerExposureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E239B3DF04A37884F2E211EA /* ServerExposureTests.swift */; };
 		DA15B523FFDEAC7C67CEA77E /* TheBrains.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A759CD7776997CD4951BF16 /* TheBrains.swift */; };
 		DB057320CFB8B72EC65E4926 /* TheStashResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E06AB2C57CE2C760F6BF8F /* TheStashResolutionTests.swift */; };
@@ -800,7 +800,7 @@
 		836230F6A839FEB27A183BFE /* AccessibilityTraceMoveInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceMoveInference.swift; sourceTree = "<group>"; };
 		83B4BD6A0F12986301C77C34 /* TheTripwire+WindowSignals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheTripwire+WindowSignals.swift"; sourceTree = "<group>"; };
 		84D1831C2867656143871E2E /* TheFence+RequestPayload+RotorActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+RotorActions.swift"; sourceTree = "<group>"; };
-		851FD7CC291222D18DEDA172 /* TheStash+SemanticRevealPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+SemanticRevealPlan.swift"; sourceTree = "<group>"; };
+		851FD7CC291222D18DEDA172 /* TheStash+SemanticReveal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+SemanticReveal.swift"; sourceTree = "<group>"; };
 		8525C7CC57F974C78534C5B6 /* TheFence+RequestPayload+TransformGestures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+TransformGestures.swift"; sourceTree = "<group>"; };
 		853859C605E256FDB5707237 /* TheSafecrackerIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecrackerIntegrationTests.swift; sourceTree = "<group>"; };
 		85B2E875026420F5AB06D0A2 /* BatchExecutionResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExecutionResult.swift; sourceTree = "<group>"; };
@@ -1349,7 +1349,7 @@
 				E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */,
 				0108809EB5567BB0C5665090 /* TheStash+Matching.swift */,
 				356B994EEDC692551581FA9B /* TheStash+Rotor.swift */,
-				851FD7CC291222D18DEDA172 /* TheStash+SemanticRevealPlan.swift */,
+				851FD7CC291222D18DEDA172 /* TheStash+SemanticReveal.swift */,
 				81CF9628DD207248D46BFE20 /* TheStash+TargetResolution.swift */,
 				85F00EF7237962DD4F94F135 /* WireConversion.swift */,
 			);
@@ -2234,7 +2234,7 @@
 				D73AF669F2F4C132C0391CAF /* TheStash+LiveGeometry.swift in Sources */,
 				871194C060FF486DFB34A4C6 /* TheStash+Matching.swift in Sources */,
 				4D3C5AF5044915A018C59689 /* TheStash+Rotor.swift in Sources */,
-				D8F9CDE24C7A3A02AD68C533 /* TheStash+SemanticRevealPlan.swift in Sources */,
+				D8F9CDE24C7A3A02AD68C533 /* TheStash+SemanticReveal.swift in Sources */,
 				C0DD9775AF7798263DFA5CFD /* TheStash+TargetResolution.swift in Sources */,
 				97376AD47CD2A760A727ABE8 /* TheStash.swift in Sources */,
 				5283417AB9EDA1F0444CECFA /* WireConversion.swift in Sources */,

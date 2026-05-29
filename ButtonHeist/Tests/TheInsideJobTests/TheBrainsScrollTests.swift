@@ -414,7 +414,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    func testSemanticRevealPlanNoOpsWhenAlreadyVisible() {
+    func testSemanticRevealNoOpsWhenAlreadyVisible() {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visibleEntry = Screen.ScreenElement(
@@ -425,7 +425,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installLiveScrollTarget(visibleEntry, scrollView: scrollView, stableId: "visible_scroll")
 
-        let result = brains.stash.executeSemanticRevealPlan(for: visibleEntry)
+        let result = brains.stash.revealSemanticTarget(visibleEntry)
 
         guard case .alreadyVisible = result else {
             return XCTFail("Expected already-visible no-op, got \(result)")
@@ -434,7 +434,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
-    func testSemanticRevealPlanUsesNonAnimatedJumpForKnownOffscreenElement() throws {
+    func testSemanticRevealUsesNonAnimatedJumpForKnownOffscreenElement() throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -448,7 +448,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let entry = try XCTUnwrap(
             brains.stash.currentScreen.findElement(heistId: "settings_button")
         )
-        let result = brains.stash.executeSemanticRevealPlan(for: entry)
+        let result = brains.stash.revealSemanticTarget(entry)
 
         guard case .revealed(let resolvedScrollView) = result else {
             return XCTFail("Expected semantic reveal to resolve, got \(result)")
@@ -460,7 +460,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset.y, expectedOffset.y, accuracy: 0.01)
     }
 
-    func testSemanticRevealPlanFailsWithoutProvenLiveScrollAncestor() throws {
+    func testSemanticRevealFailsWithoutProvenLiveScrollAncestor() throws {
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -474,7 +474,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let entry = try XCTUnwrap(
             brains.stash.currentScreen.findElement(heistId: "settings_button")
         )
-        let result = brains.stash.executeSemanticRevealPlan(for: entry)
+        let result = brains.stash.revealSemanticTarget(entry)
 
         guard case .failed(.noLiveScrollableAncestor) = result else {
             return XCTFail("Expected missing live scroll ancestor failure, got \(result)")

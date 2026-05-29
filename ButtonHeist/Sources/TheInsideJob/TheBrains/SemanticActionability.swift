@@ -103,9 +103,9 @@ final class SemanticActionability {
         var revealMovedViewport = false
         switch stash.resolveTarget(executableTarget) {
         case .resolved(let screenElement):
-            let reveal = stash.executeSemanticRevealPlan(for: screenElement)
-            if case .failed = reveal {
-                return .failed(.noRevealPath(semanticRevealPlanFailureMessage(screenElement)))
+            let reveal = stash.revealSemanticTarget(screenElement)
+            if case .failed(let failure) = reveal {
+                return .failed(.noRevealPath(semanticRevealFailureMessage(failure, entry: screenElement)))
             }
             if reveal.didReveal {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
