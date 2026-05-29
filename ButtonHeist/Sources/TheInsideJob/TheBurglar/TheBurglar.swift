@@ -82,35 +82,37 @@ final class TheBurglar {
         }
 
         var allHierarchy: [AccessibilityHierarchy] = []
-        var allObjects: [AccessibilityElement: NSObject] = [:]
-        var objectCandidates: [AccessibilityElement: [NSObject]] = [:]
-        var containerObjectCandidates: [AccessibilityContainer: [NSObject]] = [:]
-        var scrollViewCandidates: [AccessibilityContainer: [UIView]] = [:]
+        var objects: [AccessibilityElement: NSObject] = [:]
+        var objectsByPath: [TreePath: NSObject] = [:]
+        var containerObjectsByPath: [TreePath: NSObject] = [:]
+        var scrollViewsByPath: [TreePath: UIView] = [:]
+
+        let isMultiWindow = windows.count > 1
 
         for (window, rootView) in windows {
             let containsModalBoundary = autoreleasepool { () -> Bool in
-                var containsModalBoundary = false
-                let windowTree = parser.parseAccessibilityHierarchy(
+                let captured = parser.parseAccessibilityHierarchy(
                     in: rootView,
                     rotorResultLimit: 0,
-                    elementVisitor: { element, _, object in
-                        allObjects[element] = object
-                        objectCandidates[element, default: []].append(object)
+                    makeElement: { element, traversalIndex, source in
+                        CapturedNode.element(element, traversalIndex: traversalIndex, source: source)
                     },
-                    containerVisitor: { container, object in
-                        containerObjectCandidates[container, default: []].append(object)
-                        if case .scrollable = container.type, let view = object as? UIView {
-                            scrollViewCandidates[container, default: []].append(view)
-                        }
-                        if container.isModalBoundary {
-                            containsModalBoundary = true
-                        }
+                    makeContainer: { container, children, source in
+                        CapturedNode.container(container, children: children, source: source)
                     }
                 )
 
-                if windows.count > 1 {
+                let windowHierarchy = captured.map(\.hierarchy)
+
+                // Collect live pointers at paths relative to their final position in
+                // `allHierarchy`. In multi-window mode each window is wrapped in a synthetic
+                // semantic-group container, so the window's roots sit one level deeper; that
+                // wrapper carries no live source and is intentionally not collected.
+                let rootPathPrefix: (Int) -> TreePath
+                if isMultiWindow {
+                    let wrapperIndex = allHierarchy.count
                     let windowName = NSStringFromClass(type(of: window))
-                    let container = AccessibilityContainer(
+                    let wrapper = AccessibilityContainer(
                         type: .semanticGroup(
                             label: windowName,
                             value: "windowLevel: \(window.windowLevel.rawValue)",
@@ -118,12 +120,26 @@ final class TheBurglar {
                         ),
                         frame: AccessibilityRect(window.frame)
                     )
-                    allHierarchy.append(.container(container, children: windowTree))
+                    allHierarchy.append(.container(wrapper, children: windowHierarchy))
+                    rootPathPrefix = { localIndex in TreePath([wrapperIndex, localIndex]) }
                 } else {
-                    allHierarchy.append(contentsOf: windowTree)
+                    let offset = allHierarchy.count
+                    allHierarchy.append(contentsOf: windowHierarchy)
+                    rootPathPrefix = { localIndex in TreePath([offset + localIndex]) }
                 }
 
-                return containsModalBoundary
+                for (localIndex, root) in captured.enumerated() {
+                    Self.collect(
+                        root,
+                        at: rootPathPrefix(localIndex),
+                        objects: &objects,
+                        objectsByPath: &objectsByPath,
+                        containerObjectsByPath: &containerObjectsByPath,
+                        scrollViewsByPath: &scrollViewsByPath
+                    )
+                }
+
+                return captured.contains { $0.containsModalBoundary }
             }
 
             if containsModalBoundary {
@@ -131,28 +147,16 @@ final class TheBurglar {
             }
         }
 
-        let allScrollViewsByPath = Self.scrollViewsByPath(
-            hierarchy: allHierarchy,
-            scrollViewCandidates: scrollViewCandidates
-        )
-        let allObjectsByPath = Self.objectsByPath(
-            hierarchy: allHierarchy,
-            objectCandidates: objectCandidates
-        )
-        let allContainerObjectsByPath = Self.containerObjectsByPath(
-            hierarchy: allHierarchy,
-            objectCandidates: containerObjectCandidates
-        )
         return ParseResult(
             hierarchy: allHierarchy,
-            objects: allObjects,
-            objectsByPath: allObjectsByPath,
-            containerObjectsByPath: allContainerObjectsByPath,
+            objects: objects,
+            objectsByPath: objectsByPath,
+            containerObjectsByPath: containerObjectsByPath,
             scrollViews: Self.scrollViewsByContainerForCurrentCapture(
                 hierarchy: allHierarchy,
-                scrollViewsByPath: allScrollViewsByPath
+                scrollViewsByPath: scrollViewsByPath
             ),
-            scrollViewsByPath: allScrollViewsByPath
+            scrollViewsByPath: scrollViewsByPath
         )
     }
 
@@ -162,112 +166,55 @@ final class TheBurglar {
     /// discoverable by walking the current app hierarchy.
     func parseObject(_ object: NSObject) -> AccessibilityElement? {
         let root = RotorResultParsingRoot(object: object)
-        var parsedResult: AccessibilityElement?
-        let hierarchy = parser.parseAccessibilityHierarchy(
+        let captured = parser.parseAccessibilityHierarchy(
             in: root,
             rotorResultLimit: 0,
-            elementVisitor: { element, _, parsedObject in
-                if parsedObject === object {
-                    parsedResult = element
-                }
+            makeElement: { element, traversalIndex, source in
+                CapturedNode.element(element, traversalIndex: traversalIndex, source: source)
+            },
+            makeContainer: { container, children, source in
+                CapturedNode.container(container, children: children, source: source)
             }
         )
-        if let parsedResult {
-            return parsedResult
+        if let match = captured.lazy.compactMap({ $0.firstElement(matchingSource: object) }).first {
+            return match
         }
-        return hierarchy.sortedElements.first
+        return captured.map(\.hierarchy).sortedElements.first
     }
 
-    private static func objectsByPath(
-        hierarchy: [AccessibilityHierarchy],
-        objectCandidates: [AccessibilityElement: [NSObject]]
-    ) -> [TreePath: NSObject] {
-        var consumedCounts: [AccessibilityElement: Int] = [:]
-        var result: [TreePath: NSObject] = [:]
-        for (element, path, _) in hierarchy.pathIndexedElements {
-            let nextIndex = consumedCounts[element, default: 0]
-            if let objects = objectCandidates[element], objects.indices.contains(nextIndex) {
-                result[path] = objects[nextIndex]
+    /// Records the live source object for each element and container in a captured subtree, keyed
+    /// by its `TreePath`. The path is assigned structurally during the descent, so duplicate
+    /// element/container values at different positions never collide — there is no candidate
+    /// reconciliation as there was with the visitor side channel.
+    private static func collect(
+        _ node: CapturedNode,
+        at path: TreePath,
+        objects: inout [AccessibilityElement: NSObject],
+        objectsByPath: inout [TreePath: NSObject],
+        containerObjectsByPath: inout [TreePath: NSObject],
+        scrollViewsByPath: inout [TreePath: UIView]
+    ) {
+        switch node {
+        case let .element(element, _, source):
+            objects[element] = source
+            objectsByPath[path] = source
+
+        case let .container(container, children, source):
+            containerObjectsByPath[path] = source
+            if case .scrollable = container.type, let view = source as? UIView {
+                scrollViewsByPath[path] = view
             }
-            consumedCounts[element] = nextIndex + 1
-        }
-        return result
-    }
-
-    private static func scrollViewsByPath(
-        hierarchy: [AccessibilityHierarchy],
-        scrollViewCandidates: [AccessibilityContainer: [UIView]]
-    ) -> [TreePath: UIView] {
-        var consumedCounts: [AccessibilityContainer: Int] = [:]
-        var result: [TreePath: UIView] = [:]
-        for (container, path) in parserVisitorScrollableContainerPaths(hierarchy: hierarchy) {
-            let nextIndex = consumedCounts[container, default: 0]
-            if let views = scrollViewCandidates[container], views.indices.contains(nextIndex) {
-                result[path] = views[nextIndex]
+            for (index, child) in children.enumerated() {
+                collect(
+                    child,
+                    at: path.appending(index),
+                    objects: &objects,
+                    objectsByPath: &objectsByPath,
+                    containerObjectsByPath: &containerObjectsByPath,
+                    scrollViewsByPath: &scrollViewsByPath
+                )
             }
-            consumedCounts[container] = nextIndex + 1
         }
-        return result
-    }
-
-    private static func containerObjectsByPath(
-        hierarchy: [AccessibilityHierarchy],
-        objectCandidates: [AccessibilityContainer: [NSObject]]
-    ) -> [TreePath: NSObject] {
-        var consumedCounts: [AccessibilityContainer: Int] = [:]
-        var result: [TreePath: NSObject] = [:]
-        for (container, path) in parserVisitorContainerPaths(hierarchy: hierarchy) {
-            let nextIndex = consumedCounts[container, default: 0]
-            if let objects = objectCandidates[container], objects.indices.contains(nextIndex) {
-                result[path] = objects[nextIndex]
-            }
-            consumedCounts[container] = nextIndex + 1
-        }
-        return result
-    }
-
-    private static func parserVisitorContainerPaths(
-        hierarchy: [AccessibilityHierarchy]
-    ) -> [(container: AccessibilityContainer, path: TreePath)] {
-        hierarchy.enumerated().flatMap { index, node in
-            parserVisitorContainerPaths(node: node, path: TreePath([index]))
-        }
-    }
-
-    private static func parserVisitorContainerPaths(
-        node: AccessibilityHierarchy,
-        path: TreePath
-    ) -> [(container: AccessibilityContainer, path: TreePath)] {
-        guard case .container(let container, let children) = node else { return [] }
-
-        var result = children.enumerated().flatMap { index, child in
-            parserVisitorContainerPaths(node: child, path: path.appending(index))
-        }
-        result.append((container, path))
-        return result
-    }
-
-    private static func parserVisitorScrollableContainerPaths(
-        hierarchy: [AccessibilityHierarchy]
-    ) -> [(container: AccessibilityContainer, path: TreePath)] {
-        hierarchy.enumerated().flatMap { index, node in
-            parserVisitorScrollableContainerPaths(node: node, path: TreePath([index]))
-        }
-    }
-
-    private static func parserVisitorScrollableContainerPaths(
-        node: AccessibilityHierarchy,
-        path: TreePath
-    ) -> [(container: AccessibilityContainer, path: TreePath)] {
-        guard case .container(let container, let children) = node else { return [] }
-
-        var result = children.enumerated().flatMap { index, child in
-            parserVisitorScrollableContainerPaths(node: child, path: path.appending(index))
-        }
-        if container.isScrollable {
-            result.append((container, path))
-        }
-        return result
     }
 
     private static func scrollViewsByContainerForCurrentCapture(
