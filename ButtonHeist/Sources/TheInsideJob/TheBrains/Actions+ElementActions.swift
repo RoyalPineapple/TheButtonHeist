@@ -222,7 +222,7 @@ extension Actions {
         let liveContainerTarget: TheStash.LiveContainerTarget
         switch stash.resolveLiveContainerTarget(for: containerTarget) {
         case .resolved(let target):
-            if let failure = await navigation.actionability.scrollActivationPointIntoBounds(
+            let placement = await navigation.actionability.scrollActivationPointIntoBounds(
                 target.activationPoint,
                 in: stash.liveScrollView(forContainerPath: containerTarget.path),
                 method: .customAction,
@@ -232,7 +232,8 @@ extension Actions {
                 unsafeProgrammaticScrollMessage: "container target \(description) "
                     + "is inside a scroll view that is unsafe for programmatic semantic reveal",
                 scrollFailedMessage: "container target \(description) activation point could not be brought on-screen"
-            ) {
+            )
+            if case .failure(let failure) = placement {
                 return failure.interactionResult(commandMethod: .customAction)
             }
         case .objectUnavailable:
