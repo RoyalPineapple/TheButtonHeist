@@ -110,7 +110,7 @@ enum CLIRequestBuilder {
         let requestId = envelope.requestId
         do {
             let operation: NormalizedOperation
-            switch FenceOperationCatalog.normalizeCommandObject(envelope.arguments, context: "JSON input") {
+            switch FenceOperationCatalog.normalizeCommandEnvelope(envelope.arguments, context: "JSON input") {
             case .success(let normalizedOperation):
                 operation = normalizedOperation
             case .failure(let error):
@@ -139,7 +139,7 @@ enum CLIRequestBuilder {
 
 private struct CLIMachineRequestEnvelope {
     let requestId: PublicRequestId?
-    let arguments: TheFence.CommandArgumentObject
+    let arguments: TheFence.CommandArgumentEnvelope
 
     static func decode(from line: String) throws -> Self {
         let requestId = try CLIMachineRequestIdBoundary.requestId(in: line)
@@ -158,7 +158,7 @@ private struct CLIMachineRequestEnvelope {
 }
 
 private struct CLIMachineRequestArguments: Decodable {
-    let arguments: TheFence.CommandArgumentObject
+    let arguments: TheFence.CommandArgumentEnvelope
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
@@ -170,7 +170,7 @@ private struct CLIMachineRequestArguments: Decodable {
                 values[key.stringValue] = try container.decode(HeistValue.self, forKey: key)
             }
         }
-        arguments = TheFence.CommandArgumentObject(values: values, fieldPrefix: nil)
+        arguments = TheFence.CommandArgumentEnvelope(values: values, fieldPrefix: nil)
     }
 }
 

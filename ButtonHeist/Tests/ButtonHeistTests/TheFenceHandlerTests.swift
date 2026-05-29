@@ -210,7 +210,7 @@ final class TheFenceHandlerTests: XCTestCase {
         if let target {
             arguments["target"] = target
         }
-        return try TheFence.CommandArgumentEnvelope(values: arguments).elementTarget()
+        return try TheFence.CommandArgumentEnvelope(values: arguments).decodedElementTarget()
     }
 
     @ButtonHeistActor
@@ -508,13 +508,13 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .object(let firstObject) = array[0] else {
             return XCTFail("Expected typed object")
         }
-        let first = TheFence.CommandArgumentObject(values: firstObject, fieldPrefix: "array[0]")
+        let first = TheFence.CommandArgumentEnvelope(values: firstObject, fieldPrefix: "array[0]")
         XCTAssertEqual(try first.schemaNumber("x"), 0.25)
         XCTAssertEqual(try first.schemaNumber("y"), 0.75)
         guard case .object(let secondObject) = array[1] else {
             return XCTFail("Expected typed object")
         }
-        let second = TheFence.CommandArgumentObject(values: secondObject, fieldPrefix: "array[1]")
+        let second = TheFence.CommandArgumentEnvelope(values: secondObject, fieldPrefix: "array[1]")
         XCTAssertEqual(try second.schemaNumber("x"), 0.5)
         XCTAssertEqual(try second.schemaNumber("y"), 0.5)
     }

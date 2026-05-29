@@ -9,7 +9,7 @@ struct HeistRecordingProjection: Sendable, Equatable {
 extension TheFence.ParsedRequest {
     @ButtonHeistActor
     func heistRecordingProjection() throws -> HeistRecordingProjection {
-        let elementTarget = try arguments.elementTarget()
+        let elementTarget = try arguments.decodedElementTarget()
         var values = arguments.argumentValues
         values.removeValue(forKey: "requestId")
         values.removeValue(forKey: "target")

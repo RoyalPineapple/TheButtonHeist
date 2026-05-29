@@ -5,7 +5,7 @@ import TheScore
 extension TheFence {
 
     /// Typed command arguments after external routing has selected a command.
-    public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
+    public struct CommandArgumentEnvelope: Sendable {
         public let argumentValues: [String: HeistValue]
         public let elementTarget: ElementTarget?
         let argumentFieldPrefix: String?
@@ -23,38 +23,12 @@ extension TheFence {
         func dropping(_ key: String) -> CommandArgumentEnvelope {
             var values = argumentValues
             values.removeValue(forKey: key)
-            return withArgumentValues(values)
-        }
-
-        func withArgumentValues(_ values: [String: HeistValue]) -> CommandArgumentEnvelope {
             return CommandArgumentEnvelope(
                 values: values,
                 elementTarget: elementTarget,
                 fieldPrefix: argumentFieldPrefix
             )
         }
-    }
-
-    public struct CommandArgumentObject: CommandArgumentReadable, Sendable {
-        public let argumentValues: [String: HeistValue]
-        let elementTarget: ElementTarget? = nil
-        let argumentFieldPrefix: String?
-
-        public init(values: [String: HeistValue], fieldPrefix: String?) {
-            self.argumentValues = values
-            self.argumentFieldPrefix = fieldPrefix
-        }
-
-        func withArgumentValues(_ values: [String: HeistValue]) -> CommandArgumentObject {
-            CommandArgumentObject(values: values, fieldPrefix: argumentFieldPrefix)
-        }
-    }
-
-    protocol CommandArgumentReadable: Sendable {
-        var argumentValues: [String: HeistValue] { get }
-        var elementTarget: ElementTarget? { get }
-        var argumentFieldPrefix: String? { get }
-        func withArgumentValues(_ values: [String: HeistValue]) -> Self
     }
 }
 
@@ -109,7 +83,7 @@ extension HeistValue {
 /// Strict typed accessors for command arguments after command routing.
 /// This keeps raw dictionaries at public decode edges while preserving the
 /// field-qualified diagnostics expected by the current command contract.
-extension TheFence.CommandArgumentReadable {
+extension TheFence.CommandArgumentEnvelope {
     var keys: Dictionary<String, HeistValue>.Keys {
         argumentValues.keys
     }
@@ -198,7 +172,7 @@ extension TheFence.CommandArgumentReadable {
         }
     }
 
-    func schemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject]? {
+    func schemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentEnvelope]? {
         guard let value = argumentValues[key] else { return nil }
         guard case .array(let array) = value else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "array of objects")
@@ -211,11 +185,11 @@ extension TheFence.CommandArgumentReadable {
                     expected: "object"
                 )
             }
-            return TheFence.CommandArgumentObject(values: object, fieldPrefix: "\(field(key))[\(index)]")
+            return TheFence.CommandArgumentEnvelope(values: object, fieldPrefix: "\(field(key))[\(index)]")
         }
     }
 
-    func requiredSchemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentObject] {
+    func requiredSchemaObjectArray(_ key: String) throws -> [TheFence.CommandArgumentEnvelope] {
         guard let array = try schemaObjectArray(key) else {
             throw SchemaValidationError(field: field(key), observed: "missing", expected: "array of objects")
         }
@@ -231,7 +205,7 @@ extension TheFence.CommandArgumentReadable {
                 expected: "object with numeric x and y"
             )
         }
-        let object = TheFence.CommandArgumentObject(values: values, fieldPrefix: field(key))
+        let object = TheFence.CommandArgumentEnvelope(values: values, fieldPrefix: field(key))
         try object.rejectUnknownKeys(allowed: UnitPoint.fieldNames, expected: "valid unit point field")
         guard let x = try object.schemaNumber("x") else {
             throw SchemaValidationError(field: object.field("x"), observed: "missing", expected: "number")
@@ -258,12 +232,12 @@ extension TheFence.CommandArgumentReadable {
         )
     }
 
-    func schemaDictionary(_ key: String) throws -> TheFence.CommandArgumentObject? {
+    func schemaDictionary(_ key: String) throws -> TheFence.CommandArgumentEnvelope? {
         guard let value = argumentValues[key] else { return nil }
         guard case .object(let object) = value else {
             throw SchemaValidationError(field: field(key), observed: value.schemaObservedDescription, expected: "object")
         }
-        return TheFence.CommandArgumentObject(values: object, fieldPrefix: field(key))
+        return TheFence.CommandArgumentEnvelope(values: object, fieldPrefix: field(key))
     }
 
     func schemaEnum<E>(

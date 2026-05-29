@@ -1,9 +1,9 @@
 import TheScore
 
-extension TheFence.CommandArgumentReadable {
+extension TheFence.CommandArgumentEnvelope {
 
     @ButtonHeistActor
-    func elementTarget() throws -> ElementTarget? {
+    func decodedElementTarget() throws -> ElementTarget? {
         if let elementTarget {
             if keys.contains("target") {
                 throw SchemaValidationError(
@@ -20,7 +20,7 @@ extension TheFence.CommandArgumentReadable {
 
     @ButtonHeistActor
     func requiredElementTarget(command: TheFence.Command) throws -> ElementTarget {
-        guard let target = try elementTarget() else {
+        guard let target = try decodedElementTarget() else {
             throw TheFence.MissingElementTarget(command: command.rawValue)
         }
         return target
@@ -36,7 +36,7 @@ extension TheFence.CommandArgumentReadable {
 
     @ButtonHeistActor
     func scrollContainerSelection() throws -> ScrollContainerSelection {
-        let elementTarget = try elementTarget()
+        let elementTarget = try decodedElementTarget()
         let containerTarget = try scrollContainerTarget()
         switch (containerTarget, elementTarget) {
         case (.some, .some):

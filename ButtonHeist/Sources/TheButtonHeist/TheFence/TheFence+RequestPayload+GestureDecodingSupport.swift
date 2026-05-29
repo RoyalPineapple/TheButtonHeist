@@ -2,7 +2,7 @@ import Foundation
 
 import TheScore
 
-extension TheFence.CommandArgumentReadable {
+extension TheFence.CommandArgumentEnvelope {
     func hasAny(_ keys: String...) -> Bool {
         keys.contains { argumentValues[$0] != nil }
     }
