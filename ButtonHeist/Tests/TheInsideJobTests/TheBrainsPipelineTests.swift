@@ -171,8 +171,8 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(receipt.attempt.deliveryPhase, .delivered)
         XCTAssertEqual(receipt.settle?.outcome, .settled(timeMs: 321))
         XCTAssertEqual(receipt.settle?.didSettle, true)
-        XCTAssertEqual(receipt.settle?.timeMs, 321)
-        XCTAssertEqual(receipt.settle?.postCapture?.hash, postCapture.hash)
+        XCTAssertEqual(receipt.settle?.outcome.timeMs, 321)
+        XCTAssertEqual(receipt.settle?.accessibilityTrace.captures.last?.hash, postCapture.hash)
         XCTAssertEqual(receipt.settle?.accessibilityTrace, accessibilityTrace)
     }
 
