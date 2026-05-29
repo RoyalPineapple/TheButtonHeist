@@ -11,10 +11,6 @@ struct CLIParsedRequest {
     let operation: NormalizedOperation
     let requestId: PublicRequestId?
     let mode: CLIRequestInputMode
-
-    var command: TheFence.Command? {
-        operation.command
-    }
 }
 
 struct CLIRequestBuildError: Error, CustomStringConvertible {

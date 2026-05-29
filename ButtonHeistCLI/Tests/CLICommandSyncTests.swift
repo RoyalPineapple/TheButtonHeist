@@ -157,7 +157,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.mode, .machine)
         XCTAssertEqual(parsed.operation.command, .typeText)
         XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
-        XCTAssertEqual(parsed.command, .typeText)
     }
 
     func testSharedRequestBuilderParsesStringMachineRequestIdAsMetadata() throws {
@@ -268,7 +267,7 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.mode, .machine)
-        XCTAssertEqual(parsed.command, .activate)
+        XCTAssertEqual(parsed.operation.command, .activate)
         guard case .object(let target)? = parsed.operation.argument(.target) else {
             return XCTFail("expected typed target object")
         }
@@ -279,7 +278,6 @@ final class CLICommandSyncTests: XCTestCase {
         let parsed = try CLIRequestBuilder.parsedRequest(from: "get_screen")
 
         XCTAssertEqual(parsed.mode, .human)
-        XCTAssertEqual(parsed.command, .getScreen)
         XCTAssertEqual(parsed.operation.command, .getScreen)
     }
 
@@ -287,7 +285,6 @@ final class CLICommandSyncTests: XCTestCase {
         let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"type_text","text":"hello"}"#)
 
         XCTAssertEqual(parsed.mode, .machine)
-        XCTAssertEqual(parsed.command, .typeText)
         XCTAssertEqual(parsed.operation.command, .typeText)
         XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
     }
