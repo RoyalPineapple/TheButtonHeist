@@ -319,6 +319,7 @@
 		ACD8CD478747DADBFEB7405C /* TheMuscleAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1020CB576BE23C93B24BFA96 /* TheMuscleAdmission.swift */; };
 		AD8FC6AC09AAE31D6D365834 /* swift-crypto__CryptoExtras.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 6A3DED8FA6023701C7060202 /* swift-crypto__CryptoExtras.bundle */; };
 		ADEBEB61F1B3DE1E04595B5F /* TLSIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF6FCCFB96D20A5EBD41C48 /* TLSIdentityTests.swift */; };
+		B203A54F6276210BA54155FF /* StakeoutRecordingSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 731B6C0B5071CFA47BC9C7B0 /* StakeoutRecordingSetup.swift */; };
 		B259D7CF0E8D1620C5E8746B /* TargetConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D658B41B7C2302B143935342 /* TargetConfig.swift */; };
 		B315615DC3E1B70B46B4BDC5 /* Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B14C4160E5DFB62BCCF0A84 /* Actions.swift */; };
 		B3A7E0DD9341201CC97ED43F /* TheFence+PendingRequestTrackers.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA752E01A8136738F8789715 /* TheFence+PendingRequestTrackers.swift */; };
@@ -774,6 +775,7 @@
 		71251320324067B05B606FAA /* TheFence+BookKeeperLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+BookKeeperLogging.swift"; sourceTree = "<group>"; };
 		71E06AB2C57CE2C760F6BF8F /* TheStashResolutionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStashResolutionTests.swift; sourceTree = "<group>"; };
 		728093FC7C1BED2EBBFDB9E1 /* AccessibilityElement+Construction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityElement+Construction.swift"; sourceTree = "<group>"; };
+		731B6C0B5071CFA47BC9C7B0 /* StakeoutRecordingSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StakeoutRecordingSetup.swift; sourceTree = "<group>"; };
 		73F7188B4AF419243A2EE76F /* HeistPlaybackReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlaybackReportTests.swift; sourceTree = "<group>"; };
 		7415C6DA441AD8CFAA857168 /* AccessibilityTrace+Delta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityTrace+Delta.swift"; sourceTree = "<group>"; };
 		762A9678A59A16CFF629FB3E /* TheFence+FailureTaxonomy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+FailureTaxonomy.swift"; sourceTree = "<group>"; };
@@ -1570,6 +1572,7 @@
 			isa = PBXGroup;
 			children = (
 				6AAE42D129D6475361E35741 /* StakeoutLifecycle.swift */,
+				731B6C0B5071CFA47BC9C7B0 /* StakeoutRecordingSetup.swift */,
 				A99CA156168E01D0C3C6AEAF /* StakeoutTiming.swift */,
 				C0F8269FADA6D781B5F509DA /* TheStakeout.swift */,
 			);
@@ -2218,6 +2221,7 @@
 				19B2883BD89FF79837579882 /* TheSafecracker+TapDiagnostic.swift in Sources */,
 				461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */,
 				99758B44D5A38BED29330EBB /* StakeoutLifecycle.swift in Sources */,
+				B203A54F6276210BA54155FF /* StakeoutRecordingSetup.swift in Sources */,
 				ECDA4CD711AEC9FE1B160FBB /* StakeoutTiming.swift in Sources */,
 				602171B77A5CD5D46E95687A /* TheStakeout.swift in Sources */,
 				AAEE8DC63033C8BEC937BAA5 /* AccessibilityPolicy+UIKit.swift in Sources */,
