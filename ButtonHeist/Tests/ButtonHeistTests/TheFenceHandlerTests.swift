@@ -3404,6 +3404,27 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testTypedElementTargetIsRejectedForCommandWithoutTargetParameter() async throws {
+        let (fence, _) = makeConnectedFence()
+        let operation = NormalizedOperation(
+            command: TheFence.Command.getScreen,
+            arguments: TheFence.CommandArgumentEnvelope(
+                values: [:],
+                elementTarget: ElementTarget.heistId("button_save")
+            )
+        )
+
+        let response = try await fence.execute(operation: operation)
+        guard case .error(let message, _) = response else {
+            return XCTFail("Expected typed element target to be rejected")
+        }
+        XCTAssertEqual(
+            message,
+            #"schema validation failed for target: observed target(heistId="button_save"); expected get_screen command without element target"#
+        )
+    }
+
+    @ButtonHeistActor
     func testTimeoutIsRejectedWhenCommandDoesNotConsumeIt() async {
         await assertValidationError(
             command: .getInterface,

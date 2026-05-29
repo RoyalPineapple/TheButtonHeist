@@ -4,20 +4,23 @@ import TheScore
 
 extension TheFence {
 
-    /// Typed JSON-encodable command arguments after external routing has selected a command.
+    /// Typed command arguments after external routing has selected a command.
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
+        let elementTarget: ElementTarget?
         let playbackSemanticTarget: SemanticActionTarget?
         let isPlaybackStep: Bool
         let argumentFieldPrefix: String?
 
         public init(
             values: [String: HeistValue],
+            elementTarget: ElementTarget? = nil,
             playbackSemanticTarget: SemanticActionTarget? = nil,
             isPlaybackStep: Bool = false,
             fieldPrefix: String? = nil
         ) {
             self.argumentValues = values
+            self.elementTarget = elementTarget
             self.playbackSemanticTarget = playbackSemanticTarget
             self.isPlaybackStep = isPlaybackStep
             argumentFieldPrefix = fieldPrefix
@@ -32,6 +35,7 @@ extension TheFence {
         func withArgumentValues(_ values: [String: HeistValue]) -> CommandArgumentEnvelope {
             return CommandArgumentEnvelope(
                 values: values,
+                elementTarget: elementTarget,
                 playbackSemanticTarget: playbackSemanticTarget,
                 isPlaybackStep: isPlaybackStep,
                 fieldPrefix: argumentFieldPrefix
@@ -41,6 +45,7 @@ extension TheFence {
 
     public struct CommandArgumentObject: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
+        let elementTarget: ElementTarget? = nil
         let playbackSemanticTarget: SemanticActionTarget? = nil
         let argumentFieldPrefix: String?
 
@@ -56,6 +61,7 @@ extension TheFence {
 
     protocol CommandArgumentReadable: Sendable {
         var argumentValues: [String: HeistValue] { get }
+        var elementTarget: ElementTarget? { get }
         var playbackSemanticTarget: SemanticActionTarget? { get }
         var argumentFieldPrefix: String? { get }
         func withArgumentValues(_ values: [String: HeistValue]) -> Self

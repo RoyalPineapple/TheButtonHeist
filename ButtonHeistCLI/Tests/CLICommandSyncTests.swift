@@ -141,12 +141,9 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testHumanParserCoercesKnownBooleanParametersOnly() throws {
         let operation = try ReplSession.parseHumanInput("wait_for loading-spinner absent=true")
-        guard case .object(let target)? = operation.argument(.target) else {
-            return XCTFail("expected typed target object")
-        }
 
         XCTAssertEqual(operation.command, .waitFor)
-        XCTAssertEqual(target["heistId"], .string("loading-spinner"))
+        XCTAssertEqual(operation.elementTarget, .heistId("loading-spinner"))
         XCTAssertEqual(operation.argument(.absent), .bool(true))
     }
 
@@ -328,30 +325,22 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testREPLParsesPositionalActivateTarget() throws {
         let operation = try ReplSession.parseHumanInput("activate button_save")
-        guard case .object(let target)? = operation.argument(.target) else {
-            return XCTFail("expected typed target object")
-        }
 
         XCTAssertEqual(operation.command, .activate)
-        XCTAssertEqual(target["heistId"], .string("button_save"))
+        XCTAssertEqual(operation.elementTarget, .heistId("button_save"))
     }
 
-    func testCLIBuilderSerializesMatcherTargetAsFlatTarget() throws {
-        let operation = try TheFence.Command.activate.cliOperation(
-            target: .matcher(
-                ElementMatcher(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
-                ordinal: 1
-            )
+    func testCLIBuilderCarriesMatcherTargetAsTypedTarget() throws {
+        let expectedTarget = ElementTarget.matcher(
+            ElementMatcher(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
+            ordinal: 1
         )
-        guard case .object(let target)? = operation.argument(.target) else {
-            return XCTFail("expected typed target object")
-        }
+        let operation = try TheFence.Command.activate.cliOperation(
+            target: expectedTarget
+        )
 
-        XCTAssertNil(target["matcher"])
-        XCTAssertEqual(target["label"], .string("Rotor Host"))
-        XCTAssertEqual(target["identifier"], .string("rotor.host"))
-        XCTAssertEqual(target["traits"], .array([.string("button")]))
-        XCTAssertEqual(target["ordinal"], .int(1))
+        XCTAssertEqual(operation.elementTarget, expectedTarget)
+        XCTAssertNil(operation.argument(.target))
     }
 
     func testREPLParsesCoordinateGesture() throws {
@@ -364,24 +353,18 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testHumanParserUsesCatalogPositionalDirectionSyntax() throws {
         let operation = try ReplSession.parseHumanInput("swipe up checkout_list")
-        guard case .object(let target)? = operation.argument(.target) else {
-            return XCTFail("expected typed target object")
-        }
 
         XCTAssertEqual(operation.command, .swipe)
         XCTAssertEqual(operation.argument(.direction), .string("up"))
-        XCTAssertEqual(target["heistId"], .string("checkout_list"))
+        XCTAssertEqual(operation.elementTarget, .heistId("checkout_list"))
     }
 
     func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
         let operation = try ReplSession.parseHumanInput("scroll_to_edge top checkout_list")
-        guard case .object(let target)? = operation.argument(.target) else {
-            return XCTFail("expected typed target object")
-        }
 
         XCTAssertEqual(operation.command, .scrollToEdge)
         XCTAssertEqual(operation.argument(.edge), .string("top"))
-        XCTAssertEqual(target["heistId"], .string("checkout_list"))
+        XCTAssertEqual(operation.elementTarget, .heistId("checkout_list"))
     }
 
     func testScrollCLIAllowsNoElementTarget() throws {
@@ -417,12 +400,31 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testHumanParserMapsHeistIdPositionalTarget() throws {
         let operation = try ReplSession.parseHumanInput("activate button_save")
-        guard case .object(let target)? = operation.argument(.target) else {
-            return XCTFail("expected typed target object")
-        }
 
         XCTAssertEqual(operation.command, .activate)
-        XCTAssertEqual(target["heistId"], .string("button_save"))
+        XCTAssertEqual(operation.elementTarget, .heistId("button_save"))
+    }
+
+    func testHumanParserRejectsDuplicateElementTarget() {
+        XCTAssertThrowsError(
+            try ReplSession.parseHumanInput("activate button_save target=button_cancel")
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Element target specified more than once"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
+    }
+
+    func testHumanParserRejectsTargetForCommandWithoutTargetParameter() {
+        XCTAssertThrowsError(
+            try ReplSession.parseHumanInput("get_screen target=button_save")
+        ) { error in
+            XCTAssertTrue(
+                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown parameter 'target' for get_screen"),
+                CLIRequestBuilder.diagnosticMessage(for: error)
+            )
+        }
     }
 
     private func topLevelCommandNames() -> [String] {
