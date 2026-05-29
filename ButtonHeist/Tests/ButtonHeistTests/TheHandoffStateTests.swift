@@ -772,7 +772,7 @@ final class TheHandoffStateTests: XCTestCase {
         do {
             try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
             XCTFail("Expected noMatchingDevice to be thrown")
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as HandoffConnectionError {
             guard case .noMatchingDevice(let filter, let available) = error else {
                 return XCTFail("Expected noMatchingDevice, got \(error)")
             }
@@ -832,7 +832,7 @@ final class TheHandoffStateTests: XCTestCase {
         do {
             try await handoff.connectWithDiscovery(filter: nil, timeout: 0.5)
             XCTFail("Expected noMatchingDevice to be thrown")
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as HandoffConnectionError {
             guard case .noMatchingDevice(let filter, let available) = error else {
                 return XCTFail("Expected noMatchingDevice, got \(error)")
             }
@@ -947,8 +947,8 @@ final class TheHandoffStateTests: XCTestCase {
 
         do {
             try await handoff.waitForConnectionResult(timeout: 5)
-            XCTFail("Expected ConnectionError to be thrown")
-        } catch let error as TheHandoff.ConnectionError {
+            XCTFail("Expected HandoffConnectionError to be thrown")
+        } catch let error as HandoffConnectionError {
             guard case .connectionFailed(let message) = error else {
                 return XCTFail("Expected .connectionFailed, got \(error)")
             }
@@ -1068,7 +1068,7 @@ final class TheHandoffStateTests: XCTestCase {
         do {
             try await shortWaitTask.value
             XCTFail("Expected timeout")
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as HandoffConnectionError {
             XCTAssertEqual(error, .timeout)
         } catch {
             XCTFail("Expected timeout, got \(error)")
@@ -1107,7 +1107,7 @@ final class TheHandoffStateTests: XCTestCase {
         do {
             try await waitTask.value
             XCTFail("Expected auth failure")
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as HandoffConnectionError {
             guard case .disconnected(.authFailed(let reason)) = error else {
                 return XCTFail("Expected auth-failed disconnect, got \(error)")
             }
@@ -1141,7 +1141,7 @@ final class TheHandoffStateTests: XCTestCase {
             do {
                 try await waitTask.value
                 XCTFail("Expected disconnect failure")
-            } catch let error as TheHandoff.ConnectionError {
+            } catch let error as HandoffConnectionError {
                 XCTAssertEqual(error, .disconnected(.missingFingerprint))
             } catch {
                 XCTFail("Unexpected error: \(error)")
@@ -1274,7 +1274,7 @@ final class TheHandoffStateTests: XCTestCase {
         do {
             try await handoff.waitForConnectionResult(timeout: 30)
             XCTFail("Expected disconnect failure")
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as HandoffConnectionError {
             guard case .disconnected(let reason) = error else {
                 return XCTFail("Expected .disconnected, got \(error)")
             }
@@ -1370,7 +1370,7 @@ final class TheHandoffStateTests: XCTestCase {
         do {
             try await handoff.waitForConnectionResult(timeout: 30)
             XCTFail("Expected fast-path throw on .disconnected")
-        } catch is TheHandoff.ConnectionError {
+        } catch is HandoffConnectionError {
             // Expected.
         }
     }

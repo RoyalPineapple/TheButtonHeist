@@ -25,7 +25,7 @@ extension TheFence {
         handoff.stopDiscovery()
     }
 
-    func handleHandoffConnectionStateChanged(_ state: TheHandoff.ConnectionPhase) {
+    func handleHandoffConnectionStateChanged(_ state: HandoffConnectionPhase) {
         switch state {
         case .failed(let failure):
             clearClientSessionState(error: sessionStateError(for: failure))
@@ -46,7 +46,7 @@ extension TheFence {
         recording.reset()
     }
 
-    private func sessionStateError(for failure: TheHandoff.ConnectionError) -> Error {
+    private func sessionStateError(for failure: HandoffConnectionError) -> Error {
         if case .disconnected(let reason) = failure {
             return FenceError.connectionFailure(ConnectionFailure(disconnectReason: reason))
         }
@@ -64,7 +64,7 @@ extension TheFence {
                 filter: filter,
                 timeout: config.connectionTimeout
             )
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as HandoffConnectionError {
             throw FenceError(error)
         }
     }
@@ -76,7 +76,7 @@ extension TheFence {
         case .reachable:
             break
         case .failed(let reason):
-            throw FenceError(TheHandoff.ConnectionError.disconnected(reason))
+            throw FenceError(HandoffConnectionError.disconnected(reason))
         case .unavailable:
             throw FenceError.connectionFailure(ConnectionFailure(
                 message: "Could not reach ButtonHeist server at \(device.name)",
@@ -90,10 +90,10 @@ extension TheFence {
         let attemptID = handoff.connect(to: device)
         do {
             try await handoff.waitForConnectionResult(timeout: config.connectionTimeout)
-        } catch let error as TheHandoff.ConnectionError where error == .timeout {
+        } catch let error as HandoffConnectionError where error == .timeout {
             handoff.abortConnectionAttempt(attemptID, failure: .timeout)
             throw FenceError(error)
-        } catch let error as TheHandoff.ConnectionError {
+        } catch let error as HandoffConnectionError {
             throw FenceError(error)
         }
         handoff.onStatus?("Connected to \(device.name)")

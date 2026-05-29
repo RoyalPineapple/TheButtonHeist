@@ -4,29 +4,29 @@ import XCTest
 final class ConnectionPhaseTests: XCTestCase {
 
     func testConnectionErrorIsEquatable() {
-        // ConnectionError is used as the associated value in
-        // ConnectionPhase.failed, so Equatable conformance is load-bearing
+        // HandoffConnectionError is used as the associated value in
+        // HandoffConnectionPhase.failed, so Equatable conformance is load-bearing
         // for phase comparison in tests and assertions.
         XCTAssertEqual(
-            TheHandoff.ConnectionError.connectionFailed("boom"),
-            TheHandoff.ConnectionError.connectionFailed("boom")
+            HandoffConnectionError.connectionFailed("boom"),
+            HandoffConnectionError.connectionFailed("boom")
         )
         XCTAssertNotEqual(
-            TheHandoff.ConnectionError.connectionFailed("boom"),
-            TheHandoff.ConnectionError.connectionFailed("other")
+            HandoffConnectionError.connectionFailed("boom"),
+            HandoffConnectionError.connectionFailed("other")
         )
         XCTAssertNotEqual(
-            TheHandoff.ConnectionError.disconnected(.authFailed("bad token")),
-            TheHandoff.ConnectionError.disconnected(.sessionLocked("bad token"))
+            HandoffConnectionError.disconnected(.authFailed("bad token")),
+            HandoffConnectionError.disconnected(.sessionLocked("bad token"))
         )
         XCTAssertEqual(
-            TheHandoff.ConnectionError.disconnected(.missingFingerprint),
-            TheHandoff.ConnectionError.disconnected(.missingFingerprint)
+            HandoffConnectionError.disconnected(.missingFingerprint),
+            HandoffConnectionError.disconnected(.missingFingerprint)
         )
     }
 
     func testConnectionErrorTaxonomy() {
-        let cases: [(TheHandoff.ConnectionError, String, FailurePhase, Bool)] = [
+        let cases: [(HandoffConnectionError, String, FailurePhase, Bool)] = [
             (.connectionFailed("refused"), "connection.failed", .transport, true),
             (.disconnected(.missingFingerprint), "tls.missing_fingerprint", .tls, false),
             (.disconnected(.serverClosed), "transport.server_closed", .transport, true),

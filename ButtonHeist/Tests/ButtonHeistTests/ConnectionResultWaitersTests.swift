@@ -29,7 +29,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         let waitTask = makeWaitTask(waiters: waiters, id: waiterID, attemptID: attemptID)
         await Task.yield()
 
-        waiters.fail(id: waiterID, attemptID: UUID(), with: TheHandoff.ConnectionError.timeout)
+        waiters.fail(id: waiterID, attemptID: UUID(), with: HandoffConnectionError.timeout)
         await Task.yield()
 
         waiters.resolve(attemptID: attemptID, with: .success(()))
@@ -45,7 +45,7 @@ final class ConnectionResultWaitersTests: XCTestCase {
         let waitTask = makeWaitTask(waiters: waiters, id: waiterID, attemptID: attemptID)
         await Task.yield()
 
-        waiters.fail(id: waiterID, attemptID: attemptID, with: TheHandoff.ConnectionError.timeout)
+        waiters.fail(id: waiterID, attemptID: attemptID, with: HandoffConnectionError.timeout)
         assertConnectionError(await waitTask.value, .timeout)
     }
 
@@ -89,11 +89,11 @@ final class ConnectionResultWaitersTests: XCTestCase {
 
     private func assertConnectionError(
         _ result: Result<Void, Error>,
-        _ expected: TheHandoff.ConnectionError,
+        _ expected: HandoffConnectionError,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        guard case .failure(let error as TheHandoff.ConnectionError) = result else {
+        guard case .failure(let error as HandoffConnectionError) = result else {
             return XCTFail("Expected \(expected), got \(result)", file: file, line: line)
         }
         XCTAssertEqual(error, expected, file: file, line: line)

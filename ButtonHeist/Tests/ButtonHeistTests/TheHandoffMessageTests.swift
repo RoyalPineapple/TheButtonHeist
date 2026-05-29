@@ -408,7 +408,7 @@ final class TheHandoffMessageTests: XCTestCase {
         XCTAssertEqual(handoff.missedPongCount, 2)
 
         // Reconnect (the session is rebuilt). The counter must be back to
-        // zero because it now lives inside ConnectedSession; a stale
+        // zero because it now lives inside HandoffConnectedSession; a stale
         // top-level field used to leak into the next session.
         let mockTwo = MockConnection()
         handoff.makeConnection = { _, _, _ in mockTwo }

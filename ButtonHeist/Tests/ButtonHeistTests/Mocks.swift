@@ -34,12 +34,12 @@ func assertDeviceConnectionDisconnected(
     XCTFail("Expected device connection to be disconnected, got \(connection.connectionState)", file: file, line: line)
 }
 
-/// Pattern-match helpers for `TheHandoff.ConnectionPhase`. Replaces the
+/// Pattern-match helpers for `HandoffConnectionPhase`. Replaces the
 /// dropped `Equatable` conformance — production code never compared phases
 /// for equality.
 @ButtonHeistActor
 func assertDisconnected(
-    _ phase: TheHandoff.ConnectionPhase,
+    _ phase: HandoffConnectionPhase,
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
@@ -49,7 +49,7 @@ func assertDisconnected(
 
 @ButtonHeistActor
 func assertConnected(
-    _ phase: TheHandoff.ConnectionPhase,
+    _ phase: HandoffConnectionPhase,
     device expected: DiscoveredDevice? = nil,
     file: StaticString = #filePath,
     line: UInt = #line
@@ -65,7 +65,7 @@ func assertConnected(
 
 @ButtonHeistActor
 func assertConnecting(
-    _ phase: TheHandoff.ConnectionPhase,
+    _ phase: HandoffConnectionPhase,
     device expected: DiscoveredDevice,
     file: StaticString = #filePath,
     line: UInt = #line
@@ -79,8 +79,8 @@ func assertConnecting(
 
 @ButtonHeistActor
 func assertFailed(
-    _ phase: TheHandoff.ConnectionPhase,
-    failure expected: TheHandoff.ConnectionError,
+    _ phase: HandoffConnectionPhase,
+    failure expected: HandoffConnectionError,
     file: StaticString = #filePath,
     line: UInt = #line
 ) {

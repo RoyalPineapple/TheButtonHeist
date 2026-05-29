@@ -9,13 +9,6 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 @ButtonHeistActor
 final class TheHandoff {
 
-    // MARK: - State Machine Types
-
-    typealias ConnectionError = HandoffConnectionError
-    typealias ConnectedSession = HandoffConnectedSession
-    typealias ConnectionAttempt = HandoffConnectionAttempt
-    typealias ConnectionPhase = HandoffConnectionPhase
-
     // MARK: - State
 
     private let connectionLifecycle = HandoffConnectionLifecycle()
@@ -24,13 +17,13 @@ final class TheHandoff {
 
     // MARK: - Derived State
 
-    var connectionPhase: ConnectionPhase { connectionLifecycle.phase }
+    var connectionPhase: HandoffConnectionPhase { connectionLifecycle.phase }
 
     var isConnected: Bool {
         connectionLifecycle.isConnected
     }
 
-    var connectionDiagnosticFailure: ConnectionError? {
+    var connectionDiagnosticFailure: HandoffConnectionError? {
         connectionLifecycle.diagnosticFailure
     }
 
@@ -71,7 +64,7 @@ final class TheHandoff {
 
     /// Emits after each connection phase transition. Consumers derive lifecycle
     /// side effects from this state stream instead of one-off lifecycle hooks.
-    var onConnectionStateChanged: (@ButtonHeistActor (ConnectionPhase) -> Void)?
+    var onConnectionStateChanged: (@ButtonHeistActor (HandoffConnectionPhase) -> Void)?
     /// Non-lifecycle server messages delivered to TheFence for request-tracker
     /// resolution. TheHandoff forwards these without retaining semantic state.
     var onServerMessage: (@ButtonHeistActor (ServerMessage, String?) -> Void)?
@@ -384,7 +377,7 @@ final class TheHandoff {
     /// terminal state (for example, discovery/direct-connect timeout). This
     /// intentionally does not schedule reconnect: there was no usable session
     /// drop, only a failed setup attempt.
-    func abortConnectionAttempt(_ attemptID: UUID, failure: ConnectionError) {
+    func abortConnectionAttempt(_ attemptID: UUID, failure: HandoffConnectionError) {
         guard connectionLifecycle.disconnectAttempt(attemptID, failure: failure) else { return }
         connection?.disconnect()
         connection = nil
@@ -395,12 +388,12 @@ final class TheHandoff {
     }
 
     /// Suspend until the connection phase transitions to `.connected` (returns),
-    /// `.failed` (throws the mapped `ConnectionError`), or `.disconnected`
-    /// (throws `ConnectionError.connectionFailed`). If the phase is already
+    /// `.failed` (throws the mapped `HandoffConnectionError`), or `.disconnected`
+    /// (throws `HandoffConnectionError.connectionFailed`). If the phase is already
     /// terminal at call time, returns or throws immediately without suspending.
     ///
     /// The `timeout` is enforced by scheduling a cancellable timeout task that
-    /// fails only this registered waiter with `ConnectionError.timeout`.
+    /// fails only this registered waiter with `HandoffConnectionError.timeout`.
     /// Cancelling the calling task aborts the wait and propagates
     /// `CancellationError`.
     func waitForConnectionResult(timeout: TimeInterval) async throws {
@@ -491,7 +484,7 @@ final class TheHandoff {
             )
         } catch {
             if startedDiscovery { stopDiscovery() }
-            if let connectionError = error as? ConnectionError {
+            if let connectionError = error as? HandoffConnectionError {
                 connectionLifecycle.recordAttemptFailure(connectionError)
             }
             throw error
@@ -503,7 +496,7 @@ final class TheHandoff {
         let attemptID = connect(to: device)
         do {
             try await waitForConnectionResult(timeout: timeout)
-        } catch let error as ConnectionError where error == .timeout {
+        } catch let error as HandoffConnectionError where error == .timeout {
             abortConnectionAttempt(attemptID, failure: .timeout)
             throw error
         }
