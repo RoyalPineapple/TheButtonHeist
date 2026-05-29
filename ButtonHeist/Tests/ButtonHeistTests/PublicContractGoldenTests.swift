@@ -351,11 +351,11 @@ final class PublicContractGoldenTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 0),
             app: "com.buttonheist.testapp",
             steps: [
-                HeistEvidence(
+                try HeistEvidence(
                     command: "activate",
                     target: semanticTarget(label: "Pay", traits: [.button])
                 ),
-                HeistEvidence(
+                try HeistEvidence(
                     command: "type_text",
                     target: semanticTarget(label: "Note"),
                     arguments: ["text": .string("hello")]
