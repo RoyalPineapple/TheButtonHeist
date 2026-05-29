@@ -17,7 +17,7 @@ public struct FenceParameterSpec: Sendable, Equatable {
     public let required: Bool
     public let enumValues: [String]?
     public let defaultValue: HeistValue?
-    public let jsonSchemaProperty: FenceJSONSchemaValue
+    public let jsonSchemaProperty: HeistValue
 
 }
 
@@ -100,7 +100,7 @@ func param(
     arrayItemProperties: [FenceParameterSpec] = [],
     arrayItemAdditionalProperties: Bool = false
 ) -> FenceParameterSpec {
-    var schema: [String: FenceJSONSchemaValue] = ["type": .string(type.jsonSchemaType)]
+    var schema: [String: HeistValue] = ["type": .string(type.jsonSchemaType)]
     if let enumValues { schema["enum"] = .array(enumValues.map { .string($0) }) }
     if let minimum { schema["minimum"] = jsonSchemaNumber(minimum) }
     if let maximum { schema["maximum"] = jsonSchemaNumber(maximum) }
@@ -117,7 +117,7 @@ func param(
         schema["additionalProperties"] = .bool(objectAdditionalProperties)
     case .array:
         if let arrayItemType {
-            var items: [String: FenceJSONSchemaValue] = ["type": .string(arrayItemType.jsonSchemaType)]
+            var items: [String: HeistValue] = ["type": .string(arrayItemType.jsonSchemaType)]
             if arrayItemType == .object {
                 items["properties"] = .object(FenceParameterSpec.jsonSchemaProperties(from: arrayItemProperties))
                 addRequiredKeys(from: arrayItemProperties, to: &items)
@@ -141,13 +141,13 @@ func param(
 
 private func addRequiredKeys(
     from specs: [FenceParameterSpec],
-    to schema: inout [String: FenceJSONSchemaValue]
+    to schema: inout [String: HeistValue]
 ) {
     let required = specs.filter(\.required).map(\.key)
     if !required.isEmpty { schema["required"] = .array(required.map { .string($0) }) }
 }
 
-private func jsonSchemaNumber(_ value: Double) -> FenceJSONSchemaValue {
+private func jsonSchemaNumber(_ value: Double) -> HeistValue {
     value.rounded(.towardZero) == value ? .int(Int(value)) : .double(value)
 }
 
@@ -192,10 +192,8 @@ public struct MCPToolContract: Sendable, Equatable {
     }
 }
 
-public typealias FenceJSONSchemaValue = HeistValue
-
 public extension MCPToolContract {
-    var inputJSONSchema: FenceJSONSchemaValue {
+    var inputJSONSchema: HeistValue {
         FenceParameterSpec.jsonInputSchema(
             properties: FenceParameterSpec.jsonSchemaProperties(from: parameters),
             required: requiredParameterKeys
@@ -210,8 +208,8 @@ public extension FenceParameterSpec.ParamType {
 }
 
 public extension FenceParameterSpec {
-    static func jsonSchemaProperties(from specs: [FenceParameterSpec]) -> [String: FenceJSONSchemaValue] {
-        var properties: [String: FenceJSONSchemaValue] = [:]
+    static func jsonSchemaProperties(from specs: [FenceParameterSpec]) -> [String: HeistValue] {
+        var properties: [String: HeistValue] = [:]
         for spec in specs where properties[spec.key] == nil {
             properties[spec.key] = spec.jsonSchemaProperty
         }
@@ -219,10 +217,10 @@ public extension FenceParameterSpec {
     }
 
     static func jsonInputSchema(
-        properties: [String: FenceJSONSchemaValue],
+        properties: [String: HeistValue],
         required: [String] = []
-    ) -> FenceJSONSchemaValue {
-        var schema: [String: FenceJSONSchemaValue] = [
+    ) -> HeistValue {
+        var schema: [String: HeistValue] = [
             "type": .string(FenceParameterSpec.ParamType.object.jsonSchemaType),
             "properties": .object(properties),
             "additionalProperties": .bool(false),
