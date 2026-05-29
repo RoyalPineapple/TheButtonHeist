@@ -151,11 +151,6 @@ public final class TheInsideJob {
 
     var stakeout: TheStakeout? { getaway.stakeout }
 
-    /// Test hook: exposes whether lifecycle bridge Tasks have self-removed
-    /// without exposing the underlying tracker.
-    var pendingLifecycleTasksIsEmpty: Bool { lifecycleBoundaryTasks.isEmpty }
-    var pendingTransportStopTaskIsEmpty: Bool { pendingTransportStopTask == nil }
-
     static let defaultPollingTimeout: TimeInterval = 2.0
 
     // MARK: - Initialization
