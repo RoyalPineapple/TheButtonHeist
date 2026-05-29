@@ -546,15 +546,16 @@ final class TheHandoff {
     /// Compute display name with disambiguation when multiple devices have the same app
     func displayName(for device: DiscoveredDevice) -> String {
         let appName = device.appName
+        let deviceSuffix = device.deviceName.isEmpty ? "" : " (\(device.deviceName))"
 
         let sameAppDevices = discoveredDevices.filter { $0.appName == appName }
 
         if sameAppDevices.count > 1 {
             let sameAppAndDevice = sameAppDevices.filter { $0.deviceName == device.deviceName }
             if sameAppAndDevice.count > 1, let shortId = device.shortId {
-                return "\(appName) (\(device.deviceName)) [\(shortId)]"
+                return "\(appName)\(deviceSuffix) [\(shortId)]"
             }
-            return "\(appName) (\(device.deviceName))"
+            return "\(appName)\(deviceSuffix)"
         } else {
             return appName
         }

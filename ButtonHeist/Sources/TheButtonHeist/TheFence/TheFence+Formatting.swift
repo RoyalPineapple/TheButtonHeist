@@ -215,7 +215,8 @@ extension FenceResponse {
             case .usb: "usb"
             case .network: "network"
             }
-            output += "  [\(index)] \(id)  \(device.appName)  (\(device.deviceName))  [\(typeLabel)]\n"
+            let name = device.deviceName.isEmpty ? device.appName : "\(device.appName)  (\(device.deviceName))"
+            output += "  [\(index)] \(id)  \(name)  [\(typeLabel)]\n"
         }
         return output.trimmingCharacters(in: .newlines)
     }
