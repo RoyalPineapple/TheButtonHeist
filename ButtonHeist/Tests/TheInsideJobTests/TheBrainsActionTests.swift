@@ -638,7 +638,7 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
         )
-        let target = try semanticActionTarget(heistId: "quantity_0", in: sourceScreen)
+        let target = ElementTarget.heistId("quantity_0")
 
         let result = await brains.actions.executeIncrement(target)
 
