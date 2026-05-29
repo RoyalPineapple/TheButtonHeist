@@ -156,10 +156,18 @@ final class TheStash {
         WireConversion.toInterface(from: currentScreen, timestamp: timestamp)
     }
 
-    /// Single-build variant: returns the interface alongside its hash so callers
-    /// that need both don't pay for two projection passes.
-    func interfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String) {
-        let interface = interface(timestamp: timestamp)
+    /// Current semantic screen projection used for traces and deltas.
+    ///
+    /// Unlike `interface()`, this reads the committed semantic state produced
+    /// by exploration, so off-viewport targetable elements participate in
+    /// post-action deltas.
+    func semanticInterface(timestamp: Date = Date()) -> Interface {
+        WireConversion.toSemanticInterface(from: currentScreen, timestamp: timestamp)
+    }
+
+    /// Single-build semantic variant for state capture and delta projection.
+    func semanticInterfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String) {
+        let interface = semanticInterface(timestamp: timestamp)
         return (interface, AccessibilityTrace.Capture.hash(interface))
     }
 }

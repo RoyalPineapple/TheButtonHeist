@@ -104,12 +104,13 @@ final class TheBrains {
     /// Capture the current state for delta computation before an action.
     /// Caller must have called `refresh()` already this frame.
     func captureBeforeState() -> BeforeState {
-        let (interface, interfaceHash) = stash.interfaceWithHash()
+        let snapshot = stash.selectElements()
+        let (interface, interfaceHash) = stash.semanticInterfaceWithHash()
         let tripwireSignal = tripwire.tripwireSignal()
         let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
-            snapshot: stash.selectElements(),
-            elements: stash.currentHierarchy.sortedElements,
+            snapshot: snapshot,
+            elements: snapshot.map(\.element),
             hierarchy: stash.currentHierarchy,
             interface: interface,
             interfaceHash: interfaceHash,
@@ -121,13 +122,12 @@ final class TheBrains {
         )
     }
 
-    /// Capture the known semantic state from the current parser hierarchy plus
-    /// Button Heist annotations. Exploration may update known targetable
-    /// elements, but the interface capture remains the parser tree rather than
-    /// a second flattened wire tree.
+    /// Capture the known semantic state. Exploration updates the targetable
+    /// semantic set; this capture projects that state so deltas compare the
+    /// whole discovered interface rather than the latest viewport parse.
     func captureSemanticState() -> BeforeState {
         let snapshot = stash.selectElements()
-        let (interface, interfaceHash) = stash.interfaceWithHash()
+        let (interface, interfaceHash) = stash.semanticInterfaceWithHash()
         let tripwireSignal = tripwire.tripwireSignal()
         let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
@@ -146,14 +146,15 @@ final class TheBrains {
 
     // MARK: - Action Result with Delta
 
-    /// Snapshot the hierarchy after an action, diff against before-state, return enriched ActionResult.
+    /// Settle after an action, explore reachable semantics, diff against before-state, and return enriched ActionResult.
     func actionResultWithDelta(
         success: Bool,
         method: ActionMethod,
         message: String? = nil,
         payload: ResultPayload? = nil,
         errorKind: ErrorKind? = nil,
-        before: BeforeState
+        before: BeforeState,
+        settleOutcome: SettleSession.Outcome? = nil
     ) async -> ActionResult {
         guard success else {
             return failureActionResult(
@@ -165,12 +166,17 @@ final class TheBrains {
             )
         }
 
-        let start = CFAbsoluteTimeGetCurrent()
-        let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
-        // Tripwire triggers the post-action parse early, but the parsed
-        // accessibility signature below decides no-change, element-change,
-        // or screen-change.
-        let settleResult = await settleSession.run(start: start, baselineTripwireSignal: before.tripwireSignal)
+        let settleResult: SettleSession.Outcome
+        if let settleOutcome {
+            settleResult = settleOutcome
+        } else {
+            let start = CFAbsoluteTimeGetCurrent()
+            let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
+            // Tripwire triggers the post-action parse early, but the parsed
+            // accessibility signature below decides no-change, element-change,
+            // or screen-change.
+            settleResult = await settleSession.run(start: start, baselineTripwireSignal: before.tripwireSignal)
+        }
         let didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
             var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
@@ -179,45 +185,47 @@ final class TheBrains {
             builder.settleTimeMs = cancelMs
             return builder.failure(errorKind: .actionFailed, payload: payload)
         }
-        var afterScreen = settleResult.outcome.didSettleCleanly
-            ? settleResult.finalScreen
-            : nil
-        if afterScreen == nil {
-            afterScreen = stash.parse()
+
+        let settledScreen: Screen?
+        if settleOutcome != nil {
+            settledScreen = settleResult.finalScreen
+        } else {
+            settledScreen = settleResult.finalScreen ?? stash.parse()
         }
 
-        let afterSnapshotForClassification = afterScreen.map(ScreenClassifier.snapshot(of:)) ?? ScreenClassifier.snapshot(of: .empty)
-        let classification = ScreenClassifier.classify(
+        guard let afterScreen = settledScreen else {
+            var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+            builder.message = "Could not parse post-action accessibility tree"
+            builder.settled = didSettle
+            builder.settleTimeMs = settleResult.outcome.timeMs
+            return builder.failure(errorKind: .actionFailed, payload: payload)
+        }
+
+        stash.currentScreen = afterScreen
+
+        _ = await navigation.exploreAndPrune()
+        let finalState = captureSemanticState()
+        let finalClassification = ScreenClassifier.classify(
             before: before.screenSnapshot,
-            after: afterSnapshotForClassification
+            after: finalState.screenSnapshot
         )
-        let isScreenChange = classification.isScreenChange
-        if let afterScreen {
-            stash.currentScreen = afterScreen
-        }
-
-        if isScreenChange {
-            _ = await navigation.exploreAndPrune()
-        }
-        let afterInterface = stash.interface()
-        let transientElements = isScreenChange || settleResult.events.containsTripwireSignalChange
+        let transientElements = finalClassification.isScreenChange || settleResult.events.containsTripwireSignalChange
             ? []
             : SettleSession.transientElements(
                 seenByKey: settleResult.elementsByKey,
                 baseline: before.elements,
-                final: afterScreen?.liveCapture.hierarchy.sortedElements ?? []
+                final: finalState.elements
             )
         let accessibilityTrace = makeAccessibilityTrace(
-            afterInterface: afterInterface,
+            afterInterface: finalState.interface,
             parentCapture: before.capture,
-            classification: classification,
+            classification: finalClassification,
             transient: transientElements.map { TheStash.WireConversion.convert($0) }
         )
 
         await stash.captureActionFrame()
 
-        guard let postCapture = accessibilityTrace.captures.last,
-              accessibilityTrace.endpointDeltaProjection != nil else {
+        guard let postCapture = accessibilityTrace.captures.last else {
             return failureActionResult(
                 method: method,
                 message: message,
