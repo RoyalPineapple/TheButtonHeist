@@ -3,7 +3,6 @@ import TheScore
 
 extension TheFence {
 
-    /// Canonical set of all commands supported by TheFence (CLI and MCP).
     public enum Command: String, CaseIterable, Sendable {
         case help
         case ping
@@ -47,11 +46,6 @@ extension TheFence {
     }
 }
 
-/// Canonical command descriptor for TheFence command surfaces.
-///
-/// The enum is the stable wire identity. This descriptor owns the contract
-/// projected from that identity: adapter exposure, batch eligibility,
-/// parameter shape, and user-facing help text.
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public var canonicalName: String { command.rawValue }
@@ -69,10 +63,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         cliExposure != .notExposed || mcpExposure != .notExposed || isBatchExecutable
     }
 
-    /// Parameter keys that identify an element target for this command.
-    ///
-    /// Adapters use this projection when they need to talk about target matcher
-    /// fields without knowing how the catalog orders or composes parameter blocks.
     public var elementTargetParameterKeys: [String] {
         let elementTargetKeys = Set(FenceParameterBlocks.elementTarget.map(\.key))
         return parameters.map(\.key).filter(elementTargetKeys.contains)
@@ -103,11 +93,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     }
 }
 
-/// Catalog-owned request payload family for a Fence command.
-///
-/// This keeps request parsing routed by command metadata instead of a separate
-/// switch in request decoding. The individual family decoders still own field
-/// validation for their typed payloads.
 public enum FenceRequestPayloadKind: Sendable, Equatable {
     case none
     case observation
@@ -117,11 +102,6 @@ public enum FenceRequestPayloadKind: Sendable, Equatable {
     case session
 }
 
-/// Catalog-owned positional grammar for the CLI's human command parser.
-///
-/// The CLI still owns tokenization and key=value parsing. Command-specific
-/// meaning for positional tokens lives here so adapters do not mirror command
-/// identity or parameter roles.
 public enum FenceHumanPositionalSyntax: Sendable, Equatable {
     case target
     case joinedText(FenceParameterKey)
@@ -143,62 +123,24 @@ private struct FenceCommandCatalogEntry {
     var description = ""
 }
 
-extension FenceCommandDescriptor {
-    func executionTimeout(for request: TheFence.ParsedRequest) throws -> TimeInterval {
-        if command == .getPasteboard {
-            return Timeouts.healthSeconds
-        }
-        if command == .elementSearch || command == .typeText {
-            return Timeouts.longActionSeconds
-        }
-        if command == .waitFor {
-            guard case .waitFor(let target)? = request.executableMessages?.first else {
-                throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for payload")
-            }
-            return target.resolvedTimeout + 5
-        }
-        if command == .waitForChange {
-            guard case .waitForChange(let target)? = request.executableMessages?.first else {
-                throw FenceError.invalidRequest("command \"\(canonicalName)\" is missing wait_for_change payload")
-            }
-            return target.resolvedTimeout + 5
-        }
-        return Timeouts.actionSeconds
-    }
-}
-
 public extension TheFence.Command {
-    var descriptor: FenceCommandDescriptor {
-        Self.descriptor(for: self)
-    }
+    var descriptor: FenceCommandDescriptor { Self.descriptor(for: self) }
 
-    static var descriptors: [FenceCommandDescriptor] {
-        allCases.map(descriptor(for:))
-    }
+    static var descriptors: [FenceCommandDescriptor] { allCases.map(descriptor(for:)) }
 
     static var cliDirectCommandDescriptors: [FenceCommandDescriptor] {
         descriptors.filter { $0.cliExposure == .directCommand }
     }
 
-    var canonicalName: String {
-        descriptor.canonicalName
-    }
+    var canonicalName: String { descriptor.canonicalName }
 
-    var cliExposure: CLIExposure {
-        descriptor.cliExposure
-    }
+    var cliExposure: CLIExposure { descriptor.cliExposure }
 
-    var mcpExposure: MCPExposure {
-        descriptor.mcpExposure
-    }
+    var mcpExposure: MCPExposure { descriptor.mcpExposure }
 
-    var parameters: [FenceParameterSpec] {
-        descriptor.parameters
-    }
+    var parameters: [FenceParameterSpec] { descriptor.parameters }
 
-    var requestPayloadKind: FenceRequestPayloadKind {
-        descriptor.requestPayloadKind
-    }
+    var requestPayloadKind: FenceRequestPayloadKind { descriptor.requestPayloadKind }
 
     func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
         parameters.first { $0.key == key.rawValue }
@@ -208,34 +150,21 @@ public extension TheFence.Command {
         parameter(named: key)?.defaultValue
     }
 
-    var humanPositionalSyntax: FenceHumanPositionalSyntax {
-        descriptor.humanPositionalSyntax
-    }
+    var humanPositionalSyntax: FenceHumanPositionalSyntax { descriptor.humanPositionalSyntax }
 
     static let humanDirectionValues = Set(fenceEnumValues(ScrollDirection.self))
 
     static let humanScrollEdgeValues = Set(fenceEnumValues(ScrollEdge.self))
 
-    /// Commands that can execute as a run_batch step.
-    ///
-    /// Session-control and batch-orchestration commands are accepted at
-    /// external edges but should not appear in batch schemas or execution.
-    var isBatchExecutable: Bool {
-        descriptor.isBatchExecutable
-    }
+    var isBatchExecutable: Bool { descriptor.isBatchExecutable }
 
     static var batchExecutableCases: [Self] {
         allCases.filter { command in
-            // runBatch builds its step schema from batchExecutableCases; skip it
-            // before reading catalogEntry to avoid recursive catalog construction.
             command != .runBatch && command.catalogEntry.isBatchExecutable
         }
     }
 
-    /// Commands that should establish a device connection before dispatch.
-    var requiresConnectionBeforeDispatch: Bool {
-        descriptor.requiresConnectionBeforeDispatch
-    }
+    var requiresConnectionBeforeDispatch: Bool { descriptor.requiresConnectionBeforeDispatch }
 
     static var mcpToolContracts: [MCPToolContract] {
         descriptors.compactMap { descriptor in
@@ -286,10 +215,7 @@ extension TheFence.Command {
         case .ping:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-            entry.description = """
-                Check Button Heist connection health. Returns cheap static app/server identity facts \
-                without reading UI hierarchy or accessibility state.
-                """
+            entry.description = "Check connection health without reading accessibility state."
         case .quit:
             entry.cliExposure = .sessionOnly
             entry.mcpExposure = .notExposed
@@ -297,10 +223,7 @@ extension TheFence.Command {
         case .listDevices:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-            entry.description = """
-                List iOS devices discovered via Bonjour plus named targets from .buttonheist.json. \
-                Empty when Bonjour is blocked and no config targets exist — use connect(device:token:) directly.
-                """
+            entry.description = "List discovered iOS devices and configured connection targets."
         case .getInterface:
             entry.requestPayloadKind = .observation
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -308,31 +231,18 @@ extension TheFence.Command {
                 FenceParameterBlocks.interfaceSubtree,
                 param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
             ]
-            entry.description = """
-                Read the app accessibility hierarchy. Call once on a new screen, then track changes via \
-                action deltas — re-fetch only when you need elements the delta didn't cover. \
-                Omit subtree for the whole hierarchy, or pass subtree to select the returned tree from \
-                a selected leaf or container node.
-                """
+            entry.description = "Read the app accessibility hierarchy, optionally scoped to a subtree."
         case .getScreen:
             entry.requestPayloadKind = .observation
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.parameters = [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)]
-            entry.description = """
-                Capture a PNG screenshot from the connected device. Returns metadata plus an artifact path \
-                by default. Set inlineData=true to return capped base64 PNG data inline; set includeInterface=true \
-                to include the fresh visible accessibility tree.
-                """
+            entry.description = "Capture a PNG screenshot with optional inline data and interface state."
         case .waitForChange:
             entry.requestPayloadKind = .waitForChange
             entry.isBatchExecutable = true
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
             entry.parameters = expectation
-            entry.description = """
-                Wait for the UI to change. With no expect, returns on any tree change. With expect, \
-                rides through intermediate states (spinners, loading) until the expectation is met. \
-                Use after an action whose delta showed a transient state and the expectation wasn't met yet.
-                """
+            entry.description = "Wait for any UI change or for an expectation to become true."
         case .oneFingerTap:
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
@@ -423,18 +333,12 @@ extension TheFence.Command {
                     defaultValue: .string(ScrollDirection.down.rawValue)
                 ),
             ] + expectation
-            entry.description = """
-                Scroll one page within scroll views in the requested direction. Use scroll_to_visible, \
-                element_search, or scroll_to_edge for those canonical operations.
-                """
+            entry.description = "Scroll one page in a selected container or semantic target's owning scroll ancestor."
         case .scrollToVisible:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + expectation
-            entry.description = """
-                Make a semantic target visible by resolving it, revealing its owning scroll path, \
-                refreshing the hierarchy, and returning fresh live geometry.
-                """
+            entry.description = "Make a semantic target actionable and report its fresh geometry."
         case .elementSearch:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
@@ -458,11 +362,7 @@ extension TheFence.Command {
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation
-            entry.description = """
-                Activate a UI element (VoiceOver-style double-tap): tap buttons, follow links, toggle \
-                controls. Pass 'action' to invoke a named action like "increment", "decrement", or \
-                any entry from the element's actions array.
-                """
+            entry.description = "Activate a semantic UI element or one of its named accessibility actions."
         case .rotor:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
@@ -479,52 +379,32 @@ extension TheFence.Command {
                 param(.currentTextStartOffset, .integer, minimum: 0),
                 param(.currentTextEndOffset, .integer, minimum: 0),
             ] + expectation
-            entry.description = """
-                Move through a rotor exposed by an element. Defaults to next. Use rotors listed by \
-                get_interface to pick rotor or rotorIndex; pass currentHeistId from the previous \
-                object result to continue like a VoiceOver user. For text-range results, also pass \
-                the returned start and end offsets.
-                """
+            entry.description = "Move through an element rotor using direction and continuation metadata."
         case .typeText:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .joinedText(.text)
             entry.parameters = target + [param(.text, .string, required: true, minLength: 1)] + expectation
-            entry.description = """
-                Type non-empty text via keyboard injection. Optionally target an \
-                element to focus it first and read back the resulting value.
-                """
+            entry.description = "Type non-empty text, optionally after making a semantic target actionable."
         case .editAction:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.humanPositionalSyntax = .firstToken(.action)
             entry.parameters = [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + expectation
-            entry.description = """
-                Perform an edit or keyboard action on the current first responder. \
-                Actions: copy, paste, cut, select, selectAll, delete. Use dismiss_keyboard to dismiss the keyboard.
-                """
+            entry.description = "Perform an edit action on the current first responder."
         case .setPasteboard:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = [param(.text, .string, required: true)] + expectation
-            entry.description = """
-                Write text to the general pasteboard from within the app. Content written by the app \
-                itself does not trigger the iOS "Allow Paste" dialog when subsequently read.
-                """
+            entry.description = "Write text to the general pasteboard from within the app."
         case .getPasteboard:
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
-            entry.description = """
-                Read text from the general pasteboard. iOS may show "Allow Paste" if the content \
-                was written by another app.
-                """
+            entry.description = "Read text from the general pasteboard."
         case .waitFor:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.absent, .boolean), FenceParameterBlocks.expectationTimeout, expect]
-            entry.description = """
-                Wait for an element matching a predicate to appear, or to disappear with absent=true. \
-                Polls on UI settle events. Returns the matched element or diagnostic info on timeout.
-                """
+            entry.description = "Wait for a semantic element to appear or disappear."
         case .dismissKeyboard:
             entry.isBatchExecutable = true
             entry.parameters = expectation
@@ -541,10 +421,7 @@ extension TheFence.Command {
         case .stopRecording:
             entry.requestPayloadKind = .observation
             entry.parameters = [param(.output, .string), param(.inlineData, .boolean), param(.includeInteractionLog, .boolean)]
-            entry.description = """
-                Stop an in-progress screen recording. Returns artifact path and metadata by default. \
-                Set inlineData=true and/or includeInteractionLog=true for a capped expanded JSON response.
-                """
+            entry.description = "Stop an in-progress screen recording and return the artifact metadata."
         case .runBatch:
             entry.requestPayloadKind = .session
             entry.parameters = [
@@ -564,36 +441,20 @@ extension TheFence.Command {
                 ),
                 param(.policy, .string, enumValues: fenceEnumValues(BatchExecutionPolicy.self)),
             ]
-            entry.description = """
-                Execute multiple commands in one call. Each step is a JSON object with 'command' set \
-                to a canonical TheFence.Command name plus that command's parameters. Attach 'expect' per step \
-                to verify inline. Returns ordered per-step results. \
-                policy=stop_on_error (default) or continue_on_error.
-                """
+            entry.description = "Execute ordered command steps with batch policy and per-step expectations."
         case .getSessionState:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-            entry.description = """
-                Inspect the current Button Heist session: connection status, device/app identity, \
-                recording state, client timeouts, and a lightweight summary of the last action.
-                """
+            entry.description = "Inspect connection, device, recording, and last-action session state."
         case .connect:
             entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
             entry.parameters = [param(.target, .string), param(.device, .string), param(.token, .string)]
-            entry.description = """
-                Establish or switch the active connection to an iOS app with Button Heist enabled. \
-                Three patterns: target=NAME from .buttonheist.json, device=HOST:PORT + token, or \
-                BUTTONHEIST_DEVICE/BUTTONHEIST_TOKEN env vars. Tears down any existing session first. \
-                Returns session state; call get_interface explicitly to observe UI hierarchy.
-                """
+            entry.description = "Establish or switch the active connection to a Button Heist app."
         case .listTargets:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-            entry.description = """
-                List named connection targets from .buttonheist.json (or ~/.config/buttonheist/config.json), \
-                including each target's address and which one is the default.
-                """
+            entry.description = "List configured connection targets and the default target."
         case .getSessionLog:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -607,27 +468,16 @@ extension TheFence.Command {
             entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
             entry.parameters = [param(.app, .string), param(.identifier, .string)]
-            entry.description = """
-                Start recording a heist. Successful commands become steps in a .heist file; \
-                the recorder derives minimum matcher fields for durable element targeting; heistId remains recording evidence only. \
-                Attach 'expect' to validate outcomes during playback.
-                """
+            entry.description = "Start recording replayable heist steps from successful commands."
         case .stopHeist:
             entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
             entry.parameters = [param(.output, .string, required: true)]
-            entry.description = """
-                Stop recording and save the heist as a self-contained JSON playback script. \
-                Returns the file path and step count. At least one step must have been recorded.
-                """
+            entry.description = "Stop heist recording and save a JSON playback script."
         case .playHeist:
             entry.requestPayloadKind = .session
             entry.parameters = [param(.input, .string, required: true)]
-            entry.description = """
-                Play back a .heist file. Steps execute sequentially; playback stops on the first \
-                failed step. On failure, returns full diagnostics: command, target, error, action \
-                result, expectation result, and a complete interface snapshot at the failure point.
-                """
+            entry.description = "Play back a heist file and return step diagnostics on failure."
         }
         return entry
     }

@@ -24,7 +24,7 @@ extension TheFence {
 
     func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
         let messages = try executableActionMessages(for: request)
-        let timeout = try request.command.descriptor.executionTimeout(for: request)
+        let timeout = actionTimeout(for: messages)
         var finalResult: ActionResult?
         for message in messages {
             let result = try await sendAndAwaitAction(message, timeout: timeout)
@@ -40,6 +40,22 @@ extension TheFence {
             return .error("command \"\(request.command.rawValue)\" did not produce an executable action")
         }
         return .action(command: request.command, result: finalResult)
+    }
+
+    private func actionTimeout(for messages: [ClientMessage]) -> TimeInterval {
+        guard let message = messages.first else { return Timeouts.actionSeconds }
+        switch message {
+        case .getPasteboard:
+            return Timeouts.healthSeconds
+        case .elementSearch, .typeText:
+            return Timeouts.longActionSeconds
+        case .waitFor(let target):
+            return target.resolvedTimeout + 5
+        case .waitForChange(let target):
+            return target.resolvedTimeout + 5
+        default:
+            return Timeouts.actionSeconds
+        }
     }
 
     func missingElementTargetResponse(command: String) -> FenceResponse {
