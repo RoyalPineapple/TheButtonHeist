@@ -185,7 +185,7 @@ extension TheGetaway {
                 return
             }
             replaceRecordingRouteState(.recording(stakeout: recorder, ownerClientId: clientId))
-            brains.stakeout = recorder
+            brains.stash.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
             // Roll back the claim so the next start_recording can proceed.
@@ -219,7 +219,7 @@ extension TheGetaway {
         case .idle, .starting, .completed:
             return
         }
-        brains.stakeout = nil
+        brains.stash.stakeout = nil
         let owner = state.ownerClientId
 
         // Pending stop waiter wins — that's the request the originator (or
@@ -423,7 +423,7 @@ extension TheGetaway {
         ownerClientId: Int?,
         reason: RecordingInvalidationReason
     ) async {
-        brains.stakeout = nil
+        brains.stash.stakeout = nil
         replaceRecordingRouteState(.invalidating(stakeout: stakeout, ownerClientId: ownerClientId, reason: reason))
         if await stakeout.isRecording {
             await stakeout.stopRecording(reason: .manual)
@@ -438,7 +438,7 @@ extension TheGetaway {
         ownerClientId: Int?,
         reason: RecordingInvalidationReason
     ) async {
-        brains.stakeout = nil
+        brains.stash.stakeout = nil
         replaceRecordingRouteState(.invalidating(stakeout: stakeout, ownerClientId: ownerClientId, reason: reason))
         if await stakeout.isIdle {
             clearInvalidatingRecordingRoute(stakeout)

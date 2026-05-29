@@ -144,13 +144,6 @@ public final class TheInsideJob {
         set { pollingRuntime.phase = newValue }
     }
 
-    /// Recording phase lives on TheGetaway — convenience accessors for tests.
-    var recordingPhase: TheGetaway.RecordingPhase {
-        getaway.recordingPhase
-    }
-
-    var stakeout: TheStakeout? { getaway.stakeout }
-
     static let defaultPollingTimeout: TimeInterval = 2.0
 
     // MARK: - Initialization

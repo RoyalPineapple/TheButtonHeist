@@ -543,14 +543,6 @@ final class TheBrains {
         return current
     }
 
-    // MARK: - Recording Wiring
-
-    /// Stakeout for recording frame capture.
-    var stakeout: TheStakeout? {
-        get { stash.stakeout }
-        set { stash.stakeout = newValue }
-    }
-
 }
 
 #endif // DEBUG

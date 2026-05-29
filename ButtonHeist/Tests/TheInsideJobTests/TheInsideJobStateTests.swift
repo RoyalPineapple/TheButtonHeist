@@ -598,11 +598,11 @@ final class TheInsideJobStateTests: XCTestCase {
 
     func testInitialRecordingPhaseIsIdle() {
         let job = TheInsideJob()
-        guard case .idle = job.recordingPhase else {
-            XCTFail("Expected .idle, got \(job.recordingPhase)")
+        guard case .idle = job.getaway.recordingPhase else {
+            XCTFail("Expected .idle, got \(job.getaway.recordingPhase)")
             return
         }
-        XCTAssertNil(job.stakeout)
+        XCTAssertNil(job.getaway.stakeout)
     }
 
     func testRecordingPhaseExposesStakeout() {
@@ -610,7 +610,7 @@ final class TheInsideJobStateTests: XCTestCase {
         let recorder = TheStakeout(captureFrame: { nil })
         job.getaway.installRecordingRouteStateForTest(.recording(stakeout: recorder, ownerClientId: nil))
 
-        XCTAssertTrue(job.stakeout === recorder)
+        XCTAssertTrue(job.getaway.stakeout === recorder)
     }
 
     func testIdleRecordingPhaseHidesStakeout() {
@@ -620,7 +620,7 @@ final class TheInsideJobStateTests: XCTestCase {
 
         job.getaway.installRecordingRouteStateForTest(.idle)
 
-        XCTAssertNil(job.stakeout)
+        XCTAssertNil(job.getaway.stakeout)
     }
 
     // MARK: - stop() awaits muscle.tearDown()
