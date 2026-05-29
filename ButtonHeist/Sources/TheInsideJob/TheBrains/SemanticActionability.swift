@@ -105,6 +105,8 @@ final class SemanticActionability {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 stash.refresh()
                 didRevealTarget = true
+            } else {
+                stash.refresh()
             }
         case .notFound(let diagnostics):
             return .failed(.notFound(diagnostics))
