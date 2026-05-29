@@ -47,6 +47,7 @@ public func theInsideJobAutoStartFromLoad() {
         autoStartLogger.debug("MainActor task executing...")
         autoStartLogger.info("Device: \(UIDevice.current.name)")
         autoStartLogger.info("System: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+        armApplicationAccessibility()
         do {
             TheInsideJob.configure(startupConfiguration: configuration)
             try await TheInsideJob.shared.start()
