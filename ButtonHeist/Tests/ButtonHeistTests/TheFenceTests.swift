@@ -1042,9 +1042,9 @@ final class TheFenceTests: XCTestCase {
     func testBatchJSONAndCompactDeriveFromTypedOutcomes() throws {
         let response = FenceResponse.batch(
             outcomes: [
-                makeBatchOutcome(command: "activate"),
-                makeBatchOutcome(command: "bad_step", response: .error("boom"), stopsBatch: true),
-                .skipped(command: "later_step", afterFailedIndex: 1),
+                makeBatchOutcome(command: .activate),
+                makeBatchOutcome(command: .typeText, response: .error("boom"), stopsBatch: true),
+                .skipped(command: .scroll, afterFailedIndex: 1),
             ],
             totalTimingMs: 42
         )
@@ -1054,8 +1054,8 @@ final class TheFenceTests: XCTestCase {
             """
             batch: 2 steps in 42ms (failed at 1)
               [0] activate
-              [1] bad_step → error: boom
-              [2] later_step → error: skipped: stop_on_error stopped batch after step 1
+              [1] type_text → error: boom
+              [2] scroll → error: skipped: stop_on_error stopped batch after step 1
             """
         )
 
@@ -3297,9 +3297,9 @@ final class TheFenceTests: XCTestCase {
             ]
         )
 
-        let sentNames = mockConn.sent.map { $0.0.canonicalName }
-        XCTAssertTrue(sentNames.contains("activate"))
-        XCTAssertTrue(sentNames.contains("wait_for_change"))
+        let sentTypes = mockConn.sent.map { $0.0.wireType }
+        XCTAssertTrue(sentTypes.contains(.activate))
+        XCTAssertTrue(sentTypes.contains(.waitForChange))
         if case .action(_, let result, let expectation) = response {
             XCTAssertEqual(result.method, .waitForChange)
             XCTAssertEqual(expectation?.met, true)

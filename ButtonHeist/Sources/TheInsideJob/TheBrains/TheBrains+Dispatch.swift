@@ -73,7 +73,7 @@ extension TheBrains {
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen,
              .startRecording, .stopRecording, .getPasteboard:
-            preconditionFailure("Non-executable client message reached action execution: \(message.canonicalName)")
+            preconditionFailure("Non-executable client message reached action execution: \(message.wireType.rawValue)")
         }
     }
 

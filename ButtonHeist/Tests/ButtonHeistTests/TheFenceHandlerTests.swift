@@ -2654,7 +2654,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected planned batch step")
         }
         XCTAssertEqual(step.originalIndex, 0)
-        XCTAssertEqual(step.commandName, "activate")
+        XCTAssertEqual(step.command, .activate)
         XCTAssertEqual(step.typedStep.expectation, .elementsChanged)
 
         let singleMessages = try fence.executableActionMessages(for: try fence.parseRequest(
@@ -2726,7 +2726,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 batchStepValue(.waitForChange, ["expect": .object(["type": .string("screen_changed")])]),
             ]
         )
-        XCTAssertEqual(validBatch.steps.map(\.commandName), ["activate", "wait_for", "wait_for_change"])
+        XCTAssertEqual(validBatch.steps.map(\.command), [.activate, .waitFor, .waitForChange])
         XCTAssertEqual(validBatch.steps.map(\.originalIndex), [0, 1, 2])
     }
 
@@ -2773,7 +2773,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertTrue(mockConn.sent.isEmpty, "Batch normalization must not perform raw heistId lookup")
         let steps = plannedBatchSteps(from: batch)
-        XCTAssertEqual(steps.map(\.commandName), ["activate", "wait_for"])
+        XCTAssertEqual(steps.map(\.command), [.activate, .waitFor])
 
         guard case .activate(let actionTarget) = steps[0].typedStep.command else {
             return XCTFail("Expected activate command with heistId target")
@@ -3141,7 +3141,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(batch.expectationsMet, 0)
         XCTAssertEqual(batch.summaries.count, 2)
         XCTAssertEqual(batch.summaries[0].expectationMet, false)
-        XCTAssertEqual(batch.summaries[1].command, "activate")
+        XCTAssertEqual(batch.summaries[1].command, .activate)
         XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
     }
 
@@ -3179,7 +3179,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(batch.results.count, 1)
         XCTAssertNil(batch.failedIndex)
-        XCTAssertEqual(batch.summaries.map(\.command), ["scroll"])
+        XCTAssertEqual(batch.summaries.map(\.command), [.scroll])
         let batchPlans = mockConn.sent.compactMap { sent -> BatchPlan? in
             if case .batchExecutionPlan(let plan) = sent.0 { return plan }
             return nil
@@ -3289,7 +3289,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(batch.results.count, 3)
         XCTAssertNil(batch.failedIndex)
-        XCTAssertEqual(batch.summaries.map(\.command), ["swipe", "scroll_to_visible", "dismiss_keyboard"])
+        XCTAssertEqual(batch.summaries.map(\.command), [.swipe, .scrollToVisible, .dismissKeyboard])
     }
 
     @ButtonHeistActor
@@ -3726,14 +3726,14 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(activateMessages.count, 3)
         XCTAssertEqual(
-            mockConn.sent.map { $0.0.canonicalName },
+            mockConn.sent.map { $0.0.wireType },
             [
-                "request_interface",
-                "activate",
-                "request_interface",
-                "activate",
-                "request_interface",
-                "activate",
+                .requestInterface,
+                .activate,
+                .requestInterface,
+                .activate,
+                .requestInterface,
+                .activate,
             ]
         )
     }

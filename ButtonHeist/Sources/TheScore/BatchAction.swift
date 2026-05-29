@@ -38,7 +38,7 @@ public struct BatchStep: Sendable {
 extension BatchStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("step", [
-            "command=\(command.canonicalName)",
+            "command=\(command.wireType.rawValue)",
             "expect=\(expectation)",
             "deadline=\(deadline)",
         ])
@@ -70,7 +70,7 @@ extension BatchStep: Codable {
             throw DecodingError.dataCorruptedError(
                 forKey: .command,
                 in: container,
-                debugDescription: "BatchStep command \"\(command.canonicalName)\" cannot be a nested batch execution plan"
+                debugDescription: "BatchStep command \"\(command.wireType.rawValue)\" cannot be a nested batch execution plan"
             )
         }
         self.init(
@@ -84,7 +84,7 @@ extension BatchStep: Codable {
         guard !command.isNestedBatchExecutionPlan else {
             throw EncodingError.invalidValue(command, .init(
                 codingPath: encoder.codingPath,
-                debugDescription: "BatchStep command \"\(command.canonicalName)\" cannot be a nested batch execution plan"
+                debugDescription: "BatchStep command \"\(command.wireType.rawValue)\" cannot be a nested batch execution plan"
             ))
         }
         var container = encoder.container(keyedBy: CodingKeys.self)
