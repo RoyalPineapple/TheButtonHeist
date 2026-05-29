@@ -54,55 +54,6 @@ extension TheFence.CommandArgumentReadable {
         }
     }
 
-    func customActionContainerTarget() throws -> (matcher: ContainerMatcher, ordinal: Int?)? {
-        guard let container = try schemaDictionary("container") else { return nil }
-        let matcher = ContainerMatcher(
-            stableId: try container.schemaString("stableId"),
-            type: try container.schemaEnum("type", as: ContainerTypeName.self),
-            label: try container.schemaString("label"),
-            value: try container.schemaString("value"),
-            identifier: try container.schemaString("identifier"),
-            isModalBoundary: try container.schemaBoolean("isModalBoundary")
-        )
-        let ordinal = try schemaNonNegativeInteger("ordinal")
-        guard matcher.hasPredicates else {
-            throw SchemaValidationError(
-                field: "container",
-                observed: container.observedDescription,
-                expected: "container target with stableId, type, label, value, identifier, or isModalBoundary"
-            )
-        }
-        return (matcher, ordinal)
-    }
-
-    @ButtonHeistActor
-    func customActionTarget(actionName: String) throws -> CustomActionTarget {
-        let containerTarget = try customActionContainerTarget()
-        if let containerTarget {
-            guard !hasElementTargetFields else {
-                throw SchemaValidationError(
-                    field: "target",
-                    observed: observedDescription,
-                    expected: "exactly one element target or container selector"
-                )
-            }
-            return CustomActionTarget(
-                containerTarget: containerTarget.matcher,
-                ordinal: containerTarget.ordinal,
-                actionName: actionName
-            )
-        }
-
-        guard let elementTarget = try elementTarget() else {
-            throw TheFence.MissingElementTarget(command: TheFence.Command.activate.rawValue)
-        }
-        return CustomActionTarget(elementTarget: elementTarget, actionName: actionName)
-    }
-
-    var hasElementTargetFields: Bool {
-        elementTarget != nil || keys.contains("target")
-    }
-
     func nonEmptyString(_ key: String) throws -> String {
         let value = try requiredSchemaString(key)
         if value.isEmpty {
