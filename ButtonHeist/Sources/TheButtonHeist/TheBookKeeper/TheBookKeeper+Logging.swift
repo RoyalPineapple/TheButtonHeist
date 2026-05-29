@@ -2,33 +2,6 @@ import Foundation
 
 import TheScore
 
-private extension HeistValue {
-    static func encoded<T: Encodable>(_ value: T) throws -> HeistValue {
-        let data = try JSONEncoder().encode(value)
-        return try JSONDecoder().decode(HeistValue.self, from: data)
-    }
-}
-
-private extension Dictionary where Key == String, Value == HeistValue {
-    mutating func appendExpectation(_ expectation: ActionExpectation?, timeout: Double?) throws {
-        if let expectation {
-            self["expect"] = try .encoded(expectation)
-        }
-        if let timeout {
-            self["timeout"] = try .encoded(timeout)
-        }
-    }
-}
-
-extension TheFence.ParsedRequest {
-    func heistEvidenceArguments() throws -> [String: HeistValue] {
-        var arguments = heistRecordingArguments()
-        let timeout = expectationPayload.expectation == nil ? nil : expectationPayload.timeout
-        try arguments.appendExpectation(expectationPayload.expectation, timeout: timeout)
-        return arguments
-    }
-}
-
 struct HeaderLogEntry: Encodable {
     let type = "header"
     let formatVersion: String
