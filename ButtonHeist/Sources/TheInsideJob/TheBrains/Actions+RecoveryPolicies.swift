@@ -17,7 +17,7 @@ extension Actions {
 /// stale-object failures.
 struct LiveActionTargetRecoveryPolicy {
     struct Request {
-        let normalizedTarget: TheStash.NormalizedTarget
+        let target: SemanticElementTarget
         let method: ActionMethod
         let requireInteractive: Bool
         let deallocatedBoundary: String
@@ -35,7 +35,7 @@ struct LiveActionTargetRecoveryPolicy {
     @MainActor
     func resolve(_ request: Request) async -> Resolution {
         switch await actionability.makeActionable(
-            for: request.normalizedTarget,
+            for: request.target,
             method: request.method,
             deallocatedBoundary: request.deallocatedBoundary
         ) {
@@ -48,11 +48,11 @@ struct LiveActionTargetRecoveryPolicy {
 
     @MainActor
     func refreshActivationTarget(
-        _ normalizedTarget: TheStash.NormalizedTarget
+        _ target: SemanticElementTarget
     ) async -> ActivationPolicy.RefreshResult {
         _ = refresh()
         switch await actionability.makeActionable(
-            for: normalizedTarget,
+            for: target,
             method: .activate,
             deallocatedBoundary: "activation retry"
         ) {

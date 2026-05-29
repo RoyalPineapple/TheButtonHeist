@@ -29,43 +29,10 @@ enum SemanticElementTarget: Sendable {
         executableTarget == nil ? "semantic target requires matcher predicates" : nil
     }
 
-}
-
-extension TheStash {
-    func normalizeTarget(_ target: SemanticElementTarget) -> NormalizedTarget {
-        let executableTarget = target.executableTarget
-        return NormalizedTarget(
-            executableTarget: executableTarget,
-            sourceHeistId: target.sourceHeistId,
-            validationFailure: target.validationFailureMessage
-        )
-    }
-
-    func normalizeTarget(_ target: SemanticActionTarget) -> NormalizedTarget {
-        normalizeTarget(.durable(target))
-    }
-
-    func semanticElementTarget(for target: SemanticElementTarget) -> ElementTarget? {
-        target.executableTarget
-    }
-
-    func resolveTarget(_ target: SemanticElementTarget) -> TargetResolution {
-        guard let executableTarget = target.executableTarget else {
-            return .notFound(diagnostics: "semantic target requires matcher predicates")
-        }
-        return resolveTarget(executableTarget)
-    }
-
-    func resolveVisibleTarget(_ target: SemanticElementTarget) -> TargetResolution {
-        guard let executableTarget = target.executableTarget else {
-            return .notFound(diagnostics: "semantic target requires matcher predicates")
-        }
-        return resolveVisibleTarget(executableTarget)
-    }
-
-    func resolveFirstVisibleMatch(_ target: SemanticElementTarget) -> ResolvedTarget? {
-        guard let executableTarget = target.executableTarget else { return nil }
-        return resolveFirstVisibleMatch(executableTarget)
+    func diagnostics(_ message: String) -> String {
+        guard let sourceHeistId else { return message }
+        guard !message.contains(sourceHeistId) else { return message }
+        return "\(message)\nSource heistId: \(sourceHeistId)"
     }
 }
 

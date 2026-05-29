@@ -206,7 +206,7 @@ extension TheBrains {
     ) async -> TheSafecracker.InteractionResult {
         let deadline = ContinuousClock.now + .seconds(timeout)
         let start = CFAbsoluteTimeGetCurrent()
-        guard let executableTarget = stash.semanticElementTarget(for: elementTarget) else {
+        guard let executableTarget = elementTarget.executableTarget else {
             return .failure(
                 .waitFor,
                 message: "wait_for target requires heistId or semantic matcher predicates",

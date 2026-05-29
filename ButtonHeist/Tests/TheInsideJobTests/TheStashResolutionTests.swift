@@ -162,7 +162,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains("button_ok"), "Should suggest similar heistId")
     }
 
-    func testNormalizeHeistIdKeepsCurrentCaptureHandle() throws {
+    func testCurrentCaptureHeistIdKeepsCurrentCaptureHandle() throws {
         let currentElement = element(
             label: "Quantity",
             value: "1",
@@ -171,22 +171,22 @@ final class TheStashResolutionTests: XCTestCase {
         )
         bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
 
-        let normalized = bagman.normalizeTarget(.heistId("quantity_0"))
+        let target = SemanticElementTarget.currentCapture(.heistId("quantity_0"))
 
-        XCTAssertEqual(normalized.executableTarget, .heistId("quantity_0"))
-        XCTAssertNil(normalized.sourceHeistId)
-        let executableTarget = try XCTUnwrap(normalized.executableTarget)
+        XCTAssertEqual(target.executableTarget, .heistId("quantity_0"))
+        XCTAssertNil(target.sourceHeistId)
+        let executableTarget = try XCTUnwrap(target.executableTarget)
         XCTAssertNil(
             bagman.resolveTarget(executableTarget).resolved,
             "Runtime heistIds are current-capture handles and must not replay through source-screen matchers"
         )
     }
 
-    func testNormalizeHeistIdDoesNotAddSourceMetadata() {
-        let normalized = bagman.normalizeTarget(.heistId("missing_button"))
+    func testCurrentCaptureHeistIdDoesNotAddSourceMetadata() {
+        let target = SemanticElementTarget.currentCapture(.heistId("missing_button"))
 
-        XCTAssertEqual(normalized.executableTarget, .heistId("missing_button"))
-        XCTAssertNil(normalized.sourceHeistId)
+        XCTAssertEqual(target.executableTarget, .heistId("missing_button"))
+        XCTAssertNil(target.sourceHeistId)
     }
 
     func testSemanticActionTargetAcquiresFreshLiveGeometry() throws {
@@ -229,10 +229,10 @@ final class TheStashResolutionTests: XCTestCase {
             element: sourceWireElement,
             in: capture
         )))
-        let normalized = bagman.normalizeTarget(semanticTarget)
+        let runtimeTarget = SemanticElementTarget.durable(semanticTarget)
 
-        XCTAssertEqual(normalized.sourceHeistId, "quantity_0")
-        let executableTarget = try XCTUnwrap(normalized.executableTarget)
+        XCTAssertEqual(runtimeTarget.sourceHeistId, "quantity_0")
+        let executableTarget = try XCTUnwrap(runtimeTarget.executableTarget)
         guard case .matcher(let matcher, let ordinal) = executableTarget else {
             XCTFail("Expected semantic replay target to carry matcher identity, got \(executableTarget)")
             return

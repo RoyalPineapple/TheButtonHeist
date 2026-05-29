@@ -63,10 +63,8 @@ extension Actions {
         guard !target.text.isEmpty else {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
-        let normalizedTarget = target.elementTarget.map {
-            stash.normalizeTarget(.currentCapture($0))
-        }
-        if let failure = await focusTextInput(normalizedTarget) { return failure }
+        let semanticTarget = target.elementTarget.map(SemanticElementTarget.currentCapture)
+        if let failure = await focusTextInput(semanticTarget) { return failure }
 
         let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
         let typingResult = await safecracker.typeText(target.text, interKeyDelay: interKeyDelay)
@@ -78,8 +76,8 @@ extension Actions {
         stash.refresh()
 
         var fieldValue: String?
-        if let normalizedTarget,
-           let executableTarget = normalizedTarget.executableTarget {
+        if let semanticTarget,
+           let executableTarget = semanticTarget.executableTarget {
             if let resolved = stash.resolveTarget(executableTarget).resolved {
                 fieldValue = resolved.element.value
             }
@@ -99,9 +97,9 @@ extension Actions {
     }
 
     private func focusTextInput(
-        _ normalizedTarget: TheStash.NormalizedTarget?
+        _ semanticTarget: SemanticElementTarget?
     ) async -> TheSafecracker.InteractionResult? {
-        guard let normalizedTarget else {
+        guard let semanticTarget else {
             guard safecracker.hasActiveTextInput() else {
                 return .failure(
                     .typeText,
@@ -118,7 +116,7 @@ extension Actions {
 
         let liveTarget: TheStash.LiveActionTarget
         switch await actionability.makeActionable(
-            for: normalizedTarget,
+            for: semanticTarget,
             method: .typeText,
             deallocatedBoundary: "text input focus"
         ) {
