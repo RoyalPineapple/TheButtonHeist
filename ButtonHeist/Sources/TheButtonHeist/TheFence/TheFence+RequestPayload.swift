@@ -116,12 +116,6 @@ extension TheFence {
         }
     }
 
-    struct ClientMessageExecutionPlan {
-        let messages: [ClientMessage]
-        let timeout: TimeInterval
-        let recordsCompletion: Bool
-    }
-
     struct ArchiveSessionRequest {
         let deleteSource: Bool
     }

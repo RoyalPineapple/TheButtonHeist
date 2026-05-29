@@ -69,12 +69,12 @@ private extension TheFence {
     }
 
     func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
-        let executionPlan = try clientMessageExecutionPlan(for: request)
-        guard let message = executionPlan.messages.first, executionPlan.messages.count == 1 else {
+        let messages = try executableActionMessages(for: request)
+        guard let message = messages.first, messages.count == 1 else {
             let commandName = request.command.rawValue
             throw BatchStepPlanBuildError(
                 message: """
-                run_batch step command "\(commandName)" expands to \(executionPlan.messages.count) actions; \
+                run_batch step command "\(commandName)" expands to \(messages.count) actions; \
                 express repeats as separate ordered steps
                 """
             )

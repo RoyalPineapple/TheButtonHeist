@@ -2688,18 +2688,18 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(step.commandName, "activate")
         XCTAssertEqual(step.typedStep.expectation, .elementsChanged)
 
-        let singlePlan = try fence.clientMessageExecutionPlan(for: try fence.parseRequest(
+        let singleMessages = try fence.executableActionMessages(for: try fence.parseRequest(
             command: .activate,
             values: ["target": targetValue(identifier: "save-button")]
         ))
-        XCTAssertEqual(singlePlan.messages.count, 1)
+        XCTAssertEqual(singleMessages.count, 1)
 
         guard case .activate(let actionTarget) = step.typedStep.command else {
             return XCTFail("Expected activate command, got \(step.typedStep.command)")
         }
         XCTAssertEqual(actionTarget, .matcher(ElementMatcher(identifier: "save-button")))
-        guard case .activate(let singleActionTarget)? = singlePlan.messages.first else {
-            return XCTFail("Expected single activate command, got \(String(describing: singlePlan.messages.first))")
+        guard case .activate(let singleActionTarget)? = singleMessages.first else {
+            return XCTFail("Expected single activate command, got \(String(describing: singleMessages.first))")
         }
         XCTAssertEqual(singleActionTarget, actionTarget)
     }
@@ -2721,9 +2721,9 @@ final class TheFenceHandlerTests: XCTestCase {
                 return XCTFail("Expected planned batch step for \(testCase.command.rawValue)")
             }
             let singleRequest = try fence.parseRequest(command: testCase.command, values: testCase.arguments)
-            let singlePlan = try fence.clientMessageExecutionPlan(for: singleRequest)
+            let singleMessages = try fence.executableActionMessages(for: singleRequest)
             XCTAssertEqual(
-                String(reflecting: singlePlan.messages),
+                String(reflecting: singleMessages),
                 String(reflecting: [plannedStep.typedStep.command]),
                 testCase.command.rawValue
             )
