@@ -5,9 +5,6 @@ import Foundation
 /// A current-capture `heistId` stands alone; `ordinal` only disambiguates a
 /// semantic matcher.
 public enum ElementTargetGrammar {
-    public static let matcherFieldNames: [String] = ["label", "identifier", "value", "traits", "excludeTraits"]
-    public static let inlineFieldNames: [String] = ["heistId"] + matcherFieldNames + ["ordinal"]
-
     public static func validatedTarget(
         heistId: HeistId?,
         matcher: ElementMatcher?,

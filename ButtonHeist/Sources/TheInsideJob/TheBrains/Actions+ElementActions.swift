@@ -20,18 +20,71 @@ extension Actions {
         preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (SemanticActionability.SemanticActionableTarget) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
-        switch await liveActionTargetRecoveryPolicy.resolve(.init(
-            target: target,
+        switch await actionability.makeActionable(
+            for: target,
             method: method,
-            requireInteractive: requireInteractive,
-            deallocatedBoundary: deallocatedBoundary,
-            preflight: preflight
-        )) {
-        case .success(let context):
+            deallocatedBoundary: deallocatedBoundary
+        ) {
+        case .failed(let failure):
+            return failure.interactionResult(commandMethod: method)
+        case .actionable(let context):
+            if let failure = preflight?(context.screenElement) {
+                return failure
+            }
+            if let failure = interactivityFailure(
+                context,
+                method: method,
+                requireInteractive: requireInteractive
+            ) {
+                return failure
+            }
             return await action(context)
-        case .failure(let result):
-            return result
         }
+    }
+
+    private func refreshActivationTarget(
+        _ target: SemanticElementTarget
+    ) async -> ActivationPolicy.RefreshResult {
+        stash.refresh()
+        switch await actionability.makeActionable(
+            for: target,
+            method: .activate,
+            deallocatedBoundary: "activation retry"
+        ) {
+        case .actionable(let actionableTarget):
+            return .resolved(
+                screenElement: actionableTarget.screenElement,
+                liveTarget: actionableTarget.liveTarget
+            )
+        case .failed(let failure):
+            return .failure(failure.interactionResult(commandMethod: .activate))
+        }
+    }
+
+    private func interactivityFailure(
+        _ context: SemanticActionability.SemanticActionableTarget,
+        method: ActionMethod,
+        requireInteractive: Bool
+    ) -> TheSafecracker.InteractionResult? {
+        guard requireInteractive else { return nil }
+        let screenElement = context.screenElement
+        let liveTarget = context.liveTarget
+        switch TheStash.Interactivity.checkInteractivity(screenElement.element, object: liveTarget.object) {
+        case .blocked(let reason):
+            return .failure(method, message: reason)
+        case .interactive(let warning):
+            if let warning { insideJobLogger.warning("\(warning)") }
+        }
+        guard TheStash.Interactivity.isInteractive(element: screenElement.element, object: liveTarget.object) else {
+            return .failure(
+                method,
+                message: ActionCapabilityDiagnostic.unsupportedElementAction(
+                    method,
+                    element: screenElement
+                )
+            )
+        }
+        return nil
     }
 
     // MARK: - Accessibility Actions
@@ -52,7 +105,7 @@ extension Actions {
             await ActivationPolicy(
                 activate: stash.activate,
                 refreshAndResolve: {
-                    await self.liveActionTargetRecoveryPolicy.refreshActivationTarget(context.target)
+                    await self.refreshActivationTarget(context.target)
                 },
                 syntheticTap: safecracker.tap,
                 showFingerprint: safecracker.showFingerprint,

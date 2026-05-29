@@ -24,6 +24,28 @@ public enum ElementTarget: Sendable, Equatable {
 
 }
 
+public extension ElementTarget {
+    static var heistIdFieldName: String {
+        CodingKeys.heistId.stringValue
+    }
+
+    static var matcherFieldNames: [String] {
+        CodingKeys.matcherKeys.map(\.stringValue)
+    }
+
+    static var selectorFieldNames: [String] {
+        [heistIdFieldName] + matcherFieldNames
+    }
+
+    static var disambiguatorFieldNames: [String] {
+        [CodingKeys.ordinal.stringValue]
+    }
+
+    static var inlineFieldNames: [String] {
+        CodingKeys.allInlineKeys.map(\.stringValue)
+    }
+}
+
 extension ElementTarget: CustomStringConvertible {
     public var description: String {
         switch self {
@@ -50,7 +72,8 @@ extension ElementTarget: Codable {
 
         /// The matcher / heistId keys whose presence in a parent container
         /// indicates an `ElementTarget` is flattened at that level.
-        static let allInlineKeys = ElementTargetGrammar.inlineFieldNames.compactMap(CodingKeys.init(rawValue:))
+        static let matcherKeys: [CodingKeys] = [.label, .identifier, .value, .traits, .excludeTraits]
+        static let allInlineKeys: [CodingKeys] = [.heistId] + matcherKeys + [.ordinal]
     }
 
     private struct UnknownCodingKey: CodingKey {
@@ -152,8 +175,7 @@ extension ElementTarget: Codable {
     }
 
     private static func hasMatcherFields(in container: KeyedDecodingContainer<CodingKeys>) -> Bool {
-        [CodingKeys.label, .identifier, .value, .traits, .excludeTraits]
-            .contains { container.contains($0) }
+        CodingKeys.matcherKeys.contains { container.contains($0) }
     }
 
     private static func targetOrDecodingError(

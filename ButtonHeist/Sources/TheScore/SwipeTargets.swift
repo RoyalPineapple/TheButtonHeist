@@ -38,12 +38,36 @@ public enum SwipeGestureSelection: Sendable, Equatable, CustomStringConvertible 
 /// `(0, 0)` is top-left, `(1, 1)` is bottom-right, `(0.5, 0.5)` is center.
 /// Values outside 0-1 extend beyond the element's frame.
 public struct UnitPoint: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case x
+        case y
+    }
+
+    public static var fieldNames: Set<String> {
+        Set(CodingKeys.allCases.map(\.stringValue))
+    }
+
     public let x: Double
     public let y: Double
 
     public init(x: Double, y: Double) {
         self.x = x
         self.y = y
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "unit point")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            x: try container.decode(Double.self, forKey: .x),
+            y: try container.decode(Double.self, forKey: .y)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(x, forKey: .x)
+        try container.encode(y, forKey: .y)
     }
 }
 
@@ -53,7 +77,7 @@ extension UnitPoint: CustomStringConvertible {
     }
 }
 
-private enum SwipePointCodingKeys: String, CodingKey {
+private enum SwipePointCodingKeys: String, CodingKey, CaseIterable {
     case startX
     case startY
     case endX
@@ -126,6 +150,11 @@ public struct SwipeTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: SwipePointCodingKeys.self,
+            additional: Set(ElementTarget.inlineFieldNames),
+            typeName: "swipe target"
+        )
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
         let pointContainer = try decoder.container(keyedBy: SwipePointCodingKeys.self)
         let startX = try pointContainer.decodeIfPresent(Double.self, forKey: .startX)

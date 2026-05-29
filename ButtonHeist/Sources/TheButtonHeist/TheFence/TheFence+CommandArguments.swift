@@ -236,7 +236,7 @@ extension TheFence.CommandArgumentReadable {
             )
         }
         let object = TheFence.CommandArgumentObject(values: values, fieldPrefix: field(key))
-        try object.rejectUnknownKeys(allowed: ["x", "y"], expected: "valid unit point field")
+        try object.rejectUnknownKeys(allowed: UnitPoint.fieldNames, expected: "valid unit point field")
         guard let x = try object.schemaNumber("x") else {
             throw SchemaValidationError(field: object.field("x"), observed: "missing", expected: "number")
         }

@@ -142,6 +142,22 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.end, ScreenPoint(x: 30, y: 40))
     }
 
+    func testDragTargetRejectsUnknownField() {
+        let json = #"{"startX":10,"startY":20,"endX":30,"endY":40,"unexpected":true}"#
+        XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown drag target field"), "\(error)")
+            XCTAssertTrue("\(error)".contains("unexpected"), "\(error)")
+        }
+    }
+
+    func testSwipeTargetRejectsUnknownField() {
+        let json = #"{"heistId":"list","direction":"down","unexpected":true}"#
+        XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown swipe target field"), "\(error)")
+            XCTAssertTrue("\(error)".contains("unexpected"), "\(error)")
+        }
+    }
+
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(
             SwipeTarget(selection: .point(start: .element(.heistId("list")), destination: .direction(.down))).resolvedDuration,
@@ -664,6 +680,14 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(SwipeDirection.up.defaultEnd, UnitPoint(x: 0.5, y: 0.2))
         XCTAssertEqual(SwipeDirection.down.defaultStart, UnitPoint(x: 0.5, y: 0.2))
         XCTAssertEqual(SwipeDirection.down.defaultEnd, UnitPoint(x: 0.5, y: 0.8))
+    }
+
+    func testUnitPointRejectsUnknownField() {
+        let json = #"{"x":0.2,"y":0.8,"unexpected":true}"#
+        XCTAssertThrowsError(try decoder.decode(UnitPoint.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown unit point field"), "\(error)")
+            XCTAssertTrue("\(error)".contains("unexpected"), "\(error)")
+        }
     }
 
     // MARK: - RecordingConfig Validation

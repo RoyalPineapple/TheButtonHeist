@@ -3,13 +3,6 @@ import XCTest
 
 final class ElementMatcherTests: XCTestCase {
 
-    func testElementTargetInlineKeysMatchSharedGrammar() {
-        XCTAssertEqual(
-            Set(ElementTarget.CodingKeys.allInlineKeys.map(\.stringValue)),
-            Set(ElementTargetGrammar.inlineFieldNames)
-        )
-    }
-
     func testHasPredicatesIgnoresEmptyTraitArrays() {
         XCTAssertFalse(ElementMatcher(traits: []).hasPredicates)
         XCTAssertFalse(ElementMatcher(excludeTraits: []).hasPredicates)

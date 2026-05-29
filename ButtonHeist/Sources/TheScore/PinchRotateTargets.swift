@@ -36,7 +36,7 @@ public struct PinchTarget: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(
             allowed: CodingKeys.self,
-            additional: gestureCenterFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            additional: gestureCenterFieldNames.union(ElementTarget.inlineFieldNames),
             typeName: "pinch target"
         )
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -104,7 +104,7 @@ public struct RotateTarget: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(
             allowed: CodingKeys.self,
-            additional: gestureCenterFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            additional: gestureCenterFieldNames.union(ElementTarget.inlineFieldNames),
             typeName: "rotate target"
         )
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -159,7 +159,7 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(
             allowed: CodingKeys.self,
-            additional: gestureCenterFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            additional: gestureCenterFieldNames.union(ElementTarget.inlineFieldNames),
             typeName: "two finger tap target"
         )
         self.center = try decodeRequiredGestureCenterSelection(from: decoder)

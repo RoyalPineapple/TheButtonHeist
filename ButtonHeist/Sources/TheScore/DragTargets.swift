@@ -19,6 +19,11 @@ public struct DragTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: DragPointCodingKeys.self,
+            additional: Set(ElementTarget.inlineFieldNames),
+            typeName: "drag target"
+        )
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
         let container = try decoder.container(keyedBy: DragPointCodingKeys.self)
         let startX = try container.decodeIfPresent(Double.self, forKey: .startX)
@@ -54,7 +59,7 @@ public struct DragTarget: Codable, Sendable {
     }
 }
 
-private enum DragPointCodingKeys: String, CodingKey {
+private enum DragPointCodingKeys: String, CodingKey, CaseIterable {
     case startX
     case startY
     case endX

@@ -6,7 +6,7 @@ import TheScore
 struct SessionLease {
     enum Phase {
         case idle
-        case active(driverId: String, connections: Set<Int>)
+        case active(driverId: String, clientId: Int)
         case draining(driverId: String, releaseDeadline: Date)
     }
 
@@ -63,7 +63,7 @@ struct SessionLease {
     }
 
     var activeSessionConnections: Set<Int> {
-        if case .active(_, let connections) = phase { return connections }
+        if case .active(_, let clientId) = phase { return [clientId] }
         return []
     }
 
@@ -78,22 +78,22 @@ struct SessionLease {
     mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
         switch phase {
         case .idle:
-            phase = .active(driverId: driverIdentity, connections: [clientId])
+            phase = .active(driverId: driverIdentity, clientId: clientId)
             return .accepted(notifyActiveChanged: true, cancelReleaseTimer: false)
 
-        case .active(let activeId, let connections) where driverIdentity == activeId:
+        case .active(let activeId, _) where driverIdentity == activeId:
             return .rejected(diagnostic(
                 baseMessage: "Session is already active for this driver",
                 ownerDriverId: activeId,
-                activeConnections: connections.count
+                activeConnections: 1
             ))
 
         case .draining(let activeId, _) where driverIdentity == activeId:
-            phase = .active(driverId: activeId, connections: [clientId])
+            phase = .active(driverId: activeId, clientId: clientId)
             return .accepted(notifyActiveChanged: false, cancelReleaseTimer: true)
 
-        case .active(let driverId, let connections):
-            return .rejected(diagnostic(ownerDriverId: driverId, activeConnections: connections.count))
+        case .active(let driverId, _):
+            return .rejected(diagnostic(ownerDriverId: driverId, activeConnections: 1))
 
         case .draining(let driverId, let releaseDeadline):
             return .rejected(diagnostic(
@@ -111,17 +111,15 @@ struct SessionLease {
     }
 
     mutating func removeConnection(_ clientId: Int) -> ConnectionRemoval {
-        guard case .active(let driverId, var connections) = phase else {
+        guard case .active(let driverId, let activeClientId) = phase else {
             return .unchanged
         }
-        connections.remove(clientId)
-        if connections.isEmpty {
-            let releaseDeadline = Date().addingTimeInterval(releaseTimeout)
-            phase = .draining(driverId: driverId, releaseDeadline: releaseDeadline)
-            return .draining(releaseDeadline: releaseDeadline)
+        guard activeClientId == clientId else {
+            return .active
         }
-        phase = .active(driverId: driverId, connections: connections)
-        return .active
+        let releaseDeadline = Date().addingTimeInterval(releaseTimeout)
+        phase = .draining(driverId: driverId, releaseDeadline: releaseDeadline)
+        return .draining(releaseDeadline: releaseDeadline)
     }
 
     mutating func resetInactivityTimer() -> Date? {
@@ -133,11 +131,11 @@ struct SessionLease {
 
     func uiApprovalUnavailableDiagnostic() -> SessionLockDiagnostic? {
         switch phase {
-        case .active(let driverId, let connections):
+        case .active(let driverId, _):
             return diagnostic(
                 baseMessage: "UI approval is unavailable while a ButtonHeist session is active",
                 ownerDriverId: driverId,
-                activeConnections: connections.count
+                activeConnections: 1
             )
         case .draining(let driverId, let releaseDeadline):
             return diagnostic(
