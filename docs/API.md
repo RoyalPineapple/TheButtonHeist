@@ -261,8 +261,7 @@ Expectations use object form with a `type` discriminator, for example
 `{"type":"screen_changed"}` or
 `{"type":"element_appeared","matcher":{"label":"Success"}}`.
 
-Prototype v1 shorthand strings and compiler-synthesized enum wrapper shapes are
-rejected by the public persisted format.
+Expectations use the current object grammar at every public boundary.
 
 ## Minimal Integration
 

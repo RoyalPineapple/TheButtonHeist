@@ -6,7 +6,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 1. **Read** — `get_interface` returns the app accessibility state with heistIds, labels, values, traits, and actions.
 2. **Act** — `activate`, `type_text`, `scroll`, `swipe`, and the other canonical action tools — target by heistId or matcher. Always attach `expect` when you know what should change.
-3. **Read the response** — action responses carry the action's `accessibilityDelta`; any `[while_idle: ...]` block uses the same capture/delta contract to report a change that happened while you were idle between tool calls. If either answers your question, skip `get_interface`.
+3. **Read the response** — action responses carry trace-backed result evidence; any `[while_idle: ...]` block uses the same capture/delta contract to report a change that happened while you were idle between tool calls. If either answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true. If the change already happened while you were idle, `wait_for_change` returns instantly.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
 

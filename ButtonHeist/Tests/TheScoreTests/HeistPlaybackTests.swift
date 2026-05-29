@@ -222,7 +222,7 @@ final class HeistPlaybackTests: XCTestCase {
         let data = try JSONEncoder().encode(step)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let recorded = try XCTUnwrap(json["_recorded"] as? [String: Any])
-        XCTAssertNil(recorded["accessibilityDelta"])
+        XCTAssertNotNil(recorded["accessibilityTrace"])
 
         let decoded = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
