@@ -44,14 +44,14 @@ final class ElementMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.description, "matcher(*)")
     }
 
-    func testElementMatcherRejectsHeistIdField() {
+    func testElementMatcherRejectsUnknownFields() {
         let json = #"{"heistId":"save_button"}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(ElementMatcher.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("does not accept heistId"))
+            XCTAssertEqual(context.debugDescription, #"Unknown element matcher field "heistId""#)
         }
     }
 
