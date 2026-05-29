@@ -567,7 +567,7 @@ final class TheBookKeeperTests: XCTestCase {
         XCTAssertEqual(activate.command, .activate)
         let projection = try activate.heistRecordingProjection()
         XCTAssertEqual(projection.elementTarget, .heistId("login_button"))
-        XCTAssertNil(projection.arguments["target"])
+        XCTAssertTrue(projection.arguments.isEmpty)
     }
 
     @ButtonHeistActor
@@ -579,10 +579,9 @@ final class TheBookKeeperTests: XCTestCase {
         )
         let arguments = try tap.heistRecordingProjection().arguments
 
+        XCTAssertEqual(Set(arguments.keys), Set(["x", "y"]))
         XCTAssertEqual(arguments["x"], .double(10.5))
         XCTAssertEqual(arguments["y"], .double(20.25))
-        XCTAssertNil(arguments["pointX"])
-        XCTAssertNil(arguments["pointY"])
     }
 
     @ButtonHeistActor
@@ -599,8 +598,6 @@ final class TheBookKeeperTests: XCTestCase {
 
         XCTAssertEqual(Set(arguments.keys), Set(["action"]))
         XCTAssertEqual(arguments["action"], .string("Archive"))
-        XCTAssertNil(arguments["actionName"])
-        XCTAssertNil(arguments["target"])
     }
 
     @ButtonHeistActor
@@ -618,12 +615,14 @@ final class TheBookKeeperTests: XCTestCase {
         )
         let arguments = try rotor.heistRecordingProjection().arguments
 
+        XCTAssertEqual(
+            Set(arguments.keys),
+            Set(["rotor", "currentHeistId", "currentTextStartOffset", "currentTextEndOffset"])
+        )
         XCTAssertEqual(arguments["rotor"], .string("Words"))
         XCTAssertEqual(arguments["currentHeistId"], .string("word_1"))
         XCTAssertEqual(arguments["currentTextStartOffset"], .int(4))
         XCTAssertEqual(arguments["currentTextEndOffset"], .int(9))
-        XCTAssertNil(arguments["currentTextRange"])
-        XCTAssertNil(arguments["target"])
     }
 
     @ButtonHeistActor

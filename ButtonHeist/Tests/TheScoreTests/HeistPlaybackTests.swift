@@ -64,7 +64,7 @@ final class HeistPlaybackTests: XCTestCase {
           "recorded": "2026-05-27T12:00:00Z",
           "app": "com.buttonheist.testapp",
           "steps": [],
-          "projection": {}
+          "unexpectedField": {}
         }
         """
         let decoder = JSONDecoder()
@@ -74,7 +74,7 @@ final class HeistPlaybackTests: XCTestCase {
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("Unknown heist playback field \"projection\""))
+            XCTAssertTrue(context.debugDescription.contains("Unknown heist playback field \"unexpectedField\""))
         }
     }
 

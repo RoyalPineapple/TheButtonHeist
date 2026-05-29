@@ -28,11 +28,11 @@ private struct CaptureWithoutContextFixture: Encodable {
 final class AccessibilityTraceTests: XCTestCase {
 
     func testDecodeRejectsUnsupportedTraceFields() {
-        let json = #"{"captures":[],"projection":[]}"#
+        let json = #"{"captures":[],"unexpectedField":[]}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: Data(json.utf8))) { error in
             XCTAssertTrue(
-                "\(error)".contains("Unsupported AccessibilityTrace field: projection"),
+                "\(error)".contains("Unsupported AccessibilityTrace field: unexpectedField"),
                 "Expected unsupported field rejection, got \(error)"
             )
         }

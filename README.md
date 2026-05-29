@@ -145,23 +145,10 @@ That changes the loop. Every action goes through the contract. Every result come
 
 ### 1. Results: trace-backed evidence after every action
 
-After every command, Button Heist returns one typed result payload. Accessibility traces are the source receipt; deltas are compact projections used for expectations and formatting. Tap "Login" and the response shows what left and what arrived:
-
-```json
-{
-  "success": true,
-  "method": "activate",
-  "accessibilityDelta": {
-    "kind": "elementsChanged",
-    "elementCount": 14,
-    "removed": ["button_login", "textfield_password", "textfield_email"],
-    "added": [
-      {"heistId": "header_dashboard", "label": "Dashboard", "traits": ["header"]},
-      {"heistId": "button_settings", "label": "Settings", "traits": ["button"]}
-    ]
-  }
-}
-```
+After every command, Button Heist returns one typed result payload. Accessibility
+traces are the source receipt; deltas are compact projections used for
+expectations and formatting. Tap "Login" and the response carries the capture
+chain plus derived screen context, not a second stored delta truth.
 
 The agent does not need to re-read the screen to understand the result. Value updates include the element, property, old value, and new value. When nothing changes, the delta projection says `"noChange"`.
 
