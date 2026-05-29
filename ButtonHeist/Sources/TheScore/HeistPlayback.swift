@@ -177,8 +177,6 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
                 in: container,
                 debugDescription: "HeistEvidence target requires at least one matcher field"
             )
-        } catch {
-            throw error
         }
     }
 
