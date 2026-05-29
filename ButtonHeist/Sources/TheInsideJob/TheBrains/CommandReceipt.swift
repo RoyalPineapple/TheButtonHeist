@@ -18,7 +18,7 @@ struct CommandReceipt {
         switch attempt.deliveryPhase {
         case .delivered:
             guard let settle,
-                  let postCapture = settle.postCapture,
+                  let postCapture = settle.accessibilityTrace.captures.last,
                   settle.accessibilityTrace.endpointDeltaProjection != nil else {
                 var builder = ActionResultBuilder(method: attempt.method, snapshot: before.snapshot)
                 builder.message = attempt.message
@@ -28,7 +28,7 @@ struct CommandReceipt {
             builder.message = attempt.message
             builder.accessibilityTrace = settle.accessibilityTrace
             builder.settled = settle.didSettle
-            builder.settleTimeMs = settle.timeMs
+            builder.settleTimeMs = settle.outcome.timeMs
             return builder.success(payload: attempt.payload)
         case .failed, .skipped:
             var builder = ActionResultBuilder(method: attempt.method, snapshot: before.snapshot)
@@ -111,9 +111,6 @@ struct SettleReceipt {
     let elementsByKey: [TimelineKey: AccessibilityElement]
     let didSettle: Bool
     let accessibilityTrace: AccessibilityTrace
-
-    var timeMs: Int { outcome.timeMs }
-    var postCapture: AccessibilityTrace.Capture? { accessibilityTrace.captures.last }
 }
 
 #endif // DEBUG
