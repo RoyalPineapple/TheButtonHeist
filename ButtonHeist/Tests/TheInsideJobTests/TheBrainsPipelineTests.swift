@@ -7,8 +7,8 @@ import UIKit
 
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
 /// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`, the
-/// `SentState` accessors, the `computeBackgroundAccessibilityTrace` guards, the
-/// background trace guards, and `exploreAndPrune` pruning.
+/// `computeBackgroundAccessibilityTrace` guards, background trace guards, and
+/// `exploreAndPrune` pruning.
 ///
 /// Success-path `actionResultWithDelta` and `exploreScreen` container iteration
 /// require a live window and are covered by integration/benchmark runs.
@@ -354,31 +354,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(trace.captures.last?.hash, after.capture.hash)
     }
 
-    // MARK: - SentState
+    // MARK: - Semantic Capture
 
-    func testLastSentStateStartsNil() {
-        XCTAssertNil(brains.lastSentState)
-        XCTAssertNil(brains.lastSentScreenId)
-        XCTAssertFalse(brains.screenChangedSinceLastSent,
-                       "No prior send means there is no baseline for screen-change classification")
-    }
-
-    func testRecordSentStatePopulatesAllFields() {
-        seedScreen(elements: [("Home", .header, "home_header"), ("A", .button, "button_a")])
-
-        brains.recordSentState()
-
-        let sent = brains.lastSentState
-        XCTAssertNotNil(sent)
-        XCTAssertEqual(sent?.screenId, "home")
-        XCTAssertFalse(sent?.interfaceHash.isEmpty ?? true,
-                       "interfaceHash should be present for a non-empty screen")
-        XCTAssertEqual(sent?.captureHash, sent?.beforeState.capture.hash)
-        XCTAssertEqual(sent?.interfaceHash, sent?.beforeState.interfaceHash)
-        XCTAssertEqual(brains.lastSentScreenId, "home")
-    }
-
-    func testRecordSentStateKeepsKnownSemanticElementsWithCanonicalInterfaceHash() {
+    func testCaptureSemanticStateKeepsKnownElementsWithCanonicalInterfaceHash() {
         let visible = AccessibilityElement.make(
             label: "Visible",
             traits: .button,
@@ -395,49 +373,17 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
         let interfaceHash = AccessibilityTrace.Capture.hash(brains.stash.interface())
 
-        brains.recordSentState()
+        let state = brains.captureSemanticState()
 
-        let sent = brains.lastSentState
         XCTAssertEqual(
-            Set(sent?.beforeState.snapshot.map(\.heistId) ?? []),
+            Set(state.snapshot.map(\.heistId)),
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
-            sent?.interfaceHash,
+            state.interfaceHash,
             interfaceHash,
             "Interface captures hash the canonical parser tree; known-only entries stay in the targeting snapshot"
         )
-    }
-
-    func testRecordSentStateDerivesMetadataFromCapturedState() {
-        seedScreen(elements: [("Screen X", .header, "screen_x_header"), ("A", .button, "button_a")])
-        let state = brains.captureSemanticState()
-
-        brains.recordSentState()
-
-        XCTAssertEqual(brains.lastSentState?.interfaceHash, state.interfaceHash)
-        XCTAssertEqual(brains.lastSentState?.captureHash, state.capture.hash)
-        XCTAssertEqual(brains.lastSentState?.screenId, "screen_x")
-    }
-
-    func testScreenChangedSinceLastSentDetectsIdTransition() {
-        seedScreen(elements: [("Home", .header, "home_header")])
-        brains.recordSentState()
-        XCTAssertFalse(brains.screenChangedSinceLastSent)
-
-        seedScreen(elements: [("Settings", .header, "settings_header")])
-        XCTAssertTrue(brains.screenChangedSinceLastSent,
-                      "A changed parsed screen signature should report a screen change")
-    }
-
-    func testClearCacheResetsSentState() {
-        seedScreen(elements: [("A", .button, "button_a")])
-        brains.recordSentState()
-        XCTAssertNotNil(brains.lastSentState)
-
-        brains.clearCache()
-
-        XCTAssertNil(brains.lastSentState)
     }
 
     // MARK: - computeBackgroundAccessibilityTrace Guards
