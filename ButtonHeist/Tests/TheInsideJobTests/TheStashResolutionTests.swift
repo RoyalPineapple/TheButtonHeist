@@ -518,9 +518,9 @@ final class TheStashResolutionTests: XCTestCase {
 
         let limit3 = bagman.currentHierarchy.matches(ElementMatcher(label: "Item"), mode: .substring, limit: 3)
         XCTAssertEqual(limit3.count, 3)
-        XCTAssertEqual(limit3[0].element.value, "0")
-        XCTAssertEqual(limit3[1].element.value, "1")
-        XCTAssertEqual(limit3[2].element.value, "2")
+        XCTAssertEqual(limit3[0].value, "0")
+        XCTAssertEqual(limit3[1].value, "1")
+        XCTAssertEqual(limit3[2].value, "2")
     }
 
     func testMatchesWithLimitExceedingCountReturnsAll() {
