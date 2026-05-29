@@ -270,7 +270,7 @@ extension Actions {
 
         switch stash.resolveLiveContainerTarget(for: containerTarget) {
         case .resolved(let target):
-            guard SemanticActionability.activationPointIsOnScreen(target.activationPoint) else {
+            guard ScreenMetrics.current.bounds.contains(target.activationPoint) else {
                 return .failure(
                     .customAction,
                     message: SemanticActionability.SemanticActionabilityFailure
