@@ -244,7 +244,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected semantic replay selector to resolve against current screen")
             return
         }
-        XCTAssertEqual(resolved.screenElement.heistId, "quantity_1")
+        XCTAssertEqual(resolved.heistId, "quantity_1")
 
         guard case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Expected current accessibility capture to provide action geometry")
@@ -283,7 +283,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected .resolved, got \(result)")
             return
         }
-        XCTAssertEqual(resolved.screenElement.heistId, "button_cancel")
+        XCTAssertEqual(resolved.heistId, "button_cancel")
         XCTAssertEqual(resolved.element.label, "Cancel")
     }
 
@@ -567,7 +567,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Expected known semantic match, got \(result)")
             return
         }
-        XCTAssertEqual(target.screenElement.heistId, "long_list_button")
+        XCTAssertEqual(target.heistId, "long_list_button")
     }
 
     func testScopedHeistIdsSeparateVisibleFromKnownUnion() {
@@ -630,7 +630,7 @@ final class TheStashResolutionTests: XCTestCase {
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
         let knownResult = bagman.resolveTarget(.matcher(ElementMatcher(label: "Below Fold")))
-        XCTAssertEqual(knownResult.resolved?.screenElement.heistId, "below_fold_button")
+        XCTAssertEqual(knownResult.resolved?.heistId, "below_fold_button")
 
         let visibleResult = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Below Fold")))
         guard case .notFound(let diagnostics) = visibleResult else {
@@ -650,7 +650,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNil(bagman.resolveFirstVisibleMatch(.heistId("below_fold_button")))
         XCTAssertNil(bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Below Fold"))))
         XCTAssertEqual(
-            bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Visible")))?.screenElement.heistId,
+            bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Visible")))?.heistId,
             "button_visible"
         )
     }
@@ -681,7 +681,7 @@ final class TheStashResolutionTests: XCTestCase {
             XCTFail("Known-only heistId should still resolve")
             return
         }
-        XCTAssertEqual(resolved.screenElement.heistId, "below_fold_button")
+        XCTAssertEqual(resolved.heistId, "below_fold_button")
         XCTAssertNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
         guard case .objectUnavailable = bagman.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Known-only target should not have a live action target")

@@ -14,7 +14,7 @@ struct ActivationPolicy {
 
     enum RefreshResult {
         case resolved(
-            resolvedTarget: TheStash.ResolvedTarget,
+            screenElement: TheStash.ScreenElement,
             liveTarget: TheStash.LiveActionTarget
         )
         case failure(TheSafecracker.InteractionResult)
@@ -40,11 +40,11 @@ struct ActivationPolicy {
             return .success(method: .activate)
         }
 
-        let resolvedTarget: TheStash.ResolvedTarget
+        let screenElement: TheStash.ScreenElement
         let retryLiveTarget: TheStash.LiveActionTarget
         switch await refreshAndResolve() {
-        case .resolved(let resolved, let liveTarget):
-            resolvedTarget = resolved
+        case .resolved(let resolvedElement, let liveTarget):
+            screenElement = resolvedElement
             retryLiveTarget = liveTarget
         case .failure(let result):
             return result
@@ -63,7 +63,7 @@ struct ActivationPolicy {
             return .success(method: .syntheticTap)
         case .failed(let tapReceiver):
             return finalDiagnosticFailure(
-                resolvedTarget: resolvedTarget,
+                screenElement: screenElement,
                 tapReceiver: tapReceiver,
                 activateOutcome: retryOutcome
             )
@@ -80,13 +80,13 @@ struct ActivationPolicy {
 
     @MainActor
     private func finalDiagnosticFailure(
-        resolvedTarget: TheStash.ResolvedTarget,
+        screenElement: TheStash.ScreenElement,
         tapReceiver: TheSafecracker.TapReceiverDiagnostic?,
         activateOutcome: TheStash.ActivateOutcome
     ) -> TheSafecracker.InteractionResult {
-        let traitNames = ActionCapabilityDiagnostic.traitNames(resolvedTarget.element.traits)
+        let traitNames = ActionCapabilityDiagnostic.traitNames(screenElement.element.traits)
         let message = ActivateFailureDiagnostic.build(
-            element: resolvedTarget.element,
+            element: screenElement.element,
             traitNames: traitNames,
             activateOutcome: activateOutcome,
             tapAttempted: true,

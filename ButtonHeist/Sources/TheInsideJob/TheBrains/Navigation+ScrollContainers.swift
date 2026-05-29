@@ -45,8 +45,8 @@ extension Navigation {
             guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
                 return .failed(liveScrollElementFailureMessage(.currentCapture(elementTarget), commandName: commandName))
             }
-            let targetDescription = Self.describeScrollTarget(resolved.screenElement)
-            guard let scrollView = stash.liveScrollView(for: resolved.screenElement) else {
+            let targetDescription = Self.describeScrollTarget(resolved)
+            guard let scrollView = stash.liveScrollView(for: resolved) else {
                 return .failed(
                     "scroll target failed: observed \(targetDescription) with no live scrollable ancestor; "
                         + "try element_search or target an element inside a scroll container"
@@ -119,7 +119,7 @@ extension Navigation {
     ) -> ScrollPlan? {
         guard let executableTarget = target.executableTarget,
               let resolved = stash.resolveTarget(executableTarget).resolved,
-              let scrollView = stash.liveScrollView(for: resolved.screenElement),
+              let scrollView = stash.liveScrollView(for: resolved),
               !scrollView.bhIsUnsafeForProgrammaticScrolling else {
             return nil
         }

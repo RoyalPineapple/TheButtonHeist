@@ -361,8 +361,7 @@ final class ActivateOutcomeBehaviorTests: XCTestCase {
             heistId: "x", contentSpaceOrigin: nil, element: element
         )
         let stash = TheStash(tripwire: TheTripwire())
-        let resolved = TheStash.ResolvedTarget(screenElement: screenElement)
-        guard case .objectUnavailable = stash.resolveLiveActionTarget(for: resolved) else {
+        guard case .objectUnavailable = stash.resolveLiveActionTarget(for: screenElement) else {
             XCTFail("Expected objectUnavailable for deallocated action target")
             return
         }
