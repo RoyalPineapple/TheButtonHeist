@@ -16,7 +16,7 @@ extension Actions {
         let rotorIndex = target.selection.rotorIndex
         let method: ActionMethod = .rotor
         return await performElementAction(
-            target: .currentCapture(target.elementTarget),
+            target: target.elementTarget,
             method: method,
             requireInteractive: false
         ) { context in

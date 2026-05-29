@@ -171,25 +171,15 @@ final class TheStashResolutionTests: XCTestCase {
         )
         bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
 
-        let target = SemanticElementTarget.currentCapture(.heistId("quantity_0"))
+        let target = ElementTarget.heistId("quantity_0")
 
-        XCTAssertEqual(target.executableTarget, .heistId("quantity_0"))
-        XCTAssertNil(target.sourceHeistId)
-        let executableTarget = try XCTUnwrap(target.executableTarget)
         XCTAssertNil(
-            bagman.resolveTarget(executableTarget).resolved,
+            bagman.resolveTarget(target).resolved,
             "Runtime heistIds are current-capture handles and must not replay through source-screen matchers"
         )
     }
 
-    func testCurrentCaptureHeistIdDoesNotAddSourceMetadata() {
-        let target = SemanticElementTarget.currentCapture(.heistId("missing_button"))
-
-        XCTAssertEqual(target.executableTarget, .heistId("missing_button"))
-        XCTAssertNil(target.sourceHeistId)
-    }
-
-    func testSemanticActionTargetAcquiresFreshLiveGeometry() throws {
+    func testMatcherTargetAcquiresFreshLiveGeometry() throws {
         let sourceFrame = CGRect(x: 10, y: 20, width: 80, height: 44)
         let sourcePoint = CGPoint(x: 50, y: 42)
         let sourceElement = AccessibilityElement.make(
@@ -225,14 +215,12 @@ final class TheStashResolutionTests: XCTestCase {
             interface: TheStash.WireConversion.toInterface(from: sourceScreen)
         )
         let sourceWireElement = try XCTUnwrap(capture.interface.elements.first { $0.heistId == "quantity_0" })
-        let semanticTarget = SemanticActionTarget(try XCTUnwrap(MinimumMatcher.build(
+        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(
             element: sourceWireElement,
             in: capture
-        )))
-        let runtimeTarget = SemanticElementTarget.durable(semanticTarget)
+        ))
+        let executableTarget = ElementTarget.matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
 
-        XCTAssertEqual(runtimeTarget.sourceHeistId, "quantity_0")
-        let executableTarget = try XCTUnwrap(runtimeTarget.executableTarget)
         guard case .matcher(let matcher, let ordinal) = executableTarget else {
             XCTFail("Expected semantic replay target to carry matcher identity, got \(executableTarget)")
             return

@@ -14,7 +14,7 @@ extension Actions {
         switch selection {
         case .element(let target):
             switch await navigation.actionability.makeActionable(
-                for: .currentCapture(target),
+                for: target,
                 method: method,
                 deallocatedBoundary: "gesture action"
             ) {

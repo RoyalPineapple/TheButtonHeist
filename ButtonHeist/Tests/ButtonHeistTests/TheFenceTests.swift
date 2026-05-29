@@ -3714,7 +3714,7 @@ final class TheFenceTests: XCTestCase {
         let heist = try TheBookKeeper.readHeist(from: output)
         XCTAssertEqual(heist.steps.count, 1)
         XCTAssertEqual(heist.steps[0].recorded?.heistId, "pay_button")
-        XCTAssertEqual(heist.steps[0].target?.matcher.identifier, "checkout.pay")
+        XCTAssertEqual(heist.steps[0].target, semanticTarget(identifier: "checkout.pay"))
         XCTAssertEqual(heist.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
         XCTAssertEqual(heist.steps[0].recorded?.expectation?.met, true)
         try? await fence.bookKeeper.closeSession()
@@ -3784,7 +3784,7 @@ final class TheFenceTests: XCTestCase {
         let evidence = try XCTUnwrap(heistEvidence(in: fence))
         XCTAssertEqual(evidence.count, 1)
         XCTAssertEqual(evidence[0].recorded?.heistId, "pay_button")
-        XCTAssertEqual(evidence[0].target?.matcher.identifier, "checkout.pay")
+        XCTAssertEqual(evidence[0].target, semanticTarget(identifier: "checkout.pay"))
         try? await fence.bookKeeper.closeSession()
     }
 

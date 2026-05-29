@@ -83,7 +83,7 @@ extension HeistPlayback: CustomStringConvertible {
 // MARK: - Heist Step
 
 /// A single command in a heist playback. Contains the command name, durable
-/// semantic target, command-specific arguments, and optional recording metadata.
+/// matcher target, command-specific arguments, and optional recording metadata.
 ///
 /// Element identity lives under `target`; command arguments live under
 /// `arguments`. Top-level step fields are closed so unsupported shapes fail at
@@ -94,8 +94,10 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     /// lives in TheButtonHeist (iOS-only) and TheScore must be portable across
     /// iOS + macOS.
     public let command: String
-    /// Durable semantic target — nil means the command doesn't target an element.
-    public let target: SemanticActionTarget?
+    /// Durable replay target — nil means the command doesn't target an element.
+    /// A persisted heist target must be a matcher; capture-local heistIds live
+    /// under `_recorded.heistId` as evidence only.
+    public let target: ElementTarget?
     /// Command-specific arguments (direction, text, duration, etc.).
     /// Excludes command name and element targeting fields.
     public let arguments: [String: HeistValue]
@@ -104,10 +106,13 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
 
     public init(
         command: String,
-        target: SemanticActionTarget? = nil,
+        target: ElementTarget? = nil,
         arguments: [String: HeistValue] = [:],
         recorded: RecordedMetadata? = nil
     ) {
+        if case .heistId = target {
+            preconditionFailure("HeistEvidence target must be a durable matcher; record source heistId under _recorded")
+        }
         self.command = command
         self.target = target
         self.arguments = arguments
@@ -125,7 +130,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         try Self.rejectUnknownStepKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         command = try container.decode(String.self, forKey: .command)
-        target = try container.decodeIfPresent(SemanticActionTarget.self, forKey: .target)
+        target = try Self.decodeDurableTarget(from: container, forKey: .target)
         arguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
         recorded = try container.decodeIfPresent(RecordedMetadata.self, forKey: .recorded)
     }
@@ -145,11 +150,48 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
-        try container.encodeIfPresent(target, forKey: .target)
+        try encodeDurableTarget(to: &container)
         if !arguments.isEmpty {
             try container.encode(arguments, forKey: .arguments)
         }
         try container.encodeIfPresent(recorded, forKey: .recorded)
+    }
+
+    private static func decodeDurableTarget(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> ElementTarget? {
+        guard let target = try container.decodeIfPresent(ElementTarget.self, forKey: key) else {
+            return nil
+        }
+        switch target {
+        case .matcher:
+            return target
+        case .heistId:
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "HeistEvidence target requires matcher fields; heistId is capture-local evidence under _recorded.heistId"
+            )
+        }
+    }
+
+    private func encodeDurableTarget(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
+        guard let target else { return }
+        switch target {
+        case .matcher(let matcher, _) where matcher.hasPredicates:
+            try container.encode(target, forKey: .target)
+        case .matcher:
+            throw EncodingError.invalidValue(target, .init(
+                codingPath: container.codingPath + [CodingKeys.target],
+                debugDescription: "HeistEvidence target requires at least one matcher field"
+            ))
+        case .heistId:
+            throw EncodingError.invalidValue(target, .init(
+                codingPath: container.codingPath + [CodingKeys.target],
+                debugDescription: "HeistEvidence target requires matcher fields; heistId is capture-local evidence under _recorded.heistId"
+            ))
+        }
     }
 
 }

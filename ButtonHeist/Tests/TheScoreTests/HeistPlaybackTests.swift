@@ -29,8 +29,7 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.app, "com.buttonheist.testapp")
         XCTAssertEqual(decoded.steps.count, 3)
         XCTAssertEqual(decoded.steps[0].command, "activate")
-        XCTAssertEqual(decoded.steps[0].target?.matcher.label, "Login")
-        XCTAssertEqual(decoded.steps[0].target?.matcher.traits, [.button])
+        XCTAssertEqual(decoded.steps[0].target, semanticTarget(label: "Login", traits: [.button]))
         XCTAssertEqual(decoded.steps[1].command, "type_text")
         XCTAssertEqual(decoded.steps[1].arguments["text"], .string("user@example.com"))
         XCTAssertNil(decoded.steps[1].target)
@@ -107,8 +106,7 @@ final class HeistPlaybackTests: XCTestCase {
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.command, "activate")
-        XCTAssertEqual(step.target?.matcher.label, "Submit")
-        XCTAssertEqual(step.target?.matcher.traits, [.button])
+        XCTAssertEqual(step.target, semanticTarget(label: "Submit", traits: [.button]))
         XCTAssertTrue(step.arguments.isEmpty)
     }
 
@@ -116,6 +114,14 @@ final class HeistPlaybackTests: XCTestCase {
         let json = #"{"command":"activate","target":{"heistId":"button_save"}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
+        }
+    }
+
+    func testPlaybackTargetRejectsEmptyMatcherOnEncode() {
+        let step = HeistEvidence(command: "activate", target: .matcher(ElementMatcher()))
+
+        XCTAssertThrowsError(try JSONEncoder().encode(step)) { error in
+            XCTAssertTrue("\(error)".contains("requires at least one matcher field"), "\(error)")
         }
     }
 
@@ -148,7 +154,7 @@ final class HeistPlaybackTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
-        XCTAssertEqual(step.target?.matcher.label, "Save")
+        XCTAssertEqual(step.target, semanticTarget(label: "Save"))
         XCTAssertEqual(step.recorded?.heistId, "recorded_save")
         XCTAssertNil(step.arguments["heistId"])
     }
@@ -310,7 +316,7 @@ final class HeistPlaybackTests: XCTestCase {
             )
         )
 
-        let expected = #"step(command="activate" semanticTarget(matcher(label="Save" traits=[button])) "#
+        let expected = #"step(command="activate" target(matcher(label="Save" traits=[button])) "#
             + #"args=arguments("count"=2 "text"="hello") "#
             + #"recorded(heistId="save_button" frame(1,2,3,4) coordinateOnly=false "#
             + #"expectation(met=true expected=screen_changed actual="screenChanged")))"#
@@ -370,17 +376,15 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     private func semanticTarget(
-        sourceHeistId: HeistId? = nil,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
         traits: [HeistTrait]? = nil,
         excludeTraits: [HeistTrait]? = nil,
         ordinal: Int? = nil
-    ) -> SemanticActionTarget {
-        SemanticActionTarget(
-            sourceHeistId: sourceHeistId,
-            matcher: ElementMatcher(
+    ) -> ElementTarget {
+        .matcher(
+            ElementMatcher(
                 label: label,
                 identifier: identifier,
                 value: value,

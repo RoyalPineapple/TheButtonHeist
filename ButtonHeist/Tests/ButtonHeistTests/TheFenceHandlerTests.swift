@@ -3783,8 +3783,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.steps.count, 2)
         XCTAssertEqual(operation.command, "type_text")
         XCTAssertEqual(playback.steps[1].command, "activate")
-        XCTAssertEqual(operation.target?.matcher.identifier, "email")
-        XCTAssertEqual(operation.target?.ordinal, 1)
+        XCTAssertEqual(operation.target, semanticTarget(identifier: "email", ordinal: 1))
 
         let parsed = try fence.parsePlaybackEvidence(operation)
         XCTAssertEqual(parsed.command, .typeText)
@@ -3818,7 +3817,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.map(\.command), ["activate"])
-        XCTAssertEqual(playback.steps.first?.target?.matcher.identifier, "submit")
+        XCTAssertEqual(playback.steps.first?.target, semanticTarget(identifier: "submit"))
         let step = try XCTUnwrap(playback.steps.first)
         let expect = try fence.parsePlaybackEvidence(step).arguments.argumentValues["expect"]
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))

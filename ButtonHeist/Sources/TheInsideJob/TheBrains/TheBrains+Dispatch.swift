@@ -137,14 +137,14 @@ extension TheBrains {
         method: ActionMethod
     ) async -> ActionResult {
         await performElementSearch(
-            elementTarget: .currentCapture(target.elementTarget),
+            elementTarget: target.elementTarget,
             direction: target.direction,
             method: method
         )
     }
 
     func performElementSearch(
-        elementTarget: SemanticElementTarget?,
+        elementTarget: ElementTarget?,
         direction: ScrollSearchDirection,
         method: ActionMethod
     ) async -> ActionResult {
@@ -167,14 +167,14 @@ extension TheBrains {
     /// Wait for an element to appear or disappear.
     func performWaitFor(target: WaitForTarget) async -> ActionResult {
         await performWaitFor(
-            elementTarget: .currentCapture(target.elementTarget),
+            elementTarget: target.elementTarget,
             absent: target.absent,
             timeout: target.timeout
         )
     }
 
     func performWaitFor(
-        elementTarget: SemanticElementTarget,
+        elementTarget: ElementTarget,
         absent: Bool?,
         timeout: Double?
     ) async -> ActionResult {
@@ -200,35 +200,28 @@ extension TheBrains {
 
     /// Execute the wait_for polling loop.
     private func executeWaitFor(
-        elementTarget: SemanticElementTarget,
+        elementTarget: ElementTarget,
         absent: Bool,
         timeout: Double
     ) async -> TheSafecracker.InteractionResult {
         let deadline = ContinuousClock.now + .seconds(timeout)
         let start = CFAbsoluteTimeGetCurrent()
-        guard let executableTarget = elementTarget.executableTarget else {
-            return .failure(
-                .waitFor,
-                message: "wait_for target requires heistId or semantic matcher predicates",
-                failureKind: .inputValidation
-            )
-        }
 
-        guard await refreshSemanticStateForWait(target: executableTarget) else {
+        guard await refreshSemanticStateForWait(target: elementTarget) else {
             return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
         }
-        var resolution = stash.resolveTarget(executableTarget)
+        var resolution = stash.resolveTarget(elementTarget)
         if let result = waitForResult(resolution: resolution, absent: absent, elapsed: nil) {
             return result
         }
 
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            guard await refreshSemanticStateForWait(target: executableTarget) else {
+            guard await refreshSemanticStateForWait(target: elementTarget) else {
                 return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-            resolution = stash.resolveTarget(executableTarget)
+            resolution = stash.resolveTarget(elementTarget)
             if let result = waitForResult(resolution: resolution, absent: absent, elapsed: elapsed) {
                 return result
             }
@@ -269,7 +262,7 @@ extension TheBrains {
     private func waitForTimeoutMessage(
         absent: Bool,
         elapsed: String,
-        target: SemanticElementTarget,
+        target: ElementTarget,
         resolution: TheStash.TargetResolution
     ) -> String {
         let expected = absent ? "element to disappear" : "element to appear"
@@ -295,11 +288,8 @@ extension TheBrains {
         return parts.joined(separator: "; ")
     }
 
-    private func waitForTargetDescription(_ target: SemanticElementTarget) -> String {
-        guard let executableTarget = target.executableTarget else {
-            return "<missing semantic matcher>"
-        }
-        switch executableTarget {
+    private func waitForTargetDescription(_ target: ElementTarget) -> String {
+        switch target {
         case .heistId(let heistId):
             return "heistId=\"\(heistId)\""
         case .matcher(let matcher, let ordinal):

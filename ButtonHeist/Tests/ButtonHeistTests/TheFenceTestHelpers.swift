@@ -48,17 +48,15 @@ extension TheFence {
 }
 
 func semanticTarget(
-    sourceHeistId: HeistId? = nil,
     label: String? = nil,
     identifier: String? = nil,
     value: String? = nil,
     traits: [HeistTrait]? = nil,
     excludeTraits: [HeistTrait]? = nil,
     ordinal: Int? = nil
-) -> SemanticActionTarget {
-    SemanticActionTarget(
-        sourceHeistId: sourceHeistId,
-        matcher: ElementMatcher(
+) -> ElementTarget {
+    .matcher(
+        ElementMatcher(
             label: label,
             identifier: identifier,
             value: value,
