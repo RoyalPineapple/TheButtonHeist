@@ -132,36 +132,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(object["target"], .object(["heistId": .string("button-login")]))
     }
 
-    func testRunBatchRejectsUnknownSerializedCommandAtEdge() {
-        XCTAssertThrowsError(
-            try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"not_a_command"}]"#,
-                fromFile: nil
-            )
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains(
-                    #"steps[0] command must be a canonical TheFence.Command; unknown command "not_a_command""#
-                ),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testRunBatchRejectsNestedRunBatchCommandAtEdge() {
-        XCTAssertThrowsError(
-            try RunBatchCommand.serializedBatchSteps(
-                inline: #"[{"command":"run_batch","steps":[]}]"#,
-                fromFile: nil
-            )
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains(#"steps[0] command "run_batch" is not supported"#),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
     func testHumanParserPreservesKnownStringParameterValues() throws {
         let operation = try ReplSession.parseHumanInput("set_pasteboard text=false")
 

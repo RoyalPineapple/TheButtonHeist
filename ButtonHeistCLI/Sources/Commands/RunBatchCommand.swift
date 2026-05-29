@@ -60,12 +60,8 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
             fromFile: path,
             optionName: "steps"
         ).enumerated().map { index, value in
-            guard case .object(let object) = value else {
+            guard case .object = value else {
                 throw ValidationError("steps[\(index)] must be a JSON object")
-            }
-            let step = TheFence.CommandArgumentObject(values: object, fieldPrefix: "steps[\(index)]")
-            if case .failure(let error) = FenceOperationCatalog.normalizeBatchStep(step, context: "steps[\(index)]") {
-                throw ValidationError(error.message)
             }
             return value
         }
