@@ -25,7 +25,7 @@ struct DeviceResolver {
     /// reachability; return the first reachable match for `filter`, or (if
     /// `filter` is nil) the single device when exactly one is reachable.
     ///
-    /// Throws `ConnectionError.noMatchingDevice` when no filter is supplied and
+    /// Throws `HandoffConnectionError.noMatchingDevice` when no filter is supplied and
     /// multiple reachable devices exist (ambiguous selection), or when a filter
     /// is supplied with no matches. Throws `.noDeviceFound` if nothing appears
     /// before `discoveryTimeout` elapses. A `127.0.0.1:PORT` filter bypasses
@@ -60,7 +60,7 @@ struct DeviceResolver {
                     return device
                 }
                 if filter == nil, reachable.count > 1 {
-                    throw TheHandoff.ConnectionError.noMatchingDevice(
+                    throw HandoffConnectionError.noMatchingDevice(
                         filter: "(none)",
                         available: reachable.map { $0.name }
                     )
@@ -77,27 +77,27 @@ struct DeviceResolver {
         }
     }
 
-    private func finalSelection() async throws(TheHandoff.ConnectionError) -> DiscoveredDevice {
+    private func finalSelection() async throws(HandoffConnectionError) -> DiscoveredDevice {
         let reachable = await getDiscoveredDevices().reachable(timeout: reachabilityTimeout)
         if let device = Self.selectDevice(from: reachable, filter: filter) {
             return device
         }
 
         if filter == nil, reachable.count > 1 {
-            throw TheHandoff.ConnectionError.noMatchingDevice(
+            throw HandoffConnectionError.noMatchingDevice(
                 filter: "(none)",
                 available: reachable.map { $0.name }
             )
         }
 
         if let filter {
-            throw TheHandoff.ConnectionError.noMatchingDevice(
+            throw HandoffConnectionError.noMatchingDevice(
                 filter: filter,
                 available: reachable.map { $0.name }
             )
         }
 
-        throw TheHandoff.ConnectionError.noDeviceFound
+        throw HandoffConnectionError.noDeviceFound
     }
 
     static func selectDevice(from devices: [DiscoveredDevice], filter: String?) -> DiscoveredDevice? {

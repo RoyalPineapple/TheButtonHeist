@@ -3,7 +3,7 @@ import Foundation
 import TheScore
 
 extension FenceError {
-    init(_ connectionError: TheHandoff.ConnectionError) {
+    init(_ connectionError: HandoffConnectionError) {
         switch connectionError {
         case .connectionFailed(let message): self = .connectionFailed(message)
         case .disconnected(.authFailed(let reason)): self = .authFailed(reason)

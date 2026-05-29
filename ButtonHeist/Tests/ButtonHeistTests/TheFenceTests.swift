@@ -1498,7 +1498,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testFenceErrorDistinguishesSetupAndRequestTimeoutTaxonomy() {
-        let setupTimeout = FenceError(TheHandoff.ConnectionError.timeout)
+        let setupTimeout = FenceError(HandoffConnectionError.timeout)
         let requestTimeout = FenceError.actionTimeout
 
         XCTAssertEqual(setupTimeout.errorCode, "setup.timeout")
@@ -1508,7 +1508,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     func testConnectionFailureFormattingPreservesDisconnectCause() {
-        let response = FenceResponse.failure(FenceError(TheHandoff.ConnectionError.disconnected(.missingFingerprint)))
+        let response = FenceResponse.failure(FenceError(HandoffConnectionError.disconnected(.missingFingerprint)))
 
         let compact = response.compactFormatted()
         XCTAssertTrue(compact.contains("error[tls.missing_fingerprint tls retryable=false]"))
