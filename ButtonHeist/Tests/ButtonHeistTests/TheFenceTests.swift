@@ -1632,7 +1632,7 @@ final class TheFenceTests: XCTestCase {
     func testDisconnectClearsLastActionSessionState() async {
         let (fence, mockConnection) = makeConnectedFence()
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
-        fence.recordCompletedAction(ActionResult(success: true, method: .activate))
+        fence.commandExecutionState.completeAction(ActionResult(success: true, method: .activate))
         XCTAssertNotNil(fence.currentSessionState().lastAction)
 
         mockConnection.onEvent?(.disconnected(.serverClosed))

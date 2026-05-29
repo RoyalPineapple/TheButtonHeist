@@ -282,10 +282,6 @@ public final class TheFence {
     // Expectation parsing (`parseExpectation` and its helpers) lives in
     // TheFence+ExpectationParsing.swift.
 
-    func recordCompletedAction(_ result: ActionResult) {
-        commandExecutionState.completeAction(result)
-    }
-
     // Batch execution (`handleRunBatch`, step-summary building,
     // and `currentSessionState`) lives in TheFence+Batch.swift.
 

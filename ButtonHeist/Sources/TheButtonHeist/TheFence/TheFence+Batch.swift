@@ -81,7 +81,7 @@ extension TheFence {
 
         if let actionResult = stepResult.actionResult ?? stepResult.expectationActionResult {
             let finalResult = stepResult.expectationActionResult ?? actionResult
-            recordCompletedAction(finalResult)
+            commandExecutionState.completeAction(finalResult)
             return BatchStepOutcome(
                 command: plannedStep.commandName,
                 response: .action(
