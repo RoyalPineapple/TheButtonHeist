@@ -105,8 +105,6 @@ final class SemanticActionability {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
                 stash.refresh()
                 didRevealTarget = true
-            } else {
-                stash.refresh()
             }
         case .notFound(let diagnostics):
             return .failed(.notFound(diagnostics))
@@ -114,11 +112,21 @@ final class SemanticActionability {
             return .failed(.ambiguous(diagnostics))
         }
 
-        let freshTarget = resolveFreshElementTarget(
+        var freshTarget = resolveFreshElementTarget(
             target: target,
             method: method,
             deallocatedBoundary: deallocatedBoundary
         )
+        if case .failure(let failure) = freshTarget,
+           failure.failedStep == .staleRefresh,
+           !didRevealTarget {
+            stash.refresh()
+            freshTarget = resolveFreshElementTarget(
+                target: target,
+                method: method,
+                deallocatedBoundary: deallocatedBoundary
+            )
+        }
         switch freshTarget {
         case .success(let actionableTarget):
             return await placeElementActivationPoint(
