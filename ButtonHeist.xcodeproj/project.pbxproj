@@ -369,6 +369,7 @@
 		C8B90E06978AE8C02F8ED097 /* AccessibilityTraceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5E0175CC98C9187ECAEF74 /* AccessibilityTraceTests.swift */; };
 		C8CF3B319B89C0360C0F6AEE /* AccessibilityTraceMoveInference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 836230F6A839FEB27A183BFE /* AccessibilityTraceMoveInference.swift */; };
 		C92511F22D3C5FAA3CFBC060 /* AccessibilityTraceTreeDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30BDB51FD53E7DC7B920BBE6 /* AccessibilityTraceTreeDiff.swift */; };
+		C9874B7862E44EDF022AED57 /* TheBurglar+CapturedNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 548D831C4E03B34D05B66FC6 /* TheBurglar+CapturedNode.swift */; };
 		CB9EF56672ACCA277A091C9A /* TheGetaway.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63AEBA441147E38C0ED98046 /* TheGetaway.swift */; };
 		CC03176EAE7C196E8DC9257E /* AutoStart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54C95A493BCD4DBBB5E890F3 /* AutoStart.swift */; };
 		CC0C7E4A567C30CB534C0A4D /* TheFenceBoolArgTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A7F4435F968A9D7DF4EF0A /* TheFenceBoolArgTests.swift */; };
@@ -722,6 +723,7 @@
 		5339441690430727D8CCCBC5 /* DeviceConnection+TLS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DeviceConnection+TLS.swift"; sourceTree = "<group>"; };
 		538D73EA6CD3915AF422FB22 /* TheFence+Formatting+Compact+Action.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting+Compact+Action.swift"; sourceTree = "<group>"; };
 		541F4575666DF7A78558A3BB /* ContainerFingerprintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContainerFingerprintTests.swift; sourceTree = "<group>"; };
+		548D831C4E03B34D05B66FC6 /* TheBurglar+CapturedNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBurglar+CapturedNode.swift"; sourceTree = "<group>"; };
 		54A2B924A69F01ECBEF755B5 /* DeviceConnectionFailures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionFailures.swift; sourceTree = "<group>"; };
 		54C95A493BCD4DBBB5E890F3 /* AutoStart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoStart.swift; sourceTree = "<group>"; };
 		55705E02DEA7790A18E98DD1 /* WaitForIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitForIntegrationTests.swift; sourceTree = "<group>"; };
@@ -1224,6 +1226,7 @@
 			isa = PBXGroup;
 			children = (
 				D8B68F25EE20E871B3447D1A /* TheBurglar.swift */,
+				548D831C4E03B34D05B66FC6 /* TheBurglar+CapturedNode.swift */,
 				5AC8E3D28B23077213FB6074 /* TheBurglar+ContentContext.swift */,
 				95C2F70FDC2CC8724AF3DF6F /* TheBurglar+ScreenBuilding.swift */,
 			);
@@ -2197,6 +2200,7 @@
 				4E560FFEDBE069E2DB2838FB /* TheBrains+WaitForChange.swift in Sources */,
 				DA15B523FFDEAC7C67CEA77E /* TheBrains.swift in Sources */,
 				237F2622077D5EABF6530F6D /* WaitForChangeState.swift in Sources */,
+				C9874B7862E44EDF022AED57 /* TheBurglar+CapturedNode.swift in Sources */,
 				8674CBEFBB447EE461497E87 /* TheBurglar+ContentContext.swift in Sources */,
 				1CA24D891296E1D528402657 /* TheBurglar+ScreenBuilding.swift in Sources */,
 				15ACCDAABA1FB72018B87121 /* TheBurglar.swift in Sources */,
