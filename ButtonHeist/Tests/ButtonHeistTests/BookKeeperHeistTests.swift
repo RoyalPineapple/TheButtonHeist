@@ -68,7 +68,7 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
         try appendEvidenceLine(
-            HeistEvidence(command: "activate", target: semanticTarget(label: "Direct", traits: [.button])),
+            try HeistEvidence(command: "activate", target: semanticTarget(label: "Direct", traits: [.button])),
             to: bookKeeper
         )
 
@@ -608,8 +608,8 @@ final class BookKeeperHeistTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
-                HeistEvidence(command: "activate", target: semanticTarget(label: "Go", traits: [.button])),
-                HeistEvidence(command: "type_text", arguments: ["text": .string("test")]),
+                try HeistEvidence(command: "activate", target: semanticTarget(label: "Go", traits: [.button])),
+                try HeistEvidence(command: "type_text", arguments: ["text": .string("test")]),
             ]
         )
 

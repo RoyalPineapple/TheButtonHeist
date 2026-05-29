@@ -109,13 +109,8 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         target: ElementTarget? = nil,
         arguments: [String: HeistValue] = [:],
         recorded: RecordedMetadata? = nil
-    ) {
-        if case .heistId = target {
-            preconditionFailure("HeistEvidence target must be a durable matcher; record source heistId under _recorded")
-        }
-        if case .matcher(let matcher, _) = target, !matcher.hasPredicates {
-            preconditionFailure("HeistEvidence target must include durable matcher predicates")
-        }
+    ) throws {
+        try Self.validateDurableTarget(target)
         self.command = command
         self.target = target
         self.arguments = arguments
@@ -167,15 +162,36 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         guard let target = try container.decodeIfPresent(ElementTarget.self, forKey: key) else {
             return nil
         }
-        switch target {
-        case .matcher:
+        do {
+            try validateDurableTarget(target)
             return target
-        case .heistId:
+        } catch HeistEvidenceError.captureHandleTarget {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
                 debugDescription: "HeistEvidence target requires matcher fields; heistId is capture-local evidence under _recorded.heistId"
             )
+        } catch HeistEvidenceError.emptyMatcherTarget {
+            throw DecodingError.dataCorruptedError(
+                forKey: key,
+                in: container,
+                debugDescription: "HeistEvidence target requires at least one matcher field"
+            )
+        } catch {
+            throw error
+        }
+    }
+
+    private static func validateDurableTarget(_ target: ElementTarget?) throws {
+        switch target {
+        case nil:
+            return
+        case .matcher(let matcher, _) where matcher.hasPredicates:
+            return
+        case .matcher:
+            throw HeistEvidenceError.emptyMatcherTarget
+        case .heistId:
+            throw HeistEvidenceError.captureHandleTarget
         }
     }
 
@@ -197,6 +213,11 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         }
     }
 
+}
+
+public enum HeistEvidenceError: Error, Sendable, Equatable {
+    case captureHandleTarget
+    case emptyMatcherTarget
 }
 
 extension HeistEvidence: CustomStringConvertible {
