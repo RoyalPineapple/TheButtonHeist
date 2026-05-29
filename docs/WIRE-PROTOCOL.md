@@ -195,8 +195,8 @@ connections.
 ```
 
 The interface payload carries the canonical hierarchy tree plus Button Heist
-annotations. There is no parallel wire `elements` array and no compiler-derived
-`_0` wrapper shape in the public wire contract.
+annotations. There is no parallel wire `elements` array in the public wire
+contract.
 
 ```json
 {
