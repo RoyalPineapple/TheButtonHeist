@@ -8,24 +8,32 @@ extension TheFence {
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
         public let elementTarget: ElementTarget?
+        let isPlaybackStep: Bool
         let argumentFieldPrefix: String?
 
         public init(
             values: [String: HeistValue],
             elementTarget: ElementTarget? = nil,
+            isPlaybackStep: Bool = false,
             fieldPrefix: String? = nil
         ) {
             self.argumentValues = values
             self.elementTarget = elementTarget
+            self.isPlaybackStep = isPlaybackStep
             argumentFieldPrefix = fieldPrefix
         }
 
         func dropping(_ key: String) -> CommandArgumentEnvelope {
             var values = argumentValues
             values.removeValue(forKey: key)
+            return withArgumentValues(values)
+        }
+
+        func withArgumentValues(_ values: [String: HeistValue]) -> CommandArgumentEnvelope {
             return CommandArgumentEnvelope(
                 values: values,
                 elementTarget: elementTarget,
+                isPlaybackStep: isPlaybackStep,
                 fieldPrefix: argumentFieldPrefix
             )
         }
@@ -40,12 +48,17 @@ extension TheFence {
             self.argumentValues = values
             self.argumentFieldPrefix = fieldPrefix
         }
+
+        func withArgumentValues(_ values: [String: HeistValue]) -> CommandArgumentObject {
+            CommandArgumentObject(values: values, fieldPrefix: argumentFieldPrefix)
+        }
     }
 
     protocol CommandArgumentReadable: Sendable {
         var argumentValues: [String: HeistValue] { get }
         var elementTarget: ElementTarget? { get }
         var argumentFieldPrefix: String? { get }
+        func withArgumentValues(_ values: [String: HeistValue]) -> Self
     }
 }
 

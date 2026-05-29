@@ -133,9 +133,9 @@ public enum FenceOperationCatalog {
             ))
         }
 
-        guard command.isBatchExecutable else {
+        guard command.isPlaybackExecutable else {
             return .failure(FenceOperationRoutingError(
-                message: "\(context) command \"\(command.rawValue)\" is not batch-executable"
+                message: "\(context) command \"\(command.rawValue)\" is not playback-executable"
             ))
         }
 

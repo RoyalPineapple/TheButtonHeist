@@ -29,7 +29,7 @@ extension TheFence {
         for message in messages {
             let result = try await sendAndAwaitAction(message, timeout: timeout)
             if result.method != .getPasteboard {
-                commandExecutionState.completeAction(result)
+                recordCompletedAction(result)
             }
             finalResult = result
             if !result.success {

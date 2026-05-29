@@ -1224,7 +1224,7 @@ final class TheGetawayTests: XCTestCase {
             screen: Self.recordingTestScreen
         )
         getaway.installRecordingRouteStateForTest(.recording(stakeout: stakeout, ownerClientId: 7))
-        getaway.brains.stash.stakeout = stakeout
+        getaway.brains.stakeout = stakeout
 
         await getaway.invalidateRecordingForDisconnect(clientId: 7)
         await fulfillment(of: [completion], timeout: 5.0)
@@ -1251,7 +1251,7 @@ final class TheGetawayTests: XCTestCase {
             screen: Self.recordingTestScreen
         )
         getaway.installRecordingRouteStateForTest(.recording(stakeout: stakeout, ownerClientId: 7))
-        getaway.brains.stash.stakeout = stakeout
+        getaway.brains.stakeout = stakeout
 
         await getaway.invalidateRecordingForSessionRelease()
         await fulfillment(of: [completion], timeout: 5.0)
@@ -1500,7 +1500,7 @@ final class TheGetawayTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        XCTAssertNil(getaway.brains.stash.stakeout, "Stash must not retain the invalidated recorder", file: file, line: line)
+        XCTAssertNil(getaway.brains.stakeout, "Brains must not retain the invalidated recorder", file: file, line: line)
         XCTAssertNil(getaway.stakeout, "Getaway route must not expose an active recorder", file: file, line: line)
         XCTAssertNil(getaway.pendingRecordingResponse, "Invalidation must clear any parked stop waiter", file: file, line: line)
         XCTAssertNil(getaway.recordingOriginatorClientId, "Invalidation must clear route ownership", file: file, line: line)

@@ -27,14 +27,14 @@ private struct CaptureWithoutContextFixture: Encodable {
 
 final class AccessibilityTraceTests: XCTestCase {
 
-    func testDecodeRejectsUnknownTraceFields() {
+    func testDecodeRejectsUnsupportedTraceFields() {
         let json = #"{"captures":[],"unexpectedField":[]}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(AccessibilityTrace.self, from: Data(json.utf8))) { error in
-            guard case DecodingError.dataCorrupted(let context) = error else {
-                return XCTFail("Expected dataCorrupted, got \(error)")
-            }
-            XCTAssertEqual(context.debugDescription, #"Unknown AccessibilityTrace field "unexpectedField""#)
+            XCTAssertTrue(
+                "\(error)".contains("Unsupported AccessibilityTrace field: unexpectedField"),
+                "Expected unsupported field rejection, got \(error)"
+            )
         }
     }
 

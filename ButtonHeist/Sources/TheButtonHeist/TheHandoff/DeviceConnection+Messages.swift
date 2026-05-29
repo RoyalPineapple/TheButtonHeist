@@ -34,7 +34,7 @@ extension DeviceConnection {
         switch envelope.message {
         case .serverHello:
             deviceConnectionLogger.info("Received server hello")
-            send(.clientHello, requestId: nil)
+            send(.clientHello)
         case .protocolMismatch(let payload):
             let message = DisconnectReason.buttonHeistVersionMismatchMessage(
                 serverVersion: payload.serverButtonHeistVersion,

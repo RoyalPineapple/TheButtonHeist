@@ -130,7 +130,7 @@ extension CLICommandContract {
     }
 
     static var cliCommandName: String {
-        fenceCommand.canonicalName
+        fenceCommand.cliCommandName
     }
 
     static func fenceOperation(

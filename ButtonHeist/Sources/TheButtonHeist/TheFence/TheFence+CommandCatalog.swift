@@ -61,6 +61,8 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
     public let isBatchExecutable: Bool
+    public var isPlaybackExecutable: Bool { isBatchExecutable }
+    public var isHeistRecordable: Bool { isPlaybackExecutable }
     public let requiresConnectionBeforeDispatch: Bool
     public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
@@ -209,6 +211,10 @@ public extension TheFence.Command {
         descriptor.canonicalName
     }
 
+    var cliCommandName: String {
+        canonicalName
+    }
+
     var cliExposure: CLIExposure {
         descriptor.cliExposure
     }
@@ -255,6 +261,20 @@ public extension TheFence.Command {
             // before reading catalogEntry to avoid recursive catalog construction.
             command != .runBatch && command.catalogEntry.isBatchExecutable
         }
+    }
+
+    /// Commands that can execute as a heist playback step.
+    var isPlaybackExecutable: Bool {
+        descriptor.isPlaybackExecutable
+    }
+
+    static var playbackExecutableCases: [Self] {
+        batchExecutableCases
+    }
+
+    /// Commands that are persisted when a heist recording is active.
+    var isHeistRecordable: Bool {
+        descriptor.isHeistRecordable
     }
 
     /// Commands that should establish a device connection before dispatch.

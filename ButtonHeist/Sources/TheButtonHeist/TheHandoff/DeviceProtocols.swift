@@ -64,6 +64,13 @@ protocol DeviceConnecting: AnyObject {
     func send(_ message: ClientMessage, requestId: String?) -> DeviceSendOutcome
 }
 
+extension DeviceConnecting {
+    @discardableResult
+    func send(_ message: ClientMessage) -> DeviceSendOutcome {
+        send(message, requestId: nil)
+    }
+}
+
 /// Connection surface used by passive reachability probes. Raw socket
 /// readiness is intentionally kept out of the authenticated lifecycle event
 /// stream consumed by TheHandoff.

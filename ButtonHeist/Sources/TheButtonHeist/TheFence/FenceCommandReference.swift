@@ -84,6 +84,7 @@ public enum FenceCommandReference {
             "- CLI: \(cliExposureDetail(descriptor))",
             "- MCP: \(mcpExposureDetail(descriptor.mcpExposure))",
             "- Batch: \(yesNo(descriptor.isBatchExecutable))",
+            "- Playback: \(yesNo(descriptor.isPlaybackExecutable))",
             "- Connection before dispatch: \(yesNo(descriptor.requiresConnectionBeforeDispatch))",
         ]
 

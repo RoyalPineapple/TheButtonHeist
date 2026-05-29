@@ -131,6 +131,15 @@ extension TheFence {
 
     // MARK: - Expectation Parsing
 
+    /// Parse the `"expect"` field off a CLI/MCP request dictionary into a typed
+    /// `ActionExpectation`. Returns `nil` when no expectation is set. The
+    /// accepted shape is the discriminator object used by `ActionExpectation`'s
+    /// wire encoding: `{"type": "...", …}`. Compound expectations use object
+    /// sub-expectations with `{"type": "compound", "expectations": [...]}`.
+    func parseExpectationPayload(_ arguments: some CommandArgumentReadable) throws -> ExpectationPayload {
+        try ExpectationPayload(arguments: arguments)
+    }
+
     /// Parse compact command input into the same typed expectation argument
     /// shape accepted by direct, MCP, batch, and playback request decoding.
     public nonisolated static func parseExpectationArgument(_ rawValue: String) throws -> HeistValue {

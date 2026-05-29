@@ -153,7 +153,7 @@ extension TheGetaway {
             // so it must be set at init.
             let brains = self.brains
             let recorder = TheStakeout(captureFrame: { @MainActor [brains] in
-                brains.stash.captureScreenForRecording()
+                brains.captureScreenForRecording()
             })
             // The completion handler signature is sync (@MainActor @Sendable).
             // `deliverRecordingResult` is async because it awaits the two
@@ -185,7 +185,7 @@ extension TheGetaway {
                 return
             }
             replaceRecordingRouteState(.recording(stakeout: recorder, ownerClientId: clientId))
-            brains.stash.stakeout = recorder
+            brains.stakeout = recorder
             sendMessage(.recordingStarted, requestId: requestId, respond: respond)
         } catch {
             // Roll back the claim so the next start_recording can proceed.
@@ -219,7 +219,7 @@ extension TheGetaway {
         case .idle, .starting, .completed:
             return
         }
-        brains.stash.stakeout = nil
+        brains.stakeout = nil
         let owner = state.ownerClientId
 
         // Pending stop waiter wins — that's the request the originator (or
@@ -423,7 +423,7 @@ extension TheGetaway {
         ownerClientId: Int?,
         reason: RecordingInvalidationReason
     ) async {
-        brains.stash.stakeout = nil
+        brains.stakeout = nil
         replaceRecordingRouteState(.invalidating(stakeout: stakeout, ownerClientId: ownerClientId, reason: reason))
         if await stakeout.isRecording {
             await stakeout.stopRecording(reason: .manual)
@@ -438,7 +438,7 @@ extension TheGetaway {
         ownerClientId: Int?,
         reason: RecordingInvalidationReason
     ) async {
-        brains.stash.stakeout = nil
+        brains.stakeout = nil
         replaceRecordingRouteState(.invalidating(stakeout: stakeout, ownerClientId: ownerClientId, reason: reason))
         if await stakeout.isIdle {
             clearInvalidatingRecordingRoute(stakeout)

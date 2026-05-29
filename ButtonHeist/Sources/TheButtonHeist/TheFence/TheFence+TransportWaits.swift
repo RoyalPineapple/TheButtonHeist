@@ -8,7 +8,7 @@ extension TheFence {
 
     func sendAction(_ message: ClientMessage) async throws -> FenceResponse {
         let result = try await sendAndAwaitAction(message, timeout: Timeouts.actionSeconds)
-        commandExecutionState.completeAction(result)
+        recordCompletedAction(result)
         return .action(result: result)
     }
 

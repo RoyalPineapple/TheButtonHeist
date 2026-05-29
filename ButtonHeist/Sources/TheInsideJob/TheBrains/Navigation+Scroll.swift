@@ -110,6 +110,9 @@ extension Navigation {
         }
     }
 
+    nonisolated static func describeScrollTarget(_ screenElement: TheStash.ScreenElement) -> String {
+        ScrollTargetDescription(screenElement).description
+    }
 }
 
 #endif // DEBUG

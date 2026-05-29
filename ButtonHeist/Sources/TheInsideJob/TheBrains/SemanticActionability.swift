@@ -164,7 +164,7 @@ final class SemanticActionability {
             }
             return .failed(.geometryNotActionable(
                 actionableTarget.target.diagnostics(
-                    "target \(Navigation.ScrollTargetDescription(liveTarget.screenElement).description) "
+                    "target \(Navigation.describeScrollTarget(liveTarget.screenElement)) "
                         + "did not become actionable after semantic reveal; "
                         + Self.liveGeometrySummary(liveTarget)
                 ),
@@ -173,7 +173,7 @@ final class SemanticActionability {
         }
 
         let screenElement = liveTarget.screenElement
-        let description = Navigation.ScrollTargetDescription(screenElement).description
+        let description = Navigation.describeScrollTarget(screenElement)
         if let failure = await scrollActivationPointIntoBounds(
             liveTarget.activationPoint,
             in: stash.liveScrollView(for: screenElement),
@@ -203,7 +203,7 @@ final class SemanticActionability {
             }
             return .failed(.geometryNotActionable(
                 refreshedTarget.target.diagnostics(
-                    "target \(Navigation.ScrollTargetDescription(refreshedTarget.screenElement).description) "
+                    "target \(Navigation.describeScrollTarget(refreshedTarget.screenElement)) "
                         + "did not become actionable after activation point placement; "
                         + Self.liveGeometrySummary(refreshedTarget.liveTarget)
                 ),

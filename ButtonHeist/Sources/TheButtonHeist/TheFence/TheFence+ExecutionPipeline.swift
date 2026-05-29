@@ -228,7 +228,7 @@ extension TheFence {
                 .waitForChange(target),
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
-            commandExecutionState.completeAction(waitResult)
+            recordCompletedAction(waitResult)
             let waitCursor = ingestActionTrace(waitResult)
             let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(

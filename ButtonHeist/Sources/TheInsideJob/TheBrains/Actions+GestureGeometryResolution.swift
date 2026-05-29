@@ -13,7 +13,7 @@ extension Actions {
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
         switch selection {
         case .element(let target):
-            switch await navigation.actionability.makeActionable(
+            switch await actionability.makeActionable(
                 for: .currentCapture(target),
                 method: method,
                 deallocatedBoundary: "gesture action"

@@ -32,7 +32,7 @@ enum ToolDefinitions {
         )
     }
 
-    private static func value(from schemaValue: HeistValue) -> Value {
+    private static func value(from schemaValue: FenceJSONSchemaValue) -> Value {
         switch schemaValue {
         case .string(let value):
             return .string(value)

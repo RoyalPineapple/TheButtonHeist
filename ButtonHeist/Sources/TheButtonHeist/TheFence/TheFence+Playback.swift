@@ -118,30 +118,13 @@ extension TheFence {
     }
 
     func parsePlaybackEvidence(_ evidence: HeistEvidence, stepIndex: Int? = nil) throws -> ParsedRequest {
-        let command = try playbackCommand(for: evidence, stepIndex: stepIndex)
-        try validatePlaybackArguments(evidence.arguments, command: command)
-        return try parseRequest(
-            command: command,
+        try parseRequest(
+            command: playbackCommand(for: evidence, stepIndex: stepIndex),
             arguments: CommandArgumentEnvelope(
                 values: evidence.arguments,
-                elementTarget: evidence.target.map { .matcher($0.matcher, ordinal: $0.ordinal) }
+                elementTarget: evidence.target.map { .matcher($0.matcher, ordinal: $0.ordinal) },
+                isPlaybackStep: true
             )
-        )
-    }
-
-    private func validatePlaybackArguments(_ arguments: [String: HeistValue], command: Command) throws {
-        let acceptedKeys = Set(
-            command.parameters
-                .map(\.key)
-                .filter { !command.descriptor.elementTargetParameterKeys.contains($0) }
-        )
-        guard let unexpectedKey = arguments.keys.sorted().first(where: { !acceptedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: unexpectedKey,
-            observed: arguments[unexpectedKey]?.schemaObservedDescription ?? "missing",
-            expected: "valid \(command.rawValue) playback argument"
         )
     }
 

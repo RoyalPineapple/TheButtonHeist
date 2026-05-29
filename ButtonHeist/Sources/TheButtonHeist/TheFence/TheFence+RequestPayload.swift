@@ -154,7 +154,7 @@ extension TheFence {
             )
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
-        let expectationPayload = try ExpectationPayload(arguments: arguments)
+        let expectationPayload = try parseExpectationPayload(arguments)
         let dispatch: DecodedRequestDispatch
         if command.requestPayloadKind == .waitForChange {
             let target = WaitForChangeTarget(
@@ -196,7 +196,10 @@ extension TheFence {
 
     private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
         let metadataKeys = Set(["requestId"])
-        let parameterKeys = Set(command.parameters.map(\.key))
+        var parameterKeys = Set(command.parameters.map(\.key))
+        if arguments.isPlaybackStep {
+            parameterKeys.subtract(command.descriptor.elementTargetParameterKeys)
+        }
         let allowedKeys = metadataKeys.union(parameterKeys)
         guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
@@ -204,7 +207,9 @@ extension TheFence {
         throw SchemaValidationError(
             field: unexpectedKey,
             observed: arguments.observedDescription(for: unexpectedKey) ?? "missing",
-            expected: "valid \(command.rawValue) parameter"
+            expected: arguments.isPlaybackStep
+                ? "valid \(command.rawValue) playback argument"
+                : "valid \(command.rawValue) parameter"
         )
     }
 

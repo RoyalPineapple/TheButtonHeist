@@ -441,7 +441,7 @@ final class TheBookKeeperTests: XCTestCase {
     // MARK: - Session Log
 
     @ButtonHeistActor
-    func testLogCommandRecordsCommandEvent() async throws {
+    func testLogCommandWritesJSONLLine() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log")
         try logCommand(
@@ -453,26 +453,21 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let entries = try sessionLogEntries(for: session)
-        let header = try sessionLogEntry(in: entries, type: "header")
-        let command = try sessionLogEntry(
-            in: entries,
-            type: "command",
-            requestId: "req-1",
-            command: "activate"
-        )
+        let lines = try sessionLogLines(for: session)
+        let header = try decodeSessionLogLine(DecodedHeaderLogEntry.self, from: lines[0])
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
         XCTAssertEqual(header.type, "header")
         XCTAssertEqual(header.formatVersion, SessionFormatVersion.current)
-        XCTAssertEqual(header.sessionId, session.sessionId)
         XCTAssertEqual(command.type, "command")
         XCTAssertEqual(command.requestId, "req-1")
         XCTAssertEqual(command.command, "activate")
-        XCTAssertFalse(try XCTUnwrap(command.t).isEmpty)
+        XCTAssertFalse(command.t.isEmpty)
+        XCTAssertNil(command.args)
     }
 
     @ButtonHeistActor
-    func testLogResponseRecordsResponseEvent() async throws {
+    func testLogResponseWritesJSONLLine() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-log-resp")
         try bookKeeper.logResponse(
@@ -483,8 +478,8 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let entries = try sessionLogEntries(for: session)
-        let response = try sessionLogEntry(in: entries, type: "response", requestId: "req-1")
+        let lines = try sessionLogLines(for: session)
+        let response = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[1])
 
         XCTAssertEqual(response.type, "response")
         XCTAssertEqual(response.requestId, "req-1")
@@ -524,14 +519,13 @@ final class TheBookKeeperTests: XCTestCase {
         }
         session.logHandle.write(Data("{not-json\n".utf8))
         try bookKeeper.logResponse(requestId: "r2", status: .error, durationMilliseconds: 5, error: "boom")
-        let malformedLineNumber = try sessionLogLineNumber(containing: "{not-json", for: session)
 
         let snapshot = try XCTUnwrap(bookKeeper.sessionLogSnapshot())
         XCTAssertEqual(snapshot.counts.commandCount, 1)
         XCTAssertEqual(snapshot.counts.errorCount, 1)
         XCTAssertTrue(snapshot.projectionStatus.isDegraded)
         XCTAssertEqual(snapshot.projectionStatus.malformedLineCount, 1)
-        XCTAssertEqual(snapshot.projectionStatus.firstMalformedLineNumber, malformedLineNumber)
+        XCTAssertEqual(snapshot.projectionStatus.firstMalformedLineNumber, 3)
         XCTAssertNotNil(snapshot.projectionStatus.firstMalformedLineCause)
         XCTAssertEqual(snapshot.projectionStatus.malformedArtifactCount, 0)
 
@@ -539,12 +533,12 @@ final class TheBookKeeperTests: XCTestCase {
         let projectionStatus = try XCTUnwrap(json["projectionStatus"] as? [String: Any])
         XCTAssertEqual(projectionStatus["degraded"] as? Bool, true)
         XCTAssertEqual(projectionStatus["malformedLineCount"] as? Int, 1)
-        XCTAssertEqual(projectionStatus["firstMalformedLineNumber"] as? Int, malformedLineNumber)
+        XCTAssertEqual(projectionStatus["firstMalformedLineNumber"] as? Int, 3)
         XCTAssertEqual(projectionStatus["malformedArtifactCount"] as? Int, 0)
     }
 
     @ButtonHeistActor
-    func testLogCommandDoesNotPersistRequestArguments() async throws {
+    func testLogCommandOmitsRequestArguments() async throws {
         let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
         try bookKeeper.beginSession(identifier: "test-typed-args")
         try logCommand(bookKeeper,
@@ -555,17 +549,11 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let entries = try sessionLogEntries(for: session)
-        let command = try sessionLogEntry(
-            in: entries,
-            type: "command",
-            requestId: "r1",
-            command: "get_screen"
-        )
-        let content = try sessionLogContent(for: session)
+        let lines = try sessionLogLines(for: session)
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
         XCTAssertEqual(command.command, "get_screen")
-        XCTAssertFalse(content.contains("screen.png"))
+        XCTAssertNil(command.args)
     }
 
     @ButtonHeistActor
@@ -655,10 +643,10 @@ final class TheBookKeeperTests: XCTestCase {
             return XCTFail("Expected active phase")
         }
         let content = try sessionLogContent(for: session)
-        let entries = try sessionLogEntries(for: session)
-        let command = try sessionLogEntry(in: entries, type: "command", requestId: "r1", command: "connect")
+        let lines = content.split(separator: "\n")
+        let command = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
 
-        XCTAssertEqual(command.command, "connect")
+        XCTAssertNil(command.args)
         XCTAssertFalse(content.contains("user-specified-token"))
     }
 
@@ -786,6 +774,10 @@ final class TheBookKeeperTests: XCTestCase {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let data = try encoder.encode(manifest)
+        let encoded = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertFalse(encoded.contains("commandCount"))
+        XCTAssertFalse(encoded.contains("errorCount"))
+        XCTAssertFalse(encoded.contains("artifacts"))
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(SessionManifest.self, from: data)
@@ -951,20 +943,35 @@ final class TheBookKeeperTests: XCTestCase {
         guard case .active(let session) = bookKeeper.phase else {
             return XCTFail("Expected active phase")
         }
-        let entries = try sessionLogEntries(for: session)
-        let commandEntry = try sessionLogEntry(
-            in: entries,
-            type: "command",
-            requestId: "req-42",
-            command: "get_screen"
-        )
-        let responseEntry = try sessionLogEntry(in: entries, type: "response", requestId: "req-42")
+        let lines = try sessionLogLines(for: session)
+
+        let commandEntry = try decodeSessionLogLine(DecodedCommandLogEntry.self, from: lines[1])
+        let responseEntry = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[2])
 
         XCTAssertEqual(commandEntry.requestId, "req-42")
         XCTAssertEqual(commandEntry.type, "command")
         XCTAssertEqual(responseEntry.requestId, "req-42")
         XCTAssertEqual(responseEntry.type, "response")
+        XCTAssertNil(responseEntry.artifact)
         XCTAssertEqual(responseEntry.durationMilliseconds, 120)
+    }
+
+    @ButtonHeistActor
+    func testLogResponseDoesNotTrackArtifactPath() async throws {
+        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
+        try bookKeeper.beginSession(identifier: "test-response-artifact-log")
+        try bookKeeper.logResponse(
+            requestId: "r1",
+            status: .ok,
+            durationMilliseconds: 50
+        )
+        guard case .active(let session) = bookKeeper.phase else {
+            return XCTFail("Expected active phase")
+        }
+        let lines = try sessionLogLines(for: session)
+        let response = try decodeSessionLogLine(DecodedResponseLogEntry.self, from: lines[1])
+        XCTAssertNil(response.artifact)
+        XCTAssertFalse(lines[1].contains("artifact"))
     }
 
     @ButtonHeistActor
@@ -1168,26 +1175,40 @@ final class TheBookKeeperTests: XCTestCase {
     }
 }
 
-private struct DecodedSessionLogEntry: Decodable {
-    let t: String?
+private struct DecodedHeaderLogEntry: Decodable {
     let type: String
-    let formatVersion: String?
-    let sessionId: String?
-    let requestId: String?
-    let command: String?
-    let status: ResponseStatus?
-    let durationMilliseconds: Int?
+    let formatVersion: String
+    let sessionId: String
+}
+
+private struct DecodedCommandLogEntry: Decodable {
+    let t: String
+    let type: String
+    let requestId: String
+    let command: String
+    let args: [String: HeistValue]?
+}
+
+private struct DecodedSessionLogEntry: Decodable {
+    let type: String
+}
+
+private struct DecodedResponseLogEntry: Decodable {
+    let t: String
+    let type: String
+    let requestId: String
+    let status: ResponseStatus
+    let durationMilliseconds: Int
+    let artifact: String?
     let error: String?
 
     private enum CodingKeys: String, CodingKey {
         case t
         case type
-        case formatVersion
-        case sessionId
         case requestId
-        case command
         case status
         case durationMilliseconds = "duration_ms"
+        case artifact
         case error
     }
 }
@@ -1205,36 +1226,6 @@ private func sessionLogEntries(for session: ActiveSession) throws -> [DecodedSes
     try sessionLogLines(for: session).map {
         try decodeSessionLogLine(DecodedSessionLogEntry.self, from: $0)
     }
-}
-
-private func sessionLogEntry(
-    in entries: [DecodedSessionLogEntry],
-    type: String,
-    requestId: String? = nil,
-    command: String? = nil,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) throws -> DecodedSessionLogEntry {
-    let matches = entries.filter { entry in
-        guard entry.type == type else { return false }
-        if let requestId, entry.requestId != requestId { return false }
-        if let command, entry.command != command { return false }
-        return true
-    }
-
-    XCTAssertEqual(matches.count, 1, file: file, line: line)
-    return try XCTUnwrap(matches.first, file: file, line: line)
-}
-
-private func sessionLogLineNumber(
-    containing needle: String,
-    for session: ActiveSession,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) throws -> Int {
-    let lines = try sessionLogLines(for: session)
-    let index = try XCTUnwrap(lines.firstIndex { $0.contains(needle) }, file: file, line: line)
-    return index + 1
 }
 
 private func decodeSessionLogLine<Entry: Decodable>(

@@ -9,7 +9,7 @@ import Foundation
 public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public let captures: [Capture]
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
+    private enum CodingKeys: String, CodingKey {
         case captures
     }
 
@@ -30,7 +30,14 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "AccessibilityTrace")
+        let dynamicContainer = try decoder.container(keyedBy: TraceUnknownKey.self)
+        let allowedKeys: Set<String> = [CodingKeys.captures.stringValue]
+        if let unsupportedKey = dynamicContainer.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) {
+            throw DecodingError.dataCorrupted(DecodingError.Context(
+                codingPath: decoder.codingPath + [unsupportedKey],
+                debugDescription: "Unsupported AccessibilityTrace field: \(unsupportedKey.stringValue)"
+            ))
+        }
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(captures: try container.decode([Capture].self, forKey: .captures))
     }
@@ -127,4 +134,17 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
         integrityIssues.isEmpty
     }
 
+}
+
+private struct TraceUnknownKey: CodingKey {
+    let stringValue: String
+    let intValue: Int? = nil
+
+    init(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue: Int) {
+        nil
+    }
 }

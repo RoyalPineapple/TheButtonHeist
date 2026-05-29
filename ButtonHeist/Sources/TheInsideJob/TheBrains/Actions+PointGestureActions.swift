@@ -23,7 +23,7 @@ extension Actions {
         let semanticTarget = elementTarget.map(SemanticElementTarget.currentCapture)
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
         if let semanticTarget {
-            switch await navigation.actionability.makeActionable(
+            switch await actionability.makeActionable(
                 for: semanticTarget,
                 method: method,
                 deallocatedBoundary: "gesture action"
@@ -77,7 +77,7 @@ extension Actions {
         switch selection {
         case .unitElement(let elementTarget, let start, let end, _):
             let actionableTarget: SemanticActionability.SemanticActionableTarget
-            switch await navigation.actionability.makeActionable(
+            switch await actionability.makeActionable(
                 for: .currentCapture(elementTarget),
                 method: .syntheticSwipe,
                 deallocatedBoundary: "gesture action"

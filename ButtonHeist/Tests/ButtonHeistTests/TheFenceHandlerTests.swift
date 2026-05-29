@@ -3420,6 +3420,20 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testGetInterfaceFullAliasUsesCommandContractRejection() async {
+        await assertValidationError(
+            command: .getInterface,
+            arguments: ["full": .bool(false)],
+            equals: "schema validation failed for full: observed boolean false; expected valid get_interface parameter"
+        )
+        await assertValidationError(
+            command: .getInterface,
+            arguments: ["full": .bool(true)],
+            equals: "schema validation failed for full: observed boolean true; expected valid get_interface parameter"
+        )
+    }
+
+    @ButtonHeistActor
     func testGetInterfaceDefaultNoSubtreeReturnsWholeHierarchy() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let interfaceFixture = selectionTestInterface()
@@ -3861,17 +3875,17 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackScriptValidationAcceptsCanonicalBatchExecutableCommands() async throws {
+    func testPlaybackScriptValidationAcceptsCanonicalPlaybackExecutableCommands() async throws {
         let playback = HeistPlayback(
             app: "com.test.mock",
-            steps: TheFence.Command.batchExecutableCases.map { command in
+            steps: TheFence.Command.playbackExecutableCases.map { command in
                 HeistEvidence(command: command.rawValue)
             }
         )
         let (fence, _) = makeConnectedFence()
         try fence.validateHeistPlayback(playback)
 
-        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.batchExecutableCases.map(\.rawValue))
+        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases.map(\.rawValue))
     }
 
     @ButtonHeistActor
@@ -3897,7 +3911,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackArgumentsUsePlaybackBoundaryValidation() async throws {
+    func testPlaybackInvalidCurrentShapeUsesRequestValidation() async throws {
         let cases: [(name: String, evidence: HeistEvidence, message: String)] = [
             (
                 "unknown scroll parameter",
@@ -3906,6 +3920,22 @@ final class TheFenceHandlerTests: XCTestCase {
                     arguments: ["unexpected": .string("value")]
                 ),
                 "schema validation failed for unexpected: observed string \"value\"; expected valid scroll playback argument"
+            ),
+            (
+                "unknown activate parameter",
+                HeistEvidence(
+                    command: "activate",
+                    arguments: ["heistId": .string("stale_button")]
+                ),
+                "schema validation failed for heistId: observed string \"stale_button\"; expected valid activate playback argument"
+            ),
+            (
+                "request target object is not playback identity",
+                HeistEvidence(
+                    command: "activate",
+                    arguments: ["target": targetValue(identifier: "argument_button")]
+                ),
+                "schema validation failed for target: observed object; expected valid activate playback argument"
             ),
             (
                 "edit_action invalid action type",
@@ -3941,7 +3971,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlaybackScriptValidationRejectsNonExecutableCommands() async throws {
         let (fence, _) = makeConnectedFence()
-        for command in TheFence.Command.allCases where !command.isBatchExecutable {
+        for command in TheFence.Command.allCases where !command.isPlaybackExecutable {
             XCTAssertThrowsError(
                 try fence.validateHeistPlayback(
                     HeistPlayback(app: "com.test.mock", steps: [HeistEvidence(command: command.rawValue)])
@@ -3953,7 +3983,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 }
                 XCTAssertTrue(message.contains("Invalid heist step 0"))
                 XCTAssertTrue(
-                    message.contains("heist step command \"\(command.rawValue)\" is not batch-executable"),
+                    message.contains("heist step command \"\(command.rawValue)\" is not playback-executable"),
                     "Unexpected error for \(command.rawValue): \(message)"
                 )
             }

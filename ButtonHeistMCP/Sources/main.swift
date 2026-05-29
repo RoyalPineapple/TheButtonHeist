@@ -114,7 +114,7 @@ struct ButtonHeistMCPServer {
 
         // Background changes: what happened while the agent was thinking
         for backgroundAccessibilityTrace in backgroundAccessibilityTraces {
-            guard let backgroundDelta = backgroundAccessibilityTrace.backgroundDeltaProjection else { continue }
+            guard let backgroundDelta = backgroundAccessibilityTrace.meaningfulEndpointDeltaProjection else { continue }
             let transient = backgroundDelta.transient
             var lines: [String] = []
             switch backgroundDelta {

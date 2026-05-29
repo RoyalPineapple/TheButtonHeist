@@ -451,7 +451,7 @@ final class TheHandoff {
     @discardableResult
     func tickKeepalive() -> Int {
         connectionLifecycle.tickKeepalive {
-            connection?.send(.ping, requestId: nil)
+            connection?.send(.ping)
         }
     }
 

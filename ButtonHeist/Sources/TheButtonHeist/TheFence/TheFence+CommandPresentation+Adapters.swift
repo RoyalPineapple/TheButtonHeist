@@ -18,18 +18,18 @@ public extension TheFence.Command {
             Button Heist drives iOS apps through the accessibility layer — the same interface \
             VoiceOver uses. Target elements with flat ElementTarget selector fields: \(selectorKeys), \
             not by screen coordinates. \(disambiguatorKeys) only disambiguates matcher results. \
-            The core loop is: \(inlineCode(getInterface.canonicalName)) \
-            to read the app accessibility state, then \(inlineCode(activate.canonicalName))/\
-            \(inlineCode(typeText.canonicalName))/\(inlineCode(scroll.canonicalName))/\
-            \(inlineCode(swipe.canonicalName)) to act with an \(inlineCode(expectationKey)) \
+            The core loop is: \(inlineMCPToolName(for: .getInterface)) \
+            to read the app accessibility state, then \(inlineMCPToolName(for: .activate))/\
+            \(inlineMCPToolName(for: .typeText))/\(inlineMCPToolName(for: .scroll))/\
+            \(inlineMCPToolName(for: .swipe)) to act with an \(inlineCode(expectationKey)) \
             attached. Every response carries a \
             `[while_idle: ...]` block describing what changed since your last call — read it \
             before deciding to re-fetch. When an action produces a transient state (spinner, \
-            loading overlay), call \(inlineCode(waitForChange.canonicalName)) with the same \
+            loading overlay), call \(inlineMCPToolName(for: .waitForChange)) with the same \
             expectation to ride through intermediate states. Use \
-            \(inlineCode(runBatch.canonicalName)) for multi-step sequences with per-step \
-            expectations. Use \(inlineCode(startHeist.canonicalName))/\
-            \(inlineCode(stopHeist.canonicalName)) to record replayable .heist files. \
+            \(inlineMCPToolName(for: .runBatch)) for multi-step sequences with per-step \
+            expectations. Use \(inlineMCPToolName(for: .startHeist))/\
+            \(inlineMCPToolName(for: .stopHeist)) to record replayable .heist files. \
             Full guide: docs/MCP-AGENT-GUIDE.md.
             """
     }
@@ -51,6 +51,10 @@ public extension TheFence.Command {
 }
 
 private extension TheFence.Command {
+    static func inlineMCPToolName(for command: TheFence.Command) -> String {
+        inlineCode(command.canonicalName)
+    }
+
     static func inlineList(_ values: [String]) -> String {
         values.map { inlineCode($0) }.joined(separator: ", ")
     }

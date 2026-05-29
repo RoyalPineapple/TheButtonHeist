@@ -83,7 +83,7 @@ extension TheBookKeeper {
     ) {
         guard case .active(let session) = phase,
               case .recording(let recording) = session.heistRecording else { return }
-        guard request.command.isBatchExecutable else { return }
+        guard request.command.isHeistRecordable else { return }
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
