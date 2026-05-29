@@ -298,15 +298,6 @@ final class Navigation {
         }
     }
 
-    // MARK: - Refresh Convenience
-
-    /// Refresh the accessibility tree into the stash. Returns the new Screen
-    /// or nil if the parser couldn't produce one.
-    @discardableResult
-    func refresh() -> Screen? {
-        stash.refresh()
-    }
-
     // MARK: - Clear
 
     func clearCache() {

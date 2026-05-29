@@ -20,7 +20,7 @@ extension Actions {
         preflight: (@MainActor (TheStash.ScreenElement) -> TheSafecracker.InteractionResult?)? = nil,
         action: @MainActor (SemanticActionability.SemanticActionableTarget) async -> TheSafecracker.InteractionResult
     ) async -> TheSafecracker.InteractionResult {
-        switch await actionability.makeActionable(
+        switch await navigation.actionability.makeActionable(
             for: target,
             method: method,
             deallocatedBoundary: deallocatedBoundary
@@ -46,7 +46,7 @@ extension Actions {
         _ target: SemanticElementTarget
     ) async -> ActivationPolicy.RefreshResult {
         stash.refresh()
-        switch await actionability.makeActionable(
+        switch await navigation.actionability.makeActionable(
             for: target,
             method: .activate,
             deallocatedBoundary: "activation retry"
@@ -246,7 +246,7 @@ extension Actions {
         let liveContainerTarget: TheStash.LiveContainerTarget
         switch stash.resolveLiveContainerTarget(for: containerTarget) {
         case .resolved(let target):
-            if let failure = await actionability.scrollActivationPointIntoBounds(
+            if let failure = await navigation.actionability.scrollActivationPointIntoBounds(
                 target.activationPoint,
                 in: stash.liveScrollView(forContainerPath: containerTarget.path),
                 method: .customAction,

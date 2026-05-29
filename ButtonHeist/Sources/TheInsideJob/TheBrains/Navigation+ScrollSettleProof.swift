@@ -40,7 +40,7 @@ extension Navigation {
         var seenVisibleIds = stash.visibleIds
 
         while true {
-            refresh()
+            stash.refresh()
             let currentVisibleIds = stash.visibleIds
             let newHeistIds = currentVisibleIds.subtracting(seenVisibleIds)
             seenVisibleIds.formUnion(newHeistIds)
