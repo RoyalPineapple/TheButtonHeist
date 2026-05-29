@@ -34,7 +34,7 @@ struct PublicPlaybackFailure: Encodable {
         self.diagnosticCaptureFailure = failure.diagnosticCaptureFailure
         switch failure {
         case .actionFailed(_, let result, let expectation, let interface, _):
-            self.actionResult = PublicActionResponse(result: result, expectation: nil)
+            self.actionResult = PublicActionResponse(commandName: failure.step.command, result: result, expectation: nil)
             if let expectation, !expectation.met {
                 self.expectation = PublicExpectationResult(result: expectation)
             } else {

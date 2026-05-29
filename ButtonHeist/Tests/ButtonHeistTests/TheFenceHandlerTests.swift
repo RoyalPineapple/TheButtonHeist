@@ -1901,7 +1901,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "count": .int(3),
         ])
 
-        guard case .action(let result, _) = response else {
+        guard case .action(_, let result, _) = response else {
             return XCTFail("Expected action failure response, got \(response)")
         }
         XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 2)
@@ -1934,7 +1934,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "count": .int(3),
         ])
 
-        guard case .action(let result, _) = response else {
+        guard case .action(_, let result, _) = response else {
             return XCTFail("Expected final action response, got \(response)")
         }
         XCTAssertEqual(mockConn.sent.adjustmentMessages.count, 3)
@@ -2248,7 +2248,7 @@ final class TheFenceHandlerTests: XCTestCase {
             ]),
         ])
 
-        guard case .action(_, let expectation) = response else {
+        guard case .action(_, _, let expectation) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
         XCTAssertEqual(expectation?.met, false)
@@ -2279,7 +2279,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "timeout": .double(0.2),
         ])
 
-        guard case .action(_, let expectation) = response else {
+        guard case .action(_, _, let expectation) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
         XCTAssertEqual(expectation?.met, false)
@@ -3966,7 +3966,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, mockConn) = makeConnectedFence()
         let response = try await fence.execute(playback: evidence)
 
-        guard case .action(let result, _) = response else {
+        guard case .action(_, let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
         XCTAssertTrue(result.success)
@@ -4152,7 +4152,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(playback: evidence)
 
-        guard case .action(let result, _) = response else {
+        guard case .action(_, let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
         XCTAssertTrue(result.success)

@@ -59,6 +59,7 @@ extension TheFence {
         )
         let validatedResponse = try await validateActionResponse(
             dispatched.response,
+            command: parsed.command,
             expectation: parsed.expectationPayload.expectation,
             expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
             preActionCaptureRef: postDispatch.preActionCaptureRef,
@@ -126,7 +127,7 @@ extension TheFence {
         ) else {
             return nil
         }
-        let response = FenceResponse.action(result: match.result, expectation: match.validation)
+        let response = FenceResponse.action(command: .waitForChange, result: match.result, expectation: match.validation)
         logResponse(requestId: requestId, response: response, durationMs: 0)
         return BackgroundExpectationResponse(
             response: response,
@@ -165,6 +166,7 @@ extension TheFence {
 
     private func validateActionResponse(
         _ response: FenceResponse,
+        command: Command,
         expectation: ActionExpectation?,
         expectationTimeout: Double?,
         preActionCaptureRef: AccessibilityTrace.CaptureRef?,
@@ -174,7 +176,7 @@ extension TheFence {
             let delivery = ActionExpectation.validateDelivery(actionResult)
             if !delivery.met {
                 return ValidatedResponse(
-                    response: .action(result: actionResult, expectation: delivery),
+                    response: .action(command: command, result: actionResult, expectation: delivery),
                     deliveredCaptureRef: nil
                 )
             }
@@ -185,12 +187,13 @@ extension TheFence {
                 )
                 if validation.met {
                     return ValidatedResponse(
-                        response: .action(result: actionResult, expectation: validation),
+                        response: .action(command: command, result: actionResult, expectation: validation),
                         deliveredCaptureRef: nil
                     )
                 }
                 return try await waitForPostActionExpectation(
                     expectation,
+                    command: command,
                     initialResult: actionResult,
                     initialValidation: validation,
                     preActionElements: preActionElements,
@@ -205,6 +208,7 @@ extension TheFence {
 
     private func waitForPostActionExpectation(
         _ expectation: ActionExpectation,
+        command: Command,
         initialResult: ActionResult,
         initialValidation: ExpectationResult,
         preActionElements: [HeistId: HeistElement],
@@ -233,6 +237,7 @@ extension TheFence {
             let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(
                 response: .action(
+                    command: .waitForChange,
                     result: waitResult,
                     expectation: waitValidation
                 ),
@@ -240,7 +245,7 @@ extension TheFence {
             )
         } catch FenceError.actionTimeout {
             return ValidatedResponse(
-                response: .action(result: initialResult, expectation: initialValidation),
+                response: .action(command: command, result: initialResult, expectation: initialValidation),
                 deliveredCaptureRef: nil
             )
         }

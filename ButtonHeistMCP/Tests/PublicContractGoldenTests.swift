@@ -15,7 +15,7 @@ struct PublicContractGoldenTests {
             errorKind: .elementNotFound
         )
         let result = ButtonHeistMCPServer.renderResponse(
-            .action(result: actionResult),
+            .action(command: .activate, result: actionResult),
             backgroundAccessibilityTraces: []
         )
 

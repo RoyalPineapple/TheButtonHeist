@@ -383,7 +383,7 @@ func makeExpectationBatchOutcome(
     let result = ActionResult(success: true, method: .activate)
     return BatchStepOutcome(
         command: command,
-        response: .action(result: result, expectation: expectation),
+        response: .action(command: .activate, result: result, expectation: expectation),
         stopsBatch: stopsBatch
     )
 }

@@ -77,7 +77,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testActionSuccessHumanFormatting() {
         let result = ActionResult(success: true, method: .syntheticTap)
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .oneFingerTap, result: result)
         let output = response.humanFormatted()
         XCTAssertTrue(output.hasPrefix("✓"))
         XCTAssertTrue(output.contains("one_finger_tap"))
@@ -85,21 +85,21 @@ final class FenceResponseTests: XCTestCase {
 
     func testActionSuccessWithValueHumanFormatting() {
         let result = ActionResult(success: true, method: .typeText, payload: .value("Hello"))
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .typeText, result: result)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("value: \"Hello\""))
     }
 
     func testActionSuccessAnimatingHumanFormatting() {
         let result = ActionResult(success: true, method: .syntheticTap, animating: true)
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .oneFingerTap, result: result)
         let output = response.humanFormatted()
         XCTAssertTrue(output.contains("(still animating)"))
     }
 
     func testActionFailureHumanFormatting() {
         let result = ActionResult(success: false, method: .elementNotFound, message: "No element at order 99")
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
         let output = response.humanFormatted()
         XCTAssertTrue(output.hasPrefix("Error:"))
         XCTAssertTrue(output.contains("No element at order 99"))
@@ -210,7 +210,7 @@ final class FenceResponseTests: XCTestCase {
 
     func testActionSuccessJsonFormatting() {
         let result = ActionResult(success: true, method: .syntheticTap, payload: .value("Hello"))
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .oneFingerTap, result: result)
         let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "ok")
         XCTAssertEqual(dict["method"] as? String, "one_finger_tap")
@@ -219,16 +219,16 @@ final class FenceResponseTests: XCTestCase {
 
     func testActionFailureJsonFormatting() {
         let result = ActionResult(success: false, method: .elementNotFound, message: "Not found")
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
         let dict = publicJSONObject(response)
         XCTAssertEqual(dict["status"] as? String, "error")
-        XCTAssertEqual(dict["method"] as? String, "elementNotFound")
+        XCTAssertEqual(dict["method"] as? String, "activate")
         XCTAssertEqual(dict["message"] as? String, "Not found")
     }
 
     func testActionAnimatingJsonFormatting() {
         let result = ActionResult(success: true, method: .syntheticTap, animating: true)
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
         let dict = publicJSONObject(response)
         XCTAssertEqual(dict["animating"] as? Bool, true)
     }
