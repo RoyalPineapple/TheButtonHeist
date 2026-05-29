@@ -52,7 +52,7 @@ extension HeistEvidence {
     func normalizedPlaybackOperation() throws -> NormalizedOperation {
         let playbackArguments = TheFence.CommandArgumentEnvelope(
             values: arguments,
-            playbackSemanticTarget: target,
+            elementTarget: target?.playbackElementTarget,
             isPlaybackStep: true
         )
         switch FenceOperationCatalog.normalizePlaybackStep(
@@ -64,6 +64,12 @@ extension HeistEvidence {
         case .failure(let error):
             throw FenceError.invalidRequest(error.message)
         }
+    }
+}
+
+private extension SemanticActionTarget {
+    var playbackElementTarget: ElementTarget {
+        .matcher(matcher, ordinal: ordinal)
     }
 }
 
