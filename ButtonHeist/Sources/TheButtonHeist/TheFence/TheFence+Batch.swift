@@ -6,8 +6,6 @@ extension TheFence {
 
     // MARK: - Batch Execution and Session State
 
-    public typealias BatchPolicy = TheScore.BatchExecutionPolicy
-
     func handleRunBatch(_ request: RunBatchRequest) async throws -> FenceResponse {
         let batchStart = CFAbsoluteTimeGetCurrent()
         var outcomesByIndex: [Int: BatchStepOutcome] = [:]
@@ -113,7 +111,7 @@ extension TheFence {
 
     private func stoppedIndex(
         outcomesByIndex: [Int: BatchStepOutcome],
-        policy: BatchPolicy
+        policy: BatchExecutionPolicy
     ) -> Int? {
         guard policy == .stopOnError else { return nil }
         return outcomesByIndex

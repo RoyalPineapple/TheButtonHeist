@@ -10,9 +10,6 @@ import TheScore
 private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
 actor SimpleSocketServer {
-    typealias DataHandler = SocketDataHandler
-    typealias Callbacks = SocketServerCallbacks
-
     // MARK: - State Machines
 
     private enum ServerPhase {
@@ -81,7 +78,7 @@ actor SimpleSocketServer {
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
         tlsParameters: NWParameters,
-        callbacks: Callbacks? = nil
+        callbacks: SocketServerCallbacks? = nil
     ) async throws -> UInt16 {
         logger.info("TLS configured for server")
         return try await startListening(
@@ -97,7 +94,7 @@ actor SimpleSocketServer {
     func startPlaintextForTests(
         port: UInt16 = 0,
         bindToLoopback: Bool = false,
-        callbacks: Callbacks? = nil
+        callbacks: SocketServerCallbacks? = nil
     ) async throws -> UInt16 {
         try await startListening(
             port: port,
@@ -111,7 +108,7 @@ actor SimpleSocketServer {
         port: UInt16,
         bindToLoopback: Bool,
         parameters: NWParameters,
-        callbacks: Callbacks?
+        callbacks: SocketServerCallbacks?
     ) async throws -> UInt16 {
         guard case .stopped = serverPhase else {
             throw ServerError.alreadyRunning

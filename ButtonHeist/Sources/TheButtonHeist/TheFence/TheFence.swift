@@ -286,7 +286,7 @@ public final class TheFence {
         commandExecutionState.completeAction(result)
     }
 
-    // Batch execution (`handleRunBatch`, `BatchPolicy`, step-summary building,
+    // Batch execution (`handleRunBatch`, step-summary building,
     // and `currentSessionState`) lives in TheFence+Batch.swift.
 
     // MARK: - Config Target Conversion

@@ -30,7 +30,7 @@ final class TLSIntegrationTests: XCTestCase {
         let tlsParams = try XCTUnwrap(generatedTLSParams, "TLS parameters must be created")
 
         let connected = expectation(description: "client connected to server")
-        let callbacks = SimpleSocketServer.Callbacks(
+        let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in connected.fulfill() }
         )
         let port = try await server.startAsync(port: 0, bindToLoopback: true, tlsParameters: tlsParams, callbacks: callbacks)
@@ -62,7 +62,7 @@ final class TLSIntegrationTests: XCTestCase {
         let echoMessage = Data("hello-tls\n".utf8)
         let echoReceived = expectation(description: "server received message")
 
-        let callbacks = SimpleSocketServer.Callbacks(
+        let callbacks = SocketServerCallbacks(
             onDataReceived: { _, data, respond in
                 respond(data)
                 echoReceived.fulfill()
@@ -140,7 +140,7 @@ final class TLSIntegrationTests: XCTestCase {
         let unexpectedPreAuthData = expectation(description: "no unauthenticated status probe")
         unexpectedPreAuthData.isInverted = true
 
-        let callbacks = SimpleSocketServer.Callbacks(
+        let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in
                 clientConnected.fulfill()
             },

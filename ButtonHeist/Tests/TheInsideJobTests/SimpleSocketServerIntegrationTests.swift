@@ -91,7 +91,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         let clientConnected = expectation(description: "client connected")
         let sendFailed = expectation(description: "send failed")
 
-        let callbacks = SimpleSocketServer.Callbacks(
+        let callbacks = SocketServerCallbacks(
             onClientConnected: { clientId, _ in
                 capturedClientId.withLock { $0 = clientId }
                 clientConnected.fulfill()
@@ -153,7 +153,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         let clientConnected = expectation(description: "client connected")
         let dataReceived = expectation(description: "data received")
 
-        let callbacks = SimpleSocketServer.Callbacks(
+        let callbacks = SocketServerCallbacks(
             onClientConnected: { clientId, _ in
                 capturedClientId.withLock { $0 = clientId }
                 clientConnected.fulfill()
@@ -195,7 +195,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         let clientConnected = expectation(description: "client connected")
         let clientDisconnected = expectation(description: "client disconnected")
 
-        let callbacks = SimpleSocketServer.Callbacks(
+        let callbacks = SocketServerCallbacks(
             onClientConnected: { clientId, _ in
                 capturedClientId.withLock { $0 = clientId }
                 clientConnected.fulfill()
@@ -232,7 +232,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         server = SimpleSocketServer(allowedScopes: [.usb])
         let clientConnected = expectation(description: "scope-rejected client must not be accepted")
         clientConnected.isInverted = true
-        let callbacks = SimpleSocketServer.Callbacks(
+        let callbacks = SocketServerCallbacks(
             onClientConnected: { _, _ in clientConnected.fulfill() }
         )
 

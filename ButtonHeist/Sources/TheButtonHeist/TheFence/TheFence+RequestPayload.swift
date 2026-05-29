@@ -42,7 +42,7 @@ extension TheFence {
 
     struct RunBatchRequest {
         let steps: [RunBatchPreparedStep]
-        let policy: BatchPolicy
+        let policy: BatchExecutionPolicy
     }
 
     struct RunBatchPreparedStep {

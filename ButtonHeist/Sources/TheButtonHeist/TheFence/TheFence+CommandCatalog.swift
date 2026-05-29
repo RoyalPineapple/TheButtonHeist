@@ -627,7 +627,7 @@ extension TheFence.Command {
                     ],
                     arrayItemAdditionalProperties: true
                 ),
-                param(.policy, .string, enumValues: fenceEnumValues(TheFence.BatchPolicy.self)),
+                param(.policy, .string, enumValues: fenceEnumValues(BatchExecutionPolicy.self)),
             ]
             entry.description = """
                 Execute multiple commands in one call. Each step is a JSON object with 'command' set \
