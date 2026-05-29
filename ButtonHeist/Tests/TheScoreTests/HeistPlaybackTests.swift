@@ -10,9 +10,9 @@ final class HeistPlaybackTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.buttonheist.testapp",
             steps: [
-                HeistEvidence(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
-                HeistEvidence(command: "type_text", arguments: ["text": .string("user@example.com")]),
-                HeistEvidence(command: "activate", target: semanticTarget(label: "Submit", traits: [.button])),
+                try HeistEvidence(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
+                try HeistEvidence(command: "type_text", arguments: ["text": .string("user@example.com")]),
+                try HeistEvidence(command: "activate", target: semanticTarget(label: "Submit", traits: [.button])),
             ]
         )
 
@@ -80,7 +80,7 @@ final class HeistPlaybackTests: XCTestCase {
     // MARK: - Heist Step Target Encoding
 
     func testStepEncodesTargetObject() throws {
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "swipe",
             target: semanticTarget(label: "List", traits: [.adjustable]),
             arguments: ["direction": .string("up")]
@@ -98,7 +98,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepRoundTripsTarget() throws {
-        let original = HeistEvidence(
+        let original = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Submit", traits: [.button])
         )
@@ -132,7 +132,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepWithNoTarget() throws {
-        let original = HeistEvidence(
+        let original = try HeistEvidence(
             command: "type_text",
             arguments: ["text": .string("hello")]
         )
@@ -145,7 +145,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepAllowsRecordedHeistIdMetadata() throws {
-        let original = HeistEvidence(
+        let original = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save"),
             recorded: RecordedMetadata(heistId: "recorded_save")
@@ -166,7 +166,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepRejectsNegativeOrdinal() throws {
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save", ordinal: -1)
         )
@@ -181,7 +181,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepWithRecordedMetadata() throws {
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save", traits: [.button]),
             recorded: RecordedMetadata(
@@ -208,7 +208,7 @@ final class HeistPlaybackTests: XCTestCase {
             elements: [makeElement(heistId: "continue", label: "Continue")],
             timestamp: Date(timeIntervalSince1970: 1)
         )
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Continue", traits: [.button]),
             recorded: RecordedMetadata(
@@ -299,8 +299,8 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.coordinateOnly, true)
     }
 
-    func testHeistEvidenceDescriptionComposesTargetArgumentsAndRecording() {
-        let step = HeistEvidence(
+    func testHeistEvidenceDescriptionComposesTargetArgumentsAndRecording() throws {
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save", traits: [.button]),
             arguments: [
@@ -322,6 +322,18 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(step.description, expected)
     }
 
+    func testProgrammaticEvidenceRejectsCaptureHandleTargetWithoutCrashing() {
+        XCTAssertThrowsError(try HeistEvidence(command: "activate", target: .heistId("button_save"))) { error in
+            XCTAssertEqual(error as? HeistEvidenceError, .captureHandleTarget)
+        }
+    }
+
+    func testProgrammaticEvidenceRejectsEmptyMatcherTargetWithoutCrashing() {
+        XCTAssertThrowsError(try HeistEvidence(command: "activate", target: .matcher(ElementMatcher()))) { error in
+            XCTAssertEqual(error as? HeistEvidenceError, .emptyMatcherTarget)
+        }
+    }
+
     // MARK: - Full Heist JSON Shape
 
     func testFullScriptJsonShape() throws {
@@ -329,7 +341,7 @@ final class HeistPlaybackTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
-                HeistEvidence(
+                try HeistEvidence(
                     command: "activate",
                     target: semanticTarget(label: "Go", traits: [.button]),
                     recorded: RecordedMetadata(heistId: "button_go")

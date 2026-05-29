@@ -233,7 +233,7 @@ extension TheBookKeeper {
             )
             : nil
 
-        return HeistEvidence(
+        return try HeistEvidence(
             command: request.command.rawValue,
             target: target,
             arguments: projection.arguments,
