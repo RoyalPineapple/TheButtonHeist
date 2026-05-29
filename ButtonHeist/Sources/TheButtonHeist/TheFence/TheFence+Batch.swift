@@ -85,6 +85,7 @@ extension TheFence {
             return BatchStepOutcome(
                 command: plannedStep.commandName,
                 response: .action(
+                    command: plannedStep.command,
                     result: finalResult,
                     expectation: stepResult.expectation ?? validatedExpectation(
                         for: plannedStep.typedStep,

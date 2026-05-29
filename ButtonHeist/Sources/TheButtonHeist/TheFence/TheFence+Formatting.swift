@@ -25,8 +25,8 @@ extension FenceResponse {
             return formatDeviceList(devices)
         case .interface(let interface, _):
             return formatInterface(interface)
-        case .action(let result, let expectation):
-            var text = formatActionResult(result)
+        case .action(let command, let result, let expectation):
+            var text = formatActionResult(command: command, result)
             if let expectation {
                 if expectation.met {
                     text += "  [expectation met]"
@@ -293,8 +293,8 @@ extension FenceResponse {
         return output
     }
 
-    private func formatActionResult(_ result: ActionResult) -> String {
-        let methodName = TheFence.Command.canonicalName(forActionResultMethod: result.method)
+    private func formatActionResult(command: TheFence.Command, _ result: ActionResult) -> String {
+        let methodName = command.rawValue
         if result.success {
             var output = "✓ \(methodName)"
             if case .value(let value) = result.payload {

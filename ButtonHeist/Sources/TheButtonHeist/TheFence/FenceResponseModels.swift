@@ -131,18 +131,18 @@ extension BatchStepOutcome {
     }
 
     var accessibilityTrace: AccessibilityTrace? {
-        guard case .action(let result, _) = response else { return nil }
+        guard case .action(_, let result, _) = response else { return nil }
         return result.accessibilityTrace
     }
 
     var expectationCounted: Bool {
-        guard case .action(_, let expectation) = response else { return false }
+        guard case .action(_, _, let expectation) = response else { return false }
         guard let checked = expectation?.expectation else { return false }
         return checked != .delivery
     }
 
     var expectationMet: Bool? {
-        guard expectationCounted, case .action(_, let expectation) = response else { return nil }
+        guard expectationCounted, case .action(_, _, let expectation) = response else { return nil }
         return expectation?.met
     }
 
@@ -175,7 +175,7 @@ extension BatchStepOutcome {
         expectationMet: Bool?
     ) -> BatchStepSummary {
         switch response {
-        case .action(let result, _):
+        case .action(_, let result, _):
             return BatchStepSummary(
                 command: command,
                 deltaKind: result.accessibilityDelta?.kindRawValue,
@@ -347,7 +347,7 @@ public enum FenceResponse {
     case pong(PongPayload)
     case devices([DiscoveredDevice])
     case interface(Interface, detail: InterfaceDetail = .summary)
-    case action(result: ActionResult, expectation: ExpectationResult? = nil)
+    case action(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult? = nil)
     /// Screenshot written to disk. `path` is the resolved filesystem location.
     case screenshot(path: String, payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
     /// Screenshot held in memory as base64 PNG. Returned only when inline data
@@ -375,7 +375,7 @@ public enum FenceResponse {
 
     /// Extract the ActionResult if this response wraps one (for expectation checking).
     var actionResult: ActionResult? {
-        if case .action(let result, _) = self { return result }
+        if case .action(_, let result, _) = self { return result }
         return nil
     }
 
@@ -392,7 +392,7 @@ public enum FenceResponse {
         switch self {
         case .error:
             return true
-        case .action(let result, let expectation):
+        case .action(_, let result, let expectation):
             return !result.success || expectation?.met == false
         case .batch(let outcomes, _, _):
             return outcomes.stoppedFailedIndex != nil

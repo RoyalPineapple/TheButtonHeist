@@ -36,6 +36,6 @@ extension TheFence.ParsedRequest {
 
 private extension TheFence.Command {
     var recordsTimeoutAsHeistArgument: Bool {
-        descriptor.actionResultMethod == .waitFor || descriptor.actionResultMethod == .waitForChange
+        self == .waitFor || self == .waitForChange
     }
 }

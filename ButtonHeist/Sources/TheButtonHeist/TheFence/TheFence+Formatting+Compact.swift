@@ -34,8 +34,8 @@ extension FenceResponse {
             var lines: [String] = [interface.screenDescription, header]
             lines.append(contentsOf: Self.compactTreeLines(interface, detail: detail))
             return lines.joined(separator: "\n")
-        case .action(let result, let expectation):
-            return compactActionResult(result, expectation: expectation)
+        case .action(let command, let result, let expectation):
+            return compactActionResult(command: command, result, expectation: expectation)
         case .screenshot(let path, let payload, _):
             return "screenshot: \(path) (\(Int(payload.width))x\(Int(payload.height)))"
         case .screenshotData(let payload, _):

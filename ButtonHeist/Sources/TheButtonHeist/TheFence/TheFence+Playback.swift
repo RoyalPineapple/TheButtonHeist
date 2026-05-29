@@ -201,7 +201,7 @@ extension TheFence {
                 interface: nil,
                 diagnosticCaptureFailure: nil
             )
-        case .action(let result, let expectation) where !result.success || expectation?.met == false:
+        case .action(_, let result, let expectation) where !result.success || expectation?.met == false:
             return .actionFailed(
                 step: failedStep,
                 result: result,
