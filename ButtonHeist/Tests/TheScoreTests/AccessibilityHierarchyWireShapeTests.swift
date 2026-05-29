@@ -5,14 +5,13 @@ import XCTest
 /// Wire-shape tests for the public `Interface` tree.
 ///
 /// The canonical wire payload is the parser's full-fidelity hierarchy plus
-/// Button Heist annotations. These tests pin the explicit public shape so
-/// compiler-derived enum payloads cannot drift into the protocol.
+/// Button Heist annotations.
 final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    func testElementLeafCarriesParserElementAndTraversalIndexWithoutCompilerPayload() throws {
+    func testElementLeafCarriesParserElementAndTraversalIndex() throws {
         let element = sampleElement(heistId: "btn", label: "OK")
         let interface = makeTestInterface(nodes: [testElement(element)])
 
@@ -20,14 +19,13 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
         let tree = try XCTUnwrap(payload["tree"] as? [[String: Any]])
         let elementPayload = try XCTUnwrap(tree.first?["element"] as? [String: Any])
-        XCTAssertNil(elementPayload["_0"])
         XCTAssertEqual(elementPayload["description"] as? String, "Button")
         XCTAssertEqual(elementPayload["label"] as? String, "OK")
         XCTAssertEqual(elementPayload["traversalIndex"] as? Int, 0)
         XCTAssertNil(payload["elements"])
     }
 
-    func testContainerCarriesParserContainerAndChildrenWithoutCompilerPayload() throws {
+    func testContainerCarriesParserContainerAndChildren() throws {
         let interface = makeTestInterface(nodes: [
             testContainer(
                 makeTestAccessibilityContainer(type: .list, frameWidth: 320, frameHeight: 200),
@@ -39,7 +37,6 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
         let tree = try XCTUnwrap(payload["tree"] as? [[String: Any]])
         let containerPayload = try XCTUnwrap(tree.first?["container"] as? [String: Any])
-        XCTAssertNil(containerPayload["_0"])
         let type = try XCTUnwrap(containerPayload["type"] as? [String: Any])
         XCTAssertNotNil(type["list"])
         let frame = try XCTUnwrap(containerPayload["frame"] as? [String: Any])
@@ -106,61 +103,11 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         XCTAssertEqual(decoded.elements, [element])
     }
 
-    func testInterfaceRejectsCompilerDerivedElementTreePayload() throws {
-        let interface = makeTestInterface(nodes: [testElement(sampleElement())])
-        var payload = try encodeJSON(interface)
-        var tree = try XCTUnwrap(payload["tree"] as? [[String: Any]])
-        var node = try XCTUnwrap(tree.first)
-        let element = try XCTUnwrap(node["element"] as? [String: Any])
-        node["element"] = [
-            "_0": element.filter { $0.key != "traversalIndex" },
-            "traversalIndex": try XCTUnwrap(element["traversalIndex"]),
-        ]
-        tree[0] = node
-        payload["tree"] = tree
-
-        let data = try JSONSerialization.data(withJSONObject: payload)
-
-        XCTAssertThrowsError(try decoder.decode(Interface.self, from: data)) { error in
-            XCTAssertTrue(String(describing: error).contains("_0"))
-        }
-    }
-
-    func testInterfaceRejectsCompilerDerivedContainerTreePayload() throws {
-        let interface = makeTestInterface(nodes: [
-            testContainer(
-                makeTestAccessibilityContainer(type: .list, frameWidth: 320, frameHeight: 200),
-                children: [testElement(sampleElement())]
-            ),
-        ])
-        var payload = try encodeJSON(interface)
-        var tree = try XCTUnwrap(payload["tree"] as? [[String: Any]])
-        var node = try XCTUnwrap(tree.first)
-        let container = try XCTUnwrap(node["container"] as? [String: Any])
-        node["container"] = [
-            "_0": container.filter { $0.key != "children" },
-            "children": try XCTUnwrap(container["children"]),
-        ]
-        tree[0] = node
-        payload["tree"] = tree
-
-        let data = try JSONSerialization.data(withJSONObject: payload)
-
-        XCTAssertThrowsError(try decoder.decode(Interface.self, from: data)) { error in
-            XCTAssertTrue(String(describing: error).contains("_0"))
-        }
-    }
-
     private func encodeInterfacePayload(_ interface: Interface) throws -> [String: Any] {
         let envelope = ResponseEnvelope(message: .interface(interface))
         let data = try encoder.encode(envelope)
         let dict = try jsonObject(data)
         return try XCTUnwrap(dict["payload"] as? [String: Any])
-    }
-
-    private func encodeJSON<T: Encodable>(_ value: T) throws -> [String: Any] {
-        let data = try encoder.encode(value)
-        return try jsonObject(data)
     }
 
     private func jsonObject(_ data: Data) throws -> [String: Any] {

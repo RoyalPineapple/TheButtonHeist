@@ -374,7 +374,6 @@ private struct InterfaceElementWirePayload: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case traversalIndex
-        case compilerSynthesizedPayload = "_0"
     }
 
     init(element: AccessibilityElement, traversalIndex: Int) {
@@ -384,7 +383,6 @@ private struct InterfaceElementWirePayload: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        try Self.rejectCompilerPayload(in: container)
         traversalIndex = try container.decode(Int.self, forKey: .traversalIndex)
         element = try AccessibilityElement(from: decoder)
     }
@@ -396,17 +394,6 @@ private struct InterfaceElementWirePayload: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(traversalIndex, forKey: .traversalIndex)
     }
-
-    private static func rejectCompilerPayload(
-        in container: KeyedDecodingContainer<CodingKeys>
-    ) throws {
-        guard container.contains(.compilerSynthesizedPayload) else { return }
-        throw DecodingError.dataCorruptedError(
-            forKey: .compilerSynthesizedPayload,
-            in: container,
-            debugDescription: "Interface element wire payload must not use compiler-derived _0 wrapper"
-        )
-    }
 }
 
 private struct InterfaceContainerWirePayload: Codable {
@@ -415,7 +402,6 @@ private struct InterfaceContainerWirePayload: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case children
-        case compilerSynthesizedPayload = "_0"
     }
 
     init(container: AccessibilityContainer, children: [InterfaceTreeWireNode]) {
@@ -425,7 +411,6 @@ private struct InterfaceContainerWirePayload: Codable {
 
     init(from decoder: Decoder) throws {
         let codingContainer = try decoder.container(keyedBy: CodingKeys.self)
-        try Self.rejectCompilerPayload(in: codingContainer)
         children = try codingContainer.decode([InterfaceTreeWireNode].self, forKey: .children)
         container = try AccessibilityContainer(from: decoder)
     }
@@ -436,17 +421,6 @@ private struct InterfaceContainerWirePayload: Codable {
         try container.encode(to: encoder)
         var codingContainer = encoder.container(keyedBy: CodingKeys.self)
         try codingContainer.encode(children, forKey: .children)
-    }
-
-    private static func rejectCompilerPayload(
-        in container: KeyedDecodingContainer<CodingKeys>
-    ) throws {
-        guard container.contains(.compilerSynthesizedPayload) else { return }
-        throw DecodingError.dataCorruptedError(
-            forKey: .compilerSynthesizedPayload,
-            in: container,
-            debugDescription: "Interface container wire payload must not use compiler-derived _0 wrapper"
-        )
     }
 }
 
