@@ -193,6 +193,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(PinchTarget.self, from: Data(json.utf8)))
     }
 
+    func testPinchTargetRejectsUnknownField() {
+        let json = #"{"scale":0.5,"centerX":10,"centerY":20,"legacyScale":2}"#
+        XCTAssertThrowsError(try decoder.decode(PinchTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown pinch target field"), "\(error)")
+        }
+    }
+
     // MARK: - RotateTarget
 
     func testRotateTargetRoundTrip() throws {
@@ -222,6 +229,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(RotateTarget.self, from: Data(json.utf8)))
     }
 
+    func testRotateTargetRejectsUnknownField() {
+        let json = #"{"angle":1.57,"centerX":10,"centerY":20,"legacyRadius":100}"#
+        XCTAssertThrowsError(try decoder.decode(RotateTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown rotate target field"), "\(error)")
+        }
+    }
+
     // MARK: - TwoFingerTapTarget
 
     func testTwoFingerTapTargetRoundTrip() throws {
@@ -246,6 +260,13 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTwoFingerTapTargetRejectsMissingCenter() {
         let json = #"{}"#
         XCTAssertThrowsError(try decoder.decode(TwoFingerTapTarget.self, from: Data(json.utf8)))
+    }
+
+    func testTwoFingerTapTargetRejectsUnknownField() {
+        let json = #"{"centerX":10,"centerY":20,"legacySpread":60}"#
+        XCTAssertThrowsError(try decoder.decode(TwoFingerTapTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown two finger tap target field"), "\(error)")
+        }
     }
 
     // MARK: - PathPoint

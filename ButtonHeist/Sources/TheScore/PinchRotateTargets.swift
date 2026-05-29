@@ -2,7 +2,7 @@ public struct PinchTarget: Codable, Sendable {
     public static let defaultSpread = 100.0
     public static let defaultDuration = 0.5
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case scale
         case spread
         case duration
@@ -34,9 +34,14 @@ public struct PinchTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.center = try decodeRequiredGestureCenterSelection(from: decoder)
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            additional: gestureCenterFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            typeName: "pinch target"
+        )
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.scale = try container.decode(Double.self, forKey: .scale)
+        self.center = try decodeRequiredGestureCenterSelection(from: decoder)
         self.spread = try container.decodeIfPresent(Double.self, forKey: .spread)
         self.duration = try container.decodeIfPresent(Double.self, forKey: .duration)
     }
@@ -65,7 +70,7 @@ public struct RotateTarget: Codable, Sendable {
     public static let defaultRadius = 100.0
     public static let defaultDuration = 0.5
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case angle
         case radius
         case duration
@@ -97,9 +102,14 @@ public struct RotateTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
-        self.center = try decodeRequiredGestureCenterSelection(from: decoder)
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            additional: gestureCenterFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            typeName: "rotate target"
+        )
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.angle = try container.decode(Double.self, forKey: .angle)
+        self.center = try decodeRequiredGestureCenterSelection(from: decoder)
         self.radius = try container.decodeIfPresent(Double.self, forKey: .radius)
         self.duration = try container.decodeIfPresent(Double.self, forKey: .duration)
     }
@@ -127,7 +137,7 @@ extension RotateTarget: CustomStringConvertible {
 public struct TwoFingerTapTarget: Codable, Sendable {
     public static let defaultSpread = 40.0
 
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case spread
     }
 
@@ -147,6 +157,11 @@ public struct TwoFingerTapTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            additional: gestureCenterFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            typeName: "two finger tap target"
+        )
         self.center = try decodeRequiredGestureCenterSelection(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.spread = try container.decodeIfPresent(Double.self, forKey: .spread)

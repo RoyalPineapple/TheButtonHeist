@@ -243,38 +243,6 @@ public struct DrawBezierTarget: Codable, Sendable {
     }
 }
 
-private struct DrawTargetUnknownKey: CodingKey {
-    var stringValue: String
-    var intValue: Int?
-
-    init(stringValue: String) {
-        self.stringValue = stringValue
-        intValue = nil
-    }
-
-    init?(intValue: Int) {
-        stringValue = "\(intValue)"
-        self.intValue = intValue
-    }
-}
-
-private extension Decoder {
-    func rejectUnknownKeys<K>(
-        allowed keyType: K.Type,
-        typeName: String
-    ) throws where K: CodingKey & CaseIterable {
-        let knownKeys = Set(keyType.allCases.map(\.stringValue))
-        let dynamicContainer = try container(keyedBy: DrawTargetUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: codingPath + [unknownKey],
-            debugDescription: "Unknown \(typeName) field \"\(unknownKey.stringValue)\""
-        ))
-    }
-}
-
 extension DrawBezierTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("drawBezier", [

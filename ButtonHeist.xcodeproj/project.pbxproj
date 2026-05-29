@@ -419,6 +419,7 @@
 		E5BC40CAB1D5966E1F9191AC /* TapTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C88F950573F5883D9F3B15 /* TapTargets.swift */; };
 		E5D5E025A0672D93F8FA9D40 /* ScreenFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D79C29B3000357A40270A6 /* ScreenFactory.swift */; };
 		E6249B5295FE8C0005B5066A /* TheTripwire+Pulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC74D304B3A4C3503A77A1B3 /* TheTripwire+Pulse.swift */; };
+		E66BC08F71EB5D20C93EE868 /* StrictDecoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7163A8DEDA3A8FBACE0872 /* StrictDecoding.swift */; };
 		E697246EFA942D8649CD623D /* TheFence+CommandPresentation+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66C9E1D1730C02AB6C40F98B /* TheFence+CommandPresentation+Session.swift */; };
 		E7B024D8233DE5634603458C /* HeistPlaybackReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E2CC1F69874C1BC9C88BBD /* HeistPlaybackReport.swift */; };
 		E84B186FCA145561549DE2EB /* IdAssignmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D49CBF2F9D6B021BBD2C282F /* IdAssignmentTests.swift */; };
@@ -952,6 +953,7 @@
 		D99E915C8B258173B025852E /* swift-crypto_CryptoBoringWrapper.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CryptoBoringWrapper.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB39FB885D566EFC3F947714 /* ActionExpectation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionExpectation.swift; sourceTree = "<group>"; };
 		DB4DDD1535AD9C1FE02A2C86 /* AuthFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthFlowTests.swift; sourceTree = "<group>"; };
+		DB7163A8DEDA3A8FBACE0872 /* StrictDecoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrictDecoding.swift; sourceTree = "<group>"; };
 		DBB214DE813D7B7AAC1D5FCA /* CancellableSleep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellableSleep.swift; sourceTree = "<group>"; };
 		DBFD1ED73E1E76F4C0DFCE1F /* InterfaceTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceTestHelpers.swift; sourceTree = "<group>"; };
 		DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BezierSamplerTests.swift; sourceTree = "<group>"; };
@@ -1569,6 +1571,7 @@
 				B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */,
 				439B35798F06B42BE1C978A6 /* ServerMessages+WireCoding.swift */,
 				1D53B2D3E81CB69878BE8422 /* ServerStatusPayloads.swift */,
+				DB7163A8DEDA3A8FBACE0872 /* StrictDecoding.swift */,
 				D1AE8EEEAC75BD6D6F06E0C7 /* SwipeTargets.swift */,
 				91C88F950573F5883D9F3B15 /* TapTargets.swift */,
 				F3E57C93FA6D48F7EA91EAE4 /* TextAndWaitCommandPayloads.swift */,
@@ -2075,6 +2078,7 @@
 				500C86B095B0F024D2F4B97C /* ServerMessages+WireCoding.swift in Sources */,
 				EF33A29DE94964545E58B8E8 /* ServerMessages.swift in Sources */,
 				ABFAA551D9A60C474DCA5C48 /* ServerStatusPayloads.swift in Sources */,
+				E66BC08F71EB5D20C93EE868 /* StrictDecoding.swift in Sources */,
 				5CDE8F942CDE1B58C49FF0B2 /* SwipeTargets.swift in Sources */,
 				E5BC40CAB1D5966E1F9191AC /* TapTargets.swift in Sources */,
 				388F0487801F4A25F6C30E9B /* TextAndWaitCommandPayloads.swift in Sources */,

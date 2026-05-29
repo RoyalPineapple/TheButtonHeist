@@ -1086,7 +1086,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPinchMissingScale() async {
         await assertOperationValidationError(
             command: .pinch,
-            equals: "schema validation failed for scale: observed missing; expected number > 0"
+            equals: "schema validation failed for scale: observed missing; expected present"
         )
     }
 
@@ -1095,7 +1095,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .pinch,
             arguments: ["scale": .double(2.0)],
-            equals: "Pinch requires target object or center coordinates (centerX, centerY)"
+            equals: "center requires an element target or center coordinates"
         )
     }
 
@@ -1119,6 +1119,24 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPinchWithIdentifierDispatchesCanonicalPayload() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(operation: normalizedOperation(
+            command: .pinch,
+            arguments: [
+                "scale": .double(2.0),
+                "target": matcherTargetValue(identifier: "map"),
+            ]
+        ))
+        guard let (message, _) = mockConn.sent.last,
+              case .pinch(let target) = message else {
+            XCTFail("Expected pinch message")
+            return
+        }
+        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "map"))))
+    }
+
+    @ButtonHeistActor
     func testRotateWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(operation: normalizedOperation(
@@ -1138,10 +1156,28 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRotateWithIdentifierDispatchesCanonicalPayload() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(operation: normalizedOperation(
+            command: .rotate,
+            arguments: [
+                "angle": .double(1.57),
+                "target": matcherTargetValue(identifier: "dial"),
+            ]
+        ))
+        guard let (message, _) = mockConn.sent.last,
+              case .rotate(let target) = message else {
+            XCTFail("Expected rotate message")
+            return
+        }
+        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "dial"))))
+    }
+
+    @ButtonHeistActor
     func testRotateMissingAngle() async {
         await assertOperationValidationError(
             command: .rotate,
-            equals: "schema validation failed for angle: observed missing; expected number"
+            equals: "schema validation failed for angle: observed missing; expected present"
         )
     }
 
@@ -1150,7 +1186,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .rotate,
             arguments: ["angle": .double(1.57)],
-            equals: "Rotate requires target object or center coordinates (centerX, centerY)"
+            equals: "center requires an element target or center coordinates"
         )
     }
 
@@ -1172,6 +1208,21 @@ final class TheFenceHandlerTests: XCTestCase {
             return
         }
         XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
+    }
+
+    @ButtonHeistActor
+    func testTwoFingerTapWithIdentifierDispatchesCanonicalPayload() async {
+        let (fence, mockConn) = makeConnectedFence()
+        _ = try? await fence.execute(operation: normalizedOperation(
+            command: .twoFingerTap,
+            arguments: ["target": matcherTargetValue(identifier: "photo")]
+        ))
+        guard let (message, _) = mockConn.sent.last,
+              case .twoFingerTap(let target) = message else {
+            XCTFail("Expected two finger tap message")
+            return
+        }
+        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "photo"))))
     }
 
     // MARK: - Draw Path Validation
