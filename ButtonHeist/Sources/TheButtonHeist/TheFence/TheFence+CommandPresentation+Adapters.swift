@@ -52,11 +52,7 @@ public extension TheFence.Command {
 
 private extension TheFence.Command {
     static func inlineMCPToolName(for command: TheFence.Command) -> String {
-        inlineCode(mcpToolName(for: command))
-    }
-
-    static func mcpToolName(for command: TheFence.Command) -> String {
-        command.canonicalName
+        inlineCode(command.canonicalName)
     }
 
     static func inlineList(_ values: [String]) -> String {
