@@ -80,8 +80,8 @@ extension TheBrains {
 
         var builder = ActionResultBuilder(
             method: .batchExecutionPlan,
-            screenName: screenName,
-            screenId: screenId
+            screenName: stash.lastScreenName,
+            screenId: stash.lastScreenId
         )
         builder.message = batchExecutionMessage(
             completedCount: stepResults.count(where: { !$0.isSkipped }),
