@@ -155,11 +155,11 @@ final class SemanticActionability {
         revealMovedViewport: Bool
     ) async -> SemanticActionabilityResult {
         let liveTarget = actionableTarget.liveTarget
-        guard !Self.activationPointHasPreferredPlacement(liveTarget.activationPoint) else {
+        guard !Self.interactionComfortZone.contains(liveTarget.activationPoint) else {
             return .actionable(actionableTarget)
         }
         guard !revealMovedViewport else {
-            if Self.activationPointIsOnScreen(liveTarget.activationPoint) {
+            if ScreenMetrics.current.bounds.contains(liveTarget.activationPoint) {
                 return .actionable(actionableTarget)
             }
             return .failed(.geometryNotActionable(
@@ -198,7 +198,7 @@ final class SemanticActionability {
             deallocatedBoundary: "activation point placement"
         ) {
         case .success(let refreshedTarget):
-            if Self.activationPointIsOnScreen(refreshedTarget.liveTarget.activationPoint) {
+            if ScreenMetrics.current.bounds.contains(refreshedTarget.liveTarget.activationPoint) {
                 return .actionable(refreshedTarget)
             }
             return .failed(.geometryNotActionable(
@@ -292,18 +292,18 @@ final class SemanticActionability {
         unsafeProgrammaticScrollMessage: String?,
         scrollFailedMessage: String
     ) async -> SemanticActionabilityFailure? {
-        if Self.activationPointHasPreferredPlacement(activationPoint) {
+        if Self.interactionComfortZone.contains(activationPoint) {
             return nil
         }
         guard let scrollView else {
-            if Self.activationPointIsOnScreen(activationPoint) {
+            if ScreenMetrics.current.bounds.contains(activationPoint) {
                 return nil
             }
             return noScrollViewFailure
         }
         if scrollView.bhIsUnsafeForProgrammaticScrolling,
            let unsafeProgrammaticScrollMessage {
-            if Self.activationPointIsOnScreen(activationPoint) {
+            if ScreenMetrics.current.bounds.contains(activationPoint) {
                 return nil
             }
             return .geometryNotActionable(unsafeProgrammaticScrollMessage, method: method)
@@ -315,7 +315,7 @@ final class SemanticActionability {
             preferredScreenRect: Self.interactionComfortZone,
             minimumScreenRect: ScreenMetrics.current.bounds
         ) else {
-            if Self.activationPointIsOnScreen(activationPoint) {
+            if ScreenMetrics.current.bounds.contains(activationPoint) {
                 return nil
             }
             return .geometryNotActionable(scrollFailedMessage, method: method)
@@ -339,9 +339,6 @@ final class SemanticActionability {
         }
     }
 
-    static func activationPointHasPreferredPlacement(_ activationPoint: CGPoint) -> Bool { interactionComfortZone.contains(activationPoint) }
-
-    static func activationPointIsOnScreen(_ activationPoint: CGPoint) -> Bool { ScreenMetrics.current.bounds.contains(activationPoint) }
 }
 
 #endif // canImport(UIKit) && DEBUG
