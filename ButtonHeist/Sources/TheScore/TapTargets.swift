@@ -10,6 +10,10 @@ public struct TapTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: gesturePointFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            typeName: "tap target"
+        )
         self.selection = try decodeRequiredGesturePointSelection(from: decoder)
     }
 
@@ -27,7 +31,7 @@ extension TapTarget: CustomStringConvertible {
 }
 
 public struct LongPressTarget: Codable, Sendable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case duration
     }
 
@@ -45,6 +49,11 @@ public struct LongPressTarget: Codable, Sendable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            additional: gesturePointFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            typeName: "long press target"
+        )
         self.selection = try decodeRequiredGesturePointSelection(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.duration = try container.decodeIfPresent(Double.self, forKey: .duration) ?? 0.5

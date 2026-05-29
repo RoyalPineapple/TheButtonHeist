@@ -29,17 +29,8 @@ extension TheFence {
     }
 
     func decodeTwoFingerTapTarget(_ request: some CommandArgumentReadable) throws -> TwoFingerTapTarget {
-        let center = try decodeRequiredPointIntent(
-            request: request,
-            elementTarget: try decodedElementTarget(request),
-            xKey: "centerX",
-            yKey: "centerY",
-            field: "centerX/centerY",
-            missingMessage: "Two finger tap requires target object or center coordinates (centerX, centerY)"
-        )
-        return TwoFingerTapTarget(
-            center: center,
-            spread: try request.positiveNumber("spread")
-        )
+        let target = try request.inlineElementTargetArgument().decodeCommandPayload(TwoFingerTapTarget.self)
+        try validatePositiveGestureNumber(target.spread, field: "spread")
+        return target
     }
 }
