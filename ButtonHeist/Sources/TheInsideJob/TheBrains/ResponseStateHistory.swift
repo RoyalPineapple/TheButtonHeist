@@ -5,59 +5,31 @@
 @MainActor
 final class ResponseStateHistory {
 
-    /// State captured after each response sent to the driver.
-    struct SentState {
-        let beforeState: TheBrains.BeforeState
-
-        var interfaceHash: String {
-            beforeState.interfaceHash
-        }
-
-        var captureHash: String {
-            beforeState.capture.hash
-        }
-
-        var screenId: String? {
-            beforeState.screenId
-        }
-    }
-
     private enum History {
         case fresh
-        case sent(SentState)
+        case sent(TheBrains.BeforeState)
     }
 
     private var history: History = .fresh
 
-    var lastSentState: SentState? {
-        guard case .sent(let state) = history else { return nil }
-        return state
-    }
-
-    var lastSentScreenId: String? {
-        lastSentState?.screenId
+    var lastSentBeforeState: TheBrains.BeforeState? {
+        guard case .sent(let beforeState) = history else { return nil }
+        return beforeState
     }
 
     var waitForChangeBaseline: TheBrains.BeforeState? {
-        guard let state = lastSentState, !state.captureHash.isEmpty else { return nil }
-        return state.beforeState
+        guard let beforeState = lastSentBeforeState, !beforeState.capture.hash.isEmpty else { return nil }
+        return beforeState
     }
 
     func record(_ beforeState: TheBrains.BeforeState) {
-        history = .sent(SentState(beforeState: beforeState))
+        history = .sent(beforeState)
     }
 
     func reset() {
         history = .fresh
     }
 
-    func screenChangedSinceLastSent(currentScreen: Screen) -> Bool {
-        guard let state = lastSentState else { return false }
-        return ScreenClassifier.classify(
-            before: state.beforeState.screenSnapshot,
-            after: ScreenClassifier.snapshot(of: currentScreen)
-        ).isScreenChange
-    }
 }
 
 #endif // DEBUG

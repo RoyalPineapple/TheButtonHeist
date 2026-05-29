@@ -311,13 +311,6 @@ final class TheBrains {
 
     // MARK: - Response State Tracking
 
-    typealias SentState = ResponseStateHistory.SentState
-
-    /// The state of the last response sent to the driver, if any.
-    var lastSentState: SentState? {
-        responseStateHistory.lastSentState
-    }
-
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
         responseStateHistory.record(captureSemanticState())
@@ -402,15 +395,15 @@ final class TheBrains {
     /// Check if the accessibility tree changed since the last response and
     /// return the public accessibility trace.
     func computeBackgroundAccessibilityTrace() async -> AccessibilityTrace? {
-        guard let sent = responseStateHistory.lastSentState else { return nil }
+        guard let baseline = responseStateHistory.lastSentBeforeState else { return nil }
         guard refresh() != nil else { return nil }
-        let current = await semanticStateAfterVisibleRefresh(baseline: sent.beforeState)
+        let current = await semanticStateAfterVisibleRefresh(baseline: baseline)
         let classification = ScreenClassifier.classify(
-            before: sent.beforeState.screenSnapshot,
+            before: baseline.screenSnapshot,
             after: current.screenSnapshot
         )
         guard Self.shouldRecordAccessibilityTrace(
-            baseline: sent.beforeState,
+            baseline: baseline,
             current: current,
             classification: classification
         ) else {
@@ -419,21 +412,11 @@ final class TheBrains {
 
         let accessibilityTrace = makeAccessibilityTrace(
             afterInterface: current.interface,
-            parentCapture: sent.beforeState.capture,
+            parentCapture: baseline.capture,
             classification: classification
         )
         guard accessibilityTrace.backgroundDeltaProjection != nil else { return nil }
         return accessibilityTrace
-    }
-
-    /// Whether the screen changed since the last response (for fast-redirect logic).
-    var screenChangedSinceLastSent: Bool {
-        responseStateHistory.screenChangedSinceLastSent(currentScreen: stash.currentScreen)
-    }
-
-    /// Screen ID from the last response, for diagnostic messages.
-    var lastSentScreenId: String? {
-        responseStateHistory.lastSentScreenId
     }
 
     // MARK: - Wait For Idle
