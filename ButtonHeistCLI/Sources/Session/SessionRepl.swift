@@ -38,7 +38,7 @@ final class ReplSession {
 
         let isTTY = isatty(STDIN_FILENO) != 0
         if isTTY {
-            logStatus(Self.startupPrompt)
+            logStatus(TheFence.Command.cliSessionStartupPrompt)
             if sessionTimeout > 0 {
                 logStatus("Idle timeout: \(Int(sessionTimeout))s")
             }
@@ -114,7 +114,7 @@ final class ReplSession {
 
         // Enhanced help for human mode
         if parsedRequest.command == .help && format == .human && parsedRequest.mode == .human {
-            return (.ok(message: Self.humanHelp), nil)
+            return (.ok(message: TheFence.Command.cliSessionHelp), nil)
         }
 
         do {
@@ -151,26 +151,5 @@ final class ReplSession {
                 logStatus("Failed to serialize response as JSON: \(error.localizedDescription)")
             }
         }
-    }
-}
-
-// MARK: - Human-Friendly Help
-
-nonisolated extension ReplSession {
-
-    static var startupPrompt: String {
-        TheFence.Command.cliSessionStartupPrompt
-    }
-
-    static var unknownCommandMessage: String {
-        TheFence.Command.cliSessionUnknownCommandMessage
-    }
-
-    static var humanHelp: String {
-        TheFence.Command.cliSessionHelp
-    }
-
-    static func parseHumanInput(_ line: String) throws -> NormalizedOperation {
-        try CLIRequestBuilder.parseHumanTokens(CLIRequestBuilder.tokenize(line)).operation
     }
 }

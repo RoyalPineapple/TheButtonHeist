@@ -11,7 +11,7 @@ struct ButtonHeistMCPServer {
         let server = Server(
             name: "buttonheist",
             version: buttonHeistVersion,
-            instructions: Self.instructions,
+            instructions: TheFence.Command.mcpServerInstructions,
             capabilities: .init(tools: .init())
         )
 
@@ -25,10 +25,6 @@ struct ButtonHeistMCPServer {
 
         try await server.start(transport: StdioTransport())
         await server.waitUntilCompleted()
-    }
-
-    static var instructions: String {
-        TheFence.Command.mcpServerInstructions
     }
 
     @ButtonHeistActor

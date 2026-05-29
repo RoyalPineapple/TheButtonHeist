@@ -14,7 +14,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testSessionHelpShowsCurrentUserCommands() {
-        let help = ReplSession.humanHelp
+        let help = TheFence.Command.cliSessionHelp
 
         XCTAssertTrue(help.contains("activate"))
         XCTAssertTrue(help.contains("get_interface"))
@@ -106,13 +106,15 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserRejectsExpectationShortcut() {
-        XCTAssertThrowsError(try ReplSession.parseHumanInput("wait_for_change expect=screen_changed")) { error in
+        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: "wait_for_change expect=screen_changed")) { error in
             XCTAssertTrue(String(describing: error).contains("Expected expectation JSON object"))
         }
     }
 
     func testHumanParserPreservesChangeExpectationJsonObjectForRequestParsing() throws {
-        let operation = try ReplSession.parseHumanInput(#"wait_for_change expect='{"type":"elements_changed"}'"#)
+        let operation = try CLIRequestBuilder
+            .parsedRequest(from: #"wait_for_change expect='{"type":"elements_changed"}'"#)
+            .operation
 
         XCTAssertEqual(operation.command, .waitForChange)
         XCTAssertEqual(operation.argument(.expect), .object(["type": .string("elements_changed")]))
@@ -133,14 +135,14 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserPreservesKnownStringParameterValues() throws {
-        let operation = try ReplSession.parseHumanInput("set_pasteboard text=false")
+        let operation = try CLIRequestBuilder.parsedRequest(from: "set_pasteboard text=false").operation
 
         XCTAssertEqual(operation.command, .setPasteboard)
         XCTAssertEqual(operation.argument(.text), .string("false"))
     }
 
     func testHumanParserCoercesKnownBooleanParametersOnly() throws {
-        let operation = try ReplSession.parseHumanInput("wait_for loading-spinner absent=true")
+        let operation = try CLIRequestBuilder.parsedRequest(from: "wait_for loading-spinner absent=true").operation
 
         XCTAssertEqual(operation.command, .waitFor)
         XCTAssertEqual(operation.arguments.elementTarget, .heistId("loading-spinner"))
@@ -323,8 +325,8 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testREPLParsesPositionalActivateTarget() throws {
-        let operation = try ReplSession.parseHumanInput("activate button_save")
+    func testHumanParserParsesPositionalActivateTarget() throws {
+        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save").operation
 
         XCTAssertEqual(operation.command, .activate)
         XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
@@ -335,7 +337,8 @@ final class CLICommandSyncTests: XCTestCase {
             ElementMatcher(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
             ordinal: 1
         )
-        let operation = try TheFence.Command.activate.cliOperation(
+        let operation = try CLIRequestBuilder.operation(
+            command: .activate,
             target: expectedTarget
         )
 
@@ -343,8 +346,8 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNil(operation.argument(.target))
     }
 
-    func testREPLParsesCoordinateGesture() throws {
-        let operation = try ReplSession.parseHumanInput("one_finger_tap x=100 y=200")
+    func testHumanParserParsesCoordinateGesture() throws {
+        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200").operation
 
         XCTAssertEqual(operation.command, .oneFingerTap)
         XCTAssertEqual(operation.argument(.x), .double(100))
@@ -352,7 +355,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserUsesCatalogPositionalDirectionSyntax() throws {
-        let operation = try ReplSession.parseHumanInput("swipe up checkout_list")
+        let operation = try CLIRequestBuilder.parsedRequest(from: "swipe up checkout_list").operation
 
         XCTAssertEqual(operation.command, .swipe)
         XCTAssertEqual(operation.argument(.direction), .string("up"))
@@ -360,7 +363,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
-        let operation = try ReplSession.parseHumanInput("scroll_to_edge top checkout_list")
+        let operation = try CLIRequestBuilder.parsedRequest(from: "scroll_to_edge top checkout_list").operation
 
         XCTAssertEqual(operation.command, .scrollToEdge)
         XCTAssertEqual(operation.argument(.edge), .string("top"))
@@ -391,7 +394,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserMapsCoordinateTapCanonicalCommand() throws {
-        let operation = try ReplSession.parseHumanInput("one_finger_tap x=100 y=200")
+        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200").operation
 
         XCTAssertEqual(operation.command, .oneFingerTap)
         XCTAssertEqual(operation.argument(.x), .double(100))
@@ -399,7 +402,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserMapsHeistIdPositionalTarget() throws {
-        let operation = try ReplSession.parseHumanInput("activate button_save")
+        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save").operation
 
         XCTAssertEqual(operation.command, .activate)
         XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
@@ -407,7 +410,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testHumanParserRejectsDuplicateElementTarget() {
         XCTAssertThrowsError(
-            try ReplSession.parseHumanInput("activate button_save target=button_cancel")
+            try CLIRequestBuilder.parsedRequest(from: "activate button_save target=button_cancel")
         ) { error in
             XCTAssertTrue(
                 CLIRequestBuilder.diagnosticMessage(for: error).contains("Element target specified more than once"),
@@ -418,7 +421,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testHumanParserRejectsTargetForCommandWithoutTargetParameter() {
         XCTAssertThrowsError(
-            try ReplSession.parseHumanInput("get_screen target=button_save")
+            try CLIRequestBuilder.parsedRequest(from: "get_screen target=button_save")
         ) { error in
             XCTAssertTrue(
                 CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown parameter 'target' for get_screen"),
