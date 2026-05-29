@@ -1,25 +1,6 @@
 import Foundation
 import TheScore
 
-/// Canonical request projected from human CLI tokens.
-public struct FenceHumanCommandRequest: Sendable, Equatable {
-    public let descriptor: FenceCommandDescriptor
-    public let parameters: [FenceParameterKey: HeistValue]
-    public let elementTarget: ElementTarget?
-
-    public var command: TheFence.Command { descriptor.command }
-
-    public init(
-        descriptor: FenceCommandDescriptor,
-        parameters: [FenceParameterKey: HeistValue],
-        elementTarget: ElementTarget? = nil
-    ) {
-        self.descriptor = descriptor
-        self.parameters = parameters
-        self.elementTarget = elementTarget
-    }
-}
-
 public struct FenceHumanCommandParsingError: Error, LocalizedError, CustomStringConvertible, Sendable {
     public let message: String
 
@@ -36,10 +17,10 @@ public extension FenceCommandDescriptor {
         TheFence.Command(rawValue: name)?.descriptor
     }
 
-    static func humanRequest(
+    static func humanOperation(
         commandName rawCommandName: String,
         arguments: [String]
-    ) throws -> FenceHumanCommandRequest {
+    ) throws -> NormalizedOperation {
         var draft = try FenceHumanRequestDraft(commandName: rawCommandName)
 
         var positional: [String] = []
@@ -54,7 +35,7 @@ public extension FenceCommandDescriptor {
         }
 
         try draft.applyPositionalArguments(positional)
-        return draft.request
+        return try draft.normalizedOperation()
     }
 
     fileprivate static func descriptor(forCLIInputName name: String) -> FenceCommandDescriptor? {
@@ -120,12 +101,18 @@ private struct FenceHumanRequestDraft {
         self.elementTarget = elementTarget
     }
 
-    var request: FenceHumanCommandRequest {
-        FenceHumanCommandRequest(
-            descriptor: descriptor,
-            parameters: parameters,
-            elementTarget: elementTarget
+    func normalizedOperation() throws -> NormalizedOperation {
+        let values = Dictionary(
+            parameters.map { ($0.key.rawValue, $0.value) },
+            uniquingKeysWith: { _, newest in newest }
         )
+        let arguments = TheFence.CommandArgumentEnvelope(values: values, elementTarget: elementTarget)
+        switch FenceOperationCatalog.normalizeCommand(descriptor.command, arguments: arguments) {
+        case .success(let operation):
+            return operation
+        case .failure(let error):
+            throw FenceHumanCommandParsingError(error.message)
+        }
     }
 
     subscript(_ key: FenceParameterKey) -> HeistValue? {

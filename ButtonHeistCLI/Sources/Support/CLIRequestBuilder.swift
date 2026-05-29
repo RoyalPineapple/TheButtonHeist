@@ -10,11 +10,10 @@ enum CLIRequestInputMode: Equatable {
 struct CLIParsedRequest {
     let operation: NormalizedOperation
     let requestId: PublicRequestId?
-    let descriptor: FenceCommandDescriptor?
     let mode: CLIRequestInputMode
 
     var command: TheFence.Command? {
-        descriptor?.command
+        operation.command
     }
 }
 
@@ -61,19 +60,14 @@ enum CLIRequestBuilder {
             throw ValidationError("Unknown command. Type 'help' for available commands.")
         }
 
-        let fenceRequest = try FenceCommandDescriptor.humanRequest(
+        let operation = try FenceCommandDescriptor.humanOperation(
             commandName: first,
             arguments: Array(tokens.dropFirst())
         )
 
         return CLIParsedRequest(
-            operation: try operation(
-                command: fenceRequest.command,
-                parameters: fenceRequest.parameters,
-                target: fenceRequest.elementTarget
-            ),
+            operation: operation,
             requestId: nil,
-            descriptor: fenceRequest.descriptor,
             mode: .human
         )
     }
@@ -129,7 +123,6 @@ enum CLIRequestBuilder {
             return CLIParsedRequest(
                 operation: operation,
                 requestId: requestId,
-                descriptor: operation.command.descriptor,
                 mode: .machine
             )
         } catch let error as CLIRequestBuildError {
