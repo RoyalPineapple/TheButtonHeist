@@ -50,10 +50,10 @@ extension TheFence {
 
 extension HeistEvidence {
     func normalizedPlaybackOperation() throws -> NormalizedOperation {
-        try rejectPlaybackTargetArguments()
         let playbackArguments = TheFence.CommandArgumentEnvelope(
             values: arguments,
-            playbackSemanticTarget: target
+            playbackSemanticTarget: target,
+            isPlaybackStep: true
         )
         switch FenceOperationCatalog.normalizePlaybackStep(
             commandName: command,
@@ -64,19 +64,6 @@ extension HeistEvidence {
         case .failure(let error):
             throw FenceError.invalidRequest(error.message)
         }
-    }
-
-    private func rejectPlaybackTargetArguments() throws {
-        let targetKeys = Set(["target"] + ElementTargetGrammar.inlineFieldNames)
-        guard let targetKey = arguments.keys.sorted().first(where: targetKeys.contains) else {
-            return
-        }
-        let observed = arguments[targetKey]?.schemaObservedDescription ?? "missing"
-        throw SchemaValidationError(
-            field: targetKey,
-            observed: observed,
-            expected: "recorded playback target field"
-        )
     }
 }
 

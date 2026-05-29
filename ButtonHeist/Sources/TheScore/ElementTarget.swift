@@ -79,18 +79,6 @@ extension ElementTarget: Codable {
         return try decodeFlat(from: decoder, shouldRejectUnknownKeys: false)
     }
 
-    public static func decodeCommandTarget(from value: HeistValue) throws -> ElementTarget {
-        let data = try JSONEncoder().encode(value)
-        let commandTarget = try JSONDecoder().decode(CommandElementTarget.self, from: data)
-        return try targetOrDecodingError(
-            heistId: commandTarget.heistId,
-            matcher: commandTarget.matcher,
-            matcherWasProvided: commandTarget.matcherWasProvided,
-            ordinal: commandTarget.ordinal,
-            codingPath: []
-        )
-    }
-
     /// Decode a required `ElementTarget` flattened into a command payload that
     /// may also contain command-specific fields.
     public static func decodeInline(from decoder: Decoder) throws -> ElementTarget {
@@ -203,29 +191,5 @@ extension ElementTarget: Codable {
             try container.encodeIfPresent(matcher.excludeTraits, forKey: .excludeTraits)
             try container.encodeIfPresent(ordinal, forKey: .ordinal)
         }
-    }
-}
-
-private struct CommandElementTarget: Decodable {
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case heistId
-        case matcher
-        case ordinal
-    }
-
-    let heistId: HeistId?
-    let matcher: ElementMatcher?
-    let ordinal: Int?
-
-    var matcherWasProvided: Bool {
-        matcher != nil
-    }
-
-    init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element target")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        heistId = try container.decodeIfPresent(HeistId.self, forKey: .heistId)
-        matcher = try container.decodeIfPresent(ElementMatcher.self, forKey: .matcher)
-        ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
     }
 }

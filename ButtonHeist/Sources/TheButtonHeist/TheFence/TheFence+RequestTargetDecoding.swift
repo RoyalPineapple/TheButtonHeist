@@ -15,30 +15,7 @@ extension TheFence.CommandArgumentReadable {
             return playbackSemanticTarget.playbackElementTarget
         }
         guard let target = try schemaDictionary("target") else { return nil }
-        try target.rejectUnknownKeys(
-            allowed: Set(ElementTargetGrammar.wrappedTargetFieldNames),
-            expected: "valid target field"
-        )
-        let heistId = try target.schemaString("heistId")
-        let matcherObject = try target.schemaDictionary("matcher")
-        let ordinal = try target.schemaNonNegativeInteger("ordinal")
-        let elementMatcher: ElementMatcher?
-        if let matcherObject {
-            try matcherObject.rejectUnknownKeys(
-                allowed: Set(ElementTargetGrammar.matcherFieldNames),
-                expected: "valid target.matcher field"
-            )
-            elementMatcher = try matcher(from: matcherObject)
-        } else {
-            elementMatcher = nil
-        }
-
-        return try validatedElementTarget(
-            heistId: heistId,
-            matcher: elementMatcher,
-            matcherWasProvided: matcherObject != nil,
-            ordinal: ordinal
-        )
+        return try target.decodeCommandPayload(ElementTarget.self)
     }
 
     @ButtonHeistActor
@@ -126,28 +103,6 @@ extension TheFence.CommandArgumentReadable {
         playbackSemanticTarget != nil || keys.contains("target")
     }
 
-    @ButtonHeistActor
-    func matcher() throws -> ElementMatcher {
-        try matcher(from: self)
-    }
-
-    @ButtonHeistActor
-    func matcher(from source: some TheFence.CommandArgumentReadable) throws -> ElementMatcher {
-        ElementMatcher(
-            label: try source.schemaString("label"),
-            identifier: try source.schemaString("identifier"),
-            value: try source.schemaString("value"),
-            traits: try TheFence.parseTraitNames(
-                try source.schemaStringArray("traits"),
-                field: source.field("traits")
-            ),
-            excludeTraits: try TheFence.parseTraitNames(
-                try source.schemaStringArray("excludeTraits"),
-                field: source.field("excludeTraits")
-            )
-        )
-    }
-
     func requiredString(_ key: String) throws -> String {
         try requiredSchemaString(key)
     }
@@ -194,40 +149,6 @@ extension TheFence.CommandArgumentReadable {
         )
     }
 
-    private func validatedElementTarget(
-        heistId: HeistId?,
-        matcher: ElementMatcher?,
-        matcherWasProvided: Bool,
-        ordinal: Int?
-    ) throws -> ElementTarget {
-        do {
-            return try ElementTargetGrammar.validatedTarget(
-                heistId: heistId,
-                matcher: matcher,
-                matcherWasProvided: matcherWasProvided,
-                ordinal: ordinal
-            )
-        } catch let error as ElementTargetGrammarError {
-            throw SchemaValidationError(
-                field: "target",
-                observed: observedDescription,
-                expected: schemaExpectedDescription(for: error)
-            )
-        }
-    }
-
-    private func schemaExpectedDescription(for error: ElementTargetGrammarError) -> String {
-        switch error {
-        case .missingTarget:
-            return "heistId or matcher"
-        case .emptyMatcher:
-            return "matcher with label, identifier, value, traits, or excludeTraits"
-        case .mixedHeistIdWithMatcherOrOrdinal:
-            return "either heistId or matcher with optional ordinal"
-        case .negativeOrdinal:
-            return "integer >= 0"
-        }
-    }
 }
 
 private extension SemanticActionTarget {

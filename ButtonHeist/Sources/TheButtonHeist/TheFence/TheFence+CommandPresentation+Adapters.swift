@@ -1,4 +1,5 @@
 import Foundation
+import TheScore
 
 public extension TheFence.Command {
     static var cliSessionStartupPrompt: String {
@@ -10,11 +11,11 @@ public extension TheFence.Command {
     }
 
     static var mcpServerInstructions: String {
-        let matcherKeys = inlineList(activate.descriptor.elementTargetParameterKeys)
+        let targetKeys = inlineList(ElementTargetGrammar.inlineFieldNames.map { "target.\($0)" })
         let expectationKey = activate.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue
         return """
             Button Heist drives iOS apps through the accessibility layer — the same interface \
-            VoiceOver uses. Target elements with schema matcher fields: \(matcherKeys), not \
+            VoiceOver uses. Target elements with flat ElementTarget fields: \(targetKeys), not \
             by screen coordinates. The core loop is: \(inlineMCPToolName(for: .getInterface)) \
             to read the app accessibility state, then \(inlineMCPToolName(for: .activate))/\
             \(inlineMCPToolName(for: .typeText))/\(inlineMCPToolName(for: .scroll))/\

@@ -151,9 +151,9 @@ final class PublicContractGoldenTests: XCTestCase {
             try jsonString(response),
             golden(
                 #"{"errorCode":"request.missing_target","hint":"get_interface()","#,
-                #""message":"activate request contract failed: missing target; requires target object with heistId or matcher. "#,
+                #""message":"activate request contract failed: missing target; requires target object with heistId or matcher fields. "#,
                 #"Next: get_interface() to inspect the current app accessibility state, then retry activate with "#,
-                #"target.heistId or target.matcher.","phase":"request","#,
+                #"target.heistId or target.label, target.identifier, target.value, target.traits, or target.excludeTraits.","phase":"request","#,
                 #""retryable":false,"status":"error"}"#
             )
         )
@@ -283,7 +283,7 @@ final class PublicContractGoldenTests: XCTestCase {
             )),
             golden(
                 #"{"completedSteps":1,"failedIndex":1,"failure":{"command":"activate","#,
-                #""error":"not connected","target":{"matcher":{"label":"Pay","traits":["button"]}}},"#,
+                #""error":"not connected","target":{"label":"Pay","traits":["button"]}},"#,
                 #""status":"error","totalTimingMs":25}"#
             )
         )
@@ -310,7 +310,7 @@ final class PublicContractGoldenTests: XCTestCase {
             golden(
                 #"{"completedSteps":1,"failedIndex":1,"failure":{"command":"activate","#,
                 #""diagnosticCaptureFailure":"diagnostic interface unavailable","#,
-                #""error":"not connected","target":{"matcher":{"label":"Pay","traits":["button"]}}},"#,
+                #""error":"not connected","target":{"label":"Pay","traits":["button"]}},"#,
                 #""status":"error","totalTimingMs":25}"#
             )
         )
@@ -367,8 +367,8 @@ final class PublicContractGoldenTests: XCTestCase {
             try sortedJSONString(playback, dateEncodingStrategy: .iso8601),
             golden(
                 #"{"app":"com.buttonheist.testapp","recorded":"1970-01-01T00:00:00Z","steps":["#,
-                #"{"command":"activate","target":{"matcher":{"label":"Pay","traits":["button"]}}},"#,
-                #"{"arguments":{"text":"hello"},"command":"type_text","target":{"matcher":{"label":"Note"}}}],"version":4}"#
+                #"{"command":"activate","target":{"label":"Pay","traits":["button"]}},"#,
+                #"{"arguments":{"text":"hello"},"command":"type_text","target":{"label":"Note"}}],"version":4}"#
             )
         )
     }

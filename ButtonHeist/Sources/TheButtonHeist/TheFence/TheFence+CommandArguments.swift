@@ -8,15 +8,18 @@ extension TheFence {
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
         let playbackSemanticTarget: SemanticActionTarget?
+        let isPlaybackStep: Bool
         let argumentFieldPrefix: String?
 
         public init(
             values: [String: HeistValue],
             playbackSemanticTarget: SemanticActionTarget? = nil,
+            isPlaybackStep: Bool = false,
             fieldPrefix: String? = nil
         ) {
             self.argumentValues = values
             self.playbackSemanticTarget = playbackSemanticTarget
+            self.isPlaybackStep = isPlaybackStep
             argumentFieldPrefix = fieldPrefix
         }
 
@@ -30,6 +33,7 @@ extension TheFence {
             return CommandArgumentEnvelope(
                 values: values,
                 playbackSemanticTarget: playbackSemanticTarget,
+                isPlaybackStep: isPlaybackStep,
                 fieldPrefix: argumentFieldPrefix
             )
         }
@@ -317,38 +321,6 @@ extension TheFence.CommandArgumentReadable {
         } catch {
             throw FenceError.invalidRequest(String(describing: error))
         }
-    }
-
-    func inlineElementTargetArgument() throws -> Self {
-        guard let targetValue = argumentValues["target"] else { return self }
-        let target = try ElementTarget.decodeCommandTarget(from: targetValue)
-        var values = argumentValues
-        values.removeValue(forKey: "target")
-        guard !ElementTargetGrammar.inlineFieldNames.contains(where: { values[$0] != nil }) else {
-            throw SchemaValidationError(
-                field: "target",
-                observed: "mixed target fields",
-                expected: "target object or inline ElementTarget fields"
-            )
-        }
-        switch target {
-        case .heistId(let heistId):
-            values["heistId"] = .string(heistId)
-        case .matcher(let matcher, let ordinal):
-            if let label = matcher.label { values["label"] = .string(label) }
-            if let identifier = matcher.identifier { values["identifier"] = .string(identifier) }
-            if let value = matcher.value { values["value"] = .string(value) }
-            if let traits = matcher.traits {
-                values["traits"] = .array(traits.map { .string($0.rawValue) })
-            }
-            if let excludeTraits = matcher.excludeTraits {
-                values["excludeTraits"] = .array(excludeTraits.map { .string($0.rawValue) })
-            }
-            if let ordinal {
-                values["ordinal"] = .int(ordinal)
-            }
-        }
-        return withArgumentValues(values)
     }
 
     private func decodeCommandPayloadFailure(_ error: DecodingError, value: HeistValue) -> Error {

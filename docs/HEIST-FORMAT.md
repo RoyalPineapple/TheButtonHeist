@@ -2,7 +2,7 @@
 
 **Extension**: `.heist`
 **Encoding**: JSON (UTF-8)
-**Version**: 3
+**Version**: 4
 
 A `.heist` file stores durable interaction steps, expected outcomes, and optional recording notes. Playback runs those steps deterministically, ignoring recording notes and removing the agent from the loop.
 
@@ -10,7 +10,7 @@ A `.heist` file stores durable interaction steps, expected outcomes, and optiona
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "recorded": "2026-04-03T18:00:59Z",
   "app": "com.buttonheist.testapp",
   "steps": [ ... ]
@@ -19,12 +19,12 @@ A `.heist` file stores durable interaction steps, expected outcomes, and optiona
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `Int` | Format version. Currently `3`. |
+| `version` | `Int` | Format version. Currently `4`. |
 | `recorded` | `String` | ISO 8601 timestamp of when the recording was made. |
 | `app` | `String` | Bundle identifier of the app that was running. |
 | `steps` | `[HeistEvidence]` | Ordered list of durable interaction steps. |
 
-Version 3 is the current heist contract. Older flat target shapes are rejected; re-record old flows.
+Version 4 is the current heist contract. Step targets use flat semantic matcher fields; heist IDs are recording metadata only.
 
 ## Accessibility Trace Evidence
 
@@ -40,7 +40,7 @@ how captures are grouped for derived segment views.
 
 ## Evidence (Steps)
 
-Each step is a JSON object using the same command names as live Button Heist requests. Durable semantic replay identity lives under `target.matcher`; `_recorded.heistId` is recording evidence only.
+Each step is a JSON object using the same command names as live Button Heist requests. Durable semantic replay identity lives under the flat `target` matcher fields; `_recorded.heistId` is recording evidence only.
 
 ### Element-targeting step
 
@@ -48,10 +48,8 @@ Each step is a JSON object using the same command names as live Button Heist req
 {
   "command": "activate",
   "target": {
-    "matcher": {
-      "label": "Review PR, High priority",
-      "traits": ["button"]
-    }
+    "label": "Review PR, High priority",
+    "traits": ["button"]
   },
   "expect": {
     "type": "compound",
@@ -95,11 +93,11 @@ Each step is a JSON object using the same command names as live Button Heist req
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `command` | `String` | Yes | Button Heist command name (`activate`, `type_text`, `swipe`, etc.) |
-| `target.matcher.label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
-| `target.matcher.identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
-| `target.matcher.value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
-| `target.matcher.traits` | `[String]` | No | Element matcher: all listed traits must be present |
-| `target.matcher.excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
+| `target.label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
+| `target.identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
+| `target.value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
+| `target.traits` | `[String]` | No | Element matcher: all listed traits must be present |
+| `target.excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
 | `target.ordinal` | `Int` | No | 0-based index among matcher results; only valid with at least one matcher field |
 | `expect` | `Object` | No | Expected outcome — validated on playback |
 | `_recorded` | `Object` | No | Optional recording notes (ignored during playback) |
@@ -117,7 +115,7 @@ Ordinal-only steps are the least durable replay target. They are reserved for an
 
 **Workflow**: Call `get_interface` before recording actions so the recorder has current element data. Durable heist steps should be the interactions and waits you want to replay; inspection calls help the recorder build good matchers but are not themselves replay steps.
 
-**Example**: You activate `button_sign_in` in the current interface. The `.heist` step should store fields like `{"command":"activate","target":{"matcher":{"label":"Sign In","traits":["button"]}},"_recorded":{"heistId":"button_sign_in"}}`, not `heistId` as the replay target.
+**Example**: You activate `button_sign_in` in the current interface. The `.heist` step should store fields like `{"command":"activate","target":{"label":"Sign In","traits":["button"]},"_recorded":{"heistId":"button_sign_in"}}`, not `heistId` as the replay target.
 
 ### Async operations
 
@@ -210,7 +208,7 @@ The `_recorded` key carries optional recording notes for debugging. It is preser
 | `accessibilityTrace` | `Object?` | Capture trace observed while recording |
 | `expectation` | `Object?` | Expectation evidence observed while recording |
 
-`_recorded.heistId`, traces, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the flat step command, matcher fields, ordinal, and command arguments outside `_recorded`. Compact deltas are derived from `_recorded.accessibilityTrace` when needed; they are not stored as separate recorded evidence.
+`_recorded.heistId`, traces, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the step command, flat `target` matcher fields, `target.ordinal`, and command arguments outside `_recorded`. Compact deltas are derived from `_recorded.accessibilityTrace` when needed; they are not stored as separate recorded evidence.
 
 ## Durable Recording
 
@@ -255,7 +253,7 @@ On failure, the response includes a `failure` object with everything needed to d
 | Field | Type | Description |
 |-------|------|-------------|
 | `command` | `String` | The command that failed (e.g. `activate`, `type_text`) |
-| `target` | `ElementMatcher?` | The element matcher from the failed step |
+| `target` | `ElementTarget?` | The flat element target from the failed step |
 | `error` | `String` | Human-readable error message |
 | `actionResult` | `ActionResult?` | Full action result — includes `errorKind`, `scrollSearchResult`, delta, etc. |
 | `expectation` | `ExpectationResult?` | Expectation check result (when `expect` was attached to the step) |
