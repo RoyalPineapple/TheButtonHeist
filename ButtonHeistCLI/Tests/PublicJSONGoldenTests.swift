@@ -12,7 +12,7 @@ final class PublicJSONGoldenTests: XCTestCase {
         )
 
         try XCTAssertGoldenJSON(
-            FenceResponse.action(result: result),
+            FenceResponse.action(command: .activate, result: result),
             equals: #"{"method":"activate","status":"ok","value":"Pressed Buy"}"#
         )
     }
@@ -26,7 +26,7 @@ final class PublicJSONGoldenTests: XCTestCase {
         )
 
         try XCTAssertGoldenJSON(
-            FenceResponse.action(result: result),
+            FenceResponse.action(command: .activate, result: result),
             equals: #"{"errorClass":"elementNotFound","message":"No element matching label \"Buy\"","method":"activate","status":"error"}"#
         )
     }

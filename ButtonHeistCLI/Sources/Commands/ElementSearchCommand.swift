@@ -49,7 +49,8 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request, target: target),
+            command: Self.fenceCommand,
+            arguments: Self.fenceArguments(request, target: target),
             statusMessage: "Searching for element..."
         )
     }

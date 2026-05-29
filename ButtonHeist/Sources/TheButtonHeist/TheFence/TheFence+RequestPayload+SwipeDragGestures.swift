@@ -4,13 +4,13 @@ import TheScore
 
 extension TheFence {
 
-    func decodeSwipeTarget(_ request: some CommandArgumentReadable) throws -> SwipeTarget {
+    func decodeSwipeTarget(_ request: CommandArgumentEnvelope) throws -> SwipeTarget {
         let start = try request.schemaUnitPoint("start")
         let end = try request.schemaUnitPoint("end")
         if (start != nil) != (end != nil) {
             throw FenceError.invalidRequest("Unit-point swipe requires both start and end")
         }
-        let elementTarget = try request.elementTarget()
+        let elementTarget = try request.decodedElementTarget()
         let direction = try request.schemaEnum("direction", as: SwipeDirection.self)
         let startPoint = try decodeCoordinatePair(request: request, xKey: "startX", yKey: "startY", field: "startX/startY")
         let endPoint = try decodeCoordinatePair(request: request, xKey: "endX", yKey: "endY", field: "endX/endY")
@@ -60,10 +60,10 @@ extension TheFence {
         return SwipeTarget(selection: selection, duration: try request.gestureDuration())
     }
 
-    func decodeDragTarget(_ request: some CommandArgumentReadable) throws -> DragTarget {
+    func decodeDragTarget(_ request: CommandArgumentEnvelope) throws -> DragTarget {
         let start = try decodeRequiredPointIntent(
             request: request,
-            elementTarget: try request.elementTarget(),
+            elementTarget: try request.decodedElementTarget(),
             xKey: "startX",
             yKey: "startY",
             field: "startX/startY",

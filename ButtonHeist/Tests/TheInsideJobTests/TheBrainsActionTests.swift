@@ -566,7 +566,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testElementActionUsesSemanticActionTargetBeforeLiveResolution() async throws {
+    func testElementActionUsesMatcherTargetBeforeLiveResolution() async throws {
         let sourceElement = makeElement(
             label: "Quantity",
             value: "0",
@@ -588,7 +588,7 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
         )
-        let target = try semanticActionTarget(heistId: "quantity_0", in: sourceScreen)
+        let target = try matcherTarget(heistId: "quantity_0", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(target)
 
@@ -638,7 +638,7 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
         )
-        let target = try semanticActionTarget(heistId: "quantity_0", in: sourceScreen)
+        let target = try matcherTarget(heistId: "quantity_0", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(target)
 
@@ -1291,16 +1291,17 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
-    private func semanticActionTarget(
+    private func matcherTarget(
         heistId: HeistId,
         in screen: Screen
-    ) throws -> SemanticActionTarget {
+    ) throws -> ElementTarget {
         let capture = AccessibilityTrace.Capture(
             sequence: 1,
             interface: TheStash.WireConversion.toInterface(from: screen)
         )
         let element = try XCTUnwrap(capture.interface.elements.first { $0.heistId == heistId })
-        return SemanticActionTarget(try XCTUnwrap(MinimumMatcher.build(element: element, in: capture)))
+        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: element, in: capture))
+        return .matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
     }
 
     private func XCTAssertDiagnostic(

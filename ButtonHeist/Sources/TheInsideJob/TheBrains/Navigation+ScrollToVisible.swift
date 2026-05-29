@@ -10,11 +10,11 @@ extension Navigation {
     /// product actionability path. It does not own separate reveal or geometry
     /// behavior.
     func executeScrollToVisible(_ target: ScrollToVisibleTarget) async -> TheSafecracker.InteractionResult {
-        await executeScrollToVisible(elementTarget: .currentCapture(target.elementTarget))
+        await executeScrollToVisible(elementTarget: target.elementTarget)
     }
 
     func executeScrollToVisible(
-        elementTarget: SemanticElementTarget?
+        elementTarget: ElementTarget?
     ) async -> TheSafecracker.InteractionResult {
         guard let elementTarget else {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")

@@ -4,7 +4,7 @@ extension TheFence {
 
     func decodeScrollActionDispatch(
         command: Command,
-        input: some CommandArgumentReadable
+        input: CommandArgumentEnvelope
     ) throws -> DecodedRequestDispatch {
         switch command {
         case .scroll:

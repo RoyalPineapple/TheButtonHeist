@@ -46,16 +46,16 @@ struct ButtonHeistMCPServer {
         defer { idleMonitor.resetTimer() }
         do {
             let arguments = try decodeArguments(params.arguments)
-            let routed = FenceOperationCatalog.normalizeToolCall(name: params.name, arguments: arguments)
-            let operation: NormalizedOperation
+            let routed = FenceOperationCatalog.normalizeToolCall(name: params.name)
+            let command: TheFence.Command
             switch routed {
             case .success(let value):
-                operation = value
+                command = value
             case .failure(let error):
                 return .init(content: [.text(text: error.message, annotations: nil, _meta: nil)], isError: true)
             }
 
-            let response = try await fence.execute(operation: operation)
+            let response = try await fence.execute(command: command, arguments: arguments)
             let backgroundAccessibilityTraces = fence.drainBackgroundAccessibilityTraces()
             return renderResponse(response, backgroundAccessibilityTraces: backgroundAccessibilityTraces)
         } catch {

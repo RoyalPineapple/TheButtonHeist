@@ -139,7 +139,7 @@ extension TheFence {
         return "\(arguments.field("subtree")).\(suffix)"
     }
 
-    private func interfaceElementMatcher(_ arguments: some CommandArgumentReadable) throws -> ElementMatcher {
+    private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementMatcher {
         ElementMatcher(
             label: try arguments.schemaString("label"),
             identifier: try arguments.schemaString("identifier"),

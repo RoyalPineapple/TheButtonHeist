@@ -68,13 +68,13 @@ final class BookKeeperHeistTests: XCTestCase {
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
         try appendEvidenceLine(
-            HeistEvidence(command: "activate", target: semanticTarget(label: "Direct", traits: [.button])),
+            try HeistEvidence(command: "activate", target: semanticTarget(label: "Direct", traits: [.button])),
             to: bookKeeper
         )
 
         let heist = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(heist.steps.count, 1)
-        XCTAssertEqual(heist.steps[0].target?.matcher.label, "Direct")
+        XCTAssertEqual(heist.steps[0].target, semanticTarget(label: "Direct", traits: [.button]))
     }
 
     @ButtonHeistActor
@@ -125,7 +125,7 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(script.app, "com.example.app")
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
-        XCTAssertEqual(script.steps[0].target?.matcher.label, "Go")
+        XCTAssertEqual(script.steps[0].target, semanticTarget(label: "Go", traits: [.button]))
         let change = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace?.receipts.first)
         XCTAssertEqual(change.kind, .capture)
         XCTAssertEqual(change.interface.elements.first?.label, "Go")
@@ -261,8 +261,7 @@ final class BookKeeperHeistTests: XCTestCase {
         )
 
         let script = try bookKeeper.stopHeistRecording()
-        XCTAssertEqual(script.steps[0].target?.matcher.identifier, "primary.save")
-        XCTAssertNil(script.steps[0].target?.ordinal)
+        XCTAssertEqual(script.steps[0].target, semanticTarget(identifier: "primary.save"))
         XCTAssertEqual(script.steps[0].recorded?.heistId, "save")
         XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
     }
@@ -364,8 +363,7 @@ final class BookKeeperHeistTests: XCTestCase {
         )
         let script = try bookKeeper.stopHeistRecording()
 
-        XCTAssertEqual(script.steps[0].target?.matcher.label, "Submit")
-        XCTAssertEqual(script.steps[0].target?.matcher.traits, [.button])
+        XCTAssertEqual(script.steps[0].target, semanticTarget(label: "Submit", traits: [.button]))
     }
 
     @ButtonHeistActor
@@ -402,7 +400,7 @@ final class BookKeeperHeistTests: XCTestCase {
         )
         let script = try bookKeeper.stopHeistRecording()
 
-        XCTAssertEqual(script.steps[0].target?.matcher.identifier, "login.email")
+        XCTAssertEqual(script.steps[0].target, semanticTarget(identifier: "login.email"))
         XCTAssertEqual(script.steps[0].arguments, ["text": .string("hello world")])
     }
 
@@ -468,8 +466,7 @@ final class BookKeeperHeistTests: XCTestCase {
         )
         let script = try bookKeeper.stopHeistRecording()
 
-        XCTAssertEqual(script.steps[0].target?.matcher.label, "Submit")
-        XCTAssertNil(script.steps[0].target?.matcher.traits)
+        XCTAssertEqual(script.steps[0].target, semanticTarget(label: "Submit"))
         XCTAssertEqual(script.steps[0].recorded?.heistId, "button_submit")
     }
 
@@ -558,7 +555,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let heist = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(heist.steps.count, 1)
-        XCTAssertEqual(heist.steps[0].target?.matcher.label, "Go")
+        XCTAssertEqual(heist.steps[0].target, semanticTarget(label: "Go"))
     }
 
     @ButtonHeistActor
@@ -585,7 +582,7 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let heist = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(heist.steps.count, 1)
-        XCTAssertEqual(heist.steps[0].target?.matcher.label, "Go")
+        XCTAssertEqual(heist.steps[0].target, semanticTarget(label: "Go"))
     }
 
     @ButtonHeistActor
@@ -611,8 +608,8 @@ final class BookKeeperHeistTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
-                HeistEvidence(command: "activate", target: semanticTarget(label: "Go", traits: [.button])),
-                HeistEvidence(command: "type_text", arguments: ["text": .string("test")]),
+                try HeistEvidence(command: "activate", target: semanticTarget(label: "Go", traits: [.button])),
+                try HeistEvidence(command: "type_text", arguments: ["text": .string("test")]),
             ]
         )
 
@@ -624,7 +621,7 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(loaded.app, "com.example.app")
         XCTAssertEqual(loaded.steps.count, 2)
         XCTAssertEqual(loaded.steps[0].command, "activate")
-        XCTAssertEqual(loaded.steps[0].target?.matcher.label, "Go")
+        XCTAssertEqual(loaded.steps[0].target, semanticTarget(label: "Go", traits: [.button]))
         XCTAssertEqual(loaded.steps[1].arguments["text"], .string("test"))
     }
 

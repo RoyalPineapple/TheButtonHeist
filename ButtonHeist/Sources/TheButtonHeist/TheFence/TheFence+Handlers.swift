@@ -33,13 +33,13 @@ extension TheFence {
             }
             finalResult = result
             if !result.success {
-                return .action(result: result)
+                return .action(command: request.command, result: result)
             }
         }
         guard let finalResult else {
             return .error("command \"\(request.command.rawValue)\" did not produce an executable action")
         }
-        return .action(result: finalResult)
+        return .action(command: request.command, result: finalResult)
     }
 
     func missingElementTargetResponse(command: String) -> FenceResponse {

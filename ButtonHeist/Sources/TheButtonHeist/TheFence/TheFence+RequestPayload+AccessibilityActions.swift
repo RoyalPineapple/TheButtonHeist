@@ -6,7 +6,7 @@ extension TheFence {
 
     func decodeAccessibilityActionDispatch(
         command: Command,
-        input: some CommandArgumentReadable
+        input: CommandArgumentEnvelope
     ) throws -> DecodedRequestDispatch {
         guard command == .activate else {
             throw FenceError.invalidRequest("Unexpected accessibility action command: \(command.rawValue)")

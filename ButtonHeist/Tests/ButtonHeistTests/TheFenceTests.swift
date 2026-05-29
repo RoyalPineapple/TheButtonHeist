@@ -65,7 +65,7 @@ final class TheFenceTests: XCTestCase {
                 "traits": .array([.string("madeUpTrait")]),
             ]),
         ])
-        XCTAssertThrowsError(try args.elementTarget()) { error in
+        XCTAssertThrowsError(try args.decodedElementTarget()) { error in
             let message = error.localizedDescription
             XCTAssertTrue(message.hasPrefix(
                 "schema validation failed for target.traits[0]: observed string \"madeUpTrait\"; expected enum one of"
@@ -83,7 +83,7 @@ final class TheFenceTests: XCTestCase {
                 "excludeTraits": .array([.string("bogus")]),
             ]),
         ])
-        XCTAssertThrowsError(try args.elementTarget()) { error in
+        XCTAssertThrowsError(try args.decodedElementTarget()) { error in
             let message = error.localizedDescription
             XCTAssertTrue(message.hasPrefix(
                 "schema validation failed for target.excludeTraits[0]: observed string \"bogus\"; expected enum one of"
@@ -102,7 +102,7 @@ final class TheFenceTests: XCTestCase {
                 "excludeTraits": .array([.string("selected")]),
             ]),
         ])
-        guard case .matcher(let matcher, nil)? = try args.elementTarget() else {
+        guard case .matcher(let matcher, nil)? = try args.decodedElementTarget() else {
             return XCTFail("Expected matcher target")
         }
         XCTAssertEqual(matcher.traits, [.button, .header])
@@ -682,7 +682,7 @@ final class TheFenceTests: XCTestCase {
     func testActionWithExpectationMetFormatting() {
         let result = ActionResult(success: true, method: .activate)
         let expectation = ExpectationResult(met: true, expectation: .screenChanged, actual: "screenChanged")
-        let response = FenceResponse.action(result: result, expectation: expectation)
+        let response = FenceResponse.action(command: .activate, result: result, expectation: expectation)
         let text = response.humanFormatted()
         XCTAssertTrue(text.contains("[expectation met]"))
     }
@@ -690,7 +690,7 @@ final class TheFenceTests: XCTestCase {
     func testActionWithExpectationFailedFormatting() {
         let result = ActionResult(success: true, method: .activate, accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 5))))
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
-        let response = FenceResponse.action(result: result, expectation: expectation)
+        let response = FenceResponse.action(command: .activate, result: result, expectation: expectation)
         let text = response.humanFormatted()
         XCTAssertTrue(text.contains("[expectation FAILED"))
         XCTAssertTrue(text.contains("noChange"))
@@ -703,7 +703,7 @@ final class TheFenceTests: XCTestCase {
             accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits())))
         )
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "elementsChanged")
-        let response = FenceResponse.action(result: result, expectation: expectation)
+        let response = FenceResponse.action(command: .activate, result: result, expectation: expectation)
         let text = response.compactFormatted()
 
         XCTAssertTrue(text.contains("[expectation FAILED: got elementsChanged]"))
@@ -714,7 +714,7 @@ final class TheFenceTests: XCTestCase {
     func testActionWithDeliveryFailureFormatting() {
         let result = ActionResult(success: false, method: .activate, message: "not found")
         let expectation = ExpectationResult(met: false, expectation: nil, actual: "not found")
-        let response = FenceResponse.action(result: result, expectation: expectation)
+        let response = FenceResponse.action(command: .activate, result: result, expectation: expectation)
         let text = response.humanFormatted()
         XCTAssertTrue(text.contains("[expectation FAILED"))
         XCTAssertTrue(text.contains("delivery"))
@@ -728,7 +728,7 @@ final class TheFenceTests: XCTestCase {
             errorKind: .elementNotFound
         )
 
-        let text = FenceResponse.action(result: result).compactFormatted()
+        let text = FenceResponse.action(command: .activate, result: result).compactFormatted()
 
         XCTAssertEqual(text, "activate: error[elementNotFound]: No element matching label \"Buy\"")
     }
@@ -742,7 +742,7 @@ final class TheFenceTests: XCTestCase {
             screenId: "checkout"
         )
 
-        let text = FenceResponse.action(result: result).compactFormatted()
+        let text = FenceResponse.action(command: .waitFor, result: result).compactFormatted()
 
         XCTAssertEqual(text, "checkout | wait_for: error[timeout]: Timed out after 2.0s waiting for element")
     }
@@ -755,7 +755,7 @@ final class TheFenceTests: XCTestCase {
             errorKind: .actionFailed
         )
 
-        let text = FenceResponse.action(result: result).compactFormatted()
+        let text = FenceResponse.action(command: .waitFor, result: result).compactFormatted()
 
         XCTAssertEqual(
             text,
@@ -765,7 +765,7 @@ final class TheFenceTests: XCTestCase {
 
     func testActionWithoutExpectationFormatting() {
         let result = ActionResult(success: true, method: .activate)
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
         let text = response.humanFormatted()
         XCTAssertFalse(text.contains("expectation"))
     }
@@ -796,7 +796,7 @@ final class TheFenceTests: XCTestCase {
             payload: .scrollSearch(search)
         )
 
-        let text = FenceResponse.action(result: result).compactFormatted()
+        let text = FenceResponse.action(command: .elementSearch, result: result).compactFormatted()
 
         XCTAssertTrue(text.contains("element_search: found after 1 scrolls (29 unique elements seen)"))
         XCTAssertTrue(text.contains("long_list_button \"Long List\" button"))
@@ -816,7 +816,7 @@ final class TheFenceTests: XCTestCase {
             screenId: "buttonheist_demo"
         )
 
-        let text = FenceResponse.action(result: result).compactFormatted()
+        let text = FenceResponse.action(command: .elementSearch, result: result).compactFormatted()
 
         XCTAssertEqual(text, "buttonheist_demo | element_search: error[elementNotFound]: not found after 3 scrolls (42 unique elements seen)")
     }
@@ -826,7 +826,7 @@ final class TheFenceTests: XCTestCase {
     func testActionWithExpectationMetJSON() {
         let result = ActionResult(success: true, method: .activate)
         let expectation = ExpectationResult(met: true, expectation: .screenChanged, actual: "screenChanged")
-        let response = FenceResponse.action(result: result, expectation: expectation)
+        let response = FenceResponse.action(command: .activate, result: result, expectation: expectation)
         let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         let expDict = json["expectation"] as? [String: Any]
@@ -838,7 +838,7 @@ final class TheFenceTests: XCTestCase {
     func testActionWithExpectationFailedJSON() {
         let result = ActionResult(success: true, method: .activate)
         let expectation = ExpectationResult(met: false, expectation: .screenChanged, actual: "noChange")
-        let response = FenceResponse.action(result: result, expectation: expectation)
+        let response = FenceResponse.action(command: .activate, result: result, expectation: expectation)
         let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "expectation_failed")
         let expDict = json["expectation"] as? [String: Any]
@@ -847,7 +847,7 @@ final class TheFenceTests: XCTestCase {
 
     func testActionWithoutExpectationJSON() {
         let result = ActionResult(success: true, method: .activate)
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .getPasteboard, result: result)
         let json = publicJSONObject(response)
         XCTAssertEqual(json["status"] as? String, "ok")
         XCTAssertNil(json["expectation"])
@@ -861,7 +861,7 @@ final class TheFenceTests: XCTestCase {
             screenName: "Receipt",
             screenId: "receipt"
         )
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .getPasteboard, result: result)
 
         let encoded = try Self.jsonObject(from: response.jsonData())
         let dict = publicJSONObject(response)
@@ -880,7 +880,7 @@ final class TheFenceTests: XCTestCase {
             message: "Could not access accessibility tree: no traversable app windows",
             errorKind: .actionFailed
         )
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
 
         let json = publicJSONObject(response)
 
@@ -899,7 +899,7 @@ final class TheFenceTests: XCTestCase {
             message: "Could not access accessibility tree: no traversable app windows",
             errorKind: .actionFailed
         )
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
 
         let encoded = try Self.jsonObject(from: response.jsonData())
         let dict = publicJSONObject(response)
@@ -920,8 +920,8 @@ final class TheFenceTests: XCTestCase {
         )
 
         let details = FenceResponse.actionFailureDetails(result)
-        let compact = FenceResponse.action(result: result).compactFormatted()
-        let json = publicJSONObject(FenceResponse.action(result: result))
+        let compact = FenceResponse.action(command: .waitFor, result: result).compactFormatted()
+        let json = publicJSONObject(FenceResponse.action(command: .waitFor, result: result))
 
         XCTAssertEqual(details?.errorCode, "request.accessibility_tree_unavailable")
         XCTAssertEqual(
@@ -1302,7 +1302,7 @@ final class TheFenceTests: XCTestCase {
             method: .activate,
             accessibilityTrace: makeReceiptTestTrace(before: before, after: after)
         )
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
         let json = publicJSONObject(response)
         let deltaDict = json["delta"] as! [String: Any]
         let editsDict = deltaDict["edits"] as! [String: Any]
@@ -1350,7 +1350,7 @@ final class TheFenceTests: XCTestCase {
             method: .activate,
             accessibilityTrace: makeReceiptTestTrace(before: before, after: after)
         )
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
         let json = publicJSONObject(response)
         let deltaDict = json["delta"] as! [String: Any]
         // Geometry-only updates are dropped — and with no other edits, the
@@ -1362,7 +1362,7 @@ final class TheFenceTests: XCTestCase {
         let interface = makeReceiptTestInterface(elementCount: 3)
         let trace = makeReceiptTestTrace(before: interface, after: interface)
         let result = ActionResult(success: true, method: .activate, accessibilityTrace: trace)
-        let response = FenceResponse.action(result: result)
+        let response = FenceResponse.action(command: .activate, result: result)
         let json = publicJSONObject(response)
         let deltaDict = json["delta"] as! [String: Any]
         let edgeDict = deltaDict["captureEdge"] as! [String: Any]
@@ -1656,7 +1656,7 @@ final class TheFenceTests: XCTestCase {
         )
 
         state.noteDispatchedResponse(
-            .action(result: ActionResult(success: true, method: .activate)),
+            .action(command: .activate, result: ActionResult(success: true, method: .activate)),
             latencyMs: 17
         )
 
@@ -3018,7 +3018,7 @@ final class TheFenceTests: XCTestCase {
                 ]),
             ]
         )
-        if case .action(_, let expectation) = response {
+        if case .action(_, _, let expectation) = response {
             XCTAssertEqual(expectation?.met, false)
         } else {
             XCTFail("Expected action response, got \(response)")
@@ -3063,7 +3063,7 @@ final class TheFenceTests: XCTestCase {
             values: ["expect": expectationValue(type: "screen_changed")]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertTrue(result.success)
             XCTAssertEqual(result.accessibilityDelta?.isScreenChanged, true)
             XCTAssertEqual(expectation?.met, true)
@@ -3150,7 +3150,7 @@ final class TheFenceTests: XCTestCase {
             values: ["expect": expectationValue(type: "screen_changed")]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertTrue(result.success)
             XCTAssertEqual(result.message, "expectation already met by background change")
             XCTAssertNotNil(expectation)
@@ -3193,7 +3193,7 @@ final class TheFenceTests: XCTestCase {
             values: ["expect": expectationValue(type: "screen_changed")]
         )
 
-        guard case .action(let result, let expectation) = response else {
+        guard case .action(_, let result, let expectation) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
         XCTAssertTrue(result.success)
@@ -3245,7 +3245,7 @@ final class TheFenceTests: XCTestCase {
             if case .activate = sent { return true }
             return false
         }, "Action must dispatch even when a queued background trace already matches")
-        if case .action(_, let expectation) = response {
+        if case .action(_, _, let expectation) = response {
             XCTAssertEqual(expectation?.met, false)
         } else {
             XCTFail("Expected action response, got \(response)")
@@ -3300,7 +3300,7 @@ final class TheFenceTests: XCTestCase {
         let sentNames = mockConn.sent.map { $0.0.canonicalName }
         XCTAssertTrue(sentNames.contains("activate"))
         XCTAssertTrue(sentNames.contains("wait_for_change"))
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertEqual(result.method, .waitForChange)
             XCTAssertEqual(expectation?.met, true)
         } else {
@@ -3340,7 +3340,7 @@ final class TheFenceTests: XCTestCase {
             ]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertFalse(result.success)
             XCTAssertEqual(result.method, .waitForChange)
             XCTAssertEqual(result.errorKind, .timeout)
@@ -3378,7 +3378,7 @@ final class TheFenceTests: XCTestCase {
             ]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertTrue(result.success)
             XCTAssertEqual(result.method, .activate)
             XCTAssertEqual(expectation?.met, false)
@@ -3422,7 +3422,7 @@ final class TheFenceTests: XCTestCase {
             return false
         }
         XCTAssertTrue(waitMessages.isEmpty)
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertEqual(result.method, .activate)
             XCTAssertEqual(expectation?.met, true)
         } else {
@@ -3446,7 +3446,7 @@ final class TheFenceTests: XCTestCase {
                 command: .activate,
                 values: ["target": targetArgumentValue(heistId: "some_button")]
             )
-            if case .action(let result, _) = response {
+            if case .action(_, let result, _) = response {
                 XCTAssertFalse(result.success)
                 XCTAssertNotEqual(result.message, "expectation already met by background change")
             }
@@ -3486,7 +3486,7 @@ final class TheFenceTests: XCTestCase {
             ]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertTrue(result.success)
             XCTAssertEqual(result.method, .activate)
             XCTAssertEqual(expectation?.met, false)
@@ -3531,7 +3531,7 @@ final class TheFenceTests: XCTestCase {
             ]
         )
 
-        if case .action(_, let expectation) = response {
+        if case .action(_, _, let expectation) = response {
             XCTAssertEqual(expectation?.met, true)
         } else {
             XCTFail("Expected action response, got \(response)")
@@ -3627,7 +3627,7 @@ final class TheFenceTests: XCTestCase {
             ]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertEqual(result.method, .waitForChange)
             XCTAssertEqual(expectation?.met, true)
         } else {
@@ -3696,7 +3696,7 @@ final class TheFenceTests: XCTestCase {
                 ]),
             ]
         )
-        guard case .action(let result, let expectation) = response else {
+        guard case .action(_, let result, let expectation) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
         XCTAssertTrue(result.success)
@@ -3714,7 +3714,7 @@ final class TheFenceTests: XCTestCase {
         let heist = try TheBookKeeper.readHeist(from: output)
         XCTAssertEqual(heist.steps.count, 1)
         XCTAssertEqual(heist.steps[0].recorded?.heistId, "pay_button")
-        XCTAssertEqual(heist.steps[0].target?.matcher.identifier, "checkout.pay")
+        XCTAssertEqual(heist.steps[0].target, semanticTarget(identifier: "checkout.pay"))
         XCTAssertEqual(heist.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
         XCTAssertEqual(heist.steps[0].recorded?.expectation?.met, true)
         try? await fence.bookKeeper.closeSession()
@@ -3738,7 +3738,7 @@ final class TheFenceTests: XCTestCase {
             values: ["target": targetArgumentValue(label: "Plain Success")]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertTrue(result.success)
             XCTAssertNil(expectation)
         } else {
@@ -3776,7 +3776,7 @@ final class TheFenceTests: XCTestCase {
             command: .activate,
             values: ["target": targetArgumentValue(heistId: "pay_button")]
         )
-        guard case .action(let result, _) = response else {
+        guard case .action(_, let result, _) = response else {
             return XCTFail("Expected action response, got \(response)")
         }
         XCTAssertTrue(result.success)
@@ -3784,7 +3784,7 @@ final class TheFenceTests: XCTestCase {
         let evidence = try XCTUnwrap(heistEvidence(in: fence))
         XCTAssertEqual(evidence.count, 1)
         XCTAssertEqual(evidence[0].recorded?.heistId, "pay_button")
-        XCTAssertEqual(evidence[0].target?.matcher.identifier, "checkout.pay")
+        XCTAssertEqual(evidence[0].target, semanticTarget(identifier: "checkout.pay"))
         try? await fence.bookKeeper.closeSession()
     }
 
@@ -3811,7 +3811,7 @@ final class TheFenceTests: XCTestCase {
             values: ["target": targetArgumentValue(label: "Missing")]
         )
 
-        if case .action(let result, let expectation) = response {
+        if case .action(_, let result, let expectation) = response {
             XCTAssertFalse(result.success)
             XCTAssertEqual(expectation?.met, false)
         } else {
@@ -4091,8 +4091,7 @@ final class TheFenceTests: XCTestCase {
     }
 
     private func decodeActionExpectationJSON(_ result: ExpectationResult) throws -> ActionExpectationPublicJSON {
-        let response = FenceResponse.action(
-            result: ActionResult(success: true, method: .activate),
+        let response = FenceResponse.action(command: .activate, result: ActionResult(success: true, method: .activate),
             expectation: result
         )
         return try JSONDecoder().decode(ActionExpectationPublicJSON.self, from: response.jsonData())

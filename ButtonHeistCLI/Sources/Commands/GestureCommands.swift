@@ -8,7 +8,7 @@ extension GestureCLICommandContract {
         numbers: [(FenceParameterKey, Double?)] = [],
         strings: [(FenceParameterKey, String?)] = [],
         objects: [(FenceParameterKey, [FenceParameterKey: HeistValue]?)] = []
-    ) throws -> NormalizedOperation {
+    ) throws -> TheFence.CommandArgumentEnvelope {
         let target = try element.parsedTarget()
         var merged = parameters
         for (key, value) in numbers {
@@ -25,19 +25,20 @@ extension GestureCLICommandContract {
                 ))
             }
         }
-        return try fenceOperation(merged, target: target)
+        return fenceArguments(merged, target: target)
     }
 
     @ButtonHeistActor
     static func sendGesture(
-        _ operation: NormalizedOperation,
+        _ arguments: TheFence.CommandArgumentEnvelope,
         connection: ConnectionOptions,
         output: OutputOptions
     ) async throws {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: operation,
+            command: fenceCommand,
+            arguments: arguments,
             statusMessage: "Sending gesture..."
         )
     }

@@ -7,7 +7,7 @@ final class ElementActionRequestContractTests: XCTestCase {
     @ButtonHeistActor
     func testActivateMissingTargetKeepsContractDiagnostics() async throws {
         let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(operation: normalizedOperation(command: .activate))
+        let response = try await fence.execute(command: .activate)
 
         guard case .error(let message, let details) = response else {
             return XCTFail("Expected error response")
@@ -81,7 +81,8 @@ final class ElementActionRequestContractTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         do {
             let response = try await fence.execute(
-                operation: normalizedOperation(command: command, arguments: arguments)
+                command: command,
+                values: arguments
             )
             guard case .error(let message, _) = response else {
                 return XCTFail("Expected error response", file: file, line: line)
@@ -96,16 +97,6 @@ final class ElementActionRequestContractTests: XCTestCase {
             XCTFail("Unexpected throw: \(error)", file: file, line: line)
         }
     }
-}
-
-private func normalizedOperation(
-    command: TheFence.Command,
-    arguments: [String: HeistValue] = [:]
-) -> NormalizedOperation {
-    NormalizedOperation(
-        command: command,
-        arguments: TheFence.CommandArgumentEnvelope(values: arguments)
-    )
 }
 
 private func targetValue(identifier: String) -> HeistValue {

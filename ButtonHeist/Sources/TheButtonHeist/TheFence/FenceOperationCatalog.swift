@@ -11,43 +11,29 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
     public var errorDescription: String? { message }
 }
 
-/// Canonical Fence operation routed from external input.
-public struct NormalizedOperation {
-    public let command: TheFence.Command
-    public let arguments: TheFence.CommandArgumentEnvelope
-}
-
 /// Shared routing table for MCP tool calls and batch steps.
 public enum FenceOperationCatalog {
     public static func normalizeToolCall(
-        name: String,
-        arguments: TheFence.CommandArgumentEnvelope
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        name: String
+    ) -> Result<TheFence.Command, FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: name),
               command.descriptor.mcpExposure == .directTool else {
             return .failure(FenceOperationRoutingError(message: "Unknown tool: \(name)"))
         }
 
-        return .success(NormalizedOperation(command: command, arguments: arguments))
-    }
-
-    public static func normalizeCommand(
-        _ command: TheFence.Command,
-        arguments: TheFence.CommandArgumentEnvelope
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        .success(NormalizedOperation(command: command, arguments: arguments))
+        return .success(command)
     }
 
     public static func normalizeBatchStep(
-        _ step: TheFence.CommandArgumentObject
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+        _ step: TheFence.CommandArgumentEnvelope
+    ) -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
         normalizeBatchStep(step, context: "run_batch step")
     }
 
     public static func normalizeBatchStep(
-        _ step: TheFence.CommandArgumentObject,
+        _ step: TheFence.CommandArgumentEnvelope,
         context: String
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+    ) -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
         normalizeCanonicalStep(
             step,
             context: context,
@@ -55,12 +41,12 @@ public enum FenceOperationCatalog {
         )
     }
 
-    public static func normalizeCommandObject(
-        _ object: TheFence.CommandArgumentObject,
+    public static func normalizeCommandEnvelope(
+        _ arguments: TheFence.CommandArgumentEnvelope,
         context: String
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+    ) -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
         normalizeCanonicalStep(
-            object,
+            arguments,
             context: context,
             isExecutable: nil
         )
@@ -74,10 +60,10 @@ public enum FenceOperationCatalog {
     }
 
     private static func normalizeCanonicalStep(
-        _ step: TheFence.CommandArgumentObject,
+        _ step: TheFence.CommandArgumentEnvelope,
         context: String,
         isExecutable: KeyPath<TheFence.Command, Bool>?
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+    ) -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
         let commandName: String
         do {
             commandName = try step.requiredSchemaString("command")
@@ -87,16 +73,9 @@ public enum FenceOperationCatalog {
             return .failure(FenceOperationRoutingError(message: error.localizedDescription))
         }
 
-        var argumentValues = step.argumentValues
-        argumentValues.removeValue(forKey: "command")
-        let arguments = TheFence.CommandArgumentEnvelope(
-            values: argumentValues,
-            fieldPrefix: step.argumentFieldPrefix
-        )
-
         return normalizeCanonicalStep(
             commandName: commandName,
-            arguments: arguments,
+            arguments: step.dropping("command"),
             context: context,
             isExecutable: isExecutable
         )
@@ -107,7 +86,7 @@ public enum FenceOperationCatalog {
         arguments: TheFence.CommandArgumentEnvelope,
         context: String,
         isExecutable: KeyPath<TheFence.Command, Bool>?
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+    ) -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command must be a canonical TheFence.Command; unknown command \"\(commandName)\""
@@ -120,7 +99,7 @@ public enum FenceOperationCatalog {
             ))
         }
 
-        return .success(NormalizedOperation(command: command, arguments: arguments))
+        return .success((command: command, arguments: arguments))
     }
 
     private static func normalizeTypedPlaybackStep(

@@ -40,25 +40,20 @@ extension TheFence {
 
     @ButtonHeistActor
     func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
-        try await execute(operation: NormalizedOperation(
-            command: command,
-            arguments: CommandArgumentEnvelope(values: values)
-        ))
+        try await execute(command: command, arguments: CommandArgumentEnvelope(values: values))
     }
 }
 
 func semanticTarget(
-    sourceHeistId: HeistId? = nil,
     label: String? = nil,
     identifier: String? = nil,
     value: String? = nil,
     traits: [HeistTrait]? = nil,
     excludeTraits: [HeistTrait]? = nil,
     ordinal: Int? = nil
-) -> SemanticActionTarget {
-    SemanticActionTarget(
-        sourceHeistId: sourceHeistId,
-        matcher: ElementMatcher(
+) -> ElementTarget {
+    .matcher(
+        ElementMatcher(
             label: label,
             identifier: identifier,
             value: value,
@@ -385,7 +380,7 @@ func makeExpectationBatchOutcome(
     let result = ActionResult(success: true, method: .activate)
     return BatchStepOutcome(
         command: command,
-        response: .action(result: result, expectation: expectation),
+        response: .action(command: .activate, result: result, expectation: expectation),
         stopsBatch: stopsBatch
     )
 }

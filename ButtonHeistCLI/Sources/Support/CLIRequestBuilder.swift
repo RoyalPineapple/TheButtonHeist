@@ -8,7 +8,8 @@ enum CLIRequestInputMode: Equatable {
 }
 
 struct CLIParsedRequest {
-    let operation: NormalizedOperation
+    let command: TheFence.Command
+    let arguments: TheFence.CommandArgumentEnvelope
     let requestId: PublicRequestId?
     let mode: CLIRequestInputMode
 }
@@ -22,22 +23,15 @@ struct CLIRequestBuildError: Error, CustomStringConvertible {
 
 enum CLIRequestBuilder {
 
-    static func operation(
-        command: TheFence.Command,
+    static func arguments(
         parameters: CLIRequestParameters = [:],
         target: ElementTarget? = nil
-    ) throws -> NormalizedOperation {
+    ) -> TheFence.CommandArgumentEnvelope {
         let values = Dictionary(
             parameters.map { ($0.key.rawValue, $0.value) },
             uniquingKeysWith: { _, newest in newest }
         )
-        let arguments = TheFence.CommandArgumentEnvelope(values: values, elementTarget: target)
-        switch FenceOperationCatalog.normalizeCommand(command, arguments: arguments) {
-        case .success(let operation):
-            return operation
-        case .failure(let error):
-            throw ValidationError(error.message)
-        }
+        return TheFence.CommandArgumentEnvelope(values: values, elementTarget: target)
     }
 
     static func parsedRequest(from line: String, acceptsHumanInput: Bool = true) throws -> CLIParsedRequest {
@@ -56,13 +50,14 @@ enum CLIRequestBuilder {
             throw ValidationError("Unknown command. Type 'help' for available commands.")
         }
 
-        let operation = try FenceCommandDescriptor.humanOperation(
+        let request = try FenceCommandDescriptor.humanCommandRequest(
             commandName: first,
             arguments: Array(tokens.dropFirst())
         )
 
         return CLIParsedRequest(
-            operation: operation,
+            command: request.command,
+            arguments: request.arguments,
             requestId: nil,
             mode: .human
         )
@@ -109,18 +104,17 @@ enum CLIRequestBuilder {
         }
         let requestId = envelope.requestId
         do {
-            let operation: NormalizedOperation
-            switch FenceOperationCatalog.normalizeCommandObject(envelope.arguments, context: "JSON input") {
-            case .success(let normalizedOperation):
-                operation = normalizedOperation
+            switch FenceOperationCatalog.normalizeCommandEnvelope(envelope.arguments, context: "JSON input") {
+            case .success(let routed):
+                return CLIParsedRequest(
+                    command: routed.command,
+                    arguments: routed.arguments,
+                    requestId: requestId,
+                    mode: .machine
+                )
             case .failure(let error):
                 throw ValidationError(error.message)
             }
-            return CLIParsedRequest(
-                operation: operation,
-                requestId: requestId,
-                mode: .machine
-            )
         } catch let error as CLIRequestBuildError {
             throw error
         } catch {
@@ -139,7 +133,7 @@ enum CLIRequestBuilder {
 
 private struct CLIMachineRequestEnvelope {
     let requestId: PublicRequestId?
-    let arguments: TheFence.CommandArgumentObject
+    let arguments: TheFence.CommandArgumentEnvelope
 
     static func decode(from line: String) throws -> Self {
         let requestId = try CLIMachineRequestIdBoundary.requestId(in: line)
@@ -158,7 +152,7 @@ private struct CLIMachineRequestEnvelope {
 }
 
 private struct CLIMachineRequestArguments: Decodable {
-    let arguments: TheFence.CommandArgumentObject
+    let arguments: TheFence.CommandArgumentEnvelope
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
@@ -170,7 +164,7 @@ private struct CLIMachineRequestArguments: Decodable {
                 values[key.stringValue] = try container.decode(HeistValue.self, forKey: key)
             }
         }
-        arguments = TheFence.CommandArgumentObject(values: values, fieldPrefix: nil)
+        arguments = TheFence.CommandArgumentEnvelope(values: values, fieldPrefix: nil)
     }
 }
 

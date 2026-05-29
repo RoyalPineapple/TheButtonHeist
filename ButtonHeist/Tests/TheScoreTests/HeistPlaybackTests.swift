@@ -10,9 +10,9 @@ final class HeistPlaybackTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.buttonheist.testapp",
             steps: [
-                HeistEvidence(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
-                HeistEvidence(command: "type_text", arguments: ["text": .string("user@example.com")]),
-                HeistEvidence(command: "activate", target: semanticTarget(label: "Submit", traits: [.button])),
+                try HeistEvidence(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
+                try HeistEvidence(command: "type_text", arguments: ["text": .string("user@example.com")]),
+                try HeistEvidence(command: "activate", target: semanticTarget(label: "Submit", traits: [.button])),
             ]
         )
 
@@ -29,8 +29,7 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.app, "com.buttonheist.testapp")
         XCTAssertEqual(decoded.steps.count, 3)
         XCTAssertEqual(decoded.steps[0].command, "activate")
-        XCTAssertEqual(decoded.steps[0].target?.matcher.label, "Login")
-        XCTAssertEqual(decoded.steps[0].target?.matcher.traits, [.button])
+        XCTAssertEqual(decoded.steps[0].target, semanticTarget(label: "Login", traits: [.button]))
         XCTAssertEqual(decoded.steps[1].command, "type_text")
         XCTAssertEqual(decoded.steps[1].arguments["text"], .string("user@example.com"))
         XCTAssertNil(decoded.steps[1].target)
@@ -81,7 +80,7 @@ final class HeistPlaybackTests: XCTestCase {
     // MARK: - Heist Step Target Encoding
 
     func testStepEncodesTargetObject() throws {
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "swipe",
             target: semanticTarget(label: "List", traits: [.adjustable]),
             arguments: ["direction": .string("up")]
@@ -99,7 +98,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepRoundTripsTarget() throws {
-        let original = HeistEvidence(
+        let original = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Submit", traits: [.button])
         )
@@ -107,8 +106,7 @@ final class HeistPlaybackTests: XCTestCase {
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
         XCTAssertEqual(step.command, "activate")
-        XCTAssertEqual(step.target?.matcher.label, "Submit")
-        XCTAssertEqual(step.target?.matcher.traits, [.button])
+        XCTAssertEqual(step.target, semanticTarget(label: "Submit", traits: [.button]))
         XCTAssertTrue(step.arguments.isEmpty)
     }
 
@@ -116,6 +114,13 @@ final class HeistPlaybackTests: XCTestCase {
         let json = #"{"command":"activate","target":{"heistId":"button_save"}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
+        }
+    }
+
+    func testPlaybackTargetRejectsEmptyMatcherOnDecode() {
+        let json = #"{"command":"activate","target":{}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("requires heistId or matcher"), "\(error)")
         }
     }
 
@@ -127,7 +132,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepWithNoTarget() throws {
-        let original = HeistEvidence(
+        let original = try HeistEvidence(
             command: "type_text",
             arguments: ["text": .string("hello")]
         )
@@ -140,7 +145,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepAllowsRecordedHeistIdMetadata() throws {
-        let original = HeistEvidence(
+        let original = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save"),
             recorded: RecordedMetadata(heistId: "recorded_save")
@@ -148,7 +153,7 @@ final class HeistPlaybackTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
 
-        XCTAssertEqual(step.target?.matcher.label, "Save")
+        XCTAssertEqual(step.target, semanticTarget(label: "Save"))
         XCTAssertEqual(step.recorded?.heistId, "recorded_save")
         XCTAssertNil(step.arguments["heistId"])
     }
@@ -161,7 +166,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepRejectsNegativeOrdinal() throws {
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save", ordinal: -1)
         )
@@ -176,7 +181,7 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepWithRecordedMetadata() throws {
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save", traits: [.button]),
             recorded: RecordedMetadata(
@@ -203,7 +208,7 @@ final class HeistPlaybackTests: XCTestCase {
             elements: [makeElement(heistId: "continue", label: "Continue")],
             timestamp: Date(timeIntervalSince1970: 1)
         )
-        let step = HeistEvidence(
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Continue", traits: [.button]),
             recorded: RecordedMetadata(
@@ -294,8 +299,8 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(decoded.coordinateOnly, true)
     }
 
-    func testHeistEvidenceDescriptionComposesTargetArgumentsAndRecording() {
-        let step = HeistEvidence(
+    func testHeistEvidenceDescriptionComposesTargetArgumentsAndRecording() throws {
+        let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save", traits: [.button]),
             arguments: [
@@ -310,11 +315,23 @@ final class HeistPlaybackTests: XCTestCase {
             )
         )
 
-        let expected = #"step(command="activate" semanticTarget(matcher(label="Save" traits=[button])) "#
+        let expected = #"step(command="activate" target(matcher(label="Save" traits=[button])) "#
             + #"args=arguments("count"=2 "text"="hello") "#
             + #"recorded(heistId="save_button" frame(1,2,3,4) coordinateOnly=false "#
             + #"expectation(met=true expected=screen_changed actual="screenChanged")))"#
         XCTAssertEqual(step.description, expected)
+    }
+
+    func testProgrammaticEvidenceRejectsCaptureHandleTargetWithoutCrashing() {
+        XCTAssertThrowsError(try HeistEvidence(command: "activate", target: .heistId("button_save"))) { error in
+            XCTAssertEqual(error as? HeistEvidenceError, .captureHandleTarget)
+        }
+    }
+
+    func testProgrammaticEvidenceRejectsEmptyMatcherTargetWithoutCrashing() {
+        XCTAssertThrowsError(try HeistEvidence(command: "activate", target: .matcher(ElementMatcher()))) { error in
+            XCTAssertEqual(error as? HeistEvidenceError, .emptyMatcherTarget)
+        }
     }
 
     // MARK: - Full Heist JSON Shape
@@ -324,7 +341,7 @@ final class HeistPlaybackTests: XCTestCase {
             recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
-                HeistEvidence(
+                try HeistEvidence(
                     command: "activate",
                     target: semanticTarget(label: "Go", traits: [.button]),
                     recorded: RecordedMetadata(heistId: "button_go")
@@ -370,17 +387,15 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     private func semanticTarget(
-        sourceHeistId: HeistId? = nil,
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
         traits: [HeistTrait]? = nil,
         excludeTraits: [HeistTrait]? = nil,
         ordinal: Int? = nil
-    ) -> SemanticActionTarget {
-        SemanticActionTarget(
-            sourceHeistId: sourceHeistId,
-            matcher: ElementMatcher(
+    ) -> ElementTarget {
+        .matcher(
+            ElementMatcher(
                 label: label,
                 identifier: identifier,
                 value: value,

@@ -113,13 +113,13 @@ final class ReplSession {
         }
 
         // Enhanced help for human mode
-        if parsedRequest.operation.command == .help && format == .human && parsedRequest.mode == .human {
+        if parsedRequest.command == .help && format == .human && parsedRequest.mode == .human {
             return (.ok(message: TheFence.Command.cliSessionHelp), nil)
         }
 
         do {
-            let response = try await fence.execute(operation: parsedRequest.operation)
-            if parsedRequest.operation.command == .quit {
+            let response = try await fence.execute(command: parsedRequest.command, arguments: parsedRequest.arguments)
+            if parsedRequest.command == .quit {
                 if case .running(let idleMonitor) = state {
                     idleMonitor?.stop()
                 }

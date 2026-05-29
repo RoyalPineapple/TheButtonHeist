@@ -13,7 +13,7 @@ extension Actions {
     /// Unified pipeline for actions that target an element:
     /// semantic selector → reveal plan → fresh live geometry → actionable target.
     func performElementAction(
-        target: SemanticElementTarget,
+        target: ElementTarget,
         method: ActionMethod,
         requireInteractive: Bool = true,
         deallocatedBoundary: String = "element action",
@@ -43,7 +43,7 @@ extension Actions {
     }
 
     private func refreshActivationTarget(
-        _ target: SemanticElementTarget
+        _ target: ElementTarget
     ) async -> ActivationPolicy.RefreshResult {
         stash.refresh()
         switch await navigation.actionability.makeActionable(
@@ -90,14 +90,6 @@ extension Actions {
     // MARK: - Accessibility Actions
 
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await executeActivate(.currentCapture(target))
-    }
-
-    func executeActivate(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
-        await executeActivate(.durable(target))
-    }
-
-    private func executeActivate(_ target: SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .activate
@@ -116,14 +108,6 @@ extension Actions {
     }
 
     func executeIncrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(.currentCapture(target))
-    }
-
-    func executeIncrement(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
-        await executeIncrement(.durable(target))
-    }
-
-    private func executeIncrement(_ target: SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .increment,
@@ -150,14 +134,6 @@ extension Actions {
     }
 
     func executeDecrement(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(.currentCapture(target))
-    }
-
-    func executeDecrement(_ target: SemanticActionTarget) async -> TheSafecracker.InteractionResult {
-        await executeDecrement(.durable(target))
-    }
-
-    private func executeDecrement(_ target: SemanticElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .decrement,
@@ -195,7 +171,7 @@ extension Actions {
             )
         case .element(let elementTarget, let actionName):
             return await performElementAction(
-                target: .currentCapture(elementTarget),
+                target: elementTarget,
                 method: .customAction,
                 deallocatedBoundary: "custom action"
             ) { context in
@@ -246,7 +222,7 @@ extension Actions {
         let liveContainerTarget: TheStash.LiveContainerTarget
         switch stash.resolveLiveContainerTarget(for: containerTarget) {
         case .resolved(let target):
-            if let failure = await navigation.actionability.scrollActivationPointIntoBounds(
+            let placement = await navigation.actionability.scrollActivationPointIntoBounds(
                 target.activationPoint,
                 in: stash.liveScrollView(forContainerPath: containerTarget.path),
                 method: .customAction,
@@ -256,7 +232,8 @@ extension Actions {
                 unsafeProgrammaticScrollMessage: "container target \(description) "
                     + "is inside a scroll view that is unsafe for programmatic semantic reveal",
                 scrollFailedMessage: "container target \(description) activation point could not be brought on-screen"
-            ) {
+            )
+            if case .failure(let failure) = placement {
                 return failure.interactionResult(commandMethod: .customAction)
             }
         case .objectUnavailable:

@@ -170,7 +170,7 @@ final class TheBrains {
         // accessibility signature below decides no-change, element-change,
         // or screen-change.
         let settleResult = await settleSession.run(start: start, baselineTripwireSignal: before.tripwireSignal)
-        var didSettle = settleResult.outcome.didSettleCleanly
+        let didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
             var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
             builder.message = "cancelled after \(cancelMs)ms"
@@ -191,22 +191,15 @@ final class TheBrains {
             after: afterSnapshotForClassification
         )
         let isScreenChange = classification.isScreenChange
-        let afterElements = afterScreen?.liveCapture.hierarchy.sortedElements ?? []
-        if isScreenChange && afterElements.isEmpty {
-            let repopulated = await repopulateAfterScreenChange(into: &afterScreen)
-            if !repopulated { didSettle = false }
-        }
-
         if let afterScreen {
             stash.currentScreen = afterScreen
         }
 
-        _ = await navigation.exploreAndPrune()
+        if isScreenChange {
+            _ = await navigation.exploreAndPrune()
+        }
         let afterInterface = stash.interface()
-        let transientElements = Self.shouldSuppressTransient(
-            settleEvents: settleResult.events,
-            isScreenChange: isScreenChange
-        )
+        let transientElements = isScreenChange || settleResult.events.containsTripwireSignalChange
             ? []
             : SettleSession.transientElements(
                 seenByKey: settleResult.elementsByKey,
@@ -239,52 +232,6 @@ final class TheBrains {
         )
 
         return receipt.actionResult()
-    }
-
-    /// Wait for the post-screen-change tree to repopulate. Returns true
-    /// if a non-empty parse landed within the attempt budget.
-    private func repopulateAfterScreenChange(into afterScreen: inout Screen?) async -> Bool {
-        let repopStart = CFAbsoluteTimeGetCurrent()
-        for attempt in 1...10 {
-            _ = await tripwire.waitForAllClear(timeout: 0.2)
-            afterScreen = stash.parse()
-            if !(afterScreen?.semantic.elements.isEmpty ?? true) {
-                let repopMs = Int((CFAbsoluteTimeGetCurrent() - repopStart) * 1000)
-                insideJobLogger.info("Screen re-populated after \(attempt) re-parse(s) in \(repopMs)ms")
-                return true
-            }
-        }
-        insideJobLogger.info("Screen failed to re-populate after 10 attempts; reporting settled=false")
-        return false
-    }
-
-    // MARK: - Transient Capture
-
-    /// Should the post-action delta omit the `transient` list?
-    ///
-    /// `SettleSession.elementsByKey` accumulates every element seen during
-    /// the multi-cycle loop. On a clean same-screen settle (no Tripwire
-    /// signal and no parsed screen change), the "appeared then disappeared"
-    /// elements really are transient — a spinner, a loading overlay, a
-    /// snackbar. On a transition, the same accumulation includes the
-    /// *previous screen's* elements, which are stale-not-transient: they
-    /// didn't come and go as part of this action, they're just no longer the
-    /// active screen. Reporting them as `transient` claims the wrong thing
-    /// and pollutes the delta with elements the agent can no longer see or
-    /// act on.
-    ///
-    /// Both checks matter:
-    /// - `SettleEvent.tripwireSignalChanged`: the loop reset its baseline
-    ///   because a cheap UIKit-side condition changed. Suppress transients
-    ///   because the settle timeline is not a clean same-screen sequence.
-    /// - `isScreenChange` flag: the parsed signature concluded the screen
-    ///   changed even if the settle loop reached `.settled`.
-    static func shouldSuppressTransient(
-        settleEvents: [SettleEvent],
-        isScreenChange: Bool
-    ) -> Bool {
-        if settleEvents.containsTripwireSignalChange { return true }
-        return isScreenChange
     }
 
     // MARK: - Keyboard Observation
@@ -529,7 +476,7 @@ final class TheBrains {
 
     /// A Tripwire tick is permission to parse visible state, not to tickle
     /// scroll views. Full exploration is reserved for screen changes and
-    /// post-action cycles.
+    /// explicit interface observation.
     func semanticStateAfterVisibleRefresh(baseline: BeforeState) async -> BeforeState {
         var current = captureSemanticState()
         let classification = ScreenClassifier.classify(

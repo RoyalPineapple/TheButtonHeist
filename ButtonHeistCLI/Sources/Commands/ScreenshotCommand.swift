@@ -36,13 +36,15 @@ struct ScreenshotCommand: AsyncParsableCommand, CLICommandContract {
             try await CLIRunner.run(
                 connection: connection,
                 format: .human,
-                operation: try Self.fenceOperation(request),
+                command: Self.fenceCommand,
+                arguments: Self.fenceArguments(request),
                 statusMessage: "Requesting screenshot..."
             )
         } else {
             let (fence, response) = try await CLIRunner.execute(
                 connection: connection,
-                operation: try Self.fenceOperation(request),
+                command: Self.fenceCommand,
+                arguments: Self.fenceArguments(request),
                 statusMessage: "Requesting screenshot..."
             )
             defer { fence.stop() }

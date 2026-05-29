@@ -133,11 +133,11 @@ extension CLICommandContract {
         fenceCommand.canonicalName
     }
 
-    static func fenceOperation(
+    static func fenceArguments(
         _ parameters: CLIRequestParameters = [:],
         target: ElementTarget? = nil
-    ) throws -> NormalizedOperation {
-        try CLIRequestBuilder.operation(command: fenceCommand, parameters: parameters, target: target)
+    ) -> TheFence.CommandArgumentEnvelope {
+        CLIRequestBuilder.arguments(parameters: parameters, target: target)
     }
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {

@@ -4,7 +4,7 @@ extension TheFence {
 
     func decodeRotorActionDispatch(
         command: Command,
-        input: some CommandArgumentReadable
+        input: CommandArgumentEnvelope
     ) throws -> DecodedRequestDispatch {
         guard command == .rotor else {
             throw FenceError.invalidRequest("Unexpected rotor action command: \(command.rawValue)")
@@ -35,7 +35,7 @@ extension TheFence {
     }
 }
 
-extension TheFence.CommandArgumentReadable {
+extension TheFence.CommandArgumentEnvelope {
     func rotorContinuation() throws -> RotorContinuation {
         let startOffset = try schemaInteger("currentTextStartOffset")
         let endOffset = try schemaInteger("currentTextEndOffset")

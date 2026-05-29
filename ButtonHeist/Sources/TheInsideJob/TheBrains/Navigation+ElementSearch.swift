@@ -13,7 +13,7 @@ extension Navigation {
     /// Iterative search: page through scroll content looking for an element.
     /// `element_search` never delegates to semantic reveal/actionability commands.
     func executeElementSearch(
-        elementTarget: SemanticElementTarget?,
+        elementTarget: ElementTarget?,
         direction: ScrollSearchDirection
     ) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = elementTarget else {
@@ -21,13 +21,6 @@ extension Navigation {
         }
         let searchDirection = direction
         let requestedAxis = Self.requiredAxis(for: searchDirection)
-        guard let executableSearchTarget = searchTarget.executableTarget else {
-            return .failure(
-                .elementSearch,
-                message: searchTarget.validationFailureMessage
-                    ?? "element_search target requires heistId or semantic matcher predicates"
-            )
-        }
 
         var candidates = scrollSearchCandidates(requiredAxis: requestedAxis)
         if let seed = scrollSearchSeedCandidate(for: searchTarget, requiredAxis: requestedAxis),
@@ -40,7 +33,7 @@ extension Navigation {
             maxScrolls: Self.scrollSearchMaxScrolls
         )
 
-        if let found = stash.resolveFirstVisibleMatch(executableSearchTarget) {
+        if let found = stash.resolveFirstVisibleMatch(searchTarget) {
             return searchFoundResult(
                 found, scrollCount: 0,
                 uniqueElementsSeen: progress.uniqueElementsSeen
@@ -75,7 +68,7 @@ extension Navigation {
                 candidates: &candidates,
                 progress: &progress
             )
-            if let found = stash.resolveFirstVisibleMatch(executableSearchTarget) {
+            if let found = stash.resolveFirstVisibleMatch(searchTarget) {
                 return searchFoundResult(
                     found, scrollCount: progress.scrollCount,
                     uniqueElementsSeen: progress.uniqueElementsSeen
