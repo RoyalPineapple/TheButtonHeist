@@ -3875,17 +3875,17 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackScriptValidationAcceptsCanonicalPlaybackExecutableCommands() async throws {
+    func testPlaybackScriptValidationAcceptsCanonicalBatchExecutableCommands() async throws {
         let playback = HeistPlayback(
             app: "com.test.mock",
-            steps: TheFence.Command.playbackExecutableCases.map { command in
+            steps: TheFence.Command.batchExecutableCases.map { command in
                 HeistEvidence(command: command.rawValue)
             }
         )
         let (fence, _) = makeConnectedFence()
         try fence.validateHeistPlayback(playback)
 
-        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases.map(\.rawValue))
+        XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.batchExecutableCases.map(\.rawValue))
     }
 
     @ButtonHeistActor
@@ -3971,7 +3971,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlaybackScriptValidationRejectsNonExecutableCommands() async throws {
         let (fence, _) = makeConnectedFence()
-        for command in TheFence.Command.allCases where !command.isPlaybackExecutable {
+        for command in TheFence.Command.allCases where !command.isBatchExecutable {
             XCTAssertThrowsError(
                 try fence.validateHeistPlayback(
                     HeistPlayback(app: "com.test.mock", steps: [HeistEvidence(command: command.rawValue)])
@@ -3983,7 +3983,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 }
                 XCTAssertTrue(message.contains("Invalid heist step 0"))
                 XCTAssertTrue(
-                    message.contains("heist step command \"\(command.rawValue)\" is not playback-executable"),
+                    message.contains("heist step command \"\(command.rawValue)\" is not batch-executable"),
                     "Unexpected error for \(command.rawValue): \(message)"
                 )
             }
