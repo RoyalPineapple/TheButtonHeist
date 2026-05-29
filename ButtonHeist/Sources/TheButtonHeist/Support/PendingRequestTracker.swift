@@ -27,8 +27,6 @@ final class PendingRequestTracker<T: Sendable> {
 
     private var pending: [String: PendingRequest] = [:]
 
-    var pendingCount: Int { pending.count }
-
     /// Register a pending request and wait for its response or timeout.
     ///
     /// The caller is suspended until either `resolve(requestId:result:)` is called
