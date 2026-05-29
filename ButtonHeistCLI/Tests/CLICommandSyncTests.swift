@@ -336,6 +336,24 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(target["heistId"], .string("button_save"))
     }
 
+    func testCLIBuilderSerializesMatcherTargetAsFlatTarget() throws {
+        let operation = try TheFence.Command.activate.cliOperation(
+            target: .matcher(
+                ElementMatcher(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
+                ordinal: 1
+            )
+        )
+        guard case .object(let target)? = operation.argument(.target) else {
+            return XCTFail("expected typed target object")
+        }
+
+        XCTAssertNil(target["matcher"])
+        XCTAssertEqual(target["label"], .string("Rotor Host"))
+        XCTAssertEqual(target["identifier"], .string("rotor.host"))
+        XCTAssertEqual(target["traits"], .array([.string("button")]))
+        XCTAssertEqual(target["ordinal"], .int(1))
+    }
+
     func testREPLParsesCoordinateGesture() throws {
         let operation = try ReplSession.parseHumanInput("one_finger_tap x=100 y=200")
 
