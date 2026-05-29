@@ -84,7 +84,7 @@ struct ActivationPolicy {
         tapReceiver: TheSafecracker.TapReceiverDiagnostic?,
         activateOutcome: TheStash.ActivateOutcome
     ) -> TheSafecracker.InteractionResult {
-        let traitNames = ActionCapabilityDiagnostic.traitNames(screenElement.element.traits)
+        let traitNames = screenElement.element.traits.heistTraitNames
         let message = ActivateFailureDiagnostic.build(
             element: screenElement.element,
             traitNames: traitNames,

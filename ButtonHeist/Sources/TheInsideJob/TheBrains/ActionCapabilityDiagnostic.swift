@@ -146,7 +146,7 @@ import AccessibilitySnapshotParser
         if let value = element.value, !value.isEmpty {
             parts.append("value=\(quote(value))")
         }
-        let traits = traitNames(element.traits)
+        let traits = element.traits.heistTraitNames
         parts.append("traits=\(formatList(traits))")
         parts.append("actions=\(formatList(availableActions(for: screenElement, liveObject: liveObject)))")
         if includeLiveState, liveObject == nil {
@@ -221,10 +221,6 @@ import AccessibilitySnapshotParser
             .filter { !$0.isEmpty } ?? []
         appendUnique(liveNames, to: &names)
         return names
-    }
-
-    static func traitNames(_ traits: AccessibilityTraits) -> [String] {
-        traits.heistTraitNames
     }
 
     private static func availableCustomActions(
