@@ -1217,7 +1217,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     .object(["x": .double(1.0), "y": .double(1.0)]),
                 ]),
             ],
-            equals: "schema validation failed for points[0].pressure: observed number 0.5; expected valid draw path point field"
+            equals: "schema validation failed for points[0].pressure: observed number 0.5; expected Unknown draw path point field \"pressure\""
         )
     }
 
@@ -1267,7 +1267,16 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDrawBezierMissingStart() async {
         await assertValidationError(
             command: .drawBezier,
-            equals: "schema validation failed for startX: observed missing; expected number"
+            arguments: [
+                "segments": .array([
+                    .object([
+                        "cp1X": .double(10.0), "cp1Y": .double(20.0),
+                        "cp2X": .double(30.0), "cp2Y": .double(40.0),
+                        "endX": .double(50.0), "endY": .double(60.0),
+                    ]),
+                ]),
+            ],
+            equals: "schema validation failed for startX: observed missing; expected present"
         )
     }
 
@@ -1298,7 +1307,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 "startY": .double(0.0),
                 "segments": .array([.object(["cp1X": .double(1.0), "cp1Y": .double(2.0)])]),
             ],
-            equals: "schema validation failed for segments[0].cp2X: observed missing; expected number"
+            equals: "schema validation failed for segments[0].cp2X: observed missing; expected present"
         )
     }
 
@@ -1318,7 +1327,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     ]),
                 ]),
             ],
-            equals: "schema validation failed for segments[0].weight: observed number 0.5; expected valid bezier segment field"
+            equals: "schema validation failed for segments[0].weight: observed number 0.5; expected Unknown bezier segment field \"weight\""
         )
     }
 
