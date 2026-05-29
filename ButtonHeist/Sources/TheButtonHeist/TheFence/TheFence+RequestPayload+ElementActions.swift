@@ -29,8 +29,4 @@ extension TheFence {
     func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {
         try arguments.elementTarget()
     }
-
-    func decodedElementMatcher(_ arguments: some CommandArgumentReadable) throws -> ElementMatcher {
-        try arguments.matcher()
-    }
 }

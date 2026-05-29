@@ -32,17 +32,19 @@ final class TheFenceTests: XCTestCase {
         XCTAssertFalse(markdown.contains("- Command:"))
     }
 
-    // MARK: - Element Matcher Validation
+    // MARK: - Element Target Validation
 
     @ButtonHeistActor
-    func testElementMatcherRejectsUnknownTrait() async {
+    func testElementTargetRejectsUnknownTrait() async {
         let fence = TheFence(configuration: .init())
         let args = TheFence.CommandArgumentEnvelope(values: [
-            "traits": .array([.string("madeUpTrait")]),
+            "target": .object([
+                "traits": .array([.string("madeUpTrait")]),
+            ]),
         ])
-        let expectedError = "schema validation failed for traits[0]: observed string \"madeUpTrait\"; " +
-            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.decodedElementMatcher(args)) { error in
+        let expectedError = "schema validation failed for target.traits[0]: observed string \"madeUpTrait\"; " +
+            "expected Unknown HeistTrait: \"madeUpTrait\""
+        XCTAssertThrowsError(try fence.decodedElementTarget(args)) { error in
             XCTAssertEqual(
                 error.localizedDescription,
                 expectedError
@@ -51,14 +53,16 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementMatcherRejectsUnknownExcludeTrait() async {
+    func testElementTargetRejectsUnknownExcludeTrait() async {
         let fence = TheFence(configuration: .init())
         let args = TheFence.CommandArgumentEnvelope(values: [
-            "excludeTraits": .array([.string("bogus")]),
+            "target": .object([
+                "excludeTraits": .array([.string("bogus")]),
+            ]),
         ])
-        let expectedError = "schema validation failed for excludeTraits[0]: observed string \"bogus\"; " +
-            "expected enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
-        XCTAssertThrowsError(try fence.decodedElementMatcher(args)) { error in
+        let expectedError = "schema validation failed for target.excludeTraits[0]: observed string \"bogus\"; " +
+            "expected Unknown HeistTrait: \"bogus\""
+        XCTAssertThrowsError(try fence.decodedElementTarget(args)) { error in
             XCTAssertEqual(
                 error.localizedDescription,
                 expectedError
@@ -67,13 +71,17 @@ final class TheFenceTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementMatcherAcceptsKnownTraits() async throws {
+    func testElementTargetAcceptsKnownTraits() async throws {
         let fence = TheFence(configuration: .init())
         let args = TheFence.CommandArgumentEnvelope(values: [
-            "traits": .array([.string("button"), .string("header")]),
-            "excludeTraits": .array([.string("selected")]),
+            "target": .object([
+                "traits": .array([.string("button"), .string("header")]),
+                "excludeTraits": .array([.string("selected")]),
+            ]),
         ])
-        let matcher = try fence.decodedElementMatcher(args)
+        guard case .matcher(let matcher, nil)? = try fence.decodedElementTarget(args) else {
+            return XCTFail("Expected matcher target")
+        }
         XCTAssertEqual(matcher.traits, [.button, .header])
         XCTAssertEqual(matcher.excludeTraits, [.selected])
     }

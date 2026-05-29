@@ -7,7 +7,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Execute a batch of Button Heist steps from a JSON payload",
         discussion: """
-            Reads a steps array (`[{ "command": "activate", "target": { "heistId": "…" } }, …]`)
+            Reads a steps array (`[{ "command": "activate", "target": { "label": "Sign In", "traits": ["button"] } }, …]`)
             either inline via --steps or from a JSON file. Each step is a full
             Button Heist request dictionary as produced by get_interface / session
             JSON mode.
@@ -19,7 +19,7 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
             Examples:
               buttonheist run_batch --steps-from-file steps.json
               buttonheist run_batch --steps-from-file steps.json --policy continue_on_error
-              buttonheist run_batch --steps '[{"command":"activate","target":{"heistId":"btn-OK"}}]'
+              buttonheist run_batch --steps '[{"command":"activate","target":{"label":"OK","traits":["button"]}}]'
             """
     )
 

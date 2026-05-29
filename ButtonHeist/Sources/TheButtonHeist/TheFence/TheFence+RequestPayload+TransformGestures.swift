@@ -5,17 +5,41 @@ import TheScore
 extension TheFence {
 
     func decodePinchTarget(_ request: some CommandArgumentReadable) throws -> PinchTarget {
-        let target = try request.inlineElementTargetArgument().decodeCommandPayload(PinchTarget.self)
+        let scale = try request.requiredNumber("scale")
+        let target = PinchTarget(
+            center: try decodeRequiredPointIntent(
+                request: request,
+                elementTarget: try decodedElementTarget(request),
+                xKey: "centerX",
+                yKey: "centerY",
+                field: "centerX/centerY",
+                missingMessage: "center requires an element target or center coordinates"
+            ),
+            scale: scale,
+            spread: try request.number("spread"),
+            duration: try request.gestureDuration()
+        )
         try validatePositiveGestureNumber(target.scale, field: "scale")
         try validatePositiveGestureNumber(target.spread, field: "spread")
-        try validateGestureDuration(target.duration)
         return target
     }
 
     func decodeRotateTarget(_ request: some CommandArgumentReadable) throws -> RotateTarget {
-        let target = try request.inlineElementTargetArgument().decodeCommandPayload(RotateTarget.self)
+        let angle = try request.requiredNumber("angle")
+        let target = RotateTarget(
+            center: try decodeRequiredPointIntent(
+                request: request,
+                elementTarget: try decodedElementTarget(request),
+                xKey: "centerX",
+                yKey: "centerY",
+                field: "centerX/centerY",
+                missingMessage: "center requires an element target or center coordinates"
+            ),
+            angle: angle,
+            radius: try request.number("radius"),
+            duration: try request.gestureDuration()
+        )
         try validatePositiveGestureNumber(target.radius, field: "radius")
-        try validateGestureDuration(target.duration)
         return target
     }
 }

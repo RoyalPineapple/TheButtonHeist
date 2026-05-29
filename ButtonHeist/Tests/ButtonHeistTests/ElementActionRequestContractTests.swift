@@ -34,7 +34,7 @@ final class ElementActionRequestContractTests: XCTestCase {
         await assertExecutionError(
             command: .activate,
             arguments: [
-                "target": matcherTargetValue(identifier: "counter"),
+                "target": targetValue(identifier: "counter"),
                 "action": .string("increment"),
                 "count": .int(0),
             ],
@@ -47,7 +47,7 @@ final class ElementActionRequestContractTests: XCTestCase {
         await assertExecutionError(
             command: .rotor,
             arguments: [
-                "target": matcherTargetValue(identifier: "body"),
+                "target": targetValue(identifier: "body"),
                 "currentHeistId": .string("body-current"),
                 "currentTextStartOffset": .int(10),
                 "currentTextEndOffset": .int(4),
@@ -62,7 +62,7 @@ final class ElementActionRequestContractTests: XCTestCase {
         await assertExecutionError(
             command: .scroll,
             arguments: [
-                "target": matcherTargetValue(identifier: "row"),
+                "target": targetValue(identifier: "row"),
                 "container": .object(["stableId": .string("list")]),
             ],
             contains: "schema validation failed for target: observed"
@@ -108,8 +108,6 @@ private func normalizedOperation(
     )
 }
 
-private func matcherTargetValue(identifier: String) -> HeistValue {
-    .object([
-        "matcher": .object(["identifier": .string(identifier)]),
-    ])
+private func targetValue(identifier: String) -> HeistValue {
+    .object(["identifier": .string(identifier)])
 }
