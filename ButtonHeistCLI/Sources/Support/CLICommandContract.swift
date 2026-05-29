@@ -16,10 +16,6 @@ struct CLICommandAdapter {
     let commandType: ParsableCommand.Type
     let fenceDescriptor: FenceCommandDescriptor?
 
-    var fenceCommand: TheFence.Command? {
-        fenceDescriptor?.command
-    }
-
     static func fence(_ commandType: CLICommandContract.Type, descriptor: FenceCommandDescriptor) -> Self {
         Self(
             commandType: commandType,
@@ -113,10 +109,6 @@ enum CLICommandAdapterCatalog {
         descriptorsByCommandType[ObjectIdentifier(commandType)]
     }
 
-    static func fenceCommand(for commandType: CLICommandContract.Type) -> TheFence.Command? {
-        descriptor(for: commandType)?.command
-    }
-
     private static let descriptorsByCommandType: [ObjectIdentifier: FenceCommandDescriptor] = {
         return Dictionary(
             uniqueKeysWithValues: adapters.compactMap { adapter in
@@ -130,7 +122,7 @@ enum CLICommandAdapterCatalog {
 
 extension CLICommandContract {
     static var fenceCommand: TheFence.Command {
-        guard let command = CLICommandAdapterCatalog.fenceCommand(for: Self.self) else {
+        guard let command = CLICommandAdapterCatalog.descriptor(for: Self.self)?.command else {
             fatalError("No Fence command descriptor registered for CLI adapter \(Self.self)")
         }
 
@@ -145,7 +137,7 @@ extension CLICommandContract {
         _ parameters: CLIRequestParameters = [:],
         target: ElementTarget? = nil
     ) throws -> NormalizedOperation {
-        try fenceCommand.cliOperation(parameters, target: target)
+        try CLIRequestBuilder.operation(command: fenceCommand, parameters: parameters, target: target)
     }
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {
@@ -172,15 +164,6 @@ extension CLICommandContract {
     ) -> String? {
         let values = catalogAllowedValues(for: key)
         return values.contains(value) ? value : nil
-    }
-}
-
-extension TheFence.Command {
-    func cliOperation(
-        _ parameters: CLIRequestParameters = [:],
-        target: ElementTarget? = nil
-    ) throws -> NormalizedOperation {
-        try CLIRequestBuilder.operation(command: self, parameters: parameters, target: target)
     }
 }
 
