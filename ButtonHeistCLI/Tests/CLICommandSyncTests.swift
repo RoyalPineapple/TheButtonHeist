@@ -161,6 +161,16 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.command, .typeText)
     }
 
+    func testSharedRequestBuilderParsesStringMachineRequestIdAsMetadata() throws {
+        let parsed = try CLIRequestBuilder.parsedRequest(
+            from: #"{"id":"request-1","command":"type_text","text":"hello"}"#
+        )
+
+        XCTAssertEqual(parsed.requestId, .string("request-1"))
+        XCTAssertNil(parsed.operation.argumentValue("id"))
+        XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
+    }
+
     func testSharedRequestBuilderParsesTypedMachineRequestId() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
             from: #"{"id":9223372036854775807,"command":"type_text","text":"hello"}"#
