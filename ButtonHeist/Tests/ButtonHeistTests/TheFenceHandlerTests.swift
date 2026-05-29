@@ -2491,7 +2491,7 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"expectation matcher does not accept "matcher.unknown""#)
+            XCTAssertEqual(message, #"Unknown element matcher field "unknown""#)
         }
     }
 
@@ -2506,7 +2506,7 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"expectation matcher does not accept "matcher.heistId""#)
+            XCTAssertEqual(message, #"Unknown element matcher field "heistId""#)
         }
     }
 
@@ -2547,11 +2547,13 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testParseExpectationDiscriminatorElementAppearedWithoutMatcherThrows() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object(["type": .string("element_appeared")]))) { error in
-            guard case FenceError.invalidRequest(let msg) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            guard let error = error as? SchemaValidationError else {
+                XCTFail("Expected SchemaValidationError, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("matcher"))
+            XCTAssertEqual(error.field, "matcher")
+            XCTAssertEqual(error.observed, "missing")
+            XCTAssertEqual(error.expected, "present")
         }
     }
 
@@ -2582,11 +2584,13 @@ final class TheFenceHandlerTests: XCTestCase {
                 .object(["type": .string("elements_changed")]),
             ]),
         ]))) { error in
-            guard case FenceError.invalidRequest(let msg) = error else {
-                XCTFail("Expected FenceError.invalidRequest, got \(error)")
+            guard let error = error as? SchemaValidationError else {
+                XCTFail("Expected SchemaValidationError, got \(error)")
                 return
             }
-            XCTAssertTrue(msg.contains("must be objects"))
+            XCTAssertEqual(error.field, "expectations[0]")
+            XCTAssertEqual(error.observed, #"string "screen_changed""#)
+            XCTAssertEqual(error.expected, "object")
         }
     }
 

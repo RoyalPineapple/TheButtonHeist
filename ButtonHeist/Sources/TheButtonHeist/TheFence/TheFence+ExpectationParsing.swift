@@ -25,7 +25,107 @@ extension TheFence {
 
         static func parseExpectation(_ value: HeistValue?) throws -> ActionExpectation? {
             guard let value else { return nil }
-            return try FenceExpectationParser.decode(value)
+            guard case .object(let object) = value else {
+                throw FenceError.invalidRequest(
+                    "Invalid expectation type: expected object with a \"type\" discriminator"
+                )
+            }
+            guard let type = object["type"] else {
+                throw FenceError.invalidRequest(
+                    "Expectation object requires a \"type\" discriminator " +
+                        "(e.g. {\"type\": \"element_updated\", …}). " +
+                        "Got keys: \(object.keys.sorted())"
+                )
+            }
+            guard case .string = type else {
+                throw FenceError.invalidRequest(
+                    "Expectation object requires a string \"type\" discriminator " +
+                        "(e.g. {\"type\": \"element_updated\", …}). " +
+                        "Got type: \(type.schemaObservedDescription)"
+                )
+            }
+            do {
+                let data = try JSONEncoder().encode(value)
+                return try JSONDecoder().decode(ActionExpectation.self, from: data)
+            } catch let error as DecodingError {
+                throw Self.expectationDecodingFailure(error, value: value)
+            }
+        }
+
+        private static func expectationDecodingFailure(_ error: DecodingError, value: HeistValue) -> Error {
+            switch error {
+            case .typeMismatch(let type, let context):
+                return SchemaValidationError(
+                    field: expectationField(codingPath: context.codingPath),
+                    observed: expectationValue(value, at: context.codingPath)?.schemaObservedDescription
+                        ?? value.schemaObservedDescription,
+                    expected: schemaExpectedDescription(for: type)
+                )
+            case .valueNotFound(let type, let context):
+                return SchemaValidationError(
+                    field: expectationField(codingPath: context.codingPath),
+                    observed: "missing",
+                    expected: schemaExpectedDescription(for: type)
+                )
+            case .keyNotFound(let key, let context):
+                return SchemaValidationError(
+                    field: expectationField(codingPath: context.codingPath + [key]),
+                    observed: "missing",
+                    expected: "present"
+                )
+            case .dataCorrupted(let context):
+                return FenceError.invalidRequest(context.debugDescription)
+            @unknown default:
+                return FenceError.invalidRequest(String(describing: error))
+            }
+        }
+
+        private static func expectationField(codingPath: [CodingKey]) -> String {
+            var path = ""
+            for key in codingPath {
+                if let index = key.intValue {
+                    path += "[\(index)]"
+                } else if path.isEmpty {
+                    path = key.stringValue
+                } else {
+                    path += ".\(key.stringValue)"
+                }
+            }
+            return path.isEmpty ? "expect" : path
+        }
+
+        private static func expectationValue(_ value: HeistValue, at codingPath: [CodingKey]) -> HeistValue? {
+            codingPath.reduce(Optional(value)) { current, key in
+                guard let current else { return nil }
+                if let index = key.intValue {
+                    guard case .array(let values) = current, values.indices.contains(index) else { return nil }
+                    return values[index]
+                }
+                guard case .object(let values) = current else { return nil }
+                return values[key.stringValue]
+            }
+        }
+
+        private static func schemaExpectedDescription(for type: Any.Type) -> String {
+            switch type {
+            case is String.Type:
+                return "string"
+            case is Bool.Type:
+                return "boolean"
+            case is Int.Type:
+                return "integer"
+            case is Double.Type:
+                return "number"
+            case is [ActionExpectation].Type:
+                return "array of expectation objects"
+            case is ElementMatcher.Type, is ActionExpectation.Type:
+                return "object"
+            default:
+                if String(describing: type) == "Dictionary<String, Any>" {
+                    return "object"
+                }
+                return String(describing: type)
+            }
         }
     }
 
@@ -59,167 +159,5 @@ extension TheFence {
             throw FenceError.invalidRequest("Expected expectation JSON to decode as an object")
         }
         return value
-    }
-}
-
-private enum FenceExpectationParser {
-    static func decode(_ value: HeistValue) throws -> ActionExpectation {
-        if case .object(let object) = value {
-            return try decode(TheFence.CommandArgumentObject(values: object, fieldPrefix: nil))
-        }
-        throw FenceError.invalidRequest(
-            "Invalid expectation type: expected object with a \"type\" discriminator"
-        )
-    }
-
-    static func decode(_ object: TheFence.CommandArgumentObject) throws -> ActionExpectation {
-        let type = try expectationType(in: object)
-        switch type {
-        case "delivery":
-            try validateAllowedKeys(["type"], in: object, type: type)
-            return .delivery
-        case "screen_changed":
-            try validateAllowedKeys(["type"], in: object, type: type)
-            return .screenChanged
-        case "elements_changed":
-            try validateAllowedKeys(["type"], in: object, type: type)
-            return .elementsChanged
-        case "element_updated":
-            try validateAllowedKeys(["type", "heistId", "property", "oldValue", "newValue"], in: object, type: type)
-            return try .elementUpdated(
-                heistId: object.schemaString("heistId"),
-                property: elementProperty(in: object),
-                oldValue: object.schemaString("oldValue"),
-                newValue: object.schemaString("newValue")
-            )
-        case "element_appeared":
-            try validateAllowedKeys(["type", "matcher"], in: object, type: type)
-            return try .elementAppeared(requiredMatcher(in: object, type: type))
-        case "element_disappeared":
-            try validateAllowedKeys(["type", "matcher"], in: object, type: type)
-            return try .elementDisappeared(requiredMatcher(in: object, type: type))
-        case "compound":
-            try validateAllowedKeys(["type", "expectations"], in: object, type: type)
-            return try .compound(compoundExpectations(in: object))
-        default:
-            throw FenceError.invalidRequest("Unknown expectation type: \"\(type)\". Valid: \(validTypes)")
-        }
-    }
-
-    private static var validTypes: String {
-        ActionExpectation.wireTypeValues.joined(separator: ", ")
-    }
-
-    private static func validateAllowedKeys(
-        _ allowedKeys: Set<String>,
-        in object: TheFence.CommandArgumentObject,
-        type: String
-    ) throws {
-        let unknownKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
-        guard let unknownKey = unknownKeys.first else { return }
-        throw FenceError.invalidRequest(
-            "\(type) expectation does not accept \"\(object.field(unknownKey))\""
-        )
-    }
-
-    private static func expectationType(in object: TheFence.CommandArgumentObject) throws -> String {
-        guard let value = object.argumentValues["type"] else {
-            throw FenceError.invalidRequest(missingTypeMessage(object))
-        }
-        guard case .string(let type) = value else {
-            throw FenceError.invalidRequest(
-                "Expectation object requires a string \"type\" discriminator " +
-                    "(e.g. {\"type\": \"element_updated\", …}). " +
-                    "Got \(object.field("type")): \(value.schemaObservedDescription)"
-            )
-        }
-        guard ActionExpectation.wireTypeValues.contains(type) else {
-            throw FenceError.invalidRequest("Unknown expectation type: \"\(type)\". Valid: \(validTypes)")
-        }
-        return type
-    }
-
-    private static func missingTypeMessage(_ object: TheFence.CommandArgumentObject) -> String {
-        "Expectation object requires a \"type\" discriminator " +
-            "(e.g. {\"type\": \"element_updated\", …}). " +
-            "Got keys: \(object.keys.sorted())"
-    }
-
-    private static func elementProperty(in object: TheFence.CommandArgumentObject) throws -> ElementProperty? {
-        guard let propertyString = try object.schemaString("property") else { return nil }
-        guard let property = ElementProperty(rawValue: propertyString) else {
-            throw FenceError.invalidRequest(
-                "Unknown element property: \"\(propertyString)\". Valid: \(validProperties)"
-            )
-        }
-        return property
-    }
-
-    private static var validProperties: String {
-        ElementProperty.allCases.map(\.rawValue).joined(separator: ", ")
-    }
-
-    private static func requiredMatcher(
-        in object: TheFence.CommandArgumentObject,
-        type: String
-    ) throws -> ElementMatcher {
-        guard let matcher = try object.schemaDictionary("matcher") else {
-            throw FenceError.invalidRequest("\(type) requires a \"matcher\" object")
-        }
-        return try elementMatcher(from: matcher)
-    }
-
-    private static func elementMatcher(from object: TheFence.CommandArgumentObject) throws -> ElementMatcher {
-        try validateAllowedMatcherKeys(in: object)
-        return ElementMatcher(
-            label: try object.schemaString("label"),
-            identifier: try object.schemaString("identifier"),
-            value: try object.schemaString("value"),
-            traits: try TheFence.parseTraitNames(
-                try object.schemaStringArray("traits"),
-                field: object.field("traits")
-            ),
-            excludeTraits: try TheFence.parseTraitNames(
-                try object.schemaStringArray("excludeTraits"),
-                field: object.field("excludeTraits")
-            )
-        )
-    }
-
-    private static func validateAllowedMatcherKeys(in object: TheFence.CommandArgumentObject) throws {
-        let allowedKeys: Set<String> = ["label", "identifier", "value", "traits", "excludeTraits"]
-        let unknownKeys = object.keys.filter { !allowedKeys.contains($0) }.sorted()
-        guard let unknownKey = unknownKeys.first else { return }
-        throw FenceError.invalidRequest(
-            "expectation matcher does not accept \"\(object.field(unknownKey))\""
-        )
-    }
-
-    private static func compoundExpectations(in object: TheFence.CommandArgumentObject) throws -> NonEmptyActionExpectations {
-        guard let value = object.argumentValues["expectations"] else {
-            throw FenceError.invalidRequest("compound requires an \"expectations\" array")
-        }
-        guard case .array(let values) = value else {
-            throw SchemaValidationError(
-                field: object.field("expectations"),
-                observed: value.schemaObservedDescription,
-                expected: "array of objects"
-            )
-        }
-        let expectations = try values.enumerated().map { index, value in
-            guard case .object(let expectationObject) = value else {
-                throw FenceError.invalidRequest("compound expectations must be objects with a \"type\" discriminator")
-            }
-            return try decode(
-                TheFence.CommandArgumentObject(
-                    values: expectationObject,
-                    fieldPrefix: "\(object.field("expectations"))[\(index)]"
-                )
-            )
-        }
-        guard !expectations.isEmpty else {
-            throw FenceError.invalidRequest("compound requires at least one expectation")
-        }
-        return try NonEmptyActionExpectations(expectations)
     }
 }
