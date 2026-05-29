@@ -354,7 +354,7 @@ final class AccessibilityHierarchyReconciliationTests: XCTestCase {
             hierarchyElement(label: "Row 3", identifier: "r3", frame: CGRect(x: 0, y: 132, width: 320, height: 44), index: 3),
         ]
 
-        let result = accumulated.reconcilePage(from: page)
+        let result = reconcilePage(accumulated: accumulated.sortedElements, page: page.sortedElements)
         XCTAssertEqual(result.elements.count, 4)
         XCTAssertEqual(result.elements.map(\.label), ["Row 0", "Row 1", "Row 2", "Row 3"])
     }
