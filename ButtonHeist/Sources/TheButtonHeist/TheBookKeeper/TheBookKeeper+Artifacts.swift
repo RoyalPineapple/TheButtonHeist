@@ -76,7 +76,7 @@ extension TheBookKeeper {
     }
 
     func writeToPath(_ data: Data, outputPath: String) throws -> URL {
-        guard let resolvedURL = validateOutputPath(outputPath) else {
+        guard let resolvedURL = outputPath.validatedOutputURL() else {
             throw BookKeeperError.unsafePath(outputPath)
         }
         try data.write(to: resolvedURL)

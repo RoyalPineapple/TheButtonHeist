@@ -193,7 +193,8 @@ extension TheBookKeeper {
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) throws -> HeistEvidence? {
-        let elementTarget = try request.heistRecordingElementTarget()
+        let projection = try request.heistRecordingProjection()
+        let elementTarget = projection.elementTarget
         var target: SemanticActionTarget?
         var recordedHeistId: HeistId?
         var recordedFrame: RecordedFrame?
@@ -213,7 +214,7 @@ extension TheBookKeeper {
         } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
             guard matcher.hasPredicates else { return nil }
             target = SemanticActionTarget(matcher: matcher, ordinal: matchedOrdinal)
-        } else if try request.heistRecordingCoordinateOnly() {
+        } else if projection.coordinateOnly {
             coordinateOnly = true
         }
 
@@ -235,7 +236,7 @@ extension TheBookKeeper {
         return HeistEvidence(
             command: request.command.rawValue,
             target: target,
-            arguments: try request.heistEvidenceArguments(),
+            arguments: projection.arguments,
             recorded: recorded
         )
     }

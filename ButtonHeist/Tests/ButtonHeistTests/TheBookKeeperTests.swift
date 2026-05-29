@@ -565,8 +565,9 @@ final class TheBookKeeperTests: XCTestCase {
         )
 
         XCTAssertEqual(activate.command, .activate)
-        XCTAssertEqual(try activate.heistRecordingElementTarget(), .heistId("login_button"))
-        XCTAssertNil(try activate.heistEvidenceArguments()["target"])
+        let projection = try activate.heistRecordingProjection()
+        XCTAssertEqual(projection.elementTarget, .heistId("login_button"))
+        XCTAssertNil(projection.arguments["target"])
     }
 
     @ButtonHeistActor
@@ -576,7 +577,7 @@ final class TheBookKeeperTests: XCTestCase {
             command: .oneFingerTap,
             arguments: ["x": .double(10.5), "y": .double(20.25)]
         )
-        let arguments = try tap.heistEvidenceArguments()
+        let arguments = try tap.heistRecordingProjection().arguments
 
         XCTAssertEqual(arguments["x"], .double(10.5))
         XCTAssertEqual(arguments["y"], .double(20.25))
@@ -594,7 +595,7 @@ final class TheBookKeeperTests: XCTestCase {
                 "action": .string("Archive"),
             ]
         )
-        let arguments = try action.heistEvidenceArguments()
+        let arguments = try action.heistRecordingProjection().arguments
 
         XCTAssertEqual(Set(arguments.keys), Set(["action"]))
         XCTAssertEqual(arguments["action"], .string("Archive"))
@@ -615,7 +616,7 @@ final class TheBookKeeperTests: XCTestCase {
                 "currentTextEndOffset": .int(9),
             ]
         )
-        let arguments = try rotor.heistEvidenceArguments()
+        let arguments = try rotor.heistRecordingProjection().arguments
 
         XCTAssertEqual(arguments["rotor"], .string("Words"))
         XCTAssertEqual(arguments["currentHeistId"], .string("word_1"))
@@ -716,7 +717,7 @@ final class TheBookKeeperTests: XCTestCase {
             ]
         )
 
-        let arguments = try request.heistEvidenceArguments()
+        let arguments = try request.heistRecordingProjection().arguments
 
         XCTAssertEqual(arguments["expect"], .object([
             "type": .string("element_appeared"),
@@ -786,43 +787,31 @@ final class TheBookKeeperTests: XCTestCase {
 
     // MARK: - Path Validation
 
-    @ButtonHeistActor
     func testRejectsDoubleDotComponents() async {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        XCTAssertNil(bookKeeper.validateOutputPath("../etc/passwd"))
+        XCTAssertNil("../etc/passwd".validatedOutputURL())
     }
 
-    @ButtonHeistActor
     func testRejectsEmbeddedDoubleDot() async {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        XCTAssertNil(bookKeeper.validateOutputPath("foo/../../../etc/passwd"))
+        XCTAssertNil("foo/../../../etc/passwd".validatedOutputURL())
     }
 
-    @ButtonHeistActor
     func testRejectsControlCharactersInOutputPath() async {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        XCTAssertNil(bookKeeper.validateOutputPath("screenshots/bad\nname.png"))
+        XCTAssertNil("screenshots/bad\nname.png".validatedOutputURL())
     }
 
-    @ButtonHeistActor
     func testAcceptsSimpleRelativePath() async {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        let result = bookKeeper.validateOutputPath("screenshot.png")
+        let result = "screenshot.png".validatedOutputURL()
         XCTAssertNotNil(result)
     }
 
-    @ButtonHeistActor
     func testAcceptsAbsolutePath() async {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        let result = bookKeeper.validateOutputPath("/tmp/shot.png")
+        let result = "/tmp/shot.png".validatedOutputURL()
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.path, "/tmp/shot.png")
     }
 
-    @ButtonHeistActor
     func testRejectsEmptyPath() async {
-        let bookKeeper = TheBookKeeper(baseDirectory: tempDirectory)
-        XCTAssertNil(bookKeeper.validateOutputPath(""))
+        XCTAssertNil("".validatedOutputURL())
     }
 
     // MARK: - Artifact Storage

@@ -358,12 +358,6 @@ final class TheBookKeeper {
         ), to: session.logHandle)
     }
 
-    // MARK: - Path Safety
-
-    func validateOutputPath(_ path: String) -> URL? {
-        path.validatedOutputURL()
-    }
-
     // MARK: - Phase / Directory / Manifest Helpers
 
     var phaseName: String {

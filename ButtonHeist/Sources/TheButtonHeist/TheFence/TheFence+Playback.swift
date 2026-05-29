@@ -82,7 +82,7 @@ extension TheFence {
         try playback.begin()
         defer { playback.end() }
 
-        guard let resolvedURL = bookKeeper.validateOutputPath(request.inputPath) else {
+        guard let resolvedURL = request.inputPath.validatedOutputURL() else {
             throw FenceError.invalidRequest("Invalid input path: must not be empty or contain '..' components")
         }
 

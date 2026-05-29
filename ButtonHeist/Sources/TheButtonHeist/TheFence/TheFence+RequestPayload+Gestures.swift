@@ -4,14 +4,7 @@ import TheScore
 
 extension TheFence {
 
-    func decodeGestureRequestDispatch(
-        command: Command,
-        arguments: CommandArgumentEnvelope
-    ) throws -> DecodedRequestDispatch {
-        try decodeGestureAction(command: command, request: arguments)
-    }
-
-    private func decodeGestureAction(
+    func decodeGestureAction(
         command: Command,
         request: some CommandArgumentReadable
     ) throws -> DecodedRequestDispatch {

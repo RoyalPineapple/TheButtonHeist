@@ -236,7 +236,7 @@ extension TheFence {
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
         case .gesture:
-            return try decodeGestureRequestDispatch(command: command, arguments: arguments)
+            return try decodeGestureAction(command: command, request: arguments)
         case .elementAction:
             return try decodeElementActionDispatch(command: command, arguments: arguments)
         case .session:

@@ -1,18 +1,15 @@
 import TheScore
 
+struct HeistRecordingProjection: Sendable, Equatable {
+    let elementTarget: ElementTarget?
+    let coordinateOnly: Bool
+    let arguments: [String: HeistValue]
+}
+
 extension TheFence.ParsedRequest {
     @ButtonHeistActor
-    func heistRecordingElementTarget() throws -> ElementTarget? {
-        try arguments.elementTarget()
-    }
-
-    @ButtonHeistActor
-    func heistRecordingCoordinateOnly() throws -> Bool {
-        guard try arguments.elementTarget() == nil else { return false }
-        return command.requestPayloadKind == .gesture
-    }
-
-    func heistRecordingArguments() -> [String: HeistValue] {
+    func heistRecordingProjection() throws -> HeistRecordingProjection {
+        let elementTarget = try arguments.elementTarget()
         var values = arguments.argumentValues
         values.removeValue(forKey: "requestId")
         values.removeValue(forKey: "target")
@@ -22,7 +19,18 @@ extension TheFence.ParsedRequest {
             values.removeValue(forKey: "timeout")
         }
 
-        return values
+        if expectationPayload.expectation != nil {
+            values["expect"] = arguments.argumentValues["expect"]
+            if let timeout = arguments.argumentValues["timeout"] {
+                values["timeout"] = timeout
+            }
+        }
+
+        return HeistRecordingProjection(
+            elementTarget: elementTarget,
+            coordinateOnly: elementTarget == nil && command.requestPayloadKind == .gesture,
+            arguments: values
+        )
     }
 }
 

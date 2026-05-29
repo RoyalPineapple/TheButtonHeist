@@ -114,7 +114,7 @@ extension TheFence {
     }
 
     func handleStopHeist(_ request: StopHeistRequest) throws -> FenceResponse {
-        guard let resolvedURL = bookKeeper.validateOutputPath(request.outputPath) else {
+        guard let resolvedURL = request.outputPath.validatedOutputURL() else {
             throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
         }
         defer {
