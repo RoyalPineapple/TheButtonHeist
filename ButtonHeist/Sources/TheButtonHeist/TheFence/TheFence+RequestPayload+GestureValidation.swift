@@ -2,16 +2,6 @@ import Foundation
 
 extension TheFence {
 
-    func validateDrawTiming(duration: Double?, velocity: Double?) throws {
-        guard duration == nil || velocity == nil else {
-            throw SchemaValidationError(
-                field: "duration/velocity",
-                observed: "both duration and velocity",
-                expected: "duration or velocity"
-            )
-        }
-    }
-
     func validateArrayCount(
         field: String,
         count: Int,

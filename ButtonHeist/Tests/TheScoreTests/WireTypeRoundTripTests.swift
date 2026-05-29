@@ -262,6 +262,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(point.cgPoint, CGPoint(x: 10, y: 20))
     }
 
+    func testPathPointRejectsUnknownField() {
+        let json = #"{"x":10,"y":20,"pressure":0.5}"#
+        XCTAssertThrowsError(try decoder.decode(PathPoint.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown draw path point field"), "\(error)")
+        }
+    }
+
     // MARK: - BezierSegment
 
     func testBezierSegmentRoundTrip() throws {
@@ -282,6 +289,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(segment.cp1, CGPoint(x: 1, y: 2))
         XCTAssertEqual(segment.cp2, CGPoint(x: 3, y: 4))
         XCTAssertEqual(segment.end, CGPoint(x: 5, y: 6))
+    }
+
+    func testBezierSegmentRejectsUnknownField() {
+        let json = """
+        {"cp1X":1,"cp1Y":2,"cp2X":3,"cp2Y":4,"endX":5,"endY":6,"weight":0.5}
+        """
+        XCTAssertThrowsError(try decoder.decode(BezierSegment.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("Unknown bezier segment field"), "\(error)")
+        }
     }
 
     // MARK: - DrawPathTarget
