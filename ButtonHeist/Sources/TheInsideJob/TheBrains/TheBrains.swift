@@ -182,8 +182,6 @@ final class TheBrains {
             builder.settleTimeMs = cancelMs
             return builder.failure(errorKind: .actionFailed, payload: payload)
         }
-        logSettleOutcome(settleResult.outcome, events: settleResult.events)
-
         var afterScreen = settleResult.outcome.didSettleCleanly
             ? settleResult.finalScreen
             : nil
@@ -245,23 +243,6 @@ final class TheBrains {
         )
 
         return receipt.actionResult()
-    }
-
-    // MARK: - Settle Outcome Helpers
-
-    private func logSettleOutcome(_ outcome: SettleOutcome, events: [SettleEvent]) {
-        switch outcome {
-        case .settled(let ms):
-            if events.containsTripwireSignalChange {
-                insideJobLogger.info("Post-action settle: settled after Tripwire signal in \(ms)ms")
-            } else {
-                insideJobLogger.info("Post-action settle: settled in \(ms)ms")
-            }
-        case .timedOut(let ms):
-            insideJobLogger.info("Post-action settle: timed out after \(ms)ms")
-        case .cancelled(let ms):
-            insideJobLogger.info("Post-action settle: cancelled after \(ms)ms")
-        }
     }
 
     /// Wait for the post-screen-change tree to repopulate. Returns true

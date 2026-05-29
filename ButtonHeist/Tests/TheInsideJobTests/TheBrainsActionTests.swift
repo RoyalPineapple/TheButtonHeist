@@ -190,9 +190,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(before.elements.count, 1)
     }
 
-    // MARK: - Deallocated Element Fail-Closed
+    // MARK: - Stale Current-Capture Handle Fail-Closed
 
-    func testExecuteIncrementFailsWhenElementObjectIsDeallocated() async {
+    func testExecuteIncrementFailsWhenCurrentCaptureHandleIsStale() async {
         let heistId = "volume_slider"
         registerScreenElement(
             heistId: heistId,
@@ -203,18 +203,15 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.actions.executeIncrement(.heistId(heistId))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementDeallocated)
+        XCTAssertEqual(result.method, .increment)
         XCTAssertDiagnostic(result.message, contains: [
-            "adjustable action failed",
-            "heistId=\"volume_slider\"",
-            "label=\"Volume\"",
-            "traits=[adjustable]",
-            "liveObject=deallocated",
-            "live target became stale during semantic actionability",
+            "semantic actionability failed [staleRefresh]",
+            "target was not found in fresh live geometry",
+            "volume_slider",
         ])
     }
 
-    func testExecuteDecrementFailsWhenElementObjectIsDeallocated() async {
+    func testExecuteDecrementFailsWhenCurrentCaptureHandleIsStale() async {
         let heistId = "brightness_slider"
         registerScreenElement(
             heistId: heistId,
@@ -225,14 +222,11 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.actions.executeDecrement(.heistId(heistId))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementDeallocated)
+        XCTAssertEqual(result.method, .decrement)
         XCTAssertDiagnostic(result.message, contains: [
-            "adjustable action failed",
-            "heistId=\"brightness_slider\"",
-            "label=\"Brightness\"",
-            "traits=[adjustable]",
-            "liveObject=deallocated",
-            "live target became stale during semantic actionability",
+            "semantic actionability failed [staleRefresh]",
+            "target was not found in fresh live geometry",
+            "brightness_slider",
         ])
     }
 
@@ -282,7 +276,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testExecuteCustomActionFailsWhenElementObjectIsDeallocated() async {
+    func testExecuteCustomActionFailsWhenCurrentCaptureHandleIsStale() async {
         let heistId = "options_button"
         registerScreenElement(
             heistId: heistId,
@@ -295,13 +289,11 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementDeallocated)
+        XCTAssertEqual(result.method, .customAction)
         XCTAssertDiagnostic(result.message, contains: [
-            "custom action failed",
-            "heistId=\"options_button\"",
-            "label=\"Options\"",
-            "liveObject=deallocated",
-            "live target became stale during semantic actionability",
+            "semantic actionability failed [staleRefresh]",
+            "target was not found in fresh live geometry",
+            "options_button",
         ])
     }
 
@@ -433,6 +425,40 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .customAction)
         XCTAssertEqual(customActionTarget.invocationCount, 1)
+    }
+
+    func testExecuteCustomActionFailsClosedWhenContainerObjectIsUnavailable() async {
+        let path = TreePath([0])
+        let container = AccessibilityContainer(
+            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 200, height: 80)),
+            customActions: [.init(name: "Archive")]
+        )
+        brains.stash.currentScreen = Screen(
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerStableIds: [container: "semantic_actions__actions"],
+            containerStableIdsByPath: [path: "semantic_actions__actions"],
+            heistIdByElement: [:],
+            elementRefs: [:],
+            containerRefsByPath: [path: Screen.ContainerRef(object: nil)],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+
+        let result = await brains.actions.executeCustomAction(
+            CustomActionTarget(
+                containerTarget: ContainerMatcher(stableId: "semantic_actions__actions"),
+                actionName: "Archive"
+            )
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .customAction)
+        XCTAssertDiagnostic(result.message, contains: [
+            "semantic actionability failed [staleRefresh]",
+            "container target became stale before dispatch",
+        ])
     }
 
     func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async {
@@ -692,7 +718,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testElementActionRetriesWithRefreshedLiveTarget() async throws {
+    func testElementActionUsesFreshLiveTargetForStaleSemanticCapture() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
         let liveObject = AdjustableGeometryView(

@@ -119,7 +119,7 @@ final class TheBurglarApplyTests: XCTestCase {
 
         let screen = TheBurglar.buildScreen(from: result)
 
-        XCTAssertEqual(screen.id, TheStash.IdAssignment.slugify("My Profile"))
+        XCTAssertEqual(screen.id, TheScore.slugify("My Profile"))
     }
 
     func testScreenNameNilWhenNoHeaders() {

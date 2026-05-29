@@ -25,11 +25,10 @@ extension TheFence {
     func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
         let messages = try executableActionMessages(for: request)
         let timeout = try request.command.descriptor.executionTimeout(for: request)
-        let recordsCompletion = request.command.descriptor.recordsActionCompletion
         var finalResult: ActionResult?
         for message in messages {
             let result = try await sendAndAwaitAction(message, timeout: timeout)
-            if recordsCompletion {
+            if result.method != .getPasteboard {
                 recordCompletedAction(result)
             }
             finalResult = result

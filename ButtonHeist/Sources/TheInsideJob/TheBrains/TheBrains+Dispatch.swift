@@ -303,7 +303,7 @@ extension TheBrains {
         case .heistId(let heistId):
             return "heistId=\"\(heistId)\""
         case .matcher(let matcher, let ordinal):
-            var description = stash.formatMatcher(matcher)
+            var description = TheStash.Diagnostics.formatMatcher(matcher)
             if let ordinal {
                 description += " ordinal=\(ordinal)"
             }

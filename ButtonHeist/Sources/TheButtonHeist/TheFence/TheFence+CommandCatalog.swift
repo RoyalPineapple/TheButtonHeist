@@ -67,7 +67,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
     public let mcpAnnotations: MCPToolAnnotationSpec?
-    public let recordsActionCompletion: Bool
     public let description: String
 
     public var isPublicRequestContract: Bool {
@@ -94,7 +93,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         humanPositionalSyntax: FenceHumanPositionalSyntax = .target,
         parameters: [FenceParameterSpec],
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
-        recordsActionCompletion: Bool = true,
         description: String
     ) {
         self.command = command
@@ -107,7 +105,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.humanPositionalSyntax = humanPositionalSyntax
         self.parameters = parameters
         self.mcpAnnotations = mcpAnnotations
-        self.recordsActionCompletion = recordsActionCompletion
         self.description = description
     }
 }
@@ -150,7 +147,6 @@ private struct FenceCommandCatalogEntry {
     var humanPositionalSyntax: FenceHumanPositionalSyntax = .target
     var parameters: [FenceParameterSpec] = []
     var mcpAnnotations: MCPToolAnnotationSpec?
-    var recordsActionCompletion = true
     var description = ""
 }
 
@@ -314,7 +310,6 @@ extension TheFence.Command {
             humanPositionalSyntax: entry.humanPositionalSyntax,
             parameters: entry.parameters,
             mcpAnnotations: entry.mcpAnnotations,
-            recordsActionCompletion: entry.recordsActionCompletion,
             description: entry.description
         )
     }
@@ -580,7 +575,6 @@ extension TheFence.Command {
                 """
         case .getPasteboard:
             entry.actionResultMethod = .getPasteboard
-            entry.recordsActionCompletion = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
             entry.description = """
                 Read text from the general pasteboard. iOS may show "Allow Paste" if the content \

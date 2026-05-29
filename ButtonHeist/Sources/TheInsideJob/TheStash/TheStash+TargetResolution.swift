@@ -191,10 +191,6 @@ extension TheStash {
         )
     }
 
-    func formatMatcher(_ matcher: ElementMatcher) -> String {
-        Diagnostics.formatMatcher(matcher)
-    }
-
     /// All elements in the current screen.
     ///
     /// Live elements appear first in hierarchy (depth-first) traversal order;
@@ -294,7 +290,7 @@ private extension TheStash {
             parts.append(Diagnostics.availabilityDescription(for: screenElement, visibleHeistIds: visibleHeistIds))
             return parts.joined(separator: " ")
         }
-        let query = formatMatcher(matcher)
+        let query = Diagnostics.formatMatcher(matcher)
         let countLabel = screenElements.count > 10 ? "10+" : "\(screenElements.count)"
         let rangeLabel = screenElements.count > 10 ? "0, 1, 2, ..." : "0–\(screenElements.count - 1)"
         var lines = [

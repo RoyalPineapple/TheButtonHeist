@@ -90,11 +90,7 @@ extension TheBookKeeper {
     }
 
     func iso8601Now() -> String {
-        iso8601String(from: Date())
-    }
-
-    func iso8601String(from date: Date) -> String {
-        Self.iso8601Formatter().string(from: date)
+        Self.iso8601Formatter().string(from: Date())
     }
 
     private static func iso8601Formatter() -> ISO8601DateFormatter {

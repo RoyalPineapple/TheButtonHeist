@@ -349,6 +349,7 @@
 		C1B5DC54A2F58EC4B8BCCD3B /* ElementMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA2B9DBB624B59914F1B4849 /* ElementMatcherTests.swift */; };
 		C1FB9ED34C4A404BC0FF0977 /* TheBookKeeperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9E5BD783CB31E3A568EE70 /* TheBookKeeperTests.swift */; };
 		C23A54D8EE16D10E22F9DC02 /* TheScoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEB0B7809F88FC5A43CCE9A4 /* TheScoreTests.swift */; };
+		C2A3E5B25D5A4CFC78102D0F /* SemanticActionability+Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 699330CED5D3A491B931B63F /* SemanticActionability+Diagnostics.swift */; };
 		C37F1C9913776EF955109103 /* TheBookKeeper+Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CAE462B3455397C39B17C05 /* TheBookKeeper+Logging.swift */; };
 		C3F3C823A641A0D51302D437 /* AccessibilityTraceSegmentProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E538007F739418BB6F1CE4F /* AccessibilityTraceSegmentProjection.swift */; };
 		C3F56D14709840E5997F9DD7 /* TheFence+FailureRendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2920131B855763A04F4CB499 /* TheFence+FailureRendering.swift */; };
@@ -754,6 +755,7 @@
 		66CED33B1FC7FF963B22343D /* BatchAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchAction.swift; sourceTree = "<group>"; };
 		6777391A168B3CB3695C0BCF /* swift-crypto_CCryptoBoringSSLShims.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_CCryptoBoringSSLShims.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		684B1D4DC1EC65626B3028AC /* AccessibilityHierarchy+TreeOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityHierarchy+TreeOperations.swift"; sourceTree = "<group>"; };
+		699330CED5D3A491B931B63F /* SemanticActionability+Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SemanticActionability+Diagnostics.swift"; sourceTree = "<group>"; };
 		69D97ECB99E775784B0E4D54 /* ActionResultTraceTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionResultTraceTestHelpers.swift; sourceTree = "<group>"; };
 		6A3DED8FA6023701C7060202 /* swift-crypto__CryptoExtras.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto__CryptoExtras.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6AAE42D129D6475361E35741 /* StakeoutLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StakeoutLifecycle.swift; sourceTree = "<group>"; };
@@ -1491,6 +1493,7 @@
 				C86237E19821F7ED7CF36B79 /* ResponseStateHistory.swift */,
 				82F75CD8C56005B03DF567DC /* ScreenClassifier.swift */,
 				41D52DCF1E6D45A77741DA17 /* SemanticActionability.swift */,
+				699330CED5D3A491B931B63F /* SemanticActionability+Diagnostics.swift */,
 				F98F2733E084A7CDE14859DD /* SemanticElementTarget.swift */,
 				9ADDF552D62895A7A002E496 /* SettleSession.swift */,
 				7A759CD7776997CD4951BF16 /* TheBrains.swift */,
@@ -2185,6 +2188,7 @@
 				240068AF542B73EA95807EC5 /* Navigation.swift in Sources */,
 				4A920E34835982CAFFA7F543 /* ResponseStateHistory.swift in Sources */,
 				2F94B833740659A02093F762 /* ScreenClassifier.swift in Sources */,
+				C2A3E5B25D5A4CFC78102D0F /* SemanticActionability+Diagnostics.swift in Sources */,
 				96C5D87B4E7CECEF24518DD4 /* SemanticActionability.swift in Sources */,
 				A04895BF9930706EB8DEF2B6 /* SemanticElementTarget.swift in Sources */,
 				8DDAB77F92D5C0AC1F4C0F2B /* SettleSession.swift in Sources */,
