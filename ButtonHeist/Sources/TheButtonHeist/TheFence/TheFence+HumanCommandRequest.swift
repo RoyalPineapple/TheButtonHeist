@@ -5,15 +5,18 @@ import TheScore
 public struct FenceHumanCommandRequest: Sendable, Equatable {
     public let descriptor: FenceCommandDescriptor
     public let parameters: [FenceParameterKey: HeistValue]
+    public let elementTarget: ElementTarget?
 
     public var command: TheFence.Command { descriptor.command }
 
     public init(
         descriptor: FenceCommandDescriptor,
-        parameters: [FenceParameterKey: HeistValue]
+        parameters: [FenceParameterKey: HeistValue],
+        elementTarget: ElementTarget? = nil
     ) {
         self.descriptor = descriptor
         self.parameters = parameters
+        self.elementTarget = elementTarget
     }
 }
 
@@ -97,6 +100,7 @@ public extension FenceCommandDescriptor {
 private struct FenceHumanRequestDraft {
     let descriptor: FenceCommandDescriptor
     private var parameters: [FenceParameterKey: HeistValue]
+    private var elementTarget: ElementTarget?
 
     init(commandName: String) throws {
         if let descriptor = FenceCommandDescriptor.descriptor(forCLIInputName: commandName) {
@@ -108,14 +112,20 @@ private struct FenceHumanRequestDraft {
 
     private init(
         descriptor: FenceCommandDescriptor,
-        parameters: [FenceParameterKey: HeistValue] = [:]
+        parameters: [FenceParameterKey: HeistValue] = [:],
+        elementTarget: ElementTarget? = nil
     ) {
         self.descriptor = descriptor
         self.parameters = parameters
+        self.elementTarget = elementTarget
     }
 
     var request: FenceHumanCommandRequest {
-        FenceHumanCommandRequest(descriptor: descriptor, parameters: parameters)
+        FenceHumanCommandRequest(
+            descriptor: descriptor,
+            parameters: parameters,
+            elementTarget: elementTarget
+        )
     }
 
     subscript(_ key: FenceParameterKey) -> HeistValue? {
@@ -126,6 +136,14 @@ private struct FenceHumanRequestDraft {
     mutating func setParameter(named name: String, rawValue: String) throws {
         guard let key = FenceParameterKey(rawValue: name) else {
             throw FenceHumanCommandParsingError("Parameter '\(name)' is not supported by CLI request rendering")
+        }
+        guard descriptor.parameters.contains(where: { $0.key == name }) else {
+            throw FenceHumanCommandParsingError("Unknown parameter '\(name)' for \(descriptor.canonicalName)")
+        }
+        if key == .target {
+            try setElementTarget(.heistId(rawValue))
+            try normalizeExpectationArgument()
+            return
         }
         self[key] = try descriptor.humanValue(rawValue, forParameterNamed: name)
         try normalizeExpectationArgument()
@@ -151,11 +169,11 @@ private struct FenceHumanRequestDraft {
                 self[.edge] = .string(first)
                 remaining.removeFirst()
             }
-            applyElementTarget(remaining)
+            try applyElementTarget(remaining)
 
         case .targetThenJoinedText(let parameter):
             if let first = positional.first {
-                applyElementTarget([first])
+                try applyElementTarget([first])
                 if positional.count > 1 {
                     self[parameter] = .string(positional.dropFirst().joined(separator: " "))
                 }
@@ -167,10 +185,10 @@ private struct FenceHumanRequestDraft {
                 self[.direction] = .string(first)
                 remaining.removeFirst()
             }
-            applyGenericTargetOrCoordinates(remaining)
+            try applyGenericTargetOrCoordinates(remaining)
 
         case .target:
-            applyGenericTargetOrCoordinates(positional)
+            try applyGenericTargetOrCoordinates(positional)
         }
 
         try normalizeExpectationArgument()
@@ -198,19 +216,26 @@ private struct FenceHumanRequestDraft {
         return description.isEmpty ? error.localizedDescription : description
     }
 
-    private mutating func applyGenericTargetOrCoordinates(_ tokens: [String]) {
+    private mutating func applyGenericTargetOrCoordinates(_ tokens: [String]) throws {
         if tokens.count >= 2,
            let x = Double(tokens[0]),
            let y = Double(tokens[1]) {
             self[.x] = .double(x)
             self[.y] = .double(y)
         } else {
-            applyElementTarget(tokens)
+            try applyElementTarget(tokens)
         }
     }
 
-    private mutating func applyElementTarget(_ tokens: [String]) {
+    private mutating func applyElementTarget(_ tokens: [String]) throws {
         guard let first = tokens.first else { return }
-        self[.target] = .object([FenceParameterKey.heistId.rawValue: .string(first)])
+        try setElementTarget(.heistId(first))
+    }
+
+    private mutating func setElementTarget(_ target: ElementTarget) throws {
+        guard elementTarget == nil else {
+            throw FenceHumanCommandParsingError("Element target specified more than once")
+        }
+        elementTarget = target
     }
 }

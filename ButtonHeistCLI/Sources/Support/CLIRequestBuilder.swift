@@ -32,14 +32,11 @@ enum CLIRequestBuilder {
         parameters: CLIRequestParameters = [:],
         target: ElementTarget? = nil
     ) throws -> NormalizedOperation {
-        var values = Dictionary(
+        let values = Dictionary(
             parameters.map { ($0.key.rawValue, $0.value) },
             uniquingKeysWith: { _, newest in newest }
         )
-        if let target {
-            values[FenceParameterKey.target.rawValue] = target.fenceArgumentValue
-        }
-        let arguments = TheFence.CommandArgumentEnvelope(values: values)
+        let arguments = TheFence.CommandArgumentEnvelope(values: values, elementTarget: target)
         switch FenceOperationCatalog.normalizeCommand(command, arguments: arguments) {
         case .success(let operation):
             return operation
@@ -70,7 +67,11 @@ enum CLIRequestBuilder {
         )
 
         return CLIParsedRequest(
-            operation: try operation(command: fenceRequest.command, parameters: fenceRequest.parameters),
+            operation: try operation(
+                command: fenceRequest.command,
+                parameters: fenceRequest.parameters,
+                target: fenceRequest.elementTarget
+            ),
             requestId: nil,
             descriptor: fenceRequest.descriptor,
             mode: .human
@@ -144,30 +145,6 @@ enum CLIRequestBuilder {
     static func diagnosticMessage(for error: Error) -> String {
         let description = String(describing: error)
         return description.isEmpty ? error.localizedDescription : description
-    }
-}
-
-private extension ElementTarget {
-    var fenceArgumentValue: HeistValue {
-        switch self {
-        case .heistId(let heistId):
-            return .object([FenceParameterKey.heistId.rawValue: .string(heistId)])
-        case .matcher(let matcher, let ordinal):
-            var targetValue: [String: HeistValue] = [:]
-            if let label = matcher.label { targetValue[FenceParameterKey.label.rawValue] = .string(label) }
-            if let identifier = matcher.identifier { targetValue[FenceParameterKey.identifier.rawValue] = .string(identifier) }
-            if let value = matcher.value { targetValue[FenceParameterKey.value.rawValue] = .string(value) }
-            if let traits = matcher.traits {
-                targetValue[FenceParameterKey.traits.rawValue] = .array(traits.map { .string($0.rawValue) })
-            }
-            if let excludeTraits = matcher.excludeTraits {
-                targetValue[FenceParameterKey.excludeTraits.rawValue] = .array(excludeTraits.map { .string($0.rawValue) })
-            }
-            if let ordinal {
-                targetValue[FenceParameterKey.ordinal.rawValue] = .int(ordinal)
-            }
-            return .object(targetValue)
-        }
     }
 }
 

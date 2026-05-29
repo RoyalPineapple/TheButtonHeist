@@ -148,6 +148,7 @@ extension TheFence {
             )
         }
         try validateRequestKeys(command: command, arguments: arguments)
+        try validateTypedElementTarget(command: command, arguments: arguments)
         try validateSemanticPlaybackTarget(command: command, arguments: arguments)
         if let immediate = handleImmediateCommand(command) {
             return ParsedRequest(
@@ -196,6 +197,17 @@ extension TheFence {
                 field: "target",
                 observed: playbackSemanticTarget.description,
                 expected: "\(command.rawValue) command without playback target"
+            )
+        }
+    }
+
+    private func validateTypedElementTarget(command: Command, arguments: CommandArgumentEnvelope) throws {
+        guard let elementTarget = arguments.elementTarget else { return }
+        guard !command.descriptor.elementTargetParameterKeys.isEmpty else {
+            throw SchemaValidationError(
+                field: "target",
+                observed: elementTarget.description,
+                expected: "\(command.rawValue) command without element target"
             )
         }
     }

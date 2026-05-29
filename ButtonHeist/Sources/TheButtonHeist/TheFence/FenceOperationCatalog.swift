@@ -16,6 +16,7 @@ public struct NormalizedOperation {
     public let command: TheFence.Command
     let arguments: TheFence.CommandArgumentEnvelope
 
+    public var elementTarget: ElementTarget? { arguments.elementTarget }
     public func stringArgument(_ key: String) -> String? { arguments.string(key) }
     public func argumentValue(_ key: String) -> HeistValue? { arguments.argumentValues[key] }
 }
