@@ -96,7 +96,7 @@ extension TheBrains {
         if case .rotor = message {
             return
         }
-        clearPendingRotorResult()
+        stash.clearPendingRotorResult()
     }
 
     func performInteraction(

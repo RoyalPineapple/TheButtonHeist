@@ -153,17 +153,17 @@ final class TheGetaway {
             let result = brains.executePasteboardRead()
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
-            brains.clearPendingRotorResult()
+            brains.stash.clearPendingRotorResult()
             handleScreen(requestId: requestId, respond: respond)
         case .waitForIdle(let target):
-            brains.clearPendingRotorResult()
+            brains.stash.clearPendingRotorResult()
             let observedGeneration = backgroundChangeState.latestGeneration
             let result = await brains.executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
             noteCommandParseSatisfiedIfNeeded(result.accessibilityTrace, observedGeneration: observedGeneration)
             brains.recordSentState()
         case .waitForChange(let target):
-            brains.clearPendingRotorResult()
+            brains.stash.clearPendingRotorResult()
             let observedGeneration = backgroundChangeState.latestGeneration
             let result = await brains.executeWaitForChange(
                 timeout: target.resolvedTimeout, expectation: target.expect
@@ -176,10 +176,10 @@ final class TheGetaway {
         default:
             switch message {
             case .startRecording(let config):
-                brains.clearPendingRotorResult()
+                brains.stash.clearPendingRotorResult()
                 await handleStartRecording(config, clientId: clientId, requestId: requestId, respond: respond)
             case .stopRecording:
-                brains.clearPendingRotorResult()
+                brains.stash.clearPendingRotorResult()
                 await handleStopRecording(clientId: clientId, requestId: requestId, respond: respond)
             default:
                 if let stakeout {
@@ -285,7 +285,7 @@ final class TheGetaway {
             return
         }
 
-        guard let (image, bounds) = brains.captureScreen() else {
+        guard let (image, bounds) = brains.stash.captureScreen() else {
             sendMessage(.error(ServerError(kind: .general, message: "Could not access app window")), requestId: requestId, respond: respond)
             return
         }
@@ -299,7 +299,7 @@ final class TheGetaway {
             pngData: pngData.base64EncodedString(),
             width: bounds.width,
             height: bounds.height,
-            interface: brains.currentInterface()
+            interface: brains.stash.interface()
         )
 
         sendMessage(.screen(payload), requestId: requestId, respond: respond)

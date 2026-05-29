@@ -153,7 +153,7 @@ extension TheGetaway {
             // so it must be set at init.
             let brains = self.brains
             let recorder = TheStakeout(captureFrame: { @MainActor [brains] in
-                brains.captureScreenForRecording()
+                brains.stash.captureScreenForRecording()
             })
             // The completion handler signature is sync (@MainActor @Sendable).
             // `deliverRecordingResult` is async because it awaits the two
