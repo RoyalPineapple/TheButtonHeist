@@ -3988,7 +3988,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 }
                 XCTAssertTrue(message.contains("Invalid heist step 0"))
                 XCTAssertTrue(
-                    message.contains("heist step command \"\(command.rawValue)\" is not playback-executable"),
+                    message.contains("heist step command \"\(command.rawValue)\" is not batch-executable"),
                     "Unexpected error for \(command.rawValue): \(message)"
                 )
             }
