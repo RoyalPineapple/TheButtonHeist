@@ -136,6 +136,7 @@
 		4256CB616B986CB49F6C2E6D /* TheSafecrackerScrollTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56251CA89DDB9F186323DE2D /* TheSafecrackerScrollTests.swift */; };
 		426FC537EAF1DAACB13285DC /* TheFence+BookKeeperLogging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71251320324067B05B606FAA /* TheFence+BookKeeperLogging.swift */; };
 		43FAA429064665630FF0445A /* TheInsideJob.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BCBC80A25FD1B978F9DFF2B9 /* TheInsideJob.framework */; };
+		442C6A51CAE8E31790A92BE6 /* WireCommandParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 355430138664DD43433DBDA1 /* WireCommandParityTests.swift */; };
 		444E8A980C32638FC69394E6 /* BezierSamplerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCC1088F98FACEF52AEBC66A /* BezierSamplerTests.swift */; };
 		44CDD6DBEDD1C8C245D41CAA /* TheGetaway+Status.swift in Sources */ = {isa = PBXBuildFile; fileRef = F81D4AD108F70379DBD8DB42 /* TheGetaway+Status.swift */; };
 		4514B88CC3887BD7B9BA0850 /* TheGetaway+Recording.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD05EE261CD3684BED556896 /* TheGetaway+Recording.swift */; };
@@ -669,6 +670,7 @@
 		321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+IOHIDEventBuilder.swift"; sourceTree = "<group>"; };
 		32FA31515D39E073761B8D66 /* SwiftASN1.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = SwiftASN1.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		3535E1A875F4E39BB589D4A3 /* TheBrains+Dispatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheBrains+Dispatch.swift"; sourceTree = "<group>"; };
+		355430138664DD43433DBDA1 /* WireCommandParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireCommandParityTests.swift; sourceTree = "<group>"; };
 		356B994EEDC692551581FA9B /* TheStash+Rotor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+Rotor.swift"; sourceTree = "<group>"; };
 		35CB7DADF77498D30A91CC4A /* TheFence+RequestPayload+Observation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+Observation.swift"; sourceTree = "<group>"; };
 		361EAF9A9EA2EC80AFED4A95 /* ElementAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementAttributes.swift; sourceTree = "<group>"; };
@@ -1119,6 +1121,7 @@
 				BDB73CF66308BB76E8AF5E0D /* TheHandoffMessageTests.swift */,
 				FCE478B1B9A069FD64C5BD2E /* TheHandoffStateTests.swift */,
 				62DD31D9145D6BABD29D286B /* USBDeviceDiscoveryParsingTests.swift */,
+				355430138664DD43433DBDA1 /* WireCommandParityTests.swift */,
 			);
 			path = ButtonHeistTests;
 			sourceTree = "<group>";
@@ -2395,6 +2398,7 @@
 				41EE076C6DDFF6565C5028DF /* TheHandoffMessageTests.swift in Sources */,
 				83B29D2A5A9726FCFBCC1062 /* TheHandoffStateTests.swift in Sources */,
 				95797E6821845F20FA64ED49 /* USBDeviceDiscoveryParsingTests.swift in Sources */,
+				442C6A51CAE8E31790A92BE6 /* WireCommandParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
