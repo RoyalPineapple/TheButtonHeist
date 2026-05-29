@@ -43,7 +43,7 @@ public struct EnvironmentConfig: Sendable {
             sessionTimeout: sessionTimeout,
             connectionTimeout: connectionTimeout,
             autoReconnect: autoReconnect,
-            fileConfig: TargetConfigResolver.loadConfig(),
+            fileConfig: TargetConfigResolver.loadConfig(searchPaths: TargetConfigResolver.searchPaths),
             env: env
         )
     }

@@ -89,11 +89,6 @@ enum TargetConfigResolver {
         "~/.config/buttonheist/config.json",
     ]
 
-    /// Load and parse the first config file found in the standard search paths.
-    static func loadConfig() -> ButtonHeistFileConfig? {
-        loadConfig(searchPaths: searchPaths)
-    }
-
     /// Load and parse the first config file found in the provided default search paths.
     static func loadConfig(searchPaths paths: [String]) -> ButtonHeistFileConfig? {
         for path in paths {
