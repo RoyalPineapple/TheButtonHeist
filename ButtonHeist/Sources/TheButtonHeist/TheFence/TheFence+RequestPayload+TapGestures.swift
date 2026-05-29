@@ -7,7 +7,7 @@ extension TheFence {
     func decodeTapTarget(_ request: some CommandArgumentReadable) throws -> TapTarget {
         let selection = try decodeRequiredPointIntent(
             request: request,
-            elementTarget: try decodedElementTarget(request),
+            elementTarget: try request.elementTarget(),
             xKey: "x",
             yKey: "y",
             field: "x/y",
@@ -19,7 +19,7 @@ extension TheFence {
     func decodeLongPressTarget(_ request: some CommandArgumentReadable) throws -> LongPressTarget {
         let selection = try decodeRequiredPointIntent(
             request: request,
-            elementTarget: try decodedElementTarget(request),
+            elementTarget: try request.elementTarget(),
             xKey: "x",
             yKey: "y",
             field: "x/y",
@@ -31,7 +31,7 @@ extension TheFence {
     func decodeTwoFingerTapTarget(_ request: some CommandArgumentReadable) throws -> TwoFingerTapTarget {
         let center = try decodeRequiredPointIntent(
             request: request,
-            elementTarget: try decodedElementTarget(request),
+            elementTarget: try request.elementTarget(),
             xKey: "centerX",
             yKey: "centerY",
             field: "centerX/centerY",

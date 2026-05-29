@@ -177,7 +177,7 @@ extension HeistTrait: Codable {
         guard let trait = HeistTrait(rawValue: value) else {
             throw DecodingError.dataCorruptedError(
                 in: container,
-                debugDescription: "Unknown HeistTrait: \"\(value)\""
+                debugDescription: "enum one of \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))"
             )
         }
         self = trait

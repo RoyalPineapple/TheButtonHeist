@@ -10,7 +10,7 @@ extension TheFence {
         if (start != nil) != (end != nil) {
             throw FenceError.invalidRequest("Unit-point swipe requires both start and end")
         }
-        let elementTarget = try decodedElementTarget(request)
+        let elementTarget = try request.elementTarget()
         let direction = try request.enumValue("direction", as: SwipeDirection.self)
         let startPoint = try decodeCoordinatePair(request: request, xKey: "startX", yKey: "startY", field: "startX/startY")
         let endPoint = try decodeCoordinatePair(request: request, xKey: "endX", yKey: "endY", field: "endX/endY")
@@ -63,7 +63,7 @@ extension TheFence {
     func decodeDragTarget(_ request: some CommandArgumentReadable) throws -> DragTarget {
         let start = try decodeRequiredPointIntent(
             request: request,
-            elementTarget: try decodedElementTarget(request),
+            elementTarget: try request.elementTarget(),
             xKey: "startX",
             yKey: "startY",
             field: "startX/startY",

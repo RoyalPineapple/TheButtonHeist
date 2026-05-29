@@ -9,7 +9,7 @@ extension TheFence {
         let target = PinchTarget(
             center: try decodeRequiredPointIntent(
                 request: request,
-                elementTarget: try decodedElementTarget(request),
+                elementTarget: try request.elementTarget(),
                 xKey: "centerX",
                 yKey: "centerY",
                 field: "centerX/centerY",
@@ -29,7 +29,7 @@ extension TheFence {
         let target = RotateTarget(
             center: try decodeRequiredPointIntent(
                 request: request,
-                elementTarget: try decodedElementTarget(request),
+                elementTarget: try request.elementTarget(),
                 xKey: "centerX",
                 yKey: "centerY",
                 field: "centerX/centerY",

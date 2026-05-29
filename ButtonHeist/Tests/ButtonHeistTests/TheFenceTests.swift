@@ -59,13 +59,12 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetRejectsUnknownTrait() async {
-        let fence = TheFence(configuration: .init())
         let args = TheFence.CommandArgumentEnvelope(values: [
             "target": .object([
                 "traits": .array([.string("madeUpTrait")]),
             ]),
         ])
-        XCTAssertThrowsError(try fence.decodedElementTarget(args)) { error in
+        XCTAssertThrowsError(try args.elementTarget()) { error in
             let message = error.localizedDescription
             XCTAssertTrue(message.hasPrefix(
                 "schema validation failed for target.traits[0]: observed string \"madeUpTrait\"; expected enum one of"
@@ -78,13 +77,12 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetRejectsUnknownExcludeTrait() async {
-        let fence = TheFence(configuration: .init())
         let args = TheFence.CommandArgumentEnvelope(values: [
             "target": .object([
                 "excludeTraits": .array([.string("bogus")]),
             ]),
         ])
-        XCTAssertThrowsError(try fence.decodedElementTarget(args)) { error in
+        XCTAssertThrowsError(try args.elementTarget()) { error in
             let message = error.localizedDescription
             XCTAssertTrue(message.hasPrefix(
                 "schema validation failed for target.excludeTraits[0]: observed string \"bogus\"; expected enum one of"
@@ -97,14 +95,13 @@ final class TheFenceTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetAcceptsKnownTraits() async throws {
-        let fence = TheFence(configuration: .init())
         let args = TheFence.CommandArgumentEnvelope(values: [
             "target": .object([
                 "traits": .array([.string("button"), .string("header")]),
                 "excludeTraits": .array([.string("selected")]),
             ]),
         ])
-        guard case .matcher(let matcher, nil)? = try fence.decodedElementTarget(args) else {
+        guard case .matcher(let matcher, nil)? = try args.elementTarget() else {
             return XCTFail("Expected matcher target")
         }
         XCTAssertEqual(matcher.traits, [.button, .header])

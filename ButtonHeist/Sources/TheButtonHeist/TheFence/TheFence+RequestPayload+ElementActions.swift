@@ -26,7 +26,4 @@ extension TheFence {
         Self.clientActionDispatch([message])
     }
 
-    func decodedElementTarget(_ arguments: some CommandArgumentReadable) throws -> ElementTarget? {
-        try arguments.elementTarget()
-    }
 }
