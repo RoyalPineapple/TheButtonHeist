@@ -283,7 +283,7 @@ expires. `element_disappeared` is satisfied by current absence.
 Action responses use `actionResult`:
 
 ```json
-{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"success":true,"method":"activate","accessibilityDelta":{"kind":"screenChanged","elementCount":14}}}
+{"buttonHeistVersion":"<semver>","type":"actionResult","payload":{"success":true,"method":"activate"}}
 ```
 
 `ActionResult.payload` is a tagged union when command-specific data is needed,

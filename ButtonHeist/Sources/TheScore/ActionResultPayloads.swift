@@ -217,7 +217,6 @@ public struct ActionResult: Codable, Sendable {
         case message
         case errorKind
         case payload
-        case accessibilityDelta
         case accessibilityTrace
         case animating
         case screenName
@@ -244,12 +243,6 @@ public struct ActionResult: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         try Self.rejectUnknownKeys(decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        guard !container.contains(.accessibilityDelta) else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: decoder.codingPath,
-                debugDescription: "ActionResult stores accessibilityTrace as truth; accessibilityDelta is a derived projection and cannot be decoded"
-            ))
-        }
         self.init(
             success: try container.decode(Bool.self, forKey: .success),
             method: try container.decode(ActionMethod.self, forKey: .method),
