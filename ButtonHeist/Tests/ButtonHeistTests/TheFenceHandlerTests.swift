@@ -3819,7 +3819,11 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(normalizedOperation.stringArgument("identifier"))
         XCTAssertEqual(normalizedOperation.stringArgument("text"), "user@example.com")
         XCTAssertNil(normalizedOperation.stringArgument("_recorded"))
-        XCTAssertEqual(normalizedOperation.arguments.playbackSemanticTarget?.matcher.identifier, "email")
+        guard case .matcher(let matcher, let ordinal)? = normalizedOperation.arguments.elementTarget else {
+            return XCTFail("Expected playback target to bind as typed matcher")
+        }
+        XCTAssertEqual(matcher.identifier, "email")
+        XCTAssertEqual(ordinal, 1)
     }
 
     @ButtonHeistActor
@@ -3959,8 +3963,8 @@ final class TheFenceHandlerTests: XCTestCase {
                     target: semanticTarget(identifier: "ignored"),
                     arguments: ["action": .string("copy")]
                 ),
-                "schema validation failed for target: observed semanticTarget(matcher(identifier=\"ignored\")); "
-                    + "expected edit_action command without playback target"
+                "schema validation failed for target: observed target(matcher(identifier=\"ignored\")); "
+                    + "expected edit_action command without element target"
             ),
         ]
 
@@ -4179,7 +4183,10 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         let operation = try evidence.normalizedPlaybackOperation()
-        XCTAssertEqual(operation.arguments.playbackSemanticTarget?.matcher.identifier, "btn1")
+        guard case .matcher(let matcher, nil)? = operation.arguments.elementTarget else {
+            return XCTFail("Expected playback target to bind as typed matcher")
+        }
+        XCTAssertEqual(matcher.identifier, "btn1")
         XCTAssertNil(operation.argumentValue("heistId"))
         XCTAssertNil(operation.argumentValue("target"))
 
