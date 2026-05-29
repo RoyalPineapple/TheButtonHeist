@@ -2403,6 +2403,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testParseExpectationFromTypedPlaybackRequestArguments() async throws {
         let evidence = HeistEvidence(
             command: "activate",
+            target: semanticTarget(identifier: "counter"),
             arguments: [
                 "expect": .object([
                     "type": .string("element_updated"),
@@ -2413,7 +2414,10 @@ final class TheFenceHandlerTests: XCTestCase {
             ]
         )
 
-        let result = try parseTypedExpectation(try evidence.normalizedPlaybackOperation().arguments.argumentValues["expect"])
+        let (fence, _) = makeConnectedFence()
+        let result = try parseTypedExpectation(
+            try fence.parsePlaybackEvidence(evidence).arguments.argumentValues["expect"]
+        )
 
         XCTAssertEqual(
             result,
@@ -3777,36 +3781,36 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackBindsFixtureStepsToTypedCommands() async throws {
-        let playback = try TheFence.TypedHeistPlayback(
-            wire: HeistPlayback(
-                app: "com.test.mock",
-                steps: [
-                    HeistEvidence(
-                        command: "type_text",
-                        target: semanticTarget(identifier: "email", ordinal: 1),
-                        arguments: ["text": .string("user@example.com")],
-                        recorded: RecordedMetadata(heistId: "recorded-email")
-                    ),
-                    HeistEvidence(command: "activate", target: semanticTarget(identifier: "submit")),
-                ]
-            )
+    func testPlaybackScriptValidationBindsFixtureStepsToTypedCommands() async throws {
+        let playback = HeistPlayback(
+            app: "com.test.mock",
+            steps: [
+                HeistEvidence(
+                    command: "type_text",
+                    target: semanticTarget(identifier: "email", ordinal: 1),
+                    arguments: ["text": .string("user@example.com")],
+                    recorded: RecordedMetadata(heistId: "recorded-email")
+                ),
+                HeistEvidence(command: "activate", target: semanticTarget(identifier: "submit")),
+            ]
         )
+        let (fence, _) = makeConnectedFence()
+        try fence.validateHeistPlayback(playback)
         let operation = playback.steps[0]
 
         XCTAssertEqual(playback.app, "com.test.mock")
-        XCTAssertEqual(playback.totalStepCount, 2)
+        XCTAssertEqual(playback.steps.count, 2)
         XCTAssertEqual(operation.command, "type_text")
         XCTAssertEqual(playback.steps[1].command, "activate")
         XCTAssertEqual(operation.target?.matcher.identifier, "email")
         XCTAssertEqual(operation.target?.ordinal, 1)
 
-        let normalizedOperation = try operation.normalizedPlaybackOperation()
-        XCTAssertEqual(normalizedOperation.command, .typeText)
-        XCTAssertNil(normalizedOperation.arguments.string("identifier"))
-        XCTAssertEqual(normalizedOperation.arguments.string("text"), "user@example.com")
-        XCTAssertNil(normalizedOperation.arguments.string("_recorded"))
-        guard case .matcher(let matcher, let ordinal)? = normalizedOperation.arguments.elementTarget else {
+        let parsed = try fence.parsePlaybackEvidence(operation)
+        XCTAssertEqual(parsed.command, .typeText)
+        XCTAssertNil(parsed.arguments.string("identifier"))
+        XCTAssertEqual(parsed.arguments.string("text"), "user@example.com")
+        XCTAssertNil(parsed.arguments.string("_recorded"))
+        guard case .matcher(let matcher, let ordinal)? = parsed.arguments.elementTarget else {
             return XCTFail("Expected playback target to bind as typed matcher")
         }
         XCTAssertEqual(matcher.identifier, "email")
@@ -3814,7 +3818,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackLoadsHeistFileAtFileEdge() async throws {
+    func testPlaybackScriptLoadsHeistFileAtFileEdge() async throws {
         let heist = HeistPlayback(
             app: "com.test.mock",
             steps: [
@@ -3828,17 +3832,19 @@ final class TheFenceHandlerTests: XCTestCase {
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
-        let playback = try TheFence.TypedHeistPlayback(contentsOf: heistURL)
+        let (fence, _) = makeConnectedFence()
+        let playback = try fence.readHeistPlayback(contentsOf: heistURL)
 
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.map(\.command), ["activate"])
         XCTAssertEqual(playback.steps.first?.target?.matcher.identifier, "submit")
-        let expect = try playback.steps.first?.normalizedPlaybackOperation().arguments.argumentValues["expect"]
+        let step = try XCTUnwrap(playback.steps.first)
+        let expect = try fence.parsePlaybackEvidence(step).arguments.argumentValues["expect"]
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackFileEdgeRejectsUnsupportedVersion() async throws {
+    func testPlaybackScriptFileEdgeRejectsUnsupportedVersion() async throws {
         let heist = HeistPlayback(
             version: HeistPlayback.currentVersion + 1,
             app: "com.test.mock",
@@ -3847,7 +3853,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
-        XCTAssertThrowsError(try TheFence.TypedHeistPlayback(contentsOf: heistURL)) { error in
+        let (fence, _) = makeConnectedFence()
+        XCTAssertThrowsError(try fence.readHeistPlayback(contentsOf: heistURL)) { error in
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
@@ -3861,39 +3868,39 @@ final class TheFenceHandlerTests: XCTestCase {
         let evidence = HeistEvidence(
             command: "type_text",
             target: semanticTarget(identifier: "email"),
-            arguments: ["expect": .object(["type": .string("screen_changed")])]
+            arguments: [
+                "text": .string("user@example.com"),
+                "expect": .object(["type": .string("screen_changed")]),
+            ]
         )
 
-        let expect = try evidence.normalizedPlaybackOperation().arguments.argumentValues["expect"]
+        let (fence, _) = makeConnectedFence()
+        let expect = try fence.parsePlaybackEvidence(evidence).arguments.argumentValues["expect"]
         XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackAcceptsCanonicalPlaybackExecutableCommands() async throws {
-        let playback = try TheFence.TypedHeistPlayback(
-            wire: HeistPlayback(
-                app: "com.test.mock",
-                steps: TheFence.Command.playbackExecutableCases.map { command in
-                    HeistEvidence(command: command.rawValue)
-                }
-            )
+    func testPlaybackScriptValidationAcceptsCanonicalPlaybackExecutableCommands() async throws {
+        let playback = HeistPlayback(
+            app: "com.test.mock",
+            steps: TheFence.Command.playbackExecutableCases.map { command in
+                HeistEvidence(command: command.rawValue)
+            }
         )
+        let (fence, _) = makeConnectedFence()
+        try fence.validateHeistPlayback(playback)
 
         XCTAssertEqual(playback.steps.map(\.command), TheFence.Command.playbackExecutableCases.map(\.rawValue))
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackRejectsUnknownCommandName() async throws {
+    func testPlaybackScriptValidationRejectsUnknownCommandName() async throws {
+        let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(
-            try TheFence.TypedHeistPlayback(
-                wire: HeistPlayback(
+            try fence.validateHeistPlayback(
+                HeistPlayback(
                     app: "com.test.mock",
-                    steps: [
-                        HeistEvidence(
-                            command: "unknown_command",
-                            arguments: [:]
-                        ),
-                    ]
+                    steps: [HeistEvidence(command: "unknown_command", arguments: [:])]
                 )
             )
         ) { error in
@@ -3967,11 +3974,12 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testTypedPlaybackRejectsNonExecutableCommands() async throws {
+    func testPlaybackScriptValidationRejectsNonExecutableCommands() async throws {
+        let (fence, _) = makeConnectedFence()
         for command in TheFence.Command.allCases where !command.isPlaybackExecutable {
             XCTAssertThrowsError(
-                try TheFence.TypedHeistPlayback(
-                    wire: HeistPlayback(app: "com.test.mock", steps: [HeistEvidence(command: command.rawValue)])
+                try fence.validateHeistPlayback(
+                    HeistPlayback(app: "com.test.mock", steps: [HeistEvidence(command: command.rawValue)])
                 ),
                 command.rawValue
             ) { error in
@@ -4169,15 +4177,15 @@ final class TheFenceHandlerTests: XCTestCase {
             recorded: RecordedMetadata(heistId: "stale_debug_id")
         )
 
-        let operation = try evidence.normalizedPlaybackOperation()
-        guard case .matcher(let matcher, nil)? = operation.arguments.elementTarget else {
+        let (fence, mockConn) = makeConnectedFence()
+        let parsed = try fence.parsePlaybackEvidence(evidence)
+        guard case .matcher(let matcher, nil)? = parsed.arguments.elementTarget else {
             return XCTFail("Expected playback target to bind as typed matcher")
         }
         XCTAssertEqual(matcher.identifier, "btn1")
-        XCTAssertNil(operation.arguments.argumentValues["heistId"])
-        XCTAssertNil(operation.arguments.argumentValues["target"])
+        XCTAssertNil(parsed.arguments.argumentValues["heistId"])
+        XCTAssertNil(parsed.arguments.argumentValues["target"])
 
-        let (fence, mockConn) = makeConnectedFence()
         let response = try await fence.execute(playback: evidence)
 
         guard case .action(let result, _) = response else {

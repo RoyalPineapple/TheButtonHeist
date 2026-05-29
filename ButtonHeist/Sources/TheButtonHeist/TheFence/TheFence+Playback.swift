@@ -6,70 +6,31 @@ import TheScore
 private let playbackLogger = Logger(subsystem: "com.buttonheist.fence", category: "playback")
 
 extension TheFence {
-    struct TypedHeistPlayback: Sendable {
-        let app: String
-        let steps: [HeistEvidence]
-
-        @ButtonHeistActor
-        init(contentsOf url: URL) throws {
-            do {
-                try self.init(wire: TheBookKeeper.readHeist(from: url))
-            } catch BookKeeperError.heistRecording(.scriptReadFailed(_, let reason))
-                where reason.contains("Unsupported heist file version") {
-                throw FenceError.invalidRequest(reason)
-            }
-        }
-
-        init(wire playback: HeistPlayback) throws {
-            guard playback.version == HeistPlayback.currentVersion else {
-                throw FenceError.invalidRequest(
-                    "Unsupported heist file version \(playback.version). " +
-                        "This Button Heist build supports version \(HeistPlayback.currentVersion). " +
-                        "Re-record the heist with the current format."
-                )
-            }
-
-            app = playback.app
-            steps = try playback.steps.enumerated().map { index, evidence in
-                switch FenceOperationCatalog.normalizePlaybackStep(commandName: evidence.command) {
-                case .success:
-                    return evidence
-                case .failure(let error):
-                    throw FenceError.invalidRequest(
-                        "Invalid heist step \(index): \(error.message)"
-                    )
-                }
-            }
-        }
-
-        var totalStepCount: Int {
-            steps.count
+    @ButtonHeistActor
+    func readHeistPlayback(contentsOf url: URL) throws -> HeistPlayback {
+        do {
+            let playback = try TheBookKeeper.readHeist(from: url)
+            try validateHeistPlayback(playback)
+            return playback
+        } catch BookKeeperError.heistRecording(.scriptReadFailed(_, let reason))
+            where reason.contains("Unsupported heist file version") {
+            throw FenceError.invalidRequest(reason)
         }
     }
-}
 
-extension HeistEvidence {
-    func normalizedPlaybackOperation() throws -> NormalizedOperation {
-        let playbackArguments = TheFence.CommandArgumentEnvelope(
-            values: arguments,
-            elementTarget: target?.playbackElementTarget,
-            isPlaybackStep: true
-        )
-        switch FenceOperationCatalog.normalizePlaybackStep(
-            commandName: command,
-            arguments: playbackArguments
-        ) {
-        case .success(let operation):
-            return operation
-        case .failure(let error):
-            throw FenceError.invalidRequest(error.message)
+    @ButtonHeistActor
+    func validateHeistPlayback(_ playback: HeistPlayback) throws {
+        guard playback.version == HeistPlayback.currentVersion else {
+            throw FenceError.invalidRequest(
+                "Unsupported heist file version \(playback.version). " +
+                    "This Button Heist build supports version \(HeistPlayback.currentVersion). " +
+                    "Re-record the heist with the current format."
+            )
         }
-    }
-}
 
-private extension SemanticActionTarget {
-    var playbackElementTarget: ElementTarget {
-        .matcher(matcher, ordinal: ordinal)
+        try playback.steps.enumerated().forEach { index, evidence in
+            _ = try playbackCommand(for: evidence, stepIndex: index)
+        }
     }
 }
 
@@ -86,12 +47,12 @@ extension TheFence {
             throw FenceError.invalidRequest("Invalid input path: must not be empty or contain '..' components")
         }
 
-        let typedPlayback = try TypedHeistPlayback(contentsOf: resolvedURL)
+        let playbackScript = try readHeistPlayback(contentsOf: resolvedURL)
 
         if let connectedBundle = handoff.serverInfo?.bundleIdentifier,
-           connectedBundle != typedPlayback.app {
+           connectedBundle != playbackScript.app {
             playbackLogger.warning(
-                "Heist was recorded against \(typedPlayback.app) but connected app is \(connectedBundle)"
+                "Heist was recorded against \(playbackScript.app) but connected app is \(connectedBundle)"
             )
         }
 
@@ -104,7 +65,7 @@ extension TheFence {
 
         try await primePlaybackInterface()
 
-        for (index, evidence) in typedPlayback.steps.enumerated() {
+        for (index, evidence) in playbackScript.steps.enumerated() {
             let stepStart = CFAbsoluteTimeGetCurrent()
             var stepFailure: PlaybackFailure?
 
@@ -125,7 +86,7 @@ extension TheFence {
             }
             completedSteps += 1
 
-            if index < typedPlayback.steps.index(before: typedPlayback.steps.endIndex) {
+            if index < playbackScript.steps.index(before: playbackScript.steps.endIndex) {
                 try await primePlaybackInterface()
             }
         }
@@ -138,8 +99,8 @@ extension TheFence {
         let totalTimingMs = Int(totalTimeSeconds * 1000)
         let report = HeistPlaybackReport(
             heistName: heistName,
-            app: typedPlayback.app,
-            totalStepCount: typedPlayback.totalStepCount,
+            app: playbackScript.app,
+            totalStepCount: playbackScript.steps.count,
             totalTimeSeconds: totalTimeSeconds,
             steps: stepResults
         )
@@ -154,6 +115,27 @@ extension TheFence {
 
     private func primePlaybackInterface() async throws {
         _ = try await execute(parsed: defaultGetInterfaceParsedRequest())
+    }
+
+    func parsePlaybackEvidence(_ evidence: HeistEvidence, stepIndex: Int? = nil) throws -> ParsedRequest {
+        try parseRequest(
+            command: playbackCommand(for: evidence, stepIndex: stepIndex),
+            arguments: CommandArgumentEnvelope(
+                values: evidence.arguments,
+                elementTarget: evidence.target.map { .matcher($0.matcher, ordinal: $0.ordinal) },
+                isPlaybackStep: true
+            )
+        )
+    }
+
+    private func playbackCommand(for evidence: HeistEvidence, stepIndex: Int?) throws -> Command {
+        switch FenceOperationCatalog.normalizePlaybackStep(commandName: evidence.command) {
+        case .success(let command):
+            return command
+        case .failure(let error):
+            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
+            throw FenceError.invalidRequest(prefix + error.message)
+        }
     }
 
     private func stepResult(
