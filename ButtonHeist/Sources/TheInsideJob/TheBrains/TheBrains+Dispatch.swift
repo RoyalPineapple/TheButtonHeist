@@ -358,7 +358,7 @@ extension TheBrains {
 
         let manifest = await navigation.exploreAndPrune()
         let afterSnapshot = stash.selectElements()
-        let exploreElements = TheStash.WireConversion.toWire(afterSnapshot)
+        let exploreElements = afterSnapshot.map { TheStash.WireConversion.convert($0.element, heistId: $0.heistId) }
         let accessibilityTrace = makeAccessibilityTrace(afterInterface: stash.interface(), parentCapture: before.capture)
 
         var builder = ActionResultBuilder(method: .explore, snapshot: afterSnapshot)

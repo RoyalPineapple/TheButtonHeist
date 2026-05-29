@@ -32,8 +32,9 @@ extension TheBrains {
 
         let baseline = sentBaseline ?? initial
         let preWaitElements = Dictionary(
-            TheStash.WireConversion.toWire(baseline.snapshot).map {
-                ($0.heistId, $0)
+            baseline.snapshot.map {
+                let wire = TheStash.WireConversion.convert($0.element, heistId: $0.heistId)
+                return (wire.heistId, wire)
             },
             uniquingKeysWith: { _, newest in newest }
         )

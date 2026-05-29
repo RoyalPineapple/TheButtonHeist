@@ -37,17 +37,6 @@ extension TheStash {
     /// TheScore.
     @MainActor enum WireConversion { // swiftlint:disable:this agent_main_actor_value_type
 
-    // MARK: - Trait Names
-
-    /// Trait-to-name conversion delegated to AccessibilitySnapshotParser.
-    static func traitNames(_ traits: UIAccessibilityTraits) -> [HeistTrait] {
-        traitNames(AccessibilityTraits(traits))
-    }
-
-    static func traitNames(_ traits: AccessibilityTraits) -> [HeistTrait] {
-        traits.heistTraits
-    }
-
     // MARK: - Element Conversion
 
     static func convert(_ element: AccessibilityElement, heistId: HeistId = "") -> HeistElement {
@@ -60,7 +49,7 @@ extension TheStash {
             value: element.value,
             identifier: element.identifier,
             hint: element.hint,
-            traits: traitNames(element.traits),
+            traits: element.traits.heistTraits,
             frameX: frame.origin.x.sanitizedForJSON,
             frameY: frame.origin.y.sanitizedForJSON,
             frameWidth: frame.size.width.sanitizedForJSON,
@@ -100,17 +89,6 @@ extension TheStash {
             .map { $0.name }
             .filter { !$0.isEmpty }
         return names.map(ElementAction.custom)
-    }
-
-    // MARK: - Wire Output
-
-    static func toWire(_ entry: ScreenElement) -> HeistElement {
-        convert(entry.element, heistId: entry.heistId)
-    }
-
-    /// Convert a snapshot to wire format. Use at serialization boundaries.
-    static func toWire(_ entries: [ScreenElement]) -> [HeistElement] {
-        entries.map { toWire($0) }
     }
 
     // MARK: - Interface Conversion

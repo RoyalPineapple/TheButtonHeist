@@ -134,7 +134,9 @@ extension Actions {
         _ hit: TheStash.RotorHit,
         direction: RotorDirection
     ) -> TheSafecracker.InteractionResult {
-        let found = hit.screenElement.map(TheStash.WireConversion.toWire)
+        let found = hit.screenElement.map {
+            TheStash.WireConversion.convert($0.element, heistId: $0.heistId)
+        }
         var message = "Rotor '\(hit.rotor)' found"
         if let found {
             message += " \(found.heistId)"
