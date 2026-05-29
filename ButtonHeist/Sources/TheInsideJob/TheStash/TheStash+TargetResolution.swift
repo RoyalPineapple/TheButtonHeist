@@ -69,13 +69,6 @@ extension TheStash {
         resolveTarget(target, in: currentScreen, resolutionScope: .known)
     }
 
-    /// Resolve a target against a supplied screen value. Used by callers that
-    /// intentionally preserved a known semantic snapshot across a fresh visible
-    /// parse.
-    func resolveTarget(_ target: ElementTarget, in screen: Screen) -> TargetResolution {
-        resolveTarget(target, in: screen, resolutionScope: .provided)
-    }
-
     /// Resolve a target only against the latest live hierarchy. This preserves
     /// full target semantics (ambiguity and explicit ordinal) while excluding
     /// known-only entries retained from exploration.
@@ -162,19 +155,6 @@ extension TheStash {
             effectiveTarget = .matcher(matcher, ordinal: 0)
         }
         return resolveVisibleTarget(effectiveTarget).resolved
-    }
-
-    /// Boolean existence check for callers that only need present-vs-missing
-    /// target semantics. Ambiguous matches count as present, and explicit
-    /// ordinals must resolve at the requested index instead of falling back to
-    /// the first match.
-    func hasTarget(_ target: ElementTarget) -> Bool {
-        switch resolveTarget(target) {
-        case .resolved, .ambiguous:
-            return true
-        case .notFound:
-            return false
-        }
     }
 
     func matcherNotFoundMessage(
