@@ -154,7 +154,7 @@ extension TheFence {
             )
         }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
-        let expectationPayload = try parseExpectationPayload(arguments)
+        let expectationPayload = try ExpectationPayload(arguments: arguments)
         let dispatch: DecodedRequestDispatch
         if command.requestPayloadKind == .waitForChange {
             let target = WaitForChangeTarget(
