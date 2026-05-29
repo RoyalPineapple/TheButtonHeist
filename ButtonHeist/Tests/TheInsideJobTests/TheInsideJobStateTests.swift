@@ -367,8 +367,8 @@ final class TheInsideJobStateTests: XCTestCase {
 
         job.finishFailedResumeAttempt(staleID, startedTransport: ServerTransport())
 
-        XCTAssertFalse(
-            job.pendingTransportStopTaskIsEmpty,
+        XCTAssertNotNil(
+            job.pendingTransportStopTask,
             "Stale resume cleanup must remain pending so the next start/resume waits for listener shutdown."
         )
         guard case .suspended = job.serverPhase else {
@@ -764,7 +764,7 @@ final class TheInsideJobStateTests: XCTestCase {
         await Task.yield()
 
         XCTAssertTrue(
-            job.pendingLifecycleTasksIsEmpty,
+            job.lifecycleBoundaryTasks.isEmpty,
             "Completed lifecycle Task should have removed itself from pendingLifecycleTasks"
         )
     }
