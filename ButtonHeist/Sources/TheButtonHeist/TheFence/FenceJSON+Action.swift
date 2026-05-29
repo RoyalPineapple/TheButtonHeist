@@ -257,7 +257,7 @@ struct PublicBatchStepSummary: Encodable {
 
     init(index: Int, summary: BatchStepSummary) {
         self.index = index
-        self.command = summary.command
+        self.command = summary.command.rawValue
         self.deltaKind = summary.deltaKind
         self.screenName = summary.screenName
         self.screenId = summary.screenId

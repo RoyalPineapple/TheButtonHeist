@@ -156,12 +156,13 @@ final class TheBrains {
         before: BeforeState
     ) async -> ActionResult {
         guard success else {
-            let kind = errorKind
-                ?? ((method == .elementNotFound || method == .elementDeallocated)
-                    ? .elementNotFound : .actionFailed)
-            var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
-            builder.message = message
-            return builder.failure(errorKind: kind, payload: payload)
+            return failureActionResult(
+                method: method,
+                message: message,
+                payload: payload,
+                errorKind: errorKind,
+                before: before
+            )
         }
 
         let start = CFAbsoluteTimeGetCurrent()
@@ -215,23 +216,23 @@ final class TheBrains {
 
         await stash.captureActionFrame()
 
-        let receipt = CommandReceipt(
-            before: before,
-            attempt: .delivered(
+        guard let postCapture = accessibilityTrace.captures.last,
+              accessibilityTrace.endpointDeltaProjection != nil else {
+            return failureActionResult(
                 method: method,
                 message: message,
-                payload: payload
-            ),
-            settle: SettleReceipt(
-                outcome: settleResult.outcome,
-                events: settleResult.events,
-                elementsByKey: settleResult.elementsByKey,
-                didSettle: didSettle,
-                accessibilityTrace: accessibilityTrace
+                payload: payload,
+                errorKind: .actionFailed,
+                before: before
             )
-        )
+        }
 
-        return receipt.actionResult()
+        var builder = ActionResultBuilder(method: method, capture: postCapture)
+        builder.message = message
+        builder.accessibilityTrace = accessibilityTrace
+        builder.settled = didSettle
+        builder.settleTimeMs = settleResult.outcome.timeMs
+        return builder.success(payload: payload)
     }
 
     // MARK: - Keyboard Observation
@@ -250,6 +251,21 @@ final class TheBrains {
         stash.clearCache()
         navigation.clearCache()
         responseStateHistory.reset()
+    }
+
+    func failureActionResult(
+        method: ActionMethod,
+        message: String?,
+        payload: ResultPayload?,
+        errorKind: ErrorKind?,
+        before: BeforeState
+    ) -> ActionResult {
+        let kind = errorKind
+            ?? ((method == .elementNotFound || method == .elementDeallocated)
+                ? .elementNotFound : .actionFailed)
+        var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+        builder.message = message
+        return builder.failure(errorKind: kind, payload: payload)
     }
 
     // MARK: - Response State Tracking

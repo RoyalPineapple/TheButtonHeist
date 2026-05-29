@@ -29,8 +29,6 @@ public struct BatchExecutionResult: Codable, Sendable {
 /// do not have action output, and action-only rows do not have expectation data.
 public struct BatchExecutionStepResult: Codable, Sendable {
     public let index: Int
-    public let actionName: String?
-    public let expectationName: String?
     public let actionResult: ActionResult?
     public let expectationActionResult: ActionResult?
     public let expectation: ExpectationResult?
@@ -40,8 +38,6 @@ public struct BatchExecutionStepResult: Codable, Sendable {
 
     public init(
         index: Int,
-        actionName: String? = nil,
-        expectationName: String? = nil,
         actionResult: ActionResult? = nil,
         expectationActionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
@@ -50,8 +46,6 @@ public struct BatchExecutionStepResult: Codable, Sendable {
         skipped: BatchExecutionSkippedStepResult? = nil
     ) {
         self.index = index
-        self.actionName = actionName
-        self.expectationName = expectationName
         self.actionResult = actionResult
         self.expectationActionResult = expectationActionResult
         self.expectation = expectation
@@ -69,28 +63,22 @@ public struct BatchExecutionStepResult: Codable, Sendable {
         if actionResult?.success == false { return true }
         if expectationActionResult?.success == false { return true }
         if expectation?.met == false { return true }
-        if actionName == nil, expectationName == nil { return true }
+        if actionResult == nil, expectationActionResult == nil, expectation == nil { return true }
         return false
     }
 }
 
 public struct BatchExecutionSkippedStepResult: Codable, Sendable {
     public let index: Int
-    public let actionName: String?
-    public let expectationName: String?
     public let reason: String
     public let afterFailedIndex: Int
 
     public init(
         index: Int,
-        actionName: String? = nil,
-        expectationName: String? = nil,
         reason: String,
         afterFailedIndex: Int
     ) {
         self.index = index
-        self.actionName = actionName
-        self.expectationName = expectationName
         self.reason = reason
         self.afterFailedIndex = afterFailedIndex
     }

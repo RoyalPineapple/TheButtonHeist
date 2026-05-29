@@ -32,7 +32,7 @@ public struct RecordingResponseOptions: Sendable, Equatable {
 /// is the wire-level `kind` discriminator from the step's `AccessibilityTrace.Delta`;
 /// `expectationMet` is nil when the step had no expectation attached.
 public struct BatchStepSummary: Sendable {
-    public let command: String
+    public let command: TheFence.Command
     public let deltaKind: String?
     public let screenName: String?
     public let screenId: String?
@@ -44,7 +44,7 @@ public struct BatchStepSummary: Sendable {
     public let nextCommand: String?
 
     public init(
-        command: String,
+        command: TheFence.Command,
         deltaKind: String?,
         screenName: String?,
         screenId: String?,
@@ -74,13 +74,13 @@ public struct BatchStepOutcome {
         case skipped(reason: String, afterFailedIndex: Int)
     }
 
-    public let command: String
+    public let command: TheFence.Command
     public let result: Result
     public let diagnosticDetails: FailureDetails?
     public let stopsBatch: Bool
 
     public init(
-        command: String,
+        command: TheFence.Command,
         response: FenceResponse,
         diagnosticDetails: FailureDetails? = nil,
         stopsBatch: Bool = false
@@ -92,7 +92,7 @@ public struct BatchStepOutcome {
     }
 
     private init(
-        command: String,
+        command: TheFence.Command,
         result: Result,
         diagnosticDetails: FailureDetails? = nil,
         stopsBatch: Bool = false
@@ -103,7 +103,7 @@ public struct BatchStepOutcome {
         self.stopsBatch = stopsBatch
     }
 
-    public static func skipped(command: String, afterFailedIndex failedIndex: Int) -> BatchStepOutcome {
+    public static func skipped(command: TheFence.Command, afterFailedIndex failedIndex: Int) -> BatchStepOutcome {
         BatchStepOutcome(
             command: command,
             result: .skipped(reason: "skipped: stop_on_error stopped batch after step \(failedIndex)", afterFailedIndex: failedIndex)
@@ -169,7 +169,7 @@ extension BatchStepOutcome {
     }
 
     private static func makeStepSummary(
-        command: String,
+        command: TheFence.Command,
         response: FenceResponse,
         diagnosticDetails: FailureDetails?,
         expectationMet: Bool?

@@ -110,8 +110,6 @@ extension TheBrains {
 
         return BatchExecutionStepResult(
             index: index,
-            actionName: step.command.canonicalName,
-            expectationName: step.expectation.summaryDescription,
             actionResult: actionResult,
             expectationActionResult: expectationReceipt?.actionResult,
             expectation: expectationReceipt?.expectation,
@@ -146,19 +144,14 @@ extension TheBrains {
         remainingSteps: ArraySlice<TheScore.BatchStep>,
         into stepResults: inout [BatchExecutionStepResult]
     ) {
-        for (offset, step) in remainingSteps.enumerated() {
-            let index = failedIndex + 1 + offset
+        for index in (failedIndex + 1)..<(failedIndex + 1 + remainingSteps.count) {
             let skipped = BatchExecutionSkippedStepResult(
                 index: index,
-                actionName: step.command.canonicalName,
-                expectationName: step.expectation.summaryDescription,
                 reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                 afterFailedIndex: failedIndex
             )
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: step.command.canonicalName,
-                expectationName: step.expectation.summaryDescription,
                 durationMs: 0,
                 skipped: skipped
             ))
@@ -193,8 +186,6 @@ private extension BatchExecutionStepResult {
     func markingStop() -> BatchExecutionStepResult {
         BatchExecutionStepResult(
             index: index,
-            actionName: actionName,
-            expectationName: expectationName,
             actionResult: actionResult,
             expectationActionResult: expectationActionResult,
             expectation: expectation,

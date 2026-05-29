@@ -333,7 +333,7 @@ final class TheGetawayTests: XCTestCase {
             return XCTFail("Expected admission rejection, got \(response.message)")
         }
         XCTAssertEqual(error.kind, .validationError)
-        XCTAssertEqual(error.message, "Protocol message client_hello is not an app command after authentication.")
+        XCTAssertEqual(error.message, "Protocol message clientHello is not an app command after authentication.")
     }
 
     func testStatusReportsActiveDriverId() async throws {
