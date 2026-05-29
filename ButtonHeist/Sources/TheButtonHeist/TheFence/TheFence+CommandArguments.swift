@@ -7,22 +7,33 @@ extension TheFence {
     /// Typed JSON-encodable command arguments after external routing has selected a command.
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
+        let playbackSemanticTarget: SemanticActionTarget?
         let argumentFieldPrefix: String?
 
-        public init(values: [String: HeistValue], fieldPrefix: String? = nil) {
+        public init(
+            values: [String: HeistValue],
+            playbackSemanticTarget: SemanticActionTarget? = nil,
+            fieldPrefix: String? = nil
+        ) {
             self.argumentValues = values
+            self.playbackSemanticTarget = playbackSemanticTarget
             argumentFieldPrefix = fieldPrefix
         }
 
         func dropping(_ key: String) -> CommandArgumentEnvelope {
             var values = argumentValues
             values.removeValue(forKey: key)
-            return CommandArgumentEnvelope(values: values, fieldPrefix: argumentFieldPrefix)
+            return CommandArgumentEnvelope(
+                values: values,
+                playbackSemanticTarget: playbackSemanticTarget,
+                fieldPrefix: argumentFieldPrefix
+            )
         }
     }
 
     public struct CommandArgumentObject: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
+        let playbackSemanticTarget: SemanticActionTarget? = nil
         let argumentFieldPrefix: String?
 
         public init(values: [String: HeistValue], fieldPrefix: String?) {
@@ -33,6 +44,7 @@ extension TheFence {
 
     protocol CommandArgumentReadable: Sendable {
         var argumentValues: [String: HeistValue] { get }
+        var playbackSemanticTarget: SemanticActionTarget? { get }
         var argumentFieldPrefix: String? { get }
     }
 }

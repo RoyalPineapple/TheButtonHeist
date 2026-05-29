@@ -49,40 +49,34 @@ extension TheFence {
 }
 
 extension HeistEvidence {
-    func playbackArgumentEnvelope() -> TheFence.CommandArgumentEnvelope {
-        var requestArguments = arguments
-
-        if let target {
-            var matcher: [String: HeistValue] = [:]
-            if let label = target.matcher.label { matcher["label"] = .string(label) }
-            if let matchIdentifier = target.matcher.identifier { matcher["identifier"] = .string(matchIdentifier) }
-            if let matchValue = target.matcher.value { matcher["value"] = .string(matchValue) }
-            if let matchTraits = target.matcher.traits {
-                matcher["traits"] = .array(matchTraits.map { .string($0.rawValue) })
-            }
-            if let matchExclude = target.matcher.excludeTraits {
-                matcher["excludeTraits"] = .array(matchExclude.map { .string($0.rawValue) })
-            }
-            var targetArguments: [String: HeistValue] = ["matcher": .object(matcher)]
-            if let ordinal = target.ordinal {
-                targetArguments["ordinal"] = .int(ordinal)
-            }
-            requestArguments["target"] = .object(targetArguments)
-        }
-
-        return TheFence.CommandArgumentEnvelope(values: requestArguments)
-    }
-
     func normalizedPlaybackOperation() throws -> NormalizedOperation {
+        try rejectPlaybackTargetArguments()
+        let playbackArguments = TheFence.CommandArgumentEnvelope(
+            values: arguments,
+            playbackSemanticTarget: target
+        )
         switch FenceOperationCatalog.normalizePlaybackStep(
             commandName: command,
-            arguments: playbackArgumentEnvelope()
+            arguments: playbackArguments
         ) {
         case .success(let operation):
             return operation
         case .failure(let error):
             throw FenceError.invalidRequest(error.message)
         }
+    }
+
+    private func rejectPlaybackTargetArguments() throws {
+        let targetKeys = Set(["target"] + ElementTargetGrammar.inlineFieldNames)
+        guard let targetKey = arguments.keys.sorted().first(where: targetKeys.contains) else {
+            return
+        }
+        let observed = arguments[targetKey]?.schemaObservedDescription ?? "missing"
+        throw SchemaValidationError(
+            field: targetKey,
+            observed: observed,
+            expected: "recorded playback target field"
+        )
     }
 }
 

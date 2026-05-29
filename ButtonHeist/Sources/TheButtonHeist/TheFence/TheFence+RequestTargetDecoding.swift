@@ -4,6 +4,16 @@ extension TheFence.CommandArgumentReadable {
 
     @ButtonHeistActor
     func elementTarget() throws -> ElementTarget? {
+        if let playbackSemanticTarget {
+            if keys.contains("target") {
+                throw SchemaValidationError(
+                    field: field("target"),
+                    observed: observedDescription(for: "target") ?? "object",
+                    expected: "not present when semantic playback target is provided"
+                )
+            }
+            return playbackSemanticTarget.playbackElementTarget
+        }
         guard let target = try schemaDictionary("target") else { return nil }
         try target.rejectUnknownKeys(
             allowed: Set(ElementTargetGrammar.wrappedTargetFieldNames),
@@ -113,7 +123,7 @@ extension TheFence.CommandArgumentReadable {
     }
 
     var hasElementTargetFields: Bool {
-        keys.contains("target")
+        playbackSemanticTarget != nil || keys.contains("target")
     }
 
     @ButtonHeistActor
@@ -217,6 +227,12 @@ extension TheFence.CommandArgumentReadable {
         case .negativeOrdinal:
             return "integer >= 0"
         }
+    }
+}
+
+private extension SemanticActionTarget {
+    var playbackElementTarget: ElementTarget {
+        .matcher(matcher, ordinal: ordinal)
     }
 }
 
