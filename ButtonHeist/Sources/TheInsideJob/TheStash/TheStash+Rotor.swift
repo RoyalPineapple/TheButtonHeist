@@ -198,7 +198,7 @@ extension TheStash {
         if let pendingObject = rotorContinuations.activeCursorObject(heistId: heistId) {
             return pendingObject
         }
-        guard let current = resolveVisibleTarget(.heistId(heistId)).resolved?.screenElement,
+        guard let current = resolveVisibleTarget(.heistId(heistId)).resolved,
               let currentObject = liveObject(for: current) else {
             return nil
         }
