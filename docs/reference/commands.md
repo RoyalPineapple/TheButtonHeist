@@ -55,7 +55,6 @@ Activate a UI element (VoiceOver-style double-tap): tap buttons, follow links, t
 - CLI: direct command `activate`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -75,7 +74,6 @@ Close and compress the current session into a .tar.gz archive; returns the path.
 - CLI: direct command `archive_session`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -91,7 +89,6 @@ Establish or switch the active connection to an iOS app with Button Heist enable
 - CLI: direct command `connect`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -109,7 +106,6 @@ Dismiss the on-screen keyboard through the current first responder or keyboard a
 - CLI: direct command `dismiss_keyboard`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -126,7 +122,6 @@ Drag from one point to another using explicit coordinates or a semantic target.
 - CLI: direct command `drag`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -149,7 +144,6 @@ Draw a Bezier path from a start point through one or more curve segments.
 - CLI: direct command `draw_bezier`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -172,7 +166,6 @@ Draw a free-form path through explicit screen-coordinate points.
 - CLI: direct command `draw_path`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -192,7 +185,6 @@ Perform an edit or keyboard action on the current first responder. Actions: copy
 - CLI: direct command `edit_action`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -210,7 +202,6 @@ Search scrollable content for a semantic element match without performing an act
 - CLI: direct command `element_search`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -229,7 +220,6 @@ Read the app accessibility hierarchy. Call once on a new screen, then track chan
 - CLI: direct command `get_interface`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -251,7 +241,6 @@ Read text from the general pasteboard. iOS may show "Allow Paste" if the content
 - CLI: direct command `get_pasteboard`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -265,7 +254,6 @@ Capture a PNG screenshot from the connected device. Returns metadata plus an art
 - CLI: direct command `get_screen`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -283,7 +271,6 @@ Return the current session log snapshot: commands executed and artifacts produce
 - CLI: direct command `get_session_log`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -297,7 +284,6 @@ Inspect the current Button Heist session: connection status, device/app identity
 - CLI: direct command `get_session_state`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -311,7 +297,6 @@ Return descriptor-backed help for the current Button Heist command surface.
 - CLI: session-only `help`
 - MCP: not exposed
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -325,7 +310,6 @@ List iOS devices discovered via Bonjour plus named targets from .buttonheist.jso
 - CLI: direct command `list_devices`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -339,7 +323,6 @@ List named connection targets from .buttonheist.json (or ~/.config/buttonheist/c
 - CLI: direct command `list_targets`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -353,7 +336,6 @@ Long-press a coordinate or semantic target for a resolved duration.
 - CLI: direct command `long_press`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -374,7 +356,6 @@ Tap a coordinate or semantic target after actionability resolution.
 - CLI: direct command `one_finger_tap`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -394,7 +375,6 @@ Pinch around a resolved center point using scale, angle, and duration.
 - CLI: direct command `pinch`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -417,7 +397,6 @@ Check Button Heist connection health. Returns cheap static app/server identity f
 - CLI: direct command `ping`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -431,7 +410,6 @@ Play back a .heist file. Steps execute sequentially; playback stops on the first
 - CLI: direct command `play_heist`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -447,7 +425,6 @@ End the interactive CLI session.
 - CLI: session-only `quit`
 - MCP: not exposed
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -461,7 +438,6 @@ Rotate around a resolved center point using angle, radius, and duration.
 - CLI: direct command `rotate`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -484,7 +460,6 @@ Move through a rotor exposed by an element. Defaults to next. Use rotors listed 
 - CLI: direct command `rotor`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -508,7 +483,6 @@ Execute multiple commands in one call. Each step is a JSON object with 'command'
 - CLI: direct command `run_batch`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -525,7 +499,6 @@ Scroll one page within scroll views in the requested direction. Use scroll_to_vi
 - CLI: direct command `scroll`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -547,7 +520,6 @@ Scroll the selected container, or the target's owning scroll ancestor, to a requ
 - CLI: direct command `scroll_to_edge`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -569,7 +541,6 @@ Make a semantic target visible by resolving it, revealing its owning scroll path
 - CLI: direct command `scroll_to_visible`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -587,7 +558,6 @@ Write text to the general pasteboard from within the app. Content written by the
 - CLI: direct command `set_pasteboard`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -605,7 +575,6 @@ Start recording a heist. Successful commands become steps in a .heist file; the 
 - CLI: direct command `start_heist`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -622,7 +591,6 @@ Start an H.264/MP4 screen recording. Recording runs until max duration unless in
 - CLI: direct command `start_recording`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -641,7 +609,6 @@ Stop recording and save the heist as a self-contained JSON playback script. Retu
 - CLI: direct command `stop_heist`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: no
 
 Parameters:
@@ -657,7 +624,6 @@ Stop an in-progress screen recording. Returns artifact path and metadata by defa
 - CLI: direct command `stop_recording`
 - MCP: direct tool
 - Batch: no
-- Playback: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -675,7 +641,6 @@ Swipe in a direction or between explicit points; semantic targets are made actio
 - CLI: direct command `swipe`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -701,7 +666,6 @@ Tap with two fingers at a coordinate or actionable semantic target.
 - CLI: direct command `two_finger_tap`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -722,7 +686,6 @@ Type non-empty text via keyboard injection. Optionally target an element to focu
 - CLI: direct command `type_text`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -741,7 +704,6 @@ Wait for an element matching a predicate to appear, or to disappear with absent=
 - CLI: direct command `wait_for`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -760,7 +722,6 @@ Wait for the UI to change. With no expect, returns on any tree change. With expe
 - CLI: direct command `wait_for_change`
 - MCP: direct tool
 - Batch: yes
-- Playback: yes
 - Connection before dispatch: yes
 
 Parameters:

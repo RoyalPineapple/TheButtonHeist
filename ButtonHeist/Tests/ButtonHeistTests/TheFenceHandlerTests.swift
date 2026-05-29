@@ -3880,7 +3880,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackScriptValidationAcceptsCanonicalPlaybackExecutableCommands() async throws {
+    func testPlaybackScriptValidationAcceptsCanonicalBatchExecutableCommands() async throws {
         let playback = HeistPlayback(
             app: "com.test.mock",
             steps: TheFence.Command.batchExecutableCases.map { command in
