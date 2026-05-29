@@ -9,13 +9,7 @@ extension TheFence.ParsedRequest {
     @ButtonHeistActor
     func heistRecordingCoordinateOnly() throws -> Bool {
         guard try arguments.elementTarget() == nil else { return false }
-        switch command {
-        case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap,
-             .drawPath, .drawBezier:
-            return true
-        default:
-            return false
-        }
+        return command.requestPayloadKind == .gesture
     }
 
     func heistRecordingArguments() -> [String: HeistValue] {
@@ -34,11 +28,6 @@ extension TheFence.ParsedRequest {
 
 private extension TheFence.Command {
     var recordsTimeoutAsHeistArgument: Bool {
-        switch self {
-        case .waitFor, .waitForChange:
-            return true
-        default:
-            return false
-        }
+        descriptor.actionResultMethod == .waitFor || descriptor.actionResultMethod == .waitForChange
     }
 }
