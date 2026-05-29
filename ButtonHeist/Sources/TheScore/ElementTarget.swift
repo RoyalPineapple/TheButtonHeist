@@ -135,6 +135,13 @@ extension ElementTarget: Codable {
         let ordinal = allowsInlineOrdinal
             ? try container.decodeIfPresent(Int.self, forKey: .ordinal)
             : externalOrdinal
+        if let ordinal, ordinal < 0 {
+            throw DecodingError.dataCorruptedError(
+                forKey: .ordinal,
+                in: container,
+                debugDescription: ElementTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription
+            )
+        }
         if let heistId = try container.decodeIfPresent(HeistId.self, forKey: .heistId) {
             return try targetOrDecodingError(
                 heistId: heistId,

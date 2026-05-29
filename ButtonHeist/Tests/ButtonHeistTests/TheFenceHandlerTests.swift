@@ -204,14 +204,13 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     private func decodedElementTarget(
-        _ fence: TheFence,
         target: HeistValue? = nil
     ) throws -> ElementTarget? {
         var arguments: [String: HeistValue] = [:]
         if let target {
             arguments["target"] = target
         }
-        return try fence.decodedElementTarget(TheFence.CommandArgumentEnvelope(values: arguments))
+        return try TheFence.CommandArgumentEnvelope(values: arguments).elementTarget()
     }
 
     @ButtonHeistActor
@@ -684,8 +683,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetWithIdentifier() async throws {
-        let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: targetValue(identifier: "myButton")),
+        guard let target = try decodedElementTarget(target: targetValue(identifier: "myButton")),
               case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -694,8 +692,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetWithHeistId() async throws {
-        let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: heistTargetValue("button_save")),
+        guard let target = try decodedElementTarget(target: heistTargetValue("button_save")),
               case .heistId(let id) = target else {
             return XCTFail("Expected .heistId")
         }
@@ -704,8 +701,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetWithMatcherFields() async throws {
-        let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: targetValue(label: "Save", traits: ["button"])),
+        guard let target = try decodedElementTarget(target: targetValue(label: "Save", traits: ["button"])),
               case .matcher(let matcher, _) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -715,10 +711,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetRejectsHeistIdAndMatcher() async throws {
-        let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(
             try decodedElementTarget(
-                fence,
                 target: elementTargetValue([
                     "heistId": .string("button_save"),
                     "label": .string("Save"),
@@ -734,10 +728,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetRejectsHeistIdAndOrdinal() async throws {
-        let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(
             try decodedElementTarget(
-                fence,
                 target: elementTargetValue([
                     "heistId": .string("button_save"),
                     "ordinal": .int(1),
@@ -753,10 +745,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetRejectsUnknownTargetField() async throws {
-        let (fence, _) = makeConnectedFence()
         XCTAssertThrowsError(
             try decodedElementTarget(
-                fence,
                 target: elementTargetValue([
                     "label": .string("Save"),
                     "unexpectedTargetField": .string("button_save"),
@@ -772,8 +762,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetWithOrdinal() async throws {
-        let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: targetValue(label: "Save", ordinal: 2)),
+        guard let target = try decodedElementTarget(target: targetValue(label: "Save", ordinal: 2)),
               case .matcher(let matcher, let ordinal) = target else {
             return XCTFail("Expected .matcher with ordinal")
         }
@@ -786,14 +775,13 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .activate,
             arguments: ["target": targetValue(label: "Save", ordinal: -1)],
-            equals: "schema validation failed for target.ordinal: observed integer -1; expected integer >= 0"
+            equals: "schema validation failed for target.ordinal: observed integer -1; expected ordinal must be non-negative, got -1"
         )
     }
 
     @ButtonHeistActor
     func testElementTargetWithoutOrdinal() async throws {
-        let (fence, _) = makeConnectedFence()
-        guard let target = try decodedElementTarget(fence, target: targetValue(label: "Save")),
+        guard let target = try decodedElementTarget(target: targetValue(label: "Save")),
               case .matcher(_, let ordinal) = target else {
             return XCTFail("Expected .matcher")
         }
@@ -802,8 +790,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testElementTargetMissing() async throws {
-        let (fence, _) = makeConnectedFence()
-        XCTAssertNil(try decodedElementTarget(fence))
+        XCTAssertNil(try decodedElementTarget())
     }
 
     // MARK: - Schema Validation Diagnostics
@@ -2892,7 +2879,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     ]),
                 ]),
             ],
-            contains: "schema validation failed for steps[0].target.ordinal: observed integer -1; expected integer >= 0"
+            contains: "schema validation failed for steps[0].target.ordinal: observed integer -1; expected ordinal must be non-negative, got -1"
         )
     }
 

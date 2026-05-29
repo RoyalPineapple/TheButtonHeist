@@ -15,7 +15,7 @@ extension TheFence.CommandArgumentReadable {
             return elementTarget
         }
         guard let target = try schemaDictionary("target") else { return nil }
-        return try target.decodedElementTarget()
+        return try target.decodeCommandPayload(ElementTarget.self)
     }
 
     @ButtonHeistActor
@@ -32,46 +32,6 @@ extension TheFence.CommandArgumentReadable {
         let captureLocalRef = try container?.schemaString("captureLocalRef") ?? schemaString("captureLocalRef")
         guard stableId != nil || captureLocalRef != nil else { return nil }
         return ScrollContainerTarget(stableId: stableId, captureLocalRef: captureLocalRef)
-    }
-
-    func decodedElementTarget() throws -> ElementTarget {
-        try rejectUnknownKeys(
-            allowed: Set(ElementTarget.inlineFieldNames),
-            expected: "valid element target field"
-        )
-
-        let heistId = try schemaString(ElementTarget.heistIdFieldName)
-        let matcher = try elementMatcher()
-        let matcherWasProvided = ElementTarget.matcherFieldNames.contains { keys.contains($0) }
-        let ordinal = try nonNegativeInteger("ordinal")
-
-        do {
-            return try ElementTargetGrammar.validatedTarget(
-                heistId: heistId,
-                matcher: matcher,
-                matcherWasProvided: matcherWasProvided,
-                ordinal: ordinal
-            )
-        } catch let error as ElementTargetGrammarError {
-            throw SchemaValidationError(
-                field: argumentFieldPrefix ?? "target",
-                observed: observedDescription,
-                expected: error.diagnosticDescription
-            )
-        }
-    }
-
-    private func elementMatcher() throws -> ElementMatcher {
-        ElementMatcher(
-            label: try schemaString("label"),
-            identifier: try schemaString("identifier"),
-            value: try schemaString("value"),
-            traits: try TheFence.parseTraitNames(try schemaStringArray("traits"), field: field("traits")),
-            excludeTraits: try TheFence.parseTraitNames(
-                try schemaStringArray("excludeTraits"),
-                field: field("excludeTraits")
-            )
-        )
     }
 
     @ButtonHeistActor

@@ -6,7 +6,7 @@ final class HeistTraitTests: XCTestCase {
     func testUnknownStringFailsDecode() throws {
         let json = Data(#""neverHeardOfIt""#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(HeistTrait.self, from: json)) { error in
-            XCTAssertTrue("\(error)".contains("Unknown HeistTrait"))
+            XCTAssertTrue("\(error)".contains("enum one of"))
         }
     }
 
