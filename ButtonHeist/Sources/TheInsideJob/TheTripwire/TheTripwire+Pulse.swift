@@ -333,18 +333,6 @@ extension TheTripwire {
         }
     }
 
-    // MARK: - Standalone Queries
-
-    /// Walk every layer in the traversable windows, sum their presentation positions.
-    func takePresentationFingerprint() -> PresentationFingerprint {
-        scanLayers().fingerprint
-    }
-
-    /// Are any layers in the window tree waiting for a layout pass?
-    func hasPendingLayout() -> Bool {
-        scanLayers().hasPendingLayout
-    }
-
     /// Is the interface all clear? When the pulse is running, returns the
     /// latest reading's settle state (requires 2 consecutive quiet frames).
     /// Otherwise falls back to a synchronous scan checking both pending layout

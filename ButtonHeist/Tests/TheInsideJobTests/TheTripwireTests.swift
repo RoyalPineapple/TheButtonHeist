@@ -109,15 +109,6 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertEqual(scan.windowCount, windows.count)
     }
 
-    func testScanLayersFingerprintMatchesDedicatedMethod() {
-        let scan = tripwire.scanLayers()
-        let dedicated = tripwire.takePresentationFingerprint()
-        XCTAssertTrue(
-            scan.fingerprint.matches(dedicated),
-            "scanLayers fingerprint should match takePresentationFingerprint"
-        )
-    }
-
     func testScanLayersDetectsPendingLayout() {
         let windows = tripwire.getTraversableWindows()
         guard let window = windows.first?.window else {
@@ -332,7 +323,7 @@ final class TheTripwireTests: XCTestCase {
         window.addSubview(testView)
         testView.setNeedsLayout()
 
-        XCTAssertTrue(tripwire.hasPendingLayout())
+        XCTAssertTrue(tripwire.scanLayers().hasPendingLayout)
 
         testView.layoutIfNeeded()
         testView.removeFromSuperview()
@@ -357,7 +348,7 @@ final class TheTripwireTests: XCTestCase {
         }
 
         // Verify baseline is clean before testing setNeedsDisplay
-        let baseline = tripwire.hasPendingLayout()
+        let baseline = tripwire.scanLayers().hasPendingLayout
         guard !baseline else {
             testLayer.removeFromSuperlayer()
             XCTFail("Baseline has pending layout — cannot isolate setNeedsDisplay effect")
@@ -366,7 +357,7 @@ final class TheTripwireTests: XCTestCase {
 
         testLayer.setNeedsDisplay()
         XCTAssertFalse(
-            tripwire.hasPendingLayout(),
+            tripwire.scanLayers().hasPendingLayout,
             "needsDisplay alone should not trigger hasPendingLayout"
         )
 
@@ -387,7 +378,7 @@ final class TheTripwireTests: XCTestCase {
         window.addSubview(testView)
         testView.setNeedsLayout()
 
-        XCTAssertTrue(tripwire.hasPendingLayout(), "Should detect pending layout after setNeedsLayout")
+        XCTAssertTrue(tripwire.scanLayers().hasPendingLayout, "Should detect pending layout after setNeedsLayout")
 
         testView.layoutIfNeeded()
         testView.removeFromSuperview()
@@ -422,16 +413,16 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertNotNil(vc, "Test host should have a root view controller")
     }
 
-    // MARK: - takePresentationFingerprint (hosted test)
+    // MARK: - Fingerprint (hosted test)
 
-    func testTakePresentationFingerprintHasLayers() {
-        let fp = tripwire.takePresentationFingerprint()
+    func testScanLayersFingerprintHasLayers() {
+        let fp = tripwire.scanLayers().fingerprint
         XCTAssertGreaterThan(fp.layerCount, 0, "Test host should have layers in the window")
     }
 
     func testConsecutiveFingerprintsMatchWhenIdle() {
-        let fp1 = tripwire.takePresentationFingerprint()
-        let fp2 = tripwire.takePresentationFingerprint()
+        let fp1 = tripwire.scanLayers().fingerprint
+        let fp2 = tripwire.scanLayers().fingerprint
         XCTAssertTrue(fp1.matches(fp2), "Consecutive fingerprints should match when idle")
     }
 

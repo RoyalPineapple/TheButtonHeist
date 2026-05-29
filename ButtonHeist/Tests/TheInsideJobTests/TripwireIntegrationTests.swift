@@ -190,7 +190,7 @@ final class TripwireIntegrationTests: XCTestCase {
             return
         }
 
-        let baseline = tripwire.takePresentationFingerprint()
+        let baseline = tripwire.scanLayers().fingerprint
 
         let testLayer = CALayer()
         testLayer.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
@@ -205,7 +205,7 @@ final class TripwireIntegrationTests: XCTestCase {
         CATransaction.flush()
         RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
 
-        let during = tripwire.takePresentationFingerprint()
+        let during = tripwire.scanLayers().fingerprint
         XCTAssertFalse(
             baseline.matches(during),
             "Fingerprint should differ while a large animation is in flight"
