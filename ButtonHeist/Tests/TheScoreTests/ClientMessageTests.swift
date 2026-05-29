@@ -86,6 +86,27 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
+    func testCanonicalNameIsDerivedFromEncodedWireType() throws {
+        let messages: [ClientMessage] = [
+            .clientHello,
+            .requestInterface(InterfaceQuery()),
+            .performCustomAction(CustomActionTarget(
+                elementTarget: .matcher(ElementMatcher(identifier: "menu")),
+                actionName: "Open"
+            )),
+            .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))),
+            .scrollToVisible(ScrollToVisibleTarget(elementTarget: .heistId("button_save"))),
+            .waitForChange(WaitForChangeTarget(timeout: 1.0)),
+        ]
+
+        for message in messages {
+            let encoded = try JSONEncoder().encode(message)
+            let wireType = try JSONDecoder().decode(EncodedClientMessageType.self, from: encoded).type
+
+            XCTAssertEqual(message.canonicalName, wireType.lowerCamelToSnakeCase(), "\(message)")
+        }
+    }
+
     func testPingEncodeDecode() throws {
         let message = ClientMessage.ping
         let data = try JSONEncoder().encode(message)
@@ -655,6 +676,25 @@ final class ClientMessageTests: XCTestCase {
 }
 
 // MARK: - Test Helpers
+
+private struct EncodedClientMessageType: Decodable {
+    let type: String
+}
+
+private extension String {
+    func lowerCamelToSnakeCase() -> String {
+        reduce(into: "") { result, character in
+            if character.isUppercase {
+                if !result.isEmpty {
+                    result.append("_")
+                }
+                result.append(character.lowercased())
+            } else {
+                result.append(character)
+            }
+        }
+    }
+}
 
 extension HeistElement {
     static func stub(

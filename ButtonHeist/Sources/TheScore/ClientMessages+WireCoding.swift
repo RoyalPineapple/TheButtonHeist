@@ -71,6 +71,13 @@ extension RequestEnvelope {
 // MARK: - ClientMessage Wire Representation
 
 extension ClientMessage {
+    /// Canonical snake-case wire diagnostic name for this typed message.
+    /// Some messages are transport-only or internal execution plans, so this
+    /// is not necessarily a public CLI/MCP command name.
+    public var canonicalName: String {
+        wireRepresentation.type.canonicalName
+    }
+
     /// Single source of truth mapping each `ClientMessage` case to its wire
     /// type tag and (optional) payload value. Used by both encode sites in
     /// this file. Adding a new case requires extending this switch — Swift's
@@ -229,4 +236,25 @@ private func unexpectedClientPayload(_ type: ClientWireMessageType, codingPath: 
         codingPath: codingPath,
         debugDescription: "\(type.rawValue) must not include a payload"
     ))
+}
+
+private extension ClientWireMessageType {
+    var canonicalName: String {
+        rawValue.lowerCamelToSnakeCase()
+    }
+}
+
+private extension String {
+    func lowerCamelToSnakeCase() -> String {
+        reduce(into: "") { result, character in
+            if character.isUppercase {
+                if !result.isEmpty {
+                    result.append("_")
+                }
+                result.append(character.lowercased())
+            } else {
+                result.append(character)
+            }
+        }
+    }
 }

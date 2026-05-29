@@ -153,48 +153,4 @@ public enum ClientMessage: Codable, Sendable {
     /// Stop an in-progress recording
     case stopRecording
 
-    /// Canonical snake-case wire diagnostic name for this typed message.
-    /// Some messages are transport-only or internal execution plans, so this
-    /// is not necessarily a public CLI/MCP command name.
-    public var canonicalName: String {
-        switch self {
-        case .clientHello: return "client_hello"
-        case .authenticate: return "authenticate"
-        case .requestInterface: return "request_interface"
-        case .ping: return "ping"
-        case .status: return "status"
-        case .requestScreen: return "request_screen"
-        case .activate: return "activate"
-        case .increment: return "increment"
-        case .decrement: return "decrement"
-        case .performCustomAction: return "perform_custom_action"
-        case .rotor: return "rotor"
-        case .editAction: return "edit_action"
-        case .setPasteboard: return "set_pasteboard"
-        case .getPasteboard: return "get_pasteboard"
-        case .resignFirstResponder: return "resign_first_responder"
-        case .oneFingerTap: return "one_finger_tap"
-        case .longPress: return "long_press"
-        case .swipe: return "swipe"
-        case .drag: return "drag"
-        case .pinch: return "pinch"
-        case .rotate: return "rotate"
-        case .twoFingerTap: return "two_finger_tap"
-        case .drawPath: return "draw_path"
-        case .drawBezier: return "draw_bezier"
-        case .typeText: return "type_text"
-        case .scroll: return "scroll"
-        case .scrollToVisible: return "scroll_to_visible"
-        case .elementSearch: return "element_search"
-        case .scrollToEdge: return "scroll_to_edge"
-        case .waitForIdle: return "wait_for_idle"
-        case .waitFor: return "wait_for"
-        case .waitForChange: return "wait_for_change"
-        case .batchExecutionPlan: return "batch_execution_plan"
-        case .explore: return "explore"
-        case .startRecording: return "start_recording"
-        case .stopRecording: return "stop_recording"
-        }
-    }
-
 }
