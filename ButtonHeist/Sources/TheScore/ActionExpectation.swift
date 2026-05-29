@@ -167,16 +167,31 @@ extension ActionExpectation: Codable {
     /// Discriminator strings accepted in object-form expectation payloads.
     public static let wireTypeValues: [String] = WireType.allCases.map(\.rawValue)
 
-    private enum ElementUpdatedKey: String, CodingKey {
+    private enum ElementUpdatedKey: String, CodingKey, CaseIterable {
         case type, heistId, property, oldValue, newValue
     }
 
-    private enum MatcherKey: String, CodingKey {
+    private enum MatcherKey: String, CodingKey, CaseIterable {
         case type, matcher
     }
 
-    private enum CompoundKey: String, CodingKey {
+    private enum CompoundKey: String, CodingKey, CaseIterable {
         case type, expectations
+    }
+
+    private struct DynamicCodingKey: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+            intValue = nil
+        }
+
+        init?(intValue: Int) {
+            stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -185,37 +200,88 @@ extension ActionExpectation: Codable {
         guard let wireType = WireType(rawValue: typeString) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: typeContainer,
-                debugDescription: "Unknown ActionExpectation type: \"\(typeString)\""
+                debugDescription: "Unknown expectation type: \"\(typeString)\". Valid: \(Self.wireTypeValues.joined(separator: ", "))"
             )
         }
         switch wireType {
         case .delivery:
+            try Self.rejectUnknownKeys(from: decoder, allowed: ["type"], expectationType: wireType.rawValue)
             self = .delivery
         case .screenChanged:
+            try Self.rejectUnknownKeys(from: decoder, allowed: ["type"], expectationType: wireType.rawValue)
             self = .screenChanged
         case .elementsChanged:
+            try Self.rejectUnknownKeys(from: decoder, allowed: ["type"], expectationType: wireType.rawValue)
             self = .elementsChanged
         case .elementUpdated:
+            try Self.rejectUnknownKeys(from: decoder, allowed: ElementUpdatedKey.self, expectationType: wireType.rawValue)
             let container = try decoder.container(keyedBy: ElementUpdatedKey.self)
+            let property = try Self.decodeElementPropertyIfPresent(in: container)
             self = .elementUpdated(
                 heistId: try container.decodeIfPresent(HeistId.self, forKey: .heistId),
-                property: try container.decodeIfPresent(ElementProperty.self, forKey: .property),
+                property: property,
                 oldValue: try container.decodeIfPresent(String.self, forKey: .oldValue),
                 newValue: try container.decodeIfPresent(String.self, forKey: .newValue)
             )
         case .elementAppeared:
+            try Self.rejectUnknownKeys(from: decoder, allowed: MatcherKey.self, expectationType: wireType.rawValue)
             let container = try decoder.container(keyedBy: MatcherKey.self)
             let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
             self = .elementAppeared(matcher)
         case .elementDisappeared:
+            try Self.rejectUnknownKeys(from: decoder, allowed: MatcherKey.self, expectationType: wireType.rawValue)
             let container = try decoder.container(keyedBy: MatcherKey.self)
             let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
             self = .elementDisappeared(matcher)
         case .compound:
+            try Self.rejectUnknownKeys(from: decoder, allowed: CompoundKey.self, expectationType: wireType.rawValue)
             let container = try decoder.container(keyedBy: CompoundKey.self)
             let expectations = try container.decode([ActionExpectation].self, forKey: .expectations)
             self = .compound(try NonEmptyActionExpectations(expectations))
         }
+    }
+
+    private static func decodeElementPropertyIfPresent(
+        in container: KeyedDecodingContainer<ElementUpdatedKey>
+    ) throws -> ElementProperty? {
+        guard let propertyString = try container.decodeIfPresent(String.self, forKey: .property) else {
+            return nil
+        }
+        guard let property = ElementProperty(rawValue: propertyString) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .property,
+                in: container,
+                debugDescription: "Unknown element property: \"\(propertyString)\". Valid: \(ElementProperty.allCases.map(\.rawValue).joined(separator: ", "))"
+            )
+        }
+        return property
+    }
+
+    private static func rejectUnknownKeys<K>(
+        from decoder: Decoder,
+        allowed keyType: K.Type,
+        expectationType: String
+    ) throws where K: CodingKey & CaseIterable {
+        try rejectUnknownKeys(
+            from: decoder,
+            allowed: Set(keyType.allCases.map(\.stringValue)),
+            expectationType: expectationType
+        )
+    }
+
+    private static func rejectUnknownKeys(
+        from decoder: Decoder,
+        allowed: Set<String>,
+        expectationType: String
+    ) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        guard let unknownKey = container.allKeys.first(where: { !allowed.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: #"\#(expectationType) expectation does not accept "\#(unknownKey.stringValue)""#
+        ))
     }
 
     public func encode(to encoder: Encoder) throws {
