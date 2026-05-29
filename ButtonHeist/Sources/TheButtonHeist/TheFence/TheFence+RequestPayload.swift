@@ -196,10 +196,7 @@ extension TheFence {
 
     private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
         let metadataKeys = Set(["requestId"])
-        var parameterKeys = Set(command.parameters.map(\.key))
-        if arguments.isPlaybackStep {
-            parameterKeys.subtract(command.descriptor.elementTargetParameterKeys)
-        }
+        let parameterKeys = Set(command.parameters.map(\.key))
         let allowedKeys = metadataKeys.union(parameterKeys)
         guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
@@ -207,9 +204,7 @@ extension TheFence {
         throw SchemaValidationError(
             field: unexpectedKey,
             observed: arguments.observedDescription(for: unexpectedKey) ?? "missing",
-            expected: arguments.isPlaybackStep
-                ? "valid \(command.rawValue) playback argument"
-                : "valid \(command.rawValue) parameter"
+            expected: "valid \(command.rawValue) parameter"
         )
     }
 
