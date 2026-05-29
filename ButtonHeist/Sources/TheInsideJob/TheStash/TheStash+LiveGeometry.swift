@@ -10,52 +10,6 @@ import TheScore
 
 extension TheStash {
 
-    /// Geometry sampled from the current accessibility capture at dispatch time.
-    ///
-    /// Invariant: this value is created from the current accessibility capture
-    /// after rejecting unusable frames and non-finite activation points.
-    /// Persisted selectors, source heistIds, and replay metadata never provide
-    /// this data.
-    struct LiveElementGeometry {
-        let frame: CGRect
-        let activationPoint: CGPoint
-
-        init?(element: AccessibilityElement) {
-            let frame = element.bhFrame
-            let activationPoint = element.bhResolvedActivationPoint
-            guard Self.isUsableFrame(frame),
-                  Self.isUsablePoint(activationPoint) else {
-                return nil
-            }
-            self.frame = frame
-            self.activationPoint = activationPoint
-        }
-
-        init?(container: AccessibilityContainer) {
-            let frame = container.frame.cgRect
-            let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
-            guard Self.isUsableFrame(frame),
-                  Self.isUsablePoint(activationPoint) else {
-                return nil
-            }
-            self.frame = frame
-            self.activationPoint = activationPoint
-        }
-
-        private static func isUsableFrame(_ frame: CGRect) -> Bool {
-            !frame.isNull
-                && !frame.isEmpty
-                && frame.origin.x.isFinite
-                && frame.origin.y.isFinite
-                && frame.size.width.isFinite
-                && frame.size.height.isFinite
-        }
-
-        private static func isUsablePoint(_ point: CGPoint) -> Bool {
-            point.x.isFinite && point.y.isFinite
-        }
-    }
-
     /// Dispatch-only action target.
     ///
     /// The `resolvedTarget` is semantic identity; `object`, `frame`, and
@@ -100,7 +54,7 @@ extension TheStash {
         guard let object = dispatchObject(for: resolvedTarget.screenElement) else {
             return .objectUnavailable
         }
-        guard let geometry = LiveElementGeometry(element: resolvedTarget.element) else {
+        guard let geometry = Self.liveGeometry(for: resolvedTarget.element) else {
             return .geometryUnavailable
         }
         return .resolved(LiveActionTarget(
@@ -115,7 +69,7 @@ extension TheStash {
         guard let object = currentScreen.liveCapture.containerObject(forPath: resolvedTarget.path) else {
             return .objectUnavailable
         }
-        guard let geometry = LiveElementGeometry(container: resolvedTarget.container) else {
+        guard let geometry = Self.liveGeometry(for: resolvedTarget.container) else {
             return .geometryUnavailable
         }
         return .resolved(LiveContainerTarget(
@@ -153,6 +107,39 @@ extension TheStash {
             return currentScreen.liveCapture.object(for: screenElement.heistId)
         }
         return nil
+    }
+
+    private static func liveGeometry(for element: AccessibilityElement) -> (frame: CGRect, activationPoint: CGPoint)? {
+        let frame = element.bhFrame
+        let activationPoint = element.bhResolvedActivationPoint
+        guard isUsableFrame(frame),
+              isUsablePoint(activationPoint) else {
+            return nil
+        }
+        return (frame, activationPoint)
+    }
+
+    private static func liveGeometry(for container: AccessibilityContainer) -> (frame: CGRect, activationPoint: CGPoint)? {
+        let frame = container.frame.cgRect
+        let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
+        guard isUsableFrame(frame),
+              isUsablePoint(activationPoint) else {
+            return nil
+        }
+        return (frame, activationPoint)
+    }
+
+    private static func isUsableFrame(_ frame: CGRect) -> Bool {
+        !frame.isNull
+            && !frame.isEmpty
+            && frame.origin.x.isFinite
+            && frame.origin.y.isFinite
+            && frame.size.width.isFinite
+            && frame.size.height.isFinite
+    }
+
+    private static func isUsablePoint(_ point: CGPoint) -> Bool {
+        point.x.isFinite && point.y.isFinite
     }
 }
 
