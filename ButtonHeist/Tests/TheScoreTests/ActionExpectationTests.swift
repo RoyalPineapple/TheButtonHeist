@@ -387,7 +387,7 @@ final class ActionExpectationTests: XCTestCase {
             method: .syntheticTap,
             message: message,
             payload: value.map { .value($0) },
-            traceProjecting: delta
+            accessibilityTrace: delta.map(AccessibilityTrace.projectingForTests)
         )
         // Note: animating param omitted (defaults to nil)
     }
