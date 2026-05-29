@@ -189,47 +189,6 @@ final class IdAssignerTests: XCTestCase {
         XCTAssertEqual(withDesc[0], "cview_button")
     }
 
-    // MARK: - Slug Synthesis
-
-    func testSlugifyLowercases() {
-        XCTAssertEqual(IdAssignment.slugify("HELLO"), "hello")
-    }
-
-    func testSlugifyReplacesNonAlphanumericWithUnderscore() {
-        XCTAssertEqual(IdAssignment.slugify("Hello World!"), "hello_world")
-    }
-
-    func testSlugifyCollapseConsecutiveSpecialChars() {
-        XCTAssertEqual(IdAssignment.slugify("a---b___c   d"), "a_b_c_d")
-    }
-
-    func testSlugifyTrimsLeadingAndTrailingUnderscores() {
-        XCTAssertEqual(IdAssignment.slugify("  hello  "), "hello")
-    }
-
-    func testSlugifyTruncatesTo24Characters() {
-        let long = "abcdefghijklmnopqrstuvwxyz0123456789"
-        let result = IdAssignment.slugify(long)
-        XCTAssertEqual(result?.count, 24)
-        XCTAssertEqual(result, "abcdefghijklmnopqrstuvwx")
-    }
-
-    func testSlugifyReturnsNilForNilInput() {
-        XCTAssertNil(IdAssignment.slugify(nil))
-    }
-
-    func testSlugifyReturnsNilForEmptyString() {
-        XCTAssertNil(IdAssignment.slugify(""))
-    }
-
-    func testSlugifyReturnsNilForAllPunctuation() {
-        XCTAssertNil(IdAssignment.slugify("!!!???"))
-    }
-
-    func testSlugifyPreservesDigits() {
-        XCTAssertEqual(IdAssignment.slugify("Item 42"), "item_42")
-    }
-
     // MARK: - Duplicate Disambiguation
 
     func testTwoDuplicatesBothGetSuffixes() {

@@ -64,8 +64,8 @@ extension TheStash {
         // "Switch Button Off" with suffix "switchButton" → slug of "Off" → "off"
         let labelForSlug = stripTraitSuffix(element.label, traitSuffix: traitSuffix)
             ?? element.label
-        let slug = slugify(labelForSlug)
-            ?? slugify(element.description)
+        let slug = TheScore.slugify(labelForSlug)
+            ?? TheScore.slugify(element.description)
 
         if let slug {
             return "\(slug)_\(traitSuffix)"
@@ -91,9 +91,6 @@ extension TheStash {
         return remainder.isEmpty ? nil : remainder
     }
 
-    static func slugify(_ text: String?) -> String? {
-        TheScore.slugify(text)
-    }
     }
 }
 

@@ -104,12 +104,6 @@ final class TheStash {
         currentScreen.id
     }
 
-    // MARK: - Element Interactivity
-
-    func isInteractive(element: AccessibilityElement) -> Bool {
-        Interactivity.isInteractive(element: element)
-    }
-
     // MARK: - Cache Control
 
     /// Clear cached element data (used on suspend).
