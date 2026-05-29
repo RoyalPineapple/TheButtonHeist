@@ -122,11 +122,11 @@ extension Navigation {
     }
 
     private func searchFoundResult(
-        _ found: TheStash.ResolvedTarget,
+        _ found: TheStash.ScreenElement,
         scrollCount: Int,
         uniqueElementsSeen: Int
     ) -> TheSafecracker.InteractionResult {
-        let wire = TheStash.WireConversion.toWire(found.screenElement)
+        let wire = TheStash.WireConversion.toWire(found)
         return .success(
             method: .elementSearch,
             payload: .scrollSearch(ScrollSearchResult(
