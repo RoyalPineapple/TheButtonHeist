@@ -13,7 +13,7 @@ extension SemanticActionability {
         _ failure: TheStash.SemanticRevealFailure,
         entry: Screen.ScreenElement
     ) -> String {
-        let description = Navigation.describeScrollTarget(entry)
+        let description = Navigation.ScrollTargetDescription(entry).description
         switch failure {
         case .missingContentOrigin:
             return "known target \(description) has no content-space position"

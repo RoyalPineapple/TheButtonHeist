@@ -45,7 +45,7 @@ extension Navigation {
             guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
                 return .failed(liveScrollElementFailureMessage(.currentCapture(elementTarget), commandName: commandName))
             }
-            let targetDescription = Self.describeScrollTarget(resolved)
+            let targetDescription = Self.ScrollTargetDescription(resolved).description
             guard let scrollView = stash.liveScrollView(for: resolved) else {
                 return .failed(
                     "scroll target failed: observed \(targetDescription) with no live scrollable ancestor; "
