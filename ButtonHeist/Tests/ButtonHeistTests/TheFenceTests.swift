@@ -32,6 +32,29 @@ final class TheFenceTests: XCTestCase {
         XCTAssertFalse(markdown.contains("- Command:"))
     }
 
+    func testCommandDescriptorsHavePublicDescriptions() {
+        for command in TheFence.Command.allCases {
+            XCTAssertFalse(command.descriptor.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    func testBatchExecutableCasesMatchDescriptorCapabilityWithoutRecursiveBatch() {
+        let batchCommands = Set(TheFence.Command.batchExecutableCases)
+
+        for command in TheFence.Command.allCases {
+            if command == .runBatch {
+                XCTAssertFalse(command.descriptor.isBatchExecutable)
+                XCTAssertFalse(batchCommands.contains(command))
+            } else {
+                XCTAssertEqual(
+                    batchCommands.contains(command),
+                    command.descriptor.isBatchExecutable,
+                    "\(command.rawValue) batch exposure must come from its descriptor"
+                )
+            }
+        }
+    }
+
     // MARK: - Element Target Validation
 
     @ButtonHeistActor

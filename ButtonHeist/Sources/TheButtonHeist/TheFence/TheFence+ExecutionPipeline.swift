@@ -24,18 +24,13 @@ extension TheFence {
         let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
     }
 
-    func clientMessageExecutionPlan(for request: ParsedRequest) throws -> ClientMessageExecutionPlan {
+    func executableActionMessages(for request: ParsedRequest) throws -> [ClientMessage] {
         guard let messages = request.executableMessages else {
             throw FenceError.invalidRequest(
                 "command \"\(request.command.rawValue)\" is not an executable action command"
             )
         }
-        let descriptor = request.command.descriptor
-        return ClientMessageExecutionPlan(
-            messages: messages,
-            timeout: try descriptor.executionTimeout(for: request),
-            recordsCompletion: descriptor.recordsActionCompletion
-        )
+        return messages
     }
 
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {

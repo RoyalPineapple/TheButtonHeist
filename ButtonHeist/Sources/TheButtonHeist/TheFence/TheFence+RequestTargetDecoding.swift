@@ -5,13 +5,6 @@ extension TheFence.CommandArgumentReadable {
     @ButtonHeistActor
     func elementTarget() throws -> ElementTarget? {
         if let elementTarget {
-            if playbackSemanticTarget != nil {
-                throw SchemaValidationError(
-                    field: field("target"),
-                    observed: elementTarget.description,
-                    expected: "not present when semantic playback target is provided"
-                )
-            }
             if keys.contains("target") {
                 throw SchemaValidationError(
                     field: field("target"),
@@ -20,16 +13,6 @@ extension TheFence.CommandArgumentReadable {
                 )
             }
             return elementTarget
-        }
-        if let playbackSemanticTarget {
-            if keys.contains("target") {
-                throw SchemaValidationError(
-                    field: field("target"),
-                    observed: observedDescription(for: "target") ?? "object",
-                    expected: "not present when semantic playback target is provided"
-                )
-            }
-            return playbackSemanticTarget.playbackElementTarget
         }
         guard let target = try schemaDictionary("target") else { return nil }
         return try target.decodedElementTarget()
@@ -157,7 +140,7 @@ extension TheFence.CommandArgumentReadable {
     }
 
     var hasElementTargetFields: Bool {
-        elementTarget != nil || playbackSemanticTarget != nil || keys.contains("target")
+        elementTarget != nil || keys.contains("target")
     }
 
     func requiredString(_ key: String) throws -> String {
@@ -206,12 +189,6 @@ extension TheFence.CommandArgumentReadable {
         )
     }
 
-}
-
-private extension SemanticActionTarget {
-    var playbackElementTarget: ElementTarget {
-        .matcher(matcher, ordinal: ordinal)
-    }
 }
 
 extension TheFence {

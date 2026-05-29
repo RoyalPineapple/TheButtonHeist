@@ -2688,18 +2688,18 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(step.commandName, "activate")
         XCTAssertEqual(step.typedStep.expectation, .elementsChanged)
 
-        let singlePlan = try fence.clientMessageExecutionPlan(for: try fence.parseRequest(
+        let singleMessages = try fence.executableActionMessages(for: try fence.parseRequest(
             command: .activate,
             values: ["target": targetValue(identifier: "save-button")]
         ))
-        XCTAssertEqual(singlePlan.messages.count, 1)
+        XCTAssertEqual(singleMessages.count, 1)
 
         guard case .activate(let actionTarget) = step.typedStep.command else {
             return XCTFail("Expected activate command, got \(step.typedStep.command)")
         }
         XCTAssertEqual(actionTarget, .matcher(ElementMatcher(identifier: "save-button")))
-        guard case .activate(let singleActionTarget)? = singlePlan.messages.first else {
-            return XCTFail("Expected single activate command, got \(String(describing: singlePlan.messages.first))")
+        guard case .activate(let singleActionTarget)? = singleMessages.first else {
+            return XCTFail("Expected single activate command, got \(String(describing: singleMessages.first))")
         }
         XCTAssertEqual(singleActionTarget, actionTarget)
     }
@@ -2721,9 +2721,9 @@ final class TheFenceHandlerTests: XCTestCase {
                 return XCTFail("Expected planned batch step for \(testCase.command.rawValue)")
             }
             let singleRequest = try fence.parseRequest(command: testCase.command, values: testCase.arguments)
-            let singlePlan = try fence.clientMessageExecutionPlan(for: singleRequest)
+            let singleMessages = try fence.executableActionMessages(for: singleRequest)
             XCTAssertEqual(
-                String(reflecting: singlePlan.messages),
+                String(reflecting: singleMessages),
                 String(reflecting: [plannedStep.typedStep.command]),
                 testCase.command.rawValue
             )
@@ -3819,7 +3819,11 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(normalizedOperation.stringArgument("identifier"))
         XCTAssertEqual(normalizedOperation.stringArgument("text"), "user@example.com")
         XCTAssertNil(normalizedOperation.stringArgument("_recorded"))
-        XCTAssertEqual(normalizedOperation.arguments.playbackSemanticTarget?.matcher.identifier, "email")
+        guard case .matcher(let matcher, let ordinal)? = normalizedOperation.arguments.elementTarget else {
+            return XCTFail("Expected playback target to bind as typed matcher")
+        }
+        XCTAssertEqual(matcher.identifier, "email")
+        XCTAssertEqual(ordinal, 1)
     }
 
     @ButtonHeistActor
@@ -3959,8 +3963,8 @@ final class TheFenceHandlerTests: XCTestCase {
                     target: semanticTarget(identifier: "ignored"),
                     arguments: ["action": .string("copy")]
                 ),
-                "schema validation failed for target: observed semanticTarget(matcher(identifier=\"ignored\")); "
-                    + "expected edit_action command without playback target"
+                "schema validation failed for target: observed target(matcher(identifier=\"ignored\")); "
+                    + "expected edit_action command without element target"
             ),
         ]
 
@@ -4179,7 +4183,10 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         let operation = try evidence.normalizedPlaybackOperation()
-        XCTAssertEqual(operation.arguments.playbackSemanticTarget?.matcher.identifier, "btn1")
+        guard case .matcher(let matcher, nil)? = operation.arguments.elementTarget else {
+            return XCTFail("Expected playback target to bind as typed matcher")
+        }
+        XCTAssertEqual(matcher.identifier, "btn1")
         XCTAssertNil(operation.argumentValue("heistId"))
         XCTAssertNil(operation.argumentValue("target"))
 

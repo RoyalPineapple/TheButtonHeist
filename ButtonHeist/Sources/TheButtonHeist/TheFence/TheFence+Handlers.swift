@@ -23,11 +23,13 @@ extension TheFence {
     // MARK: - Handler: Executable Commands
 
     func handleClientActionRequest(_ request: ParsedRequest) async throws -> FenceResponse {
-        let plan = try clientMessageExecutionPlan(for: request)
+        let messages = try executableActionMessages(for: request)
+        let timeout = try request.command.descriptor.executionTimeout(for: request)
+        let recordsCompletion = request.command.descriptor.recordsActionCompletion
         var finalResult: ActionResult?
-        for message in plan.messages {
-            let result = try await sendAndAwaitAction(message, timeout: plan.timeout)
-            if plan.recordsCompletion {
+        for message in messages {
+            let result = try await sendAndAwaitAction(message, timeout: timeout)
+            if recordsCompletion {
                 recordCompletedAction(result)
             }
             finalResult = result
