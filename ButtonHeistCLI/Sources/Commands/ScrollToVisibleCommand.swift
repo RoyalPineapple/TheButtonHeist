@@ -25,15 +25,14 @@ struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        _ = try element.requireTarget()
+        let target = try element.requireTarget()
 
-        var request: CLIRequestParameters = [.timeout: .double(timeout)]
-        try element.applyTo(&request)
+        let request: CLIRequestParameters = [.timeout: .double(timeout)]
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request),
+            operation: try Self.fenceOperation(request, target: target),
             statusMessage: "Scrolling to element..."
         )
     }

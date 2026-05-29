@@ -36,16 +36,15 @@ struct WaitForCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        _ = try element.requireTarget()
+        let target = try element.requireTarget()
 
         var request: CLIRequestParameters = [.timeout: .double(timeout)]
-        try element.applyTo(&request)
         if absent { request.set(.absent, true) }
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request),
+            operation: try Self.fenceOperation(request, target: target),
             statusMessage: absent ? "Waiting for element to disappear..." : "Waiting for element to appear..."
         )
     }

@@ -4,6 +4,35 @@ import ButtonHeist
 
 final class ElementTargetOptionsTests: XCTestCase {
 
+    func testPositionalTargetParsesToTypedHeistIdTarget() throws {
+        let command = try TapSubcommand.parse(["button_save"])
+
+        XCTAssertEqual(try command.element.parsedTarget(), .heistId("button_save"))
+    }
+
+    func testMatcherOptionsParseToTypedMatcherTarget() throws {
+        let command = try TapSubcommand.parse([
+            "--identifier", "saveButton",
+            "--label", "Save",
+            "--traits", "button",
+            "--exclude-traits", "notEnabled",
+            "--ordinal", "1",
+        ])
+
+        XCTAssertEqual(
+            try command.element.parsedTarget(),
+            .matcher(
+                ElementMatcher(
+                    label: "Save",
+                    identifier: "saveButton",
+                    traits: [.button],
+                    excludeTraits: [.notEnabled]
+                ),
+                ordinal: 1
+            )
+        )
+    }
+
     func testOrdinalOnlyIsRejectedAtTypedTargetBoundary() throws {
         let command = try TapSubcommand.parse(["--ordinal", "0"])
 

@@ -31,7 +31,7 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        _ = try element.requireTarget()
+        let target = try element.requireTarget()
 
         let scrollDirection: String?
         if let direction {
@@ -44,13 +44,12 @@ struct ElementSearchCommand: AsyncParsableCommand, CLICommandContract {
         }
 
         var request: CLIRequestParameters = [.timeout: .double(timeout)]
-        try element.applyTo(&request)
         if let scrollDirection { request.set(.direction, scrollDirection) }
 
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request),
+            operation: try Self.fenceOperation(request, target: target),
             statusMessage: "Searching for element..."
         )
     }
