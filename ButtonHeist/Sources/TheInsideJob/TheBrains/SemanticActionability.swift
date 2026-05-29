@@ -120,6 +120,9 @@ final class SemanticActionability {
         if case .failure(let failure) = freshTarget,
            failure.failedStep == .staleRefresh,
            !didRevealTarget {
+            // A semantic target can outlive its capture-local UIKit object.
+            // Refresh once before failing; reveal and activation-point placement
+            // own the other bounded refresh points.
             stash.refresh()
             freshTarget = resolveFreshElementTarget(
                 target: target,
