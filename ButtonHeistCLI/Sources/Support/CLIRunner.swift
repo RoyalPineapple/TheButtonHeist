@@ -15,7 +15,8 @@ enum CLIRunner {
     static func run(
         connection: ConnectionOptions,
         format: OutputFormat?,
-        operation: NormalizedOperation,
+        command: TheFence.Command,
+        arguments: TheFence.CommandArgumentEnvelope,
         statusMessage: String? = nil
     ) async throws {
         let fence: TheFence
@@ -23,7 +24,8 @@ enum CLIRunner {
         do {
             (fence, response) = try await execute(
                 connection: connection,
-                operation: operation,
+                command: command,
+                arguments: arguments,
                 statusMessage: statusMessage
             )
         } catch {
@@ -46,12 +48,13 @@ enum CLIRunner {
     @ButtonHeistActor
     static func execute(
         connection: ConnectionOptions,
-        operation: NormalizedOperation,
+        command: TheFence.Command,
+        arguments: TheFence.CommandArgumentEnvelope,
         statusMessage: String? = nil
     ) async throws -> (fence: TheFence, response: FenceResponse) {
         let fence = try await connect(connection: connection, statusMessage: statusMessage)
         do {
-            let response = try await fence.execute(operation: operation)
+            let response = try await fence.execute(command: command, arguments: arguments)
             return (fence, response)
         } catch {
             fence.stop()

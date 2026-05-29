@@ -49,7 +49,8 @@ struct RunBatchCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(request),
+            command: Self.fenceCommand,
+            arguments: Self.fenceArguments(request),
             statusMessage: "Running batch..."
         )
     }

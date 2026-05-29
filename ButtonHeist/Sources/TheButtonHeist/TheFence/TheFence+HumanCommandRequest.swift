@@ -17,10 +17,10 @@ public extension FenceCommandDescriptor {
         TheFence.Command(rawValue: name)?.descriptor
     }
 
-    static func humanOperation(
+    static func humanCommandRequest(
         commandName rawCommandName: String,
         arguments: [String]
-    ) throws -> NormalizedOperation {
+    ) throws -> (command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) {
         var draft = try FenceHumanRequestDraft(commandName: rawCommandName)
 
         var positional: [String] = []
@@ -35,7 +35,7 @@ public extension FenceCommandDescriptor {
         }
 
         try draft.applyPositionalArguments(positional)
-        return try draft.normalizedOperation()
+        return draft.commandRequest()
     }
 
     fileprivate static func descriptor(forCLIInputName name: String) -> FenceCommandDescriptor? {
@@ -101,18 +101,13 @@ private struct FenceHumanRequestDraft {
         self.elementTarget = elementTarget
     }
 
-    func normalizedOperation() throws -> NormalizedOperation {
+    func commandRequest() -> (command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope) {
         let values = Dictionary(
             parameters.map { ($0.key.rawValue, $0.value) },
             uniquingKeysWith: { _, newest in newest }
         )
         let arguments = TheFence.CommandArgumentEnvelope(values: values, elementTarget: elementTarget)
-        switch FenceOperationCatalog.normalizeCommand(descriptor.command, arguments: arguments) {
-        case .success(let operation):
-            return operation
-        case .failure(let error):
-            throw FenceHumanCommandParsingError(error.message)
-        }
+        return (command: descriptor.command, arguments: arguments)
     }
 
     subscript(_ key: FenceParameterKey) -> HeistValue? {

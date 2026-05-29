@@ -224,13 +224,11 @@ public final class TheFence {
         backgroundAccessibility.drainTraces()
     }
 
-    /// Execute an operation that has already been normalized by the shared command catalog.
-    ///
-    /// This keeps adapters from rebuilding command dictionaries after routing.
-    public func execute(operation: NormalizedOperation) async throws -> FenceResponse {
+    /// Execute a typed command request.
+    public func execute(command: Command, arguments: CommandArgumentEnvelope) async throws -> FenceResponse {
         let parsed: ParsedRequest
         do {
-            parsed = try parseRequest(operation: operation)
+            parsed = try parseRequest(command: command, arguments: arguments)
         } catch let error as SchemaValidationError {
             return .error(error.message)
         } catch let error as MissingElementTarget {

@@ -176,13 +176,6 @@ extension TheFence {
         )
     }
 
-    func parseRequest(operation: NormalizedOperation) throws -> ParsedRequest {
-        return try parseRequest(
-            command: operation.command,
-            arguments: operation.arguments
-        )
-    }
-
     private func validateTypedElementTarget(command: Command, arguments: CommandArgumentEnvelope) throws {
         guard let elementTarget = arguments.elementTarget else { return }
         guard !command.descriptor.elementTargetParameterKeys.isEmpty else {

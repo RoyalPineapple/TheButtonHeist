@@ -23,7 +23,8 @@ struct PingCommand: AsyncParsableCommand, CLICommandContract {
         try await CLIRunner.run(
             connection: connection,
             format: output.format,
-            operation: try Self.fenceOperation(),
+            command: Self.fenceCommand,
+            arguments: Self.fenceArguments(),
             statusMessage: "Checking health..."
         )
     }

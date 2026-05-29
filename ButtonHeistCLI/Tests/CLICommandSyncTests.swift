@@ -114,7 +114,6 @@ final class CLICommandSyncTests: XCTestCase {
     func testHumanParserPreservesChangeExpectationJsonObjectForRequestParsing() throws {
         let operation = try CLIRequestBuilder
             .parsedRequest(from: #"wait_for_change expect='{"type":"elements_changed"}'"#)
-            .operation
 
         XCTAssertEqual(operation.command, .waitForChange)
         XCTAssertEqual(operation.argument(.expect), .object(["type": .string("elements_changed")]))
@@ -135,14 +134,14 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserPreservesKnownStringParameterValues() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "set_pasteboard text=false").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "set_pasteboard text=false")
 
         XCTAssertEqual(operation.command, .setPasteboard)
         XCTAssertEqual(operation.argument(.text), .string("false"))
     }
 
     func testHumanParserCoercesKnownBooleanParametersOnly() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "wait_for loading-spinner absent=true").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "wait_for loading-spinner absent=true")
 
         XCTAssertEqual(operation.command, .waitFor)
         XCTAssertEqual(operation.arguments.elementTarget, .heistId("loading-spinner"))
@@ -155,8 +154,8 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.mode, .machine)
-        XCTAssertEqual(parsed.operation.command, .typeText)
-        XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
+        XCTAssertEqual(parsed.command, .typeText)
+        XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
     func testSharedRequestBuilderParsesStringMachineRequestIdAsMetadata() throws {
@@ -165,8 +164,8 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.requestId, .string("request-1"))
-        XCTAssertNil(parsed.operation.arguments.argumentValues["id"])
-        XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
+        XCTAssertNil(parsed.arguments.argumentValues["id"])
+        XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
     func testSharedRequestBuilderParsesTypedMachineRequestId() throws {
@@ -183,7 +182,7 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.requestId, .null)
-        XCTAssertEqual(parsed.operation.command, .ping)
+        XCTAssertEqual(parsed.command, .ping)
     }
 
     func testSharedRequestBuilderParsesUnsignedMachineRequestId() throws {
@@ -267,8 +266,8 @@ final class CLICommandSyncTests: XCTestCase {
         )
 
         XCTAssertEqual(parsed.mode, .machine)
-        XCTAssertEqual(parsed.operation.command, .activate)
-        guard case .object(let target)? = parsed.operation.argument(.target) else {
+        XCTAssertEqual(parsed.command, .activate)
+        guard case .object(let target)? = parsed.argument(.target) else {
             return XCTFail("expected typed target object")
         }
         XCTAssertEqual(target["heistId"], .string("button_save"))
@@ -278,15 +277,15 @@ final class CLICommandSyncTests: XCTestCase {
         let parsed = try CLIRequestBuilder.parsedRequest(from: "get_screen")
 
         XCTAssertEqual(parsed.mode, .human)
-        XCTAssertEqual(parsed.operation.command, .getScreen)
+        XCTAssertEqual(parsed.command, .getScreen)
     }
 
     func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"type_text","text":"hello"}"#)
 
         XCTAssertEqual(parsed.mode, .machine)
-        XCTAssertEqual(parsed.operation.command, .typeText)
-        XCTAssertEqual(parsed.operation.argument(.text), .string("hello"))
+        XCTAssertEqual(parsed.command, .typeText)
+        XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
     func testSharedRequestBuilderRejectsUnknownHumanCommand() {
@@ -323,7 +322,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserParsesPositionalActivateTarget() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save")
 
         XCTAssertEqual(operation.command, .activate)
         XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
@@ -334,17 +333,16 @@ final class CLICommandSyncTests: XCTestCase {
             ElementMatcher(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
             ordinal: 1
         )
-        let operation = try CLIRequestBuilder.operation(
-            command: .activate,
+        let arguments = CLIRequestBuilder.arguments(
             target: expectedTarget
         )
 
-        XCTAssertEqual(operation.arguments.elementTarget, expectedTarget)
-        XCTAssertNil(operation.argument(.target))
+        XCTAssertEqual(arguments.elementTarget, expectedTarget)
+        XCTAssertNil(arguments.argumentValues[FenceParameterKey.target.rawValue])
     }
 
     func testHumanParserParsesCoordinateGesture() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200")
 
         XCTAssertEqual(operation.command, .oneFingerTap)
         XCTAssertEqual(operation.argument(.x), .double(100))
@@ -352,7 +350,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserUsesCatalogPositionalDirectionSyntax() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "swipe up checkout_list").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "swipe up checkout_list")
 
         XCTAssertEqual(operation.command, .swipe)
         XCTAssertEqual(operation.argument(.direction), .string("up"))
@@ -360,7 +358,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "scroll_to_edge top checkout_list").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "scroll_to_edge top checkout_list")
 
         XCTAssertEqual(operation.command, .scrollToEdge)
         XCTAssertEqual(operation.argument(.edge), .string("top"))
@@ -391,7 +389,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserMapsCoordinateTapCanonicalCommand() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200")
 
         XCTAssertEqual(operation.command, .oneFingerTap)
         XCTAssertEqual(operation.argument(.x), .double(100))
@@ -399,7 +397,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testHumanParserMapsHeistIdPositionalTarget() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save").operation
+        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save")
 
         XCTAssertEqual(operation.command, .activate)
         XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
@@ -434,7 +432,7 @@ final class CLICommandSyncTests: XCTestCase {
     }
 }
 
-private extension NormalizedOperation {
+private extension CLIParsedRequest {
     func argument(_ key: FenceParameterKey) -> HeistValue? {
         arguments.argumentValues[key.rawValue]
     }

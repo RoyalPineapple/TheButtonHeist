@@ -40,10 +40,7 @@ extension TheFence {
 
     @ButtonHeistActor
     func execute(command: Command, values: [String: HeistValue] = [:]) async throws -> FenceResponse {
-        try await execute(operation: NormalizedOperation(
-            command: command,
-            arguments: CommandArgumentEnvelope(values: values)
-        ))
+        try await execute(command: command, arguments: CommandArgumentEnvelope(values: values))
     }
 }
 

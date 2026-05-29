@@ -26,7 +26,8 @@ struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
         if let junitPath = junit {
             let (fence, response) = try await CLIRunner.execute(
                 connection: connection,
-                operation: try Self.fenceOperation(request)
+                command: Self.fenceCommand,
+                arguments: Self.fenceArguments(request)
             )
             defer { fence.stop() }
 
@@ -44,7 +45,8 @@ struct PlayHeistCommand: AsyncParsableCommand, CLICommandContract {
             try await CLIRunner.run(
                 connection: connection,
                 format: output.format,
-                operation: try Self.fenceOperation(request)
+                command: Self.fenceCommand,
+                arguments: Self.fenceArguments(request)
             )
         }
     }
