@@ -107,6 +107,32 @@ extension TheStash {
         )
     }
 
+    /// Convert the committed semantic screen into a trace-facing interface.
+    ///
+    /// Exploration commits the full targetable element set into
+    /// `screen.knownInterface`; the latest live capture remains viewport-local
+    /// evidence for action dispatch. Post-action traces compare semantic
+    /// captures, so known off-viewport elements must be present here even when
+    /// they are absent from the latest live parser hierarchy.
+    static func toSemanticInterface(from screen: Screen, timestamp: Date = Date()) -> Interface {
+        let entries = screen.orderedElements
+        let tree = entries.enumerated().map { index, entry in
+            AccessibilityHierarchy.element(entry.element, traversalIndex: index)
+        }
+        let annotations = entries.enumerated().map { index, entry in
+            InterfaceElementAnnotation(
+                path: TreePath([index]),
+                heistId: entry.heistId,
+                actions: buildActions(for: entry.element)
+            )
+        }
+        return Interface(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: InterfaceAnnotations(elements: annotations)
+        )
+    }
+
     // MARK: - Private Helpers
 
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {

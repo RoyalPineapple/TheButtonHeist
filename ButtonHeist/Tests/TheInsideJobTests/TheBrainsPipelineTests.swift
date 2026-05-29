@@ -106,6 +106,126 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(value, "")
     }
 
+    // MARK: - actionResultWithDelta Success Path
+
+    func testActionResultWithDeltaSuccessAllowsNoSemanticDelta() async throws {
+        guard brains.refresh() != nil else {
+            throw XCTSkip("No live hierarchy available for post-action observation test")
+        }
+        _ = await brains.navigation.exploreAndPrune()
+        let screen = brains.stash.currentScreen
+        let before = brains.captureBeforeState()
+
+        let result = await brains.actionResultWithDelta(
+            success: true,
+            method: .activate,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: screen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertNotNil(result.accessibilityTrace)
+        XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
+        XCTAssertNotNil(result.accessibilityTrace?.captures.last?.hash)
+        guard case .noChange? = result.accessibilityTrace?.endpointDeltaProjection else {
+            return XCTFail("Expected noChange delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        }
+    }
+
+    func testActionResultWithDeltaSuccessReturnsTraceAfterElementChange() async {
+        let beforeScreen = makeScreen(elements: [("Total", .staticText, "total")])
+        brains.stash.currentScreen = beforeScreen
+        let before = brains.captureBeforeState()
+        let afterScreen = makeScreen(elements: [("Total $12.00", .staticText, "total")])
+
+        let result = await brains.actionResultWithDelta(
+            success: true,
+            method: .activate,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: afterScreen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertNotNil(result.accessibilityTrace)
+        XCTAssertNotNil(result.accessibilityTrace?.captures.last)
+    }
+
+    func testActionResultWithDeltaSuccessReportsScreenChange() async {
+        let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
+        brains.stash.currentScreen = beforeScreen
+        let before = brains.captureBeforeState()
+        let afterScreen = makeScreen(elements: [("Checkout", .header, "checkout_header")])
+
+        let result = await brains.actionResultWithDelta(
+            success: true,
+            method: .activate,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: afterScreen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        guard case .screenChanged? = result.accessibilityTrace?.endpointDeltaProjection else {
+            return XCTFail("Expected screenChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        }
+    }
+
+    func testActionResultWithDeltaSettleTimeoutStillReturnsSuccessfulAction() async {
+        let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
+        brains.stash.currentScreen = beforeScreen
+        let before = brains.captureBeforeState()
+        let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
+
+        let result = await brains.actionResultWithDelta(
+            success: true,
+            method: .activate,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: afterScreen, outcome: .timedOut(timeMs: 250))
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(result.settled, false)
+        XCTAssertEqual(result.settleTimeMs, 250)
+    }
+
+    func testActionResultWithDeltaCancelledSettleFailsActionResult() async {
+        let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
+        brains.stash.currentScreen = beforeScreen
+        let before = brains.captureBeforeState()
+
+        let result = await brains.actionResultWithDelta(
+            success: true,
+            method: .activate,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: beforeScreen, outcome: .cancelled(timeMs: 125))
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.message, "cancelled after 125ms")
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.settled, false)
+        XCTAssertEqual(result.settleTimeMs, 125)
+    }
+
+    func testActionResultWithDeltaParseFailureFailsActionResult() async {
+        seedScreen(elements: [("Save", .button, "save")])
+        let before = brains.captureBeforeState()
+        brains.stash.currentScreen = .empty
+
+        let result = await brains.actionResultWithDelta(
+            success: true,
+            method: .activate,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: nil, outcome: .timedOut(timeMs: 300))
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.message, "Could not parse post-action accessibility tree")
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.settled, false)
+        XCTAssertEqual(result.settleTimeMs, 300)
+    }
+
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
         let before = brains.captureBeforeState()
@@ -176,8 +296,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             elements: [(visible, "button_visible")],
             offViewport: [.init(offViewport, heistId: "button_below_fold")]
         )
-        let interfaceHash = AccessibilityTrace.Capture.hash(brains.stash.interface())
-
         let state = brains.captureSemanticState()
 
         XCTAssertEqual(
@@ -185,9 +303,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
+            Set(state.interface.elements.map(\.heistId)),
+            ["button_visible", "button_below_fold"]
+        )
+        XCTAssertEqual(
             state.interfaceHash,
-            interfaceHash,
-            "Interface captures hash the canonical parser tree; known-only entries stay in the targeting snapshot"
+            AccessibilityTrace.Capture.hash(state.interface),
+            "Semantic captures hash the explored targetable interface, including known off-viewport entries"
         )
     }
 
@@ -319,6 +441,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Helpers
 
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
+        brains.stash.currentScreen = makeScreen(elements: elements)
+    }
+
+    private func makeScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) -> Screen {
         let pairs: [(AccessibilityElement, String)] = elements.map { entry in
             let element = AccessibilityElement.make(
                 label: entry.label,
@@ -327,7 +453,21 @@ final class TheBrainsPipelineTests: XCTestCase {
             )
             return (element, entry.heistId)
         }
-        brains.stash.currentScreen = .makeForTests(elements: pairs)
+        return .makeForTests(elements: pairs)
+    }
+
+    private func settledOutcome(
+        finalScreen: Screen?,
+        outcome: SettleOutcome = .settled(timeMs: 0)
+    ) -> SettleSession.Outcome {
+        let elements = finalScreen?.liveCapture.hierarchy.sortedElements ?? []
+        let elementsByKey = Dictionary(uniqueKeysWithValues: elements.map { ($0.timelineKey, $0) })
+        return SettleSession.Outcome(
+            outcome: outcome,
+            events: [],
+            finalScreen: finalScreen,
+            elementsByKey: elementsByKey
+        )
     }
 
 }
