@@ -117,11 +117,10 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testPlaybackTargetRejectsEmptyMatcherOnEncode() {
-        let step = HeistEvidence(command: "activate", target: .matcher(ElementMatcher()))
-
-        XCTAssertThrowsError(try JSONEncoder().encode(step)) { error in
-            XCTAssertTrue("\(error)".contains("requires at least one matcher field"), "\(error)")
+    func testPlaybackTargetRejectsEmptyMatcherOnDecode() {
+        let json = #"{"command":"activate","target":{}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("requires heistId or matcher"), "\(error)")
         }
     }
 
