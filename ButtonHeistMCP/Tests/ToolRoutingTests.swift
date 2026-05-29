@@ -5,6 +5,7 @@ import ButtonHeist
 
 struct ToolRoutingTests {
     private typealias Argument = HeistValue
+    private typealias RoutedCommand = (command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope)
 
     @Test("direct tools route to same command")
     func directToolRoutesToSameCommand() throws {
@@ -96,7 +97,7 @@ struct ToolRoutingTests {
 
     @Test("unknown tool returns routing error")
     func unknownToolReturnsRoutingError() {
-        let result = routeToolRequest(name: "not_a_tool", arguments: envelope())
+        let result = routeToolRequest(name: "not_a_tool")
 
         guard case .failure(let error) = result else {
             Issue.record("Expected routing failure")
@@ -106,32 +107,31 @@ struct ToolRoutingTests {
     }
 
     private func routeToolRequest(
-        name: String,
-        arguments: TheFence.CommandArgumentEnvelope
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
-        FenceOperationCatalog.normalizeToolCall(name: name, arguments: arguments)
+        name: String
+    ) -> Result<TheFence.Command, FenceOperationRoutingError> {
+        FenceOperationCatalog.normalizeToolCall(name: name)
     }
 
     private func routed(
         _ name: String,
         _ arguments: [String: Argument]
-    ) throws -> NormalizedOperation {
-        switch routeToolRequest(name: name, arguments: envelope(arguments)) {
-        case .success(let operation):
-            return operation
+    ) throws -> RoutedCommand {
+        switch routeToolRequest(name: name) {
+        case .success(let command):
+            return (command: command, arguments: envelope(arguments))
         case .failure(let error):
             throw error
         }
     }
 
-    private func normalizeBatchSteps(_ steps: [[String: Argument]]) throws -> [NormalizedOperation] {
+    private func normalizeBatchSteps(_ steps: [[String: Argument]]) throws -> [RoutedCommand] {
         try steps.map(normalizedBatchStep)
     }
 
-    private func normalizedBatchStep(_ step: [String: Argument]) throws -> NormalizedOperation {
+    private func normalizedBatchStep(_ step: [String: Argument]) throws -> RoutedCommand {
         switch normalizeBatchStepResult(step) {
-        case .success(let operation):
-            return operation
+        case .success(let routed):
+            return routed
         case .failure(let error):
             throw error
         }
@@ -139,7 +139,7 @@ struct ToolRoutingTests {
 
     private func normalizeBatchStepResult(
         _ step: [String: Argument]
-    ) -> Result<NormalizedOperation, FenceOperationRoutingError> {
+    ) -> Result<RoutedCommand, FenceOperationRoutingError> {
         FenceOperationCatalog.normalizeBatchStep(TheFence.CommandArgumentEnvelope(values: step, fieldPrefix: nil))
     }
 

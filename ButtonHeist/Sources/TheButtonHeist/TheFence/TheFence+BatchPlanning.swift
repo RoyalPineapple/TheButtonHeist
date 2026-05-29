@@ -43,17 +43,17 @@ private extension TheFence {
 
     func decodeRunBatchStep(_ step: CommandArgumentEnvelope, index: Int) throws -> RunBatchPreparedStep {
         switch FenceOperationCatalog.normalizeBatchStep(step) {
-        case .success(let operation):
-            return try decodeRunBatchStep(operation: operation, index: index)
+        case .success(let routed):
+            return try decodeRunBatchStep(command: routed.command, arguments: routed.arguments, index: index)
 
         case .failure(let error):
             throw FenceError.invalidRequest("run_batch step \(index): \(error.message)")
         }
     }
 
-    func decodeRunBatchStep(operation: NormalizedOperation, index: Int) throws -> RunBatchPreparedStep {
+    func decodeRunBatchStep(command: Command, arguments: CommandArgumentEnvelope, index: Int) throws -> RunBatchPreparedStep {
         do {
-            let request = try parseRequest(operation: operation)
+            let request = try parseRequest(command: command, arguments: arguments)
             return try batchPreparedStep(originalIndex: index, request: request)
         } catch let error as SchemaValidationError {
             throw FenceError.invalidRequest(error.message)

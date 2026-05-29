@@ -147,7 +147,7 @@ final class TheFenceHandlerTests: XCTestCase {
     ) async {
         let (fence, _) = makeConnectedFence()
         do {
-            let response = try await fence.execute(operation: normalizedOperation(command: command, arguments: arguments))
+            let response = try await fence.execute(command: command, values: arguments)
             if case .error(let message, _) = response {
                 XCTAssertTrue(
                     message.contains(substring),
@@ -173,7 +173,7 @@ final class TheFenceHandlerTests: XCTestCase {
     ) async {
         let (fence, _) = makeConnectedFence()
         do {
-            let response = try await fence.execute(operation: normalizedOperation(command: command, arguments: arguments))
+            let response = try await fence.execute(command: command, values: arguments)
             if case .error(let message, _) = response {
                 XCTAssertEqual(message, expected, file: file, line: line)
             } else {
@@ -193,7 +193,7 @@ final class TheFenceHandlerTests: XCTestCase {
     ) async {
         let (fence, _) = makeConnectedFence()
         do {
-            let response = try await fence.execute(operation: normalizedOperation(command: command, arguments: arguments))
+            let response = try await fence.execute(command: command, values: arguments)
             if case .error(let message, _) = response {
                 XCTFail("Got validation error: \(message)", file: file, line: line)
             }
@@ -1051,15 +1051,12 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testDragWithStartCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(operation: normalizedOperation(
-            command: .drag,
-            arguments: [
+        _ = try? await fence.execute(command: .drag, values: [
                 "startX": .double(100.0),
                 "startY": .double(300.0),
                 "endX": .double(300.0),
                 "endY": .double(600.0),
-            ]
-        ))
+            ])
         guard let (message, _) = mockConn.sent.last,
               case .drag(let target) = message else {
             XCTFail("Expected drag message")
@@ -1089,14 +1086,11 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPinchWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(operation: normalizedOperation(
-            command: .pinch,
-            arguments: [
+        _ = try? await fence.execute(command: .pinch, values: [
                 "scale": .double(2.0),
                 "centerX": .double(200.0),
                 "centerY": .double(500.0),
-            ]
-        ))
+            ])
         guard let (message, _) = mockConn.sent.last,
               case .pinch(let target) = message else {
             XCTFail("Expected pinch message")
@@ -1108,13 +1102,10 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPinchWithIdentifierDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(operation: normalizedOperation(
-            command: .pinch,
-            arguments: [
+        _ = try? await fence.execute(command: .pinch, values: [
                 "scale": .double(2.0),
                 "target": targetValue(identifier: "map"),
-            ]
-        ))
+            ])
         guard let (message, _) = mockConn.sent.last,
               case .pinch(let target) = message else {
             XCTFail("Expected pinch message")
@@ -1126,14 +1117,11 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testRotateWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(operation: normalizedOperation(
-            command: .rotate,
-            arguments: [
+        _ = try? await fence.execute(command: .rotate, values: [
                 "angle": .double(1.57),
                 "centerX": .double(150.0),
                 "centerY": .double(400.0),
-            ]
-        ))
+            ])
         guard let (message, _) = mockConn.sent.last,
               case .rotate(let target) = message else {
             XCTFail("Expected rotate message")
@@ -1145,13 +1133,10 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testRotateWithIdentifierDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(operation: normalizedOperation(
-            command: .rotate,
-            arguments: [
+        _ = try? await fence.execute(command: .rotate, values: [
                 "angle": .double(1.57),
                 "target": targetValue(identifier: "dial"),
-            ]
-        ))
+            ])
         guard let (message, _) = mockConn.sent.last,
               case .rotate(let target) = message else {
             XCTFail("Expected rotate message")
@@ -1182,13 +1167,10 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testTwoFingerTapWithCenterCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(operation: normalizedOperation(
-            command: .twoFingerTap,
-            arguments: [
+        _ = try? await fence.execute(command: .twoFingerTap, values: [
                 "centerX": .double(200.0),
                 "centerY": .double(500.0),
-            ]
-        ))
+            ])
         guard let (message, _) = mockConn.sent.last,
               case .twoFingerTap(let target) = message else {
             XCTFail("Expected twoFingerTap message")
@@ -1200,10 +1182,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testTwoFingerTapWithIdentifierDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(operation: normalizedOperation(
-            command: .twoFingerTap,
-            arguments: ["target": targetValue(identifier: "photo")]
-        ))
+        _ = try? await fence.execute(command: .twoFingerTap, values: ["target": targetValue(identifier: "photo")])
         guard let (message, _) = mockConn.sent.last,
               case .twoFingerTap(let target) = message else {
             XCTFail("Expected two finger tap message")
@@ -2330,24 +2309,23 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     func testNormalizeToolCallRoutesWithoutParsingRequestArguments() throws {
-        let expectation: HeistValue = .object(["type": .string("screen_changed")])
-        let result = FenceOperationCatalog.normalizeToolCall(
-            name: "activate",
-            arguments: TheFence.CommandArgumentEnvelope(values: [
-                "target": .object(["identifier": .string("submit")]),
-                "expect": expectation,
-                "timeout": .double(0.25),
-            ])
-        )
+        let result = FenceOperationCatalog.normalizeToolCall(name: "activate")
 
-        guard case .success(let operation) = result else {
-            return XCTFail("Expected successful operation, got \(result)")
+        guard case .success(let command) = result else {
+            return XCTFail("Expected successful command, got \(result)")
         }
 
-        XCTAssertEqual(operation.command, .activate)
-        XCTAssertNil(operation.arguments.string("identifier"))
-        XCTAssertEqual(operation.arguments.argumentValues["expect"], expectation)
-        XCTAssertEqual(operation.arguments.argumentValues["timeout"], .double(0.25))
+        XCTAssertEqual(command, .activate)
+    }
+
+    func testNormalizeToolCallRejectsNonMCPCommands() {
+        let result = FenceOperationCatalog.normalizeToolCall(name: "help")
+
+        guard case .failure(let error) = result else {
+            return XCTFail("Expected non-MCP command rejection, got \(result)")
+        }
+
+        XCTAssertEqual(error.message, "Unknown tool: help")
     }
 
     @ButtonHeistActor
@@ -3392,15 +3370,14 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testTypedElementTargetIsRejectedForCommandWithoutTargetParameter() async throws {
         let (fence, _) = makeConnectedFence()
-        let operation = NormalizedOperation(
-            command: TheFence.Command.getScreen,
+        let response = try await fence.execute(
+            command: .getScreen,
             arguments: TheFence.CommandArgumentEnvelope(
                 values: [:],
                 elementTarget: ElementTarget.heistId("button_save")
             )
         )
 
-        let response = try await fence.execute(operation: operation)
         guard case .error(let message, _) = response else {
             return XCTFail("Expected typed element target to be rejected")
         }
@@ -4332,16 +4309,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(failure)
     }
 
-}
-
-private func normalizedOperation(
-    command: TheFence.Command,
-    arguments: [String: HeistValue] = [:]
-) -> NormalizedOperation {
-    NormalizedOperation(
-        command: command,
-        arguments: TheFence.CommandArgumentEnvelope(values: arguments)
-    )
 }
 
 private func heistTargetValue(_ heistId: String) -> HeistValue {
