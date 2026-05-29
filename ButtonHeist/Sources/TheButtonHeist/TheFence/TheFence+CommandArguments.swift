@@ -23,10 +23,6 @@ extension TheFence {
         func dropping(_ key: String) -> CommandArgumentEnvelope {
             var values = argumentValues
             values.removeValue(forKey: key)
-            return withArgumentValues(values)
-        }
-
-        func withArgumentValues(_ values: [String: HeistValue]) -> CommandArgumentEnvelope {
             return CommandArgumentEnvelope(
                 values: values,
                 elementTarget: elementTarget,
@@ -44,17 +40,12 @@ extension TheFence {
             self.argumentValues = values
             self.argumentFieldPrefix = fieldPrefix
         }
-
-        func withArgumentValues(_ values: [String: HeistValue]) -> CommandArgumentObject {
-            CommandArgumentObject(values: values, fieldPrefix: argumentFieldPrefix)
-        }
     }
 
     protocol CommandArgumentReadable: Sendable {
         var argumentValues: [String: HeistValue] { get }
         var elementTarget: ElementTarget? { get }
         var argumentFieldPrefix: String? { get }
-        func withArgumentValues(_ values: [String: HeistValue]) -> Self
     }
 }
 
