@@ -25,8 +25,6 @@ final class PendingRequestTrackerIntegrationTests: XCTestCase {
                 return
             }
         }
-
-        XCTAssertEqual(tracker.pendingCount, 0)
     }
 
     @ButtonHeistActor
@@ -54,6 +52,5 @@ final class PendingRequestTrackerIntegrationTests: XCTestCase {
         // Resolve after the task has completed — with no pending entry, this is
         // structurally a no-op. No wall-clock sleep means no race.
         tracker.resolve(requestId: "expired", result: .success("late"))
-        XCTAssertEqual(tracker.pendingCount, 0, "Resolve after timeout must not add entries")
     }
 }

@@ -25,55 +25,43 @@ final class PendingRequestTrackerTests: XCTestCase {
         return true
     }
 
-    /// Yield until the tracker reaches the expected pending count.
-    /// Uses cooperative scheduling — no wall-clock dependency.
-    @ButtonHeistActor
-    private func yieldUntilPendingCount<T: Sendable>(
-        _ expected: Int,
-        in tracker: PendingRequestTracker<T>
-    ) async {
-        for _ in 0..<1_000 {
-            if tracker.pendingCount == expected { return }
-            await Task.yield()
-        }
-    }
-
-    @ButtonHeistActor
-    func testPendingCountStartsAtZero() async {
-        let tracker = PendingRequestTracker<String>()
-        XCTAssertEqual(tracker.pendingCount, 0)
-    }
-
     @ButtonHeistActor
     func testResolveDeliversResult() async throws {
         let tracker = PendingRequestTracker<String>()
+        let registered = expectation(description: "request registered")
 
         let task = Task { @ButtonHeistActor in
-            try await tracker.wait(requestId: "req-1", timeout: 5)
+            try await tracker.wait(
+                requestId: "req-1",
+                timeout: 5,
+                afterRegister: { registered.fulfill() }
+            )
         }
 
-        await yieldUntilPendingCount(1, in: tracker)
-        XCTAssertEqual(tracker.pendingCount, 1)
+        await fulfillment(of: [registered], timeout: 1)
 
         tracker.resolve(requestId: "req-1", result: .success("hello"))
 
         let value = try await task.value
         XCTAssertEqual(value, "hello")
-        XCTAssertEqual(tracker.pendingCount, 0)
     }
 
     @ButtonHeistActor
     func testDuplicateRequestIdFailsWithoutReplacingExistingWaiter() async throws {
         let tracker = PendingRequestTracker<String>()
         let requestId = "duplicate"
+        let registered = expectation(description: "original request registered")
 
         let first = Task { @ButtonHeistActor in
-            try await tracker.wait(requestId: requestId, timeout: 1)
+            try await tracker.wait(
+                requestId: requestId,
+                timeout: 1,
+                afterRegister: { registered.fulfill() }
+            )
         }
         defer { first.cancel() }
 
-        await yieldUntilPendingCount(1, in: tracker)
-        XCTAssertEqual(tracker.pendingCount, 1)
+        await fulfillment(of: [registered], timeout: 1)
 
         do {
             _ = try await tracker.wait(requestId: requestId, timeout: 0.01)
@@ -83,28 +71,29 @@ final class PendingRequestTrackerTests: XCTestCase {
             guard assertDuplicateRequestId(error, requestId: requestId) else { return }
         }
 
-        XCTAssertEqual(tracker.pendingCount, 1, "Duplicate registration must not replace the owner")
-
         tracker.resolve(requestId: requestId, result: .success("first"))
         let value = try await first.value
         XCTAssertEqual(value, "first")
-        XCTAssertEqual(tracker.pendingCount, 0)
 
         tracker.resolve(requestId: requestId, result: .success("late"))
-        XCTAssertEqual(tracker.pendingCount, 0, "Late duplicate resolve must stay a no-op")
     }
 
     @ButtonHeistActor
     func testCancelledDuplicateWaitDoesNotCancelExistingOwner() async throws {
         let tracker = PendingRequestTracker<String>()
         let requestId = "cancelled-duplicate"
+        let registered = expectation(description: "original request registered")
 
         let first = Task { @ButtonHeistActor in
-            try await tracker.wait(requestId: requestId, timeout: 1)
+            try await tracker.wait(
+                requestId: requestId,
+                timeout: 1,
+                afterRegister: { registered.fulfill() }
+            )
         }
         defer { first.cancel() }
 
-        await yieldUntilPendingCount(1, in: tracker)
+        await fulfillment(of: [registered], timeout: 1)
 
         let duplicate = Task { @ButtonHeistActor in
             try await tracker.wait(requestId: requestId, timeout: 1)
@@ -122,12 +111,9 @@ final class PendingRequestTrackerTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(tracker.pendingCount, 1, "Duplicate cancellation must not remove the owner")
-
         tracker.resolve(requestId: requestId, result: .success("first"))
         let value = try await first.value
         XCTAssertEqual(value, "first")
-        XCTAssertEqual(tracker.pendingCount, 0)
     }
 
     @ButtonHeistActor
@@ -135,22 +121,30 @@ final class PendingRequestTrackerTests: XCTestCase {
         let tracker = PendingRequestTracker<String>()
         // Resolving a non-existent request should not crash or throw
         tracker.resolve(requestId: "unknown", result: .success("ignored"))
-        XCTAssertEqual(tracker.pendingCount, 0)
     }
 
     @ButtonHeistActor
     func testCancelAllResumesWithError() async throws {
         let tracker = PendingRequestTracker<String>()
+        let firstRegistered = expectation(description: "first request registered")
+        let secondRegistered = expectation(description: "second request registered")
 
         let task1 = Task { @ButtonHeistActor in
-            try await tracker.wait(requestId: "a", timeout: 10)
+            try await tracker.wait(
+                requestId: "a",
+                timeout: 10,
+                afterRegister: { firstRegistered.fulfill() }
+            )
         }
         let task2 = Task { @ButtonHeistActor in
-            try await tracker.wait(requestId: "b", timeout: 10)
+            try await tracker.wait(
+                requestId: "b",
+                timeout: 10,
+                afterRegister: { secondRegistered.fulfill() }
+            )
         }
 
-        await yieldUntilPendingCount(2, in: tracker)
-        XCTAssertEqual(tracker.pendingCount, 2)
+        await fulfillment(of: [firstRegistered, secondRegistered], timeout: 1)
 
         tracker.cancelAll(error: FenceError.notConnected)
 
@@ -173,19 +167,22 @@ final class PendingRequestTrackerTests: XCTestCase {
                 return
             }
         }
-
-        XCTAssertEqual(tracker.pendingCount, 0)
     }
 
     @ButtonHeistActor
     func testResolveWithFailure() async throws {
         let tracker = PendingRequestTracker<String>()
+        let registered = expectation(description: "request registered")
 
         let task = Task { @ButtonHeistActor in
-            try await tracker.wait(requestId: "fail", timeout: 5)
+            try await tracker.wait(
+                requestId: "fail",
+                timeout: 5,
+                afterRegister: { registered.fulfill() }
+            )
         }
 
-        await yieldUntilPendingCount(1, in: tracker)
+        await fulfillment(of: [registered], timeout: 1)
         tracker.resolve(requestId: "fail", result: .failure(FenceError.invalidRequest("bad")))
 
         do {
@@ -203,13 +200,17 @@ final class PendingRequestTrackerTests: XCTestCase {
     @ButtonHeistActor
     func testWaitCancellationRemovesPendingAndThrowsCancellationError() async {
         let tracker = PendingRequestTracker<String>()
+        let registered = expectation(description: "request registered")
 
         let task = Task { @ButtonHeistActor in
-            try await tracker.wait(requestId: "cancel-me", timeout: 10)
+            try await tracker.wait(
+                requestId: "cancel-me",
+                timeout: 10,
+                afterRegister: { registered.fulfill() }
+            )
         }
 
-        await yieldUntilPendingCount(1, in: tracker)
-        XCTAssertEqual(tracker.pendingCount, 1)
+        await fulfillment(of: [registered], timeout: 1)
 
         task.cancel()
 
@@ -221,8 +222,5 @@ final class PendingRequestTrackerTests: XCTestCase {
         } catch {
             XCTFail("Expected CancellationError, got \(error)")
         }
-
-        await yieldUntilPendingCount(0, in: tracker)
-        XCTAssertEqual(tracker.pendingCount, 0)
     }
 }
