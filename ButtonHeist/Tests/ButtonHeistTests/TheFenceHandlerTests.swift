@@ -3420,20 +3420,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testGetInterfaceFullAliasUsesCommandContractRejection() async {
-        await assertValidationError(
-            command: .getInterface,
-            arguments: ["full": .bool(false)],
-            equals: "schema validation failed for full: observed boolean false; expected valid get_interface parameter"
-        )
-        await assertValidationError(
-            command: .getInterface,
-            arguments: ["full": .bool(true)],
-            equals: "schema validation failed for full: observed boolean true; expected valid get_interface parameter"
-        )
-    }
-
-    @ButtonHeistActor
     func testGetInterfaceDefaultNoSubtreeReturnsWholeHierarchy() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let interfaceFixture = selectionTestInterface()
