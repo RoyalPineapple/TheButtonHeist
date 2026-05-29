@@ -14,11 +14,7 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
 /// Canonical Fence operation routed from external input.
 public struct NormalizedOperation {
     public let command: TheFence.Command
-    let arguments: TheFence.CommandArgumentEnvelope
-
-    public var elementTarget: ElementTarget? { arguments.elementTarget }
-    public func stringArgument(_ key: String) -> String? { arguments.string(key) }
-    public func argumentValue(_ key: String) -> HeistValue? { arguments.argumentValues[key] }
+    public let arguments: TheFence.CommandArgumentEnvelope
 }
 
 /// Shared routing table for MCP tool calls and batch steps.

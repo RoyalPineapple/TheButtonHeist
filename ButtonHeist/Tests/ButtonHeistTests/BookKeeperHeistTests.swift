@@ -132,7 +132,7 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "noChange")
         XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.elementCount, 1)
         let playback = try TheFence.TypedHeistPlayback(wire: script)
-        XCTAssertNil(try playback.steps[0].normalizedPlaybackOperation().argumentValue("_recorded"))
+        XCTAssertNil(try playback.steps[0].normalizedPlaybackOperation().arguments.argumentValues["_recorded"])
         XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 

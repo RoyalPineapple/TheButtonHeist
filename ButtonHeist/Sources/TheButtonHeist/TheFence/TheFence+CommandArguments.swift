@@ -7,7 +7,7 @@ extension TheFence {
     /// Typed command arguments after external routing has selected a command.
     public struct CommandArgumentEnvelope: CommandArgumentReadable, Sendable {
         public let argumentValues: [String: HeistValue]
-        let elementTarget: ElementTarget?
+        public let elementTarget: ElementTarget?
         let isPlaybackStep: Bool
         let argumentFieldPrefix: String?
 
