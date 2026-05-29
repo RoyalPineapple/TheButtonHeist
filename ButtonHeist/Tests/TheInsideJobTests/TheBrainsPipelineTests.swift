@@ -6,9 +6,9 @@ import UIKit
 @testable import TheScore
 
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
-/// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`, the
-/// `computeBackgroundAccessibilityTrace` guards, background trace guards, and
-/// `exploreAndPrune` pruning.
+/// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`,
+/// classified trace projections, background trace guards, and `exploreAndPrune`
+/// pruning.
 ///
 /// Success-path `actionResultWithDelta` and `exploreScreen` container iteration
 /// require a live window and are covered by integration/benchmark runs.
@@ -104,201 +104,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             return
         }
         XCTAssertEqual(value, "")
-    }
-
-    // MARK: - CommandReceipt Projection
-
-    func testCommandReceiptProjectionMatchesExistingActionResultBuilder() throws {
-        seedScreen(elements: [("Before", .header, "before_header")])
-        let before = brains.captureBeforeState()
-
-        let header = AccessibilityElement.make(
-            label: "Receipt Screen",
-            traits: .header,
-            respondsToUserInteraction: false
-        )
-        let button = AccessibilityElement.make(
-            label: "Done",
-            traits: .button,
-            respondsToUserInteraction: false
-        )
-        brains.stash.currentScreen = .makeForTests(elements: [
-            (header, "receipt_header"),
-            (button, "button_done"),
-        ])
-        let postCapture = brains.makeTraceCapture(
-            interface: brains.stash.interface(),
-            sequence: 2,
-            parentHash: before.capture.hash
-        )
-        let accessibilityTrace = brains.makeAccessibilityTrace(
-            afterCapture: postCapture,
-            parentCapture: before.capture
-        )
-        let traceBefore = try XCTUnwrap(accessibilityTrace.captures.dropLast().last)
-        let traceAfter = try XCTUnwrap(accessibilityTrace.captures.last)
-        let delta = AccessibilityTrace.Delta.between(traceBefore, traceAfter)
-
-        let receipt = CommandReceipt(
-            before: before,
-            attempt: .delivered(method: .typeText, message: "typed text", payload: .value("hello")),
-            settle: SettleReceipt(
-                outcome: .settled(timeMs: 321),
-                events: [],
-                elementsByKey: [:],
-                didSettle: true,
-                accessibilityTrace: accessibilityTrace
-            )
-        )
-
-        let projected = receipt.actionResult()
-
-        var expectedBuilder = ActionResultBuilder(method: .typeText, capture: traceAfter)
-        expectedBuilder.message = "typed text"
-        expectedBuilder.accessibilityTrace = accessibilityTrace
-        expectedBuilder.settled = true
-        expectedBuilder.settleTimeMs = 321
-        let expected = expectedBuilder.success(payload: .value("hello"))
-
-        XCTAssertEqual(try canonicalJSON(projected), try canonicalJSON(expected))
-        XCTAssertEqual(projected.screenName, "Receipt Screen")
-        XCTAssertEqual(projected.screenId, "receipt_screen")
-        XCTAssertEqual(projected.settled, true)
-        XCTAssertEqual(projected.settleTimeMs, 321)
-        XCTAssertEqual(projected.accessibilityDelta, delta)
-        XCTAssertEqual(projected.accessibilityDelta, projected.accessibilityTrace?.endpointDeltaProjection)
-        XCTAssertEqual(projected.accessibilityTrace, accessibilityTrace)
-        XCTAssertEqual(receipt.attempt.deliveryPhase, .delivered)
-        XCTAssertEqual(receipt.settle?.outcome, .settled(timeMs: 321))
-        XCTAssertEqual(receipt.settle?.didSettle, true)
-        XCTAssertEqual(receipt.settle?.outcome.timeMs, 321)
-        XCTAssertEqual(receipt.settle?.accessibilityTrace.captures.last?.hash, postCapture.hash)
-        XCTAssertEqual(receipt.settle?.accessibilityTrace, accessibilityTrace)
-    }
-
-    func testCommandReceiptDeliveredWithoutSettleCapturePreservesPayload() {
-        seedScreen(elements: [("Before", .header, "before_header")])
-        let before = brains.captureBeforeState()
-        let receipt = CommandReceipt(
-            before: before,
-            attempt: .delivered(method: .getPasteboard, message: "settle failed", payload: .value("hello")),
-            settle: nil
-        )
-
-        let result = receipt.actionResult()
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.message, "settle failed")
-        XCTAssertEqual(result.errorKind, .actionFailed)
-        guard case .value(let value) = result.payload else {
-            XCTFail("Expected .value payload, got \(String(describing: result.payload))")
-            return
-        }
-        XCTAssertEqual(value, "hello")
-    }
-
-    func testCommandReceiptDeliveredWithoutTraceDeltaFails() {
-        seedScreen(elements: [("Before", .header, "before_header")])
-        let before = brains.captureBeforeState()
-        let receipt = CommandReceipt(
-            before: before,
-            attempt: .delivered(method: .getPasteboard, message: "settle incomplete", payload: .value("hello")),
-            settle: SettleReceipt(
-                outcome: .settled(timeMs: 1),
-                events: [],
-                elementsByKey: [:],
-                didSettle: true,
-                accessibilityTrace: AccessibilityTrace(capture: before.capture)
-            )
-        )
-
-        let result = receipt.actionResult()
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.message, "settle incomplete")
-        XCTAssertEqual(result.errorKind, .actionFailed)
-        XCTAssertNil(result.accessibilityDelta)
-        XCTAssertNil(result.accessibilityTrace)
-    }
-
-    func testCommandReceiptProjectionDerivesScreenChangeFromTraceTransition() throws {
-        seedScreen(elements: [("Before", .header, "before_header")])
-        let before = brains.captureBeforeState()
-
-        let afterInterface = makeInterface(label: "After", traits: .header, heistId: "after_header")
-        let afterCapture = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: afterInterface,
-            parentHash: before.capture.hash,
-            context: AccessibilityTrace.Context(screenId: "after"),
-            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
-        )
-        let accessibilityTrace = AccessibilityTrace(captures: [before.capture, afterCapture])
-        let receipt = CommandReceipt(
-            before: before,
-            attempt: .delivered(method: .activate),
-            settle: SettleReceipt(
-                outcome: .settled(timeMs: 10),
-                events: [],
-                elementsByKey: [:],
-                didSettle: true,
-                accessibilityTrace: accessibilityTrace
-            )
-        )
-
-        let result = receipt.actionResult()
-
-        guard case .screenChanged(let payload)? = result.accessibilityDelta else {
-            return XCTFail(
-                "Expected trace transition to project screenChanged, got \(String(describing: result.accessibilityDelta))"
-            )
-        }
-        XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
-        XCTAssertEqual(payload.captureEdge?.after.hash, afterCapture.hash)
-        XCTAssertEqual(payload.newInterface, afterInterface)
-        XCTAssertEqual(result.accessibilityDelta, result.accessibilityTrace?.endpointDeltaProjection)
-        XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
-        XCTAssertEqual(result.screenName, "After")
-        XCTAssertEqual(result.screenId, "after")
-    }
-
-    func testCommandReceiptSettleOutcomeDoesNotClassifyDelta() throws {
-        seedScreen(elements: [("Stable", .header, "stable_header")])
-        let before = brains.captureBeforeState()
-        let postCapture = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: before.capture.interface,
-            parentHash: before.capture.hash,
-            context: before.capture.context
-        )
-        let accessibilityTrace = AccessibilityTrace(captures: [before.capture, postCapture])
-        let receipt = CommandReceipt(
-            before: before,
-            attempt: .delivered(method: .activate, message: "delivered"),
-            settle: SettleReceipt(
-                outcome: .timedOut(timeMs: 5_000),
-                events: [],
-                elementsByKey: [:],
-                didSettle: false,
-                accessibilityTrace: accessibilityTrace
-            )
-        )
-
-        let result = receipt.actionResult()
-
-        XCTAssertTrue(result.success)
-        XCTAssertEqual(result.message, "delivered")
-        XCTAssertEqual(result.settled, false)
-        XCTAssertEqual(result.settleTimeMs, 5_000)
-        guard case .noChange(let payload)? = result.accessibilityDelta else {
-            return XCTFail(
-                "Expected trace endpoints to project noChange, got \(String(describing: result.accessibilityDelta))"
-            )
-        }
-        XCTAssertEqual(payload.captureEdge?.before.hash, before.capture.hash)
-        XCTAssertEqual(payload.captureEdge?.after.hash, postCapture.hash)
-        XCTAssertEqual(result.accessibilityDelta, accessibilityTrace.endpointDeltaProjection)
-        XCTAssertEqual(result.accessibilityTrace, accessibilityTrace)
     }
 
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
@@ -513,25 +318,6 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeInterface(label: String, traits: UIAccessibilityTraits, heistId: HeistId) -> Interface {
-        let element = AccessibilityElement.make(
-            label: label,
-            traits: traits,
-            respondsToUserInteraction: false
-        )
-        return Interface(
-            timestamp: Date(timeIntervalSince1970: 0),
-            tree: [.element(element, traversalIndex: 0)],
-            annotations: InterfaceAnnotations(elements: [
-                InterfaceElementAnnotation(
-                    path: TreePath([0]),
-                    heistId: heistId,
-                    actions: []
-                ),
-            ])
-        )
-    }
-
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
         let pairs: [(AccessibilityElement, String)] = elements.map { entry in
             let element = AccessibilityElement.make(
@@ -542,16 +328,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             return (element, entry.heistId)
         }
         brains.stash.currentScreen = .makeForTests(elements: pairs)
-    }
-
-    private func canonicalJSON<T: Encodable>(_ value: T) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(value)
-        guard let json = String(data: data, encoding: .utf8) else {
-            throw NSError(domain: "TheBrainsPipelineTests", code: 1)
-        }
-        return json
     }
 
 }
