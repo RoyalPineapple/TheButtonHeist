@@ -11,7 +11,7 @@ public struct TapTarget: Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(
-            allowed: gesturePointFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            allowed: gesturePointFieldNames.union(ElementTarget.inlineFieldNames),
             typeName: "tap target"
         )
         self.selection = try decodeRequiredGesturePointSelection(from: decoder)
@@ -51,7 +51,7 @@ public struct LongPressTarget: Codable, Sendable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(
             allowed: CodingKeys.self,
-            additional: gesturePointFieldNames.union(ElementTargetGrammar.inlineFieldNames),
+            additional: gesturePointFieldNames.union(ElementTarget.inlineFieldNames),
             typeName: "long press target"
         )
         self.selection = try decodeRequiredGesturePointSelection(from: decoder)

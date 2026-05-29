@@ -44,7 +44,14 @@ extension TheFence {
     func missingElementTargetResponse(command: String) -> FenceResponse {
         let contract = "requires target object with heistId or matcher fields"
         let next = "get_interface()"
-        let targetHint = "target.heistId or target.label, target.identifier, target.value, target.traits, or target.excludeTraits"
+        let matcherFields = ElementTarget.matcherFieldNames.map { "target.\($0)" }
+        let matcherHint: String
+        if let last = matcherFields.last {
+            matcherHint = matcherFields.dropLast().joined(separator: ", ") + ", or \(last)"
+        } else {
+            matcherHint = ""
+        }
+        let targetHint = "target.\(ElementTarget.heistIdFieldName) or \(matcherHint)"
         let message = "\(command) request contract failed: missing target; \(contract). " +
             "Next: \(next) to inspect the current app accessibility state, then retry \(command) with \(targetHint)."
         return .error(

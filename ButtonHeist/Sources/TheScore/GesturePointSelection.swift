@@ -71,18 +71,18 @@ public enum GesturePointSelection: Sendable, Equatable, CustomStringConvertible 
     }
 }
 
-private enum GesturePointCodingKeys: String, CodingKey {
+private enum GesturePointCodingKeys: String, CodingKey, CaseIterable {
     case pointX
     case pointY
 }
 
-private enum GestureCenterCodingKeys: String, CodingKey {
+private enum GestureCenterCodingKeys: String, CodingKey, CaseIterable {
     case centerX
     case centerY
 }
 
-let gesturePointFieldNames = Set(["pointX", "pointY"])
-let gestureCenterFieldNames = Set(["centerX", "centerY"])
+let gesturePointFieldNames = Set(GesturePointCodingKeys.allCases.map(\.stringValue))
+let gestureCenterFieldNames = Set(GestureCenterCodingKeys.allCases.map(\.stringValue))
 
 func makeGesturePointSelection(
     elementTarget: ElementTarget?,

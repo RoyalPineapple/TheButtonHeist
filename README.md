@@ -176,7 +176,7 @@ pass/fail inline:
 ```json
 {
   "command": "activate",
-  "heistId": "button_login",
+  "target": {"heistId": "button_login"},
   "expect": {"type": "screen_changed"}
 }
 ```
@@ -197,7 +197,7 @@ The agent says what it expects. Button Heist says whether it happened.
   "steps": [
     {
       "command": "type_text",
-      "heistId": "textfield_email",
+      "target": {"heistId": "textfield_email"},
       "text": "user@example.com",
       "expect": {
         "type": "element_updated",
@@ -206,7 +206,7 @@ The agent says what it expects. Button Heist says whether it happened.
         "newValue": "user@example.com"
       }
     },
-    {"command": "activate", "heistId": "button_submit", "expect": {"type": "screen_changed"}}
+    {"command": "activate", "target": {"heistId": "button_submit"}, "expect": {"type": "screen_changed"}}
   ]
 }
 ```

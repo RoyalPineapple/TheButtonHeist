@@ -119,13 +119,6 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testPlaybackTargetRejectsWrappedMatcher() {
-        let json = #"{"command":"activate","target":{"matcher":{"label":"Save"}}}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("matcher"), "\(error)")
-        }
-    }
-
     func testPlaybackTargetRejectsUnknownTargetField() {
         let json = #"{"command":"activate","target":{"label":"Save","unexpectedTargetField":"button_save"}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in

@@ -241,10 +241,7 @@ public enum CLIExposure: Sendable, Equatable {
 }
 
 enum FenceParameterBlocks: Sendable {
-    private static let matcherFields: [FenceParameterSpec] = [
-        param(.label, .string), param(.identifier, .string), param(.value, .string),
-        param(.traits, .stringArray), param(.excludeTraits, .stringArray),
-    ]
+    private static let matcherFields = ElementTarget.matcherFieldNames.map(matcherFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
         param(.target, .object, objectProperties: [
@@ -326,6 +323,20 @@ enum FenceParameterBlocks: Sendable {
         maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
     )
     static let incrementCount = param(.count, .integer, minimum: 1, maximum: 100)
+
+    private static func matcherFieldSpec(_ name: String) -> FenceParameterSpec {
+        guard let key = FenceParameterKey(rawValue: name) else {
+            preconditionFailure("ElementTarget matcher field '\(name)' is not a Fence parameter key")
+        }
+        switch key {
+        case .label, .identifier, .value:
+            return param(key, .string)
+        case .traits, .excludeTraits:
+            return param(key, .stringArray)
+        default:
+            preconditionFailure("ElementTarget matcher field '\(name)' is not mapped in Fence parameter specs")
+        }
+    }
 
     static let bezierSegment: [FenceParameterSpec] = [
         param(.cp1X, .number, required: true), param(.cp1Y, .number, required: true),

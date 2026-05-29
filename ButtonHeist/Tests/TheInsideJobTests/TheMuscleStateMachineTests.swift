@@ -65,7 +65,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertTrue(payload.message.contains("remaining timeout:"))
     }
 
-    func testSessionLeaseOnlyStartsDrainingAfterFinalSessionConnection() {
+    func testSessionLeaseIgnoresNonActiveConnectionRemoval() {
         var lease = SessionLease(releaseTimeout: 30)
 
         guard case .accepted = lease.acquire(driverIdentity: "driver:alpha", clientId: 1) else {
@@ -78,7 +78,7 @@ final class TheMuscleStateMachineTests: XCTestCase {
         XCTAssertEqual(lease.activeSessionConnections, [1])
 
         guard case .draining = lease.removeConnection(1) else {
-            return XCTFail("Expected final session connection removal to start draining")
+            return XCTFail("Expected active session connection removal to start draining")
         }
     }
 

@@ -199,8 +199,23 @@ final class SemanticActionability {
                 target.validationFailureMessage ?? "target requires heistId or semantic matcher predicates"
             )))
         }
-        if let failure = await prepareActionability(for: target) {
-            return .failed(failure)
+
+        // Source screens derive only semantic identity. Reveal and geometry
+        // authority always come from the current live graph.
+        switch stash.resolveTarget(executableTarget) {
+        case .resolved(let screenElement):
+            let reveal = stash.executeSemanticRevealPlan(for: screenElement)
+            if case .failed = reveal {
+                return .failed(.noRevealPath(semanticRevealPlanFailureMessage(screenElement)))
+            }
+            if reveal.didReveal {
+                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
+                refresh()
+            }
+        case .notFound(let diagnostics):
+            return .failed(.notFound(target.diagnostics(diagnostics)))
+        case .ambiguous(_, let diagnostics):
+            return .failed(.ambiguous(target.diagnostics(diagnostics)))
         }
 
         return await makeElementActionable(
@@ -389,34 +404,6 @@ final class SemanticActionability {
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
         refresh()
         return .refreshed
-    }
-
-    private func prepareActionability(
-        for target: SemanticElementTarget
-    ) async -> SemanticActionabilityFailure? {
-        guard let executableTarget = target.executableTarget else {
-            return .notFound(target.diagnostics(
-                target.validationFailureMessage ?? "target requires heistId or semantic matcher predicates"
-            ))
-        }
-        // Source screens derive only semantic identity. Reveal and geometry
-        // authority always come from the current live graph.
-        switch stash.resolveTarget(executableTarget) {
-        case .resolved(let screenElement):
-            let reveal = stash.executeSemanticRevealPlan(for: screenElement)
-            if case .failed = reveal {
-                return .noRevealPath(semanticRevealPlanFailureMessage(screenElement))
-            }
-            if reveal.didReveal {
-                await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                refresh()
-            }
-            return nil
-        case .notFound(let diagnostics):
-            return .notFound(target.diagnostics(diagnostics))
-        case .ambiguous(_, let diagnostics):
-            return .ambiguous(target.diagnostics(diagnostics))
-        }
     }
 
     func makeActionable(
