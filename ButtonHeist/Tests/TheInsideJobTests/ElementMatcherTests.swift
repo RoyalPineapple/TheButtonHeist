@@ -136,7 +136,7 @@ final class ElementMatcherTests: XCTestCase {
             ])
         ]
         let result = try XCTUnwrap(tree.firstMatch(ElementMatcher(label: "Target"), mode: .exact))
-        XCTAssertEqual(result.element.label, "Target")
+        XCTAssertEqual(result.label, "Target")
     }
 
     func testHierarchyContainerLabelDoesNotMatch() {
@@ -157,7 +157,7 @@ final class ElementMatcherTests: XCTestCase {
             .element(element(label: "C", traits: .button), traversalIndex: 2),
         ]
         let results = tree.matches(ElementMatcher(traits: [.button]), mode: .exact, limit: 100)
-        XCTAssertEqual(results.map(\.element.label), ["A", "C"])
+        XCTAssertEqual(results.map(\.label), ["A", "C"])
     }
 
     // MARK: - StableKey

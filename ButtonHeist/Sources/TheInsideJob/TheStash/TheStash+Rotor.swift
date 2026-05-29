@@ -173,13 +173,13 @@ extension TheStash {
             return .resultTargetUnavailable(rotorName)
         }
         let parsed = parseRotorResultObject(resultObject)
-        if let parsed, !parsed.isInCurrentHierarchy {
-            rotorContinuations.store(screenElement: parsed.screenElement, object: resultObject)
+        if let parsed, !visibleIds.contains(parsed.heistId) {
+            rotorContinuations.store(screenElement: parsed, object: resultObject)
         }
         guard parsed != nil || textRange != nil else {
             return .resultTargetNotParsed(rotorName)
         }
-        return .succeeded(RotorHit(rotor: rotorName, screenElement: parsed?.screenElement, textRange: textRange))
+        return .succeeded(RotorHit(rotor: rotorName, screenElement: parsed, textRange: textRange))
     }
 
     func preparePendingRotorResult(targetedHeistId: HeistId?) -> UUID? {
@@ -208,14 +208,9 @@ extension TheStash {
 
 private extension TheStash {
 
-    struct ParsedRotorResultObject {
-        let screenElement: ScreenElement
-        let isInCurrentHierarchy: Bool
-    }
-
     /// Return the known `ScreenElement` corresponding to a UIKit accessibility
     /// object by live object identity.
-    func knownObject(_ object: NSObject) -> ParsedRotorResultObject? {
+    func knownObject(_ object: NSObject) -> ScreenElement? {
         guard let heistId = currentScreen.liveCapture.elementRefs.first(where: { _, ref in
             ref.object === object
         })?.key,
@@ -223,10 +218,7 @@ private extension TheStash {
         else {
             return nil
         }
-        return ParsedRotorResultObject(
-            screenElement: cached,
-            isInCurrentHierarchy: visibleIds.contains(cached.heistId)
-        )
+        return cached
     }
 
     /// Parse the live hierarchy and return the `ScreenElement` corresponding to
@@ -244,14 +236,14 @@ private extension TheStash {
         return screen.semantic.elements[heistId]
     }
 
-    func parseRotorResultObject(_ object: NSObject) -> ParsedRotorResultObject? {
+    func parseRotorResultObject(_ object: NSObject) -> ScreenElement? {
         if let known = knownObject(object) {
             return known
         }
 
         let standaloneElement = burglar.parseObject(object)
         if let screenElement = parseLiveObject(object) {
-            return ParsedRotorResultObject(screenElement: screenElement, isInCurrentHierarchy: true)
+            return screenElement
         }
 
         if let standaloneElement,
@@ -261,23 +253,20 @@ private extension TheStash {
 
         guard let element = standaloneElement else { return nil }
         let heistId = pendingRotorHeistId(for: element)
-        return ParsedRotorResultObject(
-            screenElement: ScreenElement(
-                heistId: heistId,
-                contentSpaceOrigin: nil,
-                element: element
-            ),
-            isInCurrentHierarchy: false
+        return ScreenElement(
+            heistId: heistId,
+            contentSpaceOrigin: nil,
+            element: element
         )
     }
 
-    func knownCachedRotorResult(matching rotorElement: AccessibilityElement) -> ParsedRotorResultObject? {
+    func knownCachedRotorResult(matching rotorElement: AccessibilityElement) -> ScreenElement? {
         let candidates = selectElements().filter {
             !visibleIds.contains($0.heistId)
                 && Self.matchesCachedRotorResult(knownElement: $0.element, rotorElement: rotorElement)
         }
         guard candidates.count == 1, let candidate = candidates.first else { return nil }
-        return ParsedRotorResultObject(screenElement: candidate, isInCurrentHierarchy: false)
+        return candidate
     }
 
     static func matchesCachedRotorResult(

@@ -9,8 +9,8 @@ extension GestureCLICommandContract {
         strings: [(FenceParameterKey, String?)] = [],
         objects: [(FenceParameterKey, [FenceParameterKey: HeistValue]?)] = []
     ) throws -> NormalizedOperation {
-        var merged = try element.targetParameters()
-        merged.merge(parameters) { _, override in override }
+        let target = try element.parsedTarget()
+        var merged = parameters
         for (key, value) in numbers {
             if let value { merged[key] = .double(value) }
         }
@@ -25,7 +25,7 @@ extension GestureCLICommandContract {
                 ))
             }
         }
-        return try fenceOperation(merged)
+        return try fenceOperation(merged, target: target)
     }
 
     @ButtonHeistActor

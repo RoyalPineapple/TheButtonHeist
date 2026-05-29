@@ -141,8 +141,11 @@ extension CLICommandContract {
         fenceCommand.cliCommandName
     }
 
-    static func fenceOperation(_ parameters: CLIRequestParameters = [:]) throws -> NormalizedOperation {
-        try fenceCommand.cliOperation(parameters)
+    static func fenceOperation(
+        _ parameters: CLIRequestParameters = [:],
+        target: ElementTarget? = nil
+    ) throws -> NormalizedOperation {
+        try fenceCommand.cliOperation(parameters, target: target)
     }
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {
@@ -173,8 +176,11 @@ extension CLICommandContract {
 }
 
 extension TheFence.Command {
-    func cliOperation(_ parameters: CLIRequestParameters = [:]) throws -> NormalizedOperation {
-        try CLIRequestBuilder.operation(command: self, parameters: parameters)
+    func cliOperation(
+        _ parameters: CLIRequestParameters = [:],
+        target: ElementTarget? = nil
+    ) throws -> NormalizedOperation {
+        try CLIRequestBuilder.operation(command: self, parameters: parameters, target: target)
     }
 }
 
