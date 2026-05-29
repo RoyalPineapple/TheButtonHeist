@@ -151,7 +151,7 @@ final class WireConverterTests: XCTestCase {
                 elementAnnotations.append(InterfaceElementAnnotation(
                     path: path,
                     heistId: element.heistId,
-                    actions: WireConversion.toWire(element).actions
+                    actions: WireConversion.convert(element.element, heistId: element.heistId).actions
                 ))
                 return .element(element.element, traversalIndex: index)
             case .container(let stableId, let container, let children):
@@ -204,31 +204,33 @@ final class WireConverterTests: XCTestCase {
     // MARK: - Trait Mapping
 
     func testSingleTraitMapped() {
-        let traits = WireConversion.traitNames(AccessibilityTraits.button)
+        let traits = AccessibilityTraits.button.heistTraits
         XCTAssertEqual(traits, [.button])
     }
 
     func testMultipleTraitsMapped() {
-        let traits = WireConversion.traitNames([AccessibilityTraits.button, .selected])
-        XCTAssertTrue(traits.contains(.button))
-        XCTAssertTrue(traits.contains(.selected))
-        XCTAssertEqual(traits.count, 2)
+        let traits: AccessibilityTraits = [.button, .selected]
+        let heistTraits = traits.heistTraits
+        XCTAssertTrue(heistTraits.contains(.button))
+        XCTAssertTrue(heistTraits.contains(.selected))
+        XCTAssertEqual(heistTraits.count, 2)
     }
 
     func testBackButtonPrivateTraitMapped() {
-        let traits = WireConversion.traitNames(AccessibilityTraits(rawValue: 1 << 27))
+        let traits = AccessibilityTraits(rawValue: 1 << 27).heistTraits
         XCTAssertEqual(traits, [.backButton])
     }
 
     func testNoTraitsReturnsEmpty() {
-        let traits = WireConversion.traitNames(AccessibilityTraits())
+        let traits = AccessibilityTraits().heistTraits
         XCTAssertTrue(traits.isEmpty)
     }
 
     func testTraitMappingDeclarationOrder() {
-        let traits = WireConversion.traitNames([AccessibilityTraits.button, .selected])
-        XCTAssertEqual(traits[0], .button)
-        XCTAssertEqual(traits[1], .selected)
+        let traits: AccessibilityTraits = [.button, .selected]
+        let heistTraits = traits.heistTraits
+        XCTAssertEqual(heistTraits[0], .button)
+        XCTAssertEqual(heistTraits[1], .selected)
     }
 
     // MARK: - Trait Name Sync
@@ -244,18 +246,18 @@ final class WireConverterTests: XCTestCase {
     /// in its `traits` array. A duplicate row in the parser's `knownTraits` table caused
     /// `traits: ["secureTextField", "secureTextField"]` to ship to every client.
     func testSecureTextFieldEmitsSecureTraitOnce() {
-        let traits = WireConversion.traitNames(AccessibilityTraits.secureTextField)
+        let traits = AccessibilityTraits.secureTextField.heistTraits
         let secureCount = traits.filter { $0 == .secureTextField }.count
         XCTAssertEqual(secureCount, 1,
                        "secureTextField must appear exactly once in wire trait list, got \(traits)")
     }
 
-    /// Every known trait in `HeistTrait.allCases` must round-trip through `WireConversion.traitNames`
+    /// Every known trait in `HeistTrait.allCases` must round-trip through `AccessibilityTraits.heistTraits`
     /// without duplication. Generalises the secure-text-field regression across the table.
     func testAllKnownTraitsRoundTripWithoutDuplicates() {
         for trait in HeistTrait.allCases {
             let bitmask = UIAccessibilityTraits.fromNames([trait.rawValue])
-            let wire = WireConversion.traitNames(bitmask)
+            let wire = AccessibilityTraits(bitmask).heistTraits
             XCTAssertEqual(wire.count, Set(wire).count,
                            "Trait \(trait.rawValue) produced duplicates on the wire: \(wire)")
         }
@@ -269,7 +271,7 @@ final class WireConverterTests: XCTestCase {
     func testUnknownTraitBitDoesNotBecomeWireTrait() {
         let unknownBit: UInt64 = 1 << 42
         let traits = UIAccessibilityTraits(rawValue: unknownBit)
-        let wire = WireConversion.traitNames(traits)
+        let wire = AccessibilityTraits(traits).heistTraits
         XCTAssertTrue(wire.isEmpty, "Unknown trait bits must stay out of the wire contract, got: \(wire)")
     }
 
@@ -277,7 +279,7 @@ final class WireConverterTests: XCTestCase {
     /// the current contract.
     func testKnownPlusUnknownTraitMixEmitsKnownTraitOnly() {
         let mixed = UIAccessibilityTraits(rawValue: UIAccessibilityTraits.button.rawValue | (1 << 42))
-        let wire = WireConversion.traitNames(mixed)
+        let wire = AccessibilityTraits(mixed).heistTraits
         XCTAssertEqual(wire, [.button], "Only named contract traits should appear, got: \(wire)")
     }
 
@@ -285,7 +287,7 @@ final class WireConverterTests: XCTestCase {
     func testAllKnownTraitsRoundTripThroughCurrentContract() {
         for trait in HeistTrait.allCases {
             let bitmask = UIAccessibilityTraits.fromNames([trait.rawValue])
-            let wire = WireConversion.traitNames(bitmask)
+            let wire = AccessibilityTraits(bitmask).heistTraits
             XCTAssertEqual(wire, [trait], "Known trait \(trait.rawValue) must round-trip, got: \(wire)")
         }
     }

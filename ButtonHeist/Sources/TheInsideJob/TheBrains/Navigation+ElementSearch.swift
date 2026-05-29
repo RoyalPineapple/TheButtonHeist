@@ -122,7 +122,7 @@ extension Navigation {
         scrollCount: Int,
         uniqueElementsSeen: Int
     ) -> TheSafecracker.InteractionResult {
-        let wire = TheStash.WireConversion.toWire(found)
+        let wire = TheStash.WireConversion.convert(found.element, heistId: found.heistId)
         return .success(
             method: .elementSearch,
             payload: .scrollSearch(ScrollSearchResult(
