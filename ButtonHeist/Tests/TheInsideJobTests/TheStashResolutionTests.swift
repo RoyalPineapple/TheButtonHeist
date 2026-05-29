@@ -748,30 +748,31 @@ final class TheStashResolutionTests: XCTestCase {
         }
     }
 
-    /// `hasTarget` powers wait-style predicates, so it must use the same
-    /// semantic-state lookup as resolution instead of leaking viewport state.
-    func testHasTargetFindsKnownMatcherOutsideLiveHierarchy() {
+    func testResolveTargetFindsKnownMatcherOutsideLiveHierarchy() {
         let offScreen = element(label: "Below Fold", traits: .button)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Below Fold"))))
+        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Below Fold"))).resolved)
     }
 
-    func testHasTargetFindsLiveHeistIdInViewport() {
+    func testResolveTargetFindsLiveHeistIdInViewport() {
         let element = element(label: "Visible", traits: .button)
         register(element, heistId: "visible_button", index: 0)
 
-        XCTAssertTrue(bagman.hasTarget(.heistId("visible_button")))
+        XCTAssertNotNil(bagman.resolveTarget(.heistId("visible_button")).resolved)
     }
 
-    func testHasTargetHonorsExplicitOrdinal() {
+    func testResolveTargetHonorsExplicitOrdinal() {
         let save1 = element(label: "Save", value: "draft")
         let save2 = element(label: "Save", value: "final")
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 1)))
-        XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 2)))
+        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 1)).resolved)
+        guard case .notFound = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 2)) else {
+            XCTFail("Expected out-of-range ordinal to fail closed")
+            return
+        }
     }
 
     func testRegisteredElementResolvesWithoutMarkPresented() {
@@ -838,17 +839,20 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.element.label, "Save")
     }
 
-    /// Near-miss surface for `wait_for absent` semantics: a substring-only match
-    /// must NOT be considered present.
-    func testHasTargetReportsAbsentForSubstringOnlyMatch() {
+    /// Near-miss surface for absent semantics: a substring-only match must not
+    /// be considered present.
+    func testResolveTargetReportsAbsentForSubstringOnlyMatch() {
         let save = element(label: "Save Draft", traits: .button)
         register(save, heistId: "button_save_draft", index: 0)
 
-        // "Save" is a substring of "Save Draft" but not equal — hasTarget must
-        // return false so wait_for absent doesn't lie about the screen state.
-        XCTAssertFalse(bagman.hasTarget(.matcher(ElementMatcher(label: "Save"))))
+        // "Save" is a substring of "Save Draft" but not equal, so semantic
+        // resolution must not report it as present.
+        guard case .notFound = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"))) else {
+            XCTFail("Expected substring-only matcher to miss")
+            return
+        }
         // Exact label still resolves to present.
-        XCTAssertTrue(bagman.hasTarget(.matcher(ElementMatcher(label: "Save Draft"))))
+        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Save Draft"))).resolved)
     }
 
     /// Server-side and client-side matchers must agree on the same input.
