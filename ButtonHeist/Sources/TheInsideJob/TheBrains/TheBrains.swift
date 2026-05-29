@@ -562,11 +562,6 @@ final class TheBrains {
         stash.captureScreenForRecording()
     }
 
-    // MARK: - Screen Name (for error messages)
-
-    var screenName: String? { stash.lastScreenName }
-    var screenId: String? { stash.lastScreenId }
-
     // MARK: - Recording Wiring
 
     /// Stakeout for recording frame capture.
