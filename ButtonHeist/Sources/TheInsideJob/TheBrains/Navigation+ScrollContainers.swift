@@ -43,7 +43,7 @@ extension Navigation {
             return .resolved(plan.target)
         case .element(let elementTarget):
             guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
-                return .failed(liveScrollElementFailureMessage(.currentCapture(elementTarget), commandName: commandName))
+                return .failed(liveScrollElementFailureMessage(elementTarget, commandName: commandName))
             }
             let targetDescription = Self.ScrollTargetDescription(resolved).description
             guard let scrollView = stash.liveScrollView(for: resolved) else {
@@ -114,11 +114,10 @@ extension Navigation {
     }
 
     func scrollSearchSeedCandidate(
-        for target: SemanticElementTarget,
+        for target: ElementTarget,
         requiredAxis axis: ScrollAxis
     ) -> ScrollPlan? {
-        guard let executableTarget = target.executableTarget,
-              let resolved = stash.resolveTarget(executableTarget).resolved,
+        guard let resolved = stash.resolveTarget(target).resolved,
               let scrollView = stash.liveScrollView(for: resolved),
               !scrollView.bhIsUnsafeForProgrammaticScrolling else {
             return nil
@@ -237,25 +236,19 @@ extension Navigation {
 
     /// Scroll either reveals the requested target or returns a reason it cannot.
     private func liveScrollElementFailureMessage(
-        _ target: SemanticElementTarget,
+        _ target: ElementTarget,
         commandName: String
     ) -> String {
-        guard let executableTarget = target.executableTarget else {
-            return target.diagnostics(target.validationFailureMessage ?? "\(commandName) failed: invalid semantic target")
-        }
-
-        switch stash.resolveTarget(executableTarget) {
+        switch stash.resolveTarget(target) {
         case .resolved:
-            return target.diagnostics("\(commandName) failed: target is known but not currently visible; "
+            return "\(commandName) failed: target is known but not currently visible; "
                 + "use scroll_to_visible to reveal it, then retry \(commandName)."
-            )
         case .ambiguous(_, let diagnostics):
-            return target.diagnostics("\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
+            return "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
                 + "\(diagnostics)\nNext: use scroll_to_visible with a heistId for a known off-screen "
                 + "target, or retarget from get_screen's visible interface."
-            )
         case .notFound(let diagnostics):
-            return target.diagnostics(diagnostics)
+            return diagnostics
         }
     }
 }

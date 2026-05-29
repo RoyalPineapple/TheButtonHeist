@@ -20,11 +20,10 @@ extension Actions {
         case .coordinate:
             elementTarget = nil
         }
-        let semanticTarget = elementTarget.map(SemanticElementTarget.currentCapture)
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
-        if let semanticTarget {
+        if let elementTarget {
             switch await navigation.actionability.makeActionable(
-                for: semanticTarget,
+                for: elementTarget,
                 method: method,
                 deallocatedBoundary: "gesture action"
             ) {
@@ -78,7 +77,7 @@ extension Actions {
         case .unitElement(let elementTarget, let start, let end, _):
             let actionableTarget: SemanticActionability.SemanticActionableTarget
             switch await navigation.actionability.makeActionable(
-                for: .currentCapture(elementTarget),
+                for: elementTarget,
                 method: .syntheticSwipe,
                 deallocatedBoundary: "gesture action"
             ) {

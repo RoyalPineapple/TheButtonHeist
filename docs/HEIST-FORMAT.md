@@ -246,7 +246,7 @@ On failure, the response includes a `failure` object with everything needed to d
 | Field | Type | Description |
 |-------|------|-------------|
 | `command` | `String` | The command that failed (e.g. `activate`, `type_text`) |
-| `target` | `SemanticActionTarget?` | The semantic target from the failed step |
+| `target` | `ElementTarget?` | The semantic target from the failed step |
 | `error` | `String` | Human-readable error message |
 | `actionResult` | `ActionResult?` | Full action result — includes `errorKind`, `scrollSearchResult`, delta, etc. |
 | `expectation` | `ExpectationResult?` | Expectation check result (when `arguments.expect` was attached to the step) |

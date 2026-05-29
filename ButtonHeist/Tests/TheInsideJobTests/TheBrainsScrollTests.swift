@@ -510,7 +510,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .currentCapture(.heistId("offscreen_button")),
+            for: .heistId("offscreen_button"),
             method: .activate,
             deallocatedBoundary: "test actionability"
         )
@@ -535,7 +535,7 @@ final class TheBrainsScrollTests: XCTestCase {
             includeLiveScrollAncestor: false
         )
         let result = await brains.navigation.actionability.makeActionable(
-            for: .currentCapture(.matcher(ElementMatcher(label: "Offscreen"))),
+            for: .matcher(ElementMatcher(label: "Offscreen")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
@@ -580,7 +580,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .currentCapture(.heistId("escaped_button")),
+            for: .heistId("escaped_button"),
             method: .scrollToVisible,
             deallocatedBoundary: "test actionability"
         )
@@ -620,7 +620,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .currentCapture(.heistId("escaped_button")),
+            for: .heistId("escaped_button"),
             method: .scrollToVisible,
             deallocatedBoundary: "test actionability"
         )
@@ -642,7 +642,7 @@ final class TheBrainsScrollTests: XCTestCase {
         var didDispatch = false
 
         let result = await brains.actions.performElementAction(
-            target: .currentCapture(.heistId("offscreen_button")),
+            target: .heistId("offscreen_button"),
             method: .activate,
             requireInteractive: false
         ) { _ in
@@ -868,7 +868,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeElementSearch(
-            elementTarget: .currentCapture(.heistId("settings_button")),
+            elementTarget: .heistId("settings_button"),
             direction: .down
         )
 
@@ -901,7 +901,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeElementSearch(
-            elementTarget: .currentCapture(.heistId("visible_button")),
+            elementTarget: .heistId("visible_button"),
             direction: .down
         )
 
@@ -1017,7 +1017,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.currentScreen = knownScreen
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .currentCapture(.matcher(ElementMatcher(label: "Jump Target"))),
+            for: .matcher(ElementMatcher(label: "Jump Target")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )

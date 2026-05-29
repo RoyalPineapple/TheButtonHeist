@@ -21,7 +21,7 @@ struct PublicPlaybackResponse: FencePublicJSONResponse {
 struct PublicPlaybackFailure: Encodable {
     let command: String
     let error: String
-    let target: SemanticActionTarget?
+    let target: ElementTarget?
     let actionResult: PublicActionResponse?
     let expectation: PublicExpectationResult?
     let interface: PublicInterface?
