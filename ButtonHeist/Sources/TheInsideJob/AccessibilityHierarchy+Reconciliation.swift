@@ -452,29 +452,6 @@ func reconcilePage(
     )
 }
 
-// MARK: - Hierarchy Reconciliation
-
-extension Array where Element == AccessibilityHierarchy {
-    /// Flatten to elements, reconcile, and report what happened.
-    /// This is the convenience entry point for merging a page of hierarchy nodes
-    /// into an accumulated hierarchy.
-    func reconcilePage(
-        from page: [AccessibilityHierarchy]
-    ) -> PageReconciliation {
-        let accElements = self.sortedElements
-        let pageElements = page.sortedElements
-        return buttonHeistReconcilePage(accumulated: accElements, page: pageElements)
-    }
-}
-
-// Module-level function to avoid ambiguity with the extension method
-private func buttonHeistReconcilePage(
-    accumulated: [AccessibilityElement],
-    page: [AccessibilityElement]
-) -> PageReconciliation {
-    reconcilePage(accumulated: accumulated, page: page)
-}
-
 private func safePathBounds(_ pathElements: [AccessibilityPathElement]) -> CGRect {
     let path = UIBezierPath()
     for element in pathElements {

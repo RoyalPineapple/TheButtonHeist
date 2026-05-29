@@ -248,7 +248,7 @@ public final class TheInsideJob {
         insideJobLogger.info("Starting TheInsideJob with ServerTransport...")
 
         let lease = try await startRuntimeLeaseForStartup()
-        activateRuntimeLease(lease)
+        lease.activate(on: self)
 
         insideJobLogger.info("Server started successfully")
     }

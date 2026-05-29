@@ -1528,7 +1528,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
         let waitTask = Task { @ButtonHeistActor in
-            try await fence.waitForActionResult(requestId: "pending", timeout: 10)
+            try await fence.pendingRequests.waitForAction(requestId: "pending", timeout: 10)
         }
         await Task.yield()
 
@@ -1553,7 +1553,7 @@ final class TheFenceTests: XCTestCase {
         fence.handoff.connect(to: TheFenceFixtures.testDevice)
 
         let waitTask = Task { @ButtonHeistActor in
-            try await fence.waitForActionResult(requestId: "pending", timeout: 10)
+            try await fence.pendingRequests.waitForAction(requestId: "pending", timeout: 10)
         }
         await Task.yield()
 

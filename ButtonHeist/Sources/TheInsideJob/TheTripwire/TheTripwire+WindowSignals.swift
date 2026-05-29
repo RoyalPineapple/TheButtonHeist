@@ -182,13 +182,9 @@ extension TheTripwire {
         guard let rootVC = entry.window.rootViewController else { return nil }
         let chain = Array(sequence(first: rootVC, next: \.presentedViewController))
         guard let deepest = chain.last else { return nil }
-        let rootView = accessibilityRootView(for: deepest)
+        guard let rootView = deepest.view else { return nil }
         guard rootView !== entry.rootView else { return deepest !== rootVC ? (entry.window, rootView) : nil }
         return (window: entry.window, rootView: rootView)
-    }
-
-    private static func accessibilityRootView(for viewController: UIViewController) -> UIView {
-        return viewController.view
     }
 
     // MARK: - View Controller Identity

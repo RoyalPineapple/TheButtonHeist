@@ -393,7 +393,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             elements: [(visible, "button_visible")],
             offViewport: [.init(offViewport, heistId: "button_below_fold")]
         )
-        let interfaceHash = brains.stash.interfaceHash()
+        let interfaceHash = AccessibilityTrace.Capture.hash(brains.stash.interface())
 
         brains.recordSentState()
 

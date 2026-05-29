@@ -12,7 +12,7 @@ enum ToolDefinitions {
     }
 
     private static func tool(for contract: MCPToolContract) -> Tool {
-        let schema = inputSchema(for: contract)
+        let schema = value(from: contract.inputJSONSchema)
         if let annotations = contract.annotations {
             return Tool(
                 name: contract.name,
@@ -30,10 +30,6 @@ enum ToolDefinitions {
             description: contract.description,
             inputSchema: schema
         )
-    }
-
-    private static func inputSchema(for contract: MCPToolContract) -> Value {
-        value(from: contract.inputJSONSchema)
     }
 
     private static func value(from schemaValue: FenceJSONSchemaValue) -> Value {

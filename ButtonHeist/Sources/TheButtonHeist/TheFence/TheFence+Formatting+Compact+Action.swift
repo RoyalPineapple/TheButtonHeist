@@ -5,7 +5,7 @@ import TheScore
 extension FenceResponse {
 
     func compactActionResult(_ result: ActionResult, expectation: ExpectationResult?) -> String {
-        let commandName = Self.compactCommandName(for: result.method)
+        let commandName = TheFence.Command.canonicalName(forActionResultMethod: result.method)
         guard result.success else {
             if case .scrollSearch(let search) = result.payload {
                 return Self.compactScrollSearchNotFound(
@@ -143,10 +143,6 @@ extension FenceResponse {
             return " (\(search.uniqueElementsSeen) unique elements seen)"
         }
         return ""
-    }
-
-    private static func compactCommandName(for method: ActionMethod) -> String {
-        TheFence.Command.canonicalName(forActionResultMethod: method)
     }
 
 }

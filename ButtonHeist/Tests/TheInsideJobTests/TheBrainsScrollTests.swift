@@ -868,7 +868,8 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeElementSearch(
-            ElementSearchTarget(elementTarget: .heistId("settings_button"))
+            elementTarget: .currentCapture(.heistId("settings_button")),
+            direction: .down
         )
 
         XCTAssertTrue(result.success, "Expected known element_search target to be found by paging: \(String(describing: result.message))")
@@ -900,7 +901,8 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeElementSearch(
-            ElementSearchTarget(elementTarget: .heistId("visible_button"))
+            elementTarget: .currentCapture(.heistId("visible_button")),
+            direction: .down
         )
 
         XCTAssertTrue(result.success, "Expected element_search to report the visible match: \(String(describing: result.message))")

@@ -85,18 +85,6 @@ extension TheFence {
         }
     }
 
-    func waitForActionResult(requestId: String, timeout: TimeInterval) async throws -> ActionResult {
-        try await pendingRequests.waitForAction(requestId: requestId, timeout: timeout)
-    }
-
-    func waitForInterface(requestId: String, timeout: TimeInterval = 10.0) async throws -> Interface {
-        try await pendingRequests.waitForInterface(requestId: requestId, timeout: timeout)
-    }
-
-    func waitForScreen(requestId: String, timeout: TimeInterval = 30.0) async throws -> ScreenPayload {
-        try await pendingRequests.waitForScreen(requestId: requestId, timeout: timeout)
-    }
-
     func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
         pendingRequests.cancelAll(error: error)
         recording.cancelAll(error: error)
