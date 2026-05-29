@@ -34,7 +34,7 @@ extension TheFence {
             steps: try batchStepDecodeInputs.enumerated().map { index, stepDecodeInput in
                 try decodeRunBatchStep(stepDecodeInput, index: index)
             },
-            policy: try arguments.schemaEnum("policy", as: BatchPolicy.self) ?? .stopOnError
+            policy: try arguments.schemaEnum("policy", as: BatchExecutionPolicy.self) ?? .stopOnError
         )
     }
 }

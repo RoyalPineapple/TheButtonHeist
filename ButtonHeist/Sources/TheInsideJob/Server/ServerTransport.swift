@@ -209,7 +209,7 @@ final class ServerTransport: NSObject {
     /// its own network queue, not the main actor. The continuation is itself
     /// Sendable; `yield` is safe to call from any context. The synchronous
     @MainActor
-    internal func makeCallbacks() -> SimpleSocketServer.Callbacks {
+    internal func makeCallbacks() -> SocketServerCallbacks {
         let continuation = eventContinuation
         let callbackTasks = callbackTasks
         let overflow = TransportOverflowStopper(transport: self)
@@ -220,7 +220,7 @@ final class ServerTransport: NSObject {
             }
             callbackTasks.record(task)
         }
-        return SimpleSocketServer.Callbacks(
+        return SocketServerCallbacks(
             onClientConnected: { clientId, remoteAddress in
                 Self.yieldEvent(
                     .clientConnected(clientId: clientId, remoteAddress: remoteAddress),
