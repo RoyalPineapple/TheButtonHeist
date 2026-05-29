@@ -3444,7 +3444,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "ordinal": .int(1),
                 ]),
             ],
-            contains: "heistId or matcher fields"
+            contains: "ElementTarget heistId cannot be combined with matcher fields or ordinal"
         )
     }
 

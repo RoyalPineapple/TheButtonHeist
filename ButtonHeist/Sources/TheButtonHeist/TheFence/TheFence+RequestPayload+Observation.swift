@@ -84,117 +84,59 @@ extension TheFence {
     }
 
     private func decodeInterfaceSubtreeSelector(_ arguments: CommandArgumentEnvelope) throws -> SubtreeSelector? {
-        guard let subtree = try arguments.schemaDictionary("subtree") else { return nil }
-        try validateInterfaceSubtreeKeys(subtree)
-        let ordinal = try subtree.schemaNonNegativeInteger("ordinal")
-
-        let elementDictionary = try subtree.schemaDictionary("element")
-        let containerDictionary = try subtree.schemaDictionary("container")
-        guard (elementDictionary == nil) != (containerDictionary == nil) else {
+        guard let subtree = arguments.argumentValues["subtree"] else { return nil }
+        guard case .object = subtree else {
             throw SchemaValidationError(
-                field: "subtree",
-                observed: subtree.observedDescription,
-                expected: "exactly one of element or container"
+                field: arguments.field("subtree"),
+                observed: subtree.schemaObservedDescription,
+                expected: "object"
             )
         }
-
-        let selector: SubtreeSelector
-        if let elementDictionary {
-            try validateInterfaceSubtreeElementKeys(elementDictionary)
-            let target = try subtreeElementTarget(elementDictionary, ordinal: ordinal)
-            selector = .element(target)
-        } else if let containerDictionary {
-            try validateInterfaceSubtreeContainerKeys(containerDictionary)
-            let matcher = try subtreeContainerMatcher(containerDictionary)
-            selector = .container(matcher, ordinal: ordinal)
-        } else {
-            throw SchemaValidationError(field: "subtree", observed: subtree.observedDescription, expected: "element or container selector")
-        }
-
-        guard selector.hasPredicates else {
-            throw SchemaValidationError(field: "subtree", observed: subtree.observedDescription, expected: "non-empty subtree selector")
-        }
-        return selector
-    }
-
-    private func validateInterfaceSubtreeKeys(_ subtree: CommandArgumentObject) throws {
-        let allowedKeys: Set<String> = ["element", "container", "ordinal"]
-        guard let unexpectedKey = subtree.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: subtree.field(unexpectedKey),
-            observed: subtree.observedDescription(for: unexpectedKey) ?? "missing",
-            expected: "valid get_interface subtree parameter"
-        )
-    }
-
-    private func validateInterfaceSubtreeElementKeys(_ element: CommandArgumentObject) throws {
-        let allowedKeys = Set(["heistId"] + ElementTargetGrammar.matcherFieldNames)
-        guard let unexpectedKey = element.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: element.field(unexpectedKey),
-            observed: element.observedDescription(for: unexpectedKey) ?? "missing",
-            expected: "valid get_interface subtree element parameter"
-        )
-    }
-
-    private func validateInterfaceSubtreeContainerKeys(_ container: CommandArgumentObject) throws {
-        let allowedKeys: Set<String> = ["stableId", "type", "label", "value", "identifier", "isModalBoundary"]
-        guard let unexpectedKey = container.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: container.field(unexpectedKey),
-            observed: container.observedDescription(for: unexpectedKey) ?? "missing",
-            expected: "valid get_interface subtree container parameter"
-        )
-    }
-
-    private func subtreeElementTarget(_ element: CommandArgumentObject, ordinal: Int?) throws -> ElementTarget {
-        let matcher = try interfaceElementMatcher(element)
-        let matcherWasProvided = ElementTargetGrammar.matcherFieldNames
-            .contains { element.keys.contains($0) }
         do {
-            return try ElementTargetGrammar.validatedTarget(
-                heistId: try element.schemaString("heistId"),
-                matcher: matcher,
-                matcherWasProvided: matcherWasProvided,
-                ordinal: ordinal
-            )
-        } catch let error as ElementTargetGrammarError {
+            let data = try JSONEncoder().encode(subtree)
+            let selector = try JSONDecoder().decode(SubtreeSelector.self, from: data)
+            guard selector.hasPredicates else {
+                throw SchemaValidationError(
+                    field: arguments.field("subtree"),
+                    observed: subtree.schemaObservedDescription,
+                    expected: "non-empty subtree selector"
+                )
+            }
+            return selector
+        } catch let error as SchemaValidationError {
+            throw error
+        } catch let error as DecodingError {
+            let context = decodingContext(from: error)
             throw SchemaValidationError(
-                field: "subtree.element",
-                observed: element.observedDescription,
-                expected: subtreeElementExpectedDescription(for: error)
+                field: subtreeField(arguments, codingPath: context.codingPath),
+                observed: subtree.schemaObservedDescription,
+                expected: context.debugDescription
+            )
+        } catch {
+            throw SchemaValidationError(
+                field: arguments.field("subtree"),
+                observed: subtree.schemaObservedDescription,
+                expected: "valid get_interface subtree parameter"
             )
         }
     }
 
-    private func subtreeElementExpectedDescription(for error: ElementTargetGrammarError) -> String {
+    private func decodingContext(from error: DecodingError) -> DecodingError.Context {
         switch error {
-        case .missingTarget:
-            return "heistId or non-empty matcher fields"
-        case .emptyMatcher:
-            return "matcher with label, identifier, value, traits, or excludeTraits"
-        case .mixedHeistIdWithMatcherOrOrdinal:
-            return "heistId or matcher fields with optional ordinal, not both"
-        case .negativeOrdinal:
-            return "integer >= 0"
+        case .typeMismatch(_, let context),
+             .valueNotFound(_, let context),
+             .keyNotFound(_, let context),
+             .dataCorrupted(let context):
+            return context
+        @unknown default:
+            return DecodingError.Context(codingPath: [], debugDescription: error.localizedDescription)
         }
     }
 
-    private func subtreeContainerMatcher(_ container: CommandArgumentObject) throws -> ContainerMatcher {
-        ContainerMatcher(
-            stableId: try container.schemaString("stableId"),
-            type: try container.schemaEnum("type", as: ContainerTypeName.self),
-            label: try container.schemaString("label"),
-            value: try container.schemaString("value"),
-            identifier: try container.schemaString("identifier"),
-            isModalBoundary: try container.schemaBoolean("isModalBoundary")
-        )
+    private func subtreeField(_ arguments: CommandArgumentEnvelope, codingPath: [CodingKey]) -> String {
+        let suffix = codingPath.map(\.stringValue).filter { !$0.isEmpty }.joined(separator: ".")
+        guard !suffix.isEmpty else { return arguments.field("subtree") }
+        return "\(arguments.field("subtree")).\(suffix)"
     }
 
     private func interfaceElementMatcher(_ arguments: some CommandArgumentReadable) throws -> ElementMatcher {
