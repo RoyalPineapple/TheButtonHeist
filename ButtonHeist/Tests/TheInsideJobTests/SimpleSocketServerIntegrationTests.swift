@@ -220,7 +220,7 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
 
         let clientId = try XCTUnwrap(capturedClientId.withLock { $0 })
-        await server.disconnect(clientId: clientId)
+        await server.removeClient(clientId)
 
         await fulfillment(of: [clientDisconnected], timeout: 5.0)
 

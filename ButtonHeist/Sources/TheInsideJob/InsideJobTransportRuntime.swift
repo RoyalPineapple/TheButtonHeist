@@ -20,10 +20,6 @@ extension TheInsideJob {
         try await startRuntimeLease(phase: "resume", leavesStoppedOnFailure: false)
     }
 
-    func activateRuntimeLease(_ lease: InsideJobRuntimeLease) {
-        lease.activate(on: self)
-    }
-
     func stopRuntime() async {
         if case .resuming(_, let task) = serverPhase {
             task.cancel()

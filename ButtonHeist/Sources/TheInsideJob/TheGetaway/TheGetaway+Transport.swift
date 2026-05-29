@@ -33,7 +33,7 @@ extension TheGetaway {
             await server.send(data, to: clientId)
         }
         let disconnect: @Sendable (Int) async -> Void = { clientId in
-            await server.disconnect(clientId: clientId)
+            await server.removeClient(clientId)
         }
         let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)

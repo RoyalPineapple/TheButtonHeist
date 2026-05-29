@@ -8,11 +8,6 @@ private let clientStateLogger = Logger(subsystem: "com.buttonheist.thehandoff", 
 extension SimpleSocketServer {
     private static let errorFlushGracePeriod: Duration = .milliseconds(100)
 
-    /// Disconnect a client.
-    func disconnect(clientId: Int) {
-        removeClient(clientId)
-    }
-
     func removeClient(_ clientId: Int) {
         clientLifecycle.removeClient(clientId, from: &clientRegistry)
     }

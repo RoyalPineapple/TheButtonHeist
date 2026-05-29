@@ -244,7 +244,7 @@ extension TheInsideJob {
                     return
                 }
 
-                self.activateRuntimeLease(lease)
+                lease.activate(on: self)
                 startedTransport = nil
 
                 insideJobLogger.info("Server resumed on port \(lease.actualPort)")

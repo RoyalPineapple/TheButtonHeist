@@ -156,10 +156,6 @@ final class TheStash {
         WireConversion.toInterface(from: currentScreen, timestamp: timestamp)
     }
 
-    func interfaceHash() -> String {
-        AccessibilityTrace.Capture.hash(interface())
-    }
-
     /// Single-build variant: returns the interface alongside its hash so callers
     /// that need both don't pay for two projection passes.
     func interfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String) {

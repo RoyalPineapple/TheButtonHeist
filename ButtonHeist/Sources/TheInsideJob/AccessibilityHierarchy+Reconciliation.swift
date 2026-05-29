@@ -463,16 +463,8 @@ extension Array where Element == AccessibilityHierarchy {
     ) -> PageReconciliation {
         let accElements = self.sortedElements
         let pageElements = page.sortedElements
-        return buttonHeistReconcilePage(accumulated: accElements, page: pageElements)
+        return reconcilePage(accumulated: accElements, page: pageElements)
     }
-}
-
-// Module-level function to avoid ambiguity with the extension method
-private func buttonHeistReconcilePage(
-    accumulated: [AccessibilityElement],
-    page: [AccessibilityElement]
-) -> PageReconciliation {
-    reconcilePage(accumulated: accumulated, page: page)
 }
 
 private func safePathBounds(_ pathElements: [AccessibilityPathElement]) -> CGRect {
