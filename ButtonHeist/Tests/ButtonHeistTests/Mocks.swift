@@ -179,15 +179,11 @@ final class MockConnection: TransportReachabilityConnecting {
             if let failedIndex {
                 let skipped = BatchExecutionSkippedStepResult(
                     index: index,
-                    actionName: step.command.canonicalName,
-                    expectationName: step.expectation.summaryDescription,
                     reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
                     afterFailedIndex: failedIndex
                 )
                 stepResults.append(BatchExecutionStepResult(
                     index: index,
-                    actionName: step.command.canonicalName,
-                    expectationName: step.expectation.summaryDescription,
                     durationMs: 0,
                     skipped: skipped
                 ))
@@ -200,8 +196,6 @@ final class MockConnection: TransportReachabilityConnecting {
                 && (actionResult.success == false || expectation?.met == false)
             stepResults.append(BatchExecutionStepResult(
                 index: index,
-                actionName: step.command.canonicalName,
-                expectationName: step.expectation.summaryDescription,
                 actionResult: actionResult,
                 expectation: expectation,
                 durationMs: 0,

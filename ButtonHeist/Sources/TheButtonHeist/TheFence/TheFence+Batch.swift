@@ -31,7 +31,7 @@ extension TheFence {
         if let stoppedIndex, request.policy == .stopOnError {
             for index in request.steps.indices where index > stoppedIndex {
                 outcomesByIndex[index] = BatchStepOutcome.skipped(
-                    command: request.steps[index].commandName,
+                    command: request.steps[index].command,
                     afterFailedIndex: stoppedIndex
                 )
             }
@@ -74,7 +74,7 @@ extension TheFence {
                 ? plannedSteps[skipped.afterFailedIndex].originalIndex
                 : skipped.afterFailedIndex
             return BatchStepOutcome.skipped(
-                command: skipped.actionName ?? skipped.expectationName ?? plannedStep.commandName,
+                command: plannedStep.command,
                 afterFailedIndex: afterFailedIndex
             )
         }
@@ -83,7 +83,7 @@ extension TheFence {
             let finalResult = stepResult.expectationActionResult ?? actionResult
             commandExecutionState.completeAction(finalResult)
             return BatchStepOutcome(
-                command: plannedStep.commandName,
+                command: plannedStep.command,
                 response: .action(
                     command: plannedStep.command,
                     result: finalResult,
@@ -97,7 +97,7 @@ extension TheFence {
         }
 
         return BatchStepOutcome(
-            command: plannedStep.commandName,
+            command: plannedStep.command,
             response: .error("typed batch step produced no action result"),
             stopsBatch: stepResult.stopsBatch
         )

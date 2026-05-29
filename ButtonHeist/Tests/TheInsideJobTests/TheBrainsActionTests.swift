@@ -1364,7 +1364,7 @@ final class TheBrainsActionTests: XCTestCase {
         guard case .batchExecution(let batch) = result.payload,
               let stepResult = batch.steps.first,
               let actionResult = stepResult.actionResult else {
-            XCTFail("Expected batch execution step result for \(command.canonicalName)")
+            XCTFail("Expected batch execution step result for \(command.wireType.rawValue)")
             return result
         }
         return actionResult

@@ -23,7 +23,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { command in
-                events.append("action:\(command.canonicalName)")
+                events.append("action:\(command.wireType.rawValue)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
@@ -74,10 +74,10 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, TheScore.ActionMethod.batchExecutionPlan)
         XCTAssertEqual(events, [
-            "action:set_pasteboard",
+            "action:setPasteboard",
             "expectation:elements_changed",
             "baseline",
-            "action:wait_for_change",
+            "action:waitForChange",
             "expectation:screen_changed",
             "baseline",
         ])
@@ -86,13 +86,9 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertNil(batch.failedIndex)
         XCTAssertEqual(batch.steps.count, 2)
         let first = batch.steps[0]
-        XCTAssertEqual(first.actionName, "set_pasteboard")
-        XCTAssertEqual(first.expectationName, "elements_changed")
         XCTAssertEqual(first.expectation?.met, true)
         XCTAssertEqual(first.expectationActionResult?.method, .waitForChange)
         let second = batch.steps[1]
-        XCTAssertEqual(second.actionName, "wait_for_change")
-        XCTAssertEqual(second.expectationName, "screen_changed")
         XCTAssertNotNil(second.actionResult)
         XCTAssertEqual(second.expectation?.met, true)
     }
@@ -101,7 +97,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { command in
-                events.append("action:\(command.canonicalName)")
+                events.append("action:\(command.wireType.rawValue)")
                 return ActionResult(
                     success: false,
                     method: .setPasteboard,
@@ -141,20 +137,16 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let result = await brains.executeBatchExecutionPlanForTest(plan, runtime: runtime)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(events, ["action:set_pasteboard", "baseline"])
+        XCTAssertEqual(events, ["action:setPasteboard", "baseline"])
         let batch = try XCTUnwrap(result.batchExecutionPayload)
         XCTAssertEqual(batch.failedIndex, 0)
         XCTAssertEqual(batch.steps.count, 3)
         let first = batch.steps[0]
-        XCTAssertEqual(first.actionName, "set_pasteboard")
         XCTAssertTrue(first.stopsBatch)
         let second = batch.steps[1]
         let third = batch.steps[2]
         XCTAssertTrue(second.isSkipped)
         XCTAssertTrue(third.isSkipped)
-        XCTAssertEqual(second.actionName, "set_pasteboard")
-        XCTAssertEqual(third.actionName, "wait_for_idle")
-        XCTAssertEqual(third.expectationName, "delivery")
         XCTAssertEqual(second.skipped?.afterFailedIndex, 0)
         XCTAssertEqual(third.skipped?.afterFailedIndex, 0)
     }
@@ -167,7 +159,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         ]
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { command in
-                events.append("action:\(command.canonicalName)")
+                events.append("action:\(command.wireType.rawValue)")
                 return results.removeFirst()
             },
             waitForExpectation: { _, _ in
@@ -198,9 +190,9 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(events, [
-            "action:set_pasteboard",
+            "action:setPasteboard",
             "baseline",
-            "action:set_pasteboard",
+            "action:setPasteboard",
             "baseline",
         ])
         let batch = try XCTUnwrap(result.batchExecutionPayload)
@@ -209,11 +201,11 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertEqual(batch.steps.map(\.actionResult?.success), [false, true])
     }
 
-    func testBatchExecutionUsesExplicitActionNamesForCasesWithoutAssociatedValues() async throws {
+    func testBatchExecutionUsesTypedCommandsForCasesWithoutAssociatedValues() async throws {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { command in
-                events.append("action:\(command.canonicalName)")
+                events.append("action:\(command.wireType.rawValue)")
                 let method: ActionMethod
                 switch command {
                 case .explore:
@@ -221,7 +213,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 case .resignFirstResponder:
                     method = .resignFirstResponder
                 default:
-                    XCTFail("Unexpected command \(command.canonicalName)")
+                    XCTFail("Unexpected command \(command.wireType.rawValue)")
                     method = .batchExecutionPlan
                 }
                 return ActionResult(success: true, method: method)
@@ -248,11 +240,10 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertEqual(events, [
             "action:explore",
             "baseline",
-            "action:resign_first_responder",
+            "action:resignFirstResponder",
             "baseline",
         ])
         let batch = try XCTUnwrap(result.batchExecutionPayload)
-        XCTAssertEqual(batch.steps.map(\.actionName), ["explore", "resign_first_responder"])
         XCTAssertEqual(batch.steps.map(\.actionResult?.method), [.explore, .resignFirstResponder])
     }
 
@@ -260,7 +251,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         var events: [String] = []
         let runtime = TheBrains.BatchExecutionRuntime(
             execute: { command in
-                events.append("action:\(command.canonicalName)")
+                events.append("action:\(command.wireType.rawValue)")
                 return ActionResult(
                     success: true,
                     method: .setPasteboard,
@@ -292,7 +283,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let result = await brains.executeBatchExecutionPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(events, ["action:set_pasteboard", "baseline"])
+        XCTAssertEqual(events, ["action:setPasteboard", "baseline"])
         let batch = try XCTUnwrap(result.batchExecutionPayload)
         XCTAssertEqual(batch.steps[0].expectation?.met, true)
     }

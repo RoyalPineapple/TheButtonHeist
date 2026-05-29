@@ -222,7 +222,7 @@ struct MuscleAuthenticationFlow {
         default:
             return .handled(rejectUnauthenticatedMessage(
                 clientId,
-                message: "Authentication required before \(envelope.message.canonicalName).",
+                message: "Authentication required before \(envelope.message.wireType.rawValue).",
                 requestId: envelope.requestId,
                 respond: respond
             ))
@@ -338,7 +338,7 @@ struct MuscleAuthenticationFlow {
         envelope: RequestEnvelope,
         respond: @escaping TheMuscleAdmission.ResponseHandler
     ) -> MuscleAdmissionEffect {
-        let name = envelope.message.canonicalName
+        let name = envelope.message.wireType.rawValue
         muscleAuthenticationLogger.warning(
             "Authenticated client \(clientId) sent protocol message \(name, privacy: .public) after admission"
         )

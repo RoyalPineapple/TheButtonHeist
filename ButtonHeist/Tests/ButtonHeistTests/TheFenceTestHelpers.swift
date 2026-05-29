@@ -360,7 +360,7 @@ func makeBackgroundScreenChangedTrace(elementCount: Int) -> AccessibilityTrace {
 }
 
 func makeBatchOutcome(
-    command: String = "test",
+    command: TheFence.Command = .activate,
     response: FenceResponse = .ok(message: "ok"),
     stopsBatch: Bool = false
 ) -> BatchStepOutcome {
@@ -368,7 +368,7 @@ func makeBatchOutcome(
 }
 
 func makeExpectationBatchOutcome(
-    command: String = "activate",
+    command: TheFence.Command = .activate,
     met: Bool,
     stopsBatch: Bool = false
 ) -> BatchStepOutcome {

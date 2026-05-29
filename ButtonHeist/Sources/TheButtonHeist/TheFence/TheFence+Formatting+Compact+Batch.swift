@@ -17,7 +17,7 @@ extension FenceResponse {
             text = "\(lastScreenId) | \(text)"
         }
         for (index, step) in stepSummaries.enumerated() {
-            var line = "  [\(index)] \(step.command)"
+            var line = "  [\(index)] \(step.command.rawValue)"
             if let error = step.error {
                 if let errorCode = step.errorCode {
                     let phase = step.phase.map { " \($0)" } ?? ""

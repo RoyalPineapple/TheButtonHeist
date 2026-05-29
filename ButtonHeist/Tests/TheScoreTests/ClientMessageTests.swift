@@ -86,7 +86,7 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    func testCanonicalNameIsDerivedFromEncodedWireType() throws {
+    func testWireTypeMatchesEncodedType() throws {
         let messages: [ClientMessage] = [
             .clientHello,
             .requestInterface(InterfaceQuery()),
@@ -103,7 +103,7 @@ final class ClientMessageTests: XCTestCase {
             let encoded = try JSONEncoder().encode(message)
             let wireType = try JSONDecoder().decode(EncodedClientMessageType.self, from: encoded).type
 
-            XCTAssertEqual(message.canonicalName, wireType.lowerCamelToSnakeCase(), "\(message)")
+            XCTAssertEqual(message.wireType.rawValue, wireType, "\(message)")
         }
     }
 
@@ -679,21 +679,6 @@ final class ClientMessageTests: XCTestCase {
 
 private struct EncodedClientMessageType: Decodable {
     let type: String
-}
-
-private extension String {
-    func lowerCamelToSnakeCase() -> String {
-        reduce(into: "") { result, character in
-            if character.isUppercase {
-                if !result.isEmpty {
-                    result.append("_")
-                }
-                result.append(character.lowercased())
-            } else {
-                result.append(character)
-            }
-        }
-    }
 }
 
 extension HeistElement {

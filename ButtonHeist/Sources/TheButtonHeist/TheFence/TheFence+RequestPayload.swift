@@ -59,8 +59,6 @@ extension TheFence {
             self.command = command
             self.typedStep = typedStep
         }
-
-        var commandName: String { command.rawValue }
     }
 
     struct DecodedRequestDispatch {

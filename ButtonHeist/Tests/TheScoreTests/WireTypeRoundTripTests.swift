@@ -820,8 +820,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             steps: [
                 BatchExecutionStepResult(
                     index: 0,
-                    actionName: "activate",
-                    expectationName: "delivery",
                     actionResult: ActionResult(
                         success: false,
                         method: .activate,
@@ -833,13 +831,9 @@ final class WireTypeRoundTripTests: XCTestCase {
                 ),
                 BatchExecutionStepResult(
                     index: 1,
-                    actionName: "wait_for_change",
-                    expectationName: "screen_changed",
                     durationMs: 0,
                     skipped: BatchExecutionSkippedStepResult(
                         index: 1,
-                        actionName: "wait_for_change",
-                        expectationName: "screen_changed",
                         reason: "skipped: stop_on_error stopped batch after step 0",
                         afterFailedIndex: 0
                     )
@@ -855,8 +849,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.policy, .stopOnError)
         XCTAssertEqual(decoded.failedIndex, 0)
         XCTAssertEqual(decoded.steps.count, 2)
-        XCTAssertEqual(decoded.steps[0].actionName, "activate")
-        XCTAssertEqual(decoded.steps[0].expectationName, "delivery")
         XCTAssertTrue(decoded.steps[0].stopsBatch)
         XCTAssertEqual(decoded.steps[0].actionResult?.method, .activate)
         XCTAssertEqual(decoded.steps[0].actionResult?.errorKind, .elementNotFound)

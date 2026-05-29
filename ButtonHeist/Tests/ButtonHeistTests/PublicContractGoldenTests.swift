@@ -243,9 +243,9 @@ final class PublicContractGoldenTests: XCTestCase {
     func testBatchPublicJSONGolden() throws {
         let response = FenceResponse.batch(
             outcomes: [
-                BatchStepOutcome(command: "wait_for", response: .ok(message: "ready")),
-                BatchStepOutcome(command: "activate", response: .error("boom"), stopsBatch: true),
-                .skipped(command: "type_text", afterFailedIndex: 1),
+                BatchStepOutcome(command: .waitFor, response: .ok(message: "ready")),
+                BatchStepOutcome(command: .activate, response: .error("boom"), stopsBatch: true),
+                .skipped(command: .typeText, afterFailedIndex: 1),
             ],
             totalTimingMs: 42
         )
