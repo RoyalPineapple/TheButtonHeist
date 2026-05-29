@@ -90,14 +90,15 @@ final class TheBurglar {
         for (window, rootView) in windows {
             let containsModalBoundary = autoreleasepool { () -> Bool in
                 var containsModalBoundary = false
-                let windowTree = parser.parseAccessibilityHierarchy(
+                let windowTree: [AccessibilityHierarchy] = parser.parseAccessibilityHierarchy(
                     in: rootView,
                     rotorResultLimit: 0,
-                    elementVisitor: { element, _, object in
+                    makeElement: { element, traversalIndex, object in
                         allObjects[element] = object
                         objectCandidates[element, default: []].append(object)
+                        return AccessibilityHierarchy.element(element, traversalIndex: traversalIndex)
                     },
-                    containerVisitor: { container, object in
+                    makeContainer: { container, children, object in
                         containerObjectCandidates[container, default: []].append(object)
                         if case .scrollable = container.type, let view = object as? UIView {
                             scrollViewCandidates[container, default: []].append(view)
@@ -105,6 +106,7 @@ final class TheBurglar {
                         if container.isModalBoundary {
                             containsModalBoundary = true
                         }
+                        return AccessibilityHierarchy.container(container, children: children)
                     }
                 )
 
@@ -163,13 +165,17 @@ final class TheBurglar {
     func parseObject(_ object: NSObject) -> AccessibilityElement? {
         let root = RotorResultParsingRoot(object: object)
         var parsedResult: AccessibilityElement?
-        let hierarchy = parser.parseAccessibilityHierarchy(
+        let hierarchy: [AccessibilityHierarchy] = parser.parseAccessibilityHierarchy(
             in: root,
             rotorResultLimit: 0,
-            elementVisitor: { element, _, parsedObject in
+            makeElement: { element, traversalIndex, parsedObject in
                 if parsedObject === object {
                     parsedResult = element
                 }
+                return AccessibilityHierarchy.element(element, traversalIndex: traversalIndex)
+            },
+            makeContainer: { container, children, _ in
+                AccessibilityHierarchy.container(container, children: children)
             }
         )
         if let parsedResult {
