@@ -14,11 +14,7 @@ extension TheBrains {
             timeout: timeout,
             start: start
         ) else {
-            var builder = ActionResultBuilder(
-                method: .waitForChange,
-                screenName: stash.lastScreenName,
-                screenId: stash.lastScreenId
-            )
+            var builder = ActionResultBuilder(method: .waitForChange)
             builder.message = "wait_for_change already in progress"
             return builder.failure(errorKind: .actionFailed)
         }
@@ -86,7 +82,7 @@ extension TheBrains {
             makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
         }
         let delta = timeoutAccessibilityTrace?.endpointDeltaProjection
-        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        var builder = ActionResultBuilder(method: .waitForChange)
         builder.message = waitForChangeTimeoutMessage(
             elapsed: elapsed,
             expectation: predicate.expectation,
@@ -202,7 +198,7 @@ extension TheBrains {
         round: Int,
         message: String
     ) -> ActionResult? {
-        var builder = ActionResultBuilder(method: .waitForChange, snapshot: afterSnapshot)
+        var builder = ActionResultBuilder(method: .waitForChange)
         builder.accessibilityTrace = accessibilityTrace
 
         guard let expectation else {

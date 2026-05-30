@@ -80,7 +80,7 @@ final class TheBrains {
     }
 
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
-        var builder = ActionResultBuilder(method: method, screenName: stash.lastScreenName, screenId: stash.lastScreenId)
+        var builder = ActionResultBuilder(method: method)
         builder.message = TheBrains.treeUnavailableMessage
         return builder.failure(errorKind: .actionFailed)
     }
@@ -179,7 +179,7 @@ final class TheBrains {
         }
         let didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
-            var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+            var builder = ActionResultBuilder(method: method, capture: before.capture)
             builder.message = "cancelled after \(cancelMs)ms"
             builder.settled = false
             builder.settleTimeMs = cancelMs
@@ -194,7 +194,7 @@ final class TheBrains {
         }
 
         guard let afterScreen = settledScreen else {
-            var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+            var builder = ActionResultBuilder(method: method, capture: before.capture)
             builder.message = "Could not parse post-action accessibility tree"
             builder.settled = didSettle
             builder.settleTimeMs = settleResult.outcome.timeMs
@@ -269,7 +269,7 @@ final class TheBrains {
         let kind = errorKind
             ?? ((method == .elementNotFound || method == .elementDeallocated)
                 ? .elementNotFound : .actionFailed)
-        var builder = ActionResultBuilder(method: method, snapshot: before.snapshot)
+        var builder = ActionResultBuilder(method: method, capture: before.capture)
         builder.message = message
         return builder.failure(errorKind: kind, payload: payload)
     }

@@ -82,9 +82,7 @@ extension TheBrains {
             method: result.method,
             message: result.message,
             errorKind: result.success ? nil : Self.actionErrorKind(for: result),
-            payload: result.payload,
-            screenName: stash.lastScreenName,
-            screenId: stash.lastScreenId
+            payload: result.payload
         )
     }
 
@@ -334,7 +332,7 @@ extension TheBrains {
         let exploreElements = afterSnapshot.map { TheStash.WireConversion.convert($0.element, heistId: $0.heistId) }
         let accessibilityTrace = makeAccessibilityTrace(afterInterface: stash.interface(), parentCapture: before.capture)
 
-        var builder = ActionResultBuilder(method: .explore, snapshot: afterSnapshot)
+        var builder = ActionResultBuilder(method: .explore)
         builder.accessibilityTrace = accessibilityTrace
         return builder.success(
             payload: .explore(ExploreResult(
