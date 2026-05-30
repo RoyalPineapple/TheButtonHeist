@@ -3,7 +3,7 @@ import Foundation
 /// Per-test scratch directory under `FileManager.temporaryDirectory`.
 ///
 /// Replaces the per-file `tempDirectory` setUp/tearDown that
-/// `TheBookKeeperTests` and `BookKeeperHeistTests` carry. Callers should
+/// heist and artifact storage tests carry. Callers should
 /// store the result and remove it in `tearDown()`.
 enum TempDirectoryFixture {
 

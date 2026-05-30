@@ -23,7 +23,7 @@ struct TheMuscleSession {
         lease.activeSessionDriverId
     }
 
-    var exposedActiveSessionDriverId: String? {
+    var exposedDriverId: String? {
         lease.exposedActiveDriverId
     }
 

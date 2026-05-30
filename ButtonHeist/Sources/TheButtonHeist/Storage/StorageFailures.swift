@@ -1,6 +1,6 @@
 import Foundation
 
-enum BookKeeperStorageFailure: Sendable, Equatable {
+enum StorageFailure: Sendable, Equatable {
     case directoryCreationFailed(path: String, reason: String)
     case privateFileCreationFailed(path: String, reason: String)
 
@@ -14,7 +14,7 @@ enum BookKeeperStorageFailure: Sendable, Equatable {
     }
 }
 
-enum BookKeeperHeistRecordingFailure: Sendable, Equatable {
+enum HeistRecordingFailure: Sendable, Equatable {
     case alreadyRecording
     case notRecording
     case fileCreationFailed(path: String, reason: String)
@@ -46,18 +46,15 @@ enum BookKeeperHeistRecordingFailure: Sendable, Equatable {
     }
 }
 
-/// Errors thrown by TheBookKeeper during heist and artifact operations.
-enum BookKeeperError: Error, LocalizedError {
-    case invalidPhase(expected: String, actual: String)
+/// Errors thrown while writing heists and screenshot artifacts.
+enum StorageError: Error, LocalizedError {
     case unsafePath(String)
     case base64DecodingFailed
-    case storage(BookKeeperStorageFailure)
-    case heistRecording(BookKeeperHeistRecordingFailure)
+    case storage(StorageFailure)
+    case heistRecording(HeistRecordingFailure)
 
     var errorDescription: String? {
         switch self {
-        case .invalidPhase(let expected, let actual):
-            return "Invalid heist recording phase: expected \(expected), currently \(actual)"
         case .unsafePath(let path):
             return "Unsafe output path: \(path)"
         case .base64DecodingFailed:

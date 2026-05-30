@@ -7,18 +7,18 @@ private let discoveryLogger = Logger(subsystem: "com.buttonheist.thehandoff", ca
 @ButtonHeistActor
 final class HandoffDiscoveryLifecycle {
 
-    private struct ActiveSession {
+    private struct DiscoverySession {
         let id: UUID
         let discovery: any DeviceDiscovering
     }
 
-    private var activeSession: ActiveSession?
+    private var discoverySession: DiscoverySession?
 
     private(set) var discoveredDevices: [DiscoveredDevice] = []
     private(set) var isDiscovering = false
 
-    var hasActiveSession: Bool {
-        activeSession != nil
+    var hasDiscoverySession: Bool {
+        discoverySession != nil
     }
 
     @discardableResult
@@ -27,14 +27,14 @@ final class HandoffDiscoveryLifecycle {
         onDeviceFound: @escaping @ButtonHeistActor (DiscoveredDevice) -> Void,
         onDeviceLost: @escaping @ButtonHeistActor (DiscoveredDevice) -> Void
     ) -> Bool {
-        guard activeSession == nil else { return false }
+        guard discoverySession == nil else { return false }
 
         discoveredDevices.removeAll()
         isDiscovering = false
 
         let sessionID = UUID()
         let activeDiscovery = makeDiscovery()
-        activeSession = ActiveSession(id: sessionID, discovery: activeDiscovery)
+        discoverySession = DiscoverySession(id: sessionID, discovery: activeDiscovery)
         activeDiscovery.onEvent = { [weak self, sessionID] event in
             guard let self, self.isCurrentSession(sessionID) else { return }
             self.handle(event, onDeviceFound: onDeviceFound, onDeviceLost: onDeviceLost)
@@ -44,15 +44,15 @@ final class HandoffDiscoveryLifecycle {
     }
 
     func stop() {
-        let activeDiscovery = activeSession?.discovery
-        activeSession = nil
+        let activeDiscovery = discoverySession?.discovery
+        discoverySession = nil
         isDiscovering = false
         discoveredDevices = []
         activeDiscovery?.stop()
     }
 
     private func isCurrentSession(_ sessionID: UUID) -> Bool {
-        activeSession?.id == sessionID
+        discoverySession?.id == sessionID
     }
 
     private func handle(
@@ -63,11 +63,11 @@ final class HandoffDiscoveryLifecycle {
         switch event {
         case .found(let device):
             discoveryLogger.info("Device found: \(device.name)")
-            discoveredDevices = activeSession?.discovery.discoveredDevices ?? []
+            discoveredDevices = discoverySession?.discovery.discoveredDevices ?? []
             onDeviceFound(device)
         case .lost(let device):
             discoveryLogger.info("Device lost: \(device.name)")
-            discoveredDevices = activeSession?.discovery.discoveredDevices ?? []
+            discoveredDevices = discoverySession?.discovery.discoveredDevices ?? []
             onDeviceLost(device)
         case .stateChanged(let isReady):
             discoveryLogger.info("Discovery state changed: isReady=\(isReady)")

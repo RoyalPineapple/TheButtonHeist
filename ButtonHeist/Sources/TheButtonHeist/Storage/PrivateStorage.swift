@@ -1,10 +1,42 @@
 import Foundation
 
-extension TheBookKeeper {
+enum PrivateStorage {
+
+    // MARK: - Paths
+
+    static func resolveBaseDirectory() -> URL {
+        if let override = ProcessInfo.processInfo.environment["BUTTONHEIST_STORAGE_DIR"] {
+            return URL(fileURLWithPath: override)
+        }
+        if let xdgDataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"] {
+            return URL(fileURLWithPath: xdgDataHome)
+                .appendingPathComponent("buttonheist")
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/share/buttonheist")
+    }
+
+    static func timestampString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        formatter.timeZone = TimeZone.current
+        return formatter.string(from: Date())
+    }
+
+    static func isSafePathSegment(_ identifier: String) -> Bool {
+        guard !identifier.isEmpty,
+              !identifier.hasPrefix("-"),
+              !identifier.contains("/"),
+              !identifier.contains("..") else { return false }
+
+        return !identifier.unicodeScalars.contains {
+            CharacterSet.controlCharacters.contains($0)
+        }
+    }
 
     // MARK: - Private File I/O
 
-    nonisolated static func createPrivateDirectory(at directory: URL) throws {
+    static func createPrivateDirectory(at directory: URL) throws {
         let fileManager = FileManager.default
         let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o700]
         do {
@@ -15,14 +47,14 @@ extension TheBookKeeper {
             )
             try fileManager.setAttributes(attributes, ofItemAtPath: directory.path)
         } catch {
-            throw BookKeeperError.storage(.directoryCreationFailed(
+            throw StorageError.storage(.directoryCreationFailed(
                 path: directory.path,
                 reason: String(describing: error)
             ))
         }
     }
 
-    nonisolated static func createPrivateFile(at url: URL, contents: Data? = nil) throws {
+    static func createPrivateFile(at url: URL, contents: Data? = nil) throws {
         let fileManager = FileManager.default
         let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
         if fileManager.fileExists(atPath: url.path) {
@@ -30,12 +62,12 @@ extension TheBookKeeper {
                 try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
                 if let contents {
                     let handle = try FileHandle(forWritingTo: url)
-                    defer { BookKeeperCleanup.close(handle) }
+                    defer { StorageCleanup.close(handle) }
                     try handle.truncate(atOffset: 0)
                     try handle.write(contentsOf: contents)
                 }
             } catch {
-                throw BookKeeperError.storage(.privateFileCreationFailed(
+                throw StorageError.storage(.privateFileCreationFailed(
                     path: url.path,
                     reason: String(describing: error)
                 ))
@@ -48,7 +80,7 @@ extension TheBookKeeper {
             contents: contents,
             attributes: attributes
         ) else {
-            throw BookKeeperError.storage(.privateFileCreationFailed(
+            throw StorageError.storage(.privateFileCreationFailed(
                 path: url.path,
                 reason: "FileManager.createFile returned false"
             ))
@@ -57,14 +89,14 @@ extension TheBookKeeper {
         do {
             try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
         } catch {
-            throw BookKeeperError.storage(.privateFileCreationFailed(
+            throw StorageError.storage(.privateFileCreationFailed(
                 path: url.path,
                 reason: String(describing: error)
             ))
         }
     }
 
-    nonisolated static func writePrivateData(_ data: Data, to url: URL) throws {
+    static func writePrivateData(_ data: Data, to url: URL) throws {
         let fileManager = FileManager.default
         let attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
         let temporaryURL = url.deletingLastPathComponent()
@@ -86,7 +118,7 @@ extension TheBookKeeper {
             try fileManager.moveItem(at: temporaryURL, to: url)
             try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
         } catch {
-            BookKeeperCleanup.removeTemporaryItem(at: temporaryURL, operation: .removeTemporaryFile)
+            StorageCleanup.removeTemporaryItem(at: temporaryURL, operation: .removeTemporaryFile)
             throw error
         }
     }

@@ -66,17 +66,20 @@ public struct BatchStepOutcome {
 
     public let command: TheFence.Command
     public let result: Result
+    public let durationMs: Int
     public let diagnosticDetails: FailureDetails?
     public let stopsBatch: Bool
 
     public init(
         command: TheFence.Command,
         response: FenceResponse,
+        durationMs: Int = 0,
         diagnosticDetails: FailureDetails? = nil,
         stopsBatch: Bool = false
     ) {
         self.command = command
         self.result = .response(response)
+        self.durationMs = durationMs
         self.diagnosticDetails = diagnosticDetails
         self.stopsBatch = stopsBatch
     }
@@ -84,19 +87,26 @@ public struct BatchStepOutcome {
     private init(
         command: TheFence.Command,
         result: Result,
+        durationMs: Int = 0,
         diagnosticDetails: FailureDetails? = nil,
         stopsBatch: Bool = false
     ) {
         self.command = command
         self.result = result
+        self.durationMs = durationMs
         self.diagnosticDetails = diagnosticDetails
         self.stopsBatch = stopsBatch
     }
 
-    public static func skipped(command: TheFence.Command, afterFailedIndex failedIndex: Int) -> BatchStepOutcome {
+    public static func skipped(
+        command: TheFence.Command,
+        afterFailedIndex failedIndex: Int,
+        durationMs: Int = 0
+    ) -> BatchStepOutcome {
         BatchStepOutcome(
             command: command,
-            result: .skipped(reason: "skipped: stop_on_error stopped batch after step \(failedIndex)", afterFailedIndex: failedIndex)
+            result: .skipped(reason: "skipped: stop_on_error stopped batch after step \(failedIndex)", afterFailedIndex: failedIndex),
+            durationMs: durationMs
         )
     }
 }

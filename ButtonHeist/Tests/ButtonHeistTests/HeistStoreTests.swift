@@ -1,13 +1,13 @@
 import XCTest
 @testable import ButtonHeist
 
-final class BookKeeperHeistTests: XCTestCase {
+final class HeistStoreTests: XCTestCase {
 
     private var tempDirectory: URL!
 
     override func setUp() {
         super.setUp()
-        tempDirectory = TempDirectoryFixture.make(prefix: "bookkeeper-heist-tests")
+        tempDirectory = TempDirectoryFixture.make(prefix: "heist-store-tests")
     }
 
     override func tearDown() {
@@ -17,15 +17,15 @@ final class BookKeeperHeistTests: XCTestCase {
 
     @ButtonHeistActor
     func testStartsAppendsAndFinishesHeistRecording() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.startRecording(identifier: "checkout-flow", app: "com.example.app")
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "checkout-flow", app: "com.example.app")
 
-        try bookKeeper.appendStep(
+        try heistStore.appendStep(
             try HeistStep(command: "activate", target: semanticTarget(label: "Pay", traits: [.button]))
         )
-        let heist = try bookKeeper.finishRecording()
+        let heist = try heistStore.finishRecording()
 
-        XCTAssertFalse(bookKeeper.isRecordingHeist)
+        XCTAssertFalse(heistStore.isRecordingHeist)
         XCTAssertEqual(heist.version, HeistPlayback.currentVersion)
         XCTAssertEqual(heist.app, "com.example.app")
         XCTAssertEqual(heist.steps, [
@@ -35,11 +35,11 @@ final class BookKeeperHeistTests: XCTestCase {
 
     @ButtonHeistActor
     func testRejectsStartWhileRecording() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.startRecording(identifier: "first", app: "com.example.app")
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "first", app: "com.example.app")
 
-        XCTAssertThrowsError(try bookKeeper.startRecording(identifier: "second", app: "com.example.app")) { error in
-            guard case BookKeeperError.heistRecording(.alreadyRecording) = error else {
+        XCTAssertThrowsError(try heistStore.startRecording(identifier: "second", app: "com.example.app")) { error in
+            guard case StorageError.heistRecording(.alreadyRecording) = error else {
                 return XCTFail("Expected alreadyRecording, got \(error)")
             }
         }
@@ -47,10 +47,10 @@ final class BookKeeperHeistTests: XCTestCase {
 
     @ButtonHeistActor
     func testRejectsUnsafeHeistIdentifier() async {
-        let bookKeeper = makeBookKeeper()
+        let heistStore = makeHeistStore()
 
-        XCTAssertThrowsError(try bookKeeper.startRecording(identifier: "../archive", app: "com.example.app")) { error in
-            guard case BookKeeperError.unsafePath("../archive") = error else {
+        XCTAssertThrowsError(try heistStore.startRecording(identifier: "../archive", app: "com.example.app")) { error in
+            guard case StorageError.unsafePath("../archive") = error else {
                 return XCTFail("Expected unsafePath, got \(error)")
             }
         }
@@ -58,10 +58,10 @@ final class BookKeeperHeistTests: XCTestCase {
 
     @ButtonHeistActor
     func testRejectsFinishWhenIdle() async {
-        let bookKeeper = makeBookKeeper()
+        let heistStore = makeHeistStore()
 
-        XCTAssertThrowsError(try bookKeeper.finishRecording()) { error in
-            guard case BookKeeperError.heistRecording(.notRecording) = error else {
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.notRecording) = error else {
                 return XCTFail("Expected notRecording, got \(error)")
             }
         }
@@ -69,48 +69,48 @@ final class BookKeeperHeistTests: XCTestCase {
 
     @ButtonHeistActor
     func testRejectsEmptyRecordingAndLeavesRecorderIdle() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.startRecording(identifier: "empty", app: "com.example.app")
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "empty", app: "com.example.app")
 
-        XCTAssertThrowsError(try bookKeeper.finishRecording()) { error in
-            guard case BookKeeperError.heistRecording(.noValidSteps) = error else {
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
                 return XCTFail("Expected noValidSteps, got \(error)")
             }
         }
-        XCTAssertFalse(bookKeeper.isRecordingHeist)
+        XCTAssertFalse(heistStore.isRecordingHeist)
     }
 
     @ButtonHeistActor
     func testAbandonedRecordingCleansHandleAndAllowsNewRecording() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.startRecording(identifier: "abandoned", app: "com.example.app")
-        let abandonedPath = try XCTUnwrap(bookKeeper.recordingFilePath)
-        try bookKeeper.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "Old")))
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "abandoned", app: "com.example.app")
+        let abandonedPath = try XCTUnwrap(heistStore.recordingFilePath)
+        try heistStore.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "Old")))
 
-        bookKeeper.abandonRecording()
+        heistStore.abandonRecording()
 
-        XCTAssertFalse(bookKeeper.isRecordingHeist)
+        XCTAssertFalse(heistStore.isRecordingHeist)
         XCTAssertTrue(FileManager.default.fileExists(atPath: abandonedPath.path))
-        try bookKeeper.startRecording(identifier: "new", app: "com.example.app")
-        try bookKeeper.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "New")))
-        let heist = try bookKeeper.finishRecording()
+        try heistStore.startRecording(identifier: "new", app: "com.example.app")
+        try heistStore.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "New")))
+        let heist = try heistStore.finishRecording()
         XCTAssertEqual(heist.steps[0].target, semanticTarget(label: "New"))
     }
 
     @ButtonHeistActor
     func testMalformedStepFailsWithLineNumber() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.startRecording(identifier: "malformed", app: "com.example.app")
-        let path = try XCTUnwrap(bookKeeper.recordingFilePath)
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "malformed", app: "com.example.app")
+        let path = try XCTUnwrap(heistStore.recordingFilePath)
 
-        try bookKeeper.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "Go")))
+        try heistStore.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "Go")))
         let handle = try FileHandle(forWritingTo: path)
         try handle.seekToEnd()
         try handle.write(contentsOf: Data("not-json\n".utf8))
         try handle.close()
 
-        XCTAssertThrowsError(try bookKeeper.finishRecording()) { error in
-            guard case BookKeeperError.heistRecording(.stepReadFailed(let failedPath, let reason)) = error else {
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.stepReadFailed(let failedPath, let reason)) = error else {
                 return XCTFail("Expected stepReadFailed, got \(error)")
             }
             XCTAssertEqual(failedPath, path.path)
@@ -120,8 +120,8 @@ final class BookKeeperHeistTests: XCTestCase {
 
     @ButtonHeistActor
     func testRecordHeistStepDerivesMatcherFromCaptureLocalHeistId() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.startRecording(identifier: "semantic", app: "com.example.app")
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "semantic", app: "com.example.app")
 
         let element = HeistElement(
             heistId: "button_submit",
@@ -142,36 +142,36 @@ final class BookKeeperHeistTests: XCTestCase {
         )
 
         try recordHeistStep(
-            bookKeeper,
+            heistStore,
             command: .activate,
             args: ["target": targetArgumentValue(heistId: "button_submit")],
             targetCapture: capture
         )
-        let heist = try bookKeeper.finishRecording()
+        let heist = try heistStore.finishRecording()
 
         XCTAssertEqual(heist.steps[0].target, semanticTarget(identifier: "checkout.submit"))
     }
 
     @ButtonHeistActor
     func testRecordHeistStepSkipsFailedActions() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.startRecording(identifier: "failed-actions", app: "com.example.app")
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "failed-actions", app: "com.example.app")
 
         try recordHeistStep(
-            bookKeeper,
+            heistStore,
             command: .activate,
             args: ["target": targetArgumentValue(label: "Missing")],
             actionResult: ActionResult(success: false, method: .activate, errorKind: .elementNotFound),
             targetCapture: nil
         )
         try recordHeistStep(
-            bookKeeper,
+            heistStore,
             command: .activate,
             args: ["target": targetArgumentValue(label: "Go")],
             targetCapture: nil
         )
 
-        let heist = try bookKeeper.finishRecording()
+        let heist = try heistStore.finishRecording()
         XCTAssertEqual(heist.steps.map(\.target), [semanticTarget(label: "Go")])
     }
 
@@ -186,21 +186,21 @@ final class BookKeeperHeistTests: XCTestCase {
         )
 
         let filePath = tempDirectory.appendingPathComponent("test.heist")
-        try TheBookKeeper.writeHeist(heist, to: filePath)
+        try HeistStore.writeHeist(heist, to: filePath)
 
-        let loaded = try TheBookKeeper.readHeist(from: filePath)
+        let loaded = try HeistStore.readHeist(from: filePath)
         XCTAssertEqual(loaded, heist)
     }
 
     @ButtonHeistActor
-    private func makeBookKeeper() -> TheBookKeeper {
-        TheBookKeeper(baseDirectory: tempDirectory)
+    private func makeHeistStore() -> HeistStore {
+        HeistStore(baseDirectory: tempDirectory)
     }
 }
 
 @ButtonHeistActor
 private func recordHeistStep(
-    _ bookKeeper: TheBookKeeper,
+    _ heistStore: HeistStore,
     command: TheFence.Command,
     args: [String: HeistValue],
     actionResult: ActionResult? = nil,
@@ -213,7 +213,7 @@ private func recordHeistStep(
         command: command,
         arguments: TheFence.CommandArgumentEnvelope(values: request)
     )
-    bookKeeper.recordHeistStep(
+    heistStore.recordHeistStep(
         parsed,
         actionResult: actionResult,
         expectation: expectation,

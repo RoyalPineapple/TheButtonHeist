@@ -3,9 +3,9 @@ import os.log
 
 import TheScore
 
-private let heistRecordingLogger = Logger(subsystem: "com.buttonheist.bookkeeper", category: "heist")
+private let heistRecordingLogger = Logger(subsystem: "com.buttonheist.storage", category: "heist")
 
-extension TheBookKeeper {
+extension HeistStore {
 
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded. Failed actions and unmet
@@ -60,9 +60,9 @@ extension TheBookKeeper {
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(heist)
-            try writePrivateData(data, to: path)
+            try PrivateStorage.writePrivateData(data, to: path)
         } catch {
-            throw BookKeeperError.heistRecording(.heistWriteFailed(
+            throw StorageError.heistRecording(.heistWriteFailed(
                 path: path.path,
                 reason: String(describing: error)
             ))
@@ -76,12 +76,12 @@ extension TheBookKeeper {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode(HeistPlayback.self, from: data)
         } catch DecodingError.dataCorrupted(let context) {
-            throw BookKeeperError.heistRecording(.heistReadFailed(
+            throw StorageError.heistRecording(.heistReadFailed(
                 path: path.path,
                 reason: context.debugDescription
             ))
         } catch {
-            throw BookKeeperError.heistRecording(.heistReadFailed(
+            throw StorageError.heistRecording(.heistReadFailed(
                 path: path.path,
                 reason: String(describing: error)
             ))
@@ -95,7 +95,7 @@ extension TheBookKeeper {
         do {
             data = try Data(contentsOf: path)
         } catch {
-            throw BookKeeperError.heistRecording(.stepReadFailed(
+            throw StorageError.heistRecording(.stepReadFailed(
                 path: path.path,
                 reason: String(describing: error)
             ))
@@ -108,7 +108,7 @@ extension TheBookKeeper {
             do {
                 return try decoder.decode(HeistStep.self, from: Data(lineData))
             } catch {
-                throw BookKeeperError.heistRecording(.stepReadFailed(
+                throw StorageError.heistRecording(.stepReadFailed(
                     path: path.path,
                     reason: "line \(index + 1) is malformed: \(String(describing: error))"
                 ))

@@ -270,7 +270,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 |------|------|
 | **TheFence** | Command dispatch for CLI and MCP, request-response correlation, and async waits |
 | **TheHandoff** | Scoped discovery, named/direct targets, TLS connection handling, session state, and testable connection hooks |
-| **TheBookKeeper** | Command evidence, artifact storage, heist recording, and replay |
+| **HeistStore / ScreenshotStore** | Deterministic heist storage and screenshot artifact storage |
 
 ### Interfaces
 

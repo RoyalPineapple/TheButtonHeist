@@ -21,6 +21,10 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertTrue(help.contains("run_batch"))
     }
 
+    func testJSONLinesDefaultOutputIsCanonicalJSON() {
+        XCTAssertEqual(JSONLinesDefaults.outputFormat, .json)
+    }
+
     func testGetInterfaceHelpDescribesCurrentContract() {
         let help = GetInterfaceCommand.helpMessage()
 

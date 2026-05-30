@@ -71,7 +71,7 @@ extension TheFence {
             autoReconnect: config.autoReconnect,
             fileConfig: config.fileConfig,
             directDevice: resolvedDirectDevice,
-            bookKeeperBaseDirectory: config.bookKeeperBaseDirectory
+            heistStoreBaseDirectory: config.heistStoreBaseDirectory
         )
         config = newConfig
 
