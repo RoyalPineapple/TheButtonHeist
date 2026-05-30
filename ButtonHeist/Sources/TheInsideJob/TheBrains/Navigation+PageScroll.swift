@@ -10,7 +10,7 @@ extension Navigation {
 
     func executeScroll(_ target: ScrollTarget) async -> TheSafecracker.InteractionResult {
         await executeScroll(
-            selection: target.containerSelection,
+            selection: target.selection,
             direction: target.direction
         )
     }
@@ -40,7 +40,7 @@ extension Navigation {
 
     func executeScrollToEdge(_ target: ScrollToEdgeTarget) async -> TheSafecracker.InteractionResult {
         await executeScrollToEdge(
-            selection: target.containerSelection,
+            selection: target.selection,
             edge: target.edge
         )
     }

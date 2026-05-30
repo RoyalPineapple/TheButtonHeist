@@ -88,7 +88,6 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testElementSearchTargetDefaults() {
         let target = ElementSearchTarget(elementTarget: .matcher(ElementMatcher(label: "Test")))
-        XCTAssertEqual(target.resolvedDirection, .down)
         XCTAssertEqual(target.direction, .down)
     }
 
