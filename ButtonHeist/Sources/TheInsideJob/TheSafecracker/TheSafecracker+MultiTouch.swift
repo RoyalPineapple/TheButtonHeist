@@ -40,34 +40,24 @@ extension TheSafecracker {
             return false
         }
 
-        guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [finger1Start, finger2Start])
-        onGestureMove?([finger1Start, finger2Start])
-
-        let stepDelay: TimeInterval = 0.01
-        let steps = max(Int(duration / stepDelay), 5)
-
-        for i in 1...steps {
+        let steps = max(Int(duration / Self.touchGestureStepDelay), 5)
+        let waypoints = (1...steps).map { i -> [CGPoint] in
             let progress = CGFloat(i) / CGFloat(steps)
             let currentSpread = startSpread + progress * (endSpread - startSpread)
 
-            let p1 = CGPoint(
-                x: center.x + cos(angle) * currentSpread,
-                y: center.y + sin(angle) * currentSpread
-            )
-            let p2 = CGPoint(
-                x: center.x - cos(angle) * currentSpread,
-                y: center.y - sin(angle) * currentSpread
-            )
-            if Task.isCancelled { break }
-            moveTouches(to: [p1, p2])
-            fingerprints.updateTrackingFingerprints(to: [p1, p2])
-            onGestureMove?([p1, p2])
-            guard await Task.cancellableSleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) else { break }
+            return [
+                CGPoint(
+                    x: center.x + cos(angle) * currentSpread,
+                    y: center.y + sin(angle) * currentSpread
+                ),
+                CGPoint(
+                    x: center.x - cos(angle) * currentSpread,
+                    y: center.y - sin(angle) * currentSpread
+                )
+            ]
         }
 
-        fingerprints.endTrackingFingerprints()
-        return touchesUp()
+        return await performTouchPath(start: [finger1Start, finger2Start], waypoints: waypoints)
     }
 
     /// Simulate a rotation gesture centered at a screen point.
@@ -102,34 +92,24 @@ extension TheSafecracker {
             return false
         }
 
-        guard touchesDown(at: [finger1Start, finger2Start]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [finger1Start, finger2Start])
-        onGestureMove?([finger1Start, finger2Start])
-
-        let stepDelay: TimeInterval = 0.01
-        let steps = max(Int(duration / stepDelay), 5)
-
-        for i in 1...steps {
+        let steps = max(Int(duration / Self.touchGestureStepDelay), 5)
+        let waypoints = (1...steps).map { i -> [CGPoint] in
             let progress = CGFloat(i) / CGFloat(steps)
             let currentAngle = startAngle + progress * angle
 
-            let p1 = CGPoint(
-                x: center.x + cos(currentAngle) * radius,
-                y: center.y + sin(currentAngle) * radius
-            )
-            let p2 = CGPoint(
-                x: center.x + cos(currentAngle + .pi) * radius,
-                y: center.y + sin(currentAngle + .pi) * radius
-            )
-            if Task.isCancelled { break }
-            moveTouches(to: [p1, p2])
-            fingerprints.updateTrackingFingerprints(to: [p1, p2])
-            onGestureMove?([p1, p2])
-            guard await Task.cancellableSleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) else { break }
+            return [
+                CGPoint(
+                    x: center.x + cos(currentAngle) * radius,
+                    y: center.y + sin(currentAngle) * radius
+                ),
+                CGPoint(
+                    x: center.x + cos(currentAngle + .pi) * radius,
+                    y: center.y + sin(currentAngle + .pi) * radius
+                )
+            ]
         }
 
-        fingerprints.endTrackingFingerprints()
-        return touchesUp()
+        return await performTouchPath(start: [finger1Start, finger2Start], waypoints: waypoints)
     }
 
     /// Simulate a two-finger tap at a screen point.

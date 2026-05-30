@@ -169,9 +169,9 @@ final class TheSafecracker {
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
     func tap(at point: CGPoint) async -> Bool {
         guard Self.geometryIsValid([point], field: "tap point") else { return false }
-        guard touchDown(at: point) else { return false }
+        guard touchesDown(at: [point]) else { return false }
         guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
-        return touchUp()
+        return touchesUp()
     }
 
     /// Simulate a long press at the given screen coordinates.
@@ -183,20 +183,21 @@ final class TheSafecracker {
     func longPress(at point: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
         guard Self.geometryIsValid([point], field: "long press point") else { return false }
         guard Self.durationIsValid(duration, field: "long press duration") else { return false }
-        guard touchDown(at: point) else { return false }
+        guard touchesDown(at: [point]) else { return false }
         fingerprints.beginTrackingFingerprints(at: [point])
         onGestureMove?([point])
 
-        let stepDelay: TimeInterval = 0.01
         var elapsed: TimeInterval = 0
         while elapsed < duration && !Task.isCancelled {
-            guard await Task.cancellableSleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) else { break }
-            elapsed += stepDelay
+            guard await Task.cancellableSleep(
+                nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
+            ) else { break }
+            elapsed += Self.touchGestureStepDelay
             sendStationary()
         }
 
         fingerprints.endTrackingFingerprints()
-        return touchUp()
+        return touchesUp()
     }
 
     /// Simulate a swipe gesture between two screen points.
@@ -210,30 +211,12 @@ final class TheSafecracker {
     func swipe(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.15) async -> Bool {
         guard Self.geometryIsValid([start, end], field: "swipe point") else { return false }
         guard Self.durationIsValid(duration, field: "swipe duration") else { return false }
-        let stepDelay: TimeInterval = 0.01
-        let steps = max(Int(duration / stepDelay), 3)
-        let waypoints = (1...steps).map { i -> CGPoint in
-            let progress = Double(i) / Double(steps)
-            return CGPoint(
-                x: start.x + progress * (end.x - start.x),
-                y: start.y + progress * (end.y - start.y)
-            )
-        }
-
-        guard touchDown(at: start) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [start])
-        onGestureMove?([start])
-
-        for point in waypoints {
-            if Task.isCancelled { break }
-            moveTo(point)
-            fingerprints.updateTrackingFingerprints(to: [point])
-            onGestureMove?([point])
-            guard await Task.cancellableSleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) else { break }
-        }
-
-        fingerprints.endTrackingFingerprints()
-        return touchUp()
+        let steps = max(Int(duration / Self.touchGestureStepDelay), 3)
+        return await performTouchPath(
+            start: [start],
+            waypoints: Self.linearPath(from: start, to: end, steps: steps)
+                .map { [$0] }
+        )
     }
 
     /// Simulate a drag gesture between two screen points.
@@ -246,30 +229,12 @@ final class TheSafecracker {
     func drag(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
         guard Self.geometryIsValid([start, end], field: "drag point") else { return false }
         guard Self.durationIsValid(duration, field: "drag duration") else { return false }
-        let stepDelay: TimeInterval = 0.01
-        let steps = max(Int(duration / stepDelay), 5)
-        let waypoints = (1...steps).map { i -> CGPoint in
-            let progress = Double(i) / Double(steps)
-            return CGPoint(
-                x: start.x + progress * (end.x - start.x),
-                y: start.y + progress * (end.y - start.y)
-            )
-        }
-
-        guard touchDown(at: start) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [start])
-        onGestureMove?([start])
-
-        for point in waypoints {
-            if Task.isCancelled { break }
-            moveTo(point)
-            fingerprints.updateTrackingFingerprints(to: [point])
-            onGestureMove?([point])
-            guard await Task.cancellableSleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) else { break }
-        }
-
-        fingerprints.endTrackingFingerprints()
-        return touchUp()
+        let steps = max(Int(duration / Self.touchGestureStepDelay), 5)
+        return await performTouchPath(
+            start: [start],
+            waypoints: Self.linearPath(from: start, to: end, steps: steps)
+                .map { [$0] }
+        )
     }
 
     /// Simulate drawing along a path of waypoints.
@@ -296,12 +261,11 @@ final class TheSafecracker {
 
         guard totalLength > 0 else {
             // Degenerate path — just tap the start point
-            guard touchDown(at: points[0]) else { return false }
-            return touchUp()
+            guard touchesDown(at: [points[0]]) else { return false }
+            return touchesUp()
         }
 
-        let stepDelay: TimeInterval = 0.01
-        let totalSteps = max(Int(duration / stepDelay), points.count)
+        let totalSteps = max(Int(duration / Self.touchGestureStepDelay), points.count)
 
         // Pre-compute: build full waypoint array at uniform speed
         let waypoints = (1...totalSteps).map { step -> CGPoint in
@@ -323,21 +287,10 @@ final class TheSafecracker {
             return points[points.count - 1]
         }
 
-        // Execute gesture with pre-computed path
-        guard touchDown(at: points[0]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [points[0]])
-        onGestureMove?([points[0]])
-
-        for point in waypoints {
-            if Task.isCancelled { break }
-            moveTo(point)
-            fingerprints.updateTrackingFingerprints(to: [point])
-            onGestureMove?([point])
-            guard await Task.cancellableSleep(nanoseconds: UInt64(stepDelay * 1_000_000_000)) else { break }
-        }
-
-        fingerprints.endTrackingFingerprints()
-        return touchUp()
+        return await performTouchPath(
+            start: [points[0]],
+            waypoints: waypoints.map { [$0] }
+        )
     }
 
     // MARK: - Public: Text Input (via KeyboardBridge)
@@ -403,18 +356,25 @@ final class TheSafecracker {
         return keyboard
     }
 
-    // MARK: - Internal: Single-Finger Primitives (delegate to N-finger)
-
-    private func touchDown(at point: CGPoint) -> Bool {
-        return touchesDown(at: [point])
-    }
+    // MARK: - Internal: Touch Path Dispatch
 
     @discardableResult
-    private func moveTo(_ point: CGPoint) -> Bool {
-        return moveTouches(to: [point])
-    }
+    func performTouchPath(start: [CGPoint], waypoints: [[CGPoint]]) async -> Bool {
+        guard touchesDown(at: start) else { return false }
+        fingerprints.beginTrackingFingerprints(at: start)
+        onGestureMove?(start)
 
-    private func touchUp() -> Bool {
+        for points in waypoints {
+            if Task.isCancelled { break }
+            moveTouches(to: points)
+            fingerprints.updateTrackingFingerprints(to: points)
+            onGestureMove?(points)
+            guard await Task.cancellableSleep(
+                nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
+            ) else { break }
+        }
+
+        fingerprints.endTrackingFingerprints()
         return touchesUp()
     }
 
@@ -520,6 +480,16 @@ final class TheSafecracker {
         return true
     }
 
+    static func linearPath(from start: CGPoint, to end: CGPoint, steps: Int) -> [CGPoint] {
+        (1...steps).map { step in
+            let progress = Double(step) / Double(steps)
+            return CGPoint(
+                x: start.x + progress * (end.x - start.x),
+                y: start.y + progress * (end.y - start.y)
+            )
+        }
+    }
+
     /// Find the correct window for a tap at the given screen point.
     /// Iterates all windows frontmost-first (highest windowLevel first),
     /// following KIF's pattern from UIApplication-KIFAdditions.m.
@@ -550,6 +520,9 @@ nonisolated extension TheSafecracker {
     /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
     /// pipeline has run-loop time to transition from "possible" to "recognized".
     static let gestureYieldDelay: Duration = .milliseconds(50)
+
+    /// Dispatch cadence for synthetic gesture movement events (10ms).
+    static let touchGestureStepDelay: TimeInterval = 0.01
 
     /// Poll interval for keyboard readiness after tapping a text field (100ms).
     static let keyboardPollInterval: Duration = .milliseconds(100)
