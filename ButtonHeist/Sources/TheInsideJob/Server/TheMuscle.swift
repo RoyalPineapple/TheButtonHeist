@@ -88,8 +88,8 @@ actor TheMuscle {
         session.activeSessionDriverId
     }
 
-    var exposedActiveSessionDriverId: String? {
-        session.exposedActiveSessionDriverId
+    var exposedDriverId: String? {
+        session.exposedDriverId
     }
 
     /// Client IDs belonging to the active session.

@@ -75,7 +75,8 @@ extension TheFence {
                 : skipped.afterFailedIndex
             return BatchStepOutcome.skipped(
                 command: plannedStep.command,
-                afterFailedIndex: afterFailedIndex
+                afterFailedIndex: afterFailedIndex,
+                durationMs: stepResult.durationMs
             )
         }
 
@@ -92,6 +93,7 @@ extension TheFence {
                         result: finalResult
                     )
                 ),
+                durationMs: stepResult.durationMs,
                 stopsBatch: stepResult.stopsBatch
             )
         }
@@ -99,6 +101,7 @@ extension TheFence {
         return BatchStepOutcome(
             command: plannedStep.command,
             response: .error("typed batch step produced no action result"),
+            durationMs: stepResult.durationMs,
             stopsBatch: stepResult.stopsBatch
         )
     }

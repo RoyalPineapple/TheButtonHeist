@@ -3533,7 +3533,7 @@ final class TheFenceHandlerTests: XCTestCase {
     private func writeTemporaryHeist(_ heist: HeistPlayback) throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
         let heistURL = tempDir.appendingPathComponent("test-\(UUID().uuidString).heist")
-        try TheBookKeeper.writeHeist(heist, to: heistURL)
+        try HeistStore.writeHeist(heist, to: heistURL)
         return heistURL
     }
 
@@ -3582,7 +3582,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testStopHeistMissingOutputDoesNotStopRecording() async throws {
         let (fence, _) = makeConnectedFence()
-        try fence.bookKeeper.startRecording(identifier: "stop-heist-missing-output", app: "com.test.mock")
+        try fence.heistStore.startRecording(identifier: "stop-heist-missing-output", app: "com.test.mock")
 
         let response = try await fence.execute(command: .stopHeist)
         guard case .error(let message, _) = response else {
@@ -3590,13 +3590,13 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(message, "schema validation failed for output: observed missing; expected string")
 
-        XCTAssertTrue(fence.bookKeeper.isRecordingHeist)
+        XCTAssertTrue(fence.heistStore.isRecordingHeist)
     }
 
     @ButtonHeistActor
     func testStopHeistInvalidOutputDoesNotStopRecording() async throws {
         let (fence, _) = makeConnectedFence()
-        try fence.bookKeeper.startRecording(identifier: "stop-heist-invalid-output", app: "com.test.mock")
+        try fence.heistStore.startRecording(identifier: "stop-heist-invalid-output", app: "com.test.mock")
 
         do {
             _ = try await fence.execute(command: .stopHeist, values: ["output": .string("/tmp/../invalid.heist")])
@@ -3608,7 +3608,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTAssertTrue(message.contains("Invalid output path"))
         }
 
-        XCTAssertTrue(fence.bookKeeper.isRecordingHeist)
+        XCTAssertTrue(fence.heistStore.isRecordingHeist)
     }
 
     @ButtonHeistActor
@@ -3687,7 +3687,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.count, 2)
-        XCTAssertEqual(operation.sourceStep.command, "type_text")
+        XCTAssertEqual(operation.command, .typeText)
         XCTAssertEqual(playback.steps[1].command, "activate")
         XCTAssertEqual(operation.target, semanticTarget(identifier: "email", ordinal: 1))
 
@@ -3720,8 +3720,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         let playback = try fence.readHeistPlayback(contentsOf: heistURL)
 
-        XCTAssertEqual(playback.source.app, "com.test.mock")
-        XCTAssertEqual(playback.steps.map(\.sourceStep.command), ["activate"])
+        XCTAssertEqual(playback.app, "com.test.mock")
+        XCTAssertEqual(playback.steps.map(\.command), [.activate])
         XCTAssertEqual(playback.steps.first?.target, semanticTarget(identifier: "submit"))
         let step = try XCTUnwrap(playback.steps.first)
         let expect = step.parsedRequest.arguments.argumentValues["expect"]
@@ -3823,7 +3823,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let (fence, _) = makeConnectedFence()
         let contract = try fence.validateHeistPlayback(playback)
 
-        XCTAssertEqual(Set(contract.steps.map(\.sourceStep.command)), Set(TheFence.Command.batchExecutableCases.map(\.rawValue)))
+        XCTAssertEqual(Set(contract.steps.map(\.command)), Set(TheFence.Command.batchExecutableCases))
     }
 
     @ButtonHeistActor
@@ -4261,6 +4261,24 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
         XCTAssertGreaterThanOrEqual(totalTimingMs, 0)
+    }
+
+    @ButtonHeistActor
+    func testPlayHeistReportUsesBatchStepDuration() async throws {
+        let heist = HeistPlayback(app: "com.test.mock", steps: [
+            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
+        ])
+        let heistURL = try writeTemporaryHeist(heist)
+        defer { try? FileManager.default.removeItem(at: heistURL) }
+
+        let (fence, mockConn) = makeConnectedFence()
+        mockConn.batchStepDurationMs = 123
+        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
+
+        guard case .heistPlayback(_, _, _, _, let report) = response else {
+            return XCTFail("Expected heistPlayback response, got \(response)")
+        }
+        XCTAssertEqual(report?.steps.first?.timeSeconds ?? -1, 0.123, accuracy: 0.000_001)
     }
 
     @ButtonHeistActor

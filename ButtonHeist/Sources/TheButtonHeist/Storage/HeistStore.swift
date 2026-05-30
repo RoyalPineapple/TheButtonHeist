@@ -8,24 +8,24 @@ enum HeistRecordingPhase: @unchecked Sendable { // swiftlint:disable:this agent_
 }
 
 /// Heist recording handle. Marked `@unchecked Sendable` because `fileHandle`
-/// is confined to the `@ButtonHeistActor`-isolated `TheBookKeeper`.
+/// is confined to the `@ButtonHeistActor`-isolated `HeistStore`.
 struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     let app: String
     let fileHandle: FileHandle
     let filePath: URL
 }
 
-// MARK: - TheBookKeeper
+// MARK: - HeistStore
 
-/// Stores heist recordings and screenshot artifacts.
+/// Stores deterministic heist recordings.
 @ButtonHeistActor
-final class TheBookKeeper {
+final class HeistStore {
 
     private var heistRecording: HeistRecordingPhase = .idle
     private let baseDirectory: URL
 
     init(baseDirectory: URL? = nil) {
-        self.baseDirectory = baseDirectory ?? Self.resolveBaseDirectory()
+        self.baseDirectory = baseDirectory ?? PrivateStorage.resolveBaseDirectory()
     }
 
     var isRecordingHeist: Bool {
@@ -40,22 +40,22 @@ final class TheBookKeeper {
 
     func startRecording(identifier: String, app: String) throws {
         guard case .idle = heistRecording else {
-            throw BookKeeperError.heistRecording(.alreadyRecording)
+            throw StorageError.heistRecording(.alreadyRecording)
         }
-        guard Self.isSafePathSegment(identifier) else {
-            throw BookKeeperError.unsafePath(identifier)
+        guard PrivateStorage.isSafePathSegment(identifier) else {
+            throw StorageError.unsafePath(identifier)
         }
 
         let directory = baseDirectory
             .appendingPathComponent("heists")
-            .appendingPathComponent("\(identifier)-\(Self.timestampString())")
-        try Self.createPrivateDirectory(at: directory)
+            .appendingPathComponent("\(identifier)-\(PrivateStorage.timestampString())")
+        try PrivateStorage.createPrivateDirectory(at: directory)
 
         let heistPath = directory.appendingPathComponent("heist.jsonl")
         do {
-            try Self.createPrivateFile(at: heistPath)
+            try PrivateStorage.createPrivateFile(at: heistPath)
         } catch {
-            throw BookKeeperError.heistRecording(.fileCreationFailed(
+            throw StorageError.heistRecording(.fileCreationFailed(
                 path: heistPath.path,
                 reason: String(describing: error)
             ))
@@ -65,7 +65,7 @@ final class TheBookKeeper {
         do {
             heistHandle = try FileHandle(forWritingTo: heistPath)
         } catch {
-            throw BookKeeperError.heistRecording(.fileOpenFailed(
+            throw StorageError.heistRecording(.fileOpenFailed(
                 path: heistPath.path,
                 reason: String(describing: error)
             ))
@@ -85,7 +85,7 @@ final class TheBookKeeper {
         recording.fileHandle.closeFile()
         let steps = try readSteps(from: recording.filePath)
         guard !steps.isEmpty else {
-            throw BookKeeperError.heistRecording(.noValidSteps(path: recording.filePath.path))
+            throw StorageError.heistRecording(.noValidSteps(path: recording.filePath.path))
         }
 
         return HeistPlayback(app: recording.app, steps: steps)
@@ -109,43 +109,9 @@ final class TheBookKeeper {
 
     private func currentRecording() throws -> HeistRecording {
         guard case .recording(let recording) = heistRecording else {
-            throw BookKeeperError.heistRecording(.notRecording)
+            throw StorageError.heistRecording(.notRecording)
         }
         return recording
-    }
-
-    static func isSafePathSegment(_ identifier: String) -> Bool {
-        guard !identifier.isEmpty,
-              !identifier.hasPrefix("-"),
-              !identifier.contains("/"),
-              !identifier.contains("..") else { return false }
-
-        return !identifier.unicodeScalars.contains {
-            CharacterSet.controlCharacters.contains($0)
-        }
-    }
-
-    var artifactBaseDirectory: URL {
-        baseDirectory
-    }
-
-    private static func resolveBaseDirectory() -> URL {
-        if let override = ProcessInfo.processInfo.environment["BUTTONHEIST_STORAGE_DIR"] {
-            return URL(fileURLWithPath: override)
-        }
-        if let xdgDataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"] {
-            return URL(fileURLWithPath: xdgDataHome)
-                .appendingPathComponent("buttonheist")
-        }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".local/share/buttonheist")
-    }
-
-    static func timestampString() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        formatter.timeZone = TimeZone.current
-        return formatter.string(from: Date())
     }
 
 }

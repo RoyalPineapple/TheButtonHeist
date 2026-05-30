@@ -105,7 +105,7 @@ final class TheHandoff: HandoffReconnectRuntime {
     private var connection: (any DeviceConnecting)?
 
     var hasActiveDiscoverySession: Bool {
-        discoveryLifecycle.hasActiveSession
+        discoveryLifecycle.hasDiscoverySession
     }
 
     /// Resolved driver ID: explicit override if set, otherwise a persistent auto-generated UUID.
@@ -125,7 +125,7 @@ final class TheHandoff: HandoffReconnectRuntime {
 
     func startDiscovery() {
         logger.info("startDiscovery called, hasSession=\(self.hasActiveDiscoverySession)")
-        guard !discoveryLifecycle.hasActiveSession else {
+        guard !discoveryLifecycle.hasDiscoverySession else {
             logger.info("Already discovering, skipping")
             return
         }

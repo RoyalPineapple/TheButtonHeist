@@ -40,8 +40,8 @@ public final class TheFence {
         var fileConfig: ButtonHeistFileConfig?
         /// Direct host:port target with optional TLS fingerprint from config.
         var directDevice: DiscoveredDevice?
-        /// Test/config override for BookKeeper's heist and artifact root.
-        var bookKeeperBaseDirectory: URL?
+        /// Test/config override for heist and screenshot storage root.
+        var heistStoreBaseDirectory: URL?
         /// Extra client-side headroom beyond a server-owned wait timeout.
         var postActionExpectationTimeoutBuffer: TimeInterval
 
@@ -52,7 +52,7 @@ public final class TheFence {
             autoReconnect: Bool = true,
             fileConfig: ButtonHeistFileConfig? = nil,
             directDevice: DiscoveredDevice? = nil,
-            bookKeeperBaseDirectory: URL? = nil,
+            heistStoreBaseDirectory: URL? = nil,
             postActionExpectationTimeoutBuffer: TimeInterval = 5
         ) {
             self.deviceFilter = deviceFilter
@@ -61,7 +61,7 @@ public final class TheFence {
             self.autoReconnect = autoReconnect
             self.fileConfig = fileConfig
             self.directDevice = directDevice
-            self.bookKeeperBaseDirectory = bookKeeperBaseDirectory
+            self.heistStoreBaseDirectory = heistStoreBaseDirectory
             self.postActionExpectationTimeoutBuffer = postActionExpectationTimeoutBuffer
         }
     }
@@ -90,7 +90,8 @@ public final class TheFence {
             lastFailure: sessionFailurePayload
         )
     }
-    let bookKeeper: TheBookKeeper
+    let heistStore: HeistStore
+    let screenshotStore: ScreenshotStore
     let pendingRequests = PendingRequestTrackers()
 
     // Lifecycle owners
@@ -99,7 +100,8 @@ public final class TheFence {
 
     public init(configuration: Configuration) {
         self.config = configuration
-        self.bookKeeper = TheBookKeeper(baseDirectory: configuration.bookKeeperBaseDirectory)
+        self.heistStore = HeistStore(baseDirectory: configuration.heistStoreBaseDirectory)
+        self.screenshotStore = ScreenshotStore(baseDirectory: configuration.heistStoreBaseDirectory)
         let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
         self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value

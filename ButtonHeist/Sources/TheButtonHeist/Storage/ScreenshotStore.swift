@@ -2,7 +2,7 @@ import Foundation
 
 import TheScore
 
-private enum BookKeeperArtifactKind {
+private enum ScreenshotArtifactKind {
     case screenshot
 
     var subdirectoryName: String {
@@ -19,35 +19,23 @@ private enum BookKeeperArtifactKind {
 
 }
 
-extension TheBookKeeper {
+@ButtonHeistActor
+final class ScreenshotStore {
+
+    private let baseDirectory: URL
+
+    init(baseDirectory: URL? = nil) {
+        self.baseDirectory = baseDirectory ?? PrivateStorage.resolveBaseDirectory()
+    }
 
     // MARK: - Artifact Storage
 
-    func writeToPath(_ data: Data, outputPath: String) throws -> URL {
+    private func writeToPath(_ data: Data, outputPath: String) throws -> URL {
         guard let resolvedURL = outputPath.validatedOutputURL() else {
-            throw BookKeeperError.unsafePath(outputPath)
+            throw StorageError.unsafePath(outputPath)
         }
         try data.write(to: resolvedURL)
         return resolvedURL
-    }
-
-    /// Write a screenshot to an explicit output path, or return `nil` when the
-    /// caller requested inline data with no filesystem sink.
-    ///
-    /// Resolution rules:
-    /// - `outputPath` supplied: write raw bytes to that path via `writeToPath`.
-    /// - No `outputPath`: return `nil`; caller returns the in-memory payload.
-    func writeScreenshotIfSinkAvailable(
-        base64Data: String,
-        outputPath: String?,
-        command: TheFence.Command
-    ) throws -> URL? {
-        try writeArtifactIfSinkAvailable(
-            kind: .screenshot,
-            base64Data: base64Data,
-            outputPath: outputPath,
-            command: command
-        )
     }
 
     /// Write a screenshot to an explicit path or standalone artifact directory.
@@ -65,7 +53,7 @@ extension TheBookKeeper {
     }
 
     private func writeArtifactIfSinkAvailable(
-        kind: BookKeeperArtifactKind,
+        kind: ScreenshotArtifactKind,
         base64Data: String,
         outputPath: String?,
         command: TheFence.Command
@@ -78,7 +66,7 @@ extension TheBookKeeper {
     }
 
     private func writeArtifact(
-        kind: BookKeeperArtifactKind,
+        kind: ScreenshotArtifactKind,
         base64Data: String,
         outputPath: String?,
         command: TheFence.Command
@@ -96,13 +84,13 @@ extension TheBookKeeper {
     }
 
     private func writeStandaloneArtifact(
-        kind: BookKeeperArtifactKind,
+        kind: ScreenshotArtifactKind,
         data: Data,
         command: TheFence.Command
     ) throws -> URL {
-        let subdirectory = artifactBaseDirectory.appendingPathComponent(kind.subdirectoryName)
+        let subdirectory = baseDirectory.appendingPathComponent(kind.subdirectoryName)
         try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
-        let filename = "\(Self.timestampString())-\(UUID().uuidString)-\(command.rawValue).\(kind.fileExtension)"
+        let filename = "\(PrivateStorage.timestampString())-\(UUID().uuidString)-\(command.rawValue).\(kind.fileExtension)"
         let fileURL = subdirectory.appendingPathComponent(filename)
         try data.write(to: fileURL)
         return fileURL
@@ -110,7 +98,7 @@ extension TheBookKeeper {
 
     private func decodeArtifactData(_ base64Data: String) throws -> Data {
         guard let data = Data(base64Encoded: base64Data) else {
-            throw BookKeeperError.base64DecodingFailed
+            throw StorageError.base64DecodingFailed
         }
         return data
     }

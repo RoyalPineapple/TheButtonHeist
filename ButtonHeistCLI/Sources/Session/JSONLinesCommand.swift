@@ -5,6 +5,7 @@ import ButtonHeist
 enum JSONLinesDefaults {
     static let connectionTimeout: Double = 30.0
     static let idleTimeout: Double = 60.0
+    static let outputFormat: OutputFormat = .json
 }
 
 struct JSONLinesCommand: AsyncParsableCommand {
@@ -14,14 +15,14 @@ struct JSONLinesCommand: AsyncParsableCommand {
         discussion: """
             Maintains a single connection and accepts canonical JSON commands on stdin.
             JSON output mode accepts one JSON object per line (e.g. {"command":"one_finger_tap"}).
-            Output is human-readable by default, compact JSON when piped.
+            Output is JSON by default; pass --format human only for interactive inspection.
 
             Examples:
               buttonheist json_lines
               buttonheist json_lines --device a1b2
-              echo '{"command":"get_interface"}' | buttonheist json_lines --format json
-              echo '{"command":"activate","target":{"heistId":"myButton"}}' | buttonheist json_lines --format json
-              echo '{"command":"activate","target":{"label":"Sign In","traits":["button"]}}' | buttonheist json_lines --format json
+              echo '{"command":"get_interface"}' | buttonheist json_lines
+              echo '{"command":"activate","target":{"heistId":"myButton"}}' | buttonheist json_lines
+              echo '{"command":"activate","target":{"label":"Sign In","traits":["button"]}}' | buttonheist json_lines
             """
     )
 
@@ -41,7 +42,7 @@ struct JSONLinesCommand: AsyncParsableCommand {
 
     @ButtonHeistActor
     mutating func run() async throws {
-        let effectiveFormat = output.format ?? .auto
+        let effectiveFormat = output.format ?? JSONLinesDefaults.outputFormat
         let config = EnvironmentConfig.resolve(
             deviceFilter: device,
             token: token,

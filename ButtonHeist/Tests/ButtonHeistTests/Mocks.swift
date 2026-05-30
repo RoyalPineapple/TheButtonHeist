@@ -135,6 +135,7 @@ final class MockConnection: TransportReachabilityConnecting {
     var connectEventsOverride: [ConnectionEvent]?
     var sendOutcome: DeviceSendOutcome = .enqueued
     var asyncSendFailure: DeviceSendFailure?
+    var batchStepDurationMs: Int = 0
 
     var serverInfo: ServerInfo?
 
@@ -198,7 +199,7 @@ final class MockConnection: TransportReachabilityConnecting {
                 )
                 stepResults.append(BatchExecutionStepResult(
                     index: index,
-                    durationMs: 0,
+                    durationMs: batchStepDurationMs,
                     skipped: skipped
                 ))
                 continue
@@ -212,7 +213,7 @@ final class MockConnection: TransportReachabilityConnecting {
                 index: index,
                 actionResult: actionResult,
                 expectation: expectation,
-                durationMs: 0,
+                durationMs: batchStepDurationMs,
                 stopsBatch: shouldStop
             ))
             if shouldStop {

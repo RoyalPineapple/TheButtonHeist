@@ -42,17 +42,17 @@ extension TheFence {
         }
 
         do {
-            let url = try bookKeeper.writeScreenshotArtifact(
+            let url = try screenshotStore.writeScreenshotArtifact(
                 base64Data: screen.pngData,
                 outputPath: request.outputPath,
                 command: .getScreen
             )
             return .screenshot(path: url.path, payload: responsePayload, options: options)
-        } catch BookKeeperError.unsafePath {
+        } catch StorageError.unsafePath {
             throw FenceError.invalidRequest(
                 "Invalid output path: must not contain '..' components or control characters"
             )
-        } catch BookKeeperError.base64DecodingFailed {
+        } catch StorageError.base64DecodingFailed {
             throw FenceError.serverError(
                 ServerError(kind: .general, message: "Failed to decode screenshot data")
             )

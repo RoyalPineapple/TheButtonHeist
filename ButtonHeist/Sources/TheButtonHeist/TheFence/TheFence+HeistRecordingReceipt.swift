@@ -25,7 +25,7 @@ extension TheFence {
     ) {
         guard playback.isIdle else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
-        bookKeeper.recordHeistStep(
+        heistStore.recordHeistStep(
             request,
             actionResult: finalReceipt.actionResult,
             expectation: finalReceipt.expectation,

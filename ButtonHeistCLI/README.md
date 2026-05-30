@@ -97,9 +97,9 @@ current-capture handles and recording step context, not replay identity.
 JSON requests on stdin.
 
 ```bash
-buttonheist json_lines --format json
-echo '{"command":"get_interface"}' | buttonheist json_lines --format json
-echo '{"command":"run_batch","steps":[{"command":"activate","target":{"label":"Sign In","traits":["button"]}}]}' | buttonheist json_lines --format json
+buttonheist json_lines
+echo '{"command":"get_interface"}' | buttonheist json_lines
+echo '{"command":"run_batch","steps":[{"command":"activate","target":{"label":"Sign In","traits":["button"]}}]}' | buttonheist json_lines
 ```
 
 JSON-lines mode auto-reconnects after connection loss, then the next command
@@ -118,8 +118,9 @@ Flags take precedence over environment variables.
 
 ## Output
 
-TTY output defaults to human-readable text. Piped output defaults to compact
-JSON. Use `--format human` or `--format json` to choose explicitly.
+Standalone commands default to human-readable text on a TTY and JSON when
+piped. JSON-lines mode defaults to JSON. Use `--format human` or `--format json`
+to choose explicitly.
 
 Status messages go to stderr.
 

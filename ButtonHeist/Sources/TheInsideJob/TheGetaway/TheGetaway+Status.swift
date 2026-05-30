@@ -48,7 +48,7 @@ extension TheGetaway {
 
         let isActive = await muscle.isSessionActive
         let connectionCount = await muscle.activeSessionConnectionCount
-        let activeDriverId = await muscle.exposedActiveSessionDriverId
+        let activeDriverId = await muscle.exposedDriverId
         let session = StatusSession(
             active: isActive,
             watchersAllowed: false,
