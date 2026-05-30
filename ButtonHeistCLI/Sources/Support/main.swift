@@ -12,10 +12,10 @@ struct ButtonHeistApp: AsyncParsableCommand {
               buttonheist list_devices                      # Find devices
               buttonheist get_interface                     # Inspect UI hierarchy
               buttonheist activate --heist-id myButton      # Tap a control
-              buttonheist type_text "hello"                 # Type text
+              buttonheist type_text --text "hello"          # Type text
               buttonheist get_screen                        # Capture screen
 
-            Use `buttonheist session` for a persistent JSON command session, or read the generated command reference for the full command contract.
+            Use `buttonheist json_lines` for canonical JSON commands on stdin, or read the generated command reference for the full command contract.
             """,
         version: buttonHeistVersion,
         subcommands: CLICommandAdapterCatalog.subcommands

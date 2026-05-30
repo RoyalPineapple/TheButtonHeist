@@ -39,7 +39,7 @@ extension TheFence {
             expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
             preActionElements: postDispatch.preActionElements
         )
-        recordHeistEvidence(
+        recordHeistStep(
             parsed,
             dispatchedResponse: dispatched.response,
             validatedResponse: validatedResponse.response,

@@ -416,7 +416,7 @@ final class TheStashRotorTests: XCTestCase {
 
         XCTAssertFalse(searchResult.success)
         XCTAssertEqual(searchResult.errorKind, .elementNotFound)
-        XCTAssertTrue(searchResult.message?.contains("currentHeistId=\"missing_current_item\" is not available") == true)
+        XCTAssertTrue(searchResult.message?.contains("continuation.heistId=\"missing_current_item\" is not available") == true)
     }
 
     func testRotorReturnsTextRangeResult() throws {

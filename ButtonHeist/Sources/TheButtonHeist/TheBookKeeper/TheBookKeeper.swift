@@ -2,119 +2,119 @@ import Foundation
 
 import TheScore
 
-// MARK: - Session Phase State Machine
-
-/// Lifecycle of a BookKeeper session from idle through closed. Each non-idle
-/// case carries the phase-specific data valid for that phase.
-enum SessionPhase: Sendable {
-    case idle
-    case active(ActiveSession)
-    case closed(ClosedSession)
-}
-
-/// Two-phase heist-recording lifecycle inside an active session: either no
-/// recording is in progress, or one is and carries its file handle and path.
-/// Replaces the `HeistRecording?` optional so the "not recording" phase is
-/// structurally distinct from any in-flight recording.
 enum HeistRecordingPhase: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     case idle
     case recording(HeistRecording)
 }
 
-struct ActiveSession: Sendable {
-    let directory: URL
-    let manifest: SessionManifest
-    var nextSequenceNumber: Int
-    var heistRecording: HeistRecordingPhase = .idle
-
-    var sessionId: String {
-        manifest.sessionId
-    }
-
-    var startTime: Date {
-        manifest.startTime
-    }
-}
-
 /// Heist recording handle. Marked `@unchecked Sendable` because `fileHandle`
-/// is a `FileHandle`; access is confined to the `@ButtonHeistActor`-isolated
-/// `TheBookKeeper`.
+/// is confined to the `@ButtonHeistActor`-isolated `TheBookKeeper`.
 struct HeistRecording: @unchecked Sendable { // swiftlint:disable:this agent_unchecked_sendable_no_comment
     let app: String
     let fileHandle: FileHandle
     let filePath: URL
 }
 
-struct ClosedSession: Sendable {
-    let directory: URL
-    let manifest: SessionManifest
-
-    var sessionId: String {
-        manifest.sessionId
-    }
-
-    var startTime: Date {
-        manifest.startTime
-    }
-
-    var endTime: Date? {
-        manifest.endTime
-    }
-}
-
 // MARK: - TheBookKeeper
 
-/// Manages session lifecycle, artifact storage, and heist recording.
+/// Stores heist recordings and screenshot artifacts.
 @ButtonHeistActor
 final class TheBookKeeper {
 
-    private(set) var phase: SessionPhase = .idle
+    private var heistRecording: HeistRecordingPhase = .idle
     private let baseDirectory: URL
 
     init(baseDirectory: URL? = nil) {
         self.baseDirectory = baseDirectory ?? Self.resolveBaseDirectory()
     }
 
-    var manifest: SessionManifest? {
-        switch phase {
-        case .idle:
-            return nil
-        case .active(let session):
-            return session.manifest
-        case .closed(let session):
-            return session.manifest
-        }
+    var isRecordingHeist: Bool {
+        guard case .recording = heistRecording else { return false }
+        return true
     }
 
-    // MARK: - Lifecycle
+    var recordingFilePath: URL? {
+        guard case .recording(let recording) = heistRecording else { return nil }
+        return recording.filePath
+    }
 
-    func beginSession(identifier: String) throws {
-        switch phase {
-        case .idle, .closed:
-            break
-        case .active:
-            throw BookKeeperError.invalidPhase(expected: "idle or closed", actual: phaseName)
+    func startRecording(identifier: String, app: String) throws {
+        guard case .idle = heistRecording else {
+            throw BookKeeperError.heistRecording(.alreadyRecording)
         }
-
-        guard Self.isSafeSessionIdentifier(identifier) else {
+        guard Self.isSafePathSegment(identifier) else {
             throw BookKeeperError.unsafePath(identifier)
         }
 
-        let timestamp = Self.timestampString()
-        let sessionId = "\(identifier)-\(timestamp)"
-        let directory = baseDirectory.appendingPathComponent(sessionId)
+        let directory = baseDirectory
+            .appendingPathComponent("heists")
+            .appendingPathComponent("\(identifier)-\(Self.timestampString())")
         try Self.createPrivateDirectory(at: directory)
 
-        let startTime = Date()
-        let manifest = SessionManifest(sessionId: sessionId, startTime: startTime)
-        phase = .active(ActiveSession(
-            directory: directory,
-            manifest: manifest,
-            nextSequenceNumber: 1
+        let heistPath = directory.appendingPathComponent("heist.jsonl")
+        do {
+            try Self.createPrivateFile(at: heistPath)
+        } catch {
+            throw BookKeeperError.heistRecording(.fileCreationFailed(
+                path: heistPath.path,
+                reason: String(describing: error)
+            ))
+        }
+
+        let heistHandle: FileHandle
+        do {
+            heistHandle = try FileHandle(forWritingTo: heistPath)
+        } catch {
+            throw BookKeeperError.heistRecording(.fileOpenFailed(
+                path: heistPath.path,
+                reason: String(describing: error)
+            ))
+        }
+
+        heistRecording = .recording(HeistRecording(
+            app: app,
+            fileHandle: heistHandle,
+            filePath: heistPath
         ))
     }
 
-    private static func isSafeSessionIdentifier(_ identifier: String) -> Bool {
+    func finishRecording() throws -> HeistPlayback {
+        let recording = try currentRecording()
+        heistRecording = .idle
+
+        recording.fileHandle.closeFile()
+        let steps = try readSteps(from: recording.filePath)
+        guard !steps.isEmpty else {
+            throw BookKeeperError.heistRecording(.noValidSteps(path: recording.filePath.path))
+        }
+
+        return HeistPlayback(app: recording.app, steps: steps)
+    }
+
+    func abandonRecording() {
+        guard case .recording(let recording) = heistRecording else { return }
+        recording.fileHandle.closeFile()
+        heistRecording = .idle
+    }
+
+    func appendStep(_ step: HeistStep) throws {
+        let recording = try currentRecording()
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        var lineData = try encoder.encode(step)
+        lineData.append(contentsOf: [0x0A])
+        recording.fileHandle.write(lineData)
+    }
+
+    private func currentRecording() throws -> HeistRecording {
+        guard case .recording(let recording) = heistRecording else {
+            throw BookKeeperError.heistRecording(.notRecording)
+        }
+        return recording
+    }
+
+    static func isSafePathSegment(_ identifier: String) -> Bool {
         guard !identifier.isEmpty,
               !identifier.hasPrefix("-"),
               !identifier.contains("/"),
@@ -125,69 +125,20 @@ final class TheBookKeeper {
         }
     }
 
-    func closeSession() async throws {
-        switch phase {
-        case .active(let session):
-            try closeActiveSession(session)
-        case .idle, .closed:
-            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
-        }
-    }
-
-    private func closeActiveSession(_ session: ActiveSession) throws {
-        let closedManifest = session.manifest.closed(at: Date())
-        try flushManifest(manifest: closedManifest, directory: session.directory)
-
-        // Close heist recording handle if still open (abandoned recording)
-        if case .recording(let abandonedRecording) = session.heistRecording {
-            abandonedRecording.fileHandle.closeFile()
-        }
-
-        phase = .closed(ClosedSession(
-            directory: session.directory,
-            manifest: closedManifest
-        ))
-    }
-
-    // MARK: - Phase / Directory / Manifest Helpers
-
-    var phaseName: String {
-        switch phase {
-        case .idle: return "idle"
-        case .active: return "active"
-        case .closed: return "closed"
-        }
-    }
-
     var artifactBaseDirectory: URL {
         baseDirectory
     }
 
-    var hasActiveSession: Bool {
-        guard case .active = phase else { return false }
-        return true
-    }
-
-    func mutateActiveSession<T>(_ body: (inout ActiveSession) throws -> T) throws -> T {
-        guard case .active(var session) = phase else {
-            throw BookKeeperError.invalidPhase(expected: "active", actual: phaseName)
-        }
-        let result = try body(&session)
-        phase = .active(session)
-        return result
-    }
-
     private static func resolveBaseDirectory() -> URL {
-        if let override = ProcessInfo.processInfo.environment["BUTTONHEIST_SESSIONS_DIR"] {
+        if let override = ProcessInfo.processInfo.environment["BUTTONHEIST_STORAGE_DIR"] {
             return URL(fileURLWithPath: override)
         }
         if let xdgDataHome = ProcessInfo.processInfo.environment["XDG_DATA_HOME"] {
             return URL(fileURLWithPath: xdgDataHome)
                 .appendingPathComponent("buttonheist")
-                .appendingPathComponent("sessions")
         }
         return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".local/share/buttonheist/sessions")
+            .appendingPathComponent(".local/share/buttonheist")
     }
 
     static func timestampString() -> String {

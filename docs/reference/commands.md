@@ -34,7 +34,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_visible` | `scroll_to_visible` | direct | yes | Make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
 | `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
-| `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a JSON playback script. |
+| `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic heist fixture. |
 | `swipe` | `swipe` | direct | yes | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
 | `two_finger_tap` | `two_finger_tap` | direct | yes | Tap with two fingers at a coordinate or actionable semantic target. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
@@ -424,9 +424,7 @@ Parameters:
 | `rotor` | `string` | no | - | - |
 | `rotorIndex` | `integer` | no | - | - |
 | `direction` | `string` | no | `"next"` | `next`, `previous` |
-| `currentHeistId` | `string` | no | - | - |
-| `currentTextStartOffset` | `integer` | no | - | - |
-| `currentTextEndOffset` | `integer` | no | - | - |
+| `continuation` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -540,7 +538,7 @@ Parameters:
 
 ### `stop_heist`
 
-Stop heist recording and save a JSON playback script.
+Stop heist recording and save a deterministic heist fixture.
 
 - CLI: direct command `stop_heist`
 - MCP: direct tool

@@ -75,7 +75,7 @@ but redact its value:
 
 | Method | Key | Example |
 |--------|-----|---------|
-| CLI flag | `--token` | `buttonheist session` (or pass token via `BUTTONHEIST_TOKEN` / `--token` where supported) |
+| CLI flag | `--token` | `buttonheist json_lines` (or pass token via `BUTTONHEIST_TOKEN` / `--token` where supported) |
 | Environment variable | `BUTTONHEIST_TOKEN` | `export BUTTONHEIST_TOKEN=my-secret-token` |
 | UI approval | (omit token) | Client sends empty token; user approves on device |
 

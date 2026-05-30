@@ -5,7 +5,7 @@ import Foundation
 struct StopHeistCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Stop recording and save the heist playback"
+        abstract: "Stop recording and save a deterministic heist fixture"
     )
 
     @Option(name: [.customShort("o"), .customLong("output")], help: "Output file path for the .heist file")

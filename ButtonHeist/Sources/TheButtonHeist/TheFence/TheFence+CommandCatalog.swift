@@ -342,9 +342,21 @@ extension TheFence.Command {
                     enumValues: fenceEnumValues(RotorDirection.self),
                     defaultValue: .string(RotorDirection.next.rawValue)
                 ),
-                param(.currentHeistId, .string),
-                param(.currentTextStartOffset, .integer, minimum: 0),
-                param(.currentTextEndOffset, .integer, minimum: 0),
+                param(
+                    .continuation,
+                    .object,
+                    objectProperties: [
+                        param(.heistId, .string, required: true),
+                        param(
+                            .textRange,
+                            .object,
+                            objectProperties: [
+                                param(.startOffset, .integer, required: true, minimum: 0),
+                                param(.endOffset, .integer, required: true, minimum: 0),
+                            ]
+                        ),
+                    ]
+                ),
             ] + expectation
             entry.description = "Move through an element rotor using direction and continuation metadata."
         case .typeText:
@@ -416,7 +428,7 @@ extension TheFence.Command {
             entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
             entry.parameters = [param(.output, .string, required: true)]
-            entry.description = "Stop heist recording and save a JSON playback script."
+            entry.description = "Stop heist recording and save a deterministic heist fixture."
         case .playHeist:
             entry.requestPayloadKind = .session
             entry.parameters = [param(.input, .string, required: true)]

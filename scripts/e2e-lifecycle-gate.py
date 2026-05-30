@@ -250,7 +250,7 @@ class DemoApp:
             return False
 
 
-class PersistentSession:
+class PersistentJSONLines:
     def __init__(self, cli: Path, app: DemoApp, driver_id: str):
         self.cli = cli
         self.app = app
@@ -265,12 +265,12 @@ class PersistentSession:
         self.proc = subprocess.Popen(
             [
                 str(cli),
-                "session",
+                "json_lines",
                 "--device",
                 app.device,
                 "--token",
                 app.token,
-                "--session-timeout",
+                "--idle-timeout",
                 "0",
                 "--format",
                 "json",
@@ -300,9 +300,9 @@ class PersistentSession:
 
     def command(self, payload: dict[str, Any], *, timeout: float = 20) -> Any:
         if self.proc.poll() is not None:
-            raise RuntimeError(f"session process exited early: {self.proc.returncode}")
+            raise RuntimeError(f"JSON-lines process exited early: {self.proc.returncode}")
         if self.proc.stdin is None:
-            raise RuntimeError("session stdin is unavailable")
+            raise RuntimeError("JSON-lines stdin is unavailable")
         self.proc.stdin.write(json.dumps(payload) + "\n")
         self.proc.stdin.flush()
         deadline = time.time() + timeout
@@ -312,7 +312,7 @@ class PersistentSession:
                 line = self.stdout.get(timeout=0.2)
             except queue.Empty:
                 if self.proc.poll() is not None:
-                    raise RuntimeError(f"session process exited while waiting: {self.proc.returncode}")
+                    raise RuntimeError(f"JSON-lines process exited while waiting: {self.proc.returncode}")
                 continue
             stripped = line.strip()
             if not stripped:
@@ -331,8 +331,7 @@ class PersistentSession:
             return
         try:
             if self.proc.stdin is not None:
-                self.proc.stdin.write("exit\n")
-                self.proc.stdin.flush()
+                self.proc.stdin.close()
             self.proc.wait(timeout=3)
         except Exception:
             self.proc.terminate()
@@ -431,7 +430,7 @@ def start_app(sim: str, label: str, timeout: float) -> tuple[DemoApp, int | None
 
 def scenario_session_lock(cli: Path, sim: str, connect_timeout: float) -> dict[str, Any]:
     app, pid = start_app(sim, "lock", timeout=2.0)
-    session = PersistentSession(cli, app, "driver-a")
+    session = PersistentJSONLines(cli, app, "driver-a")
     try:
         first = session.command({"command": "get_interface"}, timeout=20)
         assert_success(first, "driver-a persistent initial interface")
@@ -461,7 +460,7 @@ def scenario_session_lock(cli: Path, sim: str, connect_timeout: float) -> dict[s
 
 def scenario_reconnect(cli: Path, sim: str) -> dict[str, Any]:
     app, pid1 = start_app(sim, "reconnect", timeout=5.0)
-    session = PersistentSession(cli, app, "reconnect-driver")
+    session = PersistentJSONLines(cli, app, "reconnect-driver")
     try:
         before = session.command({"command": "get_interface"}, timeout=20)
         assert_success(before, "persistent session before app restart")

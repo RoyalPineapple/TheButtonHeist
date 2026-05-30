@@ -1,7 +1,7 @@
 # ButtonHeist CLI
 
 The CLI is the terminal adapter for Button Heist. It routes through
-`TheFence.Command`, the same product command contract used by session JSON,
+`TheFence.Command`, the same product command contract used by JSON-lines stdin,
 MCP, batches, and heist playback.
 
 This README covers build, targeting, and common workflows. It does not maintain
@@ -89,20 +89,20 @@ buttonheist play_heist --input recording.heist --junit report.xml
 ```
 
 Heist replay uses durable semantic selectors and matchers. `heistId` values are
-current-capture handles and recording evidence, not replay identity.
+current-capture handles and recording step context, not replay identity.
 
-### Session Mode
+### JSON-Lines Mode
 
-`buttonheist session` keeps a single connection open and accepts JSON requests
-with canonical Fence command names.
+`buttonheist json_lines` keeps a single connection open and accepts canonical
+JSON requests on stdin.
 
 ```bash
-buttonheist session --format json
-echo '{"command":"get_interface"}' | buttonheist session --format json
-echo '{"command":"run_batch","steps":[{"command":"activate","target":{"label":"Sign In","traits":["button"]}}]}' | buttonheist session --format json
+buttonheist json_lines --format json
+echo '{"command":"get_interface"}' | buttonheist json_lines --format json
+echo '{"command":"run_batch","steps":[{"command":"activate","target":{"label":"Sign In","traits":["button"]}}]}' | buttonheist json_lines --format json
 ```
 
-Session mode auto-reconnects after connection loss, then the next command
+JSON-lines mode auto-reconnects after connection loss, then the next command
 refreshes state through the same Fence path.
 
 ## Environment
@@ -112,7 +112,7 @@ refreshes state through the same Fence path.
 | `BUTTONHEIST_DEVICE` | Default device filter or named target |
 | `BUTTONHEIST_TOKEN` | Auth token |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
-| `BUTTONHEIST_SESSION_TIMEOUT` | Idle timeout for `buttonheist session` |
+| `BUTTONHEIST_SESSION_TIMEOUT` | Idle timeout for `buttonheist json_lines` |
 
 Flags take precedence over environment variables.
 

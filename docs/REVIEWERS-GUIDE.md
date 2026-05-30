@@ -14,7 +14,7 @@ Most usage starts with this CLI loop:
 buttonheist list_devices                      # Find running apps
 buttonheist get_interface                     # Read the UI element tree
 buttonheist activate --identifier "loginBtn"  # Tap a control
-buttonheist type_text "hello@example.com"     # Type into a field
+buttonheist type_text --text "hello@example.com" # Type into a field
 buttonheist get_screen                        # Capture the screen
 ```
 

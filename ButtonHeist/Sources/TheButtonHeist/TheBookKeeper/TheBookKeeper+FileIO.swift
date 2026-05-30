@@ -2,7 +2,7 @@ import Foundation
 
 extension TheBookKeeper {
 
-    // MARK: - Session File I/O
+    // MARK: - Private File I/O
 
     nonisolated static func createPrivateDirectory(at directory: URL) throws {
         let fileManager = FileManager.default
@@ -15,7 +15,7 @@ extension TheBookKeeper {
             )
             try fileManager.setAttributes(attributes, ofItemAtPath: directory.path)
         } catch {
-            throw BookKeeperError.session(.directoryCreationFailed(
+            throw BookKeeperError.storage(.directoryCreationFailed(
                 path: directory.path,
                 reason: String(describing: error)
             ))
@@ -35,7 +35,7 @@ extension TheBookKeeper {
                     try handle.write(contentsOf: contents)
                 }
             } catch {
-                throw BookKeeperError.session(.privateFileCreationFailed(
+                throw BookKeeperError.storage(.privateFileCreationFailed(
                     path: url.path,
                     reason: String(describing: error)
                 ))
@@ -48,7 +48,7 @@ extension TheBookKeeper {
             contents: contents,
             attributes: attributes
         ) else {
-            throw BookKeeperError.session(.privateFileCreationFailed(
+            throw BookKeeperError.storage(.privateFileCreationFailed(
                 path: url.path,
                 reason: "FileManager.createFile returned false"
             ))
@@ -57,7 +57,7 @@ extension TheBookKeeper {
         do {
             try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
         } catch {
-            throw BookKeeperError.session(.privateFileCreationFailed(
+            throw BookKeeperError.storage(.privateFileCreationFailed(
                 path: url.path,
                 reason: String(describing: error)
             ))
@@ -88,23 +88,6 @@ extension TheBookKeeper {
         } catch {
             BookKeeperCleanup.removeTemporaryItem(at: temporaryURL, operation: .removeTemporaryFile)
             throw error
-        }
-    }
-
-    func flushManifest(manifest: SessionManifest, directory: URL) throws {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let manifestPath = directory.appendingPathComponent("manifest.json")
-        do {
-            let data = try encoder.encode(manifest)
-            try Self.writePrivateData(data, to: manifestPath)
-        } catch {
-            throw BookKeeperError.manifest(.writeFailed(
-                sessionId: manifest.sessionId,
-                path: manifestPath.path,
-                reason: String(describing: error)
-            ))
         }
     }
 

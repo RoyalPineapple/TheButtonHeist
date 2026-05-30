@@ -48,11 +48,15 @@ final class ElementActionRequestContractTests: XCTestCase {
             command: .rotor,
             arguments: [
                 "target": targetValue(identifier: "body"),
-                "currentHeistId": .string("body-current"),
-                "currentTextStartOffset": .int(10),
-                "currentTextEndOffset": .int(4),
+                "continuation": .object([
+                    "heistId": .string("body-current"),
+                    "textRange": .object([
+                        "startOffset": .int(10),
+                        "endOffset": .int(4),
+                    ]),
+                ]),
             ],
-            contains: "schema validation failed for currentTextStartOffset/currentTextEndOffset: " +
+            contains: "schema validation failed for continuation.textRange.startOffset/continuation.textRange.endOffset: " +
                 "observed 10..<4; expected integer range with start >= 0 and end >= start"
         )
     }

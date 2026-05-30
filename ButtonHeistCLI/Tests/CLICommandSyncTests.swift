@@ -13,8 +13,8 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSessionHelpShowsCurrentUserCommands() {
-        let help = TheFence.Command.cliSessionHelp
+    func testJSONLinesHelpShowsCurrentUserCommands() {
+        let help = TheFence.Command.cliJSONLinesHelp
 
         XCTAssertTrue(help.contains("activate"))
         XCTAssertTrue(help.contains("get_interface"))
@@ -37,21 +37,22 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.connection.connectTimeout, 2.5)
     }
 
-    func testConnectCommandMergesPositionalDeviceAndConnectionTimeout() throws {
+    func testConnectCommandUsesTypedDeviceOption() throws {
         let command = try ConnectCommand.parse([
+            "--device",
             "127.0.0.1:1455",
             "--connect-timeout",
             "2.5",
             "--quiet",
         ])
-        let merged = ConnectionOptions.merging(
-            base: command.connection,
-            positionalDevice: command.device
-        )
 
-        XCTAssertEqual(merged.device, "127.0.0.1:1455")
-        XCTAssertEqual(merged.connectTimeout, 2.5)
-        XCTAssertTrue(merged.quiet)
+        XCTAssertEqual(command.connection.device, "127.0.0.1:1455")
+        XCTAssertEqual(command.connection.connectTimeout, 2.5)
+        XCTAssertTrue(command.connection.quiet)
+    }
+
+    func testConnectCommandRejectsPositionalDevice() {
+        XCTAssertThrowsError(try ConnectCommand.parse(["127.0.0.1:1455"]))
     }
 
     func testWaitForChangeCommandDefaultTimeoutIsThirtySeconds() throws {
@@ -65,11 +66,11 @@ final class CLICommandSyncTests: XCTestCase {
     }
 
     func testTypeTextRejectsEmptyText() throws {
-        XCTAssertThrowsError(try TypeCommand.parse([""]))
+        XCTAssertThrowsError(try TypeCommand.parse(["--text", ""]))
     }
 
     func testTypeTextRejectsUnknownOption() {
-        XCTAssertThrowsError(try TypeCommand.parse(["--unknown-option", "hello"]))
+        XCTAssertThrowsError(try TypeCommand.parse(["--unknown-option", "--text", "hello"]))
     }
 
     func testFenceExpectationArgumentContractRejectsShorthand() {
@@ -158,12 +159,12 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.requestId, .double(1.25))
     }
 
-    func testSharedRequestBuilderParsesWholeNumberDecimalMachineRequestId() throws {
+    func testSharedRequestBuilderParsesWholeNumberMachineRequestIdAsInteger() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
             from: #"{"id":1.0,"command":"ping"}"#
         )
 
-        XCTAssertEqual(parsed.requestId, .double(1.0))
+        XCTAssertEqual(parsed.requestId, .signedInteger(1))
     }
 
     func testSharedRequestBuilderRejectsNonScalarMachineRequestId() {
@@ -205,7 +206,7 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderRejectsHumanTextInJSONSessionMode() {
+    func testSharedRequestBuilderRejectsHumanTextInJSONLinesMode() {
         XCTAssertThrowsError(
             try CLIRequestBuilder.parsedRequest(from: "activate button_save")
         ) { error in
@@ -216,7 +217,7 @@ final class CLICommandSyncTests: XCTestCase {
         }
     }
 
-    func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONSessionMode() throws {
+    func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
             from: #"{"command":"activate","target":{"heistId":"button_save"}}"#
         )

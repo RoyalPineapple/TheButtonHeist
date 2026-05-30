@@ -3,22 +3,14 @@ import Darwin
 import ButtonHeist
 
 @ButtonHeistActor
-final class ReplSession {
-
-    // MARK: - Nested Types
-
-    private enum State {
-        case running(IdleMonitor?)
-        case exiting
-        case stopped
-    }
+final class JSONLinesSession {
 
     // MARK: - Properties
 
     private let format: OutputFormat
     private let fence: TheFence
     private let sessionTimeout: TimeInterval
-    private var state: State = .stopped
+    private var idleMonitor: IdleMonitor?
 
     // MARK: - Init
 
@@ -31,33 +23,23 @@ final class ReplSession {
         }
     }
 
-    // MARK: - REPL Loop
+    // MARK: - JSON Lines Loop
 
     func run() async throws {
         try await fence.start()
 
-        let isTTY = isatty(STDIN_FILENO) != 0
-        if isTTY, sessionTimeout > 0 {
+        if sessionTimeout > 0 {
             logStatus("Idle timeout: \(Int(sessionTimeout))s")
         }
 
-        // SIGINT closes stdin to unstick the blocking readLine; the loop sees
-        // a nil line and breaks, then runs the same structured teardown the
-        // idle-timeout path uses (idleMonitor.stop, state = .stopped,
-        // fence.stop). close() is async-signal-safe; we deliberately do NOT
-        // touch Swift state from here.
+        // SIGINT closes stdin to unstick the blocking readLine; the loop sees a
+        // nil line and runs the same structured teardown as EOF/idle timeout.
         signal(SIGINT) { _ in close(STDIN_FILENO) }
 
-        let monitor = sessionTimeout > 0 ? makeTimeoutMonitor() : nil
-        state = .running(monitor)
+        idleMonitor = sessionTimeout > 0 ? makeTimeoutMonitor() : nil
 
-        loop: while case .running(let idleMonitor) = state {
-            if isTTY {
-                fputs("> ", stderr)
-                fflush(stderr)
-            }
-
-            // Swift.readLine() is a blocking syscall; detaching from MainActor keeps the REPL responsive.
+        while true {
+            // Swift.readLine() is a blocking syscall; detaching from MainActor keeps JSON-lines input responsive.
             // swiftlint:disable:next agent_no_task_detached
             guard let line = await Task.detached(operation: { Swift.readLine() }).value else {
                 break
@@ -70,22 +52,17 @@ final class ReplSession {
 
             let (response, requestId) = await processLine(trimmed)
             outputResponse(response, id: requestId)
-
-            if case .exiting = state { break loop }
         }
 
-        if case .running(let idleMonitor) = state {
-            idleMonitor?.stop()
-        }
-        state = .stopped
+        idleMonitor?.stop()
+        idleMonitor = nil
         fence.stop()
     }
 
     private func makeTimeoutMonitor() -> IdleMonitor {
         let monitor = IdleMonitor(timeout: sessionTimeout) { [weak self] in
             guard let self else { return }
-            logStatus("Session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
-            self.state = .exiting
+            logStatus("JSON-lines session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
             close(STDIN_FILENO)
         }
         monitor.resetTimer()

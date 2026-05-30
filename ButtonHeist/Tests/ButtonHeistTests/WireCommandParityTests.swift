@@ -37,8 +37,8 @@ final class WireCommandParityTests: XCTestCase {
             let singleMessages = try fence.executableActionMessages(for: singleRequest)
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
-            let evidence = try playbackEvidence(command: command, fields: arguments)
-            let playbackRequest = try fence.parsePlaybackEvidence(evidence)
+            let sourceStep = try heistStep(command: command, fields: arguments)
+            let playbackRequest = try fence.parseHeistStep(sourceStep)
             let playbackMessages = try fence.executableActionMessages(for: playbackRequest)
 
             XCTAssertEqual(
@@ -187,13 +187,13 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    private func playbackEvidence(
+    private func heistStep(
         command: TheFence.Command,
         fields: [String: HeistValue]
-    ) throws -> HeistEvidence {
+    ) throws -> HeistStep {
         var arguments = fields
         let target = try playbackTarget(from: &arguments)
-        return try HeistEvidence(command: command.rawValue, target: target, arguments: arguments)
+        return try HeistStep(command: command.rawValue, target: target, arguments: arguments)
     }
 
     @ButtonHeistActor

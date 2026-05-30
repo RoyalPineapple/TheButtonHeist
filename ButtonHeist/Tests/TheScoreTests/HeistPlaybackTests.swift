@@ -5,17 +5,17 @@ final class HeistPlaybackTests: XCTestCase {
 
     // MARK: - Heist Playback Round-Trip
 
-    func testScriptRoundTrip() throws {
-        let script = HeistPlayback(
+    func testHeistRoundTrip() throws {
+        let heist = HeistPlayback(
             app: "com.buttonheist.testapp",
             steps: [
-                try HeistEvidence(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
-                try HeistEvidence(command: "type_text", arguments: ["text": .string("user@example.com")]),
-                try HeistEvidence(command: "activate", target: semanticTarget(label: "Submit", traits: [.button])),
+                try HeistStep(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
+                try HeistStep(command: "type_text", arguments: ["text": .string("user@example.com")]),
+                try HeistStep(command: "activate", target: semanticTarget(label: "Submit", traits: [.button])),
             ]
         )
 
-        let data = try JSONEncoder().encode(script)
+        let data = try JSONEncoder().encode(heist)
         let decoded = try JSONDecoder().decode(HeistPlayback.self, from: data)
 
         XCTAssertEqual(decoded.version, HeistPlayback.currentVersion)
@@ -67,7 +67,7 @@ final class HeistPlaybackTests: XCTestCase {
     // MARK: - Heist Step Target Encoding
 
     func testStepEncodesTargetObject() throws {
-        let step = try HeistEvidence(
+        let step = try HeistStep(
             command: "swipe",
             target: semanticTarget(label: "List", traits: [.adjustable]),
             arguments: ["direction": .string("up")]
@@ -86,12 +86,12 @@ final class HeistPlaybackTests: XCTestCase {
     }
 
     func testStepRoundTripsTarget() throws {
-        let original = try HeistEvidence(
+        let original = try HeistStep(
             command: "activate",
             target: semanticTarget(label: "Submit", traits: [.button])
         )
         let data = try JSONEncoder().encode(original)
-        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
+        let step = try JSONDecoder().decode(HeistStep.self, from: data)
 
         XCTAssertEqual(step.command, "activate")
         XCTAssertEqual(step.target, semanticTarget(label: "Submit", traits: [.button]))
@@ -100,39 +100,39 @@ final class HeistPlaybackTests: XCTestCase {
 
     func testPlaybackTargetRejectsHeistIdAsDurableIdentity() {
         let json = #"{"command":"activate","target":{"heistId":"button_save"}}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
         }
     }
 
     func testPlaybackTargetRejectsEmptyMatcherOnDecode() {
         let json = #"{"command":"activate","target":{}}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("requires heistId or matcher"), "\(error)")
         }
     }
 
     func testPlaybackTargetRejectsUnknownTargetField() {
         let json = #"{"command":"activate","target":{"label":"Save","unexpectedTargetField":"button_save"}}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("unexpectedTargetField"), "\(error)")
         }
     }
 
     func testStepRejectsRecordingMetadata() {
         let json = #"{"command":"activate","target":{"label":"Save"},"_recorded":{"heistId":"button_save"}}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("_recorded"), "\(error)")
         }
     }
 
     func testStepWithNoTarget() throws {
-        let original = try HeistEvidence(
+        let original = try HeistStep(
             command: "type_text",
             arguments: ["text": .string("hello")]
         )
         let data = try JSONEncoder().encode(original)
-        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
+        let step = try JSONDecoder().decode(HeistStep.self, from: data)
 
         XCTAssertEqual(step.command, "type_text")
         XCTAssertNil(step.target)
@@ -141,19 +141,19 @@ final class HeistPlaybackTests: XCTestCase {
 
     func testStepRejectsUnknownTopLevelField() {
         let json = #"{"command":"activate","unexpectedStepField":"button_save"}"#
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("unexpectedStepField"), "\(error)")
         }
     }
 
     func testStepRejectsNegativeOrdinal() throws {
-        let step = try HeistEvidence(
+        let step = try HeistStep(
             command: "activate",
             target: semanticTarget(label: "Save", ordinal: -1)
         )
         let data = try JSONEncoder().encode(step)
 
-        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: data)) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: data)) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -161,8 +161,8 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testCurrentVersionIsFive() {
-        XCTAssertEqual(HeistPlayback.currentVersion, 5)
+    func testCurrentVersionIsSix() {
+        XCTAssertEqual(HeistPlayback.currentVersion, 6)
     }
 
     // MARK: - Heist Value
@@ -194,8 +194,8 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(value.description, #"{"count"=2, "flags"=[true, 3.5], "text"="Save \"Now\""}"#)
     }
 
-    func testHeistEvidenceDescriptionComposesTargetAndArguments() throws {
-        let step = try HeistEvidence(
+    func testHeistStepDescriptionComposesTargetAndArguments() throws {
+        let step = try HeistStep(
             command: "activate",
             target: semanticTarget(label: "Save", traits: [.button]),
             arguments: [
@@ -209,25 +209,25 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(step.description, expected)
     }
 
-    func testProgrammaticEvidenceRejectsCaptureHandleTargetWithoutCrashing() {
-        XCTAssertThrowsError(try HeistEvidence(command: "activate", target: .heistId("button_save"))) { error in
-            XCTAssertEqual(error as? HeistEvidenceError, .captureHandleTarget)
+    func testProgrammaticStepRejectsCaptureHandleTargetWithoutCrashing() {
+        XCTAssertThrowsError(try HeistStep(command: "activate", target: .heistId("button_save"))) { error in
+            XCTAssertEqual(error as? HeistStepError, .captureHandleTarget)
         }
     }
 
-    func testProgrammaticEvidenceRejectsEmptyMatcherTargetWithoutCrashing() {
-        XCTAssertThrowsError(try HeistEvidence(command: "activate", target: .matcher(ElementMatcher()))) { error in
-            XCTAssertEqual(error as? HeistEvidenceError, .emptyMatcherTarget)
+    func testProgrammaticStepRejectsEmptyMatcherTargetWithoutCrashing() {
+        XCTAssertThrowsError(try HeistStep(command: "activate", target: .matcher(ElementMatcher()))) { error in
+            XCTAssertEqual(error as? HeistStepError, .emptyMatcherTarget)
         }
     }
 
     // MARK: - Full Heist JSON Shape
 
-    func testFullScriptJsonShape() throws {
-        let script = HeistPlayback(
+    func testFullHeistJsonShape() throws {
+        let heist = HeistPlayback(
             app: "com.example.app",
             steps: [
-                try HeistEvidence(
+                try HeistStep(
                     command: "activate",
                     target: semanticTarget(label: "Go", traits: [.button])
                 ),
@@ -236,7 +236,7 @@ final class HeistPlaybackTests: XCTestCase {
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(script)
+        let data = try encoder.encode(heist)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         XCTAssertEqual(json?["version"] as? Int, HeistPlayback.currentVersion)

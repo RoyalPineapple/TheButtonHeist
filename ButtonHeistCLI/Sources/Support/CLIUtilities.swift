@@ -58,3 +58,38 @@ private func parseJSONArray(from data: Data, source: String) throws -> [HeistVal
         throw ValidationError("\(source) is not valid JSON: \(error.localizedDescription)")
     }
 }
+
+// MARK: - JSON Object Loading
+
+func loadJSONObject(
+    inline: String?,
+    fromFile path: String?,
+    optionName: String
+) throws -> [String: HeistValue]? {
+    switch (inline, path) {
+    case (nil, nil):
+        return nil
+    case (.some, .some):
+        throw ValidationError("--\(optionName) and --\(optionName)-from-file are mutually exclusive")
+    case (.some(let literal), nil):
+        return try parseJSONObject(from: Data(literal.utf8), source: "--\(optionName)")
+    case (nil, .some(let filePath)):
+        let expanded = (filePath as NSString).expandingTildeInPath
+        let url = URL(fileURLWithPath: expanded)
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw ValidationError("Failed to read \(filePath): \(error.localizedDescription)")
+        }
+        return try parseJSONObject(from: data, source: filePath)
+    }
+}
+
+private func parseJSONObject(from data: Data, source: String) throws -> [String: HeistValue] {
+    do {
+        return try JSONDecoder().decode([String: HeistValue].self, from: data)
+    } catch {
+        throw ValidationError("\(source) is not valid JSON object: \(error.localizedDescription)")
+    }
+}

@@ -17,7 +17,7 @@ private extension FenceResponse {
 }
 
 extension TheFence {
-    func recordHeistEvidence(
+    func recordHeistStep(
         _ request: ParsedRequest,
         dispatchedResponse: FenceResponse,
         validatedResponse: FenceResponse,
@@ -25,7 +25,7 @@ extension TheFence {
     ) {
         guard playback.isIdle else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
-        bookKeeper.recordHeistEvidence(
+        bookKeeper.recordHeistStep(
             request,
             actionResult: finalReceipt.actionResult,
             expectation: finalReceipt.expectation,

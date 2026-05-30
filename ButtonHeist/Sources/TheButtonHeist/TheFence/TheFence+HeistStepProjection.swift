@@ -1,13 +1,14 @@
 import TheScore
 
-struct HeistRecordingProjection: Sendable, Equatable {
+struct HeistStepProjection: Sendable, Equatable {
     let elementTarget: ElementTarget?
     let arguments: [String: HeistValue]
+    let expectation: ActionExpectation?
 }
 
 extension TheFence.ParsedRequest {
     @ButtonHeistActor
-    func heistRecordingProjection() throws -> HeistRecordingProjection {
+    func heistStepProjection() throws -> HeistStepProjection {
         let elementTarget = try arguments.decodedElementTarget()
         var values = arguments.argumentValues
         values.removeValue(forKey: "requestId")
@@ -19,15 +20,15 @@ extension TheFence.ParsedRequest {
         }
 
         if expectationPayload.expectation != nil {
-            values["expect"] = arguments.argumentValues["expect"]
             if let timeout = arguments.argumentValues["timeout"] {
                 values["timeout"] = timeout
             }
         }
 
-        return HeistRecordingProjection(
+        return HeistStepProjection(
             elementTarget: elementTarget,
-            arguments: values
+            arguments: values,
+            expectation: expectationPayload.expectation
         )
     }
 }

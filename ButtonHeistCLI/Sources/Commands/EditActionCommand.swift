@@ -10,14 +10,14 @@ struct EditActionCommand: AsyncParsableCommand, CLICommandContract {
             that currently has focus.
 
             Examples:
-              buttonheist edit_action copy
-              buttonheist edit_action paste
-              buttonheist edit_action delete
-              buttonheist edit_action selectAll
+              buttonheist edit_action --action copy
+              buttonheist edit_action --action paste
+              buttonheist edit_action --action delete
+              buttonheist edit_action --action selectAll
             """
     )
 
-    @Argument(help: "Edit action: \(Self.catalogAllowedValuesDescription(for: .action))")
+    @Option(name: .long, help: "Edit action: \(Self.catalogAllowedValuesDescription(for: .action))")
     var action: String
 
     @OptionGroup var connection: ConnectionOptions

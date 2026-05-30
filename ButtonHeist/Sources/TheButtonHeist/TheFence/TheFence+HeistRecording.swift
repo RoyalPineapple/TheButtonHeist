@@ -8,10 +8,7 @@ extension TheFence {
     // MARK: - Handler: Heist Recording
 
     func handleStartHeist(_ request: StartHeistRequest) throws -> FenceResponse {
-        if bookKeeper.manifest == nil {
-            try bookKeeper.beginSession(identifier: request.identifier)
-        }
-        try bookKeeper.startHeistRecording(app: request.app)
+        try bookKeeper.startRecording(identifier: request.identifier, app: request.app)
         return .heistStarted
     }
 
@@ -19,7 +16,7 @@ extension TheFence {
         guard let resolvedURL = request.outputPath.validatedOutputURL() else {
             throw FenceError.invalidRequest("Invalid output path: must not be empty, contain '..' components, or contain control characters")
         }
-        let heist = try bookKeeper.stopHeistRecording()
+        let heist = try bookKeeper.finishRecording()
         try TheBookKeeper.writeHeist(heist, to: resolvedURL)
         return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
     }

@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "app": "com.buttonheist.testapp",
   "steps": [
     {
@@ -10,10 +10,8 @@
           "button"
         ]
       },
-      "arguments": {
-        "expect": {
-          "type": "screen_changed"
-        }
+      "expectation": {
+        "type": "screen_changed"
       }
     },
     {
@@ -24,10 +22,8 @@
           "button"
         ]
       },
-      "arguments": {
-        "expect": {
-          "type": "screen_changed"
-        }
+      "expectation": {
+        "type": "screen_changed"
       }
     },
     {
@@ -39,10 +35,8 @@
           "backButton"
         ]
       },
-      "arguments": {
-        "expect": {
-          "type": "screen_changed"
-        }
+      "expectation": {
+        "type": "screen_changed"
       }
     }
   ]

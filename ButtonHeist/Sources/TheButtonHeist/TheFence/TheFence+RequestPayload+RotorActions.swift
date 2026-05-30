@@ -37,27 +37,24 @@ extension TheFence {
 
 extension TheFence.CommandArgumentEnvelope {
     func rotorContinuation() throws -> RotorContinuation {
-        let startOffset = try schemaInteger("currentTextStartOffset")
-        let endOffset = try schemaInteger("currentTextEndOffset")
-        if (startOffset == nil) != (endOffset == nil) {
-            throw FenceError.invalidRequest("currentTextStartOffset and currentTextEndOffset must be provided together")
+        guard let continuation = try schemaDictionary("continuation") else {
+            return .none
         }
-        guard let startOffset, let endOffset else {
-            guard let currentHeistId = try schemaString("currentHeistId") else {
-                return .none
-            }
-            return .item(currentHeistId)
+        try continuation.rejectUnknownKeys(allowed: ["heistId", "textRange"], expected: "valid rotor continuation field")
+        let heistId = try continuation.requiredSchemaString("heistId")
+        guard let textRange = try continuation.schemaDictionary("textRange") else {
+            return .item(heistId)
         }
-        guard let currentHeistId = try schemaString("currentHeistId") else {
-            throw SchemaValidationError(field: "currentHeistId", observed: "missing", expected: "string")
-        }
+        try textRange.rejectUnknownKeys(allowed: ["startOffset", "endOffset"], expected: "valid rotor text range field")
+        let startOffset = try textRange.requiredSchemaInteger("startOffset")
+        let endOffset = try textRange.requiredSchemaInteger("endOffset")
         guard startOffset >= 0, endOffset >= startOffset else {
             throw SchemaValidationError(
-                field: "currentTextStartOffset/currentTextEndOffset",
+                field: textRange.field("startOffset") + "/" + textRange.field("endOffset"),
                 observed: "\(startOffset)..<\(endOffset)",
                 expected: "integer range with start >= 0 and end >= start"
             )
         }
-        return .textRange(currentHeistId, TextRangeReference(startOffset: startOffset, endOffset: endOffset))
+        return .textRange(heistId, TextRangeReference(startOffset: startOffset, endOffset: endOffset))
     }
 }

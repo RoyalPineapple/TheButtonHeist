@@ -3,7 +3,7 @@ import Foundation
 import TheScore
 
 private enum BookKeeperArtifactKind {
-    case screenshot(ScreenshotMetadata)
+    case screenshot
 
     var subdirectoryName: String {
         switch self {
@@ -23,20 +23,6 @@ extension TheBookKeeper {
 
     // MARK: - Artifact Storage
 
-    func writeScreenshot(
-        base64Data: String,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: ScreenshotMetadata
-    ) throws -> URL {
-        try writeSessionArtifact(
-            kind: .screenshot(metadata),
-            base64Data: base64Data,
-            requestId: requestId,
-            command: command
-        )
-    }
-
     func writeToPath(_ data: Data, outputPath: String) throws -> URL {
         guard let resolvedURL = outputPath.validatedOutputURL() else {
             throw BookKeeperError.unsafePath(outputPath)
@@ -45,45 +31,35 @@ extension TheBookKeeper {
         return resolvedURL
     }
 
-    /// Write a screenshot to whichever sink is available, or return `nil` if
-    /// neither a session is active nor an explicit outputPath was supplied.
+    /// Write a screenshot to an explicit output path, or return `nil` when the
+    /// caller requested inline data with no filesystem sink.
     ///
     /// Resolution rules:
     /// - `outputPath` supplied: write raw bytes to that path via `writeToPath`.
-    /// - No `outputPath`, session active: write into the session artifact
-    ///   directory.
-    /// - No `outputPath`, no session: return `nil`; caller returns the
-    ///   in-memory payload.
+    /// - No `outputPath`: return `nil`; caller returns the in-memory payload.
     func writeScreenshotIfSinkAvailable(
         base64Data: String,
         outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: ScreenshotMetadata
+        command: TheFence.Command
     ) throws -> URL? {
         try writeArtifactIfSinkAvailable(
-            kind: .screenshot(metadata),
+            kind: .screenshot,
             base64Data: base64Data,
             outputPath: outputPath,
-            requestId: requestId,
             command: command
         )
     }
 
-    /// Write a screenshot to an explicit path, active session artifact
-    /// directory, or standalone artifact directory when no session exists.
+    /// Write a screenshot to an explicit path or standalone artifact directory.
     func writeScreenshotArtifact(
         base64Data: String,
         outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: ScreenshotMetadata
+        command: TheFence.Command
     ) throws -> URL {
         try writeArtifact(
-            kind: .screenshot(metadata),
+            kind: .screenshot,
             base64Data: base64Data,
             outputPath: outputPath,
-            requestId: requestId,
             command: command
         )
     }
@@ -92,61 +68,31 @@ extension TheBookKeeper {
         kind: BookKeeperArtifactKind,
         base64Data: String,
         outputPath: String?,
-        requestId: String,
         command: TheFence.Command
     ) throws -> URL? {
         if let outputPath {
             let data = try decodeArtifactData(base64Data)
             return try writeToPath(data, outputPath: outputPath)
         }
-        guard hasActiveSession else { return nil }
-        return try writeSessionArtifact(
-            kind: kind,
-            base64Data: base64Data,
-            requestId: requestId,
-            command: command
-        )
+        return nil
     }
 
     private func writeArtifact(
         kind: BookKeeperArtifactKind,
         base64Data: String,
         outputPath: String?,
-        requestId: String,
         command: TheFence.Command
     ) throws -> URL {
         if let url = try writeArtifactIfSinkAvailable(
             kind: kind,
             base64Data: base64Data,
             outputPath: outputPath,
-            requestId: requestId,
             command: command
         ) {
             return url
         }
         let data = try decodeArtifactData(base64Data)
         return try writeStandaloneArtifact(kind: kind, data: data, command: command)
-    }
-
-    private func writeSessionArtifact(
-        kind: BookKeeperArtifactKind,
-        base64Data: String,
-        requestId: String,
-        command: TheFence.Command
-    ) throws -> URL {
-        let data = try decodeArtifactData(base64Data)
-        return try mutateActiveSession { session in
-            let sequenceNumber = session.nextSequenceNumber
-            session.nextSequenceNumber += 1
-
-            let filename = String(format: "%03d-%@.%@", sequenceNumber, command.rawValue, kind.fileExtension)
-            let subdirectory = session.directory.appendingPathComponent(kind.subdirectoryName)
-            try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
-            let fileURL = subdirectory.appendingPathComponent(filename)
-            try data.write(to: fileURL)
-
-            return fileURL
-        }
     }
 
     private func writeStandaloneArtifact(
