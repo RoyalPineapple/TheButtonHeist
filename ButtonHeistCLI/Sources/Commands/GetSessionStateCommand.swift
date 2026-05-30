@@ -6,8 +6,8 @@ struct GetSessionStateCommand: AsyncParsableCommand, CLICommandContract {
         commandName: Self.cliCommandName,
         abstract: "Report the current connection + session state",
         discussion: """
-            Returns connection status, connected device, recording state,
-            configured timeouts, and the most recent action/latency. Useful
+            Returns connection status, connected device, configured timeouts,
+            and the most recent action/latency. Useful
             in scripts that need to probe whether an agent is healthy before
             issuing commands.
 

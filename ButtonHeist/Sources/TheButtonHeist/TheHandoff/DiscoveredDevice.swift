@@ -286,7 +286,7 @@ extension DiscoveredDevice {
         case .tls:
             return .failed(reason)
         case .discovery, .setup, .transport, .authentication, .session,
-             .request, .recording, .protocolNegotiation, .client, .server:
+             .request, .protocolNegotiation, .client, .server:
             return .unavailable
         }
     }

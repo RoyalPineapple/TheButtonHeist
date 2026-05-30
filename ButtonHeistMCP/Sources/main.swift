@@ -56,8 +56,7 @@ struct ButtonHeistMCPServer {
             }
 
             let response = try await fence.execute(command: command, arguments: arguments)
-            let backgroundAccessibilityTraces = fence.drainBackgroundAccessibilityTraces()
-            return renderResponse(response, backgroundAccessibilityTraces: backgroundAccessibilityTraces)
+            return renderResponse(response)
         } catch {
             let response = FenceResponse.failure(error)
             return .init(content: [.text(text: response.compactFormatted(), annotations: nil, _meta: nil)], isError: true)
@@ -109,50 +108,8 @@ struct ButtonHeistMCPServer {
         }
     }
 
-    static func renderResponse(_ response: FenceResponse, backgroundAccessibilityTraces: [AccessibilityTrace]) -> CallTool.Result {
+    static func renderResponse(_ response: FenceResponse) -> CallTool.Result {
         var content: [Tool.Content] = []
-
-        // Background changes: what happened while the agent was thinking
-        for backgroundAccessibilityTrace in backgroundAccessibilityTraces {
-            guard let backgroundDelta = backgroundAccessibilityTrace.backgroundDeltaProjection else { continue }
-            let transient = backgroundDelta.transient
-            var lines: [String] = []
-            switch backgroundDelta {
-            case .screenChanged(let payload):
-                lines.append("[while_idle: screen changed (\(payload.elementCount) elements)]")
-                for (index, element) in payload.newInterface.elements.enumerated() {
-                    lines.append("  \(FenceResponse.compactElementLine(element, displayIndex: index))")
-                }
-                for element in transient {
-                    lines.append("  +- \(FenceResponse.compactElementLine(element))")
-                }
-            case .elementsChanged(let payload):
-                let edits = payload.edits
-                var parts: [String] = []
-                if !edits.added.isEmpty { parts.append("+\(edits.added.count)") }
-                if !edits.removed.isEmpty { parts.append("-\(edits.removed.count)") }
-                if !edits.updated.isEmpty { parts.append("~\(edits.updated.count)") }
-                if !transient.isEmpty { parts.append("+-\(transient.count)") }
-                lines.append("[while_idle: elements changed \(parts.joined(separator: " ")) (\(payload.elementCount) total)]")
-                for element in edits.added {
-                    lines.append("  + \(FenceResponse.compactElementLine(element))")
-                }
-                for heistId in edits.removed {
-                    lines.append("  - \(heistId)")
-                }
-                for element in transient {
-                    lines.append("  +- \(FenceResponse.compactElementLine(element))")
-                }
-            case .noChange(let payload):
-                lines.append("[while_idle: no net change (\(payload.elementCount) elements)]")
-                for element in transient {
-                    lines.append("  +- \(FenceResponse.compactElementLine(element))")
-                }
-            }
-            if !lines.isEmpty {
-                content.append(.text(text: lines.joined(separator: "\n"), annotations: nil, _meta: nil))
-            }
-        }
 
         // Screenshots: embed as image content. File-based screenshots fall through
         // to the compact text below.
@@ -160,20 +117,8 @@ struct ButtonHeistMCPServer {
             content.append(.image(data: payload.pngData, mimeType: "image/png", annotations: nil, _meta: nil))
         }
 
-        if case .recordingExpanded = response,
-           let jsonText = Self.jsonText(response) {
-            content.append(.text(text: jsonText, annotations: nil, _meta: nil))
-        } else {
-            content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
-        }
+        content.append(.text(text: response.compactFormatted(), annotations: nil, _meta: nil))
         return .init(content: content, isError: response.isFailure)
-    }
-
-    private static func jsonText(_ response: FenceResponse) -> String? {
-        // Boundary try?: MCP presentation can fall back to compact text when
-        // expanded JSON cannot be encoded for display-only content.
-        guard let data = try? response.jsonData() else { return nil }
-        return String(data: data, encoding: .utf8)
     }
 
 }

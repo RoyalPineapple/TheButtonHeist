@@ -33,7 +33,6 @@ layer.
 - Resets an idle timeout after every tool call and disconnects when inactive
 - Returns screenshot metadata plus an artifact path by default; pass `inlineData=true` on `get_screen` to opt into capped MCP image content
 - `get_screen` is not batch-executable; capture screenshots before or after `run_batch`
-- Returns recording artifact paths plus metadata by default; `inlineData` and `includeInteractionLog` are explicit, size-capped expansion flags
 
 ## Environment
 

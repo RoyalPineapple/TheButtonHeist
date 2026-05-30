@@ -16,7 +16,7 @@ Button Heist turns that contract into an inside route for agents: a control surf
 
 Link one framework into a debug build, connect over MCP or CLI, and the agent operates the app by meaning. No coordinate math. No screenshot parsing loops. No blind taps.
 
-Every job leaves evidence: deltas, expectations, recordings, and a replayable test trail.
+Every job leaves evidence: deltas, expectations, and a replayable test trail.
 
 ## The difference
 
@@ -129,7 +129,9 @@ $BH type_text "Hello" --identifier nameField
 $BH get_screen --output screen.png
 ```
 
-The session REPL accepts canonical command names with `key=value` arguments or canonical machine JSON.
+The session command keeps one connection open and accepts canonical machine JSON
+objects only. Direct CLI commands and MCP tools project from the same Fence
+command contract.
 
 For the complete generated CLI command surface, see the
 [Command Reference](docs/reference/commands.md). For workflow context, see the
@@ -151,8 +153,6 @@ expectations and formatting. Tap "Login" and the response carries the capture
 chain plus derived screen context, not a second stored delta truth.
 
 The agent does not need to re-read the screen to understand the result. Value updates include the element, property, old value, and new value. When nothing changes, the delta projection says `"noChange"`.
-
-When the screen changes while the agent is thinking, the next response uses the same capture/delta contract to report that background change before any stale action runs.
 
 ### 2. Expectations: assertions on the contract
 
@@ -258,10 +258,9 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 | **TheStash** | Current element state, target resolution, `heistId` assignment, and wire conversion. Live view pointers stay inside |
 | **TheBurglar** | Accessibility hierarchy parsing, topology detection, and scroll-container discovery |
 | **TheBrains** | Action execution, scroll orchestration, delta generation, waits, and exploration |
-| **TheGetaway** | Message dispatch, encoding/decoding, transport wiring, response state, and interaction recording |
+| **TheGetaway** | Message dispatch, encoding/decoding, transport wiring, and response state |
 | **TheMuscle** | Token validation, approval UI, and session locking |
-| **TheStakeout** | H.264 screen recording with frame timing and inactivity detection |
-| **TheFingerprints** | Touch indicators for live interaction and recorded output |
+| **TheFingerprints** | Touch indicators for live interaction |
 | **TheTripwire** | UI readiness checks: animation detection, presentation-layer fingerprints, and settle waits |
 | **ThePlant** | ObjC `+load` hook that starts TheInsideJob when the framework loads |
 
@@ -271,7 +270,7 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 |------|------|
 | **TheFence** | Command dispatch for CLI and MCP, request-response correlation, and async waits |
 | **TheHandoff** | Scoped discovery, named/direct targets, TLS connection handling, session state, and testable connection hooks |
-| **TheBookKeeper** | Session logs, artifact storage, heist recording, and replay |
+| **TheBookKeeper** | Command evidence, artifact storage, heist recording, and replay |
 
 ### Interfaces
 

@@ -40,10 +40,8 @@ extension TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        backgroundAccessibility.reset()
         commandExecutionState.reset()
         cancelAllPendingRequests(error: error)
-        recording.reset()
     }
 
     private func sessionStateError(for failure: HandoffConnectionError) -> Error {

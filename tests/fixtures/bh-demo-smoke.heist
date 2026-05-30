@@ -1,7 +1,6 @@
 {
-  "version": 4,
+  "version": 5,
   "app": "com.buttonheist.testapp",
-  "recorded": "2026-05-15T00:00:00Z",
   "steps": [
     {
       "command": "activate",

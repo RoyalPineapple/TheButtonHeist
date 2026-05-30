@@ -130,7 +130,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testServerMessageRejectsUnknownTopLevelField() throws {
-        let data = Data(#"{"type":"recordingStarted","staleField":"value"}"#.utf8)
+        let data = Data(#"{"type":"serverHello","staleField":"value"}"#.utf8)
 
         XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data)) { error in
             XCTAssertTrue("\(error)".contains("staleField"), "\(error)")
@@ -138,20 +138,20 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testNoPayloadServerMessageRejectsStrayPayload() throws {
-        let data = Data(#"{"type":"recordingStarted","payload":{"junk":true}}"#.utf8)
+        let data = Data(#"{"type":"serverHello","payload":{"junk":true}}"#.utf8)
 
         XCTAssertThrowsError(try JSONDecoder().decode(ServerMessage.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("recordingStarted must not include a payload"), "\(error)")
+            XCTAssertTrue("\(error)".contains("serverHello must not include a payload"), "\(error)")
         }
     }
 
     func testNoPayloadResponseEnvelopeRejectsStrayPayload() throws {
         let data = Data("""
-        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"recordingStarted","payload":{"junk":true}}
+        {"buttonHeistVersion":"\(TheScore.buttonHeistVersion)","type":"serverHello","payload":{"junk":true}}
         """.utf8)
 
         XCTAssertThrowsError(try JSONDecoder().decode(ResponseEnvelope.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("recordingStarted must not include a payload"), "\(error)")
+            XCTAssertTrue("\(error)".contains("serverHello must not include a payload"), "\(error)")
         }
     }
 
@@ -190,12 +190,12 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testErrorWireShape() throws {
-        let message = ServerMessage.error(ServerError(kind: .recording, message: "disk full"))
+        let message = ServerMessage.error(ServerError(kind: .general, message: "disk full"))
         let data = try JSONEncoder().encode(message)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(json["type"] as? String, "error")
         let payload = try XCTUnwrap(json["payload"] as? [String: Any])
-        XCTAssertEqual(payload["kind"] as? String, "recording")
+        XCTAssertEqual(payload["kind"] as? String, "general")
         XCTAssertEqual(payload["message"] as? String, "disk full")
     }
 
@@ -491,88 +491,6 @@ final class ServerMessageTests: XCTestCase {
         } else {
             XCTFail("Expected actionResult, got \(decoded)")
         }
-    }
-
-    // MARK: - ResponseEnvelope Background Accessibility Trace
-
-    func testResponseEnvelopeWithoutBackgroundAccessibilityTrace() throws {
-        let envelope = ResponseEnvelope(requestId: "r-1", message: .pong())
-        let data = try JSONEncoder().encode(envelope)
-        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-
-        XCTAssertEqual(decoded.requestId, "r-1")
-        XCTAssertNil(decoded.accessibilityTrace)
-        if case .pong = decoded.message {
-        } else {
-            XCTFail("Expected pong, got \(decoded.message)")
-        }
-    }
-
-    func testResponseEnvelopeCarriesBackgroundAccessibilityTraceOnly() throws {
-        let before = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let after = makeTestInterface(elements: [
-            HeistElement(
-                heistId: "done",
-                description: "Done",
-                label: "Done",
-                value: nil,
-                identifier: nil,
-                traits: [.button],
-                frameX: 0,
-                frameY: 0,
-                frameWidth: 100,
-                frameHeight: 44,
-                actions: [.activate]
-            ),
-        ], timestamp: Date(timeIntervalSince1970: 1))
-        let first = AccessibilityTrace.Capture(sequence: 1, interface: before, context: AccessibilityTrace.Context(screenId: "before"))
-        let last = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: after,
-            parentHash: first.hash,
-            context: AccessibilityTrace.Context(screenId: "after")
-        )
-        let trace = AccessibilityTrace(captures: [first, last])
-        let envelope = ResponseEnvelope(
-            requestId: "capture-1",
-            message: .pong(),
-            accessibilityTrace: trace
-        )
-        let data = try JSONEncoder().encode(envelope)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertNil(json["backgroundAccessibilityDelta"])
-        XCTAssertNotNil(json["accessibilityTrace"])
-
-        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-        let receipt = try XCTUnwrap(decoded.accessibilityTrace?.receipts.first)
-        XCTAssertEqual(receipt.kind, .capture)
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.kindRawValue, "screenChanged")
-        XCTAssertEqual(decoded.accessibilityTrace?.backgroundDeltaProjection?.elementCount, 1)
-
-        let reencoded = try JSONEncoder().encode(decoded)
-        let reencodedJson = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])
-        XCTAssertNil(reencodedJson["backgroundAccessibilityDelta"])
-        XCTAssertNotNil(reencodedJson["accessibilityTrace"])
-    }
-
-    func testResponseEnvelopeAccessibilityTraceOnlyShapeRoundTrips() throws {
-        let envelope = ResponseEnvelope(
-            requestId: "trace-only",
-            message: .pong(),
-            accessibilityTrace: AccessibilityTrace(interface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
-        )
-        let data = try JSONEncoder().encode(envelope)
-        let decoded = try JSONDecoder().decode(ResponseEnvelope.self, from: data)
-
-        let receipt = try XCTUnwrap(decoded.accessibilityTrace?.receipts.first)
-        XCTAssertEqual(receipt.sequence, 1)
-        XCTAssertEqual(receipt.kind, .capture)
-        XCTAssertEqual(receipt.interface.elements.count, 0)
-
-        let reencoded = try JSONEncoder().encode(decoded)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: reencoded) as? [String: Any])
-        XCTAssertNil(json["backgroundAccessibilityDelta"])
-        XCTAssertNotNil(json["accessibilityTrace"])
     }
 
     func testScreenEncodeDecode() throws {

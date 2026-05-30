@@ -135,8 +135,8 @@ public enum ClientMessage: Codable, Sendable {
     case waitForChange(WaitForChangeTarget)
 
     /// Execute a typed batch plan using semantic targets. Source heistIds in
-    /// the plan are recording metadata only; executable element identity is
-    /// carried by matcher fields.
+    /// the plan are current-capture handles only; executable element identity
+    /// is carried by matcher fields.
     case batchExecutionPlan(BatchPlan)
 
     /// Request a capture of the current screen
@@ -144,13 +144,4 @@ public enum ClientMessage: Codable, Sendable {
 
     /// Explore the current screen — scroll all containers to discover every element
     case explore
-
-    // MARK: - Recording Commands
-
-    /// Start recording the screen
-    case startRecording(RecordingConfig)
-
-    /// Stop an in-progress recording
-    case stopRecording
-
 }

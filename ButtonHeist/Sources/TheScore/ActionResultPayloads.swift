@@ -15,9 +15,7 @@ public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case authFailure
     /// Authentication is blocked on the on-device approval prompt.
     case authApprovalPending
-    /// Recording-pipeline failure (start, stop, capture, encode).
-    case recording
-    /// General server error not tied to a specific action or recording.
+    /// General server error not tied to a specific action.
     case general
 }
 

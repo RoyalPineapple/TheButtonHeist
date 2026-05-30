@@ -2,7 +2,6 @@ import TheScore
 
 struct HeistRecordingProjection: Sendable, Equatable {
     let elementTarget: ElementTarget?
-    let coordinateOnly: Bool
     let arguments: [String: HeistValue]
 }
 
@@ -28,7 +27,6 @@ extension TheFence.ParsedRequest {
 
         return HeistRecordingProjection(
             elementTarget: elementTarget,
-            coordinateOnly: elementTarget == nil && command.requestPayloadKind == .gesture,
             arguments: values
         )
     }

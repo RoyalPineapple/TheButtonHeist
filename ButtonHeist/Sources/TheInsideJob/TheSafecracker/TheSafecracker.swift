@@ -157,7 +157,6 @@ final class TheSafecracker {
     private var activeWindow: UIWindow?
 
     /// Called during continuous gestures with all current finger positions.
-    /// Set by TheInsideJob to update recording overlays during gesture execution.
     var onGestureMove: (@MainActor ([CGPoint]) -> Void)?
 
     // MARK: - Public: Single-Finger Gestures

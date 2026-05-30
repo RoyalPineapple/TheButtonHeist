@@ -37,11 +37,8 @@ final class ReplSession {
         try await fence.start()
 
         let isTTY = isatty(STDIN_FILENO) != 0
-        if isTTY {
-            logStatus(TheFence.Command.cliSessionStartupPrompt)
-            if sessionTimeout > 0 {
-                logStatus("Idle timeout: \(Int(sessionTimeout))s")
-            }
+        if isTTY, sessionTimeout > 0 {
+            logStatus("Idle timeout: \(Int(sessionTimeout))s")
         }
 
         // SIGINT closes stdin to unstick the blocking readLine; the loop sees
@@ -99,10 +96,7 @@ final class ReplSession {
         let isMachineInput = line.hasPrefix("{")
         let parsedRequest: CLIParsedRequest
         do {
-            parsedRequest = try CLIRequestBuilder.parsedRequest(
-                from: line,
-                acceptsHumanInput: format != .json
-            )
+            parsedRequest = try CLIRequestBuilder.parsedRequest(from: line)
         } catch {
             let message = CLIRequestBuilder.diagnosticMessage(for: error)
             let requestId = (error as? CLIRequestBuildError)?.requestId
@@ -112,19 +106,8 @@ final class ReplSession {
             return (.error(message), nil)
         }
 
-        // Enhanced help for human mode
-        if parsedRequest.command == .help && format == .human && parsedRequest.mode == .human {
-            return (.ok(message: TheFence.Command.cliSessionHelp), nil)
-        }
-
         do {
             let response = try await fence.execute(command: parsedRequest.command, arguments: parsedRequest.arguments)
-            if parsedRequest.command == .quit {
-                if case .running(let idleMonitor) = state {
-                    idleMonitor?.stop()
-                }
-                state = .exiting
-            }
             return (response, parsedRequest.requestId)
         } catch {
             return (.failure(error), parsedRequest.requestId)

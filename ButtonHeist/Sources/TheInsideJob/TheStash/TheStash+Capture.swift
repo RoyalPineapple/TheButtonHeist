@@ -22,31 +22,6 @@ extension TheStash {
         return (image, bounds)
     }
 
-    /// Capture the screen including the fingerprint overlay (for recordings).
-    /// Unlike captureScreen(), this includes TheFingerprints.FingerprintWindow so
-    /// tap/swipe indicators are visible in the video. Collects visible windows
-    /// from foreground-active scenes so system-managed popup windows are included
-    /// without compositing inactive multi-window scenes into recordings.
-    func captureScreenForRecording() -> UIImage? {
-        let allWindows = TheTripwire.orderedVisibleWindows(includeFingerprints: true).reversed()
-
-        guard let background = allWindows.first else { return nil }
-        let bounds = background.bounds
-
-        let renderer = UIGraphicsImageRenderer(bounds: bounds)
-        return renderer.image { _ in
-            for window in allWindows {
-                window.drawHierarchy(in: window.bounds, afterScreenUpdates: false)
-            }
-        }
-    }
-
-    /// If recording, capture a bonus frame to ensure the action's visual effect is captured.
-    func captureActionFrame() async {
-        if let stakeout {
-            await stakeout.captureActionFrame()
-        }
-    }
 }
 
 #endif // DEBUG

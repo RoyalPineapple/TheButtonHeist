@@ -29,7 +29,15 @@ extension TheFence {
         }
 
         try playback.steps.enumerated().forEach { index, evidence in
-            _ = try playbackCommand(for: evidence, stepIndex: index)
+            do {
+                _ = try parsePlaybackEvidence(evidence, stepIndex: index)
+            } catch let error as SchemaValidationError {
+                throw FenceError.invalidRequest("Invalid heist step \(index): \(error.message)")
+            } catch let error as MissingElementTarget {
+                throw FenceError.invalidRequest(
+                    "Invalid heist step \(index): command \"\(error.command)\" requires target object with heistId or matcher fields"
+                )
+            }
         }
     }
 }
@@ -63,8 +71,6 @@ extension TheFence {
         var failure: PlaybackFailure?
         var stepResults: [HeistPlaybackReport.StepResult] = []
 
-        try await primePlaybackInterface()
-
         for (index, evidence) in playbackScript.steps.enumerated() {
             let stepStart = CFAbsoluteTimeGetCurrent()
             var stepFailure: PlaybackFailure?
@@ -85,10 +91,6 @@ extension TheFence {
                 break
             }
             completedSteps += 1
-
-            if index < playbackScript.steps.index(before: playbackScript.steps.endIndex) {
-                try await primePlaybackInterface()
-            }
         }
 
         if let currentFailure = failure {
@@ -111,10 +113,6 @@ extension TheFence {
             failure: failure,
             report: report
         )
-    }
-
-    private func primePlaybackInterface() async throws {
-        _ = try await execute(parsed: defaultGetInterfaceParsedRequest())
     }
 
     func parsePlaybackEvidence(_ evidence: HeistEvidence, stepIndex: Int? = nil) throws -> ParsedRequest {
@@ -233,7 +231,11 @@ extension TheFence {
     }
 
     fileprivate func captureInterfaceSnapshot() async throws -> Interface {
-        let response = try await execute(parsed: defaultGetInterfaceParsedRequest())
+        let parsed = try parseRequest(
+            command: .getInterface,
+            arguments: CommandArgumentEnvelope(values: [:])
+        )
+        let response = try await execute(parsed: parsed)
         guard case .interface(let snapshot, _) = response else {
             throw FenceError.invalidRequest("Expected get_interface response while capturing playback diagnostics")
         }

@@ -2,14 +2,6 @@ import Foundation
 import TheScore
 
 public extension TheFence.Command {
-    static var cliSessionStartupPrompt: String {
-        "Session started. Type '\(help.canonicalName)' for commands, '\(quit.canonicalName)' to exit."
-    }
-
-    static var cliSessionUnknownCommandMessage: String {
-        "Unknown command. Type '\(help.canonicalName)' for available commands."
-    }
-
     static var mcpServerInstructions: String {
         let selectorKeys = inlineList(ElementTarget.selectorFieldNames.map { "target.\($0)" })
         let disambiguatorKeys = inlineList(ElementTarget.disambiguatorFieldNames.map { "target.\($0)" })
@@ -22,9 +14,7 @@ public extension TheFence.Command {
             to read the app accessibility state, then \(inlineCode(activate.canonicalName))/\
             \(inlineCode(typeText.canonicalName))/\(inlineCode(scroll.canonicalName))/\
             \(inlineCode(swipe.canonicalName)) to act with an \(inlineCode(expectationKey)) \
-            attached. Every response carries a \
-            `[while_idle: ...]` block describing what changed since your last call — read it \
-            before deciding to re-fetch. When an action produces a transient state (spinner, \
+            attached. When an action produces a transient state (spinner, \
             loading overlay), call \(inlineCode(waitForChange.canonicalName)) with the same \
             expectation to ride through intermediate states. Use \
             \(inlineCode(runBatch.canonicalName)) for multi-step sequences with per-step \
@@ -38,14 +28,10 @@ public extension TheFence.Command {
         let commandLines = descriptorHelpLines()
 
         return """
-        Commands (type a command, or use JSON for full control):
+        Commands:
 
         Commands:
         \(commandLines.joined(separator: "\n"))
-
-        Bare words are looked up as current heistId handles (from get_interface).
-        Key=value pairs work for scalar parameters: one_finger_tap x=100 y=200
-        JSON input still works: {"command":"activate","target":{"heistId":"button_save"}}
         """
     }
 }

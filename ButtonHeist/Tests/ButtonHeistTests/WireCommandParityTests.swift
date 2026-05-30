@@ -112,10 +112,9 @@ final class WireCommandParityTests: XCTestCase {
             return ["text": .string("clipboard")]
         case .waitForChange, .dismissKeyboard:
             return [:]
-        case .help, .ping, .quit, .listDevices, .getInterface, .getScreen, .getPasteboard,
-             .startRecording, .stopRecording, .runBatch, .getSessionState, .connect,
-             .listTargets, .getSessionLog, .archiveSession, .startHeist, .stopHeist,
-             .playHeist:
+        case .help, .ping, .listDevices, .getInterface, .getScreen, .getPasteboard,
+             .runBatch, .getSessionState, .connect, .listTargets, .startHeist,
+             .stopHeist, .playHeist:
             XCTFail("Unexpected non-batch command \(command.rawValue)")
             return [:]
         }
@@ -134,7 +133,6 @@ final class WireCommandParityTests: XCTestCase {
             .getPasteboard,
             .requestScreen,
             .explore,
-            .stopRecording,
             .activate(target),
             .increment(target),
             .decrement(target),
@@ -171,7 +169,6 @@ final class WireCommandParityTests: XCTestCase {
             .batchExecutionPlan(BatchPlan(steps: [
                 BatchStep(command: .activate(target), expectation: .delivery, deadline: Deadline()),
             ])),
-            .startRecording(RecordingConfig(fps: 8, scale: 1)),
         ]
     }
 

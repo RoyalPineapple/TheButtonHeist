@@ -7,7 +7,7 @@ import UIKit
 
 /// Deterministic tests for the pipelines on TheBrains that operate purely against
 /// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`,
-/// classified trace projections, background trace guards, and `exploreAndPrune`
+/// classified trace projections, wait-change guards, and `exploreAndPrune`
 /// pruning.
 ///
 /// Success-path `actionResultWithDelta` and `exploreScreen` container iteration
@@ -273,7 +273,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
         let endpointDelta = try XCTUnwrap(trace.endpointDeltaProjection)
 
-        XCTAssertEqual(trace.backgroundDeltaProjection, endpointDelta)
+        XCTAssertEqual(trace.meaningfulEndpointDeltaProjection, endpointDelta)
         XCTAssertEqual(trace.captures.first?.hash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.parentHash, before.capture.hash)
         XCTAssertEqual(trace.captures.last?.hash, after.capture.hash)
@@ -311,24 +311,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             AccessibilityTrace.Capture.hash(state.interface),
             "Semantic captures hash the explored targetable interface, including known off-viewport entries"
         )
-    }
-
-    // MARK: - computeBackgroundAccessibilityTrace Guards
-
-    func testComputeBackgroundAccessibilityTraceReturnsNilWithoutPriorSend() async {
-        let trace = await brains.computeBackgroundAccessibilityTrace()
-        XCTAssertNil(trace, "No prior send means no comparison baseline, so return nil")
-    }
-
-    func testComputeBackgroundAccessibilityTraceReturnsNilWhenSemanticStateIsUnchanged() async {
-        guard brains.refresh() != nil else {
-            XCTFail("Expected a live interface baseline")
-            return
-        }
-        brains.recordSentState()
-
-        let trace = await brains.computeBackgroundAccessibilityTrace()
-        XCTAssertNil(trace)
     }
 
     func testShouldRecordAccessibilityTraceIgnoresViewportOnlyMovement() {

@@ -6,7 +6,6 @@ extension TheFence {
     public enum Command: String, CaseIterable, Sendable {
         case help
         case ping
-        case quit
         case listDevices = "list_devices"
         case getInterface = "get_interface"
         case getScreen = "get_screen"
@@ -32,14 +31,10 @@ extension TheFence {
         case getPasteboard = "get_pasteboard"
         case waitFor = "wait_for"
         case dismissKeyboard = "dismiss_keyboard"
-        case startRecording = "start_recording"
-        case stopRecording = "stop_recording"
         case runBatch = "run_batch"
         case getSessionState = "get_session_state"
         case connect
         case listTargets = "list_targets"
-        case getSessionLog = "get_session_log"
-        case archiveSession = "archive_session"
         case startHeist = "start_heist"
         case stopHeist = "stop_heist"
         case playHeist = "play_heist"
@@ -54,7 +49,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let mcpExposure: MCPExposure
     public let isBatchExecutable: Bool
     public let requiresConnectionBeforeDispatch: Bool
-    public let humanPositionalSyntax: FenceHumanPositionalSyntax
     public let parameters: [FenceParameterSpec]
     public let mcpAnnotations: MCPToolAnnotationSpec?
     public let description: String
@@ -75,7 +69,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         mcpExposure: MCPExposure,
         isBatchExecutable: Bool,
         requiresConnectionBeforeDispatch: Bool = true,
-        humanPositionalSyntax: FenceHumanPositionalSyntax = .target,
         parameters: [FenceParameterSpec],
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
         description: String
@@ -86,7 +79,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.mcpExposure = mcpExposure
         self.isBatchExecutable = isBatchExecutable
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
-        self.humanPositionalSyntax = humanPositionalSyntax
         self.parameters = parameters
         self.mcpAnnotations = mcpAnnotations
         self.description = description
@@ -102,22 +94,12 @@ public enum FenceRequestPayloadKind: Sendable, Equatable {
     case session
 }
 
-public enum FenceHumanPositionalSyntax: Sendable, Equatable {
-    case target
-    case joinedText(FenceParameterKey)
-    case firstToken(FenceParameterKey)
-    case targetThenJoinedText(FenceParameterKey)
-    case leadingDirectionThenTarget(Set<String>)
-    case leadingEdgeThenTarget(Set<String>)
-}
-
 private struct FenceCommandCatalogEntry {
     var requestPayloadKind: FenceRequestPayloadKind = .none
     var cliExposure: CLIExposure = .directCommand
     var mcpExposure: MCPExposure = .directTool
     var isBatchExecutable = false
     var requiresConnectionBeforeDispatch = true
-    var humanPositionalSyntax: FenceHumanPositionalSyntax = .target
     var parameters: [FenceParameterSpec] = []
     var mcpAnnotations: MCPToolAnnotationSpec?
     var description = ""
@@ -149,12 +131,6 @@ public extension TheFence.Command {
     func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
         parameter(named: key)?.defaultValue
     }
-
-    var humanPositionalSyntax: FenceHumanPositionalSyntax { descriptor.humanPositionalSyntax }
-
-    static let humanDirectionValues = Set(fenceEnumValues(ScrollDirection.self))
-
-    static let humanScrollEdgeValues = Set(fenceEnumValues(ScrollEdge.self))
 
     var isBatchExecutable: Bool { descriptor.isBatchExecutable }
 
@@ -190,7 +166,6 @@ extension TheFence.Command {
             mcpExposure: entry.mcpExposure,
             isBatchExecutable: entry.isBatchExecutable,
             requiresConnectionBeforeDispatch: entry.requiresConnectionBeforeDispatch,
-            humanPositionalSyntax: entry.humanPositionalSyntax,
             parameters: entry.parameters,
             mcpAnnotations: entry.mcpAnnotations,
             description: entry.description
@@ -216,10 +191,6 @@ extension TheFence.Command {
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.description = "Check connection health without reading accessibility state."
-        case .quit:
-            entry.cliExposure = .sessionOnly
-            entry.mcpExposure = .notExposed
-            entry.description = "End the interactive CLI session."
         case .listDevices:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
@@ -256,7 +227,6 @@ extension TheFence.Command {
         case .swipe:
             entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
-            entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
             entry.parameters = target + [
                 param(.direction, .string, enumValues: fenceEnumValues(SwipeDirection.self)),
                 param(.start, .object, objectProperties: FenceParameterBlocks.unitPoint),
@@ -325,7 +295,6 @@ extension TheFence.Command {
         case .scroll:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
-            entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
             entry.parameters = scrollContainerTarget + target + [
                 param(
                     .direction, .string,
@@ -349,7 +318,6 @@ extension TheFence.Command {
         case .scrollToEdge:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
-            entry.humanPositionalSyntax = .leadingEdgeThenTarget(Self.humanScrollEdgeValues)
             entry.parameters = scrollContainerTarget + target + [
                 param(
                     .edge, .string,
@@ -366,7 +334,6 @@ extension TheFence.Command {
         case .rotor:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
-            entry.humanPositionalSyntax = .leadingDirectionThenTarget(Self.humanDirectionValues)
             entry.parameters = target + [
                 param(.rotor, .string),
                 param(.rotorIndex, .integer, minimum: 0),
@@ -383,13 +350,11 @@ extension TheFence.Command {
         case .typeText:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
-            entry.humanPositionalSyntax = .joinedText(.text)
             entry.parameters = target + [param(.text, .string, required: true, minLength: 1)] + expectation
             entry.description = "Type non-empty text, optionally after making a semantic target actionable."
         case .editAction:
             entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
-            entry.humanPositionalSyntax = .firstToken(.action)
             entry.parameters = [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + expectation
             entry.description = "Perform an edit action on the current first responder."
         case .setPasteboard:
@@ -409,19 +374,6 @@ extension TheFence.Command {
             entry.isBatchExecutable = true
             entry.parameters = expectation
             entry.description = "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
-        case .startRecording:
-            entry.requestPayloadKind = .session
-            entry.parameters = [
-                param(.fps, .integer, minimum: 1, maximum: 15),
-                param(.scale, .number, minimum: 0.25, maximum: 1.0),
-                param(.maxDuration, .number),
-                param(.inactivityTimeout, .number),
-            ]
-            entry.description = "Start an H.264/MP4 screen recording. Recording runs until max duration unless inactivity_timeout is explicitly supplied."
-        case .stopRecording:
-            entry.requestPayloadKind = .observation
-            entry.parameters = [param(.output, .string), param(.inlineData, .boolean), param(.includeInteractionLog, .boolean)]
-            entry.description = "Stop an in-progress screen recording and return the artifact metadata."
         case .runBatch:
             entry.requestPayloadKind = .session
             entry.parameters = [
@@ -445,7 +397,7 @@ extension TheFence.Command {
         case .getSessionState:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-            entry.description = "Inspect connection, device, recording, and last-action session state."
+            entry.description = "Inspect connection, device, and last-action session state."
         case .connect:
             entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
@@ -455,15 +407,6 @@ extension TheFence.Command {
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.description = "List configured connection targets and the default target."
-        case .getSessionLog:
-            entry.requiresConnectionBeforeDispatch = false
-            entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
-            entry.description = "Return the current session log snapshot: commands executed and artifacts produced."
-        case .archiveSession:
-            entry.requestPayloadKind = .session
-            entry.requiresConnectionBeforeDispatch = false
-            entry.parameters = [param(.deleteSource, .boolean)]
-            entry.description = "Close and compress the current session into a .tar.gz archive; returns the path."
         case .startHeist:
             entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false

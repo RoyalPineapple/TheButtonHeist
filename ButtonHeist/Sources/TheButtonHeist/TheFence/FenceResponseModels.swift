@@ -16,16 +16,6 @@ public struct ScreenshotResponseOptions: Sendable, Equatable {
     }
 }
 
-public struct RecordingResponseOptions: Sendable, Equatable {
-    public let inlineData: Bool
-    public let includeInteractionLog: Bool
-
-    public init(inlineData: Bool = false, includeInteractionLog: Bool = false) {
-        self.inlineData = inlineData
-        self.includeInteractionLog = includeInteractionLog
-    }
-}
-
 /// Summary of a single step within a batch execution.
 ///
 /// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`
@@ -302,7 +292,6 @@ public struct SessionStatePayload: Sendable, Equatable {
     public let connected: Bool
     public let phase: SessionConnectionPhase
     public let device: SessionDevicePayload?
-    public let isRecording: Bool
     public let actionTimeoutSeconds: TimeInterval
     public let longActionTimeoutSeconds: TimeInterval
     public let lastFailure: SessionFailurePayload?
@@ -312,7 +301,6 @@ public struct SessionStatePayload: Sendable, Equatable {
         connected: Bool,
         phase: SessionConnectionPhase,
         device: SessionDevicePayload?,
-        isRecording: Bool,
         actionTimeoutSeconds: TimeInterval,
         longActionTimeoutSeconds: TimeInterval,
         lastFailure: SessionFailurePayload?,
@@ -321,7 +309,6 @@ public struct SessionStatePayload: Sendable, Equatable {
         self.connected = connected
         self.phase = phase
         self.device = device
-        self.isRecording = isRecording
         self.actionTimeoutSeconds = actionTimeoutSeconds
         self.longActionTimeoutSeconds = longActionTimeoutSeconds
         self.lastFailure = lastFailure
@@ -336,7 +323,7 @@ enum FenceRequestErrorCode {
 /// Typed response from TheFence command execution.
 ///
 /// Cases marked `…Data` carry the raw payload in memory (base64-encoded).
-/// Screenshot data and expanded recording data are opt-in.
+/// Screenshot data is opt-in.
 /// Cases without the `Data` suffix carry a filesystem path where the artifact
 /// has been written.
 public enum FenceResponse {
@@ -353,13 +340,6 @@ public enum FenceResponse {
     /// Screenshot held in memory as base64 PNG. Returned only when inline data
     /// is explicitly requested.
     case screenshotData(payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
-    /// Recording written to disk. `path` is the resolved filesystem location.
-    case recording(path: String, payload: RecordingPayload)
-    /// Recording written to disk with explicitly requested expanded response fields.
-    case recordingExpanded(path: String, payload: RecordingPayload, options: RecordingResponseOptions)
-    /// Recording held in memory. Kept for callers that explicitly work with
-    /// in-memory recording payloads.
-    case recordingData(payload: RecordingPayload)
     case batch(
         outcomes: [BatchStepOutcome],
         totalTimingMs: Int,
@@ -367,8 +347,6 @@ public enum FenceResponse {
     )
     case sessionState(payload: SessionStatePayload)
     case targets([String: TargetConfig], defaultTarget: String?)
-    case sessionLog(snapshot: SessionLogSnapshot)
-    case archiveResult(path: String, snapshot: SessionLogSnapshot)
     case heistStarted
     case heistStopped(path: String, stepCount: Int)
     case heistPlayback(completedSteps: Int, failedIndex: Int?, totalTimingMs: Int, failure: PlaybackFailure? = nil, report: HeistPlaybackReport? = nil)

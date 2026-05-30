@@ -202,8 +202,8 @@ Runtime behavior:
 - JSON-RPC over stdio
 - One reused `TheFence` instance per MCP server process
 - Auto-reconnects to the device on the next tool call after disconnect
-- Returns screenshots and recordings as artifact paths by default
-- Requires explicit, size-bounded inline media opt-ins
+- Returns screenshots as artifact paths by default
+- Requires explicit, size-bounded inline screenshot opt-ins
 
 Environment variables:
 
@@ -247,7 +247,7 @@ lists are projections for formatting and matching, not a second wire truth.
 
 `HeistElement.heistId` is scoped to the current capture. Use it for immediate
 actions while the capture is current. Use semantic matcher fields for durable
-recordings, scripts, and replay.
+heist fixtures, scripts, and replay.
 
 ### ActionResult
 

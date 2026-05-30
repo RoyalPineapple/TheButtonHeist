@@ -12,8 +12,7 @@ struct SessionCommand: AsyncParsableCommand {
         commandName: "session",
         abstract: "Start a persistent REPL session with an iOS device",
         discussion: """
-            Maintains a single connection and accepts commands on stdin.
-            Interactive mode accepts canonical plain-text commands (e.g. 'activate myButton').
+            Maintains a single connection and accepts canonical JSON commands on stdin.
             JSON output mode accepts one JSON object per line (e.g. {"command":"one_finger_tap"}).
             Output is human-readable by default, compact JSON when piped.
 

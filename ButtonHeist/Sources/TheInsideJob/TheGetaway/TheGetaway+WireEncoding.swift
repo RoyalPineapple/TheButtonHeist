@@ -79,14 +79,12 @@ extension TheGetaway {
 
     func encodeEnvelope(
         _ message: ServerMessage,
-        requestId: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil
+        requestId: String? = nil
     ) -> Result<Data, ResponseEncodingFailure> {
         do {
             let envelopeData = try ResponseEnvelope(
                 requestId: requestId,
-                message: message,
-                accessibilityTrace: accessibilityTrace
+                message: message
             ).encoded()
             return .success(envelopeData)
         } catch {
@@ -106,13 +104,11 @@ extension TheGetaway {
     func sendMessage(
         _ message: ServerMessage,
         requestId: String? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
         respond: @escaping (Data) -> Void
     ) -> DeliveryResult {
         switch encodeEnvelope(
             message,
-            requestId: requestId,
-            accessibilityTrace: accessibilityTrace
+            requestId: requestId
         ) {
         case .success(let data):
             insideJobLogger.debug("Sending \(data.count) bytes")

@@ -7,7 +7,6 @@ final class HeistPlaybackTests: XCTestCase {
 
     func testScriptRoundTrip() throws {
         let script = HeistPlayback(
-            recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.buttonheist.testapp",
             steps: [
                 try HeistEvidence(command: "activate", target: semanticTarget(label: "Login", traits: [.button])),
@@ -16,14 +15,8 @@ final class HeistPlaybackTests: XCTestCase {
             ]
         )
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(script)
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let decoded = try decoder.decode(HeistPlayback.self, from: data)
+        let data = try JSONEncoder().encode(script)
+        let decoded = try JSONDecoder().decode(HeistPlayback.self, from: data)
 
         XCTAssertEqual(decoded.version, HeistPlayback.currentVersion)
         XCTAssertEqual(decoded.app, "com.buttonheist.testapp")
@@ -35,19 +28,16 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertNil(decoded.steps[1].target)
     }
 
-    func testDecodeRejectsUnsupportedVersionAtBoundary() throws {
+    func testDecodeRejectsUnsupportedVersionAtBoundary() {
         let json = """
         {
           "version": \(HeistPlayback.currentVersion + 1),
-          "recorded": "2026-05-27T12:00:00Z",
           "app": "com.buttonheist.testapp",
           "steps": []
         }
         """
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
 
-        XCTAssertThrowsError(try decoder.decode(HeistPlayback.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistPlayback.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -56,20 +46,17 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testDecodeRejectsUnknownTopLevelPlaybackField() throws {
+    func testDecodeRejectsUnknownTopLevelPlaybackField() {
         let json = """
         {
           "version": \(HeistPlayback.currentVersion),
-          "recorded": "2026-05-27T12:00:00Z",
           "app": "com.buttonheist.testapp",
           "steps": [],
           "unexpectedField": {}
         }
         """
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
 
-        XCTAssertThrowsError(try decoder.decode(HeistPlayback.self, from: Data(json.utf8))) { error in
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistPlayback.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
@@ -90,6 +77,7 @@ final class HeistPlaybackTests: XCTestCase {
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         XCTAssertEqual(json?["command"] as? String, "swipe")
+        XCTAssertNil(json?["_recorded"])
         let arguments = try XCTUnwrap(json?["arguments"] as? [String: Any])
         XCTAssertEqual(arguments["direction"] as? String, "up")
         let target = try XCTUnwrap(json?["target"] as? [String: Any])
@@ -131,6 +119,13 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
+    func testStepRejectsRecordingMetadata() {
+        let json = #"{"command":"activate","target":{"label":"Save"},"_recorded":{"heistId":"button_save"}}"#
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistEvidence.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("_recorded"), "\(error)")
+        }
+    }
+
     func testStepWithNoTarget() throws {
         let original = try HeistEvidence(
             command: "type_text",
@@ -142,20 +137,6 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(step.command, "type_text")
         XCTAssertNil(step.target)
         XCTAssertEqual(step.arguments["text"], .string("hello"))
-    }
-
-    func testStepAllowsRecordedHeistIdMetadata() throws {
-        let original = try HeistEvidence(
-            command: "activate",
-            target: semanticTarget(label: "Save"),
-            recorded: RecordedMetadata(heistId: "recorded_save")
-        )
-        let data = try JSONEncoder().encode(original)
-        let step = try JSONDecoder().decode(HeistEvidence.self, from: data)
-
-        XCTAssertEqual(step.target, semanticTarget(label: "Save"))
-        XCTAssertEqual(step.recorded?.heistId, "recorded_save")
-        XCTAssertNil(step.arguments["heistId"])
     }
 
     func testStepRejectsUnknownTopLevelField() {
@@ -180,67 +161,8 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testStepWithRecordedMetadata() throws {
-        let step = try HeistEvidence(
-            command: "activate",
-            target: semanticTarget(label: "Save", traits: [.button]),
-            recorded: RecordedMetadata(
-                heistId: "button_save",
-                frame: RecordedFrame(x: 20, y: 680, width: 350, height: 44)
-            )
-        )
-
-        let data = try JSONEncoder().encode(step)
-        let decoded = try JSONDecoder().decode(HeistEvidence.self, from: data)
-
-        XCTAssertEqual(decoded.recorded?.heistId, "button_save")
-        XCTAssertEqual(decoded.recorded?.frame?.x, 20)
-        XCTAssertEqual(decoded.recorded?.frame?.width, 350)
-        XCTAssertNil(decoded.recorded?.coordinateOnly)
-    }
-
-    func testStepWithRecordedAccessibilityTraceDerivesDeltaWithoutEncodingIt() throws {
-        let before = makeTestInterface(
-            elements: [makeElement(heistId: "before", label: "Before")],
-            timestamp: Date(timeIntervalSince1970: 0)
-        )
-        let after = makeTestInterface(
-            elements: [makeElement(heistId: "continue", label: "Continue")],
-            timestamp: Date(timeIntervalSince1970: 1)
-        )
-        let step = try HeistEvidence(
-            command: "activate",
-            target: semanticTarget(label: "Continue", traits: [.button]),
-            recorded: RecordedMetadata(
-                accessibilityTrace: AccessibilityTrace(first: before).appending(
-                    after,
-                    transition: .init(screenChangeReason: "explicitSignal")
-                ),
-                expectation: ExpectationResult(
-                    met: true,
-                    expectation: .screenChanged,
-                    actual: "screenChanged"
-                )
-            )
-        )
-
-        let data = try JSONEncoder().encode(step)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let recorded = try XCTUnwrap(json["_recorded"] as? [String: Any])
-        XCTAssertNotNil(recorded["accessibilityTrace"])
-
-        let decoded = try JSONDecoder().decode(HeistEvidence.self, from: data)
-
-        let change = try XCTUnwrap(decoded.recorded?.accessibilityTrace?.receipts.first)
-        XCTAssertEqual(change.kind, AccessibilityTrace.ReceiptKind.capture)
-        XCTAssertEqual(change.interface.elements.first?.label, "Before")
-        XCTAssertEqual(decoded.recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
-        XCTAssertEqual(decoded.recorded?.accessibilityDelta?.elementCount, 1)
-        XCTAssertEqual(decoded.recorded?.expectation?.met, true)
-    }
-
-    func testCurrentVersionIsFour() {
-        XCTAssertEqual(HeistPlayback.currentVersion, 4)
+    func testCurrentVersionIsFive() {
+        XCTAssertEqual(HeistPlayback.currentVersion, 5)
     }
 
     // MARK: - Heist Value
@@ -272,53 +194,18 @@ final class HeistPlaybackTests: XCTestCase {
         XCTAssertEqual(value.description, #"{"count"=2, "flags"=[true, 3.5], "text"="Save \"Now\""}"#)
     }
 
-    // MARK: - RecordedMetadata
-
-    func testRecordedMetadataRoundTrip() throws {
-        let metadata = RecordedMetadata(
-            heistId: "button_submit",
-            frame: RecordedFrame(x: 10, y: 20, width: 100, height: 44),
-            coordinateOnly: false
-        )
-        let data = try JSONEncoder().encode(metadata)
-        let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
-
-        XCTAssertEqual(decoded.heistId, "button_submit")
-        XCTAssertEqual(decoded.frame?.x, 10)
-        XCTAssertEqual(decoded.frame?.height, 44)
-        XCTAssertEqual(decoded.coordinateOnly, false)
-    }
-
-    func testRecordedMetadataCoordinateOnly() throws {
-        let metadata = RecordedMetadata(coordinateOnly: true)
-        let data = try JSONEncoder().encode(metadata)
-        let decoded = try JSONDecoder().decode(RecordedMetadata.self, from: data)
-
-        XCTAssertNil(decoded.heistId)
-        XCTAssertNil(decoded.frame)
-        XCTAssertEqual(decoded.coordinateOnly, true)
-    }
-
-    func testHeistEvidenceDescriptionComposesTargetArgumentsAndRecording() throws {
+    func testHeistEvidenceDescriptionComposesTargetAndArguments() throws {
         let step = try HeistEvidence(
             command: "activate",
             target: semanticTarget(label: "Save", traits: [.button]),
             arguments: [
                 "count": .int(2),
                 "text": .string("hello"),
-            ],
-            recorded: RecordedMetadata(
-                heistId: "save_button",
-                frame: RecordedFrame(x: 1, y: 2, width: 3, height: 4),
-                coordinateOnly: false,
-                expectation: ExpectationResult(met: true, expectation: .screenChanged, actual: "screenChanged")
-            )
+            ]
         )
 
         let expected = #"step(command="activate" target(matcher(label="Save" traits=[button])) "#
-            + #"args=arguments("count"=2 "text"="hello") "#
-            + #"recorded(heistId="save_button" frame(1,2,3,4) coordinateOnly=false "#
-            + #"expectation(met=true expected=screen_changed actual="screenChanged")))"#
+            + #"args=arguments("count"=2 "text"="hello"))"#
         XCTAssertEqual(step.description, expected)
     }
 
@@ -338,52 +225,32 @@ final class HeistPlaybackTests: XCTestCase {
 
     func testFullScriptJsonShape() throws {
         let script = HeistPlayback(
-            recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
                 try HeistEvidence(
                     command: "activate",
-                    target: semanticTarget(label: "Go", traits: [.button]),
-                    recorded: RecordedMetadata(heistId: "button_go")
+                    target: semanticTarget(label: "Go", traits: [.button])
                 ),
             ]
         )
 
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(script)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         XCTAssertEqual(json?["version"] as? Int, HeistPlayback.currentVersion)
         XCTAssertEqual(json?["app"] as? String, "com.example.app")
+        XCTAssertNil(json?["recorded"])
 
         let steps = json?["steps"] as? [[String: Any]]
         XCTAssertEqual(steps?.count, 1)
 
         let firstStep = steps?.first
         XCTAssertEqual(firstStep?["command"] as? String, "activate")
+        XCTAssertNil(firstStep?["_recorded"])
         let target = try XCTUnwrap(firstStep?["target"] as? [String: Any])
         XCTAssertEqual(target["label"] as? String, "Go")
-
-        let recorded = firstStep?["_recorded"] as? [String: Any]
-        XCTAssertEqual(recorded?["heistId"] as? String, "button_go")
-    }
-
-    private func makeElement(heistId: HeistId, label: String) -> HeistElement {
-        HeistElement(
-            heistId: heistId,
-            description: label,
-            label: label,
-            value: nil,
-            identifier: nil,
-            traits: [.button],
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 100,
-            frameHeight: 44,
-            actions: [.activate]
-        )
     }
 
     private func semanticTarget(
@@ -405,5 +272,4 @@ final class HeistPlaybackTests: XCTestCase {
             ordinal: ordinal
         )
     }
-
 }

@@ -54,9 +54,6 @@ extension SimpleSocketServer {
     }
 
     /// Try to fail the originating request explicitly when a response exceeds the send cap.
-    /// Recording responses get `.recording` kind because they use a recording-specific wait path.
-    /// Other responses get a request-scoped `.general` kind, allowing the client to fail the pending
-    /// request directly instead of surfacing a generic timeout.
     private func sendOversizedResponseError(
         clientId: Int,
         originalData: Data,
@@ -71,18 +68,11 @@ extension SimpleSocketServer {
             return
         }
         let message = "Response too large to send over the socket (\(byteCount) bytes)"
-        let kind: ErrorKind
-        switch envelope.message {
-        case .recording, .recordingStarted, .recordingStopped:
-            kind = .recording
-        default:
-            kind = .general
-        }
         sendErrorEnvelope(
             clientId: clientId,
             envelope: ResponseEnvelope(
                 requestId: envelope.requestId,
-                message: .error(TheScore.ServerError(kind: kind, message: message))
+                message: .error(TheScore.ServerError(kind: .general, message: message))
             ),
             state: state
         )

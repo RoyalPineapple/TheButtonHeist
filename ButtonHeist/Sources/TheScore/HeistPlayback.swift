@@ -2,17 +2,15 @@ import Foundation
 
 // MARK: - Heist Playback
 
-/// A recorded session that can be played back against the same (or similar) app.
-/// This is the `.heist` persistence model. Runtime playback should bind these
-/// wire fields to typed commands before execution.
+/// A deterministic heist contract that can be played back against the same (or
+/// similar) app. Runtime playback binds these wire fields to typed commands
+/// before execution.
 public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
-    public static let currentVersion = 4
+    public static let currentVersion = 5
 
     /// Current heist file format version.
     public let version: Int
-    /// ISO 8601 timestamp of when the recording was made.
-    public let recorded: Date
     /// Bundle identifier of the app that was running during recording.
     public let app: String
     /// Ordered list of commands to replay.
@@ -20,19 +18,16 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
 
     public init(
         version: Int = HeistPlayback.currentVersion,
-        recorded: Date = Date(),
         app: String,
         steps: [HeistEvidence] = []
     ) {
         self.version = version
-        self.recorded = recorded
         self.app = app
         self.steps = steps
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case version
-        case recorded
         case app
         case steps
     }
@@ -52,7 +47,6 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
         }
 
         version = decodedVersion
-        recorded = try container.decode(Date.self, forKey: .recorded)
         app = try container.decode(String.self, forKey: .app)
         steps = try container.decode([HeistEvidence].self, forKey: .steps)
     }
@@ -83,7 +77,7 @@ extension HeistPlayback: CustomStringConvertible {
 // MARK: - Heist Step
 
 /// A single command in a heist playback. Contains the command name, durable
-/// matcher target, command-specific arguments, and optional recording metadata.
+/// matcher target, and command-specific arguments.
 ///
 /// Element identity lives under `target`; command arguments live under
 /// `arguments`. Top-level step fields are closed so unsupported shapes fail at
@@ -95,33 +89,28 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     /// iOS + macOS.
     public let command: String
     /// Durable replay target — nil means the command doesn't target an element.
-    /// A persisted heist target must be a matcher; capture-local heistIds live
-    /// under `_recorded.heistId` as evidence only.
+    /// A persisted heist target must be a matcher; capture-local heistIds are
+    /// resolved before the step is written.
     public let target: ElementTarget?
     /// Command-specific arguments (direction, text, duration, etc.).
     /// Excludes command name and element targeting fields.
     public let arguments: [String: HeistValue]
-    /// Recording-time metadata for debugging. Not used during playback.
-    public let recorded: RecordedMetadata?
 
     public init(
         command: String,
         target: ElementTarget? = nil,
-        arguments: [String: HeistValue] = [:],
-        recorded: RecordedMetadata? = nil
+        arguments: [String: HeistValue] = [:]
     ) throws {
         try Self.validateDurableTarget(target)
         self.command = command
         self.target = target
         self.arguments = arguments
-        self.recorded = recorded
     }
 
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case command, target, arguments
-        case recorded = "_recorded"
     }
 
     public init(from decoder: Decoder) throws {
@@ -130,7 +119,6 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         command = try container.decode(String.self, forKey: .command)
         target = try Self.decodeDurableTarget(from: container, forKey: .target)
         arguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
-        recorded = try container.decodeIfPresent(RecordedMetadata.self, forKey: .recorded)
     }
 
     private static func rejectUnknownStepKeys(_ decoder: Decoder) throws {
@@ -152,7 +140,6 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         if !arguments.isEmpty {
             try container.encode(arguments, forKey: .arguments)
         }
-        try container.encodeIfPresent(recorded, forKey: .recorded)
     }
 
     private static func decodeDurableTarget(
@@ -169,7 +156,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
-                debugDescription: "HeistEvidence target requires matcher fields; heistId is capture-local evidence under _recorded.heistId"
+                debugDescription: "HeistEvidence target requires matcher fields; heistId is a capture-local handle"
             )
         } catch HeistEvidenceError.emptyMatcherTarget {
             throw DecodingError.dataCorruptedError(
@@ -206,7 +193,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         case .heistId:
             throw EncodingError.invalidValue(target, .init(
                 codingPath: container.codingPath + [CodingKeys.target],
-                debugDescription: "HeistEvidence target requires matcher fields; heistId is capture-local evidence under _recorded.heistId"
+                debugDescription: "HeistEvidence target requires matcher fields; heistId is a capture-local handle"
             ))
         }
     }
@@ -225,7 +212,6 @@ extension HeistEvidence: CustomStringConvertible {
             ScoreDescription.stringField("command", command),
             target?.description,
             argumentSummary,
-            recorded?.description,
         ].compactMap { $0 })
     }
 
@@ -306,107 +292,6 @@ extension HeistValue: CustomStringConvertible {
                 .map { "\(ScoreDescription.quoted($0.key))=\($0.value)" }
             return "{\(fields.joined(separator: ", "))}"
         }
-    }
-}
-
-// MARK: - Recorded Metadata
-
-/// Debugging metadata captured at recording time. Preserved in the `.heist` file
-/// under the `_recorded` key but ignored during playback.
-public struct RecordedMetadata: Codable, Sendable, Equatable {
-    /// The heistId that was used to target the element at recording time.
-    public let heistId: HeistId?
-    /// The element's frame at recording time.
-    public let frame: RecordedFrame?
-    /// Whether the step used coordinate-only targeting (no element).
-    public let coordinateOnly: Bool?
-    /// Accessibility trace observed while recording.
-    public let accessibilityTrace: AccessibilityTrace?
-    /// Expectation evidence observed while recording. Playback ignores this.
-    public let expectation: ExpectationResult?
-    /// Compact accessibility delta projection derived from the recorded trace.
-    public var accessibilityDelta: AccessibilityTrace.Delta? {
-        accessibilityTrace?.endpointDeltaProjection
-    }
-
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case heistId
-        case frame
-        case coordinateOnly
-        case accessibilityTrace
-        case expectation
-    }
-
-    public init(
-        heistId: HeistId? = nil,
-        frame: RecordedFrame? = nil,
-        coordinateOnly: Bool? = nil,
-        accessibilityTrace: AccessibilityTrace? = nil,
-        expectation: ExpectationResult? = nil
-    ) {
-        self.heistId = heistId
-        self.frame = frame
-        self.coordinateOnly = coordinateOnly
-        self.accessibilityTrace = accessibilityTrace
-        self.expectation = expectation
-    }
-
-    public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownMetadataKeys(decoder)
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            heistId: try container.decodeIfPresent(HeistId.self, forKey: .heistId),
-            frame: try container.decodeIfPresent(RecordedFrame.self, forKey: .frame),
-            coordinateOnly: try container.decodeIfPresent(Bool.self, forKey: .coordinateOnly),
-            accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
-            expectation: try container.decodeIfPresent(ExpectationResult.self, forKey: .expectation)
-        )
-    }
-
-    private static func rejectUnknownMetadataKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown recorded metadata field \"\(unknownKey.stringValue)\""
-        ))
-    }
-}
-
-extension RecordedMetadata: CustomStringConvertible {
-    public var description: String {
-        let traceReceiptCount = accessibilityTrace?.receipts.count
-        return ScoreDescription.call("recorded", [
-            ScoreDescription.stringField("heistId", heistId),
-            frame?.description,
-            ScoreDescription.valueField("coordinateOnly", coordinateOnly),
-            traceReceiptCount.map { "traceReceipts=\($0)" },
-            expectation?.description,
-        ].compactMap { $0 })
-    }
-}
-
-/// Frame captured at recording time for debugging and visual alignment.
-public struct RecordedFrame: Codable, Sendable, Equatable {
-    public let x: Double
-    public let y: Double
-    public let width: Double
-    public let height: Double
-
-    public init(x: Double, y: Double, width: Double, height: Double) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-    }
-}
-
-extension RecordedFrame: CustomStringConvertible {
-    public var description: String {
-        "frame(\(ScoreDescription.decimal(x)),\(ScoreDescription.decimal(y)),\(ScoreDescription.decimal(width)),\(ScoreDescription.decimal(height)))"
     }
 }
 

@@ -42,8 +42,6 @@ private extension ErrorKind {
             return "auth.failed"
         case .authApprovalPending:
             return "auth.approval_pending"
-        case .recording:
-            return "recording.failed"
         case .general:
             return "server.general"
         }
@@ -56,8 +54,6 @@ private extension ErrorKind {
             return .request
         case .authFailure, .authApprovalPending:
             return .authentication
-        case .recording:
-            return .recording
         case .general:
             return .server
         }
@@ -70,7 +66,7 @@ private extension ErrorKind {
         case .authApprovalPending:
             return true
         case .elementNotFound, .unsupported, .inputError, .validationError,
-             .actionFailed, .authFailure, .recording, .general:
+             .actionFailed, .authFailure, .general:
             return false
         }
     }
@@ -93,8 +89,6 @@ private extension ErrorKind {
             return nil
         case .authApprovalPending:
             return "Waiting for approval on the device. Tap Allow on the iOS device to continue."
-        case .recording:
-            return "Stop any in-progress recording and retry after resolving the recording error."
         case .general:
             return nil
         }

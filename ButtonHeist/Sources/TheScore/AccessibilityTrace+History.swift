@@ -5,11 +5,6 @@ public enum AccessibilityTraceRetention: Sendable, Equatable {
     case persistForSession
 }
 
-private struct AccessibilityTracePendingTraceBounds: Sendable, Equatable {
-    let first: AccessibilityTrace.CaptureRef
-    let last: AccessibilityTrace.CaptureRef
-}
-
 public extension AccessibilityTrace {
     struct Cursor: Codable, Sendable, Equatable, Hashable {
         public let captureRefs: [AccessibilityTrace.CaptureRef]
@@ -27,17 +22,6 @@ public extension AccessibilityTrace {
         }
     }
 
-    struct PendingTrace: Sendable, Equatable {
-        public let index: Int
-        public let cursor: AccessibilityTrace.Cursor
-        public let trace: AccessibilityTrace
-
-        public var firstRef: AccessibilityTrace.CaptureRef? { cursor.first }
-        public var lastRef: AccessibilityTrace.CaptureRef? { cursor.last }
-        public var endpointEdge: AccessibilityTrace.CaptureEdge? { cursor.endpointEdge }
-        public var delta: AccessibilityTrace.Delta? { trace.backgroundDeltaProjection }
-    }
-
     /// Append-only accessibility capture history between explicit prune points.
     ///
     /// `captures` and explicit boundary refs are the only stored truth. Cursors,
@@ -50,7 +34,6 @@ public extension AccessibilityTrace {
                 pruneToRetentionPolicy()
             }
         }
-        private var pendingTraceBounds: [AccessibilityTracePendingTraceBounds]
         private var deliveredRef: AccessibilityTrace.CaptureRef?
 
         public init(
@@ -59,7 +42,6 @@ public extension AccessibilityTrace {
         ) {
             self.captures = []
             self.retention = retention
-            self.pendingTraceBounds = []
             self.deliveredRef = nil
             for capture in captures {
                 append(capture)
@@ -69,7 +51,6 @@ public extension AccessibilityTrace {
         public static func == (lhs: History, rhs: History) -> Bool {
             lhs.captures == rhs.captures &&
                 lhs.retention == rhs.retention &&
-                lhs.pendingTraceBounds == rhs.pendingTraceBounds &&
                 lhs.deliveredRef == rhs.deliveredRef
         }
 
@@ -79,10 +60,6 @@ public extension AccessibilityTrace {
 
         public var latestRef: AccessibilityTrace.CaptureRef? {
             latestCapture.map(AccessibilityTrace.CaptureRef.init(capture:))
-        }
-
-        public var pendingTraceCount: Int {
-            pendingTraceBounds.count
         }
 
         @discardableResult
@@ -112,26 +89,6 @@ public extension AccessibilityTrace {
                 context: context,
                 transition: transition
             ))
-        }
-
-        @discardableResult
-        public mutating func enqueuePendingTrace(
-            _ trace: AccessibilityTrace,
-            limit: Int? = nil
-        ) -> AccessibilityTrace.PendingTrace? {
-            guard let cursor = ingest(trace),
-                  let first = cursor.first,
-                  let last = cursor.last else {
-                return nil
-            }
-
-            pendingTraceBounds.append(AccessibilityTracePendingTraceBounds(first: first, last: last))
-            if let limit {
-                trimPendingTraceBounds(to: limit)
-            }
-            pruneToRetentionPolicy()
-            guard let pendingIndex = pendingTraceBounds.indices.last else { return nil }
-            return pendingTrace(at: pendingIndex)
         }
 
         @discardableResult
@@ -169,26 +126,6 @@ public extension AccessibilityTrace {
             return AccessibilityTrace(captures: cursorCaptures)
         }
 
-        public func pendingCursor(at index: Int) -> AccessibilityTrace.Cursor? {
-            guard pendingTraceBounds.indices.contains(index) else { return nil }
-            return cursor(from: pendingTraceBounds[index])
-        }
-
-        public func pendingTrace(at index: Int) -> AccessibilityTrace.PendingTrace? {
-            guard let cursor = pendingCursor(at: index),
-                  let trace = trace(cursor: cursor) else {
-                return nil
-            }
-            return AccessibilityTrace.PendingTrace(index: index, cursor: cursor, trace: trace)
-        }
-
-        public func pendingTraces(startingAt startIndex: Int = 0) -> [AccessibilityTrace.PendingTrace] {
-            let boundedStartIndex = min(max(startIndex, 0), pendingTraceBounds.count)
-            return pendingTraceBounds.indices
-                .dropFirst(boundedStartIndex)
-                .compactMap { pendingTrace(at: $0) }
-        }
-
         public func trace(
             from start: AccessibilityTrace.CaptureRef?,
             to end: AccessibilityTrace.CaptureRef?
@@ -222,28 +159,6 @@ public extension AccessibilityTrace {
             trace(from: start, to: end)?.endpointDeltaProjection
         }
 
-        public mutating func removePendingTrace(
-            at index: Int
-        ) -> AccessibilityTrace.PendingTrace? {
-            guard let pendingTrace = pendingTrace(at: index) else { return nil }
-            pendingTraceBounds.remove(at: index)
-            return pendingTrace
-        }
-
-        public mutating func drainPendingTrace() -> AccessibilityTrace? {
-            guard let pendingTrace = removePendingTrace(at: 0) else { return nil }
-            markDelivered(through: pendingTrace.lastRef)
-            return pendingTrace.trace
-        }
-
-        public mutating func drainPendingTraces() -> [AccessibilityTrace] {
-            let pendingTraces = pendingTraces()
-            guard !pendingTraces.isEmpty else { return [] }
-            pendingTraceBounds.removeAll()
-            markDelivered(through: pendingTraces.last?.lastRef)
-            return pendingTraces.map(\.trace)
-        }
-
         public mutating func markDelivered(through ref: AccessibilityTrace.CaptureRef?) {
             if let ref {
                 guard capture(ref: ref) != nil else { return }
@@ -256,7 +171,6 @@ public extension AccessibilityTrace {
 
         public mutating func reset() {
             captures.removeAll()
-            pendingTraceBounds.removeAll()
             deliveredRef = nil
         }
 
@@ -288,33 +202,9 @@ public extension AccessibilityTrace {
             return nextIndex >= deliveredIndex
         }
 
-        private func cursor(from bounds: AccessibilityTracePendingTraceBounds) -> AccessibilityTrace.Cursor? {
-            guard let startIndex = index(of: bounds.first),
-                  let endIndex = index(of: bounds.last),
-                  startIndex <= endIndex else {
-                return nil
-            }
-            let refs = captures[startIndex...endIndex].map(AccessibilityTrace.CaptureRef.init(capture:))
-            return AccessibilityTrace.Cursor(captureRefs: refs)
-        }
-
-        private func captureRefs(
-            from bounds: AccessibilityTracePendingTraceBounds
-        ) -> Set<AccessibilityTrace.CaptureRef> {
-            guard let cursor = cursor(from: bounds) else { return [] }
-            return Set(cursor.captureRefs)
-        }
-
-        private mutating func trimPendingTraceBounds(to limit: Int) {
-            let boundedLimit = max(limit, 0)
-            guard pendingTraceBounds.count > boundedLimit else { return }
-            pendingTraceBounds.removeFirst(pendingTraceBounds.count - boundedLimit)
-        }
-
         private mutating func pruneToRetentionPolicy() {
             guard retention == .dropAfterDelivery else { return }
             guard !captures.isEmpty else {
-                pendingTraceBounds.removeAll()
                 deliveredRef = nil
                 return
             }
@@ -323,18 +213,12 @@ public extension AccessibilityTrace {
             if let deliveredRef, capture(ref: deliveredRef) != nil {
                 retainedRefs.insert(deliveredRef)
             }
-            for bounds in pendingTraceBounds {
-                retainedRefs.formUnion(captureRefs(from: bounds))
-            }
             if let latestRef {
                 retainedRefs.insert(latestRef)
             }
 
             captures = Self.relinked(captures.filter { retainedRefs.contains(AccessibilityTrace.CaptureRef(capture: $0)) })
             deliveredRef = deliveredRef.flatMap { capture(ref: $0).map(AccessibilityTrace.CaptureRef.init(capture:)) }
-            pendingTraceBounds = pendingTraceBounds.filter {
-                capture(ref: $0.first) != nil && capture(ref: $0.last) != nil
-            }
         }
 
         private var nextSequence: Int {

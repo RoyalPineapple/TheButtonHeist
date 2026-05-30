@@ -67,7 +67,7 @@ Semantic commands identify elements by current handles or matcher fields.
 Button Heist resolves the target, moves the viewport if needed, refreshes, and
 uses fresh live geometry before acting.
 
-### Viewport and Media
+### Viewport and Screenshots
 
 ```bash
 buttonheist element_search --label "Submit"
@@ -76,8 +76,8 @@ buttonheist get_screen --output screen.png
 ```
 
 Explicit viewport commands expose viewport state because moving the viewport is
-the command's purpose. Screenshots write artifact files by default; inline media
-is an explicit raw media output mode.
+the command's purpose. Screenshots write artifact files by default; inline PNG
+data is an explicit raw output mode.
 
 ### Record and Replay
 

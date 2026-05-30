@@ -2,11 +2,6 @@ import ButtonHeist
 import MCP
 
 enum ToolDefinitions {
-    // NOTE: Video data handling
-    // Recording responses return artifact paths plus metadata by default.
-    // Raw base64 video data and full interaction logs are opt-in and capped
-    // before rendering because they can overwhelm the MCP context window.
-
     static var all: [Tool] {
         TheFence.Command.mcpToolContracts.map(tool(for:))
     }

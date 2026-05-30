@@ -3,9 +3,6 @@ import ButtonHeist
 
 /// Shared options for commands that target a UI element by heistId or accessibility properties.
 struct ElementTargetOptions: ParsableArguments {
-    @Argument(help: "Element heistId (from get_interface)")
-    var target: String?
-
     @Option(name: .long, help: "Element heistId (from get_interface)")
     var heistId: String?
 
@@ -27,13 +24,9 @@ struct ElementTargetOptions: ParsableArguments {
     @Option(name: .long, help: "0-based index to select among multiple matches (in tree traversal order)")
     var ordinal: Int?
 
-    /// Merges positional `target` and `--heist-id`, rejecting both at once.
     var resolvedHeistId: String? {
         get throws {
-            if target != nil && heistId != nil {
-                throw ValidationError("Cannot use both positional heistId and --heist-id")
-            }
-            return target ?? heistId
+            heistId
         }
     }
 

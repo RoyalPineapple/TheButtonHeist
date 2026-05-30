@@ -612,19 +612,6 @@ Runs all tasks, bh config, 1 trial each, 3 parallel workers. Exits 0 (pass) or 1
 
 Save a new baseline when landing major changes.
 
-## Recording and Demo Commands
-
-Slash commands for capturing recordings and demos from the connected iOS app. All commands require the app to be running with TheInsideJob embedded.
-
-| Command | Description |
-|---------|-------------|
-| `/record` | Start a background screen recording |
-| `/stop-recording` | Stop an in-progress recording and save the file |
-| `/screenshot` | Capture a screenshot and display it inline |
-| `/demo [feature]` | Create a polished 3-act feature demo video |
-
-Recordings are saved to `demos/` with timestamped filenames. Default settings: `--fps 8 --scale 0.5 --inactivity-timeout 60`.
-
 ## Product and framework naming
 
 - **Product name**: **Button Heist** (colloquially "the button heist"). We are not renaming to TheButtonHeist, Interface Heist, or UI Heist.

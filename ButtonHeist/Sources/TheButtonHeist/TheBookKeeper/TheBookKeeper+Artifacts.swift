@@ -4,43 +4,19 @@ import TheScore
 
 private enum BookKeeperArtifactKind {
     case screenshot(ScreenshotMetadata)
-    case recording(RecordingMetadata)
-
-    var type: ArtifactType {
-        switch self {
-        case .screenshot: return .screenshot
-        case .recording: return .recording
-        }
-    }
 
     var subdirectoryName: String {
         switch self {
         case .screenshot: return "screenshots"
-        case .recording: return "recordings"
         }
     }
 
     var fileExtension: String {
         switch self {
         case .screenshot: return "png"
-        case .recording: return "mp4"
         }
     }
 
-    var metadata: [String: Double] {
-        switch self {
-        case .screenshot(let metadata):
-            return ["width": metadata.width, "height": metadata.height]
-        case .recording(let metadata):
-            return [
-                "width": Double(metadata.width),
-                "height": Double(metadata.height),
-                "duration": metadata.duration,
-                "fps": Double(metadata.fps),
-                "frameCount": Double(metadata.frameCount),
-            ]
-        }
-    }
 }
 
 extension TheBookKeeper {
@@ -61,20 +37,6 @@ extension TheBookKeeper {
         )
     }
 
-    func writeRecording(
-        base64Data: String,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: RecordingMetadata
-    ) throws -> URL {
-        try writeSessionArtifact(
-            kind: .recording(metadata),
-            base64Data: base64Data,
-            requestId: requestId,
-            command: command
-        )
-    }
-
     func writeToPath(_ data: Data, outputPath: String) throws -> URL {
         guard let resolvedURL = outputPath.validatedOutputURL() else {
             throw BookKeeperError.unsafePath(outputPath)
@@ -87,10 +49,9 @@ extension TheBookKeeper {
     /// neither a session is active nor an explicit outputPath was supplied.
     ///
     /// Resolution rules:
-    /// - `outputPath` supplied: write raw bytes to that path via `writeToPath`
-    ///   without appending a session log artifact event.
+    /// - `outputPath` supplied: write raw bytes to that path via `writeToPath`.
     /// - No `outputPath`, session active: write into the session artifact
-    ///   directory and append an artifact event.
+    ///   directory.
     /// - No `outputPath`, no session: return `nil`; caller returns the
     ///   in-memory payload.
     func writeScreenshotIfSinkAvailable(
@@ -120,40 +81,6 @@ extension TheBookKeeper {
     ) throws -> URL {
         try writeArtifact(
             kind: .screenshot(metadata),
-            base64Data: base64Data,
-            outputPath: outputPath,
-            requestId: requestId,
-            command: command
-        )
-    }
-
-    func writeRecordingIfSinkAvailable(
-        base64Data: String,
-        outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: RecordingMetadata
-    ) throws -> URL? {
-        try writeArtifactIfSinkAvailable(
-            kind: .recording(metadata),
-            base64Data: base64Data,
-            outputPath: outputPath,
-            requestId: requestId,
-            command: command
-        )
-    }
-
-    /// Write a recording to an explicit path, active session artifact
-    /// directory, or standalone artifact directory when no session exists.
-    func writeRecordingArtifact(
-        base64Data: String,
-        outputPath: String?,
-        requestId: String,
-        command: TheFence.Command,
-        metadata: RecordingMetadata
-    ) throws -> URL {
-        try writeArtifact(
-            kind: .recording(metadata),
             base64Data: base64Data,
             outputPath: outputPath,
             requestId: requestId,
@@ -217,16 +144,6 @@ extension TheBookKeeper {
             try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
             let fileURL = subdirectory.appendingPathComponent(filename)
             try data.write(to: fileURL)
-
-            try appendLogLine(ArtifactLogEntry(
-                t: iso8601Now(),
-                artifactType: kind.type,
-                path: "\(kind.subdirectoryName)/\(filename)",
-                size: data.count,
-                requestId: requestId,
-                command: command.rawValue,
-                metadata: kind.metadata.isEmpty ? nil : kind.metadata
-            ), to: session.logHandle)
 
             return fileURL
         }

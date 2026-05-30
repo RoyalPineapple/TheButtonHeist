@@ -8,18 +8,7 @@ extension TheInsideJob {
 
     func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
         switch transition {
-        case .tripwireTriggered:
-            getaway.noteBackgroundChange()
-            if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
-                let getaway = self.getaway
-                Task { await getaway.noteSettledChangeIfNeeded() }
-            }
-        case .unsettled:
-            getaway.noteBackgroundChange()
-        case .settled where getaway.hasPendingBackgroundChange && canRunSettledBackgroundParse:
-            let getaway = self.getaway
-            Task { await getaway.noteSettledChangeIfNeeded() }
-        case .settled:
+        case .tripwireTriggered, .unsettled, .settled:
             break
         }
     }
@@ -28,31 +17,9 @@ extension TheInsideJob {
         Task { @MainActor [weak self] in
             guard let self else { return }
             while self.isPollingEnabled && !Task.isCancelled {
-                let settled = await self.tripwire.waitForAllClear(timeout: interval)
-                guard !Task.isCancelled, self.isPollingEnabled else { break }
-                if settled && self.canRunSettledBackgroundParse {
-                    await self.getaway.noteSettledChangeIfNeeded()
-                }
+                _ = await self.tripwire.waitForAllClear(timeout: interval)
             }
         }
-    }
-
-    var canRunSettledBackgroundParse: Bool {
-        Self.canRunSettledBackgroundParse(
-            isRunning: isRunning,
-            applicationState: UIApplication.shared.applicationState,
-            backgroundChangeState: getaway.backgroundChangeState
-        )
-    }
-
-    static func canRunSettledBackgroundParse(
-        isRunning: Bool,
-        applicationState: UIApplication.State,
-        backgroundChangeState: BackgroundChangeState
-    ) -> Bool {
-        isRunning
-            && applicationState == .active
-            && backgroundChangeState.canBeginSettledParse
     }
 
     // MARK: - Accessibility Observation
@@ -78,11 +45,7 @@ extension TheInsideJob {
     }
 
     @objc private func accessibilityDidChange() {
-        getaway.noteBackgroundChange()
-        if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
-            let getaway = self.getaway
-            Task { await getaway.noteSettledChangeIfNeeded() }
-        }
+        // Observation is command-owned; notifications do not mutate command evidence.
     }
 
     // MARK: - App Lifecycle
