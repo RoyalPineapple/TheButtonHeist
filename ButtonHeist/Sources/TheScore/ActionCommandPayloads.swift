@@ -16,21 +16,6 @@ public struct CustomActionTarget: Codable, Sendable {
         self.selection = .container(containerTarget, ordinal: ordinal, actionName: actionName)
     }
 
-    public var elementTarget: ElementTarget? {
-        guard case .element(let target, _) = selection else { return nil }
-        return target
-    }
-
-    public var containerTarget: ContainerMatcher? {
-        guard case .container(let target, _, _) = selection else { return nil }
-        return target
-    }
-
-    public var containerOrdinal: Int? {
-        guard case .container(_, let ordinal, _) = selection else { return nil }
-        return ordinal
-    }
-
     public var actionName: String {
         selection.actionName
     }
@@ -320,8 +305,6 @@ public struct RotorTarget: Sendable {
         self.direction = direction
         self.continuation = continuation
     }
-
-    public var resolvedDirection: RotorDirection { direction }
 }
 
 extension RotorTarget: CustomStringConvertible {

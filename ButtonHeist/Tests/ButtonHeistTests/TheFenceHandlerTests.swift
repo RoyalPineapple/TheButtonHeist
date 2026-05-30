@@ -3131,7 +3131,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .scroll(let target)? = batchPlans.first?.steps.first?.command else {
             return XCTFail("Expected scroll command")
         }
-        XCTAssertEqual(target.containerTarget?.stableId, "main_scroll")
+        XCTAssertEqual(target.selection, .container(ScrollContainerTarget(stableId: "main_scroll")))
         XCTAssertEqual(target.direction, .down)
     }
 

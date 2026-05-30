@@ -51,16 +51,6 @@ public enum GesturePointSelection: Sendable, Equatable, CustomStringConvertible 
     case element(ElementTarget)
     case coordinate(ScreenPoint)
 
-    public var elementTarget: ElementTarget? {
-        guard case .element(let target) = self else { return nil }
-        return target
-    }
-
-    public var screenPoint: ScreenPoint? {
-        guard case .coordinate(let point) = self else { return nil }
-        return point
-    }
-
     public var description: String {
         switch self {
         case .element(let target):

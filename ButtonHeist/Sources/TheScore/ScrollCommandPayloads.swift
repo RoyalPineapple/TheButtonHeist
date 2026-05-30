@@ -73,14 +73,12 @@ public struct ScrollTarget: Sendable {
         self.init(selection: .container(containerTarget), direction: direction)
     }
 
-    public var containerSelection: ScrollContainerSelection { selection }
-
-    public var containerTarget: ScrollContainerTarget? {
+    private var containerTarget: ScrollContainerTarget? {
         guard case .container(let target) = selection else { return nil }
         return target
     }
 
-    public var elementTarget: ElementTarget? {
+    private var elementTarget: ElementTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
     }
@@ -169,8 +167,6 @@ public struct ElementSearchTarget: Sendable {
         self.elementTarget = elementTarget
         self.direction = direction
     }
-
-    public var resolvedDirection: ScrollSearchDirection { direction }
 }
 
 extension ElementSearchTarget: CustomStringConvertible {
@@ -260,14 +256,12 @@ public struct ScrollToEdgeTarget: Sendable {
         self.init(selection: .container(containerTarget), edge: edge)
     }
 
-    public var containerSelection: ScrollContainerSelection { selection }
-
-    public var containerTarget: ScrollContainerTarget? {
+    private var containerTarget: ScrollContainerTarget? {
         guard case .container(let target) = selection else { return nil }
         return target
     }
 
-    public var elementTarget: ElementTarget? {
+    private var elementTarget: ElementTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
     }

@@ -47,8 +47,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("btn_save"))
-        XCTAssertNil(decoded.containerTarget)
+        XCTAssertEqual(decoded.selection, .element(.heistId("btn_save"), actionName: "Delete Item"))
         XCTAssertEqual(decoded.actionName, "Delete Item")
     }
 
@@ -59,7 +58,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .matcher(ElementMatcher(label: "Menu")))
+        XCTAssertEqual(decoded.selection, .element(.matcher(ElementMatcher(label: "Menu")), actionName: "Open Submenu"))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
     }
 
@@ -70,8 +69,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertNil(decoded.elementTarget)
-        XCTAssertEqual(decoded.containerTarget?.stableId, "semantic_actions__actions")
+        XCTAssertEqual(
+            decoded.selection,
+            .container(ContainerMatcher(stableId: "semantic_actions__actions"), ordinal: nil, actionName: "Dismiss")
+        )
         XCTAssertEqual(decoded.actionName, "Dismiss")
     }
 
@@ -458,7 +459,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("list"))
+        XCTAssertEqual(decoded.selection, .element(.heistId("list")))
         XCTAssertEqual(decoded.direction, .down)
     }
 
@@ -478,8 +479,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
-        XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
-        XCTAssertNil(decoded.elementTarget)
+        XCTAssertEqual(decoded.selection, .container(ScrollContainerTarget(stableId: "main_scroll")))
         XCTAssertEqual(decoded.direction, .up)
     }
 
@@ -494,7 +494,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             let data = try encoder.encode(target)
             let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
             XCTAssertEqual(decoded.edge, edge)
-            XCTAssertEqual(decoded.elementTarget, .heistId("scroll_view"))
+            XCTAssertEqual(decoded.selection, .element(.heistId("scroll_view")))
         }
     }
 
@@ -505,8 +505,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
-        XCTAssertEqual(decoded.containerTarget, ScrollContainerTarget(stableId: "main_scroll"))
-        XCTAssertNil(decoded.elementTarget)
+        XCTAssertEqual(decoded.selection, .container(ScrollContainerTarget(stableId: "main_scroll")))
         XCTAssertEqual(decoded.edge, .bottom)
     }
 
@@ -916,12 +915,11 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.direction, .up)
     }
 
-    func testElementSearchTargetResolvedDirection() {
+    func testElementSearchTargetDirectionDefaults() {
         let withDirection = ElementSearchTarget(elementTarget: .heistId("item"), direction: .left)
-        XCTAssertEqual(withDirection.resolvedDirection, .left)
+        XCTAssertEqual(withDirection.direction, .left)
 
         let defaultDirection = ElementSearchTarget(elementTarget: .heistId("item"))
-        XCTAssertEqual(defaultDirection.resolvedDirection, .down)
         XCTAssertEqual(defaultDirection.direction, .down)
     }
 
