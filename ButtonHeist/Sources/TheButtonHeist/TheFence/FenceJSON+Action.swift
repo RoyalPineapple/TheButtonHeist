@@ -211,19 +211,37 @@ struct PublicBatchResponse: FencePublicJSONResponse {
     let stepSummaries: [PublicBatchStepSummary]?
     let netDelta: PublicDelta?
 
-    init(outcomes: [BatchStepOutcome], totalTimingMs: Int, accessibilityTrace: AccessibilityTrace?) {
-        let failedIndex = outcomes.stoppedFailedIndex
+    init(
+        commands: [TheFence.Command],
+        steps: [TheScore.BatchStep],
+        result: BatchExecutionResult,
+        accessibilityTrace: AccessibilityTrace?
+    ) {
+        let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
-        self.results = outcomes.compactMap(\.response).map(PublicResponseModel.init)
-        self.completedSteps = outcomes.completedStepCount
-        self.totalTimingMs = totalTimingMs
+        self.results = result.steps.compactMap { step in
+            guard commands.indices.contains(step.index),
+                  steps.indices.contains(step.index),
+                  let response = step.actionResponse(
+                    command: commands[step.index],
+                    step: steps[step.index]
+                  )
+            else { return nil }
+            return PublicResponseModel(response: response)
+        }
+        self.completedSteps = result.completedStepCount
+        self.totalTimingMs = result.totalTimingMs
         self.failedIndex = failedIndex
-        let checked = outcomes.expectationsChecked
+        let checked = result.expectationsChecked(steps: steps)
         self.expectations = checked > 0
-            ? PublicBatchExpectations(checked: checked, met: outcomes.expectationsMet)
+            ? PublicBatchExpectations(checked: checked, met: result.expectationsMet(steps: steps))
             : nil
-        let summaries = outcomes.stepSummaries.enumerated().map { index, summary in
-            PublicBatchStepSummary(index: index, summary: summary)
+        let summaries = result.steps.map { step in
+            PublicBatchStepSummary(
+                step: step,
+                command: commands.indices.contains(step.index) ? commands[step.index] : nil,
+                typedStep: steps.indices.contains(step.index) ? steps[step.index] : nil
+            )
         }
         self.stepSummaries = summaries.isEmpty ? nil : summaries
         self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
@@ -255,17 +273,46 @@ struct PublicBatchStepSummary: Encodable {
     let phase: String?
     let nextCommand: String?
 
-    init(index: Int, summary: BatchStepSummary) {
-        self.index = index
-        self.command = summary.command.rawValue
-        self.deltaKind = summary.deltaKind
-        self.screenName = summary.screenName
-        self.screenId = summary.screenId
-        self.expectationMet = summary.expectationMet
-        self.elementCount = summary.elementCount
-        self.error = summary.error
-        self.errorCode = summary.errorCode
-        self.phase = summary.phase
-        self.nextCommand = summary.nextCommand
+    init(
+        step: BatchExecutionStepResult,
+        command: TheFence.Command?,
+        typedStep: TheScore.BatchStep?
+    ) {
+        self.index = step.index
+        self.command = command?.rawValue ?? "step \(step.index)"
+        let actionResult = step.finalActionResult()
+        self.deltaKind = actionResult?.accessibilityDelta?.kindRawValue
+        self.screenName = actionResult?.screenName
+        self.screenId = actionResult?.screenId
+        self.expectationMet = typedStep.flatMap { step.expectationMet(for: $0) }
+        self.elementCount = nil
+        if let skipped = step.skipped {
+            self.error = skipped.reason
+            self.errorCode = nil
+            self.phase = nil
+            self.nextCommand = nil
+        } else if actionResult?.success == false {
+            self.error = actionResult?.message
+            self.errorCode = nil
+            self.phase = nil
+            self.nextCommand = nil
+        } else if let typedStep,
+                  let command,
+                  case .error(let message, let details) = step.actionResponse(command: command, step: typedStep) {
+            self.error = message
+            self.errorCode = details?.errorCode
+            self.phase = details?.phase.rawValue
+            self.nextCommand = Self.batchNextCommand(from: details)
+        } else {
+            self.error = nil
+            self.errorCode = nil
+            self.phase = nil
+            self.nextCommand = nil
+        }
+    }
+
+    private static func batchNextCommand(from details: FailureDetails?) -> String? {
+        guard details?.errorCode == FenceRequestErrorCode.missingTarget else { return nil }
+        return details?.hint
     }
 }

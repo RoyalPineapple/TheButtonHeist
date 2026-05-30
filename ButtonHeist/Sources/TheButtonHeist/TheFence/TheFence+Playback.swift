@@ -98,7 +98,7 @@ extension TheFence {
         let playbackStart = CFAbsoluteTimeGetCurrent()
         let batchResponse = try await handleRunBatch(playbackContract.batchRequest)
         let batchResult = try playbackBatchResult(batchResponse)
-        var failure = playbackFailure(contract: playbackContract, outcomes: batchResult.outcomes)
+        var failure = playbackFailure(contract: playbackContract, batch: batchResult)
 
         if let currentFailure = failure {
             failure = await currentFailure.withPlaybackDiagnostics(capturingWith: self)
@@ -106,8 +106,8 @@ extension TheFence {
 
         let totalTimeSeconds = CFAbsoluteTimeGetCurrent() - playbackStart
         let totalTimingMs = Int(totalTimeSeconds * 1000)
-        let stepResults = stepResults(contract: playbackContract, outcomes: batchResult.outcomes)
-        let failedIndex = firstPlaybackFailureIndex(outcomes: batchResult.outcomes)
+        let stepResults = stepResults(contract: playbackContract, batch: batchResult)
+        let failedIndex = firstPlaybackFailureIndex(contract: playbackContract, batch: batchResult)
         let completedSteps = stepResults.prefix { $0.passed }.count
         let report = HeistPlaybackReport(
             heistName: heistName,
@@ -182,26 +182,35 @@ extension TheFence {
     }
 
     private struct PlaybackBatchResult {
-        let outcomes: [BatchStepOutcome]
+        let commands: [TheFence.Command]
+        let steps: [TheScore.BatchStep]
+        let result: BatchExecutionResult
     }
 
     private func playbackBatchResult(_ response: FenceResponse) throws -> PlaybackBatchResult {
-        guard case .batch(let outcomes, _, _) = response else {
+        guard case .batch(let commands, let steps, let result, _) = response else {
             throw FenceError.invalidRequest("Expected batch response while playing heist")
         }
-        return PlaybackBatchResult(outcomes: outcomes)
+        return PlaybackBatchResult(commands: commands, steps: steps, result: result)
     }
 
     private func stepResults(
         contract: ValidatedHeistPlayback,
-        outcomes: [BatchStepOutcome]
+        batch: PlaybackBatchResult
     ) -> [HeistPlaybackReport.StepResult] {
         contract.steps.map { step in
-            let outcome = outcomes.indices.contains(step.index) ? outcomes[step.index] : nil
+            let outcome = batch.result.steps.first { $0.index == step.index }
             return stepResult(
                 step: step,
                 timeSeconds: Double(outcome?.durationMs ?? 0) / 1000,
-                failure: outcome.flatMap { playbackFailure(step: step, outcome: $0) }
+                failure: outcome.flatMap {
+                    playbackFailure(
+                        step: step,
+                        outcome: $0,
+                        command: batch.commands[safe: $0.index],
+                        typedStep: batch.steps[safe: $0.index]
+                    )
+                }
             )
         }
     }
@@ -241,42 +250,57 @@ extension TheFence {
         }
     }
 
-    private func playbackFailure(contract: ValidatedHeistPlayback, outcomes: [BatchStepOutcome]) -> PlaybackFailure? {
+    private func playbackFailure(contract: ValidatedHeistPlayback, batch: PlaybackBatchResult) -> PlaybackFailure? {
         for step in contract.steps {
-            guard outcomes.indices.contains(step.index),
-                  let failure = playbackFailure(step: step, outcome: outcomes[step.index])
+            guard let outcome = batch.result.steps.first(where: { $0.index == step.index }),
+                  let failure = playbackFailure(
+                    step: step,
+                    outcome: outcome,
+                    command: batch.commands[safe: outcome.index],
+                    typedStep: batch.steps[safe: outcome.index]
+                  )
             else { continue }
             return failure
         }
         return nil
     }
 
-    private func firstPlaybackFailureIndex(outcomes: [BatchStepOutcome]) -> Int? {
-        outcomes.firstIndex { outcome in
-            switch outcome.result {
-            case .response(let response):
-                if case .action(_, let result, let expectation) = response {
-                    return !result.success || expectation?.met == false
-                }
-                return response.isFailure
-            case .skipped:
-                return true
-            }
+    private func firstPlaybackFailureIndex(
+        contract: ValidatedHeistPlayback,
+        batch: PlaybackBatchResult
+    ) -> Int? {
+        for step in contract.steps {
+            guard let outcome = batch.result.steps.first(where: { $0.index == step.index }),
+                  playbackFailure(
+                    step: step,
+                    outcome: outcome,
+                    command: batch.commands[safe: outcome.index],
+                    typedStep: batch.steps[safe: outcome.index]
+                  ) != nil
+            else { continue }
+            return step.index
         }
+        return nil
     }
 
-    private func playbackFailure(step: ValidatedHeistStep, outcome: BatchStepOutcome) -> PlaybackFailure? {
-        switch outcome.result {
-        case .response(let response):
-            return playbackFailure(step: step, response: response)
-        case .skipped(let reason, _):
+    private func playbackFailure(
+        step: ValidatedHeistStep,
+        outcome: BatchExecutionStepResult,
+        command: TheFence.Command?,
+        typedStep: TheScore.BatchStep?
+    ) -> PlaybackFailure? {
+        if let skipped = outcome.skipped {
             return .fenceError(
                 step: PlaybackFailure.FailedStep(command: step.command.rawValue, target: step.target),
-                message: reason,
+                message: skipped.reason,
                 interface: nil,
                 diagnosticCaptureFailure: nil
             )
         }
+        guard let command, let typedStep,
+              let response = outcome.actionResponse(command: command, step: typedStep)
+        else { return nil }
+        return playbackFailure(step: step, response: response)
     }
 
     private func playbackFailure(step: ValidatedHeistStep, response: FenceResponse) -> PlaybackFailure? {
@@ -333,5 +357,11 @@ private extension PlaybackFailure {
             playbackLogger.error("Failed to capture interface for playback diagnostics: \(error.displayMessage)")
             return withDiagnosticCaptureFailure(error.displayMessage)
         }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

@@ -350,32 +350,6 @@ func makeBackgroundScreenChangedTrace(elementCount: Int) -> AccessibilityTrace {
     )
 }
 
-func makeBatchOutcome(
-    command: TheFence.Command = .activate,
-    response: FenceResponse = .ok(message: "ok"),
-    stopsBatch: Bool = false
-) -> BatchStepOutcome {
-    BatchStepOutcome(command: command, response: response, stopsBatch: stopsBatch)
-}
-
-func makeExpectationBatchOutcome(
-    command: TheFence.Command = .activate,
-    met: Bool,
-    stopsBatch: Bool = false
-) -> BatchStepOutcome {
-    let expectation = ExpectationResult(
-        met: met,
-        expectation: .screenChanged,
-        actual: met ? nil : "noChange"
-    )
-    let result = ActionResult(success: true, method: .activate)
-    return BatchStepOutcome(
-        command: command,
-        response: .action(command: .activate, result: result, expectation: expectation),
-        stopsBatch: stopsBatch
-    )
-}
-
 func publicJSONObject(
     _ response: FenceResponse,
     file: StaticString = #filePath,
@@ -395,32 +369,101 @@ func publicJSONObject(
 }
 
 struct BatchInspection {
-    let outcomes: [BatchStepOutcome]
+    struct StepSummary {
+        let command: TheFence.Command
+        let deltaKind: String?
+        let screenName: String?
+        let screenId: String?
+        let expectationMet: Bool?
+        let elementCount: Int?
+        let error: String?
+        let errorCode: String?
+        let phase: String?
+        let nextCommand: String?
+    }
+
+    let commands: [TheFence.Command]
+    let steps: [TheScore.BatchStep]
+    let executionResult: BatchExecutionResult
     let results: [[String: Any]]
     let completedSteps: Int
     let failedIndex: Int?
     let totalTimingMs: Int
     let expectationsChecked: Int
     let expectationsMet: Int
-    let summaries: [BatchStepSummary]
+    let summaries: [StepSummary]
     let accessibilityTrace: AccessibilityTrace?
 }
 
 func inspectBatch(_ response: FenceResponse) -> BatchInspection? {
-    guard case .batch(let outcomes, let totalTimingMs, let accessibilityTrace) = response else {
+    guard case .batch(let commands, let steps, let result, let accessibilityTrace) = response else {
         return nil
     }
     return BatchInspection(
-        outcomes: outcomes,
-        results: outcomes.compactMap { outcome in
-            outcome.response.map { publicJSONObject($0) }
+        commands: commands,
+        steps: steps,
+        executionResult: result,
+        results: result.steps.compactMap { stepResult in
+            guard let command = commands[safe: stepResult.index],
+                  let step = steps[safe: stepResult.index],
+                  let response = stepResult.actionResponse(command: command, step: step)
+            else { return nil }
+            return publicJSONObject(response)
         },
-        completedSteps: outcomes.completedStepCount,
-        failedIndex: outcomes.stoppedFailedIndex,
-        totalTimingMs: totalTimingMs,
-        expectationsChecked: outcomes.expectationsChecked,
-        expectationsMet: outcomes.expectationsMet,
-        summaries: outcomes.stepSummaries,
+        completedSteps: result.completedStepCount,
+        failedIndex: result.stoppedFailedIndex,
+        totalTimingMs: result.totalTimingMs,
+        expectationsChecked: result.expectationsChecked(steps: steps),
+        expectationsMet: result.expectationsMet(steps: steps),
+        summaries: result.steps.map { stepResult in
+            let command = commands[safe: stepResult.index] ?? .runBatch
+            let step = steps[safe: stepResult.index]
+            let actionResult = stepResult.finalActionResult()
+            let error: String?
+            let errorCode: String?
+            let phase: String?
+            let nextCommand: String?
+            if let skipped = stepResult.skipped {
+                error = skipped.reason
+                errorCode = nil
+                phase = nil
+                nextCommand = nil
+            } else if actionResult?.success == false {
+                error = actionResult?.message
+                errorCode = nil
+                phase = nil
+                nextCommand = nil
+            } else if let step,
+                      case .error(let message, let details) = stepResult.actionResponse(command: command, step: step) {
+                error = message
+                errorCode = details?.errorCode
+                phase = details?.phase.rawValue
+                nextCommand = details?.errorCode == FenceRequestErrorCode.missingTarget ? details?.hint : nil
+            } else {
+                error = nil
+                errorCode = nil
+                phase = nil
+                nextCommand = nil
+            }
+            return BatchInspection.StepSummary(
+                command: command,
+                deltaKind: actionResult?.accessibilityDelta?.kindRawValue,
+                screenName: actionResult?.screenName,
+                screenId: actionResult?.screenId,
+                expectationMet: step.flatMap { stepResult.expectationMet(for: $0) },
+                elementCount: nil,
+                error: error,
+                errorCode: errorCode,
+                phase: phase,
+                nextCommand: nextCommand
+            )
+        },
         accessibilityTrace: accessibilityTrace
     )
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
 }

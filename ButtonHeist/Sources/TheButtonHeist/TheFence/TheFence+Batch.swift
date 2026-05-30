@@ -8,127 +8,54 @@ extension TheFence {
 
     func handleRunBatch(_ request: RunBatchRequest) async throws -> FenceResponse {
         let batchStart = CFAbsoluteTimeGetCurrent()
-        var outcomesByIndex: [Int: BatchStepOutcome] = [:]
         let plannedSteps = request.steps
+        let typedSteps = plannedSteps.map(\.typedStep)
+        let commands = plannedSteps.map(\.command)
 
-        if !plannedSteps.isEmpty {
+        let executionResult: BatchExecutionResult
+        if plannedSteps.isEmpty {
+            executionResult = BatchExecutionResult(
+                policy: request.policy,
+                steps: [],
+                totalTimingMs: 0
+            )
+        } else {
             let plan = TheScore.BatchPlan(
-                steps: plannedSteps.map(\.typedStep),
+                steps: typedSteps,
                 policy: request.policy
             )
-            let result = try await sendAndAwaitBatchExecution(plan, timeout: Timeouts.longActionSeconds)
-            mergeBatchExecutionResult(
-                result,
-                plannedSteps: plannedSteps,
-                outcomesByIndex: &outcomesByIndex
-            )
+            executionResult = try await sendAndAwaitBatchExecution(plan, timeout: Timeouts.longActionSeconds)
         }
 
-        let stoppedIndex = stoppedIndex(
-            outcomesByIndex: outcomesByIndex,
-            policy: request.policy
-        )
-        if let stoppedIndex, request.policy == .stopOnError {
-            for index in request.steps.indices where index > stoppedIndex {
-                outcomesByIndex[index] = BatchStepOutcome.skipped(
-                    command: request.steps[index].command,
-                    afterFailedIndex: stoppedIndex
-                )
-            }
-        }
-
-        let outcomes = request.steps.indices.compactMap { outcomesByIndex[$0] }
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - batchStart) * 1000)
-        let accessibilityTrace = Self.batchAccessibilityTrace(outcomes: outcomes)
-        return .batch(
-            outcomes: outcomes,
+        let result = BatchExecutionResult(
+            policy: executionResult.policy,
+            steps: executionResult.steps,
             totalTimingMs: totalMs,
+            failedIndex: executionResult.failedIndex
+        )
+        completeBatchActions(result)
+        let accessibilityTrace = Self.batchAccessibilityTrace(result)
+        return .batch(
+            commands: commands,
+            steps: typedSteps,
+            result: result,
             accessibilityTrace: accessibilityTrace
         )
     }
 
-    private func mergeBatchExecutionResult(
-        _ result: BatchExecutionResult,
-        plannedSteps: [RunBatchPreparedStep],
-        outcomesByIndex: inout [Int: BatchStepOutcome]
-    ) {
+    private func completeBatchActions(_ result: BatchExecutionResult) {
         for stepResult in result.steps {
-            guard plannedSteps.indices.contains(stepResult.index) else { continue }
-            let plannedStep = plannedSteps[stepResult.index]
-            let outcome = batchStepOutcome(
-                from: stepResult,
-                plannedStep: plannedStep,
-                plannedSteps: plannedSteps
-            )
-            outcomesByIndex[plannedStep.originalIndex] = outcome
-        }
-    }
-
-    private func batchStepOutcome(
-        from stepResult: BatchExecutionStepResult,
-        plannedStep: RunBatchPreparedStep,
-        plannedSteps: [RunBatchPreparedStep]
-    ) -> BatchStepOutcome {
-        if let skipped = stepResult.skipped {
-            let afterFailedIndex = plannedSteps.indices.contains(skipped.afterFailedIndex)
-                ? plannedSteps[skipped.afterFailedIndex].originalIndex
-                : skipped.afterFailedIndex
-            return BatchStepOutcome.skipped(
-                command: plannedStep.command,
-                afterFailedIndex: afterFailedIndex,
-                durationMs: stepResult.durationMs
-            )
-        }
-
-        if let actionResult = stepResult.actionResult ?? stepResult.expectationActionResult {
-            let finalResult = stepResult.expectationActionResult ?? actionResult
+            guard let finalResult = stepResult.finalActionResult() else { continue }
             commandExecutionState.completeAction(finalResult)
-            return BatchStepOutcome(
-                command: plannedStep.command,
-                response: .action(
-                    command: plannedStep.command,
-                    result: finalResult,
-                    expectation: stepResult.expectation ?? validatedExpectation(
-                        for: plannedStep.typedStep,
-                        result: finalResult
-                    )
-                ),
-                durationMs: stepResult.durationMs,
-                stopsBatch: stepResult.stopsBatch
-            )
         }
-
-        return BatchStepOutcome(
-            command: plannedStep.command,
-            response: .error("typed batch step produced no action result"),
-            durationMs: stepResult.durationMs,
-            stopsBatch: stepResult.stopsBatch
-        )
-    }
-
-    private func validatedExpectation(
-        for step: TheScore.BatchStep,
-        result: ActionResult
-    ) -> ExpectationResult? {
-        step.expectation.validate(against: result)
-    }
-
-    private func stoppedIndex(
-        outcomesByIndex: [Int: BatchStepOutcome],
-        policy: BatchExecutionPolicy
-    ) -> Int? {
-        guard policy == .stopOnError else { return nil }
-        return outcomesByIndex
-            .filter { $0.value.stopsBatch }
-            .map(\.key)
-            .min()
     }
 
     private static func batchAccessibilityTrace(
-        outcomes: [BatchStepOutcome]
+        _ result: BatchExecutionResult
     ) -> AccessibilityTrace? {
-        let actionOutcomeCount = outcomes.count(where: \.hasActionResult)
-        let stepAccessibilityTraces = outcomes.compactMap(\.accessibilityTrace)
+        let actionOutcomeCount = result.steps.count { $0.finalActionResult() != nil }
+        let stepAccessibilityTraces = result.steps.compactMap { $0.finalActionResult()?.accessibilityTrace }
         guard actionOutcomeCount > 0,
               stepAccessibilityTraces.count == actionOutcomeCount
         else { return nil }
