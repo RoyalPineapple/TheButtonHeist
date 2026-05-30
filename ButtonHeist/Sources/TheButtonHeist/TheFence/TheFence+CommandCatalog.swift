@@ -43,7 +43,6 @@ extension TheFence {
 
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
-    public let requestPayloadKind: FenceRequestPayloadKind
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
     public let isBatchExecutable: Bool
@@ -71,7 +70,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
 
     public init(
         command: TheFence.Command,
-        requestPayloadKind: FenceRequestPayloadKind,
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
         isBatchExecutable: Bool,
@@ -81,7 +79,6 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         description: String
     ) {
         self.command = command
-        self.requestPayloadKind = requestPayloadKind
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
         self.isBatchExecutable = isBatchExecutable
@@ -92,17 +89,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     }
 }
 
-public enum FenceRequestPayloadKind: Sendable, Equatable {
-    case none
-    case observation
-    case waitForChange
-    case gesture
-    case elementAction
-    case session
-}
-
 private struct FenceCommandCatalogEntry {
-    var requestPayloadKind: FenceRequestPayloadKind = .none
     var cliExposure: CLIExposure = .directCommand
     var mcpExposure: MCPExposure = .directTool
     var isBatchExecutable = false
@@ -134,7 +121,6 @@ extension TheFence.Command {
         let entry = command.catalogEntry
         return FenceCommandDescriptor(
             command: command,
-            requestPayloadKind: entry.requestPayloadKind,
             cliExposure: entry.cliExposure,
             mcpExposure: entry.mcpExposure,
             isBatchExecutable: entry.isBatchExecutable,
@@ -169,7 +155,6 @@ extension TheFence.Command {
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.description = "List discovered iOS devices and configured connection targets."
         case .getInterface:
-            entry.requestPayloadKind = .observation
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.parameters = filter + [
                 FenceParameterBlocks.interfaceSubtree,
@@ -177,28 +162,23 @@ extension TheFence.Command {
             ]
             entry.description = "Read the app accessibility hierarchy, optionally scoped to a subtree."
         case .getScreen:
-            entry.requestPayloadKind = .observation
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.parameters = [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)]
             entry.description = "Capture a PNG screenshot with optional inline data and interface state."
         case .waitForChange:
-            entry.requestPayloadKind = .waitForChange
             entry.isBatchExecutable = true
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
             entry.parameters = expectation
             entry.description = "Wait for any UI change or for an expectation to become true."
         case .oneFingerTap:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.coordinateXY + expectation
             entry.description = "Tap a coordinate or semantic target after actionability resolution."
         case .longPress:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.coordinateXY + [duration] + expectation
             entry.description = "Long-press a coordinate or semantic target for a resolved duration."
         case .swipe:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + [
                 param(.direction, .string, enumValues: fenceEnumValues(SwipeDirection.self)),
@@ -207,31 +187,26 @@ extension TheFence.Command {
             ] + FenceParameterBlocks.optionalStart + FenceParameterBlocks.optionalEnd + [duration] + expectation
             entry.description = "Swipe in a direction or between explicit points; semantic targets are made actionable first."
         case .drag:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.requiredEnd + FenceParameterBlocks.optionalStart + [duration] + expectation
             entry.description = "Drag from one point to another using explicit coordinates or a semantic target."
         case .pinch:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.scale, .number, required: true)] + FenceParameterBlocks.center + [
                 param(.spread, .number), duration,
             ] + expectation
             entry.description = "Pinch around a resolved center point using scale, angle, and duration."
         case .rotate:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.angle, .number, required: true)] + FenceParameterBlocks.center + [
                 param(.radius, .number), duration,
             ] + expectation
             entry.description = "Rotate around a resolved center point using angle, radius, and duration."
         case .twoFingerTap:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.center + [param(.spread, .number)] + expectation
             entry.description = "Tap with two fingers at a coordinate or actionable semantic target."
         case .drawPath:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = [
                 param(
@@ -246,7 +221,6 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Draw a free-form path through explicit screen-coordinate points."
         case .drawBezier:
-            entry.requestPayloadKind = .gesture
             entry.isBatchExecutable = true
             entry.parameters = FenceParameterBlocks.requiredStart + [
                 param(
@@ -266,7 +240,6 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Draw a Bezier path from a start point through one or more curve segments."
         case .scroll:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = scrollContainerTarget + target + [
                 param(
@@ -277,19 +250,16 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Scroll one page in a selected container or semantic target's owning scroll ancestor."
         case .scrollToVisible:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + expectation
             entry.description = "Make a semantic target actionable and report its fresh geometry."
         case .elementSearch:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [
                 param(.direction, .string, enumValues: fenceEnumValues(ScrollSearchDirection.self)),
             ] + expectation
             entry.description = "Search scrollable content for a semantic element match without performing an action."
         case .scrollToEdge:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = scrollContainerTarget + target + [
                 param(
@@ -300,12 +270,10 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Scroll the selected container, or the target's owning scroll ancestor, to a requested edge."
         case .activate:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation
             entry.description = "Activate a semantic UI element or one of its named accessibility actions."
         case .rotor:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [
                 param(.rotor, .string),
@@ -333,17 +301,14 @@ extension TheFence.Command {
             ] + expectation
             entry.description = "Move through an element rotor using direction and continuation metadata."
         case .typeText:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.text, .string, required: true, minLength: 1)] + expectation
             entry.description = "Type non-empty text, optionally after making a semantic target actionable."
         case .editAction:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + expectation
             entry.description = "Perform an edit action on the current first responder."
         case .setPasteboard:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = [param(.text, .string, required: true)] + expectation
             entry.description = "Write text to the general pasteboard from within the app."
@@ -351,7 +316,6 @@ extension TheFence.Command {
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true)
             entry.description = "Read text from the general pasteboard."
         case .waitFor:
-            entry.requestPayloadKind = .elementAction
             entry.isBatchExecutable = true
             entry.parameters = target + [param(.absent, .boolean), FenceParameterBlocks.expectationTimeout, expect]
             entry.description = "Wait for a semantic element to appear or disappear."
@@ -360,7 +324,6 @@ extension TheFence.Command {
             entry.parameters = expectation
             entry.description = "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
         case .runBatch:
-            entry.requestPayloadKind = .session
             entry.parameters = [
                 param(
                     .steps, .array, required: true,
@@ -384,7 +347,6 @@ extension TheFence.Command {
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.description = "Inspect connection, device, and last-action session state."
         case .connect:
-            entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
             entry.parameters = [param(.target, .string), param(.device, .string), param(.token, .string)]
             entry.description = "Establish or switch the active connection to a Button Heist app."
@@ -393,17 +355,14 @@ extension TheFence.Command {
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)
             entry.description = "List configured connection targets and the default target."
         case .startHeist:
-            entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
             entry.parameters = [param(.app, .string), param(.identifier, .string)]
             entry.description = "Start recording replayable heist steps from successful commands."
         case .stopHeist:
-            entry.requestPayloadKind = .session
             entry.requiresConnectionBeforeDispatch = false
             entry.parameters = [param(.output, .string, required: true)]
             entry.description = "Stop heist recording and save a deterministic heist fixture."
         case .playHeist:
-            entry.requestPayloadKind = .session
             entry.parameters = [param(.input, .string, required: true)]
             entry.description = "Play back a heist file and return step diagnostics on failure."
         }
