@@ -9,7 +9,7 @@ private extension ScreenPayload {
             width: width,
             height: height,
             timestamp: timestamp,
-            interface: includeInterface ? interface : Interface(timestamp: timestamp, tree: [])
+            interface: includeInterface ? interface : nil
         )
     }
 }

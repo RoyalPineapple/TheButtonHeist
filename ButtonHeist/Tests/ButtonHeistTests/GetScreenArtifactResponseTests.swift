@@ -26,7 +26,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
         }
         XCTAssertEqual(payload.width, 393)
         XCTAssertEqual(payload.height, 852)
-        XCTAssertTrue(payload.interface.elements.isEmpty)
+        XCTAssertNil(payload.interface)
         XCTAssertFalse(options.includeInterface)
         XCTAssertEqual(try Data(contentsOf: URL(fileURLWithPath: path)), pngBytes)
 
@@ -58,7 +58,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             return XCTFail("Expected inline screenshot response, got \(inlineResponse)")
         }
         XCTAssertEqual(inlinePayload.pngData, pngData)
-        XCTAssertTrue(inlinePayload.interface.elements.isEmpty)
+        XCTAssertNil(inlinePayload.interface)
         XCTAssertFalse(inlineOptions.includeInterface)
 
         let inlineJson = publicJSONObject(inlineResponse)
@@ -75,7 +75,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             return XCTFail("Expected inline screenshot response with interface, got \(includedInterfaceResponse)")
         }
         XCTAssertEqual(includedInterfacePayload.pngData, pngData)
-        XCTAssertEqual(includedInterfacePayload.interface.elements.map(\.heistId), ["visible_button"])
+        XCTAssertEqual(includedInterfacePayload.interface?.elements.map(\.heistId), ["visible_button"])
         XCTAssertTrue(includedInterfaceOptions.includeInterface)
         XCTAssertNotNil(publicJSONObject(includedInterfaceResponse)["interface"])
     }

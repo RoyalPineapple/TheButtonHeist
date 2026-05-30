@@ -343,7 +343,7 @@ struct PublicScreenshotResponse: FencePublicJSONResponse {
         self.width = payload.width
         self.height = payload.height
         self.pngData = includePNGData ? payload.pngData : nil
-        self.interface = includeInterface ? PublicInterface(interface: payload.interface, detail: .full) : nil
+        self.interface = includeInterface ? payload.interface.map { PublicInterface(interface: $0, detail: .full) } : nil
         self.path = path
     }
 }
