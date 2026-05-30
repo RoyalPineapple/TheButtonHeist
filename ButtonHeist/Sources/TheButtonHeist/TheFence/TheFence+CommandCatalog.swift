@@ -43,7 +43,6 @@ extension TheFence {
 
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
-    public var canonicalName: String { command.rawValue }
     public let requestPayloadKind: FenceRequestPayloadKind
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
@@ -60,6 +59,14 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public var elementTargetParameterKeys: [String] {
         let elementTargetKeys = Set(FenceParameterBlocks.elementTarget.map(\.key))
         return parameters.map(\.key).filter(elementTargetKeys.contains)
+    }
+
+    public func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
+        parameters.first { $0.key == key.rawValue }
+    }
+
+    public func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
+        parameter(named: key)?.defaultValue
     }
 
     public init(
@@ -114,39 +121,17 @@ public extension TheFence.Command {
         descriptors.filter { $0.cliExposure == .directCommand }
     }
 
-    var canonicalName: String { descriptor.canonicalName }
-
-    var cliExposure: CLIExposure { descriptor.cliExposure }
-
-    var mcpExposure: MCPExposure { descriptor.mcpExposure }
-
-    var parameters: [FenceParameterSpec] { descriptor.parameters }
-
-    var requestPayloadKind: FenceRequestPayloadKind { descriptor.requestPayloadKind }
-
-    func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
-        parameters.first { $0.key == key.rawValue }
-    }
-
-    func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
-        parameter(named: key)?.defaultValue
-    }
-
-    var isBatchExecutable: Bool { descriptor.isBatchExecutable }
-
     static var batchExecutableCases: [Self] {
         allCases.filter { command in
             command != .runBatch && command.catalogEntry.isBatchExecutable
         }
     }
 
-    var requiresConnectionBeforeDispatch: Bool { descriptor.requiresConnectionBeforeDispatch }
-
     static var mcpToolContracts: [MCPToolContract] {
         descriptors.compactMap { descriptor in
             guard descriptor.mcpExposure == .directTool else { return nil }
             return MCPToolContract(
-                name: descriptor.canonicalName,
+                name: descriptor.command.rawValue,
                 description: descriptor.description,
                 parameters: descriptor.parameters,
                 annotations: descriptor.mcpAnnotations

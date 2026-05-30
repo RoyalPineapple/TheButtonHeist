@@ -3898,7 +3898,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlaybackValidationRejectsNonExecutableCommands() async throws {
         let (fence, _) = makeConnectedFence()
-        for command in TheFence.Command.allCases where !command.isBatchExecutable {
+        for command in TheFence.Command.allCases where !command.descriptor.isBatchExecutable {
             XCTAssertThrowsError(
                 try fence.validateHeistPlayback(
                     HeistPlayback(app: "com.test.mock", steps: [try HeistStep(command: command.rawValue)])
