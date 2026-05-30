@@ -529,9 +529,9 @@ final class ServerMessageTests: XCTestCase {
             XCTAssertEqual(decodedPayload.pngData, payload.pngData)
             XCTAssertEqual(decodedPayload.width, 390)
             XCTAssertEqual(decodedPayload.height, 844)
-            XCTAssertEqual(decodedPayload.interface.elements, [element])
-            XCTAssertEqual(decodedPayload.interface.elements.first?.frameX, 20)
-            XCTAssertEqual(decodedPayload.interface.elements.first?.activationPointX, 100)
+            XCTAssertEqual(decodedPayload.interface?.elements, [element])
+            XCTAssertEqual(decodedPayload.interface?.elements.first?.frameX, 20)
+            XCTAssertEqual(decodedPayload.interface?.elements.first?.activationPointX, 100)
         } else {
             XCTFail("Expected screen, got \(decoded)")
         }

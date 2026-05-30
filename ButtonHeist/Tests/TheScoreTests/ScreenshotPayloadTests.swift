@@ -18,6 +18,7 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertEqual(payload.width, 390)
         XCTAssertEqual(payload.height, 844)
         XCTAssertEqual(payload.timestamp, timestamp)
+        XCTAssertEqual(payload.interface?.elements, [])
     }
 
     func testDefaultTimestamp() {
@@ -34,7 +35,7 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertLessThanOrEqual(payload.timestamp, after)
     }
 
-    func testEncodingRoundTrip() throws {
+    func testEncodingRoundTripWithInterfaceEvidence() throws {
         let element = HeistElement(
             heistId: "checkout_total",
             description: "Total $12.34",
@@ -68,9 +69,30 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertEqual(payload.pngData, decoded.pngData)
         XCTAssertEqual(payload.width, decoded.width)
         XCTAssertEqual(payload.height, decoded.height)
-        XCTAssertEqual(decoded.interface.elements, [element])
-        XCTAssertEqual(decoded.interface.elements.first?.frameY, 680)
-        XCTAssertEqual(decoded.interface.elements.first?.activationPointY, 696)
+        XCTAssertEqual(decoded.interface?.elements, [element])
+        XCTAssertEqual(decoded.interface?.elements.first?.frameY, 680)
+        XCTAssertEqual(decoded.interface?.elements.first?.activationPointY, 696)
+    }
+
+    func testEncodingRoundTripWithoutInterfaceEvidence() throws {
+        let payload = ScreenPayload(
+            pngData: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+            width: 1206,
+            height: 2622
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(payload)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(ScreenPayload.self, from: data)
+
+        XCTAssertEqual(payload.pngData, decoded.pngData)
+        XCTAssertEqual(payload.width, decoded.width)
+        XCTAssertEqual(payload.height, decoded.height)
+        XCTAssertNil(decoded.interface)
     }
 
     func testLargeBase64Data() throws {
