@@ -2920,11 +2920,15 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(batch.completedSteps, 2)
         XCTAssertNil(batch.failedIndex)
         XCTAssertEqual(batch.results.compactMap { $0["message"] as? String }, ["first", "second"])
-        XCTAssertEqual(batch.summaries.map(\.deltaKind), [nil, nil])
+        XCTAssertEqual(
+            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityDelta?.kindRawValue },
+            [nil, nil]
+        )
         XCTAssertNil(batch.results[0]["delta"])
         XCTAssertNil(batch.results[1]["delta"])
 
         let json = publicJSONObject(response)
+        XCTAssertNil(json["stepSummaries"], "Batch JSON should not duplicate typed per-step results")
         XCTAssertNil(json["netDelta"], "Batch JSON must not advertise a wrapper-synthesized cumulative delta")
     }
 
@@ -2973,7 +2977,10 @@ final class TheFenceHandlerTests: XCTestCase {
         guard let batch = inspectBatch(response) else {
             return XCTFail("Expected batch response, got \(response)")
         }
-        XCTAssertEqual(batch.summaries.map(\.deltaKind), ["elementsChanged", "elementsChanged"])
+        XCTAssertEqual(
+            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityDelta?.kindRawValue },
+            ["elementsChanged", "elementsChanged"]
+        )
         XCTAssertEqual(batch.accessibilityTrace?.captures.count, 3)
 
         let json = publicJSONObject(response)
@@ -3050,10 +3057,16 @@ final class TheFenceHandlerTests: XCTestCase {
             1,
             "run_batch should dispatch one typed plan; InsideJob owns stop-on-error after step failure"
         )
-        XCTAssertEqual(batch.summaries.count, 2)
-        XCTAssertEqual(batch.summaries[0].deltaKind, "screenChanged")
-        XCTAssertEqual(batch.summaries[0].error, "activate failed: target could not be made actionable")
-        XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertEqual(batch.executionResult.steps.count, 2)
+        XCTAssertEqual(batch.executionResult.steps[0].finalActionResult()?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(
+            batch.executionResult.steps[0].finalActionResult()?.message,
+            "activate failed: target could not be made actionable"
+        )
+        XCTAssertEqual(
+            batch.executionResult.steps[1].skipped?.reason,
+            "skipped: stop_on_error stopped batch after step 0"
+        )
     }
 
     @ButtonHeistActor
@@ -3101,10 +3114,13 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(batch.failedIndex, 0)
         XCTAssertEqual(batch.expectationsChecked, 1)
         XCTAssertEqual(batch.expectationsMet, 0)
-        XCTAssertEqual(batch.summaries.count, 2)
-        XCTAssertEqual(batch.summaries[0].expectationMet, false)
-        XCTAssertEqual(batch.summaries[1].command, .activate)
-        XCTAssertEqual(batch.summaries[1].error, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertEqual(batch.executionResult.steps.count, 2)
+        XCTAssertEqual(batch.executionResult.steps[0].expectationMet(for: batch.steps[0]), false)
+        XCTAssertEqual(batch.commands[1], .activate)
+        XCTAssertEqual(
+            batch.executionResult.steps[1].skipped?.reason,
+            "skipped: stop_on_error stopped batch after step 0"
+        )
     }
 
     @ButtonHeistActor
@@ -3141,7 +3157,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(batch.results.count, 1)
         XCTAssertNil(batch.failedIndex)
-        XCTAssertEqual(batch.summaries.map(\.command), [.scroll])
+        XCTAssertEqual(batch.commands, [.scroll])
         let batchPlans = mockConn.sent.compactMap { sent -> BatchPlan? in
             if case .batchExecutionPlan(let plan) = sent.0 { return plan }
             return nil
@@ -3251,7 +3267,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(batch.results.count, 3)
         XCTAssertNil(batch.failedIndex)
-        XCTAssertEqual(batch.summaries.map(\.command), [.swipe, .scrollToVisible, .dismissKeyboard])
+        XCTAssertEqual(batch.commands, [.swipe, .scrollToVisible, .dismissKeyboard])
     }
 
     @ButtonHeistActor

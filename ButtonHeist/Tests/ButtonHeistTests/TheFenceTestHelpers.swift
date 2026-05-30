@@ -369,19 +369,6 @@ func publicJSONObject(
 }
 
 struct BatchInspection {
-    struct StepSummary {
-        let command: TheFence.Command
-        let deltaKind: String?
-        let screenName: String?
-        let screenId: String?
-        let expectationMet: Bool?
-        let elementCount: Int?
-        let error: String?
-        let errorCode: String?
-        let phase: String?
-        let nextCommand: String?
-    }
-
     let commands: [TheFence.Command]
     let steps: [TheScore.BatchStep]
     let executionResult: BatchExecutionResult
@@ -391,7 +378,6 @@ struct BatchInspection {
     let totalTimingMs: Int
     let expectationsChecked: Int
     let expectationsMet: Int
-    let summaries: [StepSummary]
     let accessibilityTrace: AccessibilityTrace?
 }
 
@@ -415,49 +401,6 @@ func inspectBatch(_ response: FenceResponse) -> BatchInspection? {
         totalTimingMs: result.totalTimingMs,
         expectationsChecked: result.expectationsChecked(steps: steps),
         expectationsMet: result.expectationsMet(steps: steps),
-        summaries: result.steps.map { stepResult in
-            let command = commands[safe: stepResult.index] ?? .runBatch
-            let step = steps[safe: stepResult.index]
-            let actionResult = stepResult.finalActionResult()
-            let error: String?
-            let errorCode: String?
-            let phase: String?
-            let nextCommand: String?
-            if let skipped = stepResult.skipped {
-                error = skipped.reason
-                errorCode = nil
-                phase = nil
-                nextCommand = nil
-            } else if actionResult?.success == false {
-                error = actionResult?.message
-                errorCode = nil
-                phase = nil
-                nextCommand = nil
-            } else if let step,
-                      case .error(let message, let details) = stepResult.actionResponse(command: command, step: step) {
-                error = message
-                errorCode = details?.errorCode
-                phase = details?.phase.rawValue
-                nextCommand = details?.errorCode == FenceRequestErrorCode.missingTarget ? details?.hint : nil
-            } else {
-                error = nil
-                errorCode = nil
-                phase = nil
-                nextCommand = nil
-            }
-            return BatchInspection.StepSummary(
-                command: command,
-                deltaKind: actionResult?.accessibilityDelta?.kindRawValue,
-                screenName: actionResult?.screenName,
-                screenId: actionResult?.screenId,
-                expectationMet: step.flatMap { stepResult.expectationMet(for: $0) },
-                elementCount: nil,
-                error: error,
-                errorCode: errorCode,
-                phase: phase,
-                nextCommand: nextCommand
-            )
-        },
         accessibilityTrace: accessibilityTrace
     )
 }

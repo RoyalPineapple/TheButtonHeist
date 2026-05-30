@@ -185,7 +185,6 @@ struct PublicBatchResponse: FencePublicJSONResponse {
     let totalTimingMs: Int
     let failedIndex: Int?
     let expectations: PublicBatchExpectations?
-    let stepSummaries: [PublicBatchStepSummary]?
     let netDelta: PublicDelta?
 
     init(
@@ -213,14 +212,6 @@ struct PublicBatchResponse: FencePublicJSONResponse {
         self.expectations = checked > 0
             ? PublicBatchExpectations(checked: checked, met: result.expectationsMet(steps: steps))
             : nil
-        let summaries = result.steps.map { step in
-            PublicBatchStepSummary(
-                step: step,
-                command: commands.indices.contains(step.index) ? commands[step.index] : nil,
-                typedStep: steps.indices.contains(step.index) ? steps[step.index] : nil
-            )
-        }
-        self.stepSummaries = summaries.isEmpty ? nil : summaries
         self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
     }
 }
@@ -234,62 +225,5 @@ struct PublicBatchExpectations: Encodable {
         self.checked = checked
         self.met = met
         self.allMet = checked == met
-    }
-}
-
-struct PublicBatchStepSummary: Encodable {
-    let index: Int
-    let command: String
-    let deltaKind: String?
-    let screenName: String?
-    let screenId: String?
-    let expectationMet: Bool?
-    let elementCount: Int?
-    let error: String?
-    let errorCode: String?
-    let phase: String?
-    let nextCommand: String?
-
-    init(
-        step: BatchExecutionStepResult,
-        command: TheFence.Command?,
-        typedStep: TheScore.BatchStep?
-    ) {
-        self.index = step.index
-        self.command = command?.rawValue ?? "step \(step.index)"
-        let actionResult = step.finalActionResult()
-        self.deltaKind = actionResult?.accessibilityDelta?.kindRawValue
-        self.screenName = actionResult?.screenName
-        self.screenId = actionResult?.screenId
-        self.expectationMet = typedStep.flatMap { step.expectationMet(for: $0) }
-        self.elementCount = nil
-        if let skipped = step.skipped {
-            self.error = skipped.reason
-            self.errorCode = nil
-            self.phase = nil
-            self.nextCommand = nil
-        } else if actionResult?.success == false {
-            self.error = actionResult?.message
-            self.errorCode = nil
-            self.phase = nil
-            self.nextCommand = nil
-        } else if let typedStep,
-                  let command,
-                  case .error(let message, let details) = step.actionResponse(command: command, step: typedStep) {
-            self.error = message
-            self.errorCode = details?.errorCode
-            self.phase = details?.phase.rawValue
-            self.nextCommand = Self.batchNextCommand(from: details)
-        } else {
-            self.error = nil
-            self.errorCode = nil
-            self.phase = nil
-            self.nextCommand = nil
-        }
-    }
-
-    private static func batchNextCommand(from details: FailureDetails?) -> String? {
-        guard details?.errorCode == FenceRequestErrorCode.missingTarget else { return nil }
-        return details?.hint
     }
 }
