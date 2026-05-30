@@ -16,12 +16,11 @@ extension TheSafecracker {
         static func sampleCubicBezier(
             p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint,
             sampleCount: Int = 20
-        ) -> [PathPoint] {
+        ) -> [CGPoint] {
             let count = max(sampleCount, 2)
             return (0..<count).map { i in
                 let t = CGFloat(i) / CGFloat(count - 1)
-                let point = cubicBezierPoint(t: t, p0: p0, p1: p1, p2: p2, p3: p3)
-                return PathPoint(x: point.x, y: point.y)
+                return cubicBezierPoint(t: t, p0: p0, p1: p1, p2: p2, p3: p3)
             }
         }
 
@@ -30,15 +29,15 @@ extension TheSafecracker {
             startPoint: CGPoint,
             segments: [BezierSegment],
             samplesPerSegment: Int = 20
-        ) -> [PathPoint] {
+        ) -> [CGPoint] {
             guard !segments.isEmpty else {
-                return [PathPoint(x: startPoint.x, y: startPoint.y)]
+                return [startPoint]
             }
 
             // reduce(into:) carries the running `current` endpoint across segments
             // and appends only the tail of each subsequent sample to avoid
             // duplicating the seam between segments.
-            return segments.enumerated().reduce(into: (result: [PathPoint](), current: startPoint)) { state, item in
+            return segments.enumerated().reduce(into: (result: [CGPoint](), current: startPoint)) { state, item in
                 let (index, segment) = item
                 let samples = sampleCubicBezier(
                     p0: state.current, p1: segment.cp1, p2: segment.cp2, p3: segment.end,

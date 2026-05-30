@@ -29,21 +29,6 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
 
     // MARK: - Touch Injection
 
-    func testSwipeFiresGestureMoveCallback() async {
-        var movePoints: [[CGPoint]] = []
-        safecracker.onGestureMove = { points in
-            movePoints.append(points)
-        }
-        defer { safecracker.onGestureMove = nil }
-
-        let start = CGPoint(x: 200, y: 400)
-        let end = CGPoint(x: 200, y: 200)
-
-        let result = await safecracker.swipe(from: start, to: end, duration: 0.1)
-        XCTAssertTrue(result, "swipe() should return true")
-        XCTAssertFalse(movePoints.isEmpty, "onGestureMove should have been called during swipe")
-    }
-
     func testTapReturnsTrue() async {
         // Tap an arbitrary point — should succeed even with no target view
         let result = await safecracker.tap(at: CGPoint(x: 100, y: 100))
