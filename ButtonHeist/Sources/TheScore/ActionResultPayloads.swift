@@ -212,23 +212,8 @@ public struct ActionResult: Codable, Sendable {
         case settleTimeMs
     }
 
-    private struct UnknownCodingKey: CodingKey {
-        let stringValue: String
-        let intValue: Int?
-
-        init?(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionResult")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             success: try container.decode(Bool.self, forKey: .success),
@@ -241,18 +226,6 @@ public struct ActionResult: Codable, Sendable {
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
         )
-    }
-
-    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown ActionResult field \"\(unknownKey.stringValue)\""
-        ))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -279,31 +252,51 @@ public struct ScrollSearchResult: Codable, Sendable {
     public let totalItems: Int?
     /// Whether every item in the data source was checked
     public let exhaustive: Bool
-    /// The matched element, if found
-    public let foundElement: HeistElement?
+    /// The matched element id, if found. The action trace owns the element snapshot.
+    public let foundHeistId: HeistId?
 
     public init(
         scrollCount: Int,
         uniqueElementsSeen: Int,
         totalItems: Int? = nil,
         exhaustive: Bool,
-        foundElement: HeistElement? = nil
+        foundHeistId: HeistId? = nil
     ) {
         self.scrollCount = scrollCount
         self.uniqueElementsSeen = uniqueElementsSeen
         self.totalItems = totalItems
         self.exhaustive = exhaustive
-        self.foundElement = foundElement
+        self.foundHeistId = foundHeistId
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case scrollCount
+        case uniqueElementsSeen
+        case totalItems
+        case exhaustive
+        case foundHeistId
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ScrollSearchResult")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            scrollCount: try container.decode(Int.self, forKey: .scrollCount),
+            uniqueElementsSeen: try container.decode(Int.self, forKey: .uniqueElementsSeen),
+            totalItems: try container.decodeIfPresent(Int.self, forKey: .totalItems),
+            exhaustive: try container.decode(Bool.self, forKey: .exhaustive),
+            foundHeistId: try container.decodeIfPresent(HeistId.self, forKey: .foundHeistId)
+        )
+    }
+
 }
 
 // MARK: - Explore Result
 
 /// Result from an explore (full screen census) operation.
-/// Contains every element discovered across all scroll positions.
 public struct ExploreResult: Codable, Sendable {
-    /// Every element discovered on the screen, including off-screen content
-    public let elements: [HeistElement]
+    /// Number of elements discovered across all scroll positions.
+    public let elementCount: Int
     /// Total scrollByPage calls during exploration
     public let scrollCount: Int
     /// Number of scrollable containers explored
@@ -312,16 +305,35 @@ public struct ExploreResult: Codable, Sendable {
     public let explorationTime: Double
 
     public init(
-        elements: [HeistElement],
+        elementCount: Int,
         scrollCount: Int,
         containersExplored: Int,
         explorationTime: Double
     ) {
-        self.elements = elements
+        self.elementCount = elementCount
         self.scrollCount = scrollCount
         self.containersExplored = containersExplored
         self.explorationTime = explorationTime
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case elementCount
+        case scrollCount
+        case containersExplored
+        case explorationTime
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ExploreResult")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            elementCount: try container.decode(Int.self, forKey: .elementCount),
+            scrollCount: try container.decode(Int.self, forKey: .scrollCount),
+            containersExplored: try container.decode(Int.self, forKey: .containersExplored),
+            explorationTime: try container.decode(Double.self, forKey: .explorationTime)
+        )
+    }
+
 }
 
 // MARK: - Custom Rotor Result
@@ -330,20 +342,40 @@ public struct ExploreResult: Codable, Sendable {
 public struct RotorResult: Codable, Sendable {
     public let rotor: String
     public let direction: RotorDirection
-    public let foundElement: HeistElement?
+    /// The selected element id, if the rotor resolved to an element. The action trace owns the element snapshot.
+    public let foundHeistId: HeistId?
     public let textRange: RotorTextRange?
 
     public init(
         rotor: String,
         direction: RotorDirection,
-        foundElement: HeistElement? = nil,
+        foundHeistId: HeistId? = nil,
         textRange: RotorTextRange? = nil
     ) {
         self.rotor = rotor
         self.direction = direction
-        self.foundElement = foundElement
+        self.foundHeistId = foundHeistId
         self.textRange = textRange
     }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case rotor
+        case direction
+        case foundHeistId
+        case textRange
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "RotorResult")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            rotor: try container.decode(String.self, forKey: .rotor),
+            direction: try container.decode(RotorDirection.self, forKey: .direction),
+            foundHeistId: try container.decodeIfPresent(HeistId.self, forKey: .foundHeistId),
+            textRange: try container.decodeIfPresent(RotorTextRange.self, forKey: .textRange)
+        )
+    }
+
 }
 
 /// Text range returned by a rotor result.

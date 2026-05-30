@@ -506,7 +506,17 @@ printf '%s' "$ROTORS_JSON" | expect_element_label "Rotor Host"
 ROTOR_JSON="$(run_cli_json rotor --label "Rotor Host" --rotor "Errors" --timeout 15)"
 printf '%s' "$ROTOR_JSON" | json_expect_ok "rotor Errors"
 # The expected label comes from TestApp/Sources/RotorsDemo.swift's UIKit rotor result view.
-ROTOR_RESULT_LABEL="$(printf '%s' "$ROTOR_JSON" | jq -r '.rotor.foundElement.label // ""')"
+ROTOR_RESULT_LABEL="$(printf '%s' "$ROTOR_JSON" | jq -r '
+  def tree_elements:
+    .[]? | if has("element") then .element else (.container.children // [] | tree_elements) end;
+  .rotor.foundHeistId as $id
+  | if $id == null then ""
+    else (
+      (.delta.edits.added[]? | select(.heistId == $id) | .label),
+      (.delta.newInterface.tree // [] | tree_elements | select(.heistId == $id) | .label)
+    ) // ""
+    end
+')"
 [[ "$ROTOR_RESULT_LABEL" == "Rotor Result: Missing amount" ]] \
     || fail "expected rotor result label 'Rotor Result: Missing amount', got '$ROTOR_RESULT_LABEL'"
 
