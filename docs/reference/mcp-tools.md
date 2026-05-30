@@ -1,6 +1,6 @@
 # ButtonHeist MCP Tool Reference
 
-_Generated from `TheFence.Command.mcpToolContracts`._
+_Generated from `TheFence.Command.descriptors`._
 
 ## Summary
 

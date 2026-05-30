@@ -167,41 +167,18 @@ public struct MCPToolAnnotationSpec: Sendable, Equatable {
     }
 }
 
-public struct MCPToolContract: Sendable, Equatable {
-    public let name: String
-    public let description: String
-    public let parameters: [FenceParameterSpec]
-    public let annotations: MCPToolAnnotationSpec?
-
-    public init(
-        name: String,
-        description: String,
-        parameters: [FenceParameterSpec],
-        annotations: MCPToolAnnotationSpec? = nil
-    ) {
-        self.name = name
-        self.description = description
-        self.parameters = parameters
-        self.annotations = annotations
-    }
-
-    public var requiredParameterKeys: [String] {
-        return parameters.filter(\.required).map(\.key)
-    }
-}
-
-public extension MCPToolContract {
-    var inputJSONSchema: HeistValue {
-        FenceParameterSpec.jsonInputSchema(
-            properties: FenceParameterSpec.jsonSchemaProperties(from: parameters),
-            required: requiredParameterKeys
-        )
-    }
-}
-
 public extension FenceParameterSpec.ParamType {
     var jsonSchemaType: String {
         self == .stringArray ? "array" : rawValue
+    }
+}
+
+public extension FenceCommandDescriptor {
+    var inputJSONSchema: HeistValue {
+        FenceParameterSpec.jsonInputSchema(
+            properties: FenceParameterSpec.jsonSchemaProperties(from: parameters),
+            required: parameters.filter(\.required).map(\.key)
+        )
     }
 }
 
