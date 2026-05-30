@@ -217,47 +217,35 @@ public struct ElementEdits: Sendable, Equatable {
     public let added: [HeistElement]
     public let removed: [HeistId]
     public let updated: [ElementUpdate]
-    public let treeInserted: [TreeInsertion]
-    public let treeRemoved: [TreeRemoval]
-    public let treeMoved: [TreeMove]
 
     public init(
         added: [HeistElement] = [],
         removed: [HeistId] = [],
-        updated: [ElementUpdate] = [],
-        treeInserted: [TreeInsertion] = [],
-        treeRemoved: [TreeRemoval] = [],
-        treeMoved: [TreeMove] = []
+        updated: [ElementUpdate] = []
     ) {
         self.added = added
         self.removed = removed
         self.updated = updated
-        self.treeInserted = treeInserted
-        self.treeRemoved = treeRemoved
-        self.treeMoved = treeMoved
     }
 
     public var isEmpty: Bool {
         added.isEmpty && removed.isEmpty && updated.isEmpty
-            && treeInserted.isEmpty && treeRemoved.isEmpty && treeMoved.isEmpty
     }
 }
 
 // MARK: - ElementEdits Codable
 
 extension ElementEdits: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case added, removed, updated, treeInserted, treeRemoved, treeMoved
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case added, removed, updated
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ElementEdits")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.added = try container.decodeIfPresent([HeistElement].self, forKey: .added) ?? []
         self.removed = try container.decodeIfPresent([HeistId].self, forKey: .removed) ?? []
         self.updated = try container.decodeIfPresent([ElementUpdate].self, forKey: .updated) ?? []
-        self.treeInserted = try container.decodeIfPresent([TreeInsertion].self, forKey: .treeInserted) ?? []
-        self.treeRemoved = try container.decodeIfPresent([TreeRemoval].self, forKey: .treeRemoved) ?? []
-        self.treeMoved = try container.decodeIfPresent([TreeMove].self, forKey: .treeMoved) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -265,9 +253,6 @@ extension ElementEdits: Codable {
         if !added.isEmpty { try container.encode(added, forKey: .added) }
         if !removed.isEmpty { try container.encode(removed, forKey: .removed) }
         if !updated.isEmpty { try container.encode(updated, forKey: .updated) }
-        if !treeInserted.isEmpty { try container.encode(treeInserted, forKey: .treeInserted) }
-        if !treeRemoved.isEmpty { try container.encode(treeRemoved, forKey: .treeRemoved) }
-        if !treeMoved.isEmpty { try container.encode(treeMoved, forKey: .treeMoved) }
     }
 }
 

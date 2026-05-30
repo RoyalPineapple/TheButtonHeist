@@ -115,19 +115,6 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             updated: [ElementUpdate(
                 heistId: "counter",
                 changes: [PropertyChange(property: .value, old: "1", new: "2")]
-            )],
-            treeInserted: [TreeInsertion(
-                location: TreeLocation(parentId: nil, index: 0),
-                node: .element(makeTestAccessibilityElement(added), traversalIndex: 0)
-            )],
-            treeRemoved: [TreeRemoval(
-                ref: TreeNodeRef(id: "old", kind: .element),
-                location: TreeLocation(parentId: nil, index: 1)
-            )],
-            treeMoved: [TreeMove(
-                ref: TreeNodeRef(id: "moved", kind: .element),
-                from: TreeLocation(parentId: nil, index: 2),
-                to: TreeLocation(parentId: nil, index: 3)
             )]
         )
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(
@@ -142,10 +129,15 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.edits.added.map(\.heistId), ["new"])
         XCTAssertEqual(payload.edits.removed, ["old"])
         XCTAssertEqual(payload.edits.updated.first?.heistId, "counter")
-        XCTAssertEqual(payload.edits.treeInserted.count, 1)
-        XCTAssertEqual(payload.edits.treeRemoved.count, 1)
-        XCTAssertEqual(payload.edits.treeMoved.count, 1)
         XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
+    }
+
+    func testElementEditsRejectsObsoleteTreeProjectionFields() throws {
+        let json = Data("""
+        {"kind":"elementsChanged","elementCount":1,"edits":{"treeInserted":[]}}
+        """.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(AccessibilityTrace.Delta.self, from: json))
     }
 
     // MARK: - screenChanged

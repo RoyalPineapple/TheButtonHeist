@@ -153,12 +153,9 @@ struct PublicElementEdits: Encodable {
     let added: [PublicElement]?
     let removed: [String]?
     let updated: [PublicElementUpdate]?
-    let treeInserted: [PublicTreeInsertion]?
-    let treeRemoved: [TreeRemoval]?
-    let treeMoved: [TreeMove]?
 
     var isEmpty: Bool {
-        added == nil && removed == nil && updated == nil && treeInserted == nil && treeRemoved == nil && treeMoved == nil
+        added == nil && removed == nil && updated == nil
     }
 
     init(edits: ElementEdits) {
@@ -166,9 +163,6 @@ struct PublicElementEdits: Encodable {
         self.removed = edits.removed.isEmpty ? nil : edits.removed
         let filteredUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
         self.updated = filteredUpdates.isEmpty ? nil : filteredUpdates
-        self.treeInserted = edits.treeInserted.isEmpty ? nil : edits.treeInserted.map { PublicTreeInsertion(insertion: $0) }
-        self.treeRemoved = edits.treeRemoved.isEmpty ? nil : edits.treeRemoved
-        self.treeMoved = edits.treeMoved.isEmpty ? nil : edits.treeMoved
     }
 }
 
@@ -181,23 +175,6 @@ struct PublicElementUpdate: Encodable {
         guard !meaningfulChanges.isEmpty else { return nil }
         self.heistId = update.heistId
         self.changes = meaningfulChanges
-    }
-}
-
-struct PublicTreeInsertion: Encodable {
-    let location: TreeLocation
-    let node: PublicTreeNode
-
-    init(insertion: TreeInsertion) {
-        self.location = insertion.location
-        self.node = PublicTreeNode.node(
-            from: insertion.node,
-            path: .root,
-            detail: .summary,
-            counter: nil,
-            elementAnnotations: insertion.annotations.elementByPath,
-            containerAnnotations: insertion.annotations.containerByPath
-        )
     }
 }
 

@@ -10,9 +10,25 @@ struct AccessibilityTraceHierarchyRecord {
     let ancestors: [HeistContainer]
 }
 
+struct AccessibilityTreeEdits: Sendable, Equatable {
+    let inserted: [TreeInsertion]
+    let removed: [TreeRemoval]
+    let moved: [TreeMove]
+
+    init(
+        inserted: [TreeInsertion] = [],
+        removed: [TreeRemoval] = [],
+        moved: [TreeMove] = []
+    ) {
+        self.inserted = inserted
+        self.removed = removed
+        self.moved = moved
+    }
+}
+
 enum AccessibilityTraceTreeDiff {
 
-    static func projectTreeEdits(before: Interface, after: Interface) -> ElementEdits {
+    static func projectTreeEdits(before: Interface, after: Interface) -> AccessibilityTreeEdits {
         let oldRecords = traceHierarchyRecords(in: before)
         let newRecords = traceHierarchyRecords(in: after)
         let oldIds = Set(oldRecords.keys)
@@ -80,7 +96,7 @@ enum AccessibilityTraceTreeDiff {
             }
             .sorted(by: treeMoveOrder)
 
-        return ElementEdits(treeInserted: inserted, treeRemoved: removed, treeMoved: moved)
+        return AccessibilityTreeEdits(inserted: inserted, removed: removed, moved: moved)
     }
 }
 

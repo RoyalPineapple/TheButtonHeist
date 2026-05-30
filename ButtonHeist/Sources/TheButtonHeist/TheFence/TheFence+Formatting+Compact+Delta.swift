@@ -48,14 +48,6 @@ extension FenceResponse {
                 lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
             }
         }
-        let structuralCount = edits.treeInserted.count + edits.treeRemoved.count + edits.treeMoved.count
-        if structuralCount > 0 {
-            var parts: [String] = []
-            if !edits.treeInserted.isEmpty { parts.append("+\(edits.treeInserted.count)") }
-            if !edits.treeRemoved.isEmpty { parts.append("-\(edits.treeRemoved.count)") }
-            if !edits.treeMoved.isEmpty { parts.append("moved \(edits.treeMoved.count)") }
-            lines.append("  hierarchy changed (\(parts.joined(separator: ", ")))")
-        }
         return lines
     }
 

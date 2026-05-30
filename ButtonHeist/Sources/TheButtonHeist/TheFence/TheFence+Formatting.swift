@@ -247,9 +247,6 @@ extension FenceResponse {
             if !edits.added.isEmpty { parts.append("+\(edits.added.count) added") }
             if !edits.removed.isEmpty { parts.append("-\(edits.removed.count) removed") }
             if !edits.updated.isEmpty { parts.append("~\(edits.updated.count) updated") }
-            if !edits.treeInserted.isEmpty { parts.append("+\(edits.treeInserted.count) tree inserted") }
-            if !edits.treeRemoved.isEmpty { parts.append("-\(edits.treeRemoved.count) tree removed") }
-            if !edits.treeMoved.isEmpty { parts.append("↕\(edits.treeMoved.count) moved") }
             return "[" + parts.joined(separator: ", ") + "]"
         case .screenChanged(let payload):
             return "[\(payload.elementCount) elements, screen changed]"

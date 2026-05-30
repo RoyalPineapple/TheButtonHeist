@@ -145,20 +145,20 @@ extension AccessibilityTrace.AccessibilityPatchOperation {
         between before: Interface,
         and after: Interface
     ) -> [Self] {
-        let edits = ElementEdits.betweenTrees(before: before, after: after)
+        let edits = AccessibilityTraceTreeDiff.projectTreeEdits(before: before, after: after)
         let afterRecords = traceHierarchyRecords(in: after)
 
-        let removals = edits.treeRemoved
+        let removals = edits.removed
             .reversed()
             .map(Self.removeSubtree)
-        let moves = edits.treeMoved.compactMap { move -> Self? in
+        let moves = edits.moved.compactMap { move -> Self? in
             guard let record = afterRecords[move.ref] else { return nil }
             return .moveSubtree(
                 move,
                 node: record.node
             )
         }
-        let insertions = edits.treeInserted.map(Self.insertSubtree)
+        let insertions = edits.inserted.map(Self.insertSubtree)
 
         return removals + moves + insertions
     }

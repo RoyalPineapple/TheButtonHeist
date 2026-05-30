@@ -35,10 +35,7 @@ enum AccessibilityTraceMoveInference {
         return ElementEdits(
             added: added,
             removed: removed,
-            updated: edits.updated + inferredUpdates,
-            treeInserted: edits.treeInserted,
-            treeRemoved: edits.treeRemoved,
-            treeMoved: edits.treeMoved
+            updated: edits.updated + inferredUpdates
         )
     }
 

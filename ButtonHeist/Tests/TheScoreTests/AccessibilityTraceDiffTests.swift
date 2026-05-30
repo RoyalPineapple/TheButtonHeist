@@ -47,15 +47,15 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             testElement(shared),
         ])
 
-        let edits = ElementEdits.between(before, after)
+        let edits = AccessibilityTraceTreeDiff.projectTreeEdits(before: before, after: after)
 
-        XCTAssertEqual(edits.treeMoved.count, 2)
-        XCTAssertTrue(edits.treeMoved.contains {
+        XCTAssertEqual(edits.moved.count, 2)
+        XCTAssertTrue(edits.moved.contains {
             $0.ref == TreeNodeRef(id: "shared", kind: .container)
                 && $0.from == TreeLocation(parentId: nil, index: 1)
                 && $0.to == TreeLocation(parentId: nil, index: 0)
         })
-        XCTAssertTrue(edits.treeMoved.contains {
+        XCTAssertTrue(edits.moved.contains {
             $0.ref == TreeNodeRef(id: "shared", kind: .element)
                 && $0.from == TreeLocation(parentId: nil, index: 0)
                 && $0.to == TreeLocation(parentId: nil, index: 1)
@@ -76,13 +76,14 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ]),
         ])
 
-        let edits = ElementEdits.between(before, after)
+        let edits = AccessibilityTraceTreeDiff.projectTreeEdits(before: before, after: after)
+        let elementEdits = ElementEdits.between(before, after)
 
-        XCTAssertTrue(edits.added.isEmpty)
+        XCTAssertTrue(elementEdits.added.isEmpty)
+        XCTAssertTrue(elementEdits.removed.isEmpty)
+        XCTAssertTrue(edits.inserted.isEmpty)
         XCTAssertTrue(edits.removed.isEmpty)
-        XCTAssertTrue(edits.treeInserted.isEmpty)
-        XCTAssertTrue(edits.treeRemoved.isEmpty)
-        XCTAssertTrue(edits.treeMoved.contains {
+        XCTAssertTrue(edits.moved.contains {
             $0.ref == TreeNodeRef(id: "generated-a", kind: .element)
                 && $0.from == TreeLocation(parentId: "list", index: 0)
                 && $0.to == TreeLocation(parentId: "list", index: 1)
