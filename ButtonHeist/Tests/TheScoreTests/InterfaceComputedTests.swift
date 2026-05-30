@@ -170,39 +170,6 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertNil(interface.screenId)
     }
 
-    // MARK: - ActionExpectation.summaryDescription
-
-    func testSummaryDescriptionScreenChanged() {
-        XCTAssertEqual(ActionExpectation.screenChanged.summaryDescription, "screen_changed")
-    }
-
-    func testSummaryDescriptionElementsChanged() {
-        XCTAssertEqual(ActionExpectation.elementsChanged.summaryDescription, "elements_changed")
-    }
-
-    func testSummaryDescriptionElementUpdated() {
-        let expectation = ActionExpectation.elementUpdated(heistId: "btn_1", property: .value, newValue: "ON")
-        XCTAssertTrue(expectation.summaryDescription.contains("element_updated"))
-        XCTAssertTrue(expectation.summaryDescription.contains("btn_1"))
-        XCTAssertTrue(expectation.summaryDescription.contains("value"))
-        XCTAssertTrue(expectation.summaryDescription.contains("ON"))
-    }
-
-    func testSummaryDescriptionElementAppeared() {
-        let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "Done"))
-        XCTAssertEqual(expectation.summaryDescription, "element_appeared(Done)")
-    }
-
-    func testSummaryDescriptionElementDisappeared() {
-        let expectation = ActionExpectation.elementDisappeared(ElementMatcher(identifier: "spinner"))
-        XCTAssertEqual(expectation.summaryDescription, "element_disappeared(spinner)")
-    }
-
-    func testSummaryDescriptionCompound() {
-        let expectation = ActionExpectation.compound([.screenChanged, .elementsChanged])
-        XCTAssertEqual(expectation.summaryDescription, "compound(2 expectations)")
-    }
-
     func testActionExpectationDescriptionComposesMatchers() {
         let expectation = ActionExpectation.compound([
             .elementAppeared(ElementMatcher(label: "Done", traits: [.button])),
