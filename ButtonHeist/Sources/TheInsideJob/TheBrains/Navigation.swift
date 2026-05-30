@@ -47,8 +47,8 @@ final class Navigation {
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
     static let swipeGestureDuration: TimeInterval = 0.12
 
-    /// Layout frames to yield after a non-animated UIScrollView scroll or
-    /// `scrollToMakeVisible` before re-reading the accessibility tree.
+    /// Layout frames to yield after a non-animated UIScrollView scroll before
+    /// re-reading the accessibility tree.
     /// Empirical: 3 frames covers a CATransaction flush plus a UIKit layout
     /// pass without waiting for animations.
     static let postScrollLayoutFrames: Int = 3
