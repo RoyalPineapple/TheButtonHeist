@@ -11,7 +11,7 @@ import AccessibilitySnapshotParser
 /// TheStash owns exactly one mutable accessibility belief: the latest
 /// committed `Screen`. It exposes lookup, matcher resolution, and
 /// wire-conversion facades over that value; parsing, diagnostics, capture,
-/// recording, response memory, and UIKit actions are boundary transforms or
+/// response memory, and UIKit actions are boundary transforms or
 /// owned by other crew members. `currentScreen.knownInterface` is targetable
 /// semantic state; `currentScreen.liveCapture` is the latest parse
 /// used for geometry, live objects, and scrolling. Callers call `parse()` to
@@ -41,11 +41,6 @@ final class TheStash {
     /// Readers that specifically want "what's on-screen in the latest parse"
     /// read `visibleIds`; target resolution reads the known semantic set.
     var currentScreen: Screen = .empty
-
-    let rotorContinuations = RotorContinuationStore()
-
-    /// Back-reference to the stakeout for recording frame capture.
-    weak var stakeout: TheStakeout?
 
     // MARK: - Aliases
 
@@ -109,7 +104,6 @@ final class TheStash {
     /// Clear cached element data (used on suspend).
     func clearCache() {
         currentScreen = .empty
-        clearPendingRotorResult()
     }
 
     /// Clear screen-level state on screen change. Screens are values, so
@@ -117,7 +111,6 @@ final class TheStash {
     /// produces a fresh screen.
     func clearScreen() {
         currentScreen = .empty
-        clearPendingRotorResult()
     }
 
     /// TheTripwire handles window access and animation detection.

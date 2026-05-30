@@ -49,7 +49,7 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
     case oneFingerTap, longPress, swipe, drag, pinch, rotate, twoFingerTap
     case drawPath, drawBezier, typeText, editAction, setPasteboard, getPasteboard
     case scroll, scrollToVisible, elementSearch, scrollToEdge, resignFirstResponder
-    case requestScreen, explore, waitForIdle, startRecording, stopRecording
+    case requestScreen, explore, waitForIdle
     case waitFor, waitForChange, batchExecutionPlan
 }
 
@@ -59,7 +59,6 @@ public enum ServerWireMessageType: String, DirectionalWireMessageType {
 
     case serverHello, protocolMismatch, authRequired, authApprovalPending, authApproved, info, interface
     case pong, status, error, actionResult, screen, sessionLocked
-    case recordingStarted, recordingStopped, recording, interaction
 }
 
 // MARK: - TXT Record Keys

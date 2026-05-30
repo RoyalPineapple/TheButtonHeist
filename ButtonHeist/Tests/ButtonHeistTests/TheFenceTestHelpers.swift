@@ -106,15 +106,6 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
             return .interface(Interface(timestamp: Date(), tree: []))
         case .requestScreen:
             return .screen(ScreenPayload(pngData: "", width: 393, height: 852, interface: Interface(timestamp: Date(), tree: [])))
-        case .startRecording:
-            return .recordingStarted
-        case .stopRecording:
-            return .recording(RecordingPayload(
-                videoData: "", width: 390, height: 844, duration: 1,
-                frameCount: 8, fps: 8, startTime: Date(), endTime: Date(),
-                stopReason: .manual,
-                interactionLog: []
-            ))
         default:
             return .actionResult(ActionResult(success: true, method: .activate))
         }

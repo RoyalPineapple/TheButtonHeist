@@ -66,20 +66,6 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 includePNGData: true,
                 includeInterface: options.includeInterface
             ).encode(to: encoder)
-        case .recording(let path, let payload):
-            try PublicRecordingResponse(
-                path: path,
-                payload: payload,
-                options: RecordingResponseOptions()
-            ).encode(to: encoder)
-        case .recordingExpanded(let path, let payload, let options):
-            try PublicRecordingResponse(path: path, payload: payload, options: options).encode(to: encoder)
-        case .recordingData(let payload):
-            try PublicRecordingResponse(
-                path: nil,
-                payload: payload,
-                options: RecordingResponseOptions(inlineData: true)
-            ).encode(to: encoder)
         case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
             try PublicBatchResponse(
                 outcomes: outcomes,
@@ -90,10 +76,6 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicSessionStateResponse(payload: payload).encode(to: encoder)
         case .targets(let targets, let defaultTarget):
             try PublicTargetsResponse(targets: targets, defaultTarget: defaultTarget).encode(to: encoder)
-        case .sessionLog(let snapshot):
-            try PublicSessionLogResponse(snapshot: snapshot).encode(to: encoder)
-        case .archiveResult(let path, let snapshot):
-            try PublicSessionLogResponse(snapshot: snapshot, path: path).encode(to: encoder)
         case .heistStarted:
             try PublicHeistStartedResponse().encode(to: encoder)
         case .heistStopped(let path, let stepCount):

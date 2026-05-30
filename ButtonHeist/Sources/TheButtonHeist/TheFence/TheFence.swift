@@ -94,21 +94,8 @@ public final class TheFence {
     let pendingRequests = PendingRequestTrackers()
 
     // Lifecycle owners
-    let backgroundAccessibility = FenceBackgroundAccessibilityLifecycle()
     let playback = FencePlaybackLifecycle()
-    let recording = FenceRecordingLifecycle()
     let commandExecutionState = CommandExecutionState()
-
-    var recordingSnapshot: RecordingSnapshot {
-        recording.snapshot
-    }
-    var isRecording: Bool {
-        recordingSnapshot.isRecording
-    }
-    /// Test-visible state for deterministic recording completion injection.
-    var isWaitingForRecordingCompletion: Bool {
-        recordingSnapshot.isWaitingForCompletion
-    }
 
     public init(configuration: Configuration) {
         self.config = configuration
@@ -183,14 +170,6 @@ public final class TheFence {
             self?.handleSendFailure(failure, requestId: requestId)
         }
 
-        handoff.onRecordingEvent = { [weak self] event in
-            self?.handleRecordingEvent(event)
-        }
-
-        handoff.onBackgroundAccessibilityTrace = { [weak self] trace in
-            self?.enqueueBackgroundAccessibilityTrace(trace)
-        }
-
         handoff.onConnectionStateChanged = { [weak self] state in
             self?.handleHandoffConnectionStateChanged(state)
         }
@@ -204,24 +183,6 @@ public final class TheFence {
     private func handleSendFailure(_ failure: DeviceSendFailure, requestId: String?) {
         guard let requestId else { return }
         pendingRequests.resolveTransientFailure(FenceError(failure), requestId: requestId)
-    }
-
-    private func handleRecordingEvent(_ event: RecordingEvent) {
-        recording.handleEvent(event)
-    }
-
-    private func enqueueBackgroundAccessibilityTrace(_ trace: AccessibilityTrace) {
-        backgroundAccessibility.enqueue(trace)
-    }
-
-    /// Return and clear the oldest queued background accessibility trace, if any.
-    public func drainBackgroundAccessibilityTrace() -> AccessibilityTrace? {
-        backgroundAccessibility.drainTrace()
-    }
-
-    /// Return and clear all queued background accessibility traces in arrival order.
-    public func drainBackgroundAccessibilityTraces() -> [AccessibilityTrace] {
-        backgroundAccessibility.drainTraces()
     }
 
     /// Execute a typed command request.
@@ -255,20 +216,9 @@ public final class TheFence {
         switch command {
         case .help:
             return .help(commands: Self.supportedCommands)
-        case .quit:
-            stop()
-            return .ok(message: "bye")
         default:
             return nil
         }
-    }
-
-    func beginRecordingAccessibilityHistoryRetention() {
-        backgroundAccessibility.beginRecordingRetention()
-    }
-
-    func endRecordingAccessibilityHistoryRetention() {
-        backgroundAccessibility.endRecordingRetention()
     }
 
     // MARK: - Command Dispatch (thin router)

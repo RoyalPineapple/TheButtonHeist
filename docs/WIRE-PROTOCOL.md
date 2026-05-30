@@ -128,7 +128,6 @@ Server response:
 | `requestId` | Optional correlation id. Echoed by the matching response. |
 | `type` | Explicit TheScore message discriminator. |
 | `payload` | Optional payload object. |
-| `accessibilityTrace` | Response trace evidence for captures observed while preparing the response. |
 
 ## Public Wire Examples
 
@@ -256,17 +255,6 @@ expose viewport state because moving the viewport is the requested behavior.
 The raw wire response carries base64 PNG data plus a fresh visible interface.
 Public CLI/MCP adapters return artifact paths by default and include inline
 media only through explicit, size-bounded opt-ins.
-
-### Recording
-
-```json
-{"buttonHeistVersion":"<semver>","type":"startRecording","payload":{"fps":8,"scale":0.5,"maxDuration":60}}
-{"buttonHeistVersion":"<semver>","type":"stopRecording"}
-```
-
-The raw wire `recording` response carries base64 MP4 data. Public adapters
-return artifact paths by default. Full interaction logs and inline media are
-explicit opt-ins.
 
 ### Wait for Change
 

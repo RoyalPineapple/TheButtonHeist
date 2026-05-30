@@ -14,7 +14,6 @@ public enum FailurePhase: String, Sendable, Equatable, CaseIterable {
     case authentication = "auth"
     case session
     case request
-    case recording
     case protocolNegotiation = "protocol"
     case tls
     case client

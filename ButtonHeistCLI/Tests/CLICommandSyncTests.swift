@@ -54,19 +54,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertTrue(merged.quiet)
     }
 
-    func testRecordCommandLeavesOmittedInactivityTimeoutUnset() throws {
-        let command = try RecordCommand.parse(["--max-duration", "120"])
-
-        XCTAssertNil(command.inactivityTimeout)
-        XCTAssertEqual(command.maxDuration, 120)
-    }
-
-    func testRecordCommandPreservesExplicitInactivityTimeout() throws {
-        let command = try RecordCommand.parse(["--inactivity-timeout", "3"])
-
-        XCTAssertEqual(command.inactivityTimeout, 3)
-    }
-
     func testWaitForChangeCommandDefaultTimeoutIsThirtySeconds() throws {
         let command = try WaitForChangeCommand.parse([])
 
@@ -105,20 +92,6 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try TheFence.parseExpectationArgument("layout_changed"))
     }
 
-    func testHumanParserRejectsExpectationShortcut() {
-        XCTAssertThrowsError(try CLIRequestBuilder.parsedRequest(from: "wait_for_change expect=screen_changed")) { error in
-            XCTAssertTrue(String(describing: error).contains("Expected expectation JSON object"))
-        }
-    }
-
-    func testHumanParserPreservesChangeExpectationJsonObjectForRequestParsing() throws {
-        let operation = try CLIRequestBuilder
-            .parsedRequest(from: #"wait_for_change expect='{"type":"elements_changed"}'"#)
-
-        XCTAssertEqual(operation.command, .waitForChange)
-        XCTAssertEqual(operation.argument(.expect), .object(["type": .string("elements_changed")]))
-    }
-
     func testRunBatchSerializesStepsBeforeSending() throws {
         let steps = try RunBatchCommand.serializedBatchSteps(
             inline: #"[{"command":"activate","target":{"heistId":"button-login"}}]"#,
@@ -133,27 +106,11 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(object["target"], .object(["heistId": .string("button-login")]))
     }
 
-    func testHumanParserPreservesKnownStringParameterValues() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "set_pasteboard text=false")
-
-        XCTAssertEqual(operation.command, .setPasteboard)
-        XCTAssertEqual(operation.argument(.text), .string("false"))
-    }
-
-    func testHumanParserCoercesKnownBooleanParametersOnly() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "wait_for loading-spinner absent=true")
-
-        XCTAssertEqual(operation.command, .waitFor)
-        XCTAssertEqual(operation.arguments.elementTarget, .heistId("loading-spinner"))
-        XCTAssertEqual(operation.argument(.absent), .bool(true))
-    }
-
     func testSharedRequestBuilderParsesCanonicalMachineJSON() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
             from: #"{"command":"type_text","text":"hello"}"#
         )
 
-        XCTAssertEqual(parsed.mode, .machine)
         XCTAssertEqual(parsed.command, .typeText)
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
@@ -250,7 +207,7 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderRejectsHumanTextInJSONSessionMode() {
         XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: "activate button_save", acceptsHumanInput: false)
+            try CLIRequestBuilder.parsedRequest(from: "activate button_save")
         ) { error in
             XCTAssertTrue(
                 CLIRequestBuilder.diagnosticMessage(for: error).contains("Expected JSON object input"),
@@ -261,11 +218,9 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONSessionMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"activate","target":{"heistId":"button_save"}}"#,
-            acceptsHumanInput: false
+            from: #"{"command":"activate","target":{"heistId":"button_save"}}"#
         )
 
-        XCTAssertEqual(parsed.mode, .machine)
         XCTAssertEqual(parsed.command, .activate)
         guard case .object(let target)? = parsed.argument(.target) else {
             return XCTFail("expected typed target object")
@@ -273,59 +228,11 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(target["heistId"], .string("button_save"))
     }
 
-    func testSharedRequestBuilderParsesHumanCommand() throws {
-        let parsed = try CLIRequestBuilder.parsedRequest(from: "get_screen")
-
-        XCTAssertEqual(parsed.mode, .human)
-        XCTAssertEqual(parsed.command, .getScreen)
-    }
-
     func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(from: #"{"command":"type_text","text":"hello"}"#)
 
-        XCTAssertEqual(parsed.mode, .machine)
         XCTAssertEqual(parsed.command, .typeText)
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
-    }
-
-    func testSharedRequestBuilderRejectsUnknownHumanCommand() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: "not_a_command label=Save")
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown command 'not_a_command'"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testSharedRequestBuilderRejectsUnknownHumanParameter() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: "activate bogus=Save")
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown parameter 'bogus' for activate"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testSharedRequestBuilderRejectsInvalidHumanParameterValue() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: "wait_for absent=maybe")
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Invalid value 'maybe' for absent"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testHumanParserParsesPositionalActivateTarget() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save")
-
-        XCTAssertEqual(operation.command, .activate)
-        XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
     }
 
     func testCLIBuilderCarriesMatcherTargetAsTypedTarget() throws {
@@ -341,34 +248,10 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertNil(arguments.argumentValues[FenceParameterKey.target.rawValue])
     }
 
-    func testHumanParserParsesCoordinateGesture() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200")
-
-        XCTAssertEqual(operation.command, .oneFingerTap)
-        XCTAssertEqual(operation.argument(.x), .double(100))
-        XCTAssertEqual(operation.argument(.y), .double(200))
-    }
-
-    func testHumanParserUsesCatalogPositionalDirectionSyntax() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "swipe up checkout_list")
-
-        XCTAssertEqual(operation.command, .swipe)
-        XCTAssertEqual(operation.argument(.direction), .string("up"))
-        XCTAssertEqual(operation.arguments.elementTarget, .heistId("checkout_list"))
-    }
-
-    func testHumanParserUsesCatalogPositionalEdgeSyntax() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "scroll_to_edge top checkout_list")
-
-        XCTAssertEqual(operation.command, .scrollToEdge)
-        XCTAssertEqual(operation.argument(.edge), .string("top"))
-        XCTAssertEqual(operation.arguments.elementTarget, .heistId("checkout_list"))
-    }
-
     func testScrollCLIAllowsNoElementTarget() throws {
         let command = try ScrollCommand.parse([])
 
-        XCTAssertNil(command.element.target)
+        XCTAssertFalse(try command.element.hasTarget)
         XCTAssertNil(command.stableId)
         XCTAssertEqual(command.direction, "down")
     }
@@ -383,46 +266,9 @@ final class CLICommandSyncTests: XCTestCase {
     func testScrollToEdgeCLIAllowsNoElementTargetAndDefaultsTop() throws {
         let command = try ScrollToEdgeCommand.parse([])
 
-        XCTAssertNil(command.element.target)
+        XCTAssertFalse(try command.element.hasTarget)
         XCTAssertNil(command.stableId)
         XCTAssertEqual(command.edge, "top")
-    }
-
-    func testHumanParserMapsCoordinateTapCanonicalCommand() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "one_finger_tap x=100 y=200")
-
-        XCTAssertEqual(operation.command, .oneFingerTap)
-        XCTAssertEqual(operation.argument(.x), .double(100))
-        XCTAssertEqual(operation.argument(.y), .double(200))
-    }
-
-    func testHumanParserMapsHeistIdPositionalTarget() throws {
-        let operation = try CLIRequestBuilder.parsedRequest(from: "activate button_save")
-
-        XCTAssertEqual(operation.command, .activate)
-        XCTAssertEqual(operation.arguments.elementTarget, .heistId("button_save"))
-    }
-
-    func testHumanParserRejectsDuplicateElementTarget() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: "activate button_save target=button_cancel")
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Element target specified more than once"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
-    }
-
-    func testHumanParserRejectsTargetForCommandWithoutTargetParameter() {
-        XCTAssertThrowsError(
-            try CLIRequestBuilder.parsedRequest(from: "get_screen target=button_save")
-        ) { error in
-            XCTAssertTrue(
-                CLIRequestBuilder.diagnosticMessage(for: error).contains("Unknown parameter 'target' for get_screen"),
-                CLIRequestBuilder.diagnosticMessage(for: error)
-            )
-        }
     }
 
     private func topLevelCommandNames() -> [String] {

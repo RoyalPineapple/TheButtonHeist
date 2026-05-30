@@ -8,81 +8,6 @@ import TheScore
 
 // MARK: - Rotor Actions
 
-@MainActor
-final class RotorContinuationStore {
-    private var state: PendingRotorState = .none
-
-    func store(screenElement: TheStash.ScreenElement, object: NSObject) {
-        state = .stored(PendingRotorResult(
-            token: UUID(),
-            screenElement: screenElement,
-            object: object
-        ))
-    }
-
-    func prepare(targetedHeistId: HeistId?) -> UUID? {
-        let pending: PendingRotorResult
-        switch state {
-        case .none:
-            return nil
-        case .stored(let result), .active(let result):
-            pending = result
-        }
-        guard targetedHeistId == pending.screenElement.heistId else {
-            clear()
-            return nil
-        }
-        state = .active(pending)
-        return pending.token
-    }
-
-    func activeCursorObject(heistId: HeistId) -> NSObject? {
-        guard case .active(let pendingRotorResult) = state,
-              pendingRotorResult.screenElement.heistId == heistId else {
-            return nil
-        }
-        return pendingRotorResult.object
-    }
-
-    func clear() {
-        state = .none
-    }
-
-    func clear(consumedToken: UUID) {
-        switch state {
-        case .none:
-            return
-        case .stored(let pending):
-            if pending.token == consumedToken {
-                clear()
-            }
-            return
-        case .active(let pending):
-            if pending.token == consumedToken {
-                clear()
-            } else {
-                state = .stored(pending)
-            }
-        }
-    }
-
-    private struct PendingRotorResult {
-        let token: UUID
-        let screenElement: TheStash.ScreenElement
-        /// Strongly retain out-of-tree rotor result objects for one rotor
-        /// continuation step. `LiveInterface` refs are weak, but VoiceOver-style
-        /// next/previous needs the current item object as rotor-only cursor
-        /// state.
-        let object: NSObject
-    }
-
-    private enum PendingRotorState {
-        case none
-        case stored(PendingRotorResult)
-        case active(PendingRotorResult)
-    }
-}
-
 extension TheStash {
 
     struct RotorHit {
@@ -173,31 +98,13 @@ extension TheStash {
             return .resultTargetUnavailable(rotorName)
         }
         let parsed = parseRotorResultObject(resultObject)
-        if let parsed, !visibleIds.contains(parsed.heistId) {
-            rotorContinuations.store(screenElement: parsed, object: resultObject)
-        }
         guard parsed != nil || textRange != nil else {
             return .resultTargetNotParsed(rotorName)
         }
         return .succeeded(RotorHit(rotor: rotorName, screenElement: parsed, textRange: textRange))
     }
 
-    func preparePendingRotorResult(targetedHeistId: HeistId?) -> UUID? {
-        rotorContinuations.prepare(targetedHeistId: targetedHeistId)
-    }
-
-    func clearPendingRotorResult() {
-        rotorContinuations.clear()
-    }
-
-    func clearPendingRotorResult(consumedToken: UUID) {
-        rotorContinuations.clear(consumedToken: consumedToken)
-    }
-
     func rotorCurrentObject(heistId: HeistId) -> NSObject? {
-        if let pendingObject = rotorContinuations.activeCursorObject(heistId: heistId) {
-            return pendingObject
-        }
         guard let current = resolveVisibleTarget(.heistId(heistId)).resolved,
               let currentObject = liveObject(for: current) else {
             return nil
@@ -241,102 +148,7 @@ private extension TheStash {
             return known
         }
 
-        let standaloneElement = burglar.parseObject(object)
-        if let screenElement = parseLiveObject(object) {
-            return screenElement
-        }
-
-        if let standaloneElement,
-           let known = knownCachedRotorResult(matching: standaloneElement) {
-            return known
-        }
-
-        guard let element = standaloneElement else { return nil }
-        let heistId = pendingRotorHeistId(for: element)
-        return ScreenElement(
-            heistId: heistId,
-            contentSpaceOrigin: nil,
-            element: element
-        )
-    }
-
-    func knownCachedRotorResult(matching rotorElement: AccessibilityElement) -> ScreenElement? {
-        let candidates = selectElements().filter {
-            !visibleIds.contains($0.heistId)
-                && Self.matchesCachedRotorResult(knownElement: $0.element, rotorElement: rotorElement)
-        }
-        guard candidates.count == 1, let candidate = candidates.first else { return nil }
-        return candidate
-    }
-
-    static func matchesCachedRotorResult(
-        knownElement: AccessibilityElement,
-        rotorElement: AccessibilityElement
-    ) -> Bool {
-        guard rotorElement.label?.isEmpty == false
-                || rotorElement.value?.isEmpty == false
-                || rotorElement.identifier?.isEmpty == false else {
-            return false
-        }
-        guard optionalText(knownElement.label, matches: rotorElement.label),
-              optionalText(knownElement.value, matches: rotorElement.value),
-              stableTraitNames(knownElement.traits) == stableTraitNames(rotorElement.traits),
-              framesApproximatelyMatch(knownElement.shape.frame, rotorElement.shape.frame) else {
-            return false
-        }
-        if let knownIdentifier = knownElement.identifier, !knownIdentifier.isEmpty,
-           let rotorIdentifier = rotorElement.identifier, !rotorIdentifier.isEmpty {
-            return ElementMatcher.stringEquals(knownIdentifier, rotorIdentifier)
-        }
-        return true
-    }
-
-    static func optionalText(_ lhs: String?, matches rhs: String?) -> Bool {
-        switch (lhs, rhs) {
-        case (nil, nil):
-            return true
-        case let (lhs?, rhs?):
-            return ElementMatcher.stringEquals(lhs, rhs)
-        default:
-            return false
-        }
-    }
-
-    static func stableTraitNames(_ traits: AccessibilityTraits) -> Set<String> {
-        Set(traits.traitNames).subtracting(AccessibilityPolicy.transientTraitNames)
-    }
-
-    static func framesApproximatelyMatch(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
-        guard !lhs.isNull, !lhs.isEmpty,
-              !rhs.isNull, !rhs.isEmpty,
-              lhs.origin.x.isFinite,
-              lhs.origin.y.isFinite,
-              lhs.size.width.isFinite,
-              lhs.size.height.isFinite,
-              rhs.origin.x.isFinite,
-              rhs.origin.y.isFinite,
-              rhs.size.width.isFinite,
-              rhs.size.height.isFinite else {
-            return false
-        }
-        let tolerance: CGFloat = 1
-        return abs(lhs.origin.x - rhs.origin.x) <= tolerance
-            && abs(lhs.origin.y - rhs.origin.y) <= tolerance
-            && abs(lhs.size.width - rhs.size.width) <= tolerance
-            && abs(lhs.size.height - rhs.size.height) <= tolerance
-    }
-
-    func pendingRotorHeistId(for element: AccessibilityElement) -> HeistId {
-        let base = Self.IdAssignment.assign([element]).first ?? "element"
-        let root = "rotor_result_\(base)"
-        var candidate = root
-        var suffix = 2
-        let knownHeistIds = currentScreen.knownInterface.heistIds
-        while knownHeistIds.contains(candidate) {
-            candidate = "\(root)_\(suffix)"
-            suffix += 1
-        }
-        return candidate
+        return parseLiveObject(object)
     }
 
     func textRange(from reference: TextRangeReference, in input: UITextInput) -> UITextRange? {

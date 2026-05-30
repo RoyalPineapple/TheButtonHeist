@@ -2,16 +2,10 @@ import ArgumentParser
 import ButtonHeist
 import Foundation
 
-enum CLIRequestInputMode: Equatable {
-    case human
-    case machine
-}
-
 struct CLIParsedRequest {
     let command: TheFence.Command
     let arguments: TheFence.CommandArgumentEnvelope
     let requestId: PublicRequestId?
-    let mode: CLIRequestInputMode
 }
 
 struct CLIRequestBuildError: Error, CustomStringConvertible {
@@ -34,63 +28,11 @@ enum CLIRequestBuilder {
         return TheFence.CommandArgumentEnvelope(values: values, elementTarget: target)
     }
 
-    static func parsedRequest(from line: String, acceptsHumanInput: Bool = true) throws -> CLIParsedRequest {
-        if line.hasPrefix("{") {
-            return try parseMachineRequest(line)
+    static func parsedRequest(from line: String) throws -> CLIParsedRequest {
+        guard line.hasPrefix("{") else {
+            throw ValidationError("Expected JSON object input")
         }
-
-        guard acceptsHumanInput else {
-            throw ValidationError("Expected JSON object input for JSON session mode")
-        }
-        return try parseHumanTokens(tokenize(line))
-    }
-
-    static func parseHumanTokens(_ tokens: [String]) throws -> CLIParsedRequest {
-        guard let first = tokens.first else {
-            throw ValidationError("Unknown command. Type 'help' for available commands.")
-        }
-
-        let request = try FenceCommandDescriptor.humanCommandRequest(
-            commandName: first,
-            arguments: Array(tokens.dropFirst())
-        )
-
-        return CLIParsedRequest(
-            command: request.command,
-            arguments: request.arguments,
-            requestId: nil,
-            mode: .human
-        )
-    }
-
-    static func tokenize(_ line: String) -> [String] {
-        var tokens: [String] = []
-        var current = ""
-        var inQuote: Character?
-        var iterator = line.makeIterator()
-
-        while let ch = iterator.next() {
-            if let quote = inQuote {
-                if ch == quote {
-                    inQuote = nil
-                } else {
-                    current.append(ch)
-                }
-            } else if ch == "\"" || ch == "'" {
-                inQuote = ch
-            } else if ch == " " || ch == "\t" {
-                if !current.isEmpty {
-                    tokens.append(current)
-                    current = ""
-                }
-            } else {
-                current.append(ch)
-            }
-        }
-        if !current.isEmpty {
-            tokens.append(current)
-        }
-        return tokens
+        return try parseMachineRequest(line)
     }
 
     static func parseMachineRequest(_ line: String) throws -> CLIParsedRequest {
@@ -109,8 +51,7 @@ enum CLIRequestBuilder {
                 return CLIParsedRequest(
                     command: routed.command,
                     arguments: routed.arguments,
-                    requestId: requestId,
-                    mode: .machine
+                    requestId: requestId
                 )
             case .failure(let error):
                 throw ValidationError(error.message)

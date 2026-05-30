@@ -29,8 +29,6 @@ extension TheFence {
         static let maxRunBatchNestingDepth = 32
         static let maxBatchResultRows = maxRunBatchSteps
         static let maxInlineScreenshotBase64Bytes = 1_000_000
-        static let maxInlineRecordingBase64Bytes = 10_000_000
-        static let maxExpandedRecordingResponseBytes = 10_000_000
 
         static let maxDrawPathPoints = 10_000
         static let maxDrawBezierSegments = 1_000
@@ -60,15 +58,14 @@ public extension FenceParameterKey {
     static let container = Self("container"), count = Self("count"), captureLocalRef = Self("captureLocalRef")
     static let cp1X = Self("cp1X"), cp1Y = Self("cp1Y"), cp2X = Self("cp2X"), cp2Y = Self("cp2Y")
     static let currentHeistId = Self("currentHeistId"), currentTextEndOffset = Self("currentTextEndOffset")
-    static let currentTextStartOffset = Self("currentTextStartOffset"), deleteSource = Self("delete_source")
+    static let currentTextStartOffset = Self("currentTextStartOffset")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
     static let endX = Self("endX"), endY = Self("endY"), excludeTraits = Self("excludeTraits")
-    static let expect = Self("expect"), expectations = Self("expectations"), fps = Self("fps"), heistId = Self("heistId")
-    static let identifier = Self("identifier"), inactivityTimeout = Self("inactivity_timeout")
-    static let includeInteractionLog = Self("includeInteractionLog"), includeInterface = Self("includeInterface")
+    static let expect = Self("expect"), expectations = Self("expectations"), heistId = Self("heistId")
+    static let identifier = Self("identifier"), includeInterface = Self("includeInterface")
     static let inlineData = Self("inlineData"), input = Self("input"), isModalBoundary = Self("isModalBoundary")
-    static let label = Self("label"), matcher = Self("matcher"), maxDuration = Self("max_duration"), mode = Self("mode")
+    static let label = Self("label"), matcher = Self("matcher"), mode = Self("mode")
     static let newValue = Self("newValue"), oldValue = Self("oldValue"), ordinal = Self("ordinal"), output = Self("output")
     static let points = Self("points"), policy = Self("policy"), property = Self("property"), radius = Self("radius")
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex"), samplesPerSegment = Self("samplesPerSegment")

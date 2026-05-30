@@ -35,7 +35,7 @@ extension TheBookKeeper {
                     try handle.write(contentsOf: contents)
                 }
             } catch {
-                throw BookKeeperError.session(.logFileCreationFailed(
+                throw BookKeeperError.session(.privateFileCreationFailed(
                     path: url.path,
                     reason: String(describing: error)
                 ))
@@ -48,7 +48,7 @@ extension TheBookKeeper {
             contents: contents,
             attributes: attributes
         ) else {
-            throw BookKeeperError.session(.logFileCreationFailed(
+            throw BookKeeperError.session(.privateFileCreationFailed(
                 path: url.path,
                 reason: "FileManager.createFile returned false"
             ))
@@ -57,7 +57,7 @@ extension TheBookKeeper {
         do {
             try fileManager.setAttributes(attributes, ofItemAtPath: url.path)
         } catch {
-            throw BookKeeperError.session(.logFileCreationFailed(
+            throw BookKeeperError.session(.privateFileCreationFailed(
                 path: url.path,
                 reason: String(describing: error)
             ))
@@ -91,31 +91,6 @@ extension TheBookKeeper {
         }
     }
 
-    func openSessionLog(at logPath: URL) throws -> FileHandle {
-        do {
-            return try FileHandle(forWritingTo: logPath)
-        } catch {
-            throw BookKeeperError.session(.logFileOpenFailed(
-                path: logPath.path,
-                reason: String(describing: error)
-            ))
-        }
-    }
-
-    func writeSessionHeader(sessionId: String, to logHandle: FileHandle, logPath: URL) throws {
-        do {
-            try appendLogLine(HeaderLogEntry(
-                formatVersion: SessionFormatVersion.current,
-                sessionId: sessionId
-            ), to: logHandle)
-        } catch {
-            throw BookKeeperError.session(.headerWriteFailed(
-                path: logPath.path,
-                reason: String(describing: error)
-            ))
-        }
-    }
-
     func flushManifest(manifest: SessionManifest, directory: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -133,34 +108,4 @@ extension TheBookKeeper {
         }
     }
 
-    func deleteSessionSourceDirectory(_ directory: URL) throws {
-        do {
-            try FileManager.default.removeItem(at: directory)
-        } catch {
-            throw BookKeeperError.session(.sourceDeletionFailed(
-                path: directory.path,
-                reason: String(describing: error)
-            ))
-        }
-    }
-
-    func sessionLogSnapshot(manifest: SessionManifest, directory: URL) throws -> SessionLogSnapshot {
-        let projection = try sessionLogProjection(in: directory)
-        return SessionLogSnapshot(
-            manifest: manifest,
-            counts: projection.counts,
-            artifacts: projection.artifacts,
-            projectionStatus: projection.status
-        )
-    }
-
-    func sessionLogSnapshot(manifest: SessionManifest, archivePath: URL) throws -> SessionLogSnapshot {
-        let projection = try sessionLogProjection(inArchive: archivePath)
-        return SessionLogSnapshot(
-            manifest: manifest,
-            counts: projection.counts,
-            artifacts: projection.artifacts,
-            projectionStatus: projection.status
-        )
-    }
 }

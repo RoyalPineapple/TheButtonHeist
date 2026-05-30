@@ -78,22 +78,10 @@ extension DeviceConnection {
             emitMessage(.info(info), requestId: envelope.requestId)
         case .pong:
             // Pong must reach TheHandoff so the keepalive task can reset
-            // its missed-pong counter. Earlier code logged the pong here
-            // and stopped, which meant the counter incremented every 5s
-            // but never decremented — TheHandoff would force-disconnect
-            // any connection that stayed idle for 30s, including the
-            // window while the server was finalizing a recording. The
-            // log line stays for diagnostic noise; the message is also
-            // propagated so TheHandoff can mark the connection live.
+            // its missed-pong counter. Earlier code logged the pong here and
+            // stopped, which meant the counter incremented every 5s but never
+            // decremented.
             deviceConnectionLogger.debug("Received pong")
-            emitEnvelopeMessage(envelope)
-        case .recordingStopped:
-            // TheHandoff clears its recording phase on this message;
-            // dropping it here left the client believing a recording
-            // was still in progress after the server had already torn
-            // it down (e.g. a max-duration broadcast with no pending
-            // stop_recording response).
-            deviceConnectionLogger.debug("Recording stop acknowledged")
             emitEnvelopeMessage(envelope)
         default:
             emitEnvelopeMessage(envelope)
@@ -103,20 +91,17 @@ extension DeviceConnection {
     private func emitEnvelopeMessage(_ envelope: ResponseEnvelope) {
         emitMessage(
             envelope.message,
-            requestId: envelope.requestId,
-            accessibilityTrace: envelope.accessibilityTrace
+            requestId: envelope.requestId
         )
     }
 
     private func emitMessage(
         _ message: ServerMessage,
-        requestId: String?,
-        accessibilityTrace: AccessibilityTrace? = nil
+        requestId: String?
     ) {
         onEvent?(.message(
             message,
-            requestId: requestId,
-            accessibilityTrace: accessibilityTrace
+            requestId: requestId
         ))
     }
 

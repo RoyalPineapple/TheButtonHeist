@@ -16,9 +16,6 @@ extension TheFence {
         case .getScreen:
             let request = try decodeScreenRequest(arguments, requestId: requestId)
             return DecodedRequestDispatch { fence, _ in try await fence.handleGetScreen(request) }
-        case .stopRecording:
-            let request = try decodeArtifactRequest(arguments, requestId: requestId)
-            return DecodedRequestDispatch { fence, _ in try await fence.handleStopRecording(request) }
         default:
             throw FenceError.invalidRequest("Unexpected observation command: \(command.rawValue)")
         }
@@ -31,18 +28,6 @@ extension TheFence {
                 subtree: try decodeInterfaceSubtreeSelector(arguments),
                 matcher: try interfaceElementMatcher(arguments)
             )
-        )
-    }
-
-    private func decodeArtifactRequest(
-        _ arguments: CommandArgumentEnvelope,
-        requestId: String
-    ) throws -> ArtifactRequest {
-        ArtifactRequest(
-            outputPath: try arguments.schemaString("output"),
-            requestId: requestId,
-            inlineData: try arguments.schemaBoolean("inlineData") ?? false,
-            includeInteractionLog: try arguments.schemaBoolean("includeInteractionLog") ?? false
         )
     }
 
@@ -64,22 +49,6 @@ extension TheFence {
             requestId: requestId,
             inlineData: inlineData,
             includeInterface: try arguments.schemaBoolean("includeInterface") ?? false
-        )
-    }
-
-    func defaultGetInterfaceParsedRequest() -> ParsedRequest {
-        ParsedRequest(
-            command: .getInterface,
-            requestId: UUID().uuidString,
-            arguments: CommandArgumentEnvelope(values: [:]),
-            dispatch: DecodedRequestDispatch { fence, _ in
-                try await fence.handleGetInterface(GetInterfaceRequest(
-                    detail: .summary,
-                    query: InterfaceQuery()
-                ))
-            },
-            expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-            immediateResponse: nil
         )
     }
 

@@ -126,20 +126,14 @@ final class BookKeeperHeistTests: XCTestCase {
         XCTAssertEqual(script.steps.count, 1)
         XCTAssertEqual(script.steps[0].command, "activate")
         XCTAssertEqual(script.steps[0].target, semanticTarget(label: "Go", traits: [.button]))
-        let change = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace?.receipts.first)
-        XCTAssertEqual(change.kind, .capture)
-        XCTAssertEqual(change.interface.elements.first?.label, "Go")
-        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "noChange")
-        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.elementCount, 1)
-        let playbackStep = try TheFence(configuration: .init()).parsePlaybackEvidence(script.steps[0])
-        XCTAssertNil(playbackStep.arguments.argumentValues["_recorded"])
+        _ = try TheFence(configuration: .init()).parsePlaybackEvidence(script.steps[0])
         XCTAssertFalse(bookKeeper.isRecordingHeist)
     }
 
     @ButtonHeistActor
-    func testRecordHeistEvidenceStoresSameScreenTraceAsSegmentPatch() async throws {
+    func testRecordHeistEvidenceDoesNotStoreActionTrace() async throws {
         let bookKeeper = makeBookKeeper()
-        try bookKeeper.beginSession(identifier: "same-screen-trace")
+        try bookKeeper.beginSession(identifier: "no-action-trace")
         try bookKeeper.startHeistRecording(app: "com.example.app")
 
         let beforeInterface = makeReceiptTestInterface([
@@ -157,57 +151,10 @@ final class BookKeeperHeistTests: XCTestCase {
         )
 
         let script = try bookKeeper.stopHeistRecording()
-        let recordedTrace = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace)
-        XCTAssertEqual(recordedTrace.captures.map(\.interface), [beforeInterface, afterInterface])
-        XCTAssertEqual(recordedTrace.screenSegmentsProjection.count, 1)
-        XCTAssertEqual(recordedTrace.screenSegmentsProjection[0].transitions.count, 1)
-        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "elementsChanged")
-
-        let json = try XCTUnwrap(encodedRecordedTraceJSON(script))
-        XCTAssertNotNil(json["captures"])
-        let captures = try XCTUnwrap(json["captures"] as? [[String: Any]])
-        XCTAssertEqual(captures.count, 2)
-        XCTAssertNotNil(captures.first?["interface"])
-    }
-
-    @ButtonHeistActor
-    func testRecordHeistEvidenceStartsNewTraceSegmentForScreenChange() async throws {
-        let bookKeeper = makeBookKeeper()
-        try bookKeeper.beginSession(identifier: "screen-change-trace")
-        try bookKeeper.startHeistRecording(app: "com.example.app")
-
-        let before = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: makeReceiptTestInterface([
-                makeElement(heistId: "title", label: "Menu", traits: [.header]),
-            ])
-        )
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeReceiptTestInterface([
-                makeElement(heistId: "title", label: "Checkout", traits: [.header]),
-            ]),
-            parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(screenChangeReason: "test navigation")
-        )
-
-        try recordHeistEvidence(bookKeeper, command: .activate,
-            args: activateArgumentValues(label: "Checkout"),
-            actionResult: ActionResult(
-                success: true,
-                method: .activate,
-                accessibilityTrace: AccessibilityTrace(captures: [before, after])
-            ),
-            targetCapture: nil
-        )
-
-        let script = try bookKeeper.stopHeistRecording()
-        let recordedTrace = try XCTUnwrap(script.steps[0].recorded?.accessibilityTrace)
-        XCTAssertEqual(recordedTrace.captures.map(\.hash), [before.hash, after.hash])
-        XCTAssertEqual(recordedTrace.screenSegmentsProjection.count, 2)
-        XCTAssertEqual(recordedTrace.screenSegmentsProjection.map(\.baseline.hash), [before.hash, after.hash])
-        XCTAssertTrue(recordedTrace.screenSegmentsProjection.allSatisfy(\.transitions.isEmpty))
-        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
+        let data = try JSONEncoder().encode(script)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let steps = try XCTUnwrap(json["steps"] as? [[String: Any]])
+        XCTAssertNil(steps.first?["_recorded"])
     }
 
     @ButtonHeistActor
@@ -262,8 +209,6 @@ final class BookKeeperHeistTests: XCTestCase {
 
         let script = try bookKeeper.stopHeistRecording()
         XCTAssertEqual(script.steps[0].target, semanticTarget(identifier: "primary.save"))
-        XCTAssertEqual(script.steps[0].recorded?.heistId, "save")
-        XCTAssertEqual(script.steps[0].recorded?.accessibilityDelta?.kindRawValue, "screenChanged")
     }
 
     @ButtonHeistActor
@@ -467,7 +412,6 @@ final class BookKeeperHeistTests: XCTestCase {
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertEqual(script.steps[0].target, semanticTarget(label: "Submit"))
-        XCTAssertEqual(script.steps[0].recorded?.heistId, "button_submit")
     }
 
     @ButtonHeistActor
@@ -499,7 +443,7 @@ final class BookKeeperHeistTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testCoordinateOnlyFlagged() async throws {
+    func testCoordinateGestureRecordsOnlyTypedArguments() async throws {
         let bookKeeper = makeBookKeeper()
         try bookKeeper.beginSession(identifier: "test")
         try bookKeeper.startHeistRecording(app: "com.example.app")
@@ -513,7 +457,8 @@ final class BookKeeperHeistTests: XCTestCase {
         let script = try bookKeeper.stopHeistRecording()
 
         XCTAssertNil(script.steps[0].target)
-        XCTAssertEqual(script.steps[0].recorded?.coordinateOnly, true)
+        XCTAssertEqual(script.steps[0].arguments["x"], .int(100))
+        XCTAssertEqual(script.steps[0].arguments["y"], .int(200))
     }
 
     @ButtonHeistActor
@@ -605,7 +550,6 @@ final class BookKeeperHeistTests: XCTestCase {
     @ButtonHeistActor
     func testWriteAndReadHeist() async throws {
         let script = HeistPlayback(
-            recorded: Date(timeIntervalSince1970: 1_000_000),
             app: "com.example.app",
             steps: [
                 try HeistEvidence(command: "activate", target: semanticTarget(label: "Go", traits: [.button])),
@@ -795,12 +739,4 @@ private func appendEvidenceLine(_ evidence: HeistEvidence, to bookKeeper: TheBoo
     var data = try encoder.encode(evidence)
     data.append(contentsOf: [0x0A])
     recording.fileHandle.write(data)
-}
-
-private func encodedRecordedTraceJSON(_ script: HeistPlayback) throws -> [String: Any]? {
-    let data = try JSONEncoder().encode(script)
-    let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-    let steps = try XCTUnwrap(json["steps"] as? [[String: Any]])
-    let recorded = try XCTUnwrap(steps.first?["_recorded"] as? [String: Any])
-    return recorded["accessibilityTrace"] as? [String: Any]
 }

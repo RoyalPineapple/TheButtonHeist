@@ -40,16 +40,6 @@ extension FenceResponse {
             return "screenshot: \(path) (\(Int(payload.width))x\(Int(payload.height)))"
         case .screenshotData(let payload, _):
             return "screenshot: \(Int(payload.width))x\(Int(payload.height))"
-        case .recording(let path, let payload):
-            return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames)"
-        case .recordingExpanded(let path, let payload, let options):
-            var suffixes: [String] = []
-            if options.inlineData { suffixes.append("inlineData") }
-            if options.includeInteractionLog { suffixes.append("interactionLog") }
-            let suffix = suffixes.isEmpty ? "" : ", \(suffixes.joined(separator: "+"))"
-            return "recording: \(path) (\(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames\(suffix))"
-        case .recordingData(let payload):
-            return "recording: \(String(format: "%.1f", payload.duration))s, \(payload.frameCount) frames"
         case .batch(let outcomes, let totalTimingMs, let accessibilityTrace):
             return compactBatchFormatted(
                 completedSteps: outcomes.completedStepCount,
@@ -68,13 +58,6 @@ extension FenceResponse {
                 let isDefault = name == defaultTarget ? " *" : ""
                 return "\(name): \(target.device)\(isDefault)"
             }.joined(separator: "\n")
-        case .sessionLog(let snapshot):
-            var text = "session: \(snapshot.manifest.sessionId), " +
-                "\(snapshot.counts.commandCount) commands, \(snapshot.artifacts.count) artifacts"
-            if snapshot.counts.errorCount > 0 { text += ", \(snapshot.counts.errorCount) errors" }
-            return text
-        case .archiveResult(let path, let snapshot):
-            return "archived: \(path) (\(snapshot.artifacts.count) artifacts, \(snapshot.counts.commandCount) commands)"
         case .heistStarted:
             return "heist recording started"
         case .heistStopped(let path, let stepCount):

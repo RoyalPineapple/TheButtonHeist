@@ -22,13 +22,6 @@ extension TheFence {
         let includeInterface: Bool
     }
 
-    struct ArtifactRequest {
-        let outputPath: String?
-        let requestId: String
-        let inlineData: Bool
-        let includeInteractionLog: Bool
-    }
-
     struct CountArgument {
         let value: Int?
         let observed: String?
@@ -81,7 +74,7 @@ extension TheFence {
         let executableMessages: [ClientMessage]?
         let handler: ParsedRequestHandler
         let expectationPayload: ExpectationPayload
-        /// Non-nil when the command short-circuits before dispatch (help/quit).
+        /// Non-nil when the command short-circuits before dispatch.
         let immediateResponse: FenceResponse?
 
         init(
@@ -112,10 +105,6 @@ extension TheFence {
         DecodedRequestDispatch { _, _ in
             .error("Unexpected command in dispatch: \(command.rawValue)")
         }
-    }
-
-    struct ArchiveSessionRequest {
-        let deleteSource: Bool
     }
 
     struct StartHeistRequest {
@@ -240,8 +229,6 @@ extension TheFence {
             return DecodedRequestDispatch { fence, _ in .sessionState(payload: fence.currentSessionState()) }
         case .listTargets:
             return DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
-        case .getSessionLog:
-            return DecodedRequestDispatch { fence, _ in try fence.handleGetSessionLog() }
         default:
             throw FenceError.invalidRequest("Unexpected no-payload command: \(command.rawValue)")
         }

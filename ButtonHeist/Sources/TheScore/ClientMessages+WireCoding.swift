@@ -90,7 +90,6 @@ extension ClientMessage {
         case .getPasteboard: return (.getPasteboard, nil)
         case .requestScreen: return (.requestScreen, nil)
         case .explore: return (.explore, nil)
-        case .stopRecording: return (.stopRecording, nil)
         case .authenticate(let payload): return (.authenticate, payload)
         case .activate(let payload): return (.activate, payload)
         case .increment(let payload): return (.increment, payload)
@@ -117,7 +116,6 @@ extension ClientMessage {
         case .waitFor(let payload): return (.waitFor, payload)
         case .waitForChange(let payload): return (.waitForChange, payload)
         case .batchExecutionPlan(let payload): return (.batchExecutionPlan, payload)
-        case .startRecording(let payload): return (.startRecording, payload)
         }
     }
 
@@ -156,9 +154,6 @@ extension ClientMessage {
         case .explore:
             try noPayload()
             return .explore
-        case .stopRecording:
-            try noPayload()
-            return .stopRecording
         case .authenticate: return .authenticate(try AuthenticatePayload(from: try payload()))
         case .activate: return .activate(try ElementTarget(from: try payload()))
         case .increment: return .increment(try ElementTarget(from: try payload()))
@@ -185,7 +180,6 @@ extension ClientMessage {
         case .waitFor: return .waitFor(try WaitForTarget(from: try payload()))
         case .waitForChange: return .waitForChange(try WaitForChangeTarget(from: try payload()))
         case .batchExecutionPlan: return .batchExecutionPlan(try TheScore.BatchPlan(from: try payload()))
-        case .startRecording: return .startRecording(try RecordingConfig(from: try payload()))
         }
     }
 

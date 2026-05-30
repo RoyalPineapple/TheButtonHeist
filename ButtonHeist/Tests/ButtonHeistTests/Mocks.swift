@@ -152,7 +152,7 @@ final class MockConnection: TransportReachabilityConnecting {
         }
         onEvent?(.connected)
         if let info = serverInfo {
-            onEvent?(.message(.info(info), requestId: nil, accessibilityTrace: nil))
+            onEvent?(.message(.info(info), requestId: nil))
         }
     }
 
@@ -173,7 +173,7 @@ final class MockConnection: TransportReachabilityConnecting {
         if let handler = autoResponse {
             let response = batchExecutionResponse(for: message, handler: handler) ?? handler(message)
             Task { @ButtonHeistActor [self] in
-                self.onEvent?(.message(response, requestId: requestId, accessibilityTrace: nil))
+                self.onEvent?(.message(response, requestId: requestId))
             }
         }
         return .enqueued
@@ -283,8 +283,7 @@ final class MockConnection: TransportReachabilityConnecting {
         case .batchExecutionPlan: return .batchExecutionPlan
         case .explore: return .explore
         case .clientHello, .authenticate, .requestInterface,
-             .ping, .status, .requestScreen,
-             .startRecording, .stopRecording:
+             .ping, .status, .requestScreen:
             return .batchExecutionPlan
         }
     }

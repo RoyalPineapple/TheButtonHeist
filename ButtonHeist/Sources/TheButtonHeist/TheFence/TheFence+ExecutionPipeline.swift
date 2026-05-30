@@ -9,19 +9,11 @@ extension TheFence {
     }
 
     private struct PostDispatchOutcome {
-        let preActionCaptureRef: AccessibilityTrace.CaptureRef?
-        let recordingLookupCaptureRef: AccessibilityTrace.CaptureRef?
-        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
+        let preActionElements: [HeistId: HeistElement]
     }
 
     private struct ValidatedResponse {
         let response: FenceResponse
-        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
-    }
-
-    private struct BackgroundExpectationResponse {
-        let response: FenceResponse
-        let deliveredCaptureRef: AccessibilityTrace.CaptureRef?
     }
 
     func executableActionMessages(for request: ParsedRequest) throws -> [ClientMessage] {
@@ -36,103 +28,37 @@ extension TheFence {
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {
         if let immediate = parsed.immediateResponse { return immediate }
 
-        logCommand(parsed)
-
-        if parsed.command == .waitForChange,
-           let backgroundResponse = responseIfBackgroundExpectationMet(
-            parsed.expectationPayload.expectation, requestId: parsed.requestId
-           ) {
-            finishAccessibilityDelivery(backgroundResponse.deliveredCaptureRef)
-            return backgroundResponse.response
-        }
-
-        let preDispatchBackgroundCount = backgroundAccessibility.pendingTraceCount
-        let preDispatchCaptureRef = backgroundAccessibility.latestRef
         let dispatched = try await dispatchCommand(parsed)
         commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
-        logResponse(requestId: parsed.requestId, response: dispatched.response, durationMs: dispatched.durationMs)
 
-        let postDispatch = capturePostDispatchEffects(
-            parsed: parsed,
-            response: dispatched.response,
-            preDispatchCaptureRef: preDispatchCaptureRef
-        )
+        let postDispatch = capturePostDispatchEffects(response: dispatched.response)
         let validatedResponse = try await validateActionResponse(
             dispatched.response,
             command: parsed.command,
             expectation: parsed.expectationPayload.expectation,
             expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
-            preActionCaptureRef: postDispatch.preActionCaptureRef,
-            postDispatchBackgroundStartIndex: preDispatchBackgroundCount
+            preActionElements: postDispatch.preActionElements
         )
         recordHeistEvidence(
             parsed,
             dispatchedResponse: dispatched.response,
             validatedResponse: validatedResponse.response,
-            lookupCaptureRef: postDispatch.recordingLookupCaptureRef
+            targetCapture: dispatched.response.actionResult?.accessibilityTrace?.captures.first
         )
-        finishAccessibilityDelivery(validatedResponse.deliveredCaptureRef ?? postDispatch.deliveredCaptureRef)
         return validatedResponse.response
     }
 
     private func dispatchCommand(_ parsed: ParsedRequest) async throws -> DispatchResult {
         try await ensureConnectedIfNeeded(for: parsed.command)
-        return try await dispatchWithErrorLogging(
-            parsed,
-            requestId: parsed.requestId
-        )
+        return try await dispatchWithErrorLogging(parsed)
     }
 
-    private func capturePostDispatchEffects(
-        parsed: ParsedRequest,
-        response: FenceResponse,
-        preDispatchCaptureRef: AccessibilityTrace.CaptureRef?
-    ) -> PostDispatchOutcome {
-        if let fullInterface = fullInterfaceCapture(from: response, parsed: parsed) {
-            let captureRef = backgroundAccessibility.append(interface: fullInterface)
-            return PostDispatchOutcome(
-                preActionCaptureRef: nil,
-                recordingLookupCaptureRef: nil,
-                deliveredCaptureRef: captureRef
-            )
-        }
-
-        guard let actionResult = response.actionResult else {
-            return PostDispatchOutcome(
-                preActionCaptureRef: nil,
-                recordingLookupCaptureRef: nil,
-                deliveredCaptureRef: nil
-            )
-        }
-
-        let cursor = ingestActionTrace(actionResult)
-        let beforeRef = cursor?.first ?? preDispatchCaptureRef
-        return PostDispatchOutcome(
-            preActionCaptureRef: beforeRef,
-            recordingLookupCaptureRef: beforeRef,
-            deliveredCaptureRef: cursor?.last
-        )
-    }
-
-    private func responseIfBackgroundExpectationMet(
-        _ expectation: ActionExpectation?,
-        requestId: String,
-        startingAt startIndex: Int = 0
-    ) -> BackgroundExpectationResponse? {
-        guard let expectation else { return nil }
-
-        guard let match = backgroundAccessibility.consumeFirstTraceMatchingExpectation(
-            expectation,
-            startingAt: startIndex
-        ) else {
-            return nil
-        }
-        let response = FenceResponse.action(command: .waitForChange, result: match.result, expectation: match.validation)
-        logResponse(requestId: requestId, response: response, durationMs: 0)
-        return BackgroundExpectationResponse(
-            response: response,
-            deliveredCaptureRef: match.deliveredCaptureRef
-        )
+    private func capturePostDispatchEffects(response: FenceResponse) -> PostDispatchOutcome {
+        let elements = response.actionResult?.accessibilityTrace?.captures.first?.interface.elements ?? []
+        return PostDispatchOutcome(preActionElements: Dictionary(
+            elements.map { ($0.heistId, $0) },
+            uniquingKeysWith: { _, latest in latest }
+        ))
     }
 
     private func ensureConnectedIfNeeded(for command: Command) async throws {
@@ -140,10 +66,7 @@ extension TheFence {
         try await start()
     }
 
-    private func dispatchWithErrorLogging(
-        _ parsed: ParsedRequest,
-        requestId: String
-    ) async throws -> DispatchResult {
+    private func dispatchWithErrorLogging(_ parsed: ParsedRequest) async throws -> DispatchResult {
         let start = CFAbsoluteTimeGetCurrent()
         do {
             let response = try await dispatch(parsed)
@@ -154,8 +77,6 @@ extension TheFence {
                 durationMs: elapsedMilliseconds(since: start)
             )
         } catch {
-            let durationMs = elapsedMilliseconds(since: start)
-            logErrorResponse(requestId: requestId, error: error, durationMs: durationMs)
             throw error
         }
     }
@@ -169,26 +90,22 @@ extension TheFence {
         command: Command,
         expectation: ActionExpectation?,
         expectationTimeout: Double?,
-        preActionCaptureRef: AccessibilityTrace.CaptureRef?,
-        postDispatchBackgroundStartIndex: Int
+        preActionElements: [HeistId: HeistElement]
     ) async throws -> ValidatedResponse {
         if let actionResult = response.actionResult {
             let delivery = ActionExpectation.validateDelivery(actionResult)
             if !delivery.met {
                 return ValidatedResponse(
-                    response: .action(command: command, result: actionResult, expectation: delivery),
-                    deliveredCaptureRef: nil
+                    response: .action(command: command, result: actionResult, expectation: delivery)
                 )
             }
             if let expectation {
-                let preActionElements = backgroundAccessibility.elementLookup(captureRef: preActionCaptureRef)
                 let validation = expectation.validate(
                     against: actionResult, preActionElements: preActionElements
                 )
                 if validation.met {
                     return ValidatedResponse(
-                        response: .action(command: command, result: actionResult, expectation: validation),
-                        deliveredCaptureRef: nil
+                        response: .action(command: command, result: actionResult, expectation: validation)
                     )
                 }
                 return try await waitForPostActionExpectation(
@@ -197,13 +114,12 @@ extension TheFence {
                     initialResult: actionResult,
                     initialValidation: validation,
                     preActionElements: preActionElements,
-                    timeout: expectationTimeout,
-                    backgroundStartIndex: postDispatchBackgroundStartIndex
+                    timeout: expectationTimeout
                 )
             }
         }
 
-        return ValidatedResponse(response: response, deliveredCaptureRef: nil)
+        return ValidatedResponse(response: response)
     }
 
     private func waitForPostActionExpectation(
@@ -212,20 +128,8 @@ extension TheFence {
         initialResult: ActionResult,
         initialValidation: ExpectationResult,
         preActionElements: [HeistId: HeistElement],
-        timeout: Double?,
-        backgroundStartIndex: Int
+        timeout: Double?
     ) async throws -> ValidatedResponse {
-        if let backgroundResponse = responseIfBackgroundExpectationMet(
-            expectation,
-            requestId: UUID().uuidString,
-            startingAt: backgroundStartIndex
-        ) {
-            return ValidatedResponse(
-                response: backgroundResponse.response,
-                deliveredCaptureRef: backgroundResponse.deliveredCaptureRef
-            )
-        }
-
         let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
         do {
             let waitResult = try await sendAndAwaitAction(
@@ -233,40 +137,18 @@ extension TheFence {
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
             commandExecutionState.completeAction(waitResult)
-            let waitCursor = ingestActionTrace(waitResult)
             let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(
                 response: .action(
-                    // The wait produced this result. Preserve that command identity
-                    // instead of reporting the command that requested the wait.
                     command: .waitForChange,
                     result: waitResult,
                     expectation: waitValidation
-                ),
-                deliveredCaptureRef: waitCursor?.last
+                )
             )
         } catch FenceError.actionTimeout {
             return ValidatedResponse(
-                response: .action(command: command, result: initialResult, expectation: initialValidation),
-                deliveredCaptureRef: nil
+                response: .action(command: command, result: initialResult, expectation: initialValidation)
             )
         }
-    }
-
-    private func fullInterfaceCapture(from response: FenceResponse, parsed: ParsedRequest) -> Interface? {
-        guard parsed.command == .getInterface,
-              case .interface(let iface, _) = response else {
-            return nil
-        }
-        return iface
-    }
-
-    private func ingestActionTrace(_ actionResult: ActionResult) -> AccessibilityTrace.Cursor? {
-        guard let trace = actionResult.accessibilityTrace else { return nil }
-        return backgroundAccessibility.ingest(trace)
-    }
-
-    private func finishAccessibilityDelivery(_ captureRef: AccessibilityTrace.CaptureRef?) {
-        backgroundAccessibility.markDelivered(through: captureRef)
     }
 }

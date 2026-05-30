@@ -11,7 +11,6 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → explore → semantic delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
-        expireRotorContinuationIfCommandCannotConsumeIt(message)
         switch message {
         case .activate(let target):
             return await performInteraction(method: .activate) { await self.actions.executeActivate(target) }
@@ -71,8 +70,7 @@ extension TheBrains {
         case .explore:
             return await performExplore()
         case .clientHello, .authenticate, .requestInterface,
-             .ping, .status, .requestScreen,
-             .startRecording, .stopRecording, .getPasteboard:
+             .ping, .status, .requestScreen, .getPasteboard:
             preconditionFailure("Non-executable client message reached action execution: \(message.wireType.rawValue)")
         }
     }
@@ -91,13 +89,6 @@ extension TheBrains {
     }
 
     // MARK: - Interaction Pipeline
-
-    private func expireRotorContinuationIfCommandCannotConsumeIt(_ message: ClientMessage) {
-        if case .rotor = message {
-            return
-        }
-        stash.clearPendingRotorResult()
-    }
 
     func performInteraction(
         method: ActionMethod,
@@ -120,14 +111,6 @@ extension TheBrains {
     }
 
     func performRotor(_ target: RotorTarget) async -> ActionResult {
-        let pendingRotorResultToken = stash.preparePendingRotorResult(
-            targetedHeistId: target.continuation.currentHeistId
-        )
-        defer {
-            if let pendingRotorResultToken {
-                stash.clearPendingRotorResult(consumedToken: pendingRotorResultToken)
-            }
-        }
         return await performInteraction(method: .rotor) { await self.actions.executeRotor(target) }
     }
 

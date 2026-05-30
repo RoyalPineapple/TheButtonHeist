@@ -4,7 +4,7 @@ A quick orientation for anyone reviewing the ButtonHeist codebase for the first 
 
 ## What Is This?
 
-Button Heist lets AI agents (and humans) inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to tap buttons, read UI hierarchies, type text, swipe, scroll, take screenshots, and record video — all without manual interaction.
+Button Heist lets AI agents inspect and control iOS apps programmatically. Embed the `TheInsideJob` framework in your iOS app, then connect over WiFi or USB to tap buttons, read UI hierarchies, type text, swipe, scroll, and take screenshots — all without manual interaction.
 
 ## Common Starter Flow
 
@@ -22,7 +22,7 @@ The generated command reference is the source of truth for the full command cont
 
 ## Why So Many Commands?
 
-The `TheFence.Command` enum is the source of truth for the public command contract; CLI and MCP project from the same Fence-owned contract. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll operations, text editing, recording, etc.).
+The `TheFence.Command` enum is the source of truth for the public command contract; CLI and MCP project from the same Fence-owned contract. This is driven by **iOS interaction coverage** — each command maps to a distinct iOS capability (accessibility activation, gesture types, scroll operations, text editing, heist replay, etc.).
 
 Both interfaces expose canonical command names. Common operations like `activate`, `type_text`, `get_interface`, `swipe`, and `scroll_to_visible` stay top-level in both.
 

@@ -40,9 +40,6 @@ extension TheGetaway {
         }
         let onSessionActiveChanged: @MainActor @Sendable (Bool) async -> Void = { [weak self] isActive in
             self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
-            if !isActive {
-                await self?.invalidateRecordingForSessionRelease()
-            }
         }
         await muscle.installCallbacks(
             sendToClient: sendToClient,
@@ -100,11 +97,7 @@ extension TheGetaway {
     func tearDown() async {
         eventConsumerTask?.cancel()
         eventConsumerTask = nil
-        await invalidateRecordingForSessionRelease()
-        pendingRecordingTasks.cancelAll()
         transport = nil
-        resetBackgroundChangeState()
-        replaceRecordingRouteState(.idle)
     }
 
     func tearDownIfWired(to expectedTransport: ServerTransport) async {
@@ -117,7 +110,6 @@ extension TheGetaway {
     }
 
     private func handleClientDeliveryTerminated(clientId: Int) async {
-        await invalidateRecordingForDisconnect(clientId: clientId)
         await muscle.handleClientDisconnected(clientId)
     }
 }

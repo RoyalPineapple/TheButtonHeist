@@ -223,8 +223,6 @@ final class TheBrains {
             transient: transientElements.map { TheStash.WireConversion.convert($0) }
         )
 
-        await stash.captureActionFrame()
-
         guard let postCapture = accessibilityTrace.captures.last else {
             return failureActionResult(
                 method: method,
@@ -283,14 +281,6 @@ final class TheBrains {
         responseStateHistory.record(captureSemanticState())
     }
 
-    // MARK: - Settled Tripwire Parsing
-
-    struct SettledTripwireParse {
-        let changed: Bool
-        let isScreenChange: Bool
-        let accessibilityTrace: AccessibilityTrace?
-    }
-
     static func shouldRecordAccessibilityTrace(
         baseline: BeforeState,
         current: BeforeState,
@@ -301,43 +291,8 @@ final class TheBrains {
             || current.semanticHash != baseline.semanticHash
     }
 
-    /// Parse settled visible state after a Tripwire signal, update the local
-    /// semantic screen, and classify the result. Same-screen parses patch local
-    /// state; screen changes perform the full exploration pass before returning.
-    func parseSettledTripwireChange() async -> SettledTripwireParse {
-        let baseline = captureSemanticState()
-        guard refresh() != nil else {
-            return SettledTripwireParse(changed: false, isScreenChange: false, accessibilityTrace: nil)
-        }
-
-        let current = await semanticStateAfterVisibleRefresh(baseline: baseline)
-        let classification = ScreenClassifier.classify(
-            before: baseline.screenSnapshot,
-            after: current.screenSnapshot
-        )
-        guard Self.shouldRecordAccessibilityTrace(
-            baseline: baseline,
-            current: current,
-            classification: classification
-        ) else {
-            return SettledTripwireParse(changed: false, isScreenChange: false, accessibilityTrace: nil)
-        }
-
-        let accessibilityTrace = makeAccessibilityTrace(
-            afterInterface: current.interface,
-            parentCapture: baseline.capture,
-            classification: classification
-        )
-        return SettledTripwireParse(
-            changed: true,
-            isScreenChange: classification.isScreenChange,
-            accessibilityTrace: accessibilityTrace
-        )
-    }
-
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
-        stash.clearPendingRotorResult()
 
         guard refresh() != nil else {
             return .failure(.rootViewUnavailable)
@@ -350,35 +305,6 @@ final class TheBrains {
         } catch {
             return .failure(.selection(error))
         }
-    }
-
-    // MARK: - Background Accessibility Trace
-
-    /// Check if the accessibility tree changed since the last response and
-    /// return the public accessibility trace.
-    func computeBackgroundAccessibilityTrace() async -> AccessibilityTrace? {
-        guard let baseline = responseStateHistory.lastSentBeforeState else { return nil }
-        guard refresh() != nil else { return nil }
-        let current = await semanticStateAfterVisibleRefresh(baseline: baseline)
-        let classification = ScreenClassifier.classify(
-            before: baseline.screenSnapshot,
-            after: current.screenSnapshot
-        )
-        guard Self.shouldRecordAccessibilityTrace(
-            baseline: baseline,
-            current: current,
-            classification: classification
-        ) else {
-            return nil
-        }
-
-        let accessibilityTrace = makeAccessibilityTrace(
-            afterInterface: current.interface,
-            parentCapture: baseline.capture,
-            classification: classification
-        )
-        guard accessibilityTrace.backgroundDeltaProjection != nil else { return nil }
-        return accessibilityTrace
     }
 
     // MARK: - Wait For Idle

@@ -69,14 +69,8 @@ final class TheHandoff: HandoffReconnectRuntime {
     var onServerMessage: (@ButtonHeistActor (ServerMessage, String?) -> Void)?
     /// Transport send failures reported after Network.framework processes an enqueued write.
     var onSendFailure: (@ButtonHeistActor (DeviceSendFailure, String?) -> Void)?
-    /// Recording lifecycle messages from the server. TheFence owns the
-    /// client-side recording phase; TheHandoff only forwards typed messages.
-    var onRecordingEvent: (@ButtonHeistActor (RecordingEvent) -> Void)?
     /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
     var onAuthApproved: (@ButtonHeistActor (String) -> Void)?
-    /// Background UI-change evidence attached to explicit command responses.
-    var onBackgroundAccessibilityTrace: (@ButtonHeistActor (AccessibilityTrace) -> Void)?
-
     // MARK: - Configuration
 
     var token: String?
@@ -214,12 +208,11 @@ final class TheHandoff: HandoffReconnectRuntime {
             case .sendFailed(let failure, let requestId):
                 guard self.connectionLifecycle.isActiveAttempt(attemptID) else { return }
                 self.onSendFailure?(failure, requestId)
-            case .message(let message, let requestId, let accessibilityTrace):
+            case .message(let message, let requestId):
                 guard self.connectionLifecycle.isActiveAttempt(attemptID) else { return }
                 self.handleServerMessage(
                     message,
-                    requestId: requestId,
-                    accessibilityTrace: accessibilityTrace
+                    requestId: requestId
                 )
             }
         }
@@ -230,23 +223,15 @@ final class TheHandoff: HandoffReconnectRuntime {
 
     func handleServerMessage(
         _ message: ServerMessage,
-        requestId: String?,
-        accessibilityTrace: AccessibilityTrace? = nil
+        requestId: String?
     ) {
-        handleBackgroundAccessibility(accessibilityTrace)
         switch message {
         case .info(let info):
             connectionLifecycle.recordServerInfo(info)
         case .interface, .actionResult, .screen:
             forwardServerMessage(message, requestId: requestId)
-        case .recordingStarted:
-            emitRecordingEvent(.started)
-        case .recording(let payload):
-            emitRecordingEvent(.completed(payload))
         case .error(let serverError):
             switch serverError.kind {
-            case .recording:
-                emitRecordingEvent(.failed(serverError.message))
             case .authFailure:
                 connectionLifecycle.markFailed(.disconnected(.authFailed(serverError.message)))
             case .authApprovalPending:
@@ -278,28 +263,15 @@ final class TheHandoff: HandoffReconnectRuntime {
             if let requestId {
                 forwardServerMessage(message, requestId: requestId)
             }
-        case .recordingStopped:
-            emitRecordingEvent(.stopped)
         // Handshake messages are consumed inside DeviceConnection before bubbling here; no caller-visible side effect needed at this layer.
         // swiftlint:disable:next agent_wire_message_arm_no_op_break
-        case .serverHello, .authRequired, .interaction:
+        case .serverHello, .authRequired:
             break
         }
     }
 
     private func forwardServerMessage(_ message: ServerMessage, requestId: String?) {
         onServerMessage?(message, requestId)
-    }
-
-    private func emitRecordingEvent(_ event: RecordingEvent) {
-        guard isConnected else { return }
-        onRecordingEvent?(event)
-    }
-
-    private func handleBackgroundAccessibility(_ accessibilityTrace: AccessibilityTrace?) {
-        if let accessibilityTrace {
-            onBackgroundAccessibilityTrace?(accessibilityTrace)
-        }
     }
 
     func disconnect() {

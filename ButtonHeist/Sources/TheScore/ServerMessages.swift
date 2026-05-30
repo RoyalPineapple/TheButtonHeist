@@ -13,20 +13,14 @@ public struct ResponseEnvelope: Codable, Sendable {
     public let requestId: String?
     public let message: ServerMessage
 
-    /// Source-of-truth accessibility captures observed while this response was
-    /// being prepared. Deltas and summaries are derived from this trace.
-    public let accessibilityTrace: AccessibilityTrace?
-
     public init(
         buttonHeistVersion: String = TheScore.buttonHeistVersion,
         requestId: String? = nil,
-        message: ServerMessage,
-        accessibilityTrace: AccessibilityTrace? = nil
+        message: ServerMessage
     ) {
         self.buttonHeistVersion = buttonHeistVersion
         self.requestId = requestId
         self.message = message
-        self.accessibilityTrace = accessibilityTrace
     }
 
     /// Encode this envelope to JSON data. Returns nil on encode failure.
@@ -64,7 +58,7 @@ public enum ServerMessage: Codable, Sendable {
     case pong(PongPayload = PongPayload())
 
     /// Server-side error broadcast. `ServerError.kind` tags the category
-    /// (auth failure, recording, general) so clients can route without
+    /// (auth failure, general) so clients can route without
     /// pattern-matching on message text.
     case error(ServerError)
 
@@ -76,22 +70,6 @@ public enum ServerMessage: Codable, Sendable {
 
     /// Session is locked by another driver (sent before disconnect)
     case sessionLocked(SessionLockedPayload)
-
-    // MARK: - Recording Responses
-
-    /// Recording has started
-    case recordingStarted
-
-    /// Recording stop acknowledged — payload arrives via broadcast
-    case recordingStopped
-
-    /// Recording complete with video data
-    case recording(RecordingPayload)
-
-    // MARK: - Observer Broadcasts
-
-    /// An action was performed by the driver — broadcast to observers
-    case interaction(InteractionEvent)
 
     /// Lightweight server health + identity snapshot.
     /// Returned in response to ClientMessage.status without acquiring a session.

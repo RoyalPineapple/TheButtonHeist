@@ -97,27 +97,4 @@ extension TheFence {
         return .targets(fileConfig.targets, defaultTarget: fileConfig.defaultTarget)
     }
 
-    // MARK: - Handler: BookKeeper Session
-
-    func handleGetSessionLog() throws -> FenceResponse {
-        guard let snapshot = try bookKeeper.sessionLogSnapshot() else {
-            return .failure(FenceError.invalidRequest("No active session"))
-        }
-        return .sessionLog(snapshot: snapshot)
-    }
-
-    func handleArchiveSession(_ request: ArchiveSessionRequest) async throws -> FenceResponse {
-        switch bookKeeper.phase {
-        case .idle:
-            break
-        case .active:
-            try await bookKeeper.closeSession()
-        case .closing, .compressing:
-            try await bookKeeper.closeSession()
-        case .closed, .archived:
-            break
-        }
-        let (archiveURL, snapshot) = try await bookKeeper.archiveSession(deleteSource: request.deleteSource)
-        return .archiveResult(path: archiveURL.path, snapshot: snapshot)
-    }
 }

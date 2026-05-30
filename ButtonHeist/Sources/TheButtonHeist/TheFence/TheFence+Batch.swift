@@ -136,12 +136,10 @@ extension TheFence {
 
     func currentSessionState() -> SessionStatePayload {
         let connection = sessionConnectionSnapshot
-        let recording = recordingSnapshot
         return SessionStatePayload(
             connected: connection.connected,
             phase: connection.phase,
             device: connection.device,
-            isRecording: recording.isRecording,
             actionTimeoutSeconds: Timeouts.actionSeconds,
             longActionTimeoutSeconds: Timeouts.longActionSeconds,
             lastFailure: connection.lastFailure,

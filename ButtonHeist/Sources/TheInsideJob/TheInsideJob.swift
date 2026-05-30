@@ -252,11 +252,6 @@ public final class TheInsideJob {
 
     public func notifyChange() {
         guard isRunning else { return }
-        getaway.noteBackgroundChange()
-        if canRunSettledBackgroundParse, tripwire.latestReading?.isSettled == true {
-            let getaway = self.getaway
-            Task { await getaway.noteSettledChangeIfNeeded() }
-        }
     }
 
     public func startPolling(interval timeout: TimeInterval = 2.0) {

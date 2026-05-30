@@ -24,9 +24,9 @@ documented separately.
 ### Captures and Deltas Are the Currency
 
 The durable state is an accessibility capture: a full hierarchy plus a content
-hash. Deltas are receipts derived from two captures. Action responses, heist
-recording, interaction logs, and background awareness all use that same
-capture/delta model instead of parallel before/after interfaces.
+hash. Deltas are receipts derived from two captures. Action responses and heist
+contract evidence use that same capture/delta model instead of parallel
+before/after interfaces.
 
 Agents should start from `get_interface`, then prefer the action result's delta
 over another read. A screen-change delta invalidates prior `heistId` handles
@@ -70,7 +70,7 @@ Runtime subscriptions are not a public driver surface.
 
 Screen changes are not guessed from text, timers, or window events. The parser
 builds a typed semantic signature, and `ScreenClassifier` emits the screen
-classification used by action results, waiters, and background awareness.
+classification used by action results and waiters.
 
 ## Component Map
 

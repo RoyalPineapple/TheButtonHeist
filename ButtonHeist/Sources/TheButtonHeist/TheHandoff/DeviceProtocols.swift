@@ -30,19 +30,7 @@ enum ConnectionEvent {
     case connected
     case disconnected(DisconnectReason)
     case sendFailed(DeviceSendFailure, requestId: String?)
-    case message(
-        ServerMessage,
-        requestId: String?,
-        accessibilityTrace: AccessibilityTrace?
-    )
-}
-
-/// Recording lifecycle messages delivered by TheHandoff to TheFence.
-enum RecordingEvent {
-    case started
-    case stopped
-    case completed(RecordingPayload)
-    case failed(String)
+    case message(ServerMessage, requestId: String?)
 }
 
 /// Events emitted by a device discovery session as services appear and disappear.

@@ -7,7 +7,6 @@ _Generated from `TheFence.Command.mcpToolContracts`._
 | Tool | Description |
 |------|-------------|
 | `activate` | Activate a semantic UI element or one of its named accessibility actions. |
-| `archive_session` | Close and compress the current session into a .tar.gz archive; returns the path. |
 | `connect` | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | Drag from one point to another using explicit coordinates or a semantic target. |
@@ -18,8 +17,7 @@ _Generated from `TheFence.Command.mcpToolContracts`._
 | `get_interface` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | Read text from the general pasteboard. |
 | `get_screen` | Capture a PNG screenshot with optional inline data and interface state. |
-| `get_session_log` | Return the current session log snapshot: commands executed and artifacts produced. |
-| `get_session_state` | Inspect connection, device, recording, and last-action session state. |
+| `get_session_state` | Inspect connection, device, and last-action session state. |
 | `list_devices` | List discovered iOS devices and configured connection targets. |
 | `list_targets` | List configured connection targets and the default target. |
 | `long_press` | Long-press a coordinate or semantic target for a resolved duration. |
@@ -35,9 +33,7 @@ _Generated from `TheFence.Command.mcpToolContracts`._
 | `scroll_to_visible` | Make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
 | `start_heist` | Start recording replayable heist steps from successful commands. |
-| `start_recording` | Start an H.264/MP4 screen recording. Recording runs until max duration unless inactivity_timeout is explicitly supplied. |
 | `stop_heist` | Stop heist recording and save a JSON playback script. |
-| `stop_recording` | Stop an in-progress screen recording and return the artifact metadata. |
 | `swipe` | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
 | `two_finger_tap` | Tap with two fingers at a coordinate or actionable semantic target. |
 | `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
@@ -59,16 +55,6 @@ Parameters:
 | `count` | `integer` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
-
-### `archive_session`
-
-Close and compress the current session into a .tar.gz archive; returns the path.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `delete_source` | `boolean` | no | - | - |
 
 ### `connect`
 
@@ -202,17 +188,9 @@ Parameters:
 | `inlineData` | `boolean` | no | - | - |
 | `includeInterface` | `boolean` | no | - | - |
 
-### `get_session_log`
-
-Return the current session log snapshot: commands executed and artifacts produced.
-
-Parameters:
-
-_None._
-
 ### `get_session_state`
 
-Inspect connection, device, recording, and last-action session state.
+Inspect connection, device, and last-action session state.
 
 Parameters:
 
@@ -411,19 +389,6 @@ Parameters:
 | `app` | `string` | no | - | - |
 | `identifier` | `string` | no | - | - |
 
-### `start_recording`
-
-Start an H.264/MP4 screen recording. Recording runs until max duration unless inactivity_timeout is explicitly supplied.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `fps` | `integer` | no | - | - |
-| `scale` | `number` | no | - | - |
-| `max_duration` | `number` | no | - | - |
-| `inactivity_timeout` | `number` | no | - | - |
-
 ### `stop_heist`
 
 Stop heist recording and save a JSON playback script.
@@ -433,18 +398,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `output` | `string` | yes | - | - |
-
-### `stop_recording`
-
-Stop an in-progress screen recording and return the artifact metadata.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `output` | `string` | no | - | - |
-| `inlineData` | `boolean` | no | - | - |
-| `includeInteractionLog` | `boolean` | no | - | - |
 
 ### `swipe`
 

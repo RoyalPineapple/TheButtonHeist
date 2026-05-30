@@ -1,38 +1,15 @@
 import Foundation
 
-enum BookKeeperProcessFailure: Sendable, Equatable {
-    case launchFailed(context: String, reason: String)
-    case exited(context: String, status: Int32, detail: String?)
-
-    var message: String {
-        switch self {
-        case .launchFailed(let context, let reason):
-            return "\(context) failed to launch: \(reason)"
-        case .exited(let context, let status, let detail):
-            return "\(context) exited with status \(status): \(detail ?? "unknown error")"
-        }
-    }
-}
-
 enum BookKeeperSessionFailure: Sendable, Equatable {
     case directoryCreationFailed(path: String, reason: String)
-    case logFileCreationFailed(path: String, reason: String)
-    case logFileOpenFailed(path: String, reason: String)
-    case headerWriteFailed(path: String, reason: String)
-    case sourceDeletionFailed(path: String, reason: String)
+    case privateFileCreationFailed(path: String, reason: String)
 
     var message: String {
         switch self {
         case .directoryCreationFailed(let path, let reason):
             return "Failed to create session directory at \(path): \(reason)"
-        case .logFileCreationFailed(let path, let reason):
-            return "Failed to create session log at \(path): \(reason)"
-        case .logFileOpenFailed(let path, let reason):
-            return "Failed to open session log at \(path): \(reason)"
-        case .headerWriteFailed(let path, let reason):
-            return "Failed to write session header at \(path): \(reason)"
-        case .sourceDeletionFailed(let path, let reason):
-            return "Failed to delete session source at \(path): \(reason)"
+        case .privateFileCreationFailed(let path, let reason):
+            return "Failed to create private file at \(path): \(reason)"
         }
     }
 }
@@ -47,43 +24,6 @@ enum BookKeeperManifestFailure: Sendable, Equatable {
             return "Invalid manifest data for \(sessionId): \(reason)"
         case .writeFailed(let sessionId, let path, let reason):
             return "Failed to write manifest for \(sessionId) at \(path): \(reason)"
-        }
-    }
-}
-
-enum BookKeeperCompressionFailure: Sendable, Equatable {
-    case process(BookKeeperProcessFailure)
-    case outputMissing(path: String)
-    case permissionUpdateFailed(path: String, reason: String)
-
-    var message: String {
-        switch self {
-        case .process(let failure):
-            return failure.message
-        case .outputMissing(let path):
-            return "Expected compressed file not found at \(path)"
-        case .permissionUpdateFailed(let path, let reason):
-            return "Failed to restrict permissions at \(path): \(reason)"
-        }
-    }
-}
-
-enum BookKeeperArchiveFailure: Sendable, Equatable {
-    case process(BookKeeperProcessFailure)
-    case outputMissing(path: String)
-    case sessionLogMissing(path: String)
-    case permissionUpdateFailed(path: String, reason: String)
-
-    var message: String {
-        switch self {
-        case .process(let failure):
-            return failure.message
-        case .outputMissing(let path):
-            return "Expected archive not found at \(path)"
-        case .sessionLogMissing(let path):
-            return "Expected session log not found in archive \(path)"
-        case .permissionUpdateFailed(let path, let reason):
-            return "Failed to restrict permissions at \(path): \(reason)"
         }
     }
 }
@@ -127,8 +67,6 @@ enum BookKeeperError: Error, LocalizedError {
     case base64DecodingFailed
     case session(BookKeeperSessionFailure)
     case manifest(BookKeeperManifestFailure)
-    case compressionFailed(BookKeeperCompressionFailure)
-    case archiveFailed(BookKeeperArchiveFailure)
     case heistRecording(BookKeeperHeistRecordingFailure)
 
     var errorDescription: String? {
@@ -143,10 +81,6 @@ enum BookKeeperError: Error, LocalizedError {
             return "Session operation failed: \(failure.message)"
         case .manifest(let failure):
             return "Manifest failed: \(failure.message)"
-        case .compressionFailed(let failure):
-            return "Compression failed: \(failure.message)"
-        case .archiveFailed(let failure):
-            return "Archive failed: \(failure.message)"
         case .heistRecording(let failure):
             return "Heist recording failed: \(failure.message)"
         }

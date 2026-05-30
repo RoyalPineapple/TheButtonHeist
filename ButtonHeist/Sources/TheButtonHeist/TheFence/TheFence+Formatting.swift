@@ -40,12 +40,6 @@ extension FenceResponse {
             return "✓ Screenshot saved: \(path)  (\(Int(payload.width)) × \(Int(payload.height)))"
         case .screenshotData(let payload, _):
             return "✓ Screenshot captured (\(Int(payload.width)) × \(Int(payload.height))) — base64 PNG follows\n\(payload.pngData)"
-        case .recording(let path, let payload):
-            return formatRecordingHuman(path: path, payload: payload)
-        case .recordingExpanded(let path, let payload, let options):
-            return formatRecordingHuman(path: path, payload: payload, options: options)
-        case .recordingData(let payload):
-            return formatRecordingDataHuman(payload)
         case .batch(let outcomes, let totalTimingMs, _):
             let completedSteps = outcomes.completedStepCount
             let failedIndex = outcomes.stoppedFailedIndex
@@ -59,10 +53,6 @@ extension FenceResponse {
             return Self.formatSessionStateHuman(payload)
         case .targets(let targets, let defaultTarget):
             return formatTargetList(targets, defaultTarget: defaultTarget)
-        case .sessionLog(let snapshot):
-            return formatSessionLogHuman(snapshot)
-        case .archiveResult(let path, let snapshot):
-            return formatArchiveResultHuman(path: path, snapshot: snapshot)
         case .heistStarted:
             return "Heist recording started"
         case .heistStopped(let path, let stepCount):
@@ -136,64 +126,6 @@ extension FenceResponse {
         return failure.errorCode
     }
 
-    private func formatSessionLogHuman(_ snapshot: SessionLogSnapshot) -> String {
-        let manifest = snapshot.manifest
-        let counts = snapshot.counts
-        let artifacts = snapshot.artifacts
-        let formatter = ISO8601DateFormatter()
-        var text = "Session: \(manifest.sessionId)\n"
-        text += "  Started: \(formatter.string(from: manifest.startTime))\n"
-        if let endTime = manifest.endTime {
-            text += "  Ended: \(formatter.string(from: endTime))\n"
-        }
-        text += "  Commands: \(counts.commandCount)"
-        if counts.errorCount > 0 {
-            text += " (\(counts.errorCount) errors)"
-        }
-        text += "\n  Artifacts: \(artifacts.count)"
-        let screenshots = artifacts.count(where: { $0.type == .screenshot })
-        let recordings = artifacts.count(where: { $0.type == .recording })
-        if screenshots > 0 && recordings > 0 {
-            text += " (\(screenshots) screenshots, \(recordings) recordings)"
-        } else if screenshots > 0 {
-            text += " (\(screenshots) screenshots)"
-        } else if recordings > 0 {
-            text += " (\(recordings) recordings)"
-        }
-        if snapshot.projectionStatus.isDegraded {
-            text += "\n  Projection: degraded"
-            text += " (\(projectionStatusSummary(snapshot.projectionStatus)))"
-        }
-        return text
-    }
-
-    private func formatArchiveResultHuman(path: String, snapshot: SessionLogSnapshot) -> String {
-        var text = "Session archived: \(path) (\(snapshot.artifacts.count) artifacts, "
-        text += "\(snapshot.counts.commandCount) commands)"
-        if snapshot.projectionStatus.isDegraded {
-            text += "\n  Projection: degraded"
-            text += " (\(projectionStatusSummary(snapshot.projectionStatus)))"
-        }
-        return text
-    }
-
-    private func projectionStatusSummary(_ status: SessionLogProjectionStatus) -> String {
-        var details: [String] = []
-        if status.malformedLineCount > 0 {
-            details.append("\(status.malformedLineCount) malformed log line(s)")
-        }
-        if status.malformedArtifactCount > 0 {
-            details.append("\(status.malformedArtifactCount) malformed artifact entry/entries")
-        }
-        if let lineNumber = status.firstMalformedLineNumber {
-            details.append("first malformed line \(lineNumber)")
-        }
-        if let cause = status.firstMalformedLineCause {
-            details.append(cause)
-        }
-        return details.joined(separator: ", ")
-    }
-
     private func formatTargetList(_ targets: [String: TargetConfig], defaultTarget: String?) -> String {
         if targets.isEmpty { return "No targets configured" }
         var output = "\(targets.count) target(s):\n"
@@ -219,36 +151,6 @@ extension FenceResponse {
             output += "  [\(index)] \(id)  \(name)  [\(typeLabel)]\n"
         }
         return output.trimmingCharacters(in: .newlines)
-    }
-
-    private func formatRecordingHuman(
-        path: String,
-        payload: RecordingPayload,
-        options: RecordingResponseOptions = RecordingResponseOptions()
-    ) -> String {
-        let duration = String(format: "%.1f", payload.duration)
-        var text = "✓ Recording saved: \(path)  " +
-            "(\(payload.width)×\(payload.height), \(duration)s, " +
-            "\(payload.frameCount) frames, \(payload.stopReason.rawValue))"
-        text += "\n  Interactions: \(payload.interactionLog.count)"
-        if options.inlineData {
-            let sizeKB = payload.videoData.count * 3 / 4 / 1024
-            text += "\n  Inline video data included in JSON response (~\(sizeKB)KB)"
-        }
-        if options.includeInteractionLog {
-            text += "\n  Interaction log included in JSON response"
-        }
-        return text
-    }
-
-    private func formatRecordingDataHuman(_ payload: RecordingPayload) -> String {
-        let sizeKB = payload.videoData.count * 3 / 4 / 1024
-        let duration = String(format: "%.1f", payload.duration)
-        var text = "✓ Recording captured " +
-            "(\(payload.width)×\(payload.height), \(duration)s, " +
-            "\(payload.frameCount) frames, ~\(sizeKB)KB, \(payload.stopReason.rawValue))"
-        text += "\n  Interactions: \(payload.interactionLog.count)"
-        return text
     }
 
     // MARK: - Human Format Helpers

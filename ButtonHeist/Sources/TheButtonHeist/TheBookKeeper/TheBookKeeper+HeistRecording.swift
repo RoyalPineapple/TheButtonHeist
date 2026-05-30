@@ -43,7 +43,6 @@ extension TheBookKeeper {
 
             session.heistRecording = .recording(HeistRecording(
                 app: app,
-                startTime: Date(),
                 fileHandle: heistHandle,
                 filePath: heistPath
             ))
@@ -66,7 +65,6 @@ extension TheBookKeeper {
         }
 
         return HeistPlayback(
-            recorded: recording.startTime,
             app: recording.app,
             steps: steps
         )
@@ -196,9 +194,6 @@ extension TheBookKeeper {
         let projection = try request.heistRecordingProjection()
         let elementTarget = projection.elementTarget
         var target: ElementTarget?
-        var recordedHeistId: HeistId?
-        var recordedFrame: RecordedFrame?
-        var coordinateOnly: Bool?
 
         if case .heistId(let heistId)? = elementTarget {
             guard let targetCapture,
@@ -206,38 +201,15 @@ extension TheBookKeeper {
                   let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
             else { return nil }
             target = .matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
-            recordedHeistId = heistId
-            recordedFrame = RecordedFrame(
-                x: element.frameX, y: element.frameY,
-                width: element.frameWidth, height: element.frameHeight
-            )
         } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
             guard matcher.hasPredicates else { return nil }
             target = .matcher(matcher, ordinal: matchedOrdinal)
-        } else if projection.coordinateOnly {
-            coordinateOnly = true
         }
-
-        let accessibilityTrace = actionResult?.accessibilityTrace
-        let recorded = recordedHeistId != nil ||
-            recordedFrame != nil ||
-            coordinateOnly != nil ||
-            accessibilityTrace != nil ||
-            expectation != nil
-            ? RecordedMetadata(
-                heistId: recordedHeistId,
-                frame: recordedFrame,
-                coordinateOnly: coordinateOnly,
-                accessibilityTrace: accessibilityTrace,
-                expectation: expectation
-            )
-            : nil
 
         return try HeistEvidence(
             command: request.command.rawValue,
             target: target,
-            arguments: projection.arguments,
-            recorded: recorded
+            arguments: projection.arguments
         )
     }
 }

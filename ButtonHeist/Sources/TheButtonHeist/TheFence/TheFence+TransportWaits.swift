@@ -81,6 +81,5 @@ extension TheFence {
 
     func cancelAllPendingRequests(error: Error = FenceError.actionTimeout) {
         pendingRequests.cancelAll(error: error)
-        recording.cancelAll(error: error)
     }
 }

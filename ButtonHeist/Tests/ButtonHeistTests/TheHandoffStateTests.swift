@@ -1190,15 +1190,13 @@ final class TheHandoffStateTests: XCTestCase {
         mock.onEvent?(.connected)
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "connection failed")),
-            requestId: nil,
-            accessibilityTrace: nil
+            requestId: nil
         ))
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
 
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "request failed")),
-            requestId: "request-1",
-            accessibilityTrace: nil
+            requestId: "request-1"
         ))
 
         XCTAssertNil(receivedMessage)
@@ -1223,8 +1221,7 @@ final class TheHandoffStateTests: XCTestCase {
         mock.onEvent?(.connected)
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "connection failed")),
-            requestId: nil,
-            accessibilityTrace: nil
+            requestId: nil
         ))
         assertFailed(handoff.connectionPhase, failure: .connectionFailed("connection failed"))
 
@@ -1234,8 +1231,7 @@ final class TheHandoffStateTests: XCTestCase {
         )
         mock.onEvent?(.message(
             .interface(interface),
-            requestId: "interface-1",
-            accessibilityTrace: nil
+            requestId: "interface-1"
         ))
 
         let screen = ScreenPayload(
@@ -1247,8 +1243,7 @@ final class TheHandoffStateTests: XCTestCase {
         )
         mock.onEvent?(.message(
             .screen(screen),
-            requestId: "screen-1",
-            accessibilityTrace: nil
+            requestId: "screen-1"
         ))
 
         XCTAssertTrue(receivedMessages.isEmpty)
@@ -1267,14 +1262,12 @@ final class TheHandoffStateTests: XCTestCase {
         mock.onEvent?(.connected)
         mock.onEvent?(.message(
             .error(ServerError(kind: .general, message: "connection failed")),
-            requestId: nil,
-            accessibilityTrace: nil
+            requestId: nil
         ))
 
         mock.onEvent?(.message(
             .info(TheFenceFixtures.testServerInfo),
-            requestId: "request-1",
-            accessibilityTrace: nil
+            requestId: "request-1"
         ))
 
         XCTAssertNil(handoff.serverInfo)

@@ -4,10 +4,14 @@ import ButtonHeist
 
 final class ElementTargetOptionsTests: XCTestCase {
 
-    func testPositionalTargetParsesToTypedHeistIdTarget() throws {
-        let command = try TapSubcommand.parse(["button_save"])
+    func testHeistIdOptionParsesToTypedTarget() throws {
+        let command = try TapSubcommand.parse(["--heist-id", "button_save"])
 
         XCTAssertEqual(try command.element.parsedTarget(), .heistId("button_save"))
+    }
+
+    func testPositionalTargetIsRejected() {
+        XCTAssertThrowsError(try TapSubcommand.parse(["button_save"]))
     }
 
     func testMatcherOptionsParseToTypedMatcherTarget() throws {

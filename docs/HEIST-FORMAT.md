@@ -2,16 +2,17 @@
 
 **Extension**: `.heist`
 **Encoding**: JSON (UTF-8)
-**Version**: 4
+**Version**: 5
 
-A `.heist` file stores durable interaction steps and optional recording notes. Playback runs those steps deterministically, ignoring recording notes and removing the agent from the loop.
+A `.heist` file stores durable typed command steps. Playback runs those steps
+deterministically through the same command contract as live CLI and MCP
+commands, removing the agent from the loop.
 
 ## Structure
 
 ```json
 {
-  "version": 4,
-  "recorded": "2026-04-03T18:00:59Z",
+  "version": 5,
   "app": "com.buttonheist.testapp",
   "steps": [ ... ]
 }
@@ -19,19 +20,20 @@ A `.heist` file stores durable interaction steps and optional recording notes. P
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `Int` | Format version. Currently `4`. |
-| `recorded` | `String` | ISO 8601 timestamp of when the recording was made. |
+| `version` | `Int` | Format version. Currently `5`. |
 | `app` | `String` | Bundle identifier of the app that was running. |
 | `steps` | `[HeistEvidence]` | Ordered list of durable interaction steps. |
 
-Version 4 is the current heist contract. Step targets use flat semantic matcher fields; heist IDs are recording metadata only.
+Version 5 is the current heist contract. Step targets use flat semantic
+matcher fields. Capture-local heist IDs are resolved before a step is written
+and are never stored as replay authority.
 
-## Accessibility Trace Evidence
+## Capture Evidence
 
-Recording evidence uses accessibility traces as the source of truth. A trace
-stores captures. Segments and compact deltas are derived projections used for
+During live execution, Button Heist uses accessibility captures as the source
+of truth. Segments and compact deltas are derived projections used for
 diagnostics, matcher derivation, expectation checks, and failure reporting;
-they are not a second storage truth.
+they are not stored as heist truth.
 
 Actions may explore scroll views to refresh off-screen state, and
 `get_interface` may refresh the hierarchy it returns. That exploration scope
@@ -40,9 +42,12 @@ how captures are grouped for derived segment views.
 
 ## Evidence (Steps)
 
-Each step is a closed playback object. Top-level fields are limited to `command`, optional durable semantic `target`, optional `arguments`, and optional `_recorded` metadata.
+Each step is a closed playback object. Top-level fields are limited to
+`command`, optional durable semantic `target`, and optional `arguments`.
 
-Durable replay identity lives under the flat matcher fields in `target`. `heistId` is recording-time metadata only; it is never durable playback authority.
+Durable replay identity lives under the flat matcher fields in `target`.
+`heistId` is a live current-capture handle only; it is never durable playback
+authority and is not stored in the heist step.
 
 ### Element-targeting step
 
@@ -61,10 +66,6 @@ Durable replay identity lives under the flat matcher fields in `target`. `heistI
         {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
       ]
     }
-  },
-  "_recorded": {
-    "heistId": "button_review_pr_high_priority",
-    "frame": {"x": 16, "y": 514, "width": 370, "height": 65}
   }
 }
 ```
@@ -93,8 +94,7 @@ Durable replay identity lives under the flat matcher fields in `target`. `heistI
       {"cp1X": 220, "cp1Y": 450, "cp2X": 260, "cp2Y": 450, "endX": 280, "endY": 500}
     ],
     "duration": 1.5
-  },
-  "_recorded": {"coordinateOnly": true}
+  }
 }
 ```
 
@@ -111,7 +111,6 @@ Durable replay identity lives under the flat matcher fields in `target`. `heistI
 | `target.excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
 | `target.ordinal` | `Int` | No | 0-based index among matcher results; only valid with at least one matcher field |
 | `arguments` | `Object` | No | Command-specific arguments. `expect`, text input, gesture coordinates, durations, and wait options live here. |
-| `_recorded` | `Object` | No | Optional recording notes (ignored during playback) |
 
 **Note**: `value` and state traits are lower-priority matcher fields. The recorder includes them only when identifier, label, and semantic traits do not uniquely identify the element in the capture. State validation still belongs in expectations when the state itself is the contract being tested.
 
@@ -119,13 +118,13 @@ Durable replay identity lives under the flat matcher fields in `target`. `heistI
 
 Minimum matcher is the recording primitive. Given an element in an accessibility capture, Button Heist records the least-specific matcher that uniquely resolves that element in the same capture. Current-capture heistIds are useful live handles, but replay durability comes from the derived matcher fields and ordinal.
 
-When recording a heist, it is fine to target a live action by heistId if that is the handle you were handed. The recorder resolves that heistId against the action trace or retained capture, derives a minimum matcher, and stores the matcher on the step. `_recorded.heistId` is evidence only.
+When recording a heist, it is fine to target a live action by heistId if that is the handle you were handed. The recorder resolves that heistId against the command capture, derives a minimum matcher, and stores only the matcher on the step.
 
 Ordinal-only steps are the least durable replay target. They are reserved for anonymous elements that have no identifier, label, value, or useful traits; if element order changes, they can target a different element without producing a matcher miss.
 
 **Workflow**: Call `get_interface` before recording actions so the recorder has current element data. Durable heist steps should be the interactions and waits you want to replay; inspection calls help the recorder build good matchers but are not themselves replay steps.
 
-**Example**: You activate `button_sign_in` in the current interface. The `.heist` step should store fields like `{"command":"activate","target":{"label":"Sign In","traits":["button"]},"_recorded":{"heistId":"button_sign_in"}}`. Playback targets the matcher, not the recorded heistId.
+**Example**: You activate `button_sign_in` in the current interface. The `.heist` step stores fields like `{"command":"activate","target":{"label":"Sign In","traits":["button"]}}`. Playback targets the matcher, not the live heistId.
 
 ### Async operations
 
@@ -189,23 +188,12 @@ Matcher-based expectations keep playback portable:
 
 Compound expectations remain object-form payloads inside `arguments.expect`; all sub-expectations must be met.
 
-## Recorded Metadata
-
-The `_recorded` key carries optional recording notes for debugging. It is preserved in the file but **ignored during playback**.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `heistId` | `String?` | The heistId that was used to target the element at recording time |
-| `frame` | `Object?` | The element's frame at recording time (`x`, `y`, `width`, `height`) |
-| `coordinateOnly` | `Bool?` | True if the step used coordinate-only targeting (no element) |
-| `accessibilityTrace` | `Object?` | Capture trace observed while recording |
-| `expectation` | `Object?` | Expectation evidence observed while recording |
-
-`_recorded.heistId`, traces, and frames are evidence only. Playback ignores `_recorded` entirely; the durable replay contract is the step `command`, `target`, and `arguments`. Compact deltas are derived from `_recorded.accessibilityTrace` when needed; they are not stored as separate recorded evidence.
-
 ## Durable Recording
 
-Button Heist preserves successful interaction steps as the heist is recorded, then writes the final `.heist` file when you call `stop_heist`. If a session ends before `stop_heist`, the session archive may still contain enough information to recover the completed steps.
+Button Heist preserves successful interaction steps as the heist is recorded,
+then writes the final `.heist` file when you call `stop_heist`. If a session
+ends before `stop_heist`, finish the flow again and write a complete fixture;
+heist fixtures are the durable replay artifact.
 
 ## Recording and Playback Commands
 
@@ -237,7 +225,7 @@ Representative MCP flow:
 - `arguments.expect` is validated against the live action result when present
 - Playback stops on the first failed action (element not found, timeout, etc.)
 - The result reports `completedSteps`, `failedIndex` (if any), and `totalTimingMs`
-- Recording notes such as `_recorded` are ignored during playback; a readable `heistId` in `_recorded` is never used as a target
+- Capture-local heistIds are never used as playback targets
 
 ### Failure diagnostics
 

@@ -7,7 +7,6 @@ _Generated from `TheFence.Command.descriptors`._
 | Command | CLI | MCP | Batch | Description |
 |---------|-----|-----|-------|-------------|
 | `activate` | `activate` | direct | yes | Activate a semantic UI element or one of its named accessibility actions. |
-| `archive_session` | `archive_session` | direct | no | Close and compress the current session into a .tar.gz archive; returns the path. |
 | `connect` | `connect` | direct | no | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | `dismiss_keyboard` | direct | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `drag` | direct | yes | Drag from one point to another using explicit coordinates or a semantic target. |
@@ -18,8 +17,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_interface` | `get_interface` | direct | no | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `get_pasteboard` | direct | no | Read text from the general pasteboard. |
 | `get_screen` | `get_screen` | direct | no | Capture a PNG screenshot with optional inline data and interface state. |
-| `get_session_log` | `get_session_log` | direct | no | Return the current session log snapshot: commands executed and artifacts produced. |
-| `get_session_state` | `get_session_state` | direct | no | Inspect connection, device, recording, and last-action session state. |
+| `get_session_state` | `get_session_state` | direct | no | Inspect connection, device, and last-action session state. |
 | `help` | `help` | - | no | Return descriptor-backed help for the current Button Heist command surface. |
 | `list_devices` | `list_devices` | direct | no | List discovered iOS devices and configured connection targets. |
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
@@ -28,7 +26,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `pinch` | `pinch` | direct | yes | Pinch around a resolved center point using scale, angle, and duration. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
-| `quit` | `quit` | - | no | End the interactive CLI session. |
 | `rotate` | `rotate` | direct | yes | Rotate around a resolved center point using angle, radius, and duration. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor using direction and continuation metadata. |
 | `run_batch` | `run_batch` | direct | no | Execute ordered command steps with batch policy and per-step expectations. |
@@ -37,9 +34,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `scroll_to_visible` | `scroll_to_visible` | direct | yes | Make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
 | `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
-| `start_recording` | `start_recording` | direct | no | Start an H.264/MP4 screen recording. Recording runs until max duration unless inactivity_timeout is explicitly supplied. |
 | `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a JSON playback script. |
-| `stop_recording` | `stop_recording` | direct | no | Stop an in-progress screen recording and return the artifact metadata. |
 | `swipe` | `swipe` | direct | yes | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
 | `two_finger_tap` | `two_finger_tap` | direct | yes | Tap with two fingers at a coordinate or actionable semantic target. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
@@ -66,21 +61,6 @@ Parameters:
 | `count` | `integer` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
-
-### `archive_session`
-
-Close and compress the current session into a .tar.gz archive; returns the path.
-
-- CLI: direct command `archive_session`
-- MCP: direct tool
-- Batch: no
-- Connection before dispatch: no
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `delete_source` | `boolean` | no | - | - |
 
 ### `connect`
 
@@ -264,22 +244,9 @@ Parameters:
 | `inlineData` | `boolean` | no | - | - |
 | `includeInterface` | `boolean` | no | - | - |
 
-### `get_session_log`
-
-Return the current session log snapshot: commands executed and artifacts produced.
-
-- CLI: direct command `get_session_log`
-- MCP: direct tool
-- Batch: no
-- Connection before dispatch: no
-
-Parameters:
-
-_None._
-
 ### `get_session_state`
 
-Inspect connection, device, recording, and last-action session state.
+Inspect connection, device, and last-action session state.
 
 - CLI: direct command `get_session_state`
 - MCP: direct tool
@@ -417,19 +384,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `input` | `string` | yes | - | - |
-
-### `quit`
-
-End the interactive CLI session.
-
-- CLI: session-only `quit`
-- MCP: not exposed
-- Batch: no
-- Connection before dispatch: yes
-
-Parameters:
-
-_None._
 
 ### `rotate`
 
@@ -584,24 +538,6 @@ Parameters:
 | `app` | `string` | no | - | - |
 | `identifier` | `string` | no | - | - |
 
-### `start_recording`
-
-Start an H.264/MP4 screen recording. Recording runs until max duration unless inactivity_timeout is explicitly supplied.
-
-- CLI: direct command `start_recording`
-- MCP: direct tool
-- Batch: no
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `fps` | `integer` | no | - | - |
-| `scale` | `number` | no | - | - |
-| `max_duration` | `number` | no | - | - |
-| `inactivity_timeout` | `number` | no | - | - |
-
 ### `stop_heist`
 
 Stop heist recording and save a JSON playback script.
@@ -616,23 +552,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `output` | `string` | yes | - | - |
-
-### `stop_recording`
-
-Stop an in-progress screen recording and return the artifact metadata.
-
-- CLI: direct command `stop_recording`
-- MCP: direct tool
-- Batch: no
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `output` | `string` | no | - | - |
-| `inlineData` | `boolean` | no | - | - |
-| `includeInteractionLog` | `boolean` | no | - | - |
 
 ### `swipe`
 

@@ -19,11 +19,11 @@ struct ActivateCommand: AsyncParsableCommand, CLICommandContract {
             use `buttonheist one_finger_tap` instead.
 
             Examples:
-              buttonheist activate btn_login
+              buttonheist activate --heist-id btn_login
               buttonheist activate -l "Sign In" --identifier loginButton
               buttonheist activate -l "Submit" --traits button
-              buttonheist activate btn_slider --action increment
-              buttonheist activate btn_cell --action "Delete"
+              buttonheist activate --heist-id btn_slider --action increment
+              buttonheist activate --heist-id btn_cell --action "Delete"
             """
     )
 

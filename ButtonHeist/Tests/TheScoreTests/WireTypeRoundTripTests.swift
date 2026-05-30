@@ -690,80 +690,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    // MARK: - RecordingConfig Validation
-
-    func testRecordingConfigValidRoundTrip() throws {
-        let config = RecordingConfig(fps: 8, scale: 0.5, inactivityTimeout: 5, maxDuration: 60)
-        let data = try encoder.encode(config)
-        let decoded = try decoder.decode(RecordingConfig.self, from: data)
-        XCTAssertEqual(decoded.fps, 8)
-        XCTAssertEqual(decoded.scale, 0.5)
-        XCTAssertEqual(decoded.inactivityTimeout, 5)
-        XCTAssertEqual(decoded.maxDuration, 60)
-    }
-
-    func testRecordingConfigBoundaryFPS() throws {
-        let min = RecordingConfig(fps: 1)
-        let minData = try encoder.encode(min)
-        let decodedMin = try decoder.decode(RecordingConfig.self, from: minData)
-        XCTAssertEqual(decodedMin.fps, 1)
-
-        let max = RecordingConfig(fps: 15)
-        let maxData = try encoder.encode(max)
-        let decodedMax = try decoder.decode(RecordingConfig.self, from: maxData)
-        XCTAssertEqual(decodedMax.fps, 15)
-    }
-
-    func testRecordingConfigFPSTooLowThrows() throws {
-        let json = #"{"fps":0}"#
-        XCTAssertThrowsError(
-            try decoder.decode(RecordingConfig.self, from: Data(json.utf8))
-        )
-    }
-
-    func testRecordingConfigFPSTooHighThrows() throws {
-        let json = #"{"fps":16}"#
-        XCTAssertThrowsError(
-            try decoder.decode(RecordingConfig.self, from: Data(json.utf8))
-        )
-    }
-
-    func testRecordingConfigScaleTooLowThrows() throws {
-        let json = #"{"scale":0.1}"#
-        XCTAssertThrowsError(
-            try decoder.decode(RecordingConfig.self, from: Data(json.utf8))
-        )
-    }
-
-    func testRecordingConfigScaleTooHighThrows() throws {
-        let json = #"{"scale":1.5}"#
-        XCTAssertThrowsError(
-            try decoder.decode(RecordingConfig.self, from: Data(json.utf8))
-        )
-    }
-
-    func testRecordingConfigBoundaryScale() throws {
-        let min = RecordingConfig(fps: nil, scale: 0.25)
-        let minData = try encoder.encode(min)
-        let decodedMin = try decoder.decode(RecordingConfig.self, from: minData)
-        XCTAssertEqual(decodedMin.scale, 0.25)
-
-        let max = RecordingConfig(fps: nil, scale: 1.0)
-        let maxData = try encoder.encode(max)
-        let decodedMax = try decoder.decode(RecordingConfig.self, from: maxData)
-        XCTAssertEqual(decodedMax.scale, 1.0)
-    }
-
-    func testRecordingConfigNilFieldsRoundTrip() throws {
-        let config = RecordingConfig()
-        let data = try encoder.encode(config)
-        let decoded = try decoder.decode(RecordingConfig.self, from: data)
-        XCTAssertNil(decoded.fps)
-        XCTAssertNil(decoded.scale)
-        XCTAssertNil(decoded.inactivityTimeout)
-        XCTAssertNil(decoded.maxDuration)
-    }
-
     // MARK: - BatchPlan
 
     func testBatchPlanRoundTripPreservesCommandStepWireShape() throws {
@@ -974,17 +900,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             let data = try encoder.encode(kind)
             let decoded = try decoder.decode(ErrorKind.self, from: data)
             XCTAssertEqual(decoded, kind)
-        }
-    }
-
-    // MARK: - RecordingPayload.StopReason
-
-    func testStopReasonAllCasesRoundTrip() throws {
-        let reasons: [RecordingPayload.StopReason] = [.manual, .inactivity, .maxDuration, .fileSizeLimit]
-        for reason in reasons {
-            let data = try encoder.encode(reason)
-            let decoded = try decoder.decode(RecordingPayload.StopReason.self, from: data)
-            XCTAssertEqual(decoded, reason)
         }
     }
 
