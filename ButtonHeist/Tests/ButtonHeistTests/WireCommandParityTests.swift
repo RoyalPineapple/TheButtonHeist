@@ -132,7 +132,6 @@ final class WireCommandParityTests: XCTestCase {
             .resignFirstResponder,
             .getPasteboard,
             .requestScreen,
-            .explore,
             .activate(target),
             .increment(target),
             .decrement(target),

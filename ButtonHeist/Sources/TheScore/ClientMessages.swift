@@ -142,6 +142,4 @@ public enum ClientMessage: Codable, Sendable {
     /// Request a capture of the current screen
     case requestScreen
 
-    /// Explore the current screen — scroll all containers to discover every element
-    case explore
 }

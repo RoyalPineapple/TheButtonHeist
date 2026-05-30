@@ -12,7 +12,7 @@ import AccessibilitySnapshotParser
 /// TheBrains takes a command and works it through to a result by coordinating
 /// TheStash (the screen value), TheSafecracker (gestures), and TheTripwire
 /// (timing). The post-action delta cycle and command dispatch live here;
-/// scroll/explore lives in `Navigation` and the 21 `executeXxx` action
+/// scroll/explore lives in `Navigation` and the action
 /// handlers live in `Actions` — both are internal components of TheBrains.
 @MainActor
 final class TheBrains {

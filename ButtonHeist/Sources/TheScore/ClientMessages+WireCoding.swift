@@ -89,7 +89,6 @@ extension ClientMessage {
         case .resignFirstResponder: return (.resignFirstResponder, nil)
         case .getPasteboard: return (.getPasteboard, nil)
         case .requestScreen: return (.requestScreen, nil)
-        case .explore: return (.explore, nil)
         case .authenticate(let payload): return (.authenticate, payload)
         case .activate(let payload): return (.activate, payload)
         case .increment(let payload): return (.increment, payload)
@@ -151,9 +150,6 @@ extension ClientMessage {
         case .requestScreen:
             try noPayload()
             return .requestScreen
-        case .explore:
-            try noPayload()
-            return .explore
         case .authenticate: return .authenticate(try AuthenticatePayload(from: try payload()))
         case .activate: return .activate(try ElementTarget(from: try payload()))
         case .increment: return .increment(try ElementTarget(from: try payload()))

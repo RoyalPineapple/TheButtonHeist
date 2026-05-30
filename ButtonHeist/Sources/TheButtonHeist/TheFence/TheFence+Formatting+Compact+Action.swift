@@ -26,7 +26,7 @@ extension FenceResponse {
             text = Self.compactRotor(search)
         case .batchExecution(let batch):
             text = "\(TheFence.Command.runBatch.rawValue): \(batch.steps.count) step(s)"
-        case .value, .explore, .none:
+        case .value, .none:
             if let delta = result.accessibilityDelta {
                 text = Self.compactDelta(delta, method: commandName)
             } else {

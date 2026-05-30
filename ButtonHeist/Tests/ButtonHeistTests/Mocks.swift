@@ -282,7 +282,6 @@ final class MockConnection: TransportReachabilityConnecting {
         case .waitFor: return .waitFor
         case .waitForChange: return .waitForChange
         case .batchExecutionPlan: return .batchExecutionPlan
-        case .explore: return .explore
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen:
             return .batchExecutionPlan

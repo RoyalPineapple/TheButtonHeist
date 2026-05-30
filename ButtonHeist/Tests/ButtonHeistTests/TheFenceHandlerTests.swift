@@ -295,33 +295,6 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    private func exploredActionResult(elements: [HeistElement]) -> ActionResult {
-        ActionResult(
-            success: true,
-            method: .explore,
-            payload: .explore(ExploreResult(
-                elementCount: elements.count,
-                scrollCount: 1,
-                containersExplored: 1,
-                explorationTime: 0.1
-            ))
-        )
-    }
-
-    private func exploredActionResult(interface: Interface) -> ActionResult {
-        ActionResult(
-            success: true,
-            method: .explore,
-            payload: .explore(ExploreResult(
-                elementCount: interface.elements.count,
-                scrollCount: 1,
-                containersExplored: 1,
-                explorationTime: 0.1
-            )),
-            accessibilityTrace: AccessibilityTrace(interface: interface)
-        )
-    }
-
     private func selectionTestInterface(includeDuplicateGroup: Bool = false) -> Interface {
         let header = testElement("title", label: "Menu", traits: [.header])
         let submit = testElement("submit", label: "Submit", traits: [.button])
@@ -414,7 +387,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         for (message, _) in mockConn.sent {
             switch message {
-            case .requestInterface, .explore:
+            case .requestInterface:
                 XCTFail("connect must not send UI observation message \(message)")
             default:
                 break

@@ -8,7 +8,7 @@ extension TheBrains {
     // MARK: - Command Dispatch
 
     /// Execute a command through the full interaction pipeline:
-    /// refresh → snapshot → execute → settle → explore → semantic delta → result.
+    /// refresh → snapshot → execute → settle → explore semantic state → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
         switch message {
@@ -67,8 +67,6 @@ extension TheBrains {
             )
         case .batchExecutionPlan(let plan):
             return await executeBatchExecutionPlan(plan)
-        case .explore:
-            return await performExplore()
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen, .getPasteboard:
             preconditionFailure("Non-executable client message reached action execution: \(message.wireType.rawValue)")
@@ -318,29 +316,6 @@ extension TheBrains {
         guard stash.refresh() != nil else { return false }
         _ = await navigation.exploreAndPrune(target: target)
         return true
-    }
-
-    /// Full screen exploration.
-    func performExplore() async -> ActionResult {
-        guard refresh() != nil else {
-            return treeUnavailableResult(method: .explore)
-        }
-        let before = captureBeforeState()
-
-        let manifest = await navigation.exploreAndPrune()
-        let interface = stash.interface()
-        let accessibilityTrace = makeAccessibilityTrace(afterInterface: interface, parentCapture: before.capture)
-
-        var builder = ActionResultBuilder(method: .explore)
-        builder.accessibilityTrace = accessibilityTrace
-        return builder.success(
-            payload: .explore(ExploreResult(
-                elementCount: interface.elements.count,
-                scrollCount: manifest.scrollCount,
-                containersExplored: manifest.exploredContainers.count,
-                explorationTime: manifest.explorationTime
-            ))
-        )
     }
 
 }

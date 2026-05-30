@@ -1181,16 +1181,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.message, "Could not access accessibility tree: no traversable app windows")
     }
 
-    func testExecuteCommandExploreFailsWhenAccessibilityTreeUnavailable() async {
-        let result = await withNoTraversableWindows {
-            await brains.executeCommand(.explore)
-        }
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .explore)
-        XCTAssertEqual(result.errorKind, .actionFailed)
-    }
-
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
         let target = WaitForTarget(
             elementTarget: .matcher(ElementMatcher(label: "never"))

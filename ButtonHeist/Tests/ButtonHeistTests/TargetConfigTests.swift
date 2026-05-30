@@ -337,14 +337,6 @@ final class TargetConfigTests: XCTestCase {
             switch message {
             case .requestInterface:
                 return .interface(Interface(timestamp: Date(), tree: []))
-            case .explore:
-                return .actionResult(ActionResult(
-                    success: true, method: .explore,
-                    payload: .explore(ExploreResult(
-                        elementCount: 0, scrollCount: 0,
-                        containersExplored: 0, explorationTime: 0
-                    ))
-                ))
             default:
                 return .actionResult(ActionResult(success: true, method: .activate))
             }

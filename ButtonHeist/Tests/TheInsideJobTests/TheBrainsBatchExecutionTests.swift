@@ -208,8 +208,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 events.append("action:\(command.wireType.rawValue)")
                 let method: ActionMethod
                 switch command {
-                case .explore:
-                    method = .explore
+                case .getPasteboard:
+                    method = .getPasteboard
                 case .resignFirstResponder:
                     method = .resignFirstResponder
                 default:
@@ -228,7 +228,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                BatchStep(command: .explore, expectation: .delivery, deadline: Deadline()),
+                BatchStep(command: .getPasteboard, expectation: .delivery, deadline: Deadline()),
                 BatchStep(command: .resignFirstResponder, expectation: .delivery, deadline: Deadline()),
             ],
             policy: .continueOnError
@@ -238,13 +238,13 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(events, [
-            "action:explore",
+            "action:getPasteboard",
             "baseline",
             "action:resignFirstResponder",
             "baseline",
         ])
         let batch = try XCTUnwrap(result.batchExecutionPayload)
-        XCTAssertEqual(batch.steps.map(\.actionResult?.method), [.explore, .resignFirstResponder])
+        XCTAssertEqual(batch.steps.map(\.actionResult?.method), [.getPasteboard, .resignFirstResponder])
     }
 
     func testBatchExecutionDoesNotWaitWhenActionAlreadySatisfiesExpectation() async throws {

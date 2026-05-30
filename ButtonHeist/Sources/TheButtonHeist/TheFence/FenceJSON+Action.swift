@@ -13,7 +13,6 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let delta: PublicDelta?
     let screenName: String?
     let screenId: String?
-    let explore: PublicExploreResult?
     let errorClass: String?
     let errorCode: String?
     let phase: String?
@@ -43,11 +42,6 @@ struct PublicActionResponse: FencePublicJSONResponse {
         self.delta = result.accessibilityDelta.map(PublicDelta.init)
         self.screenName = result.screenName
         self.screenId = result.screenId
-        if case .explore(let explore) = result.payload {
-            self.explore = PublicExploreResult(result: explore)
-        } else {
-            self.explore = nil
-        }
         if result.success {
             self.errorClass = nil
             self.errorCode = nil
@@ -92,20 +86,6 @@ struct PublicRotorTextRange: Encodable {
         self.text = range.text
         self.startOffset = range.startOffset
         self.endOffset = range.endOffset
-    }
-}
-
-struct PublicExploreResult: Encodable {
-    let elementCount: Int
-    let scrollCount: Int
-    let containersExplored: Int
-    let explorationTime: String
-
-    init(result: ExploreResult) {
-        self.elementCount = result.elementCount
-        self.scrollCount = result.scrollCount
-        self.containersExplored = result.containersExplored
-        self.explorationTime = String(format: "%.2f", result.explorationTime)
     }
 }
 
