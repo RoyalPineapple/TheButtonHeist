@@ -18,16 +18,10 @@ extension TheSafecracker {
 
     // MARK: - IOHIDEvent Construction
 
-    struct FingerTouchData {
-        let touch: UITouch
-        let location: CGPoint
-        let phase: UITouch.Phase
-    }
-
     /// Creates IOHIDEvent structures for touch injection (IOKit, dlsym).
     final class IOHIDEventBuilder {
 
-        static func createEvent(for fingers: [FingerTouchData]) -> UnsafeMutableRawPointer? {
+        static func createEvent(for fingers: [SyntheticTouch]) -> UnsafeMutableRawPointer? {
             let timestamp = mach_absolute_time()
             let anyTouching = fingers.contains { $0.phase != .ended && $0.phase != .cancelled }
 

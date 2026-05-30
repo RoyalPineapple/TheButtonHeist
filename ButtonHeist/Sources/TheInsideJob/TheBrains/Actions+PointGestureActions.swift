@@ -223,12 +223,11 @@ extension Actions {
             return .failure(.syntheticDrawPath, message: "Bezier path requires at least 1 segment")
         }
         let samplesPerSegment = target.resolvedSamplesPerSegment
-        let pathPoints = TheSafecracker.BezierSampler.sampleBezierPath(
+        let cgPoints = TheSafecracker.BezierSampler.sampleBezierPath(
             startPoint: target.startPoint,
             segments: target.segments,
             samplesPerSegment: samplesPerSegment
         )
-        let cgPoints = pathPoints.map { $0.cgPoint }
         guard cgPoints.count >= 2 else {
             return .failure(.syntheticDrawPath, message: "Sampled bezier produced fewer than 2 points")
         }

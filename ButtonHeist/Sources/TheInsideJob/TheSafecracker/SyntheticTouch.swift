@@ -152,9 +152,7 @@ extension TheSafecracker {
             }
             ObjCRuntime.message("_clearTouches", to: event)?.call()
 
-            // Build IOHIDEvent from finger data
-            let fingerData = touches.map { FingerTouchData(touch: $0.touch, location: $0.location, phase: $0.phase) }
-            let hidEvent = IOHIDEventBuilder.createEvent(for: fingerData)
+            let hidEvent = IOHIDEventBuilder.createEvent(for: touches)
 
             if let hidEvent {
                 ObjCRuntime.message("_setHIDEvent:", to: event)?.call(hidEvent)
