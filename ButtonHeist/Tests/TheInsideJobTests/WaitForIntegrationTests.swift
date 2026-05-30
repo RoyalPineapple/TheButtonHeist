@@ -470,7 +470,9 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("expected: element_appeared(WaitForChange-AlreadyPresent)") == true)
+        XCTAssertTrue(
+            result.message?.contains("expected: element_appeared(matcher(label=\"WaitForChange-AlreadyPresent\"))") == true
+        )
     }
 
     func testWaitForChangeElementDisappearedAlreadyAbsentStillRequiresObservedChange() async throws {
@@ -482,7 +484,9 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("expected: element_disappeared(WaitForChange-NeverExisted)") == true)
+        XCTAssertTrue(
+            result.message?.contains("expected: element_disappeared(matcher(label=\"WaitForChange-NeverExisted\"))") == true
+        )
     }
 
     func testWaitForChangeElementAppearedAfterBaselineReturnsThroughChangePath() async throws {
@@ -545,7 +549,9 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .waitForChange)
         XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("expected: element_disappeared(WaitForChange-StillPresent)") == true)
+        XCTAssertTrue(
+            result.message?.contains("expected: element_disappeared(matcher(label=\"WaitForChange-StillPresent\"))") == true
+        )
         XCTAssertTrue(result.message?.contains("Next: get_interface()") == true)
     }
 

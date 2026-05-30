@@ -93,31 +93,6 @@ public enum ActionExpectation: Sendable, Equatable {
     /// Compound: all sub-expectations must be met.
     case compound(NonEmptyActionExpectations)
 
-    /// Human-readable summary of this expectation, suitable for failure messages.
-    public var summaryDescription: String {
-        switch self {
-        case .delivery:
-            return "delivery"
-        case .screenChanged:
-            return "screen_changed"
-        case .elementsChanged:
-            return "elements_changed"
-        case .elementUpdated(let heistId, let property, _, let newValue):
-            var parts = ["element_updated"]
-            if let heistId { parts.append(heistId) }
-            if let property { parts.append(property.rawValue) }
-            if let newValue { parts.append("→ \(newValue)") }
-            return parts.joined(separator: " ")
-        case .elementAppeared(let matcher):
-            let target = matcher.label ?? matcher.identifier ?? "element"
-            return "element_appeared(\(target))"
-        case .elementDisappeared(let matcher):
-            let target = matcher.label ?? matcher.identifier ?? "element"
-            return "element_disappeared(\(target))"
-        case .compound(let expectations):
-            return "compound(\(expectations.count) expectations)"
-        }
-    }
 }
 
 extension ActionExpectation: CustomStringConvertible {
@@ -406,7 +381,7 @@ extension ActionExpectation {
                     against: result, preActionElements: preActionElements
                 )
                 if !subResult.met {
-                    failures.append("\(expectation.summaryDescription): \(subResult.actual ?? "failed")")
+                    failures.append("\(expectation): \(subResult.actual ?? "failed")")
                 }
             }
             if failures.isEmpty {

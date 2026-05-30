@@ -127,18 +127,6 @@ public extension TheFence.Command {
         }
     }
 
-    static var mcpToolContracts: [MCPToolContract] {
-        descriptors.compactMap { descriptor in
-            guard descriptor.mcpExposure == .directTool else { return nil }
-            return MCPToolContract(
-                name: descriptor.command.rawValue,
-                description: descriptor.description,
-                parameters: descriptor.parameters,
-                annotations: descriptor.mcpAnnotations
-            )
-        }
-    }
-
 }
 
 extension TheFence.Command {

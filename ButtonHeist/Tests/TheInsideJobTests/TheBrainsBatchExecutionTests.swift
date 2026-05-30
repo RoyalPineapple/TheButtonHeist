@@ -31,7 +31,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 )
             },
             waitForExpectation: { expectation, _ in
-                events.append("expectation:\(expectation.summaryDescription)")
+                events.append("expectation:\(expectation)")
                 let trace: AccessibilityTrace.Delta
                 switch expectation {
                 case .screenChanged:
@@ -45,7 +45,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 return ActionResult(
                     success: true,
                     method: .waitForChange,
-                    message: expectation.summaryDescription,
+                    message: expectation.description,
                     accessibilityTrace: AccessibilityTrace.projectingForTests(trace)
                 )
             },
@@ -262,7 +262,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 )
             },
             waitForExpectation: { expectation, _ in
-                XCTFail("Action delta already satisfies \(expectation.summaryDescription)")
+                XCTFail("Action delta already satisfies \(expectation)")
                 return ActionResult(success: false, method: .waitForChange)
             },
             settleRefreshRecordBaseline: {

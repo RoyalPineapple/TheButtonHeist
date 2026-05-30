@@ -167,7 +167,7 @@ extension TheBrains {
         delta: AccessibilityTrace.Delta?,
         elementCount: Int
     ) -> String {
-        let expected = expectation?.summaryDescription ?? "any settled UI change"
+        let expected = expectation?.description ?? "any settled UI change"
         var parts = [
             "timed out after \(elapsed)s",
             "expected: \(expected)",

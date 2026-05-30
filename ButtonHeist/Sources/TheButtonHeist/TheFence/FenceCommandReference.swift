@@ -3,7 +3,7 @@ import TheScore
 /// Descriptor-backed public command reference renderer.
 ///
 /// This is intentionally pure: it reads executable command descriptors and MCP
-/// contracts, then renders stable reference artifacts. Adapters and docs can
+/// descriptors, then renders stable reference artifacts. Adapters and docs can
 /// project from this surface without owning command names, defaults, grouping,
 /// or parameter shape.
 public enum FenceCommandReference {
@@ -46,13 +46,15 @@ public enum FenceCommandReference {
     }
 
     public static func mcpMarkdown(
-        contracts: [MCPToolContract] = TheFence.Command.mcpToolContracts
+        descriptors: [FenceCommandDescriptor] = TheFence.Command.descriptors
     ) -> String {
-        let sortedContracts = contracts.sorted { $0.name < $1.name }
+        let sortedDescriptors = descriptors
+            .filter { $0.mcpExposure == .directTool }
+            .sorted { $0.command.rawValue < $1.command.rawValue }
         var lines: [String] = [
             "# ButtonHeist MCP Tool Reference",
             "",
-            "_Generated from `TheFence.Command.mcpToolContracts`._",
+            "_Generated from `TheFence.Command.descriptors`._",
             "",
             "## Summary",
             "",
@@ -60,16 +62,16 @@ public enum FenceCommandReference {
             "|------|-------------|",
         ]
 
-        for contract in sortedContracts {
+        for descriptor in sortedDescriptors {
             lines.append(
-                "| `\(contract.name)` | \(markdownCell(firstLine(of: contract.description))) |"
+                "| `\(descriptor.command.rawValue)` | \(markdownCell(firstLine(of: descriptor.description))) |"
             )
         }
 
         lines.append(contentsOf: ["", "## Details", ""])
 
-        for contract in sortedContracts {
-            lines.append(contentsOf: mcpDetailLines(for: contract))
+        for descriptor in sortedDescriptors {
+            lines.append(contentsOf: mcpDetailLines(for: descriptor))
         }
 
         return lines.joined(separator: "\n") + "\n"
@@ -93,15 +95,15 @@ public enum FenceCommandReference {
         return lines
     }
 
-    private static func mcpDetailLines(for contract: MCPToolContract) -> [String] {
+    private static func mcpDetailLines(for descriptor: FenceCommandDescriptor) -> [String] {
         var lines: [String] = [
-            "### `\(contract.name)`",
+            "### `\(descriptor.command.rawValue)`",
             "",
-            contract.description,
+            descriptor.description,
         ]
 
         lines.append(contentsOf: ["", "Parameters:", ""])
-        lines.append(contentsOf: parameterTableLines(contract.parameters))
+        lines.append(contentsOf: parameterTableLines(descriptor.parameters))
         lines.append("")
         return lines
     }
