@@ -39,9 +39,9 @@ struct PublicActionResponse: FencePublicJSONResponse {
             self.rotor = nil
         }
         self.animating = result.animating == true ? true : nil
-        self.delta = result.accessibilityDelta.map(PublicDelta.init)
-        self.screenName = result.screenName
-        self.screenId = result.screenId
+        self.delta = result.accessibilityTrace?.endpointDeltaProjection.map(PublicDelta.init)
+        self.screenName = result.accessibilityTrace?.endpointScreenNameProjection
+        self.screenId = result.accessibilityTrace?.endpointScreenIdProjection
         if result.success {
             self.errorClass = nil
             self.errorCode = nil

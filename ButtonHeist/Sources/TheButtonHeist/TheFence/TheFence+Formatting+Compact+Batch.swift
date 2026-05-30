@@ -17,7 +17,7 @@ extension FenceResponse {
         if let failedIndex { text += " (failed at \(failedIndex))" }
         if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
         if let netDelta { text += " [net: \(netDelta.kindRawValue)]" }
-        if let lastScreenId = result.steps.compactMap({ $0.finalActionResult()?.screenId }).last {
+        if let lastScreenId = result.steps.compactMap({ $0.finalActionResult()?.accessibilityTrace?.endpointScreenIdProjection }).last {
             text = "\(lastScreenId) | \(text)"
         }
         for step in result.steps {
@@ -30,7 +30,7 @@ extension FenceResponse {
             } else if let actionResult = step.finalActionResult() {
                 if !actionResult.success, let error = actionResult.message {
                     line += " → error: \(error)"
-                } else if let kind = actionResult.accessibilityDelta?.kindRawValue {
+                } else if let kind = actionResult.accessibilityTrace?.endpointDeltaProjection?.kindRawValue {
                     line += " → \(kind)"
                 }
             } else if let typedStep = steps[safe: step.index],

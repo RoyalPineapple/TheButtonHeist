@@ -214,7 +214,7 @@ extension FenceResponse {
                     }
                 }
             }
-            if let delta = result.accessibilityDelta {
+            if let delta = result.accessibilityTrace?.endpointDeltaProjection {
                 output += "  \(formatDelta(delta))"
             }
             if result.animating == true {

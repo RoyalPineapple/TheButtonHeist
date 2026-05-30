@@ -147,7 +147,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         XCTAssertEqual(result.method, .scroll)
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
         XCTAssertNotNil(result.accessibilityTrace)
-        XCTAssertNotNil(result.accessibilityDelta?.captureEdge)
+        XCTAssertNotNil(result.accessibilityTrace?.endpointDeltaProjection?.captureEdge)
     }
 
     private func runSemanticActivateThroughCommand(

@@ -2894,7 +2894,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(batch.failedIndex)
         XCTAssertEqual(batch.results.compactMap { $0["message"] as? String }, ["first", "second"])
         XCTAssertEqual(
-            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityDelta?.kindRawValue },
+            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.kindRawValue },
             [nil, nil]
         )
         XCTAssertNil(batch.results[0]["delta"])
@@ -2951,7 +2951,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected batch response, got \(response)")
         }
         XCTAssertEqual(
-            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityDelta?.kindRawValue },
+            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.kindRawValue },
             ["elementsChanged", "elementsChanged"]
         )
         XCTAssertEqual(batch.accessibilityTrace?.captures.count, 3)
@@ -3031,7 +3031,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "run_batch should dispatch one typed plan; InsideJob owns stop-on-error after step failure"
         )
         XCTAssertEqual(batch.executionResult.steps.count, 2)
-        XCTAssertEqual(batch.executionResult.steps[0].finalActionResult()?.accessibilityDelta?.kindRawValue, "screenChanged")
+        XCTAssertEqual(batch.executionResult.steps[0].finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.kindRawValue, "screenChanged")
         XCTAssertEqual(
             batch.executionResult.steps[0].finalActionResult()?.message,
             "activate failed: target could not be made actionable"

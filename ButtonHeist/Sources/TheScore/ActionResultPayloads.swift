@@ -142,29 +142,15 @@ public struct ActionResult: Codable, Sendable {
     public let payload: ResultPayload?
     /// Source-of-truth accessibility capture receipt for this action.
     public let accessibilityTrace: AccessibilityTrace?
-    /// Compact projection describing what changed in the hierarchy after the
-    /// action. This is always derived from `accessibilityTrace`; action results
-    /// store captures as truth, not stale compact deltas.
-    public var accessibilityDelta: AccessibilityTrace.Delta? {
-        accessibilityTrace?.endpointDeltaProjection
-    }
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public let animating: Bool?
-    /// Screen name projection derived from the final trace capture.
-    public var screenName: String? {
-        accessibilityTrace?.endpointScreenNameProjection
-    }
-    /// Screen id projection derived from the final trace capture.
-    public var screenId: String? {
-        accessibilityTrace?.endpointScreenIdProjection
-    }
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
     /// the existing repopulation pipeline. False *only* when the hard
     /// settle timeout elapsed while the tree was still changing — the
-    /// snapshot in `accessibilityDelta` may not be a final state.
+    /// endpoint delta projection may not be a final state.
     public let settled: Bool?
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).

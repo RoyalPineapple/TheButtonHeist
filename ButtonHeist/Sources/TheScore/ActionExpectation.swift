@@ -336,15 +336,15 @@ extension ActionExpectation {
                 actual: result.success ? "delivered" : (result.message ?? "failed")
             )
         case .screenChanged:
-            let kindString = result.accessibilityDelta?.kindRawValue ?? "noTrace"
+            let kindString = result.accessibilityTrace?.endpointDeltaProjection?.kindRawValue ?? "noTrace"
             return ExpectationResult(
-                met: result.accessibilityDelta?.isScreenChanged == true,
+                met: result.accessibilityTrace?.endpointDeltaProjection?.isScreenChanged == true,
                 expectation: self,
                 actual: kindString
             )
         case .elementsChanged:
             // Superset rule: screen_changed implies elements_changed.
-            let delta = result.accessibilityDelta
+            let delta = result.accessibilityTrace?.endpointDeltaProjection
             let kindString = delta?.kindRawValue ?? "noTrace"
             let met: Bool = {
                 guard let delta else { return false }
@@ -399,7 +399,7 @@ extension ActionExpectation {
         oldValue: String?, newValue: String?,
         expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let updates = result.accessibilityDelta?.elementEdits?.updated ?? []
+        let updates = result.accessibilityTrace?.endpointDeltaProjection?.elementEdits?.updated ?? []
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
         }
@@ -434,7 +434,7 @@ extension ActionExpectation {
     private static func validateElementAppeared(
         matcher: ElementMatcher, expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let delta = result.accessibilityDelta
+        let delta = result.accessibilityTrace?.endpointDeltaProjection
 
         // Normal path: check the added list from element-level diffs.
         let added = delta?.elementEdits?.added ?? []
@@ -473,7 +473,7 @@ extension ActionExpectation {
         result: ActionResult,
         preActionElements: [HeistId: HeistElement]
     ) -> ExpectationResult {
-        let delta = result.accessibilityDelta
+        let delta = result.accessibilityTrace?.endpointDeltaProjection
 
         // Normal path: check the removed list from element-level diffs.
         let removed = delta?.elementEdits?.removed ?? []

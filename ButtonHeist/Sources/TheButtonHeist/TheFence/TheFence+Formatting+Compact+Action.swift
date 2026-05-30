@@ -12,7 +12,7 @@ extension FenceResponse {
                     search,
                     commandName: commandName,
                     errorKind: Self.compactActionErrorKind(result),
-                    screenId: result.screenId
+                    screenId: result.accessibilityTrace?.endpointScreenIdProjection
                 )
             }
             return Self.compactActionFailure(result, commandName: commandName)
@@ -27,13 +27,13 @@ extension FenceResponse {
         case .batchExecution(let batch):
             text = "\(TheFence.Command.runBatch.rawValue): \(batch.steps.count) step(s)"
         case .value, .none:
-            if let delta = result.accessibilityDelta {
+            if let delta = result.accessibilityTrace?.endpointDeltaProjection {
                 text = Self.compactDelta(delta, method: commandName)
             } else {
                 text = "\(commandName): ok"
             }
         }
-        if let screenId = result.screenId {
+        if let screenId = result.accessibilityTrace?.endpointScreenIdProjection {
             text = "\(screenId) | \(text)"
         }
         if case .value(let value) = result.payload {
@@ -75,7 +75,7 @@ extension FenceResponse {
         let message = result.message ?? commandName
         let errorCode = Self.actionFailureDetails(result)?.errorCode ?? compactActionErrorKind(result).rawValue
         var text = "\(commandName): error[\(errorCode)]: \(message)"
-        if let screenId = result.screenId {
+        if let screenId = result.accessibilityTrace?.endpointScreenIdProjection {
             text = "\(screenId) | \(text)"
         }
         return text
