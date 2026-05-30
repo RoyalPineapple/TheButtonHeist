@@ -5,35 +5,48 @@ import TheScore
 extension FenceResponse {
 
     func compactBatchFormatted(
-        completedSteps: Int, failedIndex: Int?, totalTimingMs: Int,
-        checked: Int, met: Int, stepSummaries: [BatchStepSummary],
+        commands: [TheFence.Command],
+        steps: [TheScore.BatchStep],
+        result: BatchExecutionResult,
         netDelta: AccessibilityTrace.Delta?
     ) -> String {
-        var text = "batch: \(completedSteps) steps in \(totalTimingMs)ms"
+        let checked = result.expectationsChecked(steps: steps)
+        let met = result.expectationsMet(steps: steps)
+        var text = "batch: \(result.completedStepCount) steps in \(result.totalTimingMs)ms"
+        let failedIndex = result.stoppedFailedIndex
         if let failedIndex { text += " (failed at \(failedIndex))" }
         if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
         if let netDelta { text += " [net: \(netDelta.kindRawValue)]" }
-        if let lastScreenId = stepSummaries.last(where: { $0.screenId != nil })?.screenId {
+        if let lastScreenId = result.steps.compactMap({ $0.finalActionResult()?.screenId }).last {
             text = "\(lastScreenId) | \(text)"
         }
-        for (index, step) in stepSummaries.enumerated() {
-            var line = "  [\(index)] \(step.command.rawValue)"
-            if let error = step.error {
-                if let errorCode = step.errorCode {
-                    let phase = step.phase.map { " \($0)" } ?? ""
-                    line += " → error[\(errorCode)\(phase)]: \(error)"
-                } else {
+        for step in result.steps {
+            let commandName = commands.indices.contains(step.index)
+                ? commands[step.index].rawValue
+                : "step \(step.index)"
+            var line = "  [\(step.index)] \(commandName)"
+            if let skipped = step.skipped {
+                line += " → error: \(skipped.reason)"
+            } else if let actionResult = step.finalActionResult() {
+                if !actionResult.success, let error = actionResult.message {
                     line += " → error: \(error)"
+                } else if let kind = actionResult.accessibilityDelta?.kindRawValue {
+                    line += " → \(kind)"
                 }
-                if let nextCommand = step.nextCommand {
-                    line += " Next: \(nextCommand)"
+            } else if let typedStep = steps[safe: step.index],
+                      let response = step.actionResponse(
+                        command: commands[safe: step.index] ?? .runBatch,
+                        step: typedStep
+                      ),
+                      case .error(let message, let details) = response {
+                if let details {
+                    line += " → error[\(details.errorCode) \(details.phase.rawValue)]: \(message)"
+                } else {
+                    line += " → error: \(message)"
                 }
-            } else if let kind = step.deltaKind {
-                line += " → \(kind)"
-            } else if let count = step.elementCount {
-                line += " → \(count) elements"
             }
-            if let met = step.expectationMet {
+            if let typedStep = steps[safe: step.index],
+               let met = step.expectationMet(for: typedStep) {
                 line += met ? " ✓" : " ✗"
             }
             text += "\n\(line)"
@@ -41,4 +54,10 @@ extension FenceResponse {
         return text
     }
 
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
 }

@@ -16,224 +16,61 @@ public struct ScreenshotResponseOptions: Sendable, Equatable {
     }
 }
 
-/// Summary of a single step within a batch execution.
-///
-/// Consumed by batch formatters to build per-step human/JSON rows. `deltaKind`
-/// is the wire-level `kind` discriminator from the step's `AccessibilityTrace.Delta`;
-/// `expectationMet` is nil when the step had no expectation attached.
-public struct BatchStepSummary: Sendable {
-    public let command: TheFence.Command
-    public let deltaKind: String?
-    public let screenName: String?
-    public let screenId: String?
-    public let expectationMet: Bool?
-    public let elementCount: Int?
-    public let error: String?
-    public let errorCode: String?
-    public let phase: String?
-    public let nextCommand: String?
-
-    public init(
-        command: TheFence.Command,
-        deltaKind: String?,
-        screenName: String?,
-        screenId: String?,
-        expectationMet: Bool?,
-        elementCount: Int?,
-        error: String?,
-        errorCode: String? = nil,
-        phase: String? = nil,
-        nextCommand: String? = nil
-    ) {
-        self.command = command
-        self.deltaKind = deltaKind
-        self.screenName = screenName
-        self.screenId = screenId
-        self.expectationMet = expectationMet
-        self.elementCount = elementCount
-        self.error = error
-        self.errorCode = errorCode
-        self.phase = phase
-        self.nextCommand = nextCommand
-    }
-}
-
-public struct BatchStepOutcome {
-    public enum Result {
-        case response(FenceResponse)
-        case skipped(reason: String, afterFailedIndex: Int)
-    }
-
-    public let command: TheFence.Command
-    public let result: Result
-    public let durationMs: Int
-    public let diagnosticDetails: FailureDetails?
-    public let stopsBatch: Bool
-
-    public init(
-        command: TheFence.Command,
-        response: FenceResponse,
-        durationMs: Int = 0,
-        diagnosticDetails: FailureDetails? = nil,
-        stopsBatch: Bool = false
-    ) {
-        self.command = command
-        self.result = .response(response)
-        self.durationMs = durationMs
-        self.diagnosticDetails = diagnosticDetails
-        self.stopsBatch = stopsBatch
-    }
-
-    private init(
-        command: TheFence.Command,
-        result: Result,
-        durationMs: Int = 0,
-        diagnosticDetails: FailureDetails? = nil,
-        stopsBatch: Bool = false
-    ) {
-        self.command = command
-        self.result = result
-        self.durationMs = durationMs
-        self.diagnosticDetails = diagnosticDetails
-        self.stopsBatch = stopsBatch
-    }
-
-    public static func skipped(
-        command: TheFence.Command,
-        afterFailedIndex failedIndex: Int,
-        durationMs: Int = 0
-    ) -> BatchStepOutcome {
-        BatchStepOutcome(
+extension BatchExecutionStepResult {
+    func actionResponse(command: TheFence.Command, step: TheScore.BatchStep) -> FenceResponse? {
+        guard skipped == nil else { return nil }
+        guard let finalResult = expectationActionResult ?? actionResult else {
+            return .error("typed batch step produced no action result")
+        }
+        return .action(
             command: command,
-            result: .skipped(reason: "skipped: stop_on_error stopped batch after step \(failedIndex)", afterFailedIndex: failedIndex),
-            durationMs: durationMs
+            result: finalResult,
+            expectation: expectation ?? step.expectation.validate(against: finalResult)
         )
     }
-}
 
-extension BatchStepOutcome {
-    var response: FenceResponse? {
-        guard case .response(let response) = result else { return nil }
-        return response
+    func finalActionResult() -> ActionResult? {
+        expectationActionResult ?? actionResult
     }
 
-    var isCompleted: Bool {
-        response != nil
+    func expectationResult(for step: TheScore.BatchStep) -> ExpectationResult? {
+        if let expectation { return expectation }
+        return finalActionResult().map { step.expectation.validate(against: $0) }
     }
 
-    var isFailed: Bool {
-        response?.isFailure == true
-    }
-
-    var hasActionResult: Bool {
-        guard case .action = response else { return false }
-        return true
-    }
-
-    var accessibilityTrace: AccessibilityTrace? {
-        guard case .action(_, let result, _) = response else { return nil }
-        return result.accessibilityTrace
-    }
-
-    var expectationCounted: Bool {
-        guard case .action(_, _, let expectation) = response else { return false }
-        guard let checked = expectation?.expectation else { return false }
+    func expectationCounted(for step: TheScore.BatchStep) -> Bool {
+        guard let checked = expectationResult(for: step)?.expectation else { return false }
         return checked != .delivery
     }
 
-    var expectationMet: Bool? {
-        guard expectationCounted, case .action(_, _, let expectation) = response else { return nil }
-        return expectation?.met
-    }
-
-    var stepSummary: BatchStepSummary {
-        switch result {
-        case .response(let response):
-            return Self.makeStepSummary(
-                command: command,
-                response: response,
-                diagnosticDetails: diagnosticDetails,
-                expectationMet: expectationCounted ? expectationMet : nil
-            )
-        case .skipped(let reason, _):
-            return BatchStepSummary(
-                command: command,
-                deltaKind: nil,
-                screenName: nil,
-                screenId: nil,
-                expectationMet: nil,
-                elementCount: nil,
-                error: reason
-            )
-        }
-    }
-
-    private static func makeStepSummary(
-        command: TheFence.Command,
-        response: FenceResponse,
-        diagnosticDetails: FailureDetails?,
-        expectationMet: Bool?
-    ) -> BatchStepSummary {
-        switch response {
-        case .action(_, let result, _):
-            return BatchStepSummary(
-                command: command,
-                deltaKind: result.accessibilityDelta?.kindRawValue,
-                screenName: result.screenName,
-                screenId: result.screenId,
-                expectationMet: expectationMet,
-                elementCount: nil,
-                error: result.success ? nil : result.message
-            )
-        case .interface(let iface, _):
-            return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: iface.elements.count, error: nil
-            )
-        case .error(let message, let details):
-            let details = details ?? diagnosticDetails
-            return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: message,
-                errorCode: details?.errorCode,
-                phase: details?.phase.rawValue,
-                nextCommand: batchNextCommand(from: details)
-            )
-        default:
-            return BatchStepSummary(
-                command: command, deltaKind: nil, screenName: nil, screenId: nil,
-                expectationMet: nil, elementCount: nil, error: nil
-            )
-        }
-    }
-
-    private static func batchNextCommand(from details: FailureDetails?) -> String? {
-        guard details?.errorCode == FenceRequestErrorCode.missingTarget else { return nil }
-        return details?.hint
+    func expectationMet(for step: TheScore.BatchStep) -> Bool? {
+        guard expectationCounted(for: step) else { return nil }
+        return expectationResult(for: step)?.met
     }
 }
 
-extension Array where Element == BatchStepOutcome {
+extension BatchExecutionResult {
     var completedStepCount: Int {
-        count(where: \.isCompleted)
+        steps.count { !$0.isSkipped }
     }
 
     var stoppedFailedIndex: Int? {
-        firstIndex(where: \.stopsBatch)
+        failedIndex ?? steps.first(where: \.stopsBatch)?.index
     }
 
-    var expectationsChecked: Int {
-        count(where: \.expectationCounted)
+    func expectationsChecked(steps plannedSteps: [TheScore.BatchStep]) -> Int {
+        steps.count { step in
+            guard plannedSteps.indices.contains(step.index) else { return false }
+            return step.expectationCounted(for: plannedSteps[step.index])
+        }
     }
 
-    var expectationsMet: Int {
-        count(where: { $0.expectationMet == true })
+    func expectationsMet(steps plannedSteps: [TheScore.BatchStep]) -> Int {
+        steps.count { step in
+            guard plannedSteps.indices.contains(step.index) else { return false }
+            return step.expectationMet(for: plannedSteps[step.index]) == true
+        }
     }
-
-    var stepSummaries: [BatchStepSummary] {
-        map(\.stepSummary)
-    }
-
 }
 
 public enum SessionConnectionPhase: String, Sendable, Equatable {
@@ -351,8 +188,9 @@ public enum FenceResponse {
     /// is explicitly requested.
     case screenshotData(payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
     case batch(
-        outcomes: [BatchStepOutcome],
-        totalTimingMs: Int,
+        commands: [TheFence.Command],
+        steps: [TheScore.BatchStep],
+        result: BatchExecutionResult,
         accessibilityTrace: AccessibilityTrace? = nil
     )
     case sessionState(payload: SessionStatePayload)
@@ -382,8 +220,8 @@ public enum FenceResponse {
             return true
         case .action(_, let result, let expectation):
             return !result.success || expectation?.met == false
-        case .batch(let outcomes, _, _):
-            return outcomes.stoppedFailedIndex != nil
+        case .batch(_, _, let result, _):
+            return result.stoppedFailedIndex != nil
         case .heistPlayback(_, let failedIndex, _, _, _):
             return failedIndex != nil
         default:

@@ -115,8 +115,7 @@ public extension AccessibilityTrace {
             }
         }
 
-        /// String form of the discriminator. Used by `BatchStepSummary` and
-        /// other consumers that need to log the kind without switching.
+        /// String form of the discriminator for public formatting and logs.
         public var kindRawValue: String {
             kind.rawValue
         }
