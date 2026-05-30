@@ -10,16 +10,16 @@ public extension TheFence.Command {
             Button Heist drives iOS apps through the accessibility layer — the same interface \
             VoiceOver uses. Target elements with flat ElementTarget selector fields: \(selectorKeys), \
             not by screen coordinates. \(disambiguatorKeys) only disambiguates matcher results. \
-            The core loop is: \(inlineCode(getInterface.canonicalName)) \
-            to read the app accessibility state, then \(inlineCode(activate.canonicalName))/\
-            \(inlineCode(typeText.canonicalName))/\(inlineCode(scroll.canonicalName))/\
-            \(inlineCode(swipe.canonicalName)) to act with an \(inlineCode(expectationKey)) \
+            The core loop is: \(inlineCode(getInterface.rawValue)) \
+            to read the app accessibility state, then \(inlineCode(activate.rawValue))/\
+            \(inlineCode(typeText.rawValue))/\(inlineCode(scroll.rawValue))/\
+            \(inlineCode(swipe.rawValue)) to act with an \(inlineCode(expectationKey)) \
             attached. When an action produces a transient state (spinner, \
-            loading overlay), call \(inlineCode(waitForChange.canonicalName)) with the same \
+            loading overlay), call \(inlineCode(waitForChange.rawValue)) with the same \
             expectation to ride through intermediate states. Use \
-            \(inlineCode(runBatch.canonicalName)) for multi-step sequences with per-step \
-            expectations. Use \(inlineCode(startHeist.canonicalName))/\
-            \(inlineCode(stopHeist.canonicalName)) to record replayable .heist files. \
+            \(inlineCode(runBatch.rawValue)) for multi-step sequences with per-step \
+            expectations. Use \(inlineCode(startHeist.rawValue))/\
+            \(inlineCode(stopHeist.rawValue)) to record replayable .heist files. \
             Full guide: docs/MCP-AGENT-GUIDE.md.
             """
     }
@@ -48,11 +48,11 @@ private extension TheFence.Command {
     static func descriptorHelpLines() -> [String] {
         let descriptors = Self.descriptors
             .filter { descriptor in descriptor.cliExposure != .notExposed }
-            .sorted { $0.canonicalName < $1.canonicalName }
-        let width = descriptors.map(\.canonicalName.count).max() ?? 0
+            .sorted { $0.command.rawValue < $1.command.rawValue }
+        let width = descriptors.map(\.command.rawValue.count).max() ?? 0
 
         return descriptors.map { descriptor in
-            "  \(padded(descriptor.canonicalName, to: width))  \(oneLineDescription(descriptor.description))"
+            "  \(padded(descriptor.command.rawValue, to: width))  \(oneLineDescription(descriptor.description))"
         }
     }
 

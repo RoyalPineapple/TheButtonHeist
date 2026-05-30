@@ -43,7 +43,6 @@ extension TheFence {
 
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
-    public var canonicalName: String { command.rawValue }
     public let requestPayloadKind: FenceRequestPayloadKind
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
@@ -114,8 +113,6 @@ public extension TheFence.Command {
         descriptors.filter { $0.cliExposure == .directCommand }
     }
 
-    var canonicalName: String { descriptor.canonicalName }
-
     var cliExposure: CLIExposure { descriptor.cliExposure }
 
     var mcpExposure: MCPExposure { descriptor.mcpExposure }
@@ -146,7 +143,7 @@ public extension TheFence.Command {
         descriptors.compactMap { descriptor in
             guard descriptor.mcpExposure == .directTool else { return nil }
             return MCPToolContract(
-                name: descriptor.canonicalName,
+                name: descriptor.command.rawValue,
                 description: descriptor.description,
                 parameters: descriptor.parameters,
                 annotations: descriptor.mcpAnnotations

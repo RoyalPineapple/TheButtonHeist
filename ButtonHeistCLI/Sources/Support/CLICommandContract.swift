@@ -90,7 +90,7 @@ enum CLICommandAdapterCatalog {
 
         let directAdapters = directDescriptors.map { descriptor -> CLICommandAdapter in
             guard let commandType = commandTypesByFenceCommand[descriptor.command] else {
-                preconditionFailure("Missing CLI adapter for direct Fence command \(descriptor.canonicalName)")
+                preconditionFailure("Missing CLI adapter for direct Fence command \(descriptor.command.rawValue)")
             }
             return .fence(commandType, descriptor: descriptor)
         }
@@ -126,7 +126,7 @@ extension CLICommandContract {
     }
 
     static var cliCommandName: String {
-        fenceCommand.canonicalName
+        fenceCommand.rawValue
     }
 
     static func fenceArguments(
@@ -138,14 +138,14 @@ extension CLICommandContract {
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {
         guard case .string(let value)? = fenceCommand.defaultArgumentValue(for: key) else {
-            fatalError("No string default registered for \(fenceCommand.canonicalName).\(key.rawValue)")
+            fatalError("No string default registered for \(fenceCommand.rawValue).\(key.rawValue)")
         }
         return value
     }
 
     static func catalogAllowedValues(for key: FenceParameterKey) -> [String] {
         guard let values = fenceCommand.parameter(named: key)?.enumValues else {
-            fatalError("No enum values registered for \(fenceCommand.canonicalName).\(key.rawValue)")
+            fatalError("No enum values registered for \(fenceCommand.rawValue).\(key.rawValue)")
         }
         return values
     }

@@ -13,7 +13,7 @@ public enum FenceCommandReference {
     ) -> String {
         let sortedDescriptors = descriptors
             .filter(\.isPublicRequestContract)
-            .sorted { $0.canonicalName < $1.canonicalName }
+            .sorted { $0.command.rawValue < $1.command.rawValue }
         var lines: [String] = [
             "# ButtonHeist Command Reference",
             "",
@@ -27,7 +27,7 @@ public enum FenceCommandReference {
 
         for descriptor in sortedDescriptors {
             let columns = [
-                "`\(descriptor.canonicalName)`",
+                "`\(descriptor.command.rawValue)`",
                 cliExposureSummary(descriptor),
                 mcpExposureSummary(descriptor.mcpExposure),
                 yesNo(descriptor.isBatchExecutable),
@@ -77,7 +77,7 @@ public enum FenceCommandReference {
 
     private static func commandDetailLines(for descriptor: FenceCommandDescriptor) -> [String] {
         var lines: [String] = [
-            "### `\(descriptor.canonicalName)`",
+            "### `\(descriptor.command.rawValue)`",
             "",
             descriptor.description,
             "",
@@ -128,7 +128,7 @@ public enum FenceCommandReference {
     private static func cliExposureSummary(_ descriptor: FenceCommandDescriptor) -> String {
         switch descriptor.cliExposure {
         case .directCommand, .sessionOnly:
-            return "`\(descriptor.canonicalName)`"
+            return "`\(descriptor.command.rawValue)`"
         case .notExposed:
             return "-"
         }
@@ -137,9 +137,9 @@ public enum FenceCommandReference {
     private static func cliExposureDetail(_ descriptor: FenceCommandDescriptor) -> String {
         switch descriptor.cliExposure {
         case .directCommand:
-            return "direct command `\(descriptor.canonicalName)`"
+            return "direct command `\(descriptor.command.rawValue)`"
         case .sessionOnly:
-            return "session-only `\(descriptor.canonicalName)`"
+            return "session-only `\(descriptor.command.rawValue)`"
         case .notExposed:
             return "not exposed"
         }
