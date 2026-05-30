@@ -200,7 +200,7 @@ public enum RotorContinuation: Equatable, Hashable, Sendable {
     case item(HeistId)
     case textRange(HeistId, TextRangeReference)
 
-    public var currentHeistId: HeistId? {
+    public var heistId: HeistId? {
         switch self {
         case .none:
             return nil
@@ -209,7 +209,7 @@ public enum RotorContinuation: Equatable, Hashable, Sendable {
         }
     }
 
-    public var currentTextRange: TextRangeReference? {
+    public var textRange: TextRangeReference? {
         guard case .textRange(_, let range) = self else { return nil }
         return range
     }
@@ -221,13 +221,82 @@ extension RotorContinuation: CustomStringConvertible {
         case .none:
             return "noContinuation"
         case .item(let heistId):
-            return ScoreDescription.stringField("currentHeistId", heistId) ?? "currentHeistId=\"\""
+            return ScoreDescription.stringField("continuation.heistId", heistId) ?? "continuation.heistId=\"\""
         case .textRange(let heistId, let range):
             return [
-                ScoreDescription.stringField("currentHeistId", heistId) ?? "currentHeistId=\"\"",
+                ScoreDescription.stringField("continuation.heistId", heistId) ?? "continuation.heistId=\"\"",
                 range.description,
             ].joined(separator: ", ")
         }
+    }
+}
+
+extension RotorContinuation: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case heistId
+        case textRange
+    }
+
+    private struct UnknownCodingKey: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownKeys(from: decoder)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let heistId = try container.decode(HeistId.self, forKey: .heistId)
+        if let textRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .textRange) {
+            try Self.validate(textRange, codingPath: container.codingPath + [CodingKeys.textRange])
+            self = .textRange(heistId, textRange)
+        } else {
+            self = .item(heistId)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .none:
+            break
+        case .item(let heistId):
+            try container.encode(heistId, forKey: .heistId)
+        case .textRange(let heistId, let textRange):
+            try container.encode(heistId, forKey: .heistId)
+            try container.encode(textRange, forKey: .textRange)
+        }
+    }
+
+    static func validate(_ textRange: TextRangeReference, codingPath: [CodingKey]) throws {
+        guard textRange.startOffset >= 0,
+              textRange.endOffset >= textRange.startOffset else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath,
+                debugDescription: "textRange must use non-negative offsets with endOffset >= startOffset"
+            ))
+        }
+    }
+
+    private static func rejectUnknownKeys(from decoder: Decoder) throws {
+        let allowedKeys = Set([CodingKeys.heistId, .textRange].map(\.stringValue))
+        let container = try decoder.container(keyedBy: UnknownCodingKey.self)
+        guard let unknownKey = container.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown rotor continuation field \"\(unknownKey.stringValue)\""
+        ))
     }
 }
 
@@ -271,11 +340,26 @@ extension RotorTarget: Codable {
         case rotor
         case rotorIndex
         case direction
-        case currentHeistId
-        case currentTextRange
+        case continuation
+    }
+
+    private struct UnknownCodingKey: CodingKey {
+        var stringValue: String
+        var intValue: Int?
+
+        init(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
     }
 
     public init(from decoder: Decoder) throws {
+        try Self.rejectUnknownKeys(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
         elementTarget = try ElementTarget.decodeInline(from: decoder)
         let rotor = try container.decodeIfPresent(String.self, forKey: .rotor)
@@ -300,25 +384,8 @@ extension RotorTarget: Codable {
             .automatic
         }
         direction = try container.decodeIfPresent(RotorDirection.self, forKey: .direction) ?? .next
-        let currentHeistId = try container.decodeIfPresent(HeistId.self, forKey: .currentHeistId)
-        let currentTextRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .currentTextRange)
-        if let currentTextRange {
-            guard currentTextRange.startOffset >= 0,
-                  currentTextRange.endOffset >= currentTextRange.startOffset else {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: container.codingPath + [CodingKeys.currentTextRange],
-                    debugDescription: "currentTextRange must use non-negative offsets with endOffset >= startOffset"
-                ))
-            }
-            guard let currentHeistId else {
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: container.codingPath + [CodingKeys.currentHeistId],
-                    debugDescription: "currentTextRange requires currentHeistId"
-                ))
-            }
-            continuation = .textRange(currentHeistId, currentTextRange)
-        } else if let currentHeistId {
-            continuation = .item(currentHeistId)
+        if container.contains(.continuation) {
+            continuation = try container.decode(RotorContinuation.self, forKey: .continuation)
         } else {
             continuation = .none
         }
@@ -339,11 +406,27 @@ extension RotorTarget: Codable {
         switch continuation {
         case .none:
             break
-        case .item(let heistId):
-            try container.encode(heistId, forKey: .currentHeistId)
-        case .textRange(let heistId, let range):
-            try container.encode(heistId, forKey: .currentHeistId)
-            try container.encode(range, forKey: .currentTextRange)
+        case .item, .textRange:
+            try container.encode(continuation, forKey: .continuation)
         }
+    }
+
+    private static func rejectUnknownKeys(from decoder: Decoder) throws {
+        let allowedKeys = Set(
+            ElementTarget.inlineFieldNames + [
+                CodingKeys.rotor.stringValue,
+                CodingKeys.rotorIndex.stringValue,
+                CodingKeys.direction.stringValue,
+                CodingKeys.continuation.stringValue,
+            ]
+        )
+        let container = try decoder.container(keyedBy: UnknownCodingKey.self)
+        guard let unknownKey = container.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
+            return
+        }
+        throw DecodingError.dataCorrupted(.init(
+            codingPath: decoder.codingPath + [unknownKey],
+            debugDescription: "Unknown rotor target field \"\(unknownKey.stringValue)\""
+        ))
     }
 }

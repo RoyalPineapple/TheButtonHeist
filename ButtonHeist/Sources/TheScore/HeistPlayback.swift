@@ -7,19 +7,19 @@ import Foundation
 /// before execution.
 public struct HeistPlayback: Codable, Sendable, Equatable {
     /// Format version. Increment when the step schema changes.
-    public static let currentVersion = 5
+    public static let currentVersion = 6
 
     /// Current heist file format version.
     public let version: Int
     /// Bundle identifier of the app that was running during recording.
     public let app: String
     /// Ordered list of commands to replay.
-    public let steps: [HeistEvidence]
+    public let steps: [HeistStep]
 
     public init(
         version: Int = HeistPlayback.currentVersion,
         app: String,
-        steps: [HeistEvidence] = []
+        steps: [HeistStep] = []
     ) {
         self.version = version
         self.app = app
@@ -48,7 +48,7 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
 
         version = decodedVersion
         app = try container.decode(String.self, forKey: .app)
-        steps = try container.decode([HeistEvidence].self, forKey: .steps)
+        steps = try container.decode([HeistStep].self, forKey: .steps)
     }
 
     private static func rejectUnknownPlaybackKeys(_ decoder: Decoder) throws {
@@ -77,12 +77,13 @@ extension HeistPlayback: CustomStringConvertible {
 // MARK: - Heist Step
 
 /// A single command in a heist playback. Contains the command name, durable
-/// matcher target, and command-specific arguments.
+/// matcher target, command-specific arguments, and optional semantic
+/// expectation.
 ///
 /// Element identity lives under `target`; command arguments live under
 /// `arguments`. Top-level step fields are closed so unsupported shapes fail at
 /// the playback boundary.
-public struct HeistEvidence: Codable, Sendable, Equatable {
+public struct HeistStep: Codable, Sendable, Equatable {
     /// The `TheFence.Command` raw value (e.g. `"activate"`, `"type_text"`,
     /// `"swipe"`). Stored as a string rather than the enum because `Command`
     /// lives in TheButtonHeist (iOS-only) and TheScore must be portable across
@@ -95,22 +96,26 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
     /// Command-specific arguments (direction, text, duration, etc.).
     /// Excludes command name and element targeting fields.
     public let arguments: [String: HeistValue]
+    /// Semantic outcome expected after the command executes.
+    public let expectation: ActionExpectation?
 
     public init(
         command: String,
         target: ElementTarget? = nil,
-        arguments: [String: HeistValue] = [:]
+        arguments: [String: HeistValue] = [:],
+        expectation: ActionExpectation? = nil
     ) throws {
         try Self.validateDurableTarget(target)
         self.command = command
         self.target = target
         self.arguments = arguments
+        self.expectation = expectation
     }
 
     // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case command, target, arguments
+        case command, target, arguments, expectation
     }
 
     public init(from decoder: Decoder) throws {
@@ -119,6 +124,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         command = try container.decode(String.self, forKey: .command)
         target = try Self.decodeDurableTarget(from: container, forKey: .target)
         arguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
+        expectation = try container.decodeIfPresent(ActionExpectation.self, forKey: .expectation)
     }
 
     private static func rejectUnknownStepKeys(_ decoder: Decoder) throws {
@@ -140,6 +146,7 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         if !arguments.isEmpty {
             try container.encode(arguments, forKey: .arguments)
         }
+        try container.encodeIfPresent(expectation, forKey: .expectation)
     }
 
     private static func decodeDurableTarget(
@@ -152,17 +159,17 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         do {
             try validateDurableTarget(target)
             return target
-        } catch HeistEvidenceError.captureHandleTarget {
+        } catch HeistStepError.captureHandleTarget {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
-                debugDescription: "HeistEvidence target requires matcher fields; heistId is a capture-local handle"
+                debugDescription: "HeistStep target requires matcher fields; heistId is a capture-local handle"
             )
-        } catch HeistEvidenceError.emptyMatcherTarget {
+        } catch HeistStepError.emptyMatcherTarget {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
-                debugDescription: "HeistEvidence target requires at least one matcher field"
+                debugDescription: "HeistStep target requires at least one matcher field"
             )
         }
     }
@@ -174,9 +181,9 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         case .matcher(let matcher, _) where matcher.hasPredicates:
             return
         case .matcher:
-            throw HeistEvidenceError.emptyMatcherTarget
+            throw HeistStepError.emptyMatcherTarget
         case .heistId:
-            throw HeistEvidenceError.captureHandleTarget
+            throw HeistStepError.captureHandleTarget
         }
     }
 
@@ -188,30 +195,32 @@ public struct HeistEvidence: Codable, Sendable, Equatable {
         case .matcher:
             throw EncodingError.invalidValue(target, .init(
                 codingPath: container.codingPath + [CodingKeys.target],
-                debugDescription: "HeistEvidence target requires at least one matcher field"
+                debugDescription: "HeistStep target requires at least one matcher field"
             ))
         case .heistId:
             throw EncodingError.invalidValue(target, .init(
                 codingPath: container.codingPath + [CodingKeys.target],
-                debugDescription: "HeistEvidence target requires matcher fields; heistId is a capture-local handle"
+                debugDescription: "HeistStep target requires matcher fields; heistId is a capture-local handle"
             ))
         }
     }
 
 }
 
-public enum HeistEvidenceError: Error, Sendable, Equatable {
+public enum HeistStepError: Error, Sendable, Equatable {
     case captureHandleTarget
     case emptyMatcherTarget
 }
 
-extension HeistEvidence: CustomStringConvertible {
+extension HeistStep: CustomStringConvertible {
     public var description: String {
         let argumentSummary = arguments.isEmpty ? nil : "args=\(ScoreDescription.call("arguments", argumentsDescriptionFields))"
+        let expectationSummary = expectation.map { _ in "expectation" }
         return ScoreDescription.call("step", [
             ScoreDescription.stringField("command", command),
             target?.description,
             argumentSummary,
+            expectationSummary,
         ].compactMap { $0 })
     }
 

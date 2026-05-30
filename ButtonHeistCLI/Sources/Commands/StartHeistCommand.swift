@@ -5,7 +5,7 @@ import Foundation
 struct StartHeistCommand: AsyncParsableCommand, CLICommandContract {
     static let configuration = CommandConfiguration(
         commandName: Self.cliCommandName,
-        abstract: "Start recording a heist playback (.heist file)"
+        abstract: "Start recording deterministic heist steps"
     )
 
     @Option(name: .long, help: "Bundle ID of the app being recorded")

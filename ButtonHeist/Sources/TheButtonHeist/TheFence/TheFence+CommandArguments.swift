@@ -109,6 +109,13 @@ extension TheFence.CommandArgumentEnvelope {
         return integer
     }
 
+    func requiredSchemaInteger(_ key: String) throws -> Int {
+        guard let integer = try schemaInteger(key) else {
+            throw SchemaValidationError(field: field(key), observed: "missing", expected: "integer")
+        }
+        return integer
+    }
+
     func schemaNonNegativeInteger(_ key: String) throws -> Int? {
         guard let integer = try schemaInteger(key) else { return nil }
         guard integer >= 0 else {

@@ -67,7 +67,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testClientMessageRotorRejectsInvalidCurrentTextRange() throws {
         let json = """
-        {"type":"rotor","payload":{"heistId":"form","currentTextRange":{"startOffset":8,"endOffset":3}}}
+        {"type":"rotor","payload":{"heistId":"form","continuation":{"heistId":"field","textRange":{"startOffset":8,"endOffset":3}}}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
@@ -75,7 +75,15 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testClientMessageRotorRejectsTextRangeWithoutCurrentItem() throws {
         let json = """
-        {"type":"rotor","payload":{"heistId":"form","currentTextRange":{"startOffset":3,"endOffset":8}}}
+        {"type":"rotor","payload":{"heistId":"form","continuation":{"textRange":{"startOffset":3,"endOffset":8}}}}
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))
+    }
+
+    func testClientMessageRotorRejectsLegacyLooseContinuationFields() throws {
+        let json = """
+        {"type":"rotor","payload":{"heistId":"form","currentHeistId":"field"}}
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(ClientMessage.self, from: Data(json.utf8)))

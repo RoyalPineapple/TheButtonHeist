@@ -7,85 +7,21 @@ private let heistRecordingLogger = Logger(subsystem: "com.buttonheist.bookkeeper
 
 extension TheBookKeeper {
 
-    // MARK: - Heist Recording Lifecycle
-
-    var isRecordingHeist: Bool {
-        guard case .active(let session) = phase,
-              case .recording = session.heistRecording else { return false }
-        return true
-    }
-
-    func startHeistRecording(app: String) throws {
-        try mutateActiveSession { session in
-            guard case .idle = session.heistRecording else {
-                throw BookKeeperError.heistRecording(.alreadyRecording)
-            }
-
-            let heistPath = session.directory.appendingPathComponent("heist.jsonl")
-            do {
-                try Self.createPrivateFile(at: heistPath)
-            } catch {
-                throw BookKeeperError.heistRecording(.fileCreationFailed(
-                    path: heistPath.path,
-                    reason: String(describing: error)
-                ))
-            }
-
-            let heistHandle: FileHandle
-            do {
-                heistHandle = try FileHandle(forWritingTo: heistPath)
-            } catch {
-                throw BookKeeperError.heistRecording(.fileOpenFailed(
-                    path: heistPath.path,
-                    reason: String(describing: error)
-                ))
-            }
-
-            session.heistRecording = .recording(HeistRecording(
-                app: app,
-                fileHandle: heistHandle,
-                filePath: heistPath
-            ))
-        }
-    }
-
-    func stopHeistRecording() throws -> HeistPlayback {
-        let recording = try mutateActiveSession { session in
-            guard case .recording(let recording) = session.heistRecording else {
-                throw BookKeeperError.heistRecording(.notRecording)
-            }
-            session.heistRecording = .idle
-            return recording
-        }
-
-        recording.fileHandle.closeFile()
-        let steps = try readEvidenceFromFile(recording.filePath)
-        guard !steps.isEmpty else {
-            throw BookKeeperError.heistRecording(.noValidSteps(path: recording.filePath.path))
-        }
-
-        return HeistPlayback(
-            app: recording.app,
-            steps: steps
-        )
-    }
-
     /// Record a successfully executed command for heist playback.
     /// Only records commands that succeeded. Failed actions and unmet
     /// expectations are skipped.
-    func recordHeistEvidence(
+    func recordHeistStep(
         _ request: TheFence.ParsedRequest,
         actionResult: ActionResult? = nil,
         expectation: ExpectationResult? = nil,
         targetCapture: AccessibilityTrace.Capture?
     ) {
-        guard case .active(let session) = phase,
-              case .recording(let recording) = session.heistRecording else { return }
+        guard isRecordingHeist else { return }
         guard request.command.isBatchExecutable else { return }
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
-        let step: HeistEvidence?
+        let step: HeistStep?
         do {
             step = try buildStep(
                 request: request,
@@ -95,43 +31,38 @@ extension TheBookKeeper {
             )
         } catch {
             heistRecordingLogger.error(
-                "Skipped heist evidence for \(request.command.rawValue): projection failed: \(String(describing: error))"
+                "Skipped heist step for \(request.command.rawValue): projection failed: \(String(describing: error))"
             )
             return
         }
 
         guard let step else {
             heistRecordingLogger.error(
-                "Skipped heist evidence for \(request.command.rawValue): target has no durable semantic replay identity"
+                "Skipped heist step for \(request.command.rawValue): target has no durable semantic replay identity"
             )
             return
         }
 
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
         do {
-            var lineData = try encoder.encode(step)
-            lineData.append(contentsOf: [0x0A])
-            recording.fileHandle.write(lineData)
+            try appendStep(step)
         } catch {
             heistRecordingLogger.error(
-                "Failed to encode heist evidence for \(request.command.rawValue): \(error.localizedDescription)"
+                "Failed to encode heist step for \(request.command.rawValue): \(error.localizedDescription)"
             )
         }
     }
 
     // MARK: - Heist File I/O
 
-    static func writeHeist(_ script: HeistPlayback, to path: URL) throws {
+    static func writeHeist(_ heist: HeistPlayback, to path: URL) throws {
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(script)
+            let data = try encoder.encode(heist)
             try writePrivateData(data, to: path)
         } catch {
-            throw BookKeeperError.heistRecording(.scriptWriteFailed(
+            throw BookKeeperError.heistRecording(.heistWriteFailed(
                 path: path.path,
                 reason: String(describing: error)
             ))
@@ -145,12 +76,12 @@ extension TheBookKeeper {
             decoder.dateDecodingStrategy = .iso8601
             return try decoder.decode(HeistPlayback.self, from: data)
         } catch DecodingError.dataCorrupted(let context) {
-            throw BookKeeperError.heistRecording(.scriptReadFailed(
+            throw BookKeeperError.heistRecording(.heistReadFailed(
                 path: path.path,
                 reason: context.debugDescription
             ))
         } catch {
-            throw BookKeeperError.heistRecording(.scriptReadFailed(
+            throw BookKeeperError.heistRecording(.heistReadFailed(
                 path: path.path,
                 reason: String(describing: error)
             ))
@@ -159,12 +90,12 @@ extension TheBookKeeper {
 
     // MARK: - Private Heist I/O
 
-    private func readEvidenceFromFile(_ path: URL) throws -> [HeistEvidence] {
+    func readSteps(from path: URL) throws -> [HeistStep] {
         let data: Data
         do {
             data = try Data(contentsOf: path)
         } catch {
-            throw BookKeeperError.heistRecording(.evidenceReadFailed(
+            throw BookKeeperError.heistRecording(.stepReadFailed(
                 path: path.path,
                 reason: String(describing: error)
             ))
@@ -175,9 +106,9 @@ extension TheBookKeeper {
         decoder.dateDecodingStrategy = .iso8601
         return try lines.enumerated().map { index, lineData in
             do {
-                return try decoder.decode(HeistEvidence.self, from: Data(lineData))
+                return try decoder.decode(HeistStep.self, from: Data(lineData))
             } catch {
-                throw BookKeeperError.heistRecording(.evidenceReadFailed(
+                throw BookKeeperError.heistRecording(.stepReadFailed(
                     path: path.path,
                     reason: "line \(index + 1) is malformed: \(String(describing: error))"
                 ))
@@ -190,8 +121,8 @@ extension TheBookKeeper {
         targetCapture: AccessibilityTrace.Capture?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
-    ) throws -> HeistEvidence? {
-        let projection = try request.heistRecordingProjection()
+    ) throws -> HeistStep? {
+        let projection = try request.heistStepProjection()
         let elementTarget = projection.elementTarget
         var target: ElementTarget?
 
@@ -206,10 +137,11 @@ extension TheBookKeeper {
             target = .matcher(matcher, ordinal: matchedOrdinal)
         }
 
-        return try HeistEvidence(
+        return try HeistStep(
             command: request.command.rawValue,
             target: target,
-            arguments: projection.arguments
+            arguments: projection.arguments,
+            expectation: projection.expectation
         )
     }
 }

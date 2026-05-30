@@ -24,7 +24,7 @@ public extension TheFence.Command {
             """
     }
 
-    static var cliSessionHelp: String {
+    static var cliJSONLinesHelp: String {
         let commandLines = descriptorHelpLines()
 
         return """

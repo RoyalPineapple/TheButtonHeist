@@ -16,7 +16,7 @@ Generated references are the source of truth for executable surface area:
 ## Contract Layers
 
 Button Heist has one product command contract: `TheFence.Command`. CLI
-commands, session JSON, MCP tools, batches, and heist playback all route through
+commands, JSON-lines stdin, MCP tools, batches, and heist playback all route through
 that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
 
@@ -105,7 +105,7 @@ viewport is the caller's intent.
 
 `heistId` is a current-capture handle. It is useful for immediate follow-up
 actions against the same current hierarchy, and diagnostics may report it as
-recording evidence. It is not a durable replay selector and it is not geometry
+recording step context. It is not a durable replay selector and it is not geometry
 authority.
 
 Durable flows use semantic selectors and matchers: accessibility identifier,
@@ -132,7 +132,7 @@ they do not replace the underlying captures.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence/`
 
-TheFence is the shared orchestration layer for CLI, session JSON, MCP, batch,
+TheFence is the shared orchestration layer for CLI, JSON-lines stdin, MCP, batch,
 and heist playback. It owns command parsing, schema validation, connection
 coordination through TheHandoff, typed responses, batch policy, expectations,
 and recording/replay integration.
@@ -231,7 +231,7 @@ Common environment variables:
 | `BUTTONHEIST_DEVICE` | Default device filter or named target |
 | `BUTTONHEIST_TOKEN` | Auth token |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
-| `BUTTONHEIST_SESSION_TIMEOUT` | Default idle timeout for `buttonheist session` |
+| `BUTTONHEIST_SESSION_TIMEOUT` | Default idle timeout for `buttonheist json_lines` |
 
 Flags take precedence over environment variables.
 

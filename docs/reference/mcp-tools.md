@@ -33,7 +33,7 @@ _Generated from `TheFence.Command.mcpToolContracts`._
 | `scroll_to_visible` | Make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
 | `start_heist` | Start recording replayable heist steps from successful commands. |
-| `stop_heist` | Stop heist recording and save a JSON playback script. |
+| `stop_heist` | Stop heist recording and save a deterministic heist fixture. |
 | `swipe` | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
 | `two_finger_tap` | Tap with two fingers at a coordinate or actionable semantic target. |
 | `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
@@ -305,9 +305,7 @@ Parameters:
 | `rotor` | `string` | no | - | - |
 | `rotorIndex` | `integer` | no | - | - |
 | `direction` | `string` | no | `"next"` | `next`, `previous` |
-| `currentHeistId` | `string` | no | - | - |
-| `currentTextStartOffset` | `integer` | no | - | - |
-| `currentTextEndOffset` | `integer` | no | - | - |
+| `continuation` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -391,7 +389,7 @@ Parameters:
 
 ### `stop_heist`
 
-Stop heist recording and save a JSON playback script.
+Stop heist recording and save a deterministic heist fixture.
 
 Parameters:
 

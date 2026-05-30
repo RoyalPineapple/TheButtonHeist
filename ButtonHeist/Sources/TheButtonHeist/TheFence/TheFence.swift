@@ -40,7 +40,7 @@ public final class TheFence {
         var fileConfig: ButtonHeistFileConfig?
         /// Direct host:port target with optional TLS fingerprint from config.
         var directDevice: DiscoveredDevice?
-        /// Test/config override for BookKeeper's session and artifact root.
+        /// Test/config override for BookKeeper's heist and artifact root.
         var bookKeeperBaseDirectory: URL?
         /// Extra client-side headroom beyond a server-owned wait timeout.
         var postActionExpectationTimeoutBuffer: TimeInterval
@@ -194,18 +194,6 @@ public final class TheFence {
             return .error(error.message)
         } catch let error as MissingElementTarget {
             return missingElementTargetResponse(command: error.command)
-        } catch let error as FenceError {
-            return .error(error.coreMessage, details: error.failureDetails)
-        }
-        return try await execute(parsed: parsed)
-    }
-
-    func execute(playback evidence: HeistEvidence) async throws -> FenceResponse {
-        let parsed: ParsedRequest
-        do {
-            parsed = try parsePlaybackEvidence(evidence)
-        } catch let error as SchemaValidationError {
-            return .error(error.message)
         } catch let error as FenceError {
             return .error(error.coreMessage, details: error.failureDetails)
         }

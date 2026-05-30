@@ -74,7 +74,7 @@ enum CLICommandAdapterCatalog {
     // MARK: - Catalog Projection
 
     private static let cliOnlyAdapters: [CLICommandAdapter] = [
-        .cliOnly(SessionCommand.self),
+        .cliOnly(JSONLinesCommand.self),
     ]
 
     static let adapters: [CLICommandAdapter] = {

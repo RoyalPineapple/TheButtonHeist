@@ -37,6 +37,10 @@ extension TheFence {
             policy: try arguments.schemaEnum("policy", as: BatchExecutionPolicy.self) ?? .stopOnError
         )
     }
+
+    func prepareBatchStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
+        try batchPreparedStep(originalIndex: originalIndex, request: request)
+    }
 }
 
 private extension TheFence {

@@ -75,7 +75,7 @@ Instance ID: a1b2c3d4
 ```
 
 Then request approval directly:
-`BUTTONHEIST_DEVICE="127.0.0.1:23456" buttonheist session`.
+`BUTTONHEIST_DEVICE="127.0.0.1:23456" buttonheist json_lines`.
 For automation, configure `INSIDEJOB_TOKEN` explicitly at launch and pass the
 same value as `BUTTONHEIST_TOKEN`.
 
@@ -103,7 +103,7 @@ xcrun simctl launch "$SIM_UDID" com.buttonheist.testapp
 ```bash
 export BUTTONHEIST_DEVICE="127.0.0.1:$INSIDEJOB_PORT"
 export BUTTONHEIST_TOKEN="$TASK_SLUG"
-buttonheist session
+buttonheist json_lines
 ```
 
 **MCP server** (set env vars before invoking):

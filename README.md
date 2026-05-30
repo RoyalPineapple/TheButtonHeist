@@ -129,7 +129,7 @@ $BH type_text "Hello" --identifier nameField
 $BH get_screen --output screen.png
 ```
 
-The session command keeps one connection open and accepts canonical machine JSON
+The `json_lines` command keeps one connection open and accepts canonical machine JSON
 objects only. Direct CLI commands and MCP tools project from the same Fence
 command contract.
 
@@ -202,7 +202,7 @@ Two actions, two assertions, one round trip. If the email field does not update,
 
 ### 4. Replay: the contract in CI
 
-Button Heist can record an agent session as a replayable `.heist` file. Each step is stored as a semantic matcher: label, traits, and stable identifiers. `heistId` is a current-capture handle and recording clue, not durable replay identity.
+Button Heist can record a deterministic `.heist` fixture. Each step is stored as a semantic matcher: label, traits, and stable identifiers. `heistId` is a current-capture handle and recording clue, not durable replay identity.
 
 Replay uses the same action path as live automation. If a label changes, a trait disappears, or a custom action is removed, the replay fails and surfaces the broken contract. JUnit XML output (`--junit`) puts those failures into CI.
 

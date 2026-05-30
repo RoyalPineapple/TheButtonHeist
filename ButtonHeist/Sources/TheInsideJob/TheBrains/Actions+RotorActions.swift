@@ -81,7 +81,7 @@ extension Actions {
         case .currentItemUnavailable(let heistId):
             return rotorFailure(
                 .elementNotFound,
-                observed: "currentHeistId=\(ActionCapabilityDiagnostic.quote(heistId)) is not available",
+                observed: "continuation.heistId=\(ActionCapabilityDiagnostic.quote(heistId)) is not available",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
@@ -89,8 +89,8 @@ extension Actions {
                 liveObject: liveObject,
                 suggestion: "use the heistId returned by the previous rotor result"
             )
-        case .currentTextRangeUnavailable:
-            return rotorFailure(.rotor, observed: "currentTextRange is not available",
+        case .continuationTextRangeUnavailable:
+            return rotorFailure(.rotor, observed: "continuation.textRange is not available",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "use the text range returned by the previous rotor result")

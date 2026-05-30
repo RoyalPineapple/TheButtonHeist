@@ -23,7 +23,7 @@ extension TheStash {
         case noSuchRotor(available: [String])
         case ambiguousRotor(available: [String])
         case currentItemUnavailable(String)
-        case currentTextRangeUnavailable
+        case continuationTextRangeUnavailable
         case noResult(String)
         case resultTargetUnavailable(String)
         case resultTargetNotParsed(String)
@@ -72,18 +72,18 @@ extension TheStash {
         switch continuation {
         case .none:
             break
-        case .item(let currentHeistId):
-            guard let currentObject = rotorCurrentObject(heistId: currentHeistId) else {
-                return .currentItemUnavailable(currentHeistId)
+        case .item(let continuationHeistId):
+            guard let currentObject = rotorCurrentObject(heistId: continuationHeistId) else {
+                return .currentItemUnavailable(continuationHeistId)
             }
             predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: nil)
-        case .textRange(let currentHeistId, let currentTextRange):
-            guard let currentObject = rotorCurrentObject(heistId: currentHeistId) else {
-                return .currentItemUnavailable(currentHeistId)
+        case .textRange(let continuationHeistId, let continuationTextRange):
+            guard let currentObject = rotorCurrentObject(heistId: continuationHeistId) else {
+                return .currentItemUnavailable(continuationHeistId)
             }
             guard let input = currentObject as? UITextInput,
-                  let range = textRange(from: currentTextRange, in: input) else {
-                return .currentTextRangeUnavailable
+                  let range = textRange(from: continuationTextRange, in: input) else {
+                return .continuationTextRangeUnavailable
             }
             predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: range)
         }

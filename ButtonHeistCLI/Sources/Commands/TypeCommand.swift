@@ -9,17 +9,13 @@ struct TypeCommand: AsyncParsableCommand, CLICommandContract {
             Type non-empty text character-by-character.
             Returns the current text field value after the operation.
 
-            A single positional argument is always interpreted as text, not \
-            as a heistId. Use --identifier or --heist-id to target a specific field.
-
             Examples:
-              buttonheist type_text "Hello" btn_nameField
-              buttonheist type_text "Hello"
-              buttonheist type_text "Hello" --identifier "nameField"
+              buttonheist type_text --text "Hello"
+              buttonheist type_text --text "Hello" --identifier "nameField"
             """
     )
 
-    @Argument(help: "Text to type")
+    @Option(name: .long, help: "Text to type")
     var text: String
 
     @OptionGroup var element: ElementTargetOptions

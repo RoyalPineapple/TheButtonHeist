@@ -21,7 +21,6 @@ extension TheFence {
 
     func handleGetScreen(_ request: ScreenRequest) async throws -> FenceResponse {
         let screen = try await sendAndAwaitScreen(.requestScreen, timeout: 30)
-        let metadata = ScreenshotMetadata(width: screen.width, height: screen.height)
         let responsePayload = screen.responsePayload(includeInterface: request.includeInterface)
         let options = ScreenshotResponseOptions(includeInterface: request.includeInterface)
 
@@ -46,9 +45,7 @@ extension TheFence {
             let url = try bookKeeper.writeScreenshotArtifact(
                 base64Data: screen.pngData,
                 outputPath: request.outputPath,
-                requestId: request.requestId,
-                command: .getScreen,
-                metadata: metadata
+                command: .getScreen
             )
             return .screenshot(path: url.path, payload: responsePayload, options: options)
         } catch BookKeeperError.unsafePath {
