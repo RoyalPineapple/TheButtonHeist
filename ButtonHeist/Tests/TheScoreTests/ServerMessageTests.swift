@@ -355,9 +355,7 @@ final class ServerMessageTests: XCTestCase {
         let result = ActionResult(
             success: true,
             method: .activate,
-            accessibilityTrace: trace,
-            screenName: "stored screen",
-            screenId: "stored_screen"
+            accessibilityTrace: trace
         )
 
         XCTAssertEqual(result.screenName, "Trace Screen")
@@ -374,17 +372,15 @@ final class ServerMessageTests: XCTestCase {
         let result = ActionResult(
             success: true,
             method: .activate,
-            accessibilityTrace: trace,
-            screenName: "stored screen",
-            screenId: "stored_screen"
+            accessibilityTrace: trace
         )
 
         let data = try JSONEncoder().encode(result)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertEqual(json["screenName"] as? String, "Trace Screen")
-        XCTAssertEqual(json["screenId"] as? String, "trace_screen")
+        XCTAssertNil(json["screenName"])
+        XCTAssertNil(json["screenId"])
         XCTAssertEqual(decoded.screenName, "Trace Screen")
         XCTAssertEqual(decoded.screenId, "trace_screen")
     }
@@ -395,9 +391,7 @@ final class ServerMessageTests: XCTestCase {
         let result = ActionResult(
             success: true,
             method: .activate,
-            accessibilityTrace: trace,
-            screenName: "stored screen",
-            screenId: "stored_screen"
+            accessibilityTrace: trace
         )
 
         XCTAssertNil(result.screenName)
@@ -417,6 +411,14 @@ final class ServerMessageTests: XCTestCase {
 
         XCTAssertEqual(result.screenName, "Trace Screen")
         XCTAssertEqual(result.screenId, "trace_screen")
+    }
+
+    func testActionResultRejectsStoredScreenContextFields() {
+        let data = Data(#"{"success":true,"method":"activate","screenName":"stored screen"}"#.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionResult.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("screenName"), "\(error)")
+        }
     }
 
     func testActionResultPayloadDecodesFromExplicitJSON() throws {
@@ -540,8 +542,6 @@ final class ServerMessageTests: XCTestCase {
     private struct StoredActionResultScreenContextFixture: Encodable {
         let success = true
         let method = ActionMethod.activate
-        let screenName = "stored screen"
-        let screenId = "stored_screen"
         let accessibilityTrace: AccessibilityTrace
     }
 

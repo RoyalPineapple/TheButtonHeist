@@ -159,14 +159,14 @@ public struct ActionResult: Codable, Sendable {
     /// Whether the UI was still animating when this result was produced.
     /// nil means idle (no animations detected).
     public let animating: Bool?
-    /// Screen name projection. When `accessibilityTrace` is present,
-    /// constructed and decoded results project this field from the final
-    /// capture.
-    public let screenName: String?
-    /// Screen id projection. When `accessibilityTrace` is present, constructed
-    /// and decoded results project this field from the final capture
-    /// context/interface.
-    public let screenId: String?
+    /// Screen name projection derived from the final trace capture.
+    public var screenName: String? {
+        accessibilityTrace?.endpointScreenNameProjection
+    }
+    /// Screen id projection derived from the final trace capture.
+    public var screenId: String? {
+        accessibilityTrace?.endpointScreenIdProjection
+    }
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
@@ -186,8 +186,6 @@ public struct ActionResult: Codable, Sendable {
         payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         animating: Bool? = nil,
-        screenName: String? = nil,
-        screenId: String? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) {
@@ -198,13 +196,6 @@ public struct ActionResult: Codable, Sendable {
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
         self.animating = animating
-        if let accessibilityTrace {
-            self.screenName = accessibilityTrace.endpointScreenNameProjection
-            self.screenId = accessibilityTrace.endpointScreenIdProjection
-        } else {
-            self.screenName = screenName
-            self.screenId = screenId
-        }
         self.settled = settled
         self.settleTimeMs = settleTimeMs
     }
@@ -217,8 +208,6 @@ public struct ActionResult: Codable, Sendable {
         case payload
         case accessibilityTrace
         case animating
-        case screenName
-        case screenId
         case settled
         case settleTimeMs
     }
@@ -249,8 +238,6 @@ public struct ActionResult: Codable, Sendable {
             payload: try container.decodeIfPresent(ResultPayload.self, forKey: .payload),
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             animating: try container.decodeIfPresent(Bool.self, forKey: .animating),
-            screenName: try container.decodeIfPresent(String.self, forKey: .screenName),
-            screenId: try container.decodeIfPresent(String.self, forKey: .screenId),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
         )
@@ -277,8 +264,6 @@ public struct ActionResult: Codable, Sendable {
         try container.encodeIfPresent(payload, forKey: .payload)
         try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
         try container.encodeIfPresent(animating, forKey: .animating)
-        try container.encodeIfPresent(screenName, forKey: .screenName)
-        try container.encodeIfPresent(screenId, forKey: .screenId)
         try container.encodeIfPresent(settled, forKey: .settled)
         try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
     }

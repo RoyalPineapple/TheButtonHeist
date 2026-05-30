@@ -4,12 +4,11 @@ import TheScore
 
 /// Constructs ActionResult values with compile-time separation of success and failure paths.
 ///
-/// The builder captures screen context (screenName/screenId) from either a snapshot array or
-/// explicit values. Calling `.success()` vs `.failure()` enforces that error-only fields
-/// (errorKind) cannot appear on success results.
+/// The builder stages action metadata and trace evidence. Calling `.success()` vs `.failure()`
+/// enforces that error-only fields (errorKind) cannot appear on success results.
 ///
 /// Usage:
-///     var builder = ActionResultBuilder(method: .activate, snapshot: afterSnapshot)
+///     var builder = ActionResultBuilder(method: .activate)
 ///     builder.message = "Tapped Sign In"
 ///     builder.accessibilityTrace = trace
 ///     return builder.success()
@@ -19,33 +18,19 @@ import TheScore
 /// stages MainActor data.
 @MainActor struct ActionResultBuilder { // swiftlint:disable:this agent_main_actor_value_type
     let method: ActionMethod
-    let screenName: String?
-    let screenId: String?
     var message: String?
     var accessibilityTrace: AccessibilityTrace?
     var settled: Bool?
     var settleTimeMs: Int?
 
-    /// Create a builder deriving screenName/screenId from a ScreenElement snapshot.
-    init(method: ActionMethod, snapshot: [TheStash.ScreenElement]) {
+    init(method: ActionMethod) {
         self.method = method
-        self.screenName = snapshot.screenName
-        self.screenId = snapshot.screenId
     }
 
     /// Create a builder from an accessibility capture receipt.
     init(method: ActionMethod, capture: AccessibilityTrace.Capture) {
         self.method = method
-        self.screenName = nil
-        self.screenId = nil
         self.accessibilityTrace = AccessibilityTrace(capture: capture)
-    }
-
-    /// Create a builder with explicit screen context (when no snapshot is available).
-    init(method: ActionMethod, screenName: String?, screenId: String?) {
-        self.method = method
-        self.screenName = screenName
-        self.screenId = screenId
     }
 
     func success(payload: ResultPayload? = nil) -> ActionResult {
@@ -55,8 +40,6 @@ import TheScore
             message: message,
             payload: payload,
             accessibilityTrace: accessibilityTrace,
-            screenName: screenName,
-            screenId: screenId,
             settled: settled,
             settleTimeMs: settleTimeMs
         )
@@ -70,8 +53,6 @@ import TheScore
             errorKind: errorKind,
             payload: payload,
             accessibilityTrace: accessibilityTrace,
-            screenName: screenName,
-            screenId: screenId,
             settled: settled,
             settleTimeMs: settleTimeMs
         )

@@ -78,11 +78,7 @@ extension TheBrains {
             failedIndex: failedIndex
         )
 
-        var builder = ActionResultBuilder(
-            method: .batchExecutionPlan,
-            screenName: stash.lastScreenName,
-            screenId: stash.lastScreenId
-        )
+        var builder = ActionResultBuilder(method: .batchExecutionPlan)
         builder.message = batchExecutionMessage(
             completedCount: stepResults.count(where: { !$0.isSkipped }),
             failedCount: stepResults.count(where: \.isFailure),
