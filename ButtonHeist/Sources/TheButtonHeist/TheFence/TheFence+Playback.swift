@@ -156,7 +156,7 @@ extension TheFence {
             )
         }
         let acceptedKeys = Set(
-            command.parameters
+            command.descriptor.parameters
                 .map(\.key)
                 .filter { !command.descriptor.elementTargetParameterKeys.contains($0) }
                 .filter { $0 != "expect" }

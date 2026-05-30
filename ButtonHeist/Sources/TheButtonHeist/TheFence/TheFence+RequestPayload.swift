@@ -143,7 +143,7 @@ extension TheFence {
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try ExpectationPayload(arguments: arguments)
         let dispatch: DecodedRequestDispatch
-        if command.requestPayloadKind == .waitForChange {
+        if command.descriptor.requestPayloadKind == .waitForChange {
             let target = WaitForChangeTarget(
                 expect: expectationPayload.expectation,
                 timeout: expectationPayload.timeout
@@ -176,7 +176,7 @@ extension TheFence {
 
     private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
         let metadataKeys = Set(["requestId"])
-        let parameterKeys = Set(command.parameters.map(\.key))
+        let parameterKeys = Set(command.descriptor.parameters.map(\.key))
         let allowedKeys = metadataKeys.union(parameterKeys)
         guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return
@@ -193,7 +193,7 @@ extension TheFence {
         arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> DecodedRequestDispatch {
-        switch command.requestPayloadKind {
+        switch command.descriptor.requestPayloadKind {
         case .none:
             if command == .dismissKeyboard {
                 return Self.clientActionDispatch([.resignFirstResponder])

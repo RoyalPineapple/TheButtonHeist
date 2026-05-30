@@ -137,14 +137,14 @@ extension CLICommandContract {
     }
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {
-        guard case .string(let value)? = fenceCommand.defaultArgumentValue(for: key) else {
+        guard case .string(let value)? = fenceCommand.descriptor.defaultArgumentValue(for: key) else {
             fatalError("No string default registered for \(fenceCommand.rawValue).\(key.rawValue)")
         }
         return value
     }
 
     static func catalogAllowedValues(for key: FenceParameterKey) -> [String] {
-        guard let values = fenceCommand.parameter(named: key)?.enumValues else {
+        guard let values = fenceCommand.descriptor.parameter(named: key)?.enumValues else {
             fatalError("No enum values registered for \(fenceCommand.rawValue).\(key.rawValue)")
         }
         return values

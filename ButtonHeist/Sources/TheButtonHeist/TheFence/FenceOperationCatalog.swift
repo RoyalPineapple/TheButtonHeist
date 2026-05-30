@@ -37,7 +37,7 @@ public enum FenceOperationCatalog {
         normalizeCanonicalStep(
             step,
             context: context,
-            isExecutable: \.isBatchExecutable
+            isExecutable: { $0.descriptor.isBatchExecutable }
         )
     }
 
@@ -62,7 +62,7 @@ public enum FenceOperationCatalog {
     private static func normalizeCanonicalStep(
         _ step: TheFence.CommandArgumentEnvelope,
         context: String,
-        isExecutable: KeyPath<TheFence.Command, Bool>?
+        isExecutable: ((TheFence.Command) -> Bool)?
     ) -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
         let commandName: String
         do {
@@ -85,7 +85,7 @@ public enum FenceOperationCatalog {
         commandName: String,
         arguments: TheFence.CommandArgumentEnvelope,
         context: String,
-        isExecutable: KeyPath<TheFence.Command, Bool>?
+        isExecutable: ((TheFence.Command) -> Bool)?
     ) -> Result<(command: TheFence.Command, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
         guard let command = TheFence.Command(rawValue: commandName) else {
             return .failure(FenceOperationRoutingError(
@@ -93,7 +93,7 @@ public enum FenceOperationCatalog {
             ))
         }
 
-        if let isExecutable, !command[keyPath: isExecutable] {
+        if let isExecutable, !isExecutable(command) {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command \"\(command.rawValue)\" is not supported"
             ))
@@ -112,7 +112,7 @@ public enum FenceOperationCatalog {
             ))
         }
 
-        guard command.isBatchExecutable else {
+        guard command.descriptor.isBatchExecutable else {
             return .failure(FenceOperationRoutingError(
                 message: "\(context) command \"\(command.rawValue)\" is not batch-executable"
             ))

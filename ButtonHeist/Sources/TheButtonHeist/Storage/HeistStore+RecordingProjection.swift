@@ -17,7 +17,7 @@ extension HeistStore {
         targetCapture: AccessibilityTrace.Capture?
     ) {
         guard isRecordingHeist else { return }
-        guard request.command.isBatchExecutable else { return }
+        guard request.command.descriptor.isBatchExecutable else { return }
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 

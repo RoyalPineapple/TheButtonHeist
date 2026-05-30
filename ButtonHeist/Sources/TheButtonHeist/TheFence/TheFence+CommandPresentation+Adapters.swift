@@ -5,7 +5,7 @@ public extension TheFence.Command {
     static var mcpServerInstructions: String {
         let selectorKeys = inlineList(ElementTarget.selectorFieldNames.map { "target.\($0)" })
         let disambiguatorKeys = inlineList(ElementTarget.disambiguatorFieldNames.map { "target.\($0)" })
-        let expectationKey = activate.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue
+        let expectationKey = activate.descriptor.parameter(named: .expect)?.key ?? FenceParameterKey.expect.rawValue
         return """
             Button Heist drives iOS apps through the accessibility layer — the same interface \
             VoiceOver uses. Target elements with flat ElementTarget selector fields: \(selectorKeys), \

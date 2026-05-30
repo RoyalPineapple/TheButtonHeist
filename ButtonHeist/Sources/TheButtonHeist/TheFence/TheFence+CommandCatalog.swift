@@ -61,6 +61,14 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         return parameters.map(\.key).filter(elementTargetKeys.contains)
     }
 
+    public func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
+        parameters.first { $0.key == key.rawValue }
+    }
+
+    public func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
+        parameter(named: key)?.defaultValue
+    }
+
     public init(
         command: TheFence.Command,
         requestPayloadKind: FenceRequestPayloadKind,
@@ -113,31 +121,11 @@ public extension TheFence.Command {
         descriptors.filter { $0.cliExposure == .directCommand }
     }
 
-    var cliExposure: CLIExposure { descriptor.cliExposure }
-
-    var mcpExposure: MCPExposure { descriptor.mcpExposure }
-
-    var parameters: [FenceParameterSpec] { descriptor.parameters }
-
-    var requestPayloadKind: FenceRequestPayloadKind { descriptor.requestPayloadKind }
-
-    func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
-        parameters.first { $0.key == key.rawValue }
-    }
-
-    func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
-        parameter(named: key)?.defaultValue
-    }
-
-    var isBatchExecutable: Bool { descriptor.isBatchExecutable }
-
     static var batchExecutableCases: [Self] {
         allCases.filter { command in
             command != .runBatch && command.catalogEntry.isBatchExecutable
         }
     }
-
-    var requiresConnectionBeforeDispatch: Bool { descriptor.requiresConnectionBeforeDispatch }
 
     static var mcpToolContracts: [MCPToolContract] {
         descriptors.compactMap { descriptor in
