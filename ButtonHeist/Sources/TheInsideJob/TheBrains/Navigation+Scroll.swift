@@ -74,28 +74,12 @@ extension Navigation {
         }
     }
 
-    static func requiredAxis(for direction: ScrollSearchDirection) -> ScrollAxis {
-        switch direction {
-        case .up, .down: return .vertical
-        case .left, .right: return .horizontal
-        }
-    }
-
     // MARK: - Direction Mapping
 
     static func edgeDirection(for edge: ScrollEdge) -> UIAccessibilityScrollDirection {
         switch edge {
         case .top: return .up
         case .bottom: return .down
-        case .left: return .left
-        case .right: return .right
-        }
-    }
-
-    static func uiScrollDirection(for direction: ScrollSearchDirection) -> UIAccessibilityScrollDirection {
-        switch direction {
-        case .down: return .down
-        case .up: return .up
         case .left: return .left
         case .right: return .right
         }

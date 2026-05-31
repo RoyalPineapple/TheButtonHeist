@@ -196,7 +196,7 @@ extension TheFence.Command {
         case .elementSearch:
             entry.isBatchExecutable = true
             entry.parameters = target + [
-                param(.direction, .string, enumValues: fenceEnumValues(ScrollSearchDirection.self)),
+                param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self)),
             ] + expectation
             entry.description = "Search scrollable content for a semantic element match without performing an action."
         case .scrollToEdge:

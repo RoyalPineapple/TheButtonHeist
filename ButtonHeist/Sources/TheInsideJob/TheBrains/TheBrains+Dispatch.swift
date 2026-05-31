@@ -112,7 +112,7 @@ extension TheBrains {
 
     func performElementSearch(
         elementTarget: ElementTarget?,
-        direction: ScrollSearchDirection,
+        direction: ScrollDirection,
         method: ActionMethod
     ) async -> ActionResult {
         guard refresh() != nil else {

@@ -14,7 +14,7 @@ extension Navigation {
     /// `element_search` never delegates to semantic reveal/actionability commands.
     func executeElementSearch(
         elementTarget: ElementTarget?,
-        direction: ScrollSearchDirection
+        direction: ScrollDirection
     ) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = elementTarget else {
             return .failure(.elementSearch, message: "Element target required for element_search")

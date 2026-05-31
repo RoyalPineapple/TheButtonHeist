@@ -135,11 +135,6 @@ extension ScrollTarget: Codable {
     }
 }
 
-/// Direction for scroll search
-public enum ScrollSearchDirection: String, Codable, Sendable, CaseIterable {
-    case down, up, left, right
-}
-
 /// Target for one-shot scroll-to-visible.
 /// The element must be known (in the registry with a content-space position).
 /// Jumps directly to the element's position — no iterative search.
@@ -165,10 +160,10 @@ public struct ElementSearchTarget: Sendable {
     /// Element to search for while scrolling.
     public let elementTarget: ElementTarget
     /// Starting scroll direction.
-    public let direction: ScrollSearchDirection
+    public let direction: ScrollDirection
     public init(
         elementTarget: ElementTarget,
-        direction: ScrollSearchDirection = .down
+        direction: ScrollDirection = .down
     ) {
         self.elementTarget = elementTarget
         self.direction = direction
@@ -218,7 +213,7 @@ extension ElementSearchTarget: Codable {
             )
         }
         self.elementTarget = elementTarget
-        self.direction = try container.decode(ScrollSearchDirection.self, forKey: .direction)
+        self.direction = try container.decode(ScrollDirection.self, forKey: .direction)
     }
 
     public func encode(to encoder: Encoder) throws {
