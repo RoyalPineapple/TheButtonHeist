@@ -59,25 +59,8 @@ extension TheHandoff {
             disconnectedDevice: disconnectedDevice,
             policy: autoReconnectRecoveryPolicy,
             attemptTimeout: reconnectAttemptTimeout,
-            runtime: self
+            owner: self
         )
-    }
-
-    func publishReconnectStatus(_ message: String) {
-        onStatus?(message)
-    }
-
-    func connectForAutoReconnect(to device: DiscoveredDevice) -> UUID {
-        closeConnection()
-        return openConnection(to: device)
-    }
-
-    func waitForAutoReconnectResult(timeout: TimeInterval) async throws {
-        try await waitForConnectionResult(timeout: timeout)
-    }
-
-    func disconnectAutoReconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError) {
-        abortConnectionAttempt(attemptID, failure: failure)
     }
 
     /// Compute display name with disambiguation when multiple devices have the same app.
