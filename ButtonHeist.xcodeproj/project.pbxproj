@@ -180,7 +180,6 @@
 		69471C3179E61AF37C76C6E8 /* DiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 797239827C8461DA6F51C8DB /* DiagnosticsTests.swift */; };
 		698A3E5AED394552492E2372 /* DeviceConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0E22793B929DC48507268C /* DeviceConnection.swift */; };
 		6AC2B7B3C48E49FC43D9ADB3 /* SocketSendBufferTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 888C12427D711BF0634767DF /* SocketSendBufferTests.swift */; };
-		6B2845AA8800099AA20A57AE /* PinchRotateTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6345B6B3D37B186F1FA3DB4F /* PinchRotateTargets.swift */; };
 		6B7B275AD269B3C186105A51 /* FenceJSON+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E4A5E94AE0722D3E1B9624 /* FenceJSON+Session.swift */; };
 		6BB029DA9ECB8B7273C4ED53 /* TreeChangeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD8B147CDF7EEAF215380C3F /* TreeChangeModels.swift */; };
 		6BEF5654D1A9FFD654921870 /* PendingRequestTrackerIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE5A357B75EBB623990B852 /* PendingRequestTrackerIntegrationTests.swift */; };
@@ -233,7 +232,6 @@
 		8E9AD2C6656A928C3154500D /* ConnectionPhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE04A923F733FBDDDE13EAFA /* ConnectionPhaseTests.swift */; };
 		8F23EC2469A67303E23E2E45 /* SocketClientLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED201F7A0C3EE7C10574BF81 /* SocketClientLifecycleTests.swift */; };
 		8F6EEC1B563048DE8C0A41B1 /* HandoffDiscoveryLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45EA199501640A247FB114DE /* HandoffDiscoveryLifecycle.swift */; };
-		8F8A53891CCD15FB5673814F /* TheFence+RequestPayload+TransformGestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8525C7CC57F974C78534C5B6 /* TheFence+RequestPayload+TransformGestures.swift */; };
 		8FEBA15F69BA9F87BA344403 /* TheFence+Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 309BB45F850067AAEA4E20C3 /* TheFence+Connection.swift */; };
 		908DC4CE0DA755F8BD3D326E /* ElementMatching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CE2FC375A907CC2D795A2B3 /* ElementMatching.swift */; };
 		90C16D53B6D3D2C41A8CC04B /* Elements.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88BDCE237E3F7B5B1B2C73F6 /* Elements.swift */; };
@@ -326,7 +324,6 @@
 		C5342E6482326D40D2501735 /* swift-crypto_CCryptoBoringSSL.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = 13D30AC92A982F4FC9F47B71 /* swift-crypto_CCryptoBoringSSL.bundle */; };
 		C54E213694B1990DAE41D068 /* InsideJobExposureRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F38D815953121AF8392D5175 /* InsideJobExposureRuntime.swift */; };
 		C58ABCE1E2EC2AABA74AC5B0 /* X509.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2AAAEEB751AA8F9E857DAF57 /* X509.framework */; };
-		C631D8CED9D54B65D5B59413 /* TheSafecracker+MultiTouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B37E569E22FDE553EB0005A /* TheSafecracker+MultiTouch.swift */; };
 		C6AFA8AD52E085963679EC21 /* ActionResultPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867F46E029ED8041F4650386 /* ActionResultPayloads.swift */; };
 		C74FED6893CD13E4826F1CC3 /* InterfaceSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC9469301CCEFAA5EA43116 /* InterfaceSelection.swift */; };
 		C7C2040B34E358C9BDE7C21C /* swift-crypto_CryptoBoringWrapper.bundle in Dependencies */ = {isa = PBXBuildFile; fileRef = D99E915C8B258173B025852E /* swift-crypto_CryptoBoringWrapper.bundle */; };
@@ -668,7 +665,6 @@
 		49DC85F5FB0AB0E2A81C9B96 /* TheHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheHandoff.swift; sourceTree = "<group>"; };
 		49E4AF8938E348B619C62C6D /* AccessibilityArmingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityArmingTests.swift; sourceTree = "<group>"; };
 		4B0A2A0866EE7E1975FF7580 /* TheFence+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Playback.swift"; sourceTree = "<group>"; };
-		4B37E569E22FDE553EB0005A /* TheSafecracker+MultiTouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheSafecracker+MultiTouch.swift"; sourceTree = "<group>"; };
 		4BC89E2BFE30B17274F2A404 /* GetScreenArtifactResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetScreenArtifactResponseTests.swift; sourceTree = "<group>"; };
 		4BD75B6C0E7FA3AC5039F61A /* CancellableSleep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CancellableSleep.swift; sourceTree = "<group>"; };
 		4CECA4ED8F3DA5B21DA1E4C7 /* ButtonHeistTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistTests-Info.plist"; sourceTree = "<group>"; };
@@ -707,7 +703,6 @@
 		61D1BB785CFAF254933D5C1C /* AccessibilityElement+Geometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityElement+Geometry.swift"; sourceTree = "<group>"; };
 		61EDA1A956342901286B448D /* InteractivityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractivityTests.swift; sourceTree = "<group>"; };
 		62DD31D9145D6BABD29D286B /* USBDeviceDiscoveryParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscoveryParsingTests.swift; sourceTree = "<group>"; };
-		6345B6B3D37B186F1FA3DB4F /* PinchRotateTargets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinchRotateTargets.swift; sourceTree = "<group>"; };
 		63AEBA441147E38C0ED98046 /* TheGetaway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheGetaway.swift; sourceTree = "<group>"; };
 		646758066069FA0EF01D841D /* PrivateStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivateStorage.swift; sourceTree = "<group>"; };
 		6536DB1847A58980945D1D48 /* FenceJSON+Response.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FenceJSON+Response.swift"; sourceTree = "<group>"; };
@@ -755,7 +750,6 @@
 		836230F6A839FEB27A183BFE /* AccessibilityTraceMoveInference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceMoveInference.swift; sourceTree = "<group>"; };
 		83B4BD6A0F12986301C77C34 /* TheTripwire+WindowSignals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheTripwire+WindowSignals.swift"; sourceTree = "<group>"; };
 		84D1831C2867656143871E2E /* TheFence+RequestPayload+RotorActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+RotorActions.swift"; sourceTree = "<group>"; };
-		8525C7CC57F974C78534C5B6 /* TheFence+RequestPayload+TransformGestures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+TransformGestures.swift"; sourceTree = "<group>"; };
 		853859C605E256FDB5707237 /* TheSafecrackerIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheSafecrackerIntegrationTests.swift; sourceTree = "<group>"; };
 		85B2E875026420F5AB06D0A2 /* BatchExecutionResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExecutionResult.swift; sourceTree = "<group>"; };
 		85CAF3FDE818AAC58F840AEE /* ClientSessionPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSessionPayloads.swift; sourceTree = "<group>"; };
@@ -1118,7 +1112,6 @@
 				EDDC3F96888AFA73DB200C3C /* TheFence+RequestPayload+SwipeDragGestures.swift */,
 				B69C08BACDB197409DCB8BB1 /* TheFence+RequestPayload+TapGestures.swift */,
 				4D45DB91CC78C277BFBD228B /* TheFence+RequestPayload+TextActions.swift */,
-				8525C7CC57F974C78534C5B6 /* TheFence+RequestPayload+TransformGestures.swift */,
 				E878CB6BCD1CCD778751DFB2 /* TheFence+RequestPayload+WaitActions.swift */,
 				0E70B3ADCA6E79A1A9C7A241 /* TheFence+RequestTargetDecoding.swift */,
 				1A376430B035B200745A378D /* TheFence+RuntimeState.swift */,
@@ -1456,7 +1449,6 @@
 				2A47A1C4514B352FEB2DF816 /* InterfaceQuery.swift */,
 				670E79F3B249E61558AD14E5 /* InterfaceSummary.swift */,
 				8EB2EFB0B0E9B9ADCBDE598A /* Messages.swift */,
-				6345B6B3D37B186F1FA3DB4F /* PinchRotateTargets.swift */,
 				113FCF710985430B7CB20986 /* ScoreDescription.swift */,
 				D98A5AAE14FECB910B358C91 /* ScreenPayload.swift */,
 				8292AF2F81B2D0A51BF11C1A /* ScrollCommandPayloads.swift */,
@@ -1494,7 +1486,6 @@
 				505ED717985FBDFE68196CEB /* SyntheticTouch.swift */,
 				1308BFFECC16AF7E933839EB /* TheSafecracker.swift */,
 				321FA500B51174D203977116 /* TheSafecracker+IOHIDEventBuilder.swift */,
-				4B37E569E22FDE553EB0005A /* TheSafecracker+MultiTouch.swift */,
 				BF5926116DFCA33520480CBA /* TheSafecracker+Scroll.swift */,
 				CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */,
 			);
@@ -1935,7 +1926,6 @@
 				8854D0EBA5D2E6EA3B503E5D /* InterfaceQuery.swift in Sources */,
 				DC1900852607D7264D4AD3BF /* InterfaceSummary.swift in Sources */,
 				EB70E312ACAB369A26299111 /* Messages.swift in Sources */,
-				6B2845AA8800099AA20A57AE /* PinchRotateTargets.swift in Sources */,
 				D4C10368F1E1A511A69FCCFA /* ScoreDescription.swift in Sources */,
 				C9F834AE3D3F08D956C3FB75 /* ScreenPayload.swift in Sources */,
 				B65047B647D7BFD40ADD4316 /* ScrollCommandPayloads.swift in Sources */,
@@ -2085,7 +2075,6 @@
 				DE851FFADFCAC1719EC060DC /* ObjCRuntime.swift in Sources */,
 				23383C5DDB478FF24AC6A933 /* SyntheticTouch.swift in Sources */,
 				45C3D85998AB61A6D3ECCDD8 /* TheSafecracker+IOHIDEventBuilder.swift in Sources */,
-				C631D8CED9D54B65D5B59413 /* TheSafecracker+MultiTouch.swift in Sources */,
 				5EB6D4F065D16719C45D0C41 /* TheSafecracker+Scroll.swift in Sources */,
 				19B2883BD89FF79837579882 /* TheSafecracker+TapDiagnostic.swift in Sources */,
 				461D067E90C5263C7A4CE830 /* TheSafecracker.swift in Sources */,
@@ -2188,7 +2177,6 @@
 				5F85635443EA062711F7F820 /* TheFence+RequestPayload+SwipeDragGestures.swift in Sources */,
 				A14B65F2D503399CDFCD28D1 /* TheFence+RequestPayload+TapGestures.swift in Sources */,
 				A691EC031A9DC23848088E6C /* TheFence+RequestPayload+TextActions.swift in Sources */,
-				8F8A53891CCD15FB5673814F /* TheFence+RequestPayload+TransformGestures.swift in Sources */,
 				D12A6C217CD410B44E4CCB97 /* TheFence+RequestPayload+WaitActions.swift in Sources */,
 				4A27AC864EB826135413E2D2 /* TheFence+RequestPayload.swift in Sources */,
 				CFA4D8093D79D49EF74B2DAC /* TheFence+RequestTargetDecoding.swift in Sources */,

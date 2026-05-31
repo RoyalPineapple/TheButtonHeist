@@ -17,12 +17,6 @@ extension TheFence {
             return decodedGestureAction(.swipe(try decodeSwipeTarget(request)))
         case .drag:
             return decodedGestureAction(.drag(try decodeDragTarget(request)))
-        case .pinch:
-            return decodedGestureAction(.pinch(try decodePinchTarget(request)))
-        case .rotate:
-            return decodedGestureAction(.rotate(try decodeRotateTarget(request)))
-        case .twoFingerTap:
-            return decodedGestureAction(.twoFingerTap(try decodeTwoFingerTapTarget(request)))
         default:
             throw FenceError.invalidRequest("Unexpected gesture command: \(command.rawValue)")
         }

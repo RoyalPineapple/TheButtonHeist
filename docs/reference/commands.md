@@ -21,10 +21,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
 | `long_press` | `long_press` | direct | yes | Long-press a coordinate or semantic target for a resolved duration. |
 | `one_finger_tap` | `one_finger_tap` | direct | yes | Tap a coordinate or semantic target after actionability resolution. |
-| `pinch` | `pinch` | direct | yes | Pinch around a resolved center point using scale, angle, and duration. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
-| `rotate` | `rotate` | direct | yes | Rotate around a resolved center point using angle, radius, and duration. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor using direction and continuation metadata. |
 | `run_batch` | `run_batch` | direct | no | Execute ordered command steps with batch policy and per-step expectations. |
 | `scroll` | `scroll` | direct | yes | Scroll one page in a selected container or semantic target's owning scroll ancestor. |
@@ -34,7 +32,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
 | `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic heist fixture. |
 | `swipe` | `swipe` | direct | yes | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
-| `two_finger_tap` | `two_finger_tap` | direct | yes | Tap with two fingers at a coordinate or actionable semantic target. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
 | `wait_for` | `wait_for` | direct | yes | Wait for a semantic element to appear or disappear. |
 | `wait_for_change` | `wait_for_change` | direct | yes | Wait for any UI change or for an expectation to become true. |
@@ -292,28 +289,6 @@ Parameters:
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `pinch`
-
-Pinch around a resolved center point using scale, angle, and duration.
-
-- CLI: direct command `pinch`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `scale` | `number` | yes | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `spread` | `number` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
 ### `ping`
 
 Check connection health without reading accessibility state.
@@ -341,28 +316,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `input` | `string` | yes | - | - |
-
-### `rotate`
-
-Rotate around a resolved center point using angle, radius, and duration.
-
-- CLI: direct command `rotate`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `angle` | `number` | yes | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `radius` | `number` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
 
 ### `rotor`
 
@@ -530,26 +483,6 @@ Parameters:
 | `endX` | `number` | no | - | - |
 | `endY` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `two_finger_tap`
-
-Tap with two fingers at a coordinate or actionable semantic target.
-
-- CLI: direct command `two_finger_tap`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `spread` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 

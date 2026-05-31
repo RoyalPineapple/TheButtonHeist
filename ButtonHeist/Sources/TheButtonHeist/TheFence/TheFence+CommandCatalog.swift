@@ -14,9 +14,6 @@ extension TheFence {
         case longPress = "long_press"
         case swipe
         case drag
-        case pinch
-        case rotate
-        case twoFingerTap = "two_finger_tap"
         case scroll
         case scrollToVisible = "scroll_to_visible"
         case elementSearch = "element_search"
@@ -188,22 +185,6 @@ extension TheFence.Command {
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.requiredEnd + FenceParameterBlocks.optionalStart + [duration] + expectation
             entry.description = "Drag from one point to another using explicit coordinates or a semantic target."
-        case .pinch:
-            entry.isBatchExecutable = true
-            entry.parameters = target + [param(.scale, .number, required: true)] + FenceParameterBlocks.center + [
-                param(.spread, .number), duration,
-            ] + expectation
-            entry.description = "Pinch around a resolved center point using scale, angle, and duration."
-        case .rotate:
-            entry.isBatchExecutable = true
-            entry.parameters = target + [param(.angle, .number, required: true)] + FenceParameterBlocks.center + [
-                param(.radius, .number), duration,
-            ] + expectation
-            entry.description = "Rotate around a resolved center point using angle, radius, and duration."
-        case .twoFingerTap:
-            entry.isBatchExecutable = true
-            entry.parameters = target + FenceParameterBlocks.center + [param(.spread, .number)] + expectation
-            entry.description = "Tap with two fingers at a coordinate or actionable semantic target."
         case .scroll:
             entry.isBatchExecutable = true
             entry.parameters = scrollContainerTarget + target + [

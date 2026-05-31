@@ -208,7 +208,7 @@ extension TheFence {
             )
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
-        case .oneFingerTap, .longPress, .swipe, .drag, .pinch, .rotate, .twoFingerTap:
+        case .oneFingerTap, .longPress, .swipe, .drag:
             return try decodeGestureAction(command: command, request: arguments)
         case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge, .activate, .rotor, .typeText,
              .editAction, .setPasteboard, .waitFor:

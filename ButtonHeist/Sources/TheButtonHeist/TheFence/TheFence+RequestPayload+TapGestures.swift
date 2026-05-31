@@ -28,17 +28,4 @@ extension TheFence {
         return LongPressTarget(selection: selection, duration: try request.gestureDuration() ?? 0.5)
     }
 
-    func decodeTwoFingerTapTarget(_ request: CommandArgumentEnvelope) throws -> TwoFingerTapTarget {
-        let center = try decodeRequiredPointIntent(
-            request: request,
-            elementTarget: try request.decodedElementTarget(),
-            xKey: "centerX",
-            yKey: "centerY",
-            field: "centerX/centerY",
-            missingMessage: "center requires an element target or center coordinates"
-        )
-        let target = TwoFingerTapTarget(center: center, spread: try request.schemaNumber("spread"))
-        try validatePositiveGestureNumber(target.spread, field: "spread")
-        return target
-    }
 }

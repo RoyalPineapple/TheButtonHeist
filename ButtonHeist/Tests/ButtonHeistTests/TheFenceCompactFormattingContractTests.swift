@@ -43,11 +43,11 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
 
     func testCompactActionRenderingDoesNotInferCommandFromActionMethod() {
         let output = FenceResponse.action(
-            command: .twoFingerTap,
+            command: .drag,
             result: ActionResult(success: true, method: .syntheticTap)
         ).compactFormatted()
 
-        XCTAssertEqual(output, "two_finger_tap: ok")
+        XCTAssertEqual(output, "drag: ok")
     }
 
 }

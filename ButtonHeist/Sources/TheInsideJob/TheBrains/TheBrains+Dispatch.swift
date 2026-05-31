@@ -36,12 +36,6 @@ extension TheBrains {
             return await performInteraction(method: .syntheticSwipe) { await self.actions.executeSwipe(target) }
         case .drag(let target):
             return await performInteraction(method: .syntheticDrag) { await self.actions.executeDrag(target) }
-        case .pinch(let target):
-            return await performInteraction(method: .syntheticPinch) { await self.actions.executePinch(target) }
-        case .rotate(let target):
-            return await performInteraction(method: .syntheticRotate) { await self.actions.executeRotate(target) }
-        case .twoFingerTap(let target):
-            return await performInteraction(method: .syntheticTwoFingerTap) { await self.actions.executeTwoFingerTap(target) }
         case .typeText(let target):
             return await performInteraction(method: .typeText) { await self.actions.executeTypeText(target) }
         case .scroll(let target):

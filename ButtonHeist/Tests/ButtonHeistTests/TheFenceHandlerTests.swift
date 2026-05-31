@@ -971,131 +971,6 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(target.end, ScreenPoint(x: 300.0, y: 600.0))
     }
 
-    @ButtonHeistActor
-    func testPinchMissingScale() async {
-        await assertOperationValidationError(
-            command: .pinch,
-            equals: "schema validation failed for scale: observed missing; expected number"
-        )
-    }
-
-    @ButtonHeistActor
-    func testPinchRequiresCenter() async {
-        await assertOperationValidationError(
-            command: .pinch,
-            arguments: ["scale": .double(2.0)],
-            equals: "center requires an element target or center coordinates"
-        )
-    }
-
-    @ButtonHeistActor
-    func testPinchWithCenterCoordinatesDispatchesCanonicalPayload() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(command: .pinch, values: [
-                "scale": .double(2.0),
-                "centerX": .double(200.0),
-                "centerY": .double(500.0),
-            ])
-        guard let (message, _) = mockConn.sent.last,
-              case .pinch(let target) = message else {
-            XCTFail("Expected pinch message")
-            return
-        }
-        XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
-    }
-
-    @ButtonHeistActor
-    func testPinchWithIdentifierDispatchesCanonicalPayload() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(command: .pinch, values: [
-                "scale": .double(2.0),
-                "target": targetValue(identifier: "map"),
-            ])
-        guard let (message, _) = mockConn.sent.last,
-              case .pinch(let target) = message else {
-            XCTFail("Expected pinch message")
-            return
-        }
-        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "map"))))
-    }
-
-    @ButtonHeistActor
-    func testRotateWithCenterCoordinatesDispatchesCanonicalPayload() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(command: .rotate, values: [
-                "angle": .double(1.57),
-                "centerX": .double(150.0),
-                "centerY": .double(400.0),
-            ])
-        guard let (message, _) = mockConn.sent.last,
-              case .rotate(let target) = message else {
-            XCTFail("Expected rotate message")
-            return
-        }
-        XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 150.0, y: 400.0)))
-    }
-
-    @ButtonHeistActor
-    func testRotateWithIdentifierDispatchesCanonicalPayload() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(command: .rotate, values: [
-                "angle": .double(1.57),
-                "target": targetValue(identifier: "dial"),
-            ])
-        guard let (message, _) = mockConn.sent.last,
-              case .rotate(let target) = message else {
-            XCTFail("Expected rotate message")
-            return
-        }
-        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "dial"))))
-    }
-
-    @ButtonHeistActor
-    func testRotateMissingAngle() async {
-        await assertOperationValidationError(
-            command: .rotate,
-            equals: "schema validation failed for angle: observed missing; expected number"
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotateRequiresCenter() async {
-        await assertOperationValidationError(
-            command: .rotate,
-            arguments: ["angle": .double(1.57)],
-            equals: "center requires an element target or center coordinates"
-        )
-    }
-
-    // MARK: - Two Finger Tap
-
-    @ButtonHeistActor
-    func testTwoFingerTapWithCenterCoordinatesDispatchesCanonicalPayload() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(command: .twoFingerTap, values: [
-                "centerX": .double(200.0),
-                "centerY": .double(500.0),
-            ])
-        guard let (message, _) = mockConn.sent.last,
-              case .twoFingerTap(let target) = message else {
-            XCTFail("Expected twoFingerTap message")
-            return
-        }
-        XCTAssertEqual(target.center, .coordinate(ScreenPoint(x: 200.0, y: 500.0)))
-    }
-
-    @ButtonHeistActor
-    func testTwoFingerTapWithIdentifierDispatchesCanonicalPayload() async {
-        let (fence, mockConn) = makeConnectedFence()
-        _ = try? await fence.execute(command: .twoFingerTap, values: ["target": targetValue(identifier: "photo")])
-        guard let (message, _) = mockConn.sent.last,
-              case .twoFingerTap(let target) = message else {
-            XCTFail("Expected two finger tap message")
-            return
-        }
-        XCTAssertEqual(target.center, .element(.matcher(ElementMatcher(identifier: "photo"))))
-    }
-
     // MARK: - Scroll Action Validation
 
     @ButtonHeistActor
@@ -2024,6 +1899,9 @@ final class TheFenceHandlerTests: XCTestCase {
             "archive_session",
             "get_session_log",
             "quit",
+            "pinch",
+            "rotate",
+            "two_finger_tap",
         ]
 
         for commandName in removedCommands {
@@ -3560,15 +3438,6 @@ final class TheFenceHandlerTests: XCTestCase {
                 try HeistStep(command: "long_press", arguments: ["x": .int(10), "y": .int(20)]),
                 try HeistStep(command: "swipe", target: target, arguments: ["direction": .string("left")]),
                 try HeistStep(command: "drag", target: target, arguments: ["endX": .int(30), "endY": .int(40)]),
-                try HeistStep(
-                    command: "pinch",
-                    arguments: ["scale": .double(0.8), "centerX": .int(10), "centerY": .int(20)]
-                ),
-                try HeistStep(
-                    command: "rotate",
-                    arguments: ["angle": .double(45), "centerX": .int(10), "centerY": .int(20)]
-                ),
-                try HeistStep(command: "two_finger_tap", arguments: ["centerX": .int(10), "centerY": .int(20)]),
                 try HeistStep(command: "scroll"),
                 try HeistStep(command: "scroll_to_visible", target: target),
                 try HeistStep(command: "element_search", target: target),
