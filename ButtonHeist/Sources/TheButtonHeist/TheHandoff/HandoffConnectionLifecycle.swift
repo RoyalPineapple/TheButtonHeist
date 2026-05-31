@@ -31,7 +31,9 @@ final class HandoffConnectionLifecycle {
             return failure
         case .disconnected, .reconnecting:
             return attemptFailure
-        case .connecting, .connected:
+        case .connecting:
+            return attemptFailure
+        case .connected:
             return nil
         }
     }
