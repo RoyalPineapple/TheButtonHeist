@@ -240,16 +240,6 @@ final class TheBrains {
         return builder.success(payload: payload)
     }
 
-    // MARK: - Keyboard Observation
-
-    func startKeyboardObservation() {
-        safecracker.startKeyboardObservation()
-    }
-
-    func stopKeyboardObservation() {
-        safecracker.stopKeyboardObservation()
-    }
-
     // MARK: - Clear
 
     func clearCache() {

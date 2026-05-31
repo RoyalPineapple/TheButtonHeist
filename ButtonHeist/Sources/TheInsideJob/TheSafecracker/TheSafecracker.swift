@@ -211,12 +211,10 @@ final class TheSafecracker {
     // MARK: - Public: Text Input (via KeyboardBridge)
 
     /// Check if the software keyboard is currently visible.
-    /// Reads the notification-driven flag (frame-based detection, matching
-    /// KIF's approach) with a fallback to KeyboardBridge for hardware
-    /// keyboard scenarios.
+    /// Reads the notification-driven frame state only. Focused text input is a
+    /// separate fact exposed by `hasActiveTextInput()`.
     func isKeyboardVisible() -> Bool {
-        if keyboardVisibleFlag { return true }
-        return activeKeyboardInput() != nil
+        keyboardVisibleFlag
     }
 
     /// Type text by injecting characters into the active keyboard.

@@ -90,6 +90,14 @@ final class TheSafecrackerTests: XCTestCase {
         XCTAssertFalse(safecracker.isKeyboardVisible())
     }
 
+    func testKeyboardVisibilityDoesNotInferFromFocusedTextInput() {
+        let keyboardImpl = KeyboardInjectionKeyboardImpl()
+        safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+
+        XCTAssertTrue(safecracker.hasActiveTextInput())
+        XCTAssertFalse(safecracker.isKeyboardVisible())
+    }
+
     func testKeyboardVisibleAfterFrameNotification() {
         let screenBounds = UIScreen.main.bounds
         let keyboardFrame = CGRect(
