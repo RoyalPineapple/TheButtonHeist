@@ -1,0 +1,56 @@
+import Foundation
+
+/// Client-side admission protocol: respond to server handshake/auth messages
+/// and name terminal admission failures.
+struct HandoffAdmission {
+    var token: String?
+    var driverId: String?
+
+    var effectiveDriverId: String {
+        HandoffDriverIdentity.effectiveDriverId(explicit: driverId)
+    }
+
+    func decision(for message: ServerMessage) -> HandoffAdmissionDecision? {
+        switch message {
+        case .serverHello:
+            return .send(.clientHello)
+        case .authRequired:
+            return .send(.authenticate(AuthenticatePayload(
+                token: token ?? "",
+                driverId: effectiveDriverId
+            )))
+        case .authApproved(let payload):
+            return .approved(token: payload.token)
+        case .authApprovalPending(let payload):
+            return .recordFailure(
+                .disconnected(.authApprovalPending(payload.message)),
+                status: payload.hint
+            )
+        case .sessionLocked(let payload):
+            return .terminalFailure(.disconnected(.sessionLocked(payload.message)))
+        case .protocolMismatch(let payload):
+            return .terminalFailure(.disconnected(.buttonHeistVersionMismatch(
+                serverVersion: payload.serverButtonHeistVersion,
+                clientVersion: payload.clientButtonHeistVersion
+            )))
+        case .error(let serverError):
+            switch serverError.kind {
+            case .authFailure:
+                return .terminalFailure(.disconnected(.authFailed(serverError.message)))
+            case .authApprovalPending:
+                return .terminalFailure(.disconnected(.authApprovalPending(serverError.message)))
+            default:
+                return nil
+            }
+        case .info, .interface, .actionResult, .screen, .status, .pong:
+            return nil
+        }
+    }
+}
+
+enum HandoffAdmissionDecision {
+    case send(ClientMessage)
+    case approved(token: String)
+    case recordFailure(HandoffConnectionError, status: String?)
+    case terminalFailure(HandoffConnectionError)
+}
