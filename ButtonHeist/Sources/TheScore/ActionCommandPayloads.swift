@@ -2,115 +2,44 @@ import Foundation
 
 /// Target for custom actions.
 ///
-/// Element targeting uses the public `elementTarget` wire field.
-/// Container targeting uses the same `container` target object shape as
-/// `get_interface.subtree`, with `ordinal` as the disambiguator.
-public enum CustomActionTarget: Codable, Sendable, Equatable, CustomStringConvertible {
-    case element(ElementTarget, actionName: String)
-    case container(ContainerMatcher, ordinal: Int?, actionName: String)
+/// Custom actions are element actions. Containers remain addressable by the
+/// commands whose product subject is a container, such as scroll commands.
+public struct CustomActionTarget: Codable, Sendable, Equatable, CustomStringConvertible {
+    public let elementTarget: ElementTarget
+    public let actionName: String
 
     public init(elementTarget: ElementTarget, actionName: String) {
-        self = .element(elementTarget, actionName: actionName)
-    }
-
-    public init(containerTarget: ContainerMatcher, ordinal: Int? = nil, actionName: String) {
-        self = .container(containerTarget, ordinal: ordinal, actionName: actionName)
-    }
-
-    public var actionName: String {
-        switch self {
-        case .element(_, let actionName), .container(_, _, let actionName):
-            return actionName
-        }
+        self.elementTarget = elementTarget
+        self.actionName = actionName
     }
 
     public var description: String {
-        switch self {
-        case .element(let target, let actionName):
-            return ScoreDescription.call("customAction", [
-                target.description,
-                ScoreDescription.stringField("action", actionName),
-            ].compactMap { $0 })
-        case .container(let target, let ordinal, let actionName):
-            return ScoreDescription.call("customAction", [
-                ScoreDescription.call("container", [
-                    target.description,
-                    ScoreDescription.valueField("ordinal", ordinal),
-                ].compactMap { $0 }),
-                ScoreDescription.stringField("action", actionName),
-            ].compactMap { $0 })
-        }
+        ScoreDescription.call("customAction", [
+            elementTarget.description,
+            ScoreDescription.stringField("action", actionName),
+        ].compactMap { $0 })
     }
 }
 
 extension CustomActionTarget {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case elementTarget
-        case container
-        case ordinal
         case actionName
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "custom action target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let actionName = try container.decode(String.self, forKey: .actionName)
-        let hasElementTarget = container.contains(.elementTarget)
-        let hasContainerTarget = container.contains(.container)
-        guard hasElementTarget != hasContainerTarget else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .elementTarget,
-                in: container,
-                debugDescription: "CustomActionTarget requires exactly one of elementTarget or container"
-            )
-        }
-        if hasElementTarget {
-            self = .element(
-                try container.decode(ElementTarget.self, forKey: .elementTarget),
-                actionName: actionName
-            )
-        } else {
-            let matcher = try container.decode(ContainerMatcher.self, forKey: .container)
-            let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-            guard matcher.hasPredicates else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .container,
-                    in: container,
-                    debugDescription: """
-                    CustomActionTarget container requires stableId, type, label, value, identifier, \
-                    or isModalBoundary; ordinal only disambiguates a container matcher
-                    """
-                )
-            }
-            if let ordinal, ordinal < 0 {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .ordinal,
-                    in: container,
-                    debugDescription: "ordinal must be non-negative, got \(ordinal)"
-                )
-            }
-            self = .container(matcher, ordinal: ordinal, actionName: actionName)
-        }
+        self.init(
+            elementTarget: try container.decode(ElementTarget.self, forKey: .elementTarget),
+            actionName: try container.decode(String.self, forKey: .actionName)
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(actionName, forKey: .actionName)
-        switch self {
-        case .element(let elementTarget, _):
-            try container.encode(elementTarget, forKey: .elementTarget)
-        case .container(let containerTarget, let containerOrdinal, _):
-            guard containerTarget.hasPredicates else {
-                throw EncodingError.invalidValue(containerTarget, .init(
-                    codingPath: encoder.codingPath + [CodingKeys.container],
-                    debugDescription: """
-                    CustomActionTarget container requires stableId, type, label, value, identifier, \
-                    or isModalBoundary; ordinal only disambiguates a container matcher
-                    """
-                ))
-            }
-            try container.encode(containerTarget, forKey: .container)
-            try container.encodeIfPresent(containerOrdinal, forKey: .ordinal)
-        }
+        try container.encode(elementTarget, forKey: .elementTarget)
     }
 }
 

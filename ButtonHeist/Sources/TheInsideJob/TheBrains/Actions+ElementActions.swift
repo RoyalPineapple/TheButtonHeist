@@ -159,138 +159,36 @@ extension Actions {
     func executeCustomAction(
         _ target: CustomActionTarget
     ) async -> TheSafecracker.InteractionResult {
-        switch target {
-        case .container(let containerTarget, let ordinal, let actionName):
-            return await executeContainerCustomAction(
-                containerTarget,
-                ordinal: ordinal,
-                actionName: actionName
-            )
-        case .element(let elementTarget, let actionName):
-            return await performElementAction(
-                target: elementTarget,
-                method: .customAction,
-                deallocatedBoundary: "custom action"
-            ) { context in
-                let screenElement = context.screenElement
-                let liveTarget = context.liveTarget
-                switch self.stash.performCustomAction(named: actionName, on: liveTarget) {
-                case .deallocated:
-                    return .failure(.customAction, message: "custom action failed")
-                case .noSuchAction:
-                    return .failure(
-                        .customAction,
-                        message: ActionCapabilityDiagnostic.missingCustomAction(
-                            actionName,
-                            element: screenElement
-                        )
-                    )
-                case .declined:
-                    return .failure(
-                        .customAction,
-                        message: ActionCapabilityDiagnostic.declinedCustomAction(
-                            actionName,
-                            element: screenElement
-                        )
-                    )
-                case .succeeded:
-                    return .success(method: .customAction)
-                }
-            }
-        }
-    }
-
-    private func executeContainerCustomAction(
-        _ matcher: ContainerMatcher,
-        ordinal: Int?,
-        actionName: String
-    ) async -> TheSafecracker.InteractionResult {
-        let containerTarget: SemanticScreen.Container
-        switch stash.resolveContainerTarget(matcher, ordinal: ordinal) {
-        case .resolved(let target):
-            containerTarget = target
-        case .notFound(let diagnostics):
-            return customActionFailure(.notFound("container target could not be made actionable: \(diagnostics)"))
-        case .ambiguous(_, let diagnostics):
-            return customActionFailure(.ambiguous("container target is ambiguous: \(diagnostics)"))
-        }
-
-        let description = TheStash.containerCandidateSummary(containerTarget)
-        let liveContainerTarget: TheStash.LiveContainerTarget
-        switch stash.resolveLiveContainerTarget(for: containerTarget) {
-        case .resolved(let target):
-            let placement = await navigation.actionability.scrollActivationPointIntoBounds(
-                target.activationPoint,
-                in: stash.liveScrollView(forContainerPath: containerTarget.path),
-                method: .customAction,
-                noScrollViewFailure: .noRevealPath(
-                    "container target \(description) has no live scrollable ancestor to make actionable"
-                ),
-                unsafeProgrammaticScrollMessage: "container target \(description) "
-                    + "is inside a scroll view that is unsafe for programmatic semantic reveal",
-                scrollFailedMessage: "container target \(description) activation point could not be brought on-screen"
-            )
-            if case .failure(let failure) = placement {
-                return failure.interactionResult(commandMethod: .customAction)
-            }
-        case .objectUnavailable:
-            return customActionFailure(.staleRefresh("container target became stale before dispatch", method: .customAction))
-        case .geometryUnavailable:
-            return customActionFailure(.geometryNotActionable(
-                "container target has no fresh actionable geometry",
-                method: .customAction
-            ))
-        }
-
-        switch stash.resolveLiveContainerTarget(for: containerTarget) {
-        case .resolved(let target):
-            guard ScreenMetrics.current.bounds.contains(target.activationPoint) else {
+        await performElementAction(
+            target: target.elementTarget,
+            method: .customAction,
+            deallocatedBoundary: "custom action"
+        ) { context in
+            let screenElement = context.screenElement
+            let liveTarget = context.liveTarget
+            switch self.stash.performCustomAction(named: target.actionName, on: liveTarget) {
+            case .deallocated:
+                return .failure(.customAction, message: "custom action failed")
+            case .noSuchAction:
                 return .failure(
                     .customAction,
-                    message: SemanticActionability.SemanticActionabilityFailure
-                        .geometryNotActionable(
-                            "container target \(description) did not become actionable after activation point placement",
-                            method: .customAction
-                        )
-                        .message
+                    message: ActionCapabilityDiagnostic.missingCustomAction(
+                        target.actionName,
+                        element: screenElement
+                    )
                 )
+            case .declined:
+                return .failure(
+                    .customAction,
+                    message: ActionCapabilityDiagnostic.declinedCustomAction(
+                        target.actionName,
+                        element: screenElement
+                    )
+                )
+            case .succeeded:
+                return .success(method: .customAction)
             }
-            liveContainerTarget = target
-        case .objectUnavailable:
-            return customActionFailure(.staleRefresh(
-                "container target became stale after activation point placement",
-                method: .customAction
-            ))
-        case .geometryUnavailable:
-            return customActionFailure(.geometryNotActionable(
-                "container target has no fresh actionable geometry after activation point placement",
-                method: .customAction
-            ))
         }
-        switch stash.performCustomAction(named: actionName, on: liveContainerTarget) {
-        case .deallocated:
-            return .failure(.customAction, message: "custom action failed: container object deallocated")
-        case .noSuchAction:
-            let available = containerTarget.container.customActions.map { $0.name }.filter { !$0.isEmpty }
-            let suffix = available.isEmpty ? "" : "; available custom actions: \(available.map { "\"\($0)\"" }.joined(separator: ", "))"
-            return .failure(
-                .customAction,
-                message: "custom action failed: requestedAction=\"\(actionName)\" not found on container\(suffix)"
-            )
-        case .declined:
-            return .failure(
-                .customAction,
-                message: "custom action failed: requestedAction=\"\(actionName)\" declined by container handler"
-            )
-        case .succeeded:
-            return .success(method: .customAction)
-        }
-    }
-
-    private func customActionFailure(
-        _ failure: SemanticActionability.SemanticActionabilityFailure
-    ) -> TheSafecracker.InteractionResult {
-        .failure(.customAction, message: failure.message)
     }
 
 }
