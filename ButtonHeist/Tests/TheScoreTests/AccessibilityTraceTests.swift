@@ -195,7 +195,9 @@ final class AccessibilityTraceTests: XCTestCase {
             transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
         )
 
-        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
+        guard case .screenChanged = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected screenChanged delta")
+        }
     }
 
     func testScreenChangeReasonOverridesStructuralChange() throws {
@@ -207,7 +209,9 @@ final class AccessibilityTraceTests: XCTestCase {
             transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
         )
 
-        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
+        guard case .screenChanged = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected screenChanged delta")
+        }
     }
 
     func testScreenIdChangeProjectsScreenChangedDelta() throws {
@@ -224,7 +228,9 @@ final class AccessibilityTraceTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "checkout")
         )
 
-        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
+        guard case .screenChanged = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected screenChanged delta")
+        }
     }
 
     func testSameScreenContextChangeProjectsElementChangedDelta() throws {
@@ -241,7 +247,9 @@ final class AccessibilityTraceTests: XCTestCase {
             context: AccessibilityTrace.Context(focusedElementId: "total", keyboardVisible: false)
         )
 
-        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .elementsChanged)
+        guard case .elementsChanged = AccessibilityTrace.Delta.between(before, after) else {
+            return XCTFail("Expected elementsChanged delta")
+        }
     }
 
     func testTraceProjectsEndpointScreenContext() throws {

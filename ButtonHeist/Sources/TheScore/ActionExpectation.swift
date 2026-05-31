@@ -241,16 +241,15 @@ extension ActionExpectation {
     ) -> ExpectationResult {
         switch self {
         case .screenChanged:
-            let kindString = result.accessibilityTrace?.endpointDeltaProjection?.kindRawValue ?? "noTrace"
+            let delta = result.accessibilityTrace?.endpointDeltaProjection
             return ExpectationResult(
-                met: result.accessibilityTrace?.endpointDeltaProjection?.isScreenChanged == true,
+                met: delta?.isScreenChangeProjection == true,
                 expectation: self,
-                actual: kindString
+                actual: delta?.kindDescription ?? "noTrace"
             )
         case .elementsChanged:
             // Superset rule: screen_changed implies elements_changed.
             let delta = result.accessibilityTrace?.endpointDeltaProjection
-            let kindString = delta?.kindRawValue ?? "noTrace"
             let met: Bool = {
                 guard let delta else { return false }
                 switch delta {
@@ -261,7 +260,7 @@ extension ActionExpectation {
             return ExpectationResult(
                 met: met,
                 expectation: self,
-                actual: kindString
+                actual: delta?.kindDescription ?? "noTrace"
             )
         case .elementUpdated(let heistId, let property, let oldValue, let newValue):
             return Self.validateElementUpdated(
@@ -287,7 +286,7 @@ extension ActionExpectation {
         oldValue: String?, newValue: String?,
         expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let updates = result.accessibilityTrace?.endpointDeltaProjection?.elementEdits?.updated ?? []
+        let updates = result.accessibilityTrace?.endpointDeltaProjection?.elementEditsProjection.updated ?? []
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
         }
@@ -325,7 +324,7 @@ extension ActionExpectation {
         let delta = result.accessibilityTrace?.endpointDeltaProjection
 
         // Normal path: check the added list from element-level diffs.
-        let added = delta?.elementEdits?.added ?? []
+        let added = delta?.elementEditsProjection.added ?? []
         if !added.isEmpty {
             if added.contains(where: { $0.matches(matcher) }) {
                 return ExpectationResult(met: true, expectation: expectation, actual: nil)
@@ -364,7 +363,7 @@ extension ActionExpectation {
         let delta = result.accessibilityTrace?.endpointDeltaProjection
 
         // Normal path: check the removed list from element-level diffs.
-        let removed = delta?.elementEdits?.removed ?? []
+        let removed = delta?.elementEditsProjection.removed ?? []
         if !removed.isEmpty {
             let matched = removed.contains { heistId in
                 guard let element = preActionElements[heistId] else { return false }
@@ -406,5 +405,25 @@ extension ActionExpectation {
             expectation: nil,
             actual: result.success ? "delivered" : (result.message ?? "failed")
         )
+    }
+}
+
+private extension AccessibilityTrace.Delta {
+    var kindDescription: String {
+        switch self {
+        case .noChange: return AccessibilityTrace.DeltaKind.noChange.rawValue
+        case .elementsChanged: return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+        case .screenChanged: return AccessibilityTrace.DeltaKind.screenChanged.rawValue
+        }
+    }
+
+    var isScreenChangeProjection: Bool {
+        if case .screenChanged = self { return true }
+        return false
+    }
+
+    var elementEditsProjection: ElementEdits {
+        if case .elementsChanged(let payload) = self { return payload.edits }
+        return ElementEdits()
     }
 }

@@ -108,19 +108,33 @@ struct PublicDelta: Encodable {
     let newInterface: PublicInterface?
 
     init(delta: AccessibilityTrace.Delta) {
-        self.kind = delta.kindRawValue
-        self.elementCount = delta.elementCount
-        self.captureEdge = delta.captureEdge
-        self.transient = delta.transient.isEmpty ? nil : delta.transient.map { PublicElement(element: $0, detail: .summary) }
         switch delta {
-        case .noChange:
+        case .noChange(let payload):
+            self.kind = AccessibilityTrace.DeltaKind.noChange.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = payload.transient.isEmpty
+                ? nil
+                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
             self.newInterface = nil
         case .elementsChanged(let payload):
+            self.kind = AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = payload.transient.isEmpty
+                ? nil
+                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
             let edits = PublicElementEdits(edits: payload.edits)
             self.edits = edits.isEmpty ? nil : edits
             self.newInterface = nil
         case .screenChanged(let payload):
+            self.kind = AccessibilityTrace.DeltaKind.screenChanged.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = payload.transient.isEmpty
+                ? nil
+                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
             self.newInterface = PublicInterface(interface: payload.newInterface, detail: .summary)
         }

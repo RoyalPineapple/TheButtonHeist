@@ -4,6 +4,17 @@ import TheScore
 
 extension FenceResponse {
 
+    static func compactDeltaKind(_ delta: AccessibilityTrace.Delta) -> String {
+        switch delta {
+        case .noChange:
+            return AccessibilityTrace.DeltaKind.noChange.rawValue
+        case .elementsChanged:
+            return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+        case .screenChanged:
+            return AccessibilityTrace.DeltaKind.screenChanged.rawValue
+        }
+    }
+
     static func compactDelta(_ delta: AccessibilityTrace.Delta, method: String) -> String {
         switch delta {
         case .noChange(let payload):

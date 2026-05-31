@@ -72,9 +72,8 @@ public extension AccessibilityTrace {
         }
     }
 
-    /// On-the-wire `kind` discriminator. The per-case switch is the canonical
-    /// Swift API; the raw string is only meaningful at the Codable boundary
-    /// and for logging via `kindRawValue`.
+    /// On-the-wire `kind` discriminator. Product code should switch over
+    /// `Delta`; this type exists only at the Codable/public projection edge.
     enum DeltaKind: String, Codable {
         case noChange
         case elementsChanged
@@ -92,120 +91,6 @@ public extension AccessibilityTrace {
 
         /// View controller identity changed — a brand new interface tree.
         case screenChanged(ScreenChanged)
-
-        // MARK: - Cross-Case Accessors
-
-        /// Element count for whichever phase this delta represents.
-        public var elementCount: Int {
-            switch self {
-            case .noChange(let payload): return payload.elementCount
-            case .elementsChanged(let payload): return payload.elementCount
-            case .screenChanged(let payload): return payload.elementCount
-            }
-        }
-
-        /// Shared transition classifier used by compact action deltas and
-        /// screen-history segmentation. The raw string remains a wire detail;
-        /// product code should switch over this typed value.
-        public var kind: DeltaKind {
-            switch self {
-            case .noChange: return .noChange
-            case .elementsChanged: return .elementsChanged
-            case .screenChanged: return .screenChanged
-            }
-        }
-
-        /// String form of the discriminator for public formatting and logs.
-        public var kindRawValue: String {
-            kind.rawValue
-        }
-
-        /// True iff this delta is a screen change.
-        public var isScreenChanged: Bool {
-            if case .screenChanged = self { return true }
-            return false
-        }
-
-        /// Transient elements carried by this delta, regardless of case.
-        public var transient: [HeistElement] {
-            switch self {
-            case .noChange(let payload): return payload.transient
-            case .elementsChanged(let payload): return payload.transient
-            case .screenChanged(let payload): return payload.transient
-            }
-        }
-
-        /// Capture edge this delta was derived from, when emitted by a
-        /// capture-backed factory. nil indicates a standalone projection
-        /// value, not action-result storage truth.
-        public var captureEdge: CaptureEdge? {
-            switch self {
-            case .noChange(let payload): return payload.captureEdge
-            case .elementsChanged(let payload): return payload.captureEdge
-            case .screenChanged(let payload): return payload.captureEdge
-            }
-        }
-
-        /// Element edits carried by this delta. Only `.elementsChanged`
-        /// carries edit lists; `.screenChanged` carries a full new interface.
-        public var elementEdits: ElementEdits? {
-            switch self {
-            case .noChange, .screenChanged:
-                return nil
-            case .elementsChanged(let payload):
-                return payload.edits
-            }
-        }
-
-        public func withCaptureEdge(_ edge: CaptureEdge) -> AccessibilityTrace.Delta {
-            switch self {
-            case .noChange(let payload):
-                return .noChange(NoChange(
-                    elementCount: payload.elementCount,
-                    captureEdge: edge,
-                    transient: payload.transient
-                ))
-            case .elementsChanged(let payload):
-                return .elementsChanged(ElementsChanged(
-                    elementCount: payload.elementCount,
-                    edits: payload.edits,
-                    captureEdge: edge,
-                    transient: payload.transient
-                ))
-            case .screenChanged(let payload):
-                return .screenChanged(ScreenChanged(
-                    elementCount: payload.elementCount,
-                    captureEdge: edge,
-                    newInterface: payload.newInterface,
-                    transient: payload.transient
-                ))
-            }
-        }
-
-        public func withTransient(_ transient: [HeistElement]) -> AccessibilityTrace.Delta {
-            switch self {
-            case .noChange(let payload):
-                return .noChange(NoChange(
-                    elementCount: payload.elementCount,
-                    captureEdge: payload.captureEdge,
-                    transient: transient
-                ))
-            case .elementsChanged(let payload):
-                return .elementsChanged(ElementsChanged(
-                    elementCount: payload.elementCount,
-                    edits: payload.edits,
-                    captureEdge: payload.captureEdge,
-                    transient: transient
-                ))
-            case .screenChanged(let payload):
-                return .screenChanged(ScreenChanged(
-                    elementCount: payload.elementCount,
-                    captureEdge: payload.captureEdge,
-                    newInterface: payload.newInterface,
-                    transient: transient
-                ))
-            }
-        }
     }
 }
 
