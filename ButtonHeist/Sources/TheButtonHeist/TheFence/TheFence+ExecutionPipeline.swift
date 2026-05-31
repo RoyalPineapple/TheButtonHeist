@@ -26,8 +26,6 @@ extension TheFence {
     }
 
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {
-        if let immediate = parsed.immediateResponse { return immediate }
-
         let dispatched = try await dispatchCommand(parsed)
         commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
 

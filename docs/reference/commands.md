@@ -16,7 +16,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_pasteboard` | `get_pasteboard` | direct | no | Read text from the general pasteboard. |
 | `get_screen` | `get_screen` | direct | no | Capture a PNG screenshot with optional inline data and interface state. |
 | `get_session_state` | `get_session_state` | direct | no | Inspect connection, device, and last-action session state. |
-| `help` | `help` | - | no | Return descriptor-backed help for the current Button Heist command surface. |
 | `list_devices` | `list_devices` | direct | no | List discovered iOS devices and configured connection targets. |
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
 | `long_press` | `long_press` | direct | yes | Long-press a coordinate or semantic target for a resolved duration. |
@@ -204,19 +203,6 @@ Inspect connection, device, and last-action session state.
 
 - CLI: direct command `get_session_state`
 - MCP: direct tool
-- Batch: no
-- Connection before dispatch: no
-
-Parameters:
-
-_None._
-
-### `help`
-
-Return descriptor-backed help for the current Button Heist command surface.
-
-- CLI: session-only `help`
-- MCP: not exposed
 - Batch: no
 - Connection before dispatch: no
 

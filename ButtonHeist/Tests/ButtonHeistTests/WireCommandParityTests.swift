@@ -86,7 +86,7 @@ final class WireCommandParityTests: XCTestCase {
             return ["text": .string("clipboard")]
         case .waitForChange, .dismissKeyboard:
             return [:]
-        case .help, .ping, .listDevices, .getInterface, .getScreen, .getPasteboard,
+        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard,
              .runBatch, .getSessionState, .connect, .listTargets, .startHeist,
              .stopHeist, .playHeist:
             XCTFail("Unexpected non-batch command \(command.rawValue)")
