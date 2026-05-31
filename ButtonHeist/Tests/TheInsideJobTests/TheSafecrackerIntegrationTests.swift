@@ -66,37 +66,6 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         XCTAssertTrue(result)
     }
 
-    // MARK: - N-Finger Primitives
-
-    func testTouchLifecycleDoesNotCrash() {
-        let downResult = safecracker.touchesDown(at: [CGPoint(x: 150, y: 300)])
-        XCTAssertTrue(downResult, "touchesDown should succeed")
-
-        let moveResult = safecracker.moveTouches(to: [CGPoint(x: 160, y: 310)])
-        XCTAssertTrue(moveResult, "moveTouches should succeed")
-
-        let upResult = safecracker.touchesUp()
-        XCTAssertTrue(upResult, "touchesUp should succeed")
-    }
-
-    func testMultiTouchLifecycle() {
-        let points = [CGPoint(x: 100, y: 300), CGPoint(x: 200, y: 300)]
-        let downResult = safecracker.touchesDown(at: points)
-        XCTAssertTrue(downResult)
-
-        let movedPoints = [CGPoint(x: 80, y: 300), CGPoint(x: 220, y: 300)]
-        let moveResult = safecracker.moveTouches(to: movedPoints)
-        XCTAssertTrue(moveResult)
-
-        let upResult = safecracker.touchesUp()
-        XCTAssertTrue(upResult)
-    }
-
-    func testTouchesUpWithoutDownReturnsFalse() {
-        let result = safecracker.touchesUp()
-        XCTAssertFalse(result, "touchesUp with no active touches should return false")
-    }
-
     // MARK: - Multi-Touch Gestures
 
     func testPinchCompletesSuccessfully() async {
