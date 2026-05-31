@@ -5,6 +5,18 @@ import TheScore
 final class WireCommandParityTests: XCTestCase {
 
     @ButtonHeistActor
+    func testEveryPublicCommandRoutesThroughDescriptorPayloadFamily() async throws {
+        let (fence, _) = makeConnectedFence()
+
+        for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {
+            XCTAssertNoThrow(
+                try fence.parseRequest(command: descriptor.command, values: sampleArguments(for: descriptor.command)),
+                descriptor.command.rawValue
+            )
+        }
+    }
+
+    @ButtonHeistActor
     func testEveryBatchExecutableCommandLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
@@ -64,6 +76,9 @@ final class WireCommandParityTests: XCTestCase {
     private func sampleArguments(for command: TheFence.Command) -> [String: HeistValue] {
         let target = targetArgumentValue(identifier: "target")
         switch command {
+        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard, .getSessionState,
+             .listTargets, .startHeist, .dismissKeyboard:
+            return [:]
         case .oneFingerTap:
             return ["x": .double(12), "y": .double(34)]
         case .longPress:
@@ -86,13 +101,16 @@ final class WireCommandParityTests: XCTestCase {
             return ["action": .string(EditAction.paste.rawValue)]
         case .setPasteboard:
             return ["text": .string("clipboard")]
-        case .waitForChange, .dismissKeyboard:
+        case .waitForChange:
             return [:]
-        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard,
-             .runBatch, .getSessionState, .connect, .listTargets, .startHeist,
-             .stopHeist, .playHeist:
-            XCTFail("Unexpected non-batch command \(command.rawValue)")
-            return [:]
+        case .runBatch:
+            return ["steps": .array([batchStep(.activate, ["target": target])])]
+        case .connect:
+            return ["target": .string("default")]
+        case .stopHeist:
+            return ["output": .string("contract.heist")]
+        case .playHeist:
+            return ["input": .string("contract.heist")]
         }
     }
 
