@@ -34,9 +34,6 @@ extension TheInsideJob {
         bonjourServiceName: String?
     ) {
         let scopeNames = runtimeConfiguration.allowedScopes.map(\.rawValue).sorted().joined(separator: ",")
-        let pollingDescription = runtimeConfiguration.pollingInterval.map {
-            "\($0.value)s(\($0.source.label))"
-        } ?? "not-started"
         let bonjourDescription = if let bonjourServiceName {
             "bonjour=advertising service=\(bonjourServiceName)"
         } else {
@@ -49,7 +46,6 @@ extension TheInsideJob {
             "sessionId=\(runtimeConfiguration.sessionIdentity.sessionId.uuidString)",
             "instanceIdentifier=\(effectiveInstanceId)(\(runtimeConfiguration.instanceIdSource.label))",
             "allowedScopes=\(scopeNames)(\(runtimeConfiguration.allowedScopesSource.label))",
-            "pollingInterval=\(pollingDescription)",
             "sessionTimeout=\(runtimeConfiguration.sessionReleaseTimeout.value)s(\(runtimeConfiguration.sessionReleaseTimeout.source.label))",
             "tls=enabled fingerprint=\(tlsFingerprint)",
             bonjourDescription

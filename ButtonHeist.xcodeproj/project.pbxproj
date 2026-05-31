@@ -15,6 +15,7 @@
 		040310F6D72D13DD333F62FE /* InsideJobTransportRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A84F7B0E5395FF0F4803775 /* InsideJobTransportRuntime.swift */; };
 		04912A64AC25EE9FBAF9E407 /* ClientMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D73BFA5255C8A2DF49F8F9 /* ClientMessageTests.swift */; };
 		054BCC8E5ECD5C488094D20A /* SocketClientLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B5C52071043D7EF9CA490A6 /* SocketClientLifecycle.swift */; };
+		05C24C2D1310DC0AF57B345E /* InsideJobAppLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 864324B94878B21CF2E0F27D /* InsideJobAppLifecycle.swift */; };
 		0660ED399E6C670CB34F6C07 /* SessionTokenSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 298EDCDF7293AEBF633D256D /* SessionTokenSource.swift */; };
 		06A24ABB3DDA92F7B9081BE6 /* ScreenClassifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61AED0209793344783FFCD7 /* ScreenClassifierTests.swift */; };
 		06FAC24F6349D1CED1EF99A5 /* SocketClientRegistryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EB5ADCBFB0F4F536A643E3 /* SocketClientRegistryTests.swift */; };
@@ -60,7 +61,6 @@
 		1DE3ACC5C1D8BC396A3F4F16 /* KeyboardBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C22E288C7ED5647AD70907B9 /* KeyboardBridge.swift */; };
 		1F11B76D2ED18F20EE37A037 /* TheScore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A918FE0F8CB350A49C5A16C /* TheScore.framework */; };
 		2069663A655C695A163BF036 /* AccessibilityTracePatchTreeEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD7CB5F21F6B0A7E47FBE61 /* AccessibilityTracePatchTreeEditing.swift */; };
-		209626C64023CC7D7F7515F4 /* InsideJobObservationLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F55A74B17977ABB0873315E /* InsideJobObservationLifecycle.swift */; };
 		20EA410F4C1E228B2602E8F1 /* TheFence+CommandPresentation+Adapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D9C421EACCD36A3A4230D1D /* TheFence+CommandPresentation+Adapters.swift */; };
 		2312C069D1EE6B826E92F58B /* TheFence+RequestPayload+Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2C596A428359DBBB2B251A3 /* TheFence+RequestPayload+Session.swift */; };
 		23383C5DDB478FF24AC6A933 /* SyntheticTouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 505ED717985FBDFE68196CEB /* SyntheticTouch.swift */; };
@@ -768,6 +768,7 @@
 		85B2E875026420F5AB06D0A2 /* BatchExecutionResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExecutionResult.swift; sourceTree = "<group>"; };
 		85CAF3FDE818AAC58F840AEE /* ClientSessionPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientSessionPayloads.swift; sourceTree = "<group>"; };
 		85F00EF7237962DD4F94F135 /* WireConversion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WireConversion.swift; sourceTree = "<group>"; };
+		864324B94878B21CF2E0F27D /* InsideJobAppLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobAppLifecycle.swift; sourceTree = "<group>"; };
 		867F46E029ED8041F4650386 /* ActionResultPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionResultPayloads.swift; sourceTree = "<group>"; };
 		880178106951F3629E247BB6 /* CCryptoBoringSSLShims.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = CCryptoBoringSSLShims.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		88293D96377EAC7784AC0824 /* TheFence+FailureDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+FailureDetails.swift"; sourceTree = "<group>"; };
@@ -807,7 +808,6 @@
 		9C8A10ADBCDF552C7B0FFB00 /* AccessibilityTraceDeltaRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceDeltaRoundTripTests.swift; sourceTree = "<group>"; };
 		9D173650692F55CC5D9D0748 /* InsideJobStartupError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobStartupError.swift; sourceTree = "<group>"; };
 		9DD7CB5F21F6B0A7E47FBE61 /* AccessibilityTracePatchTreeEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTracePatchTreeEditing.swift; sourceTree = "<group>"; };
-		9F55A74B17977ABB0873315E /* InsideJobObservationLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobObservationLifecycle.swift; sourceTree = "<group>"; };
 		9FEA3B02F99B93FD31784356 /* swift-crypto_Crypto.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "swift-crypto_Crypto.bundle"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A06834E6FB89D0A837204B10 /* SessionLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLease.swift; sourceTree = "<group>"; };
 		A0E4125D91BDBBE45E6C66F9 /* TheBurglarContainerFramesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBurglarContainerFramesTests.swift; sourceTree = "<group>"; };
@@ -1236,9 +1236,9 @@
 				61D1BB785CFAF254933D5C1C /* AccessibilityElement+Geometry.swift */,
 				90E47C57C8A163210C96DF8A /* AccessibilityHierarchy+Reconciliation.swift */,
 				684B1D4DC1EC65626B3028AC /* AccessibilityHierarchy+TreeOperations.swift */,
+				864324B94878B21CF2E0F27D /* InsideJobAppLifecycle.swift */,
 				F38D815953121AF8392D5175 /* InsideJobExposureRuntime.swift */,
 				CA70330390B881BD5E0F5055 /* InsideJobLifecycleState.swift */,
-				9F55A74B17977ABB0873315E /* InsideJobObservationLifecycle.swift */,
 				38865E70B15F61D6AE8E2386 /* InsideJobRuntimeConfiguration.swift */,
 				B3B1A6858B71403D4DBB9655 /* InsideJobRuntimeLease.swift */,
 				9D173650692F55CC5D9D0748 /* InsideJobStartupError.swift */,
@@ -2022,9 +2022,9 @@
 				B62712412CA7726BC7ABCDE5 /* AccessibilityElement+Geometry.swift in Sources */,
 				3CDB64482D830F2220EA28E1 /* AccessibilityHierarchy+Reconciliation.swift in Sources */,
 				276E01C107AB4FDE2E7A141D /* AccessibilityHierarchy+TreeOperations.swift in Sources */,
+				05C24C2D1310DC0AF57B345E /* InsideJobAppLifecycle.swift in Sources */,
 				C54E213694B1990DAE41D068 /* InsideJobExposureRuntime.swift in Sources */,
 				5FF763A30011ECAE4B09C872 /* InsideJobLifecycleState.swift in Sources */,
-				209626C64023CC7D7F7515F4 /* InsideJobObservationLifecycle.swift in Sources */,
 				4DAE8B04A2A01DE26AB147E8 /* InsideJobRuntimeConfiguration.swift in Sources */,
 				3663E69FD57A3CDB2EF0E61C /* InsideJobRuntimeLease.swift in Sources */,
 				CDE776C5A28AC8E014AD0DE6 /* InsideJobStartupError.swift in Sources */,

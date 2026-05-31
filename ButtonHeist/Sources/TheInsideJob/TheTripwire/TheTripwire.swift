@@ -12,13 +12,10 @@ import UIKit
 /// The pulse answers three questions:
 /// 1. **Is the UI settled?** (no animations, no pending layout, stable fingerprint)
 /// 2. **Should the accessibility tree be checked again?** (Tripwire triggered)
-/// 3. **What transitioned?** (settle/unsettle, Tripwire triggered)
 ///
 /// The accessibility tree is TheStash's domain; TheTripwire never reads it.
 @MainActor
 final class TheTripwire {
-
-    var onTransition: (@MainActor (PulseTransition) -> Void)?
 
     var pulsePhase: PulsePhase = .idle
 

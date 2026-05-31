@@ -92,8 +92,6 @@ public enum EnvironmentKey: String, Sendable {
     case insideJobToken = "INSIDEJOB_TOKEN"
     case insideJobPort = "INSIDEJOB_PORT"
     case insideJobDisable = "INSIDEJOB_DISABLE"
-    case insideJobDisableFingerprints = "INSIDEJOB_DISABLE_FINGERPRINTS"
-    case insideJobPollingInterval = "INSIDEJOB_POLLING_INTERVAL"
     case insideJobId = "INSIDEJOB_ID"
     case insideJobScope = "INSIDEJOB_SCOPE"
     case insideJobSessionTimeout = "INSIDEJOB_SESSION_TIMEOUT"
