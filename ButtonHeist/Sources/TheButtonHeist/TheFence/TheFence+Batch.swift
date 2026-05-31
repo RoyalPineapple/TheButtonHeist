@@ -34,7 +34,6 @@ extension TheFence {
             totalTimingMs: totalMs,
             failedIndex: executionResult.failedIndex
         )
-        completeBatchActions(result)
         let accessibilityTrace = Self.batchAccessibilityTrace(result)
         return .batch(
             commands: commands,
@@ -42,13 +41,6 @@ extension TheFence {
             result: result,
             accessibilityTrace: accessibilityTrace
         )
-    }
-
-    private func completeBatchActions(_ result: BatchExecutionResult) {
-        for stepResult in result.steps {
-            guard let finalResult = stepResult.finalActionResult() else { continue }
-            commandExecutionState.completeAction(finalResult)
-        }
     }
 
     private static func batchAccessibilityTrace(
@@ -72,8 +64,7 @@ extension TheFence {
             device: connection.device,
             actionTimeoutSeconds: Timeouts.actionSeconds,
             longActionTimeoutSeconds: Timeouts.longActionSeconds,
-            lastFailure: connection.lastFailure,
-            lastAction: commandExecutionState.lastAction.sessionPayload
+            lastFailure: connection.lastFailure
         )
     }
 }

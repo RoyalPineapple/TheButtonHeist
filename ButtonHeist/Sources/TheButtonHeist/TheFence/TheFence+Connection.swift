@@ -40,7 +40,6 @@ extension TheFence {
     }
 
     func clearClientSessionState(error: Error) {
-        commandExecutionState.reset()
         cancelAllPendingRequests(error: error)
     }
 

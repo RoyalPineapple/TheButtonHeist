@@ -94,7 +94,6 @@ public final class TheFence {
 
     // Lifecycle owners
     let playback = FencePlaybackLifecycle()
-    let commandExecutionState = CommandExecutionState()
 
     public init(configuration: Configuration) {
         self.config = configuration

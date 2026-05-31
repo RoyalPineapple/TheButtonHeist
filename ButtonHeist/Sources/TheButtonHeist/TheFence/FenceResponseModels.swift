@@ -121,20 +121,6 @@ public struct SessionFailurePayload: Sendable, Equatable {
     }
 }
 
-public struct SessionLastActionPayload: Sendable, Equatable {
-    public let method: ActionMethod
-    public let success: Bool
-    public let message: String?
-    public let latencyMs: Int
-
-    public init(method: ActionMethod, success: Bool, message: String?, latencyMs: Int) {
-        self.method = method
-        self.success = success
-        self.message = message
-        self.latencyMs = latencyMs
-    }
-}
-
 public struct SessionStatePayload: Sendable, Equatable {
     public let connected: Bool
     public let phase: SessionConnectionPhase
@@ -142,7 +128,6 @@ public struct SessionStatePayload: Sendable, Equatable {
     public let actionTimeoutSeconds: TimeInterval
     public let longActionTimeoutSeconds: TimeInterval
     public let lastFailure: SessionFailurePayload?
-    public let lastAction: SessionLastActionPayload?
 
     public init(
         connected: Bool,
@@ -150,8 +135,7 @@ public struct SessionStatePayload: Sendable, Equatable {
         device: SessionDevicePayload?,
         actionTimeoutSeconds: TimeInterval,
         longActionTimeoutSeconds: TimeInterval,
-        lastFailure: SessionFailurePayload?,
-        lastAction: SessionLastActionPayload?
+        lastFailure: SessionFailurePayload?
     ) {
         self.connected = connected
         self.phase = phase
@@ -159,7 +143,6 @@ public struct SessionStatePayload: Sendable, Equatable {
         self.actionTimeoutSeconds = actionTimeoutSeconds
         self.longActionTimeoutSeconds = longActionTimeoutSeconds
         self.lastFailure = lastFailure
-        self.lastAction = lastAction
     }
 }
 

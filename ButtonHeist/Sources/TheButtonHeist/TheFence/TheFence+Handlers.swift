@@ -28,9 +28,6 @@ extension TheFence {
         var finalResult: ActionResult?
         for message in messages {
             let result = try await sendAndAwaitAction(message, timeout: timeout)
-            if result.method != .getPasteboard {
-                commandExecutionState.completeAction(result)
-            }
             finalResult = result
             if !result.success {
                 return .action(command: request.command, result: result)

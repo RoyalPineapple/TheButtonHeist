@@ -27,7 +27,6 @@ extension TheFence {
 
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {
         let dispatched = try await dispatchCommand(parsed)
-        commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
 
         let postDispatch = capturePostDispatchEffects(response: dispatched.response)
         let validatedResponse = try await validateActionResponse(
@@ -134,7 +133,6 @@ extension TheFence {
                 .waitForChange(target),
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
-            commandExecutionState.completeAction(waitResult)
             let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(
                 response: .action(
