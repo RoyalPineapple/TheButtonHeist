@@ -88,12 +88,7 @@ extension FenceResponse {
         if case .scrollSearch = result.payload {
             return .elementNotFound
         }
-        switch result.method {
-        case .elementNotFound, .elementDeallocated:
-            return .elementNotFound
-        default:
-            return .actionFailed
-        }
+        return .actionFailed
     }
 
     private static func compactScrollSearchFound(

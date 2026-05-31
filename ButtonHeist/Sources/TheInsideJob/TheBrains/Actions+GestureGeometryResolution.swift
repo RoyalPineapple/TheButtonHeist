@@ -37,7 +37,7 @@ extension Actions {
         switch selection {
         case .element:
             guard let actionableTarget else {
-                return .failure(.failure(.elementNotFound, message: "No target specified"))
+                return .failure(.failure(method, message: "No target specified", failureKind: .targetUnavailable))
             }
             let point = actionableTarget.liveTarget.activationPoint
             if let failure = geometryFailure(method: method, field: "point", point: point) {

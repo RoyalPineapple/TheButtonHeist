@@ -23,7 +23,8 @@ final class ActivationPolicyTests: XCTestCase {
             .interactionResult(commandMethod: .syntheticTap)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertEqual(result.message, "semantic actionability failed [notFound]: no such element")
     }
 

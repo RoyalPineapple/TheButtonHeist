@@ -44,33 +44,30 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.message, "target disappeared")
         XCTAssertEqual(result.errorKind, .actionFailed,
-                       "Without explicit errorKind and with method != elementNotFound, default is .actionFailed")
+                       "Without explicit errorKind, failures default to actionFailed")
     }
 
-    func testActionResultWithDeltaFailureInfersNotFoundFromMethod() async {
+    func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() {
+        let result = TheSafecracker.InteractionResult.failure(
+            .activate,
+            message: "target disappeared",
+            failureKind: .targetUnavailable
+        )
+
+        XCTAssertEqual(TheBrains.actionErrorKind(for: result), .elementNotFound)
+        XCTAssertEqual(result.method, .activate)
+    }
+
+    func testActionResultWithDeltaFailureDoesNotInferNotFoundFromActionIdentity() async {
         let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: false,
-            method: .elementNotFound,
+            method: .activate,
             before: before
         )
 
-        XCTAssertEqual(result.errorKind, .elementNotFound,
-                       "method == .elementNotFound should infer errorKind == .elementNotFound")
-    }
-
-    func testActionResultWithDeltaFailureInfersNotFoundFromDeallocated() async {
-        let before = brains.captureSemanticState()
-
-        let result = await brains.actionResultWithDelta(
-            success: false,
-            method: .elementDeallocated,
-            before: before
-        )
-
-        XCTAssertEqual(result.errorKind, .elementNotFound,
-                       "method == .elementDeallocated should infer errorKind == .elementNotFound")
+        XCTAssertEqual(result.errorKind, .actionFailed)
     }
 
     func testActionResultWithDeltaFailureRespectsExplicitErrorKind() async {
