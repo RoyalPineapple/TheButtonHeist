@@ -3456,7 +3456,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlaybackArgumentsUsePlaybackBoundaryValidation() async throws {
+    func testPlaybackArgumentsUseCommandBoundaryValidation() async throws {
         let cases: [(name: String, sourceStep: HeistStep, message: String)] = [
             (
                 "unknown scroll parameter",
@@ -3464,7 +3464,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     command: "scroll",
                     arguments: ["unexpected": .string("value")]
                 ),
-                "schema validation failed for unexpected: observed string \"value\"; expected valid scroll playback argument"
+                "schema validation failed for unexpected: observed string \"value\"; expected valid scroll parameter"
             ),
             (
                 "edit_action invalid action type",
