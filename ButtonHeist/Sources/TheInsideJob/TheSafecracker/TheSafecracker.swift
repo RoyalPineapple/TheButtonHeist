@@ -3,384 +3,69 @@
 import UIKit
 import TheScore
 
-/// Cracks open the app's touch system for remote gesture injection.
+/// Facade for debug input injection.
 ///
-/// Supports tap, long press, swipe, and drag gestures using synthetic
-/// UITouch/UIEvent injection via IOKit.
-/// Implementation based on KIF (Keep It Functional) testing framework.
-/// Key iOS 26 fix: Creates a fresh UIEvent for each touch phase
-/// instead of reusing the same event.
-///
-/// The `activate` command owns semantic actionability and may dispatch
-/// a synthetic tap as its final action. `one_finger_tap` is the low-level
-/// coordinate escape hatch for fuzzing and debugging.
+/// Semantic actionability lives in TheBrains. This type exposes the low-level
+/// keyboard, edit, and coordinate/touch escape hatches used after a command has
+/// resolved to concrete runtime input.
 @MainActor
 final class TheSafecracker {
 
-    // MARK: - Keyboard State
+    private let keyboardInput = SafecrackerKeyboardInput()
+    private let touchInjection = SafecrackerTouchInjection()
+    private let editActions = SafecrackerEditActions()
 
-    /// Whether the software keyboard is currently visible. Updated via
-    /// keyboard notifications — no polling needed.
-    private(set) var keyboardVisibleFlag = false
-
-    var keyboardBridgeProvider: () -> KeyboardBridge? = { KeyboardBridge.shared() }
+    var keyboardBridgeProvider: () -> KeyboardBridge? {
+        get { keyboardInput.keyboardBridgeProvider }
+        set { keyboardInput.keyboardBridgeProvider = newValue }
+    }
 
     func startKeyboardObservation() {
-        let center = NotificationCenter.default
-        center.addObserver(self, selector: #selector(keyboardFrameDidChange),
-                           name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-        center.addObserver(self, selector: #selector(keyboardWillShow),
-                           name: UIResponder.keyboardWillShowNotification, object: nil)
-        center.addObserver(self, selector: #selector(keyboardDidHide),
-                           name: UIResponder.keyboardDidHideNotification, object: nil)
+        keyboardInput.startObservation()
     }
 
     func stopKeyboardObservation() {
-        let center = NotificationCenter.default
-        center.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-        center.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
-        center.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
+        keyboardInput.stopObservation()
     }
 
-    @objc private func keyboardFrameDidChange(_ notification: Notification) {
-        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return
-        }
-        let screenBounds = notification.object
-            .flatMap { $0 as? UIScreen }?.bounds
-            ?? UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.screen.bounds
-            ?? .zero
-        keyboardVisibleFlag = endFrame.intersects(screenBounds)
-            && endFrame.height > 0
-            && endFrame.origin.y < screenBounds.height
-    }
-
-    @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
-    @objc private func keyboardDidHide() { keyboardVisibleFlag = false }
-
-    // MARK: - Interaction Result
-
-    /// Outcome of a high-level interaction (action, gesture, text entry).
-    /// TheInsideJob wraps this with AccessibilityTrace.Delta to produce the wire ActionResult.
-    struct InteractionResult {
-        let success: Bool
-        let method: ActionMethod
-        let message: String?
-        let payload: ResultPayload?
-        /// Structural reason for failure when `success == false`. Lets dispatch code
-        /// distinguish tree-unavailable from timeout without parsing `message`
-        /// (which is user-facing copy, not a control-flow contract).
-        let failureKind: FailureKind?
-
-        private init(
-            success: Bool,
-            method: ActionMethod,
-            message: String?,
-            payload: ResultPayload?,
-            failureKind: FailureKind? = nil
-        ) {
-            self.success = success
-            self.method = method
-            self.message = message
-            self.payload = payload
-            self.failureKind = failureKind
-        }
-
-        static func success(
-            method: ActionMethod,
-            message: String? = nil,
-            payload: ResultPayload? = nil
-        ) -> InteractionResult {
-            InteractionResult(
-                success: true,
-                method: method,
-                message: message,
-                payload: payload
-            )
-        }
-
-        static func failure(
-            _ method: ActionMethod,
-            message: String,
-            payload: ResultPayload? = nil,
-            failureKind: FailureKind? = nil
-        ) -> InteractionResult {
-            InteractionResult(
-                success: false,
-                method: method,
-                message: message,
-                payload: payload,
-                failureKind: failureKind
-            )
-        }
-    }
-
-    /// Internal failure kinds used by dispatch to choose the wire ErrorKind.
-    /// Not wire format — this is an internal control-flow signal. Sits as a
-    /// peer of `InteractionResult` (not nested inside it) to stay at the
-    /// 2-level-deep nesting cap the SwiftLint `nesting` rule enforces.
-    enum FailureKind {
-        /// The accessibility tree could not be parsed (no traversable windows).
-        case treeUnavailable
-        /// A polling/wait operation exceeded its budget.
-        case timeout
-        /// Input geometry or other client-controlled values failed validation.
-        case inputValidation
-        /// The command target was not present or its live accessibility object expired.
-        case targetUnavailable
-    }
-
-    // MARK: - Public: Single-Finger Gestures
-
-    /// Simulate a tap at the given screen coordinates.
-    /// Yields to the main run loop between began and ended phases so that
-    /// SwiftUI gesture recognizers (which process events asynchronously)
-    /// have a chance to transition from "possible" to "recognized".
-    /// - Parameter point: Point in screen coordinates
-    /// - Returns: True if the touch events were dispatched (not necessarily handled)
-    func tap(at point: CGPoint) async -> Bool {
-        guard Self.geometryIsValid([point], field: "tap point") else { return false }
-        return await performTouchTap(at: point)
-    }
-
-    /// Simulate a long press at the given screen coordinates.
-    /// Sends `.stationary` phase events every 10ms during the hold (matching KIF)
-    /// so gesture recognizers stay alive and processing.
-    /// - Parameters:
-    ///   - point: Point in screen coordinates
-    ///   - duration: How long to hold the press (seconds, default 0.5)
-    func longPress(at point: CGPoint, duration: GestureDuration = .longPressDefault) async -> Bool {
-        guard Self.geometryIsValid([point], field: "long press point") else { return false }
-        guard var touchState = beginTouch(at: point) else { return false }
-
-        var elapsed: TimeInterval = 0
-        while elapsed < duration.seconds && !Task.isCancelled {
-            guard await Task.cancellableSleep(
-                nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
-            ) else { break }
-            elapsed += Self.touchGestureStepDelay
-            sendStationary(&touchState.touch)
-        }
-
-        return endTouch(&touchState.touch)
-    }
-
-    /// Simulate a swipe gesture between two screen points.
-    /// Pre-computes all waypoints before the gesture loop (matches KIF's
-    /// `dragPointsAlongPaths:` pattern) so the path is stable even if
-    /// the view moves during the gesture.
-    /// - Parameters:
-    ///   - start: Starting point in screen coordinates
-    ///   - end: Ending point in screen coordinates
-    ///   - duration: Duration of the swipe (seconds, default 0.15)
-    func swipe(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .swipeDefault) async -> Bool {
-        guard Self.geometryIsValid([start, end], field: "swipe point") else { return false }
-        return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 3)
-    }
-
-    /// Simulate a drag gesture between two screen points.
-    /// Slower than swipe — used for reordering, slider adjustment, etc.
-    /// Pre-computes all waypoints before the gesture loop.
-    /// - Parameters:
-    ///   - start: Starting point in screen coordinates
-    ///   - end: Ending point in screen coordinates
-    ///   - duration: Duration of the drag (seconds, default 0.5)
-    func drag(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .dragDefault) async -> Bool {
-        guard Self.geometryIsValid([start, end], field: "drag point") else { return false }
-        return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 5)
-    }
-
-    // MARK: - Public: Text Input (via KeyboardBridge)
-
-    /// Check if the software keyboard is currently visible.
-    /// Reads the notification-driven frame state only. Focused text input is a
-    /// separate fact exposed by `hasActiveTextInput()`.
     func isKeyboardVisible() -> Bool {
-        keyboardVisibleFlag
+        keyboardInput.isKeyboardVisible()
     }
 
-    /// Type text by injecting characters into the active keyboard.
-    /// Routes through KeyboardBridge → UIKeyboardImpl.addInputString: per character.
+    func hasActiveTextInput() -> Bool {
+        keyboardInput.hasActiveTextInput()
+    }
+
     func typeText(
         _ text: String,
         interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
     ) async -> KeyboardTextInjectionResult {
-        guard let keyboard = activeKeyboardInput() else {
-            return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
-        }
-        var iterator = text.makeIterator()
-        guard var character = iterator.next() else { return .dispatched }
-
-        while true {
-            let result = keyboard.type(character)
-            if case .failed = result { return result }
-            guard let nextCharacter = iterator.next() else { return .dispatched }
-            guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else {
-                return .failed(.cancelled(strategy: UIKeyboardImplTextInjection.strategyName))
-            }
-            character = nextCharacter
-        }
+        await keyboardInput.typeText(text, interKeyDelay: interKeyDelay)
     }
 
-    // MARK: - Edit Actions (via Responder Chain)
-
-    /// Perform a standard edit action on the current first responder.
-    /// Uses UIApplication.sendAction to route through the responder chain,
-    /// following KIF's pattern of bypassing the edit menu UI entirely.
     func performEditAction(_ action: EditAction) -> Bool {
-        UIApplication.shared.sendAction(action.selector, to: nil, from: nil, for: nil)
+        editActions.perform(action)
     }
 
-    /// Resign first responder, dismissing the keyboard if visible.
-    /// Routes through the responder chain — no view hierarchy walk needed.
     func resignFirstResponder() -> Bool {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        editActions.resignFirstResponder()
     }
 
-    // MARK: - Public: Text Input Readiness
-
-    /// Whether a focused text input is ready to accept typed characters.
-    func hasActiveTextInput() -> Bool {
-        activeKeyboardInput() != nil
+    func tap(at point: CGPoint) async -> Bool {
+        await touchInjection.tap(at: point)
     }
 
-    private func activeKeyboardInput() -> KeyboardBridge? {
-        guard let keyboard = keyboardBridgeProvider(), keyboard.hasActiveInput else {
-            return nil
-        }
-        return keyboard
+    func longPress(at point: CGPoint, duration: GestureDuration = .longPressDefault) async -> Bool {
+        await touchInjection.longPress(at: point, duration: duration)
     }
 
-    // MARK: - Internal: Touch Path Dispatch
-
-    @discardableResult
-    private func performTouchPath(start: CGPoint, waypoints: [CGPoint]) async -> Bool {
-        guard var touchState = beginTouch(at: start) else { return false }
-
-        for point in waypoints {
-            if Task.isCancelled { break }
-            moveTouch(&touchState.touch, in: touchState.window, to: point)
-            guard await Task.cancellableSleep(
-                nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
-            ) else { break }
-        }
-
-        return endTouch(&touchState.touch)
+    func swipe(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .swipeDefault) async -> Bool {
+        await touchInjection.swipe(from: start, to: end, duration: duration)
     }
 
-    private func performTouchTap(at point: CGPoint) async -> Bool {
-        guard var touchState = beginTouch(at: point) else { return false }
-        guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
-        return endTouch(&touchState.touch)
+    func drag(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .dragDefault) async -> Bool {
+        await touchInjection.drag(from: start, to: end, duration: duration)
     }
-
-    private func performLineGesture(
-        from start: CGPoint,
-        to end: CGPoint,
-        duration: GestureDuration,
-        minimumSteps: Int
-    ) async -> Bool {
-        let steps = max(Int(duration.seconds / Self.touchGestureStepDelay), minimumSteps)
-        return await performTouchPath(
-            start: start,
-            waypoints: Self.linearPath(from: start, to: end, steps: steps)
-        )
-    }
-
-    // MARK: - Internal: Touch Primitive
-
-    private func beginTouch(at point: CGPoint) -> (touch: SyntheticTouch, window: UIWindow)? {
-        guard Self.geometryIsValid([point], field: "touch point") else { return nil }
-        guard let window = windowForPoint(point) else {
-            insideJobLogger.error("No window found for point \(String(describing: point))")
-            return nil
-        }
-
-        let target = TouchTarget.resolve(at: point, in: window)
-        guard let touch = target.makeTouch(phase: .began) else {
-            insideJobLogger.error("Failed to create touch")
-            return nil
-        }
-
-        guard let event = TouchEvent(touches: [touch]) else {
-            insideJobLogger.error("Failed to create began event")
-            return nil
-        }
-
-        event.send()
-        return (touch, window)
-    }
-
-    @discardableResult
-    private func moveTouch(_ touch: inout SyntheticTouch, in window: UIWindow, to point: CGPoint) -> Bool {
-        guard Self.geometryIsValid([point], field: "touch move point") else { return false }
-
-        let windowPoint = window.convert(point, from: nil)
-        touch.update(phase: .moved, location: windowPoint)
-
-        guard let event = TouchEvent(touches: [touch]) else { return false }
-        event.send()
-        return true
-    }
-
-    @discardableResult
-    private func sendStationary(_ touch: inout SyntheticTouch) -> Bool {
-        touch.update(phase: .stationary)
-
-        guard let event = TouchEvent(touches: [touch]) else { return false }
-        event.send()
-        return true
-    }
-
-    private func endTouch(_ touch: inout SyntheticTouch) -> Bool {
-        touch.update(phase: .ended)
-
-        guard let event = TouchEvent(touches: [touch]) else {
-            insideJobLogger.error("Failed to create ended event")
-            return false
-        }
-
-        event.send()
-        return true
-    }
-
-    // MARK: - Private
-
-    static func geometryIsValid(_ points: [CGPoint], field: String) -> Bool {
-        if let reason = GeometryValidation.validateScreenPoints(points, field: field) {
-            insideJobLogger.error("Rejected synthetic touch geometry: \(reason, privacy: .public)")
-            return false
-        }
-        return true
-    }
-
-    static func linearPath(from start: CGPoint, to end: CGPoint, steps: Int) -> [CGPoint] {
-        (1...steps).map { step in
-            let progress = Double(step) / Double(steps)
-            return CGPoint(
-                x: start.x + progress * (end.x - start.x),
-                y: start.y + progress * (end.y - start.y)
-            )
-        }
-    }
-
-    /// Find the correct window for a tap at the given screen point.
-    /// Iterates all windows frontmost-first (highest windowLevel first),
-    /// following KIF's pattern from UIApplication-KIFAdditions.m.
-    /// Returns the first window whose hitTest succeeds at the point.
-    private func windowForPoint(_ point: CGPoint) -> UIWindow? {
-        guard GeometryValidation.validateScreenPoint(point) == nil else { return nil }
-        for window in TheTripwire.orderedVisibleWindows() {
-            let windowPoint = window.convert(point, from: nil)
-            if window.hitTest(windowPoint, with: nil) != nil {
-                return window
-            }
-        }
-        return nil
-    }
-
 }
 
 // MARK: - Timing Constants
@@ -402,21 +87,6 @@ nonisolated extension TheSafecracker {
 
     /// Maximum number of polls before giving up on keyboard readiness (20 × 100ms = 2s).
     static let keyboardPollMaxAttempts: Int = 20
-}
-
-// MARK: - EditAction + Selector
-
-extension EditAction {
-    var selector: Selector {
-        switch self {
-        case .copy:      return #selector(UIResponderStandardEditActions.copy(_:))
-        case .paste:     return #selector(UIResponderStandardEditActions.paste(_:))
-        case .cut:       return #selector(UIResponderStandardEditActions.cut(_:))
-        case .select:    return #selector(UIResponderStandardEditActions.select(_:))
-        case .selectAll: return #selector(UIResponderStandardEditActions.selectAll(_:))
-        case .delete:    return #selector(UIResponderStandardEditActions.delete(_:))
-        }
-    }
 }
 
 #endif // DEBUG

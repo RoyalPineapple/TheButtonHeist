@@ -19,17 +19,15 @@ actor TheMuscle {
     private let sessionTokenSource: SessionTokenSource
     private var admission: TheMuscleAdmission
     private var session: TheMuscleSession
-    private let alerts: AlertPresenter
+    private let approvalPrompts: MuscleApprovalPromptCallbacks
     private var delivery: ClientDelivery = .unwired
 
-    /// Outstanding "wait then disconnect" tasks.
-    private let delayedDisconnectTasks = TaskTracker()
-
-    /// Per-client pre-auth deadlines.
-    private var authDeadlineTasks: [Int: Task<Void, Never>] = [:]
-
-    /// Tasks spawned by `showApprovalAlert` across actor/MainActor isolation.
-    private let pendingAlertTasks = TaskTracker()
+    private let delayedDisconnects = MuscleDelayedDisconnects(
+        gracePeriod: TheMuscle.disconnectGracePeriod
+    )
+    private let authenticationDeadlines = MuscleAuthenticationDeadlines(
+        deadline: .seconds(TheMuscle.authDeadlineSeconds)
+    )
 
     // MARK: - Init
 
@@ -50,13 +48,13 @@ actor TheMuscle {
         self.session = TheMuscleSession(
             releaseTimeout: sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
         )
-        self.alerts = alerts ?? AlertPresenter()
+        self.approvalPrompts = MuscleApprovalPromptCallbacks(alerts: alerts ?? AlertPresenter())
     }
 
     // MARK: - Test Seams
 
     /// Test seam: how many delayed-disconnect Tasks are currently tracked.
-    var pendingLockoutTaskCount: Int { delayedDisconnectTasks.taskCountForTesting }
+    var pendingLockoutTaskCount: Int { delayedDisconnects.taskCountForTesting }
 
     /// Test seam: drop transport wiring to simulate a targeted-send race.
     func clearSendToClientForTest() {
@@ -167,8 +165,11 @@ actor TheMuscle {
     func tearDown() async {
         admission.removeAllClients()
         cancelAllAuthenticationDeadlines()
-        delayedDisconnectTasks.cancelAll()
-        pendingAlertTasks.cancelAll()
+        delayedDisconnects.cancelAll()
+        let approvalPrompts = approvalPrompts
+        await MainActor.run {
+            approvalPrompts.cancelAll()
+        }
         await releaseSession()
         await dismissAlert()
     }
@@ -221,7 +222,7 @@ actor TheMuscle {
         }
 
         if let clientId = effect.approvalPromptClientId {
-            showApprovalAlert(clientId: clientId)
+            await showApprovalAlert(clientId: clientId)
         }
         if effect.dismissApprovalPrompt {
             await dismissAlert()
@@ -236,8 +237,7 @@ actor TheMuscle {
     /// Schedule a delayed disconnect so the recipient can flush the final error payload.
     private func scheduleDelayedDisconnect(_ clientId: Int) {
         cancelAuthenticationDeadline(for: clientId)
-        delayedDisconnectTasks.spawn { [weak self] in
-            guard await Task.cancellableSleep(for: TheMuscle.disconnectGracePeriod) else { return }
+        delayedDisconnects.schedule(clientId: clientId) { [weak self] in
             await self?.fireDisconnect(clientId)
         }
     }
@@ -249,22 +249,17 @@ actor TheMuscle {
     // MARK: - Authentication Deadline
 
     private func replaceAuthenticationDeadline(for clientId: Int) {
-        cancelAuthenticationDeadline(for: clientId)
-        authDeadlineTasks[clientId] = Task { [weak self] in
-            guard await Task.cancellableSleep(for: .seconds(TheMuscle.authDeadlineSeconds)) else { return }
+        authenticationDeadlines.replace(for: clientId) { [weak self] in
             await self?.handleAuthenticationDeadline(clientId)
         }
     }
 
     private func cancelAuthenticationDeadline(for clientId: Int) {
-        authDeadlineTasks.removeValue(forKey: clientId)?.cancel()
+        authenticationDeadlines.cancel(clientId)
     }
 
     private func cancelAllAuthenticationDeadlines() {
-        for task in authDeadlineTasks.values {
-            task.cancel()
-        }
-        authDeadlineTasks.removeAll()
+        authenticationDeadlines.cancelAll()
     }
 
     private func handleAuthenticationDeadline(_ clientId: Int) async {
@@ -288,42 +283,21 @@ actor TheMuscle {
     // MARK: - Alert Presentation
 
     /// Present the connection-approval UI for `clientId`.
-    private func showApprovalAlert(clientId: Int) {
-        let presenter = alerts
-        let presentTask = Task { @MainActor [weak self] in
-            presenter.presentApproval(
-                clientId: clientId,
-                onAllow: { [weak self] in
-                    self?.scheduleApprovalCallback { muscle in
-                        await muscle.approveClient(clientId)
-                    }
-                },
-                onDeny: { [weak self] in
-                    self?.scheduleApprovalCallback { muscle in
-                        await muscle.denyClient(clientId)
-                    }
-                }
-            )
-        }
-        recordAlertTask(presentTask)
-    }
-
-    /// Spawn a tracked Task that hops back to actor isolation to run an allow/deny handler.
-    nonisolated private func scheduleApprovalCallback(_ body: @escaping @Sendable (TheMuscle) async -> Void) {
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await body(self)
-        }
-        recordAlertTask(task)
-    }
-
-    /// Insert a Task handle into the lock-protected tracking set. Safe to call from any isolation context.
-    nonisolated private func recordAlertTask(_ task: Task<Void, Never>) {
-        pendingAlertTasks.record(task)
+    private func showApprovalAlert(clientId: Int) async {
+        await approvalPrompts.show(
+            clientId: clientId,
+            onAllow: { [weak self] in
+                await self?.approveClient(clientId)
+            },
+            onDeny: { [weak self] in
+                await self?.denyClient(clientId)
+            }
+        )
     }
 
     private func dismissAlert() async {
-        await alerts.dismiss()
+        let approvalPrompts = approvalPrompts
+        await approvalPrompts.dismiss()
     }
 
     // MARK: - Helpers
