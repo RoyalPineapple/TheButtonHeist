@@ -79,21 +79,6 @@ public enum ClientMessage: Codable, Sendable {
     /// Drag from one point to another
     case drag(DragTarget)
 
-    /// Pinch/zoom gesture
-    case pinch(PinchTarget)
-
-    /// Rotation gesture
-    case rotate(RotateTarget)
-
-    /// Two-finger tap
-    case twoFingerTap(TwoFingerTapTarget)
-
-    /// Draw along a path (sequence of points)
-    case drawPath(DrawPathTarget)
-
-    /// Draw along a bezier curve (sampled to polyline server-side)
-    case drawBezier(DrawBezierTarget)
-
     /// Type text character-by-character by tapping keyboard keys
     case typeText(TypeTextTarget)
 
@@ -123,9 +108,6 @@ public enum ClientMessage: Codable, Sendable {
     /// Read text from the general pasteboard
     case getPasteboard
 
-    /// Wait for all animations to complete, then return the settled interface
-    case waitForIdle(WaitForIdleTarget)
-
     /// Wait for an element matching a predicate to appear (or disappear)
     case waitFor(WaitForTarget)
 
@@ -142,6 +124,4 @@ public enum ClientMessage: Codable, Sendable {
     /// Request a capture of the current screen
     case requestScreen
 
-    /// Explore the current screen — scroll all containers to discover every element
-    case explore
 }

@@ -26,6 +26,7 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
     case missingSwipeIntent
     case partialUnitPoints
     case unitPointsRequireElementTarget
+    case invalidDuration(observed: Double, expected: String)
 
     public var description: String {
         switch self {
@@ -43,6 +44,8 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
             return "unit-point swipe requires both start and end unit points"
         case .unitPointsRequireElementTarget:
             return "unit-point swipe requires a semantic target"
+        case .invalidDuration(let observed, let expected):
+            return "duration must be \(expected) (observed \(ScoreDescription.decimal(observed)))"
         }
     }
 }
@@ -66,13 +69,7 @@ private enum GesturePointCodingKeys: String, CodingKey, CaseIterable {
     case pointY
 }
 
-private enum GestureCenterCodingKeys: String, CodingKey, CaseIterable {
-    case centerX
-    case centerY
-}
-
 let gesturePointFieldNames = Set(GesturePointCodingKeys.allCases.map(\.stringValue))
-let gestureCenterFieldNames = Set(GestureCenterCodingKeys.allCases.map(\.stringValue))
 
 func makeGesturePointSelection(
     elementTarget: ElementTarget?,
@@ -121,34 +118,5 @@ func encodeGesturePointSelection(_ selection: GesturePointSelection, to encoder:
         var container = encoder.container(keyedBy: GesturePointCodingKeys.self)
         try container.encode(point.x, forKey: .pointX)
         try container.encode(point.y, forKey: .pointY)
-    }
-}
-
-func decodeGestureCenterSelection(from decoder: Decoder) throws -> GesturePointSelection? {
-    let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-    let container = try decoder.container(keyedBy: GestureCenterCodingKeys.self)
-    let centerX = try container.decodeIfPresent(Double.self, forKey: .centerX)
-    let centerY = try container.decodeIfPresent(Double.self, forKey: .centerY)
-    if elementTarget != nil, centerX != nil || centerY != nil {
-        throw GestureProjectionError.mixedCoordinateAndElement(field: "center")
-    }
-    return try makeGesturePointSelection(elementTarget: elementTarget, x: centerX, y: centerY, field: "center")
-}
-
-func decodeRequiredGestureCenterSelection(from decoder: Decoder, field: String = "center") throws -> GesturePointSelection {
-    guard let selection = try decodeGestureCenterSelection(from: decoder) else {
-        throw GestureProjectionError.missingGesturePoint(field: field)
-    }
-    return selection
-}
-
-func encodeGestureCenterSelection(_ selection: GesturePointSelection, to encoder: Encoder) throws {
-    switch selection {
-    case .element(let target):
-        try target.encode(to: encoder)
-    case .coordinate(let point):
-        var container = encoder.container(keyedBy: GestureCenterCodingKeys.self)
-        try container.encode(point.x, forKey: .centerX)
-        try container.encode(point.y, forKey: .centerY)
     }
 }

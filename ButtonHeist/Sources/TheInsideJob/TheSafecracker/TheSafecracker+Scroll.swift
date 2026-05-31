@@ -54,78 +54,6 @@ extension TheSafecracker {
         return true
     }
 
-    /// Scroll the minimum distance needed to make a frame visible within a comfort zone.
-    /// Frame is in screen coordinates; converted to scroll view content space internally.
-    /// `comfortMarginFraction` insets the visible rect by that fraction on each side
-    /// (e.g. 1/6 targets the middle 2/3). Each axis uses the comfort zone when
-    /// the target fits on that axis and the full visible rect when it does not.
-    /// Returns true if the target is already visible or the resulting offset can make it visible.
-    func scrollToMakeVisible(
-        _ targetFrame: CGRect,
-        in scrollView: UIScrollView,
-        animated: Bool = true,
-        comfortMarginFraction: CGFloat = 0
-    ) -> Bool {
-        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else { return false }
-
-        let targetInScrollView = scrollView.convert(targetFrame, from: nil)
-
-        let fullVisibleRect = visibleRect(in: scrollView, at: scrollView.contentOffset)
-
-        let comfortRect = makeComfortRect(
-            in: fullVisibleRect,
-            comfortMarginFraction: comfortMarginFraction
-        )
-        let targetVisibleRect = preferredVisibleRect(
-            for: targetInScrollView,
-            comfortRect: comfortRect,
-            fullVisibleRect: fullVisibleRect
-        )
-
-        if targetVisibleRect.contains(targetInScrollView) { return true }
-
-        var newOffset = scrollView.contentOffset
-
-        if targetInScrollView.minX < targetVisibleRect.minX {
-            newOffset.x -= targetVisibleRect.minX - targetInScrollView.minX
-        } else if targetInScrollView.maxX > targetVisibleRect.maxX {
-            newOffset.x += targetInScrollView.maxX - targetVisibleRect.maxX
-        }
-
-        if targetInScrollView.minY < targetVisibleRect.minY {
-            newOffset.y -= targetVisibleRect.minY - targetInScrollView.minY
-        } else if targetInScrollView.maxY > targetVisibleRect.maxY {
-            newOffset.y += targetInScrollView.maxY - targetVisibleRect.maxY
-        }
-
-        let insets = scrollView.adjustedContentInset
-        let maxX = scrollView.contentSize.width + insets.right - scrollView.frame.width
-        let maxY = scrollView.contentSize.height + insets.bottom - scrollView.frame.height
-        newOffset.x = max(-insets.left, min(newOffset.x, maxX))
-        newOffset.y = max(-insets.top, min(newOffset.y, maxY))
-
-        let clampedVisibleRect = visibleRect(in: scrollView, at: newOffset)
-        let clampedComfortRect = makeComfortRect(
-            in: clampedVisibleRect,
-            comfortMarginFraction: comfortMarginFraction
-        )
-        let clampedTargetVisibleRect = preferredVisibleRect(
-            for: targetInScrollView,
-            comfortRect: clampedComfortRect,
-            fullVisibleRect: clampedVisibleRect
-        )
-        guard revealSucceeded(
-            target: targetInScrollView,
-            preferredVisibleRect: clampedTargetVisibleRect,
-            fullVisibleRect: clampedVisibleRect
-        ) else { return false }
-
-        if newOffset.x == scrollView.contentOffset.x && newOffset.y == scrollView.contentOffset.y { return true }
-
-        scrollView.setContentOffset(newOffset, animated: animated)
-        return true
-    }
-
     /// Scrolls so a live accessibility activation point lands in the preferred
     /// screen rect when possible, otherwise at least inside the minimum screen rect.
     func scrollToMakeActivationPointVisible(
@@ -195,74 +123,6 @@ extension TheSafecracker {
         return fullVisibleRect.intersection(contentRect)
     }
 
-    private func makeComfortRect(
-        in fullVisibleRect: CGRect,
-        comfortMarginFraction: CGFloat
-    ) -> CGRect {
-        fullVisibleRect.insetBy(
-            dx: fullVisibleRect.width * comfortMarginFraction,
-            dy: fullVisibleRect.height * comfortMarginFraction
-        )
-    }
-
-    private func preferredVisibleRect(
-        for target: CGRect,
-        comfortRect: CGRect,
-        fullVisibleRect: CGRect
-    ) -> CGRect {
-        let usesComfortX = comfortRect.width >= target.width
-        let usesComfortY = comfortRect.height >= target.height
-        return CGRect(
-            x: usesComfortX ? comfortRect.minX : fullVisibleRect.minX,
-            y: usesComfortY ? comfortRect.minY : fullVisibleRect.minY,
-            width: usesComfortX ? comfortRect.width : fullVisibleRect.width,
-            height: usesComfortY ? comfortRect.height : fullVisibleRect.height
-        )
-    }
-
-    private func revealSucceeded(
-        target: CGRect,
-        preferredVisibleRect: CGRect,
-        fullVisibleRect: CGRect
-    ) -> Bool {
-        axisRevealSucceeded(
-            targetMin: target.minX,
-            targetMax: target.maxX,
-            preferredMin: preferredVisibleRect.minX,
-            preferredMax: preferredVisibleRect.maxX,
-            fullMin: fullVisibleRect.minX,
-            fullMax: fullVisibleRect.maxX
-        ) && axisRevealSucceeded(
-            targetMin: target.minY,
-            targetMax: target.maxY,
-            preferredMin: preferredVisibleRect.minY,
-            preferredMax: preferredVisibleRect.maxY,
-            fullMin: fullVisibleRect.minY,
-            fullMax: fullVisibleRect.maxY
-        )
-    }
-
-    private func axisRevealSucceeded(
-        targetMin: CGFloat,
-        targetMax: CGFloat,
-        preferredMin: CGFloat,
-        preferredMax: CGFloat,
-        fullMin: CGFloat,
-        fullMax: CGFloat
-    ) -> Bool {
-        let targetLength = targetMax - targetMin
-        let preferredLength = preferredMax - preferredMin
-        let fullLength = fullMax - fullMin
-        if targetLength <= preferredLength {
-            return (targetMin >= preferredMin && targetMax <= preferredMax)
-                || (targetMin >= fullMin && targetMax <= fullMax)
-        }
-        if targetLength <= fullLength {
-            return targetMin >= fullMin && targetMax <= fullMax
-        }
-        return targetMax > fullMin && targetMin < fullMax
-    }
-
     private func visibleRect(in scrollView: UIScrollView, at offset: CGPoint) -> CGRect {
         let inset = scrollView.adjustedContentInset
         return CGRect(
@@ -305,38 +165,10 @@ extension TheSafecracker {
     func scrollBySwipe(
         frame: CGRect,
         direction: UIAccessibilityScrollDirection,
-        duration: TimeInterval = 0.25
+        duration: GestureDuration = .scrollSwipeDefault
     ) async -> Bool {
         guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.75) else { return false }
         return await swipe(from: path.start, to: path.end, duration: duration)
-    }
-
-    // MARK: - Scroll Fingerprint Animation
-
-    /// Animate a fingerprint sweep across a frame in the given scroll direction.
-    /// The finger moves opposite to content — scrolling "down" (content moves up)
-    /// shows a finger sweeping from bottom to top, matching a real swipe gesture.
-    /// Duration matches UIScrollView's animated setContentOffset (~300ms).
-    func animateScrollFingerprint(
-        frame: CGRect,
-        direction: UIAccessibilityScrollDirection,
-        duration: TimeInterval = 0.3
-    ) async {
-        guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.5) else { return }
-
-        let steps = 15
-        let stepDelay = duration / Double(steps)
-
-        fingerprints.beginTrackingFingerprints(at: [path.start])
-        defer { fingerprints.endTrackingFingerprints() }
-        for point in Self.linearPath(from: path.start, to: path.end, steps: steps) {
-            fingerprints.updateTrackingFingerprints(to: [point])
-            do {
-                try await Task.sleep(for: .milliseconds(Int(stepDelay * 1000)))
-            } catch {
-                break
-            }
-        }
     }
 
     private static func scrollFingerPath(

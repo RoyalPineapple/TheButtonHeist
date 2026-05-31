@@ -7,8 +7,6 @@ import Foundation
 public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case elementNotFound
     case timeout
-    case unsupported
-    case inputError
     case validationError
     case actionFailed
     /// Authentication failed (rejected token, denied UI prompt, rate-limited).
@@ -73,18 +71,15 @@ public struct AuthApprovalPendingPayload: Codable, Sendable, Equatable {
 /// `{"kind": "scrollSearch", "data": {...}}`, etc.
 ///   - `.value`        → typeText / setPasteboard / getPasteboard
 ///   - `.scrollSearch` → element_search / scroll_to_visible
-///   - `.explore`      → the explicit `explore` command
 public enum ResultPayload: Codable, Sendable {
     case value(String)
     case scrollSearch(ScrollSearchResult)
-    case explore(ExploreResult)
     case rotor(RotorResult)
     case batchExecution(BatchExecutionResult)
 
     private enum Kind: String, Codable {
         case value
         case scrollSearch
-        case explore
         case rotor
         case batchExecution
     }
@@ -102,8 +97,6 @@ public enum ResultPayload: Codable, Sendable {
             self = .value(try container.decode(String.self, forKey: .data))
         case .scrollSearch:
             self = .scrollSearch(try container.decode(ScrollSearchResult.self, forKey: .data))
-        case .explore:
-            self = .explore(try container.decode(ExploreResult.self, forKey: .data))
         case .rotor:
             self = .rotor(try container.decode(RotorResult.self, forKey: .data))
         case .batchExecution:
@@ -120,9 +113,6 @@ public enum ResultPayload: Codable, Sendable {
         case .scrollSearch(let search):
             try container.encode(Kind.scrollSearch, forKey: .kind)
             try container.encode(search, forKey: .data)
-        case .explore(let explore):
-            try container.encode(Kind.explore, forKey: .kind)
-            try container.encode(explore, forKey: .data)
         case .rotor(let rotor):
             try container.encode(Kind.rotor, forKey: .kind)
             try container.encode(rotor, forKey: .data)
@@ -150,29 +140,12 @@ public struct ActionResult: Codable, Sendable {
     public let payload: ResultPayload?
     /// Source-of-truth accessibility capture receipt for this action.
     public let accessibilityTrace: AccessibilityTrace?
-    /// Compact projection describing what changed in the hierarchy after the
-    /// action. This is always derived from `accessibilityTrace`; action results
-    /// store captures as truth, not stale compact deltas.
-    public var accessibilityDelta: AccessibilityTrace.Delta? {
-        accessibilityTrace?.endpointDeltaProjection
-    }
-    /// Whether the UI was still animating when this result was produced.
-    /// nil means idle (no animations detected).
-    public let animating: Bool?
-    /// Screen name projection derived from the final trace capture.
-    public var screenName: String? {
-        accessibilityTrace?.endpointScreenNameProjection
-    }
-    /// Screen id projection derived from the final trace capture.
-    public var screenId: String? {
-        accessibilityTrace?.endpointScreenIdProjection
-    }
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
     /// the existing repopulation pipeline. False *only* when the hard
     /// settle timeout elapsed while the tree was still changing — the
-    /// snapshot in `accessibilityDelta` may not be a final state.
+    /// endpoint delta projection may not be a final state.
     public let settled: Bool?
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
@@ -185,7 +158,6 @@ public struct ActionResult: Codable, Sendable {
         errorKind: ErrorKind? = nil,
         payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
-        animating: Bool? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) {
@@ -195,7 +167,6 @@ public struct ActionResult: Codable, Sendable {
         self.errorKind = errorKind
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
-        self.animating = animating
         self.settled = settled
         self.settleTimeMs = settleTimeMs
     }
@@ -207,7 +178,6 @@ public struct ActionResult: Codable, Sendable {
         case errorKind
         case payload
         case accessibilityTrace
-        case animating
         case settled
         case settleTimeMs
     }
@@ -222,7 +192,6 @@ public struct ActionResult: Codable, Sendable {
             errorKind: try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind),
             payload: try container.decodeIfPresent(ResultPayload.self, forKey: .payload),
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
-            animating: try container.decodeIfPresent(Bool.self, forKey: .animating),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
         )
@@ -236,7 +205,6 @@ public struct ActionResult: Codable, Sendable {
         try container.encodeIfPresent(errorKind, forKey: .errorKind)
         try container.encodeIfPresent(payload, forKey: .payload)
         try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
-        try container.encodeIfPresent(animating, forKey: .animating)
         try container.encodeIfPresent(settled, forKey: .settled)
         try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
     }
@@ -248,8 +216,6 @@ public struct ScrollSearchResult: Codable, Sendable {
     public let scrollCount: Int
     /// Number of unique elements seen across all scroll positions
     public let uniqueElementsSeen: Int
-    /// Total items in the data source (UITableView/UICollectionView only)
-    public let totalItems: Int?
     /// Whether every item in the data source was checked
     public let exhaustive: Bool
     /// The matched element id, if found. The action trace owns the element snapshot.
@@ -258,13 +224,11 @@ public struct ScrollSearchResult: Codable, Sendable {
     public init(
         scrollCount: Int,
         uniqueElementsSeen: Int,
-        totalItems: Int? = nil,
         exhaustive: Bool,
         foundHeistId: HeistId? = nil
     ) {
         self.scrollCount = scrollCount
         self.uniqueElementsSeen = uniqueElementsSeen
-        self.totalItems = totalItems
         self.exhaustive = exhaustive
         self.foundHeistId = foundHeistId
     }
@@ -272,7 +236,6 @@ public struct ScrollSearchResult: Codable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case scrollCount
         case uniqueElementsSeen
-        case totalItems
         case exhaustive
         case foundHeistId
     }
@@ -283,54 +246,8 @@ public struct ScrollSearchResult: Codable, Sendable {
         self.init(
             scrollCount: try container.decode(Int.self, forKey: .scrollCount),
             uniqueElementsSeen: try container.decode(Int.self, forKey: .uniqueElementsSeen),
-            totalItems: try container.decodeIfPresent(Int.self, forKey: .totalItems),
             exhaustive: try container.decode(Bool.self, forKey: .exhaustive),
             foundHeistId: try container.decodeIfPresent(HeistId.self, forKey: .foundHeistId)
-        )
-    }
-
-}
-
-// MARK: - Explore Result
-
-/// Result from an explore (full screen census) operation.
-public struct ExploreResult: Codable, Sendable {
-    /// Number of elements discovered across all scroll positions.
-    public let elementCount: Int
-    /// Total scrollByPage calls during exploration
-    public let scrollCount: Int
-    /// Number of scrollable containers explored
-    public let containersExplored: Int
-    /// Wall-clock time spent exploring, in seconds
-    public let explorationTime: Double
-
-    public init(
-        elementCount: Int,
-        scrollCount: Int,
-        containersExplored: Int,
-        explorationTime: Double
-    ) {
-        self.elementCount = elementCount
-        self.scrollCount = scrollCount
-        self.containersExplored = containersExplored
-        self.explorationTime = explorationTime
-    }
-
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case elementCount
-        case scrollCount
-        case containersExplored
-        case explorationTime
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ExploreResult")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
-            elementCount: try container.decode(Int.self, forKey: .elementCount),
-            scrollCount: try container.decode(Int.self, forKey: .scrollCount),
-            containersExplored: try container.decode(Int.self, forKey: .containersExplored),
-            explorationTime: try container.decode(Double.self, forKey: .explorationTime)
         )
     }
 
@@ -407,10 +324,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case syntheticLongPress
     case syntheticSwipe
     case syntheticDrag
-    case syntheticPinch
-    case syntheticRotate
-    case syntheticTwoFingerTap
-    case syntheticDrawPath
     case typeText
     case customAction
     case editAction
@@ -418,7 +331,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case setPasteboard
     case getPasteboard
     case rotor
-    case waitForIdle
     case waitForChange
     case batchExecutionPlan
     case scroll
@@ -426,7 +338,4 @@ public enum ActionMethod: String, Codable, Sendable {
     case elementSearch
     case scrollToEdge
     case waitFor
-    case explore
-    case elementNotFound
-    case elementDeallocated
 }

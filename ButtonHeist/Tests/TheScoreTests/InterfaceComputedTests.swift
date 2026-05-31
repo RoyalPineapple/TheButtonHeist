@@ -60,7 +60,7 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertTrue(isStableIdentifier("not-a-uuid-at-all"))
     }
 
-    // MARK: - Interface.screenDescription
+    // MARK: - InterfaceSummary.screenDescription
 
     func testScreenDescriptionWithHeaderAndButtons() {
         let elements = [
@@ -68,7 +68,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Save", traits: [.button]),
             makeElement(label: "Cancel", traits: [.button]),
         ]
-        let description = Interface.buildScreenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "Settings — 2 buttons")
     }
 
@@ -76,7 +76,7 @@ final class InterfaceComputedTests: XCTestCase {
         let elements = [
             makeElement(label: "Username", traits: [.textEntry]),
         ]
-        let description = Interface.buildScreenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "1 text field")
     }
 
@@ -84,7 +84,7 @@ final class InterfaceComputedTests: XCTestCase {
         let elements = [
             makeElement(label: "Hello", traits: [.staticText]),
         ]
-        let description = Interface.buildScreenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "1 elements")
     }
 
@@ -93,7 +93,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "About", traits: [.header]),
             makeElement(label: "Version 1.0", traits: [.staticText]),
         ]
-        let description = Interface.buildScreenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "About")
     }
 
@@ -108,7 +108,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Volume", traits: [.adjustable]),
             makeElement(label: "Docs", traits: [.link]),
         ]
-        let description = Interface.buildScreenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertTrue(description.hasPrefix("Login — "))
         XCTAssertTrue(description.contains("1 text field"))
         XCTAssertTrue(description.contains("1 password field"))
@@ -125,7 +125,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Display", traits: [.header], frameY: 72),
             makeElement(label: "Favorite star", traits: [.image], frameY: 180),
         ]
-        let description = Interface.buildScreenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "Display")
     }
 
@@ -134,23 +134,23 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Back", traits: [.button, .backButton]),
             makeElement(label: "Save", traits: [.button]),
         ]
-        let description = Interface.buildScreenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "1 button")
     }
 
     func testScreenDescriptionEmpty() {
-        let description = Interface.buildScreenDescription(from: [])
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: [], timestamp: Date()))
         XCTAssertEqual(description, "0 elements")
     }
 
-    // MARK: - Interface.screenId
+    // MARK: - InterfaceSummary.screenId
 
     func testScreenIdFromHeader() {
         let elements = [
             makeElement(label: "Controls Demo", traits: [.header]),
         ]
         let interface = makeTestInterface(elements: elements, timestamp: Date())
-        XCTAssertEqual(interface.screenId, "controls_demo")
+        XCTAssertEqual(InterfaceSummary.screenId(for: interface), "controls_demo")
     }
 
     func testScreenIdUsesTopmostHeader() {
@@ -159,7 +159,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Display", traits: [.header], frameY: 72),
         ]
         let interface = makeTestInterface(elements: elements, timestamp: Date())
-        XCTAssertEqual(interface.screenId, "display")
+        XCTAssertEqual(InterfaceSummary.screenId(for: interface), "display")
     }
 
     func testScreenIdNilWhenNoHeader() {
@@ -167,18 +167,15 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Save", traits: [.button]),
         ]
         let interface = makeTestInterface(elements: elements, timestamp: Date())
-        XCTAssertNil(interface.screenId)
+        XCTAssertNil(InterfaceSummary.screenId(for: interface))
     }
 
-    func testActionExpectationDescriptionComposesMatchers() {
-        let expectation = ActionExpectation.compound([
-            .elementAppeared(ElementMatcher(label: "Done", traits: [.button])),
-            .elementUpdated(heistId: "status", property: .value, oldValue: "Off", newValue: "On"),
-        ])
+    func testActionExpectationDescriptionComposesMatcher() {
+        let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "Done", traits: [.button]))
 
         XCTAssertEqual(
             expectation.description,
-            #"compound(element_appeared(matcher(label="Done" traits=[button])), element_updated(heistId="status" property=value oldValue="Off" newValue="On"))"#
+            #"element_appeared(matcher(label="Done" traits=[button]))"#
         )
     }
 
@@ -193,95 +190,6 @@ final class InterfaceComputedTests: XCTestCase {
             result.description,
             #"expectation(met=false expected=element_disappeared(matcher(identifier="spinner")) actual="still visible")"#
         )
-    }
-
-    // MARK: - Interface.navigation
-
-    func testNavigationScreenTitleFromHeader() {
-        let elements = [
-            makeElement(label: "Checkout", traits: [.header]),
-            makeElement(label: "Pay Now", traits: [.button]),
-        ]
-        let navigation = Interface.buildNavigation(from: elements)
-        XCTAssertEqual(navigation.screenTitle, "Checkout")
-        XCTAssertNil(navigation.backButton)
-        XCTAssertNil(navigation.tabBarItems)
-    }
-
-    func testNavigationScreenTitleUsesTopmostHeader() {
-        let elements = [
-            makeElement(label: "Section Header Style", traits: [.header], frameY: 240),
-            makeElement(label: "Display", traits: [.header], frameY: 72),
-        ]
-        let navigation = Interface.buildNavigation(from: elements)
-        XCTAssertEqual(navigation.screenTitle, "Display")
-    }
-
-    func testNavigationBackButton() {
-        let elements = [
-            makeElement(heistId: "back_button", label: "Settings", traits: [.button, .backButton]),
-            makeElement(label: "Profile", traits: [.header]),
-        ]
-        let navigation = Interface.buildNavigation(from: elements)
-        XCTAssertEqual(navigation.screenTitle, "Profile")
-        XCTAssertEqual(navigation.backButton?.heistId, "back_button")
-        XCTAssertEqual(navigation.backButton?.label, "Settings")
-    }
-
-    func testNavigationTabBarItems() {
-        let elements = [
-            makeElement(label: "Checkout", traits: [.header]),
-            makeElement(heistId: "cart", label: "Checkout", traits: [.button, .tabBarItem, .selected]),
-            makeElement(heistId: "list", label: "Transactions", traits: [.button, .tabBarItem]),
-            makeElement(heistId: "person", label: "Account", traits: [.button, .tabBarItem]),
-        ]
-        let navigation = Interface.buildNavigation(from: elements)
-        XCTAssertEqual(navigation.tabBarItems?.count, 3)
-        XCTAssertEqual(navigation.tabBarItems?[0].heistId, "cart")
-        XCTAssertEqual(navigation.tabBarItems?[0].label, "Checkout")
-        XCTAssertEqual(navigation.tabBarItems?[0].selected, true)
-        XCTAssertEqual(navigation.tabBarItems?[1].selected, false)
-        XCTAssertEqual(navigation.tabBarItems?[2].heistId, "person")
-    }
-
-    func testNavigationTabBarItemWithValue() {
-        let elements = [
-            makeElement(heistId: "inbox", label: "Inbox", value: "3", traits: [.button, .tabBarItem, .selected]),
-        ]
-        let navigation = Interface.buildNavigation(from: elements)
-        XCTAssertEqual(navigation.tabBarItems?[0].value, "3")
-    }
-
-    func testNavigationBackButtonAndTabs() {
-        let elements = [
-            makeElement(heistId: "back", label: "Home", traits: [.button, .backButton]),
-            makeElement(label: "Settings", traits: [.header]),
-            makeElement(heistId: "tab_general", label: "General", traits: [.button, .tabBarItem, .selected]),
-            makeElement(heistId: "tab_privacy", label: "Privacy", traits: [.button, .tabBarItem]),
-        ]
-        let navigation = Interface.buildNavigation(from: elements)
-        XCTAssertEqual(navigation.screenTitle, "Settings")
-        XCTAssertEqual(navigation.backButton?.heistId, "back")
-        XCTAssertEqual(navigation.backButton?.label, "Home")
-        XCTAssertEqual(navigation.tabBarItems?.count, 2)
-    }
-
-    func testNavigationEmptyElements() {
-        let navigation = Interface.buildNavigation(from: [])
-        XCTAssertNil(navigation.screenTitle)
-        XCTAssertNil(navigation.backButton)
-        XCTAssertNil(navigation.tabBarItems)
-    }
-
-    func testNavigationNoNavChrome() {
-        let elements = [
-            makeElement(label: "Hello", traits: [.staticText]),
-            makeElement(label: "Save", traits: [.button]),
-        ]
-        let navigation = Interface.buildNavigation(from: elements)
-        XCTAssertNil(navigation.screenTitle)
-        XCTAssertNil(navigation.backButton)
-        XCTAssertNil(navigation.tabBarItems)
     }
 
     // MARK: - Helpers

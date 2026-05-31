@@ -1,37 +1,4 @@
-import Foundation
-
-public struct ValidatedAccessibilityTrace: Sendable, Equatable {
-    public let trace: AccessibilityTrace
-    public let captures: [AccessibilityTrace.Capture]
-    public let receipts: [AccessibilityTrace.Receipt]
-
-    public init(trace: AccessibilityTrace) throws {
-        let issues = trace.integrityIssues
-        guard issues.isEmpty else {
-            throw AccessibilityTraceValidationError.integrityIssues(issues)
-        }
-        self.trace = trace
-        self.captures = trace.captures
-        self.receipts = trace.receipts
-    }
-}
-
-public enum AccessibilityTraceValidationError: Error, Sendable, Equatable, CustomStringConvertible {
-    case integrityIssues([AccessibilityTrace.IntegrityIssue])
-
-    public var description: String {
-        switch self {
-        case .integrityIssues(let issues):
-            return "accessibility trace integrity failed with \(issues.count) issue(s)"
-        }
-    }
-}
-
 public extension AccessibilityTrace {
-    func validated() throws -> ValidatedAccessibilityTrace {
-        try ValidatedAccessibilityTrace(trace: self)
-    }
-
     /// Raw compact projection between this trace's first and final capture.
     ///
     /// Captures remain the durable source of truth; this is the compact view
@@ -71,16 +38,6 @@ public extension AccessibilityTrace {
         return AccessibilityTrace(captures: captures)
     }
 
-    /// Raw compact projection across a set of per-step traces.
-    static func endpointDeltaProjection(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
-        endpointTraceProjection(from: traces)?.endpointDeltaProjection
-    }
-
-    /// Background/summary projection across a set of per-step traces.
-    static func meaningfulEndpointDeltaProjection(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
-        endpointTraceProjection(from: traces)?.meaningfulEndpointDeltaProjection
-    }
-
     var endpointScreenNameProjection: String? {
         captures.last?.screenNameProjection
     }
@@ -103,12 +60,10 @@ public extension AccessibilityTrace {
 
 extension AccessibilityTrace.Capture {
     var screenNameProjection: String? {
-        interface.elements
-            .first(where: { $0.traits.contains(.header) })
-            .flatMap(\.label)
+        InterfaceSummary.screenTitle(for: interface)
     }
 
     var screenIdProjection: String? {
-        context.screenId ?? interface.screenId
+        context.screenId ?? InterfaceSummary.screenId(for: interface)
     }
 }

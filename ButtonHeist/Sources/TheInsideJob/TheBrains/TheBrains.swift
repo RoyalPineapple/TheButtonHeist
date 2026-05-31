@@ -12,7 +12,7 @@ import AccessibilitySnapshotParser
 /// TheBrains takes a command and works it through to a result by coordinating
 /// TheStash (the screen value), TheSafecracker (gestures), and TheTripwire
 /// (timing). The post-action delta cycle and command dispatch live here;
-/// scroll/explore lives in `Navigation` and the 21 `executeXxx` action
+/// scroll/explore lives in `Navigation` and the action
 /// handlers live in `Actions` — both are internal components of TheBrains.
 @MainActor
 final class TheBrains {
@@ -26,7 +26,6 @@ final class TheBrains {
     let tripwire: TheTripwire
     let navigation: Navigation
     let actions: Actions
-    let responseStateHistory = ResponseStateHistory()
     let waitForChangeState = WaitForChangeState()
 
     enum InterfaceObservation {
@@ -99,27 +98,6 @@ final class TheBrains {
         let tripwireSignal: TheTripwire.TripwireSignal
         let screenSnapshot: ScreenClassifier.Snapshot
         let screenId: String?
-    }
-
-    /// Capture the current state for delta computation before an action.
-    /// Caller must have called `refresh()` already this frame.
-    func captureBeforeState() -> BeforeState {
-        let snapshot = stash.selectElements()
-        let (interface, interfaceHash) = stash.semanticInterfaceWithHash()
-        let tripwireSignal = tripwire.tripwireSignal()
-        let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
-        return BeforeState(
-            snapshot: snapshot,
-            elements: snapshot.map(\.element),
-            hierarchy: stash.currentHierarchy,
-            interface: interface,
-            interfaceHash: interfaceHash,
-            semanticHash: stash.currentScreen.semanticHash,
-            capture: capture,
-            tripwireSignal: tripwireSignal,
-            screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
-            screenId: stash.lastScreenId
-        )
     }
 
     /// Capture the known semantic state. Exploration updates the targetable
@@ -241,22 +219,12 @@ final class TheBrains {
         return builder.success(payload: payload)
     }
 
-    // MARK: - Keyboard Observation
-
-    func startKeyboardObservation() {
-        safecracker.startKeyboardObservation()
-    }
-
-    func stopKeyboardObservation() {
-        safecracker.stopKeyboardObservation()
-    }
-
     // MARK: - Clear
 
     func clearCache() {
         stash.clearCache()
         navigation.clearCache()
-        responseStateHistory.reset()
+        waitForChangeState.resetDeliveredBaseline()
     }
 
     func failureActionResult(
@@ -266,9 +234,7 @@ final class TheBrains {
         errorKind: ErrorKind?,
         before: BeforeState
     ) -> ActionResult {
-        let kind = errorKind
-            ?? ((method == .elementNotFound || method == .elementDeallocated)
-                ? .elementNotFound : .actionFailed)
+        let kind = errorKind ?? .actionFailed
         var builder = ActionResultBuilder(method: method, capture: before.capture)
         builder.message = message
         return builder.failure(errorKind: kind, payload: payload)
@@ -278,7 +244,7 @@ final class TheBrains {
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
-        responseStateHistory.record(captureSemanticState())
+        waitForChangeState.recordDeliveredBaseline(captureSemanticState())
     }
 
     static func shouldRecordAccessibilityTrace(
@@ -305,24 +271,6 @@ final class TheBrains {
         } catch {
             return .failure(.selection(error))
         }
-    }
-
-    // MARK: - Wait For Idle
-
-    /// Run the wait-for-idle pipeline: refresh → before → settle → delta → result.
-    func executeWaitForIdle(timeout: TimeInterval) async -> ActionResult {
-        guard refresh() != nil else {
-            return treeUnavailableResult(method: .waitForIdle)
-        }
-        let before = captureBeforeState()
-        let settled = await tripwire.waitForAllClear(timeout: timeout)
-
-        return await actionResultWithDelta(
-            success: true,
-            method: .waitForIdle,
-            message: settled ? "UI idle" : "Timed out after \(timeout)s, UI may still be animating",
-            before: before
-        )
     }
 
     // MARK: - Private Helpers
@@ -393,21 +341,6 @@ final class TheBrains {
         )
     }
 
-    func makeAccessibilityTrace(afterCapture: AccessibilityTrace.Capture, parentCapture: AccessibilityTrace.Capture? = nil) -> AccessibilityTrace {
-        let capture = AccessibilityTrace.Capture(
-            sequence: parentCapture == nil ? 1 : 2,
-            interface: afterCapture.interface,
-            parentHash: parentCapture?.hash,
-            context: afterCapture.context,
-            transition: afterCapture.transition,
-            hash: afterCapture.hash
-        )
-        if let parentCapture {
-            return AccessibilityTrace(captures: [parentCapture, capture])
-        }
-        return AccessibilityTrace(capture: capture)
-    }
-
     func makeClassifiedAccessibilityTrace(after: BeforeState, parent: BeforeState) -> AccessibilityTrace {
         let classification = ScreenClassifier.classify(
             before: parent.screenSnapshot,
@@ -421,7 +354,7 @@ final class TheBrains {
             transition: AccessibilityTrace.Transition(screenChangeReason: classification.reason?.rawValue),
             hash: after.capture.hash
         )
-        return makeAccessibilityTrace(afterCapture: capture, parentCapture: parent.capture)
+        return AccessibilityTrace(captures: [parent.capture, capture])
     }
 
     /// A Tripwire tick is permission to parse visible state, not to tickle

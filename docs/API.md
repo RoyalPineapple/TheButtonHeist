@@ -43,18 +43,14 @@ Environment variables take precedence over Info.plist values.
 
 ```bash
 INSIDEJOB_DISABLE=true
-INSIDEJOB_DISABLE_FINGERPRINTS=true
 INSIDEJOB_TOKEN=my-secret-token
 INSIDEJOB_ID=my-instance
 INSIDEJOB_SESSION_TIMEOUT=30
 INSIDEJOB_SCOPE=simulator,usb
-INSIDEJOB_POLLING_INTERVAL=2.0
 ```
 
 ```xml
 <key>InsideJobDisableAutoStart</key>
-<false/>
-<key>InsideJobDisableFingerprints</key>
 <false/>
 <key>InsideJobToken</key>
 <string>my-secret-token</string>

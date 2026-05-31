@@ -38,15 +38,35 @@ extension TheFence {
         )
     }
 
-    func prepareBatchStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
-        try batchPreparedStep(originalIndex: originalIndex, request: request)
+    func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
+        let messages = try executableActionMessages(for: request)
+        guard let message = messages.first, messages.count == 1 else {
+            let commandName = request.command.rawValue
+            throw BatchStepPlanBuildError(
+                message: """
+                run_batch step command "\(commandName)" expands to \(messages.count) actions; \
+                express repeats as separate ordered steps
+                """
+            )
+        }
+        let typedStep = TheScore.BatchStep(
+            command: message,
+            expectation: batchExpectation(for: message, request: request),
+            deadline: batchDeadline(for: message, request: request)
+        )
+        return RunBatchPreparedStep(
+            originalIndex: originalIndex,
+            command: request.command,
+            typedStep: typedStep
+        )
     }
+
 }
 
 private extension TheFence {
 
     func decodeRunBatchStep(_ step: CommandArgumentEnvelope, index: Int) throws -> RunBatchPreparedStep {
-        switch FenceOperationCatalog.normalizeBatchStep(step) {
+        switch TheFence.Command.routeBatchStep(step) {
         case .success(let routed):
             return try decodeRunBatchStep(command: routed.command, arguments: routed.arguments, index: index)
 
@@ -72,30 +92,7 @@ private extension TheFence {
         }
     }
 
-    func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
-        let messages = try executableActionMessages(for: request)
-        guard let message = messages.first, messages.count == 1 else {
-            let commandName = request.command.rawValue
-            throw BatchStepPlanBuildError(
-                message: """
-                run_batch step command "\(commandName)" expands to \(messages.count) actions; \
-                express repeats as separate ordered steps
-                """
-            )
-        }
-        let typedStep = TheScore.BatchStep(
-            command: message,
-            expectation: batchExpectation(for: message, request: request),
-            deadline: batchDeadline(for: message, request: request)
-        )
-        return RunBatchPreparedStep(
-            originalIndex: originalIndex,
-            command: request.command,
-            typedStep: typedStep
-        )
-    }
-
-    func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> ActionExpectation {
+    func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> ActionExpectation? {
         if let explicit = request.expectationPayload.expectation {
             return explicit
         }
@@ -103,7 +100,7 @@ private extension TheFence {
         switch message {
         case .waitFor(let target):
             guard let matcher = target.elementTarget.batchExpectationMatcher else {
-                return .delivery
+                return nil
             }
             return target.resolvedAbsent
                 ? .elementDisappeared(matcher)
@@ -111,7 +108,7 @@ private extension TheFence {
         case .waitForChange(let target):
             return target.expect ?? .screenChanged
         default:
-            return .delivery
+            return nil
         }
     }
 
@@ -121,8 +118,6 @@ private extension TheFence {
         }
 
         switch message {
-        case .waitForIdle(let target):
-            return Deadline(timeout: target.timeout ?? 5)
         case .waitFor(let target):
             return Deadline(timeout: target.resolvedTimeout)
         case .waitForChange(let target):

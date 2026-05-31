@@ -72,9 +72,8 @@ public extension AccessibilityTrace {
         }
     }
 
-    /// On-the-wire `kind` discriminator. The per-case switch is the canonical
-    /// Swift API; the raw string is only meaningful at the Codable boundary
-    /// and for logging via `kindRawValue`.
+    /// On-the-wire `kind` discriminator. Product code should switch over
+    /// `Delta`; this type exists only at the Codable/public projection edge.
     enum DeltaKind: String, Codable {
         case noChange
         case elementsChanged
@@ -92,120 +91,6 @@ public extension AccessibilityTrace {
 
         /// View controller identity changed — a brand new interface tree.
         case screenChanged(ScreenChanged)
-
-        // MARK: - Cross-Case Accessors
-
-        /// Element count for whichever phase this delta represents.
-        public var elementCount: Int {
-            switch self {
-            case .noChange(let payload): return payload.elementCount
-            case .elementsChanged(let payload): return payload.elementCount
-            case .screenChanged(let payload): return payload.elementCount
-            }
-        }
-
-        /// Shared transition classifier used by compact action deltas and
-        /// screen-history segmentation. The raw string remains a wire detail;
-        /// product code should switch over this typed value.
-        public var kind: DeltaKind {
-            switch self {
-            case .noChange: return .noChange
-            case .elementsChanged: return .elementsChanged
-            case .screenChanged: return .screenChanged
-            }
-        }
-
-        /// String form of the discriminator for public formatting and logs.
-        public var kindRawValue: String {
-            kind.rawValue
-        }
-
-        /// True iff this delta is a screen change.
-        public var isScreenChanged: Bool {
-            if case .screenChanged = self { return true }
-            return false
-        }
-
-        /// Transient elements carried by this delta, regardless of case.
-        public var transient: [HeistElement] {
-            switch self {
-            case .noChange(let payload): return payload.transient
-            case .elementsChanged(let payload): return payload.transient
-            case .screenChanged(let payload): return payload.transient
-            }
-        }
-
-        /// Capture edge this delta was derived from, when emitted by a
-        /// capture-backed factory. nil indicates a standalone projection
-        /// value, not action-result storage truth.
-        public var captureEdge: CaptureEdge? {
-            switch self {
-            case .noChange(let payload): return payload.captureEdge
-            case .elementsChanged(let payload): return payload.captureEdge
-            case .screenChanged(let payload): return payload.captureEdge
-            }
-        }
-
-        /// Element edits carried by this delta. Only `.elementsChanged`
-        /// carries edit lists; `.screenChanged` carries a full new interface.
-        public var elementEdits: ElementEdits? {
-            switch self {
-            case .noChange, .screenChanged:
-                return nil
-            case .elementsChanged(let payload):
-                return payload.edits
-            }
-        }
-
-        public func withCaptureEdge(_ edge: CaptureEdge) -> AccessibilityTrace.Delta {
-            switch self {
-            case .noChange(let payload):
-                return .noChange(NoChange(
-                    elementCount: payload.elementCount,
-                    captureEdge: edge,
-                    transient: payload.transient
-                ))
-            case .elementsChanged(let payload):
-                return .elementsChanged(ElementsChanged(
-                    elementCount: payload.elementCount,
-                    edits: payload.edits,
-                    captureEdge: edge,
-                    transient: payload.transient
-                ))
-            case .screenChanged(let payload):
-                return .screenChanged(ScreenChanged(
-                    elementCount: payload.elementCount,
-                    captureEdge: edge,
-                    newInterface: payload.newInterface,
-                    transient: payload.transient
-                ))
-            }
-        }
-
-        public func withTransient(_ transient: [HeistElement]) -> AccessibilityTrace.Delta {
-            switch self {
-            case .noChange(let payload):
-                return .noChange(NoChange(
-                    elementCount: payload.elementCount,
-                    captureEdge: payload.captureEdge,
-                    transient: transient
-                ))
-            case .elementsChanged(let payload):
-                return .elementsChanged(ElementsChanged(
-                    elementCount: payload.elementCount,
-                    edits: payload.edits,
-                    captureEdge: payload.captureEdge,
-                    transient: transient
-                ))
-            case .screenChanged(let payload):
-                return .screenChanged(ScreenChanged(
-                    elementCount: payload.elementCount,
-                    captureEdge: payload.captureEdge,
-                    newInterface: payload.newInterface,
-                    transient: transient
-                ))
-            }
-        }
     }
 }
 
@@ -217,47 +102,35 @@ public struct ElementEdits: Sendable, Equatable {
     public let added: [HeistElement]
     public let removed: [HeistId]
     public let updated: [ElementUpdate]
-    public let treeInserted: [TreeInsertion]
-    public let treeRemoved: [TreeRemoval]
-    public let treeMoved: [TreeMove]
 
     public init(
         added: [HeistElement] = [],
         removed: [HeistId] = [],
-        updated: [ElementUpdate] = [],
-        treeInserted: [TreeInsertion] = [],
-        treeRemoved: [TreeRemoval] = [],
-        treeMoved: [TreeMove] = []
+        updated: [ElementUpdate] = []
     ) {
         self.added = added
         self.removed = removed
         self.updated = updated
-        self.treeInserted = treeInserted
-        self.treeRemoved = treeRemoved
-        self.treeMoved = treeMoved
     }
 
     public var isEmpty: Bool {
         added.isEmpty && removed.isEmpty && updated.isEmpty
-            && treeInserted.isEmpty && treeRemoved.isEmpty && treeMoved.isEmpty
     }
 }
 
 // MARK: - ElementEdits Codable
 
 extension ElementEdits: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case added, removed, updated, treeInserted, treeRemoved, treeMoved
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case added, removed, updated
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ElementEdits")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.added = try container.decodeIfPresent([HeistElement].self, forKey: .added) ?? []
         self.removed = try container.decodeIfPresent([HeistId].self, forKey: .removed) ?? []
         self.updated = try container.decodeIfPresent([ElementUpdate].self, forKey: .updated) ?? []
-        self.treeInserted = try container.decodeIfPresent([TreeInsertion].self, forKey: .treeInserted) ?? []
-        self.treeRemoved = try container.decodeIfPresent([TreeRemoval].self, forKey: .treeRemoved) ?? []
-        self.treeMoved = try container.decodeIfPresent([TreeMove].self, forKey: .treeMoved) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -265,9 +138,6 @@ extension ElementEdits: Codable {
         if !added.isEmpty { try container.encode(added, forKey: .added) }
         if !removed.isEmpty { try container.encode(removed, forKey: .removed) }
         if !updated.isEmpty { try container.encode(updated, forKey: .updated) }
-        if !treeInserted.isEmpty { try container.encode(treeInserted, forKey: .treeInserted) }
-        if !treeRemoved.isEmpty { try container.encode(treeRemoved, forKey: .treeRemoved) }
-        if !treeMoved.isEmpty { try container.encode(treeMoved, forKey: .treeMoved) }
     }
 }
 
@@ -353,29 +223,6 @@ extension AccessibilityTrace.Delta: Codable {
     }
 
     private static func rejectUnknownDeltaKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: DeltaUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown accessibility delta field \"\(unknownKey.stringValue)\""
-        ))
-    }
-}
-
-private struct DeltaUnknownKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init?(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "accessibility delta")
     }
 }

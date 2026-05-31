@@ -119,9 +119,9 @@ extension TheBrains {
         runtime: BatchExecutionRuntime
     ) async -> BatchExpectationReceipt? {
         guard actionResult.success else { return nil }
-        let expectation = step.expectation
+        guard let expectation = step.expectation else { return nil }
         let immediateExpectation = expectation.validate(against: actionResult)
-        if immediateExpectation.met || expectation == .delivery {
+        if immediateExpectation.met {
             return BatchExpectationReceipt(
                 actionResult: actionResult,
                 expectation: immediateExpectation

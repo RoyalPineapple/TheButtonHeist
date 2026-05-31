@@ -20,7 +20,7 @@ extension TheFence {
         case .elementSearch:
             return try decodedExecutablePayload(.elementSearch(ElementSearchTarget(
                 elementTarget: input.requiredElementTarget(command: .elementSearch),
-                direction: input.schemaEnum("direction", as: ScrollSearchDirection.self) ?? .down
+                direction: input.schemaEnum("direction", as: ScrollDirection.self) ?? .down
             )))
         case .scrollToEdge:
             let edge = try input.schemaEnum("edge", as: ScrollEdge.self) ?? .top

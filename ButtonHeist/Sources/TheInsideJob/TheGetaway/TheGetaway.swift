@@ -80,10 +80,6 @@ final class TheGetaway {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
             handleScreen(requestId: requestId, respond: respond)
-        case .waitForIdle(let target):
-            let result = await brains.executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
-            sendMessage(.actionResult(result), requestId: requestId, respond: respond)
-            brains.recordSentState()
         case .waitForChange(let target):
             let result = await brains.executeWaitForChange(
                 timeout: target.resolvedTimeout, expectation: target.expect
@@ -124,7 +120,7 @@ final class TheGetaway {
     ) async {
         switch await brains.observeInterface(query) {
         case .success(let interface):
-            insideJobLogger.info("Interface: \(interface.elements.count) elements")
+            insideJobLogger.info("Interface: \(interface.projectedElements.count) elements")
             sendMessage(
                 .interface(interface),
                 requestId: requestId,

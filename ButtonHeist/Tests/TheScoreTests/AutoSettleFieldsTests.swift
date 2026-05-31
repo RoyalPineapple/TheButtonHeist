@@ -3,7 +3,7 @@ import XCTest
 
 /// Wire-shape tests for the current auto-settle fields:
 /// `ActionResult.settled` / `settleTimeMs` and
-/// `AccessibilityTrace.Delta.transient`.
+/// transient elements on the no-change delta payload.
 final class AutoSettleFieldsTests: XCTestCase {
 
     // MARK: - ActionResult
@@ -21,7 +21,7 @@ final class AutoSettleFieldsTests: XCTestCase {
         XCTAssertEqual(decoded.settleTimeMs, 1234)
     }
 
-    // MARK: - AccessibilityTrace.Delta.transient
+    // MARK: - Delta transient payload
 
     func testAccessibilityTraceDeltaRoundTripsWithTransient() throws {
         let element = HeistElement(
@@ -37,8 +37,11 @@ final class AutoSettleFieldsTests: XCTestCase {
         let delta: AccessibilityTrace.Delta = .noChange(.init(elementCount: 12, transient: [element]))
         let data = try JSONEncoder().encode(delta)
         let decoded = try JSONDecoder().decode(AccessibilityTrace.Delta.self, from: data)
-        XCTAssertEqual(decoded.transient.count, 1)
-        XCTAssertEqual(decoded.transient.first?.label, "Processing")
+        guard case .noChange(let payload) = decoded else {
+            return XCTFail("Expected noChange, got \(decoded)")
+        }
+        XCTAssertEqual(payload.transient.count, 1)
+        XCTAssertEqual(payload.transient.first?.label, "Processing")
     }
 
 }

@@ -8,7 +8,7 @@ extension TheBrains {
     // MARK: - Command Dispatch
 
     /// Execute a command through the full interaction pipeline:
-    /// refresh → snapshot → execute → settle → explore → semantic delta → result.
+    /// refresh → snapshot → execute → settle → explore semantic state → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
         switch message {
@@ -36,16 +36,6 @@ extension TheBrains {
             return await performInteraction(method: .syntheticSwipe) { await self.actions.executeSwipe(target) }
         case .drag(let target):
             return await performInteraction(method: .syntheticDrag) { await self.actions.executeDrag(target) }
-        case .pinch(let target):
-            return await performInteraction(method: .syntheticPinch) { await self.actions.executePinch(target) }
-        case .rotate(let target):
-            return await performInteraction(method: .syntheticRotate) { await self.actions.executeRotate(target) }
-        case .twoFingerTap(let target):
-            return await performInteraction(method: .syntheticTwoFingerTap) { await self.actions.executeTwoFingerTap(target) }
-        case .drawPath(let target):
-            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawPath(target) }
-        case .drawBezier(let target):
-            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawBezier(target) }
         case .typeText(let target):
             return await performInteraction(method: .typeText) { await self.actions.executeTypeText(target) }
         case .scroll(let target):
@@ -58,8 +48,6 @@ extension TheBrains {
             return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
         case .waitFor(let target):
             return await performWaitFor(target: target)
-        case .waitForIdle(let target):
-            return await executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
         case .waitForChange(let target):
             return await executeWaitForChange(
                 timeout: target.resolvedTimeout,
@@ -67,8 +55,6 @@ extension TheBrains {
             )
         case .batchExecutionPlan(let plan):
             return await executeBatchExecutionPlan(plan)
-        case .explore:
-            return await performExplore()
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen, .getPasteboard:
             preconditionFailure("Non-executable client message reached action execution: \(message.wireType.rawValue)")
@@ -95,7 +81,7 @@ extension TheBrains {
         guard refresh() != nil else {
             return treeUnavailableResult(method: method)
         }
-        let before = captureBeforeState()
+        let before = captureSemanticState()
         let result = await interaction()
 
         return await actionResultWithDelta(
@@ -126,13 +112,13 @@ extension TheBrains {
 
     func performElementSearch(
         elementTarget: ElementTarget?,
-        direction: ScrollSearchDirection,
+        direction: ScrollDirection,
         method: ActionMethod
     ) async -> ActionResult {
         guard refresh() != nil else {
             return treeUnavailableResult(method: method)
         }
-        let before = captureBeforeState()
+        let before = captureSemanticState()
         let result = await navigation.executeElementSearch(elementTarget: elementTarget, direction: direction)
 
         return await actionResultWithDelta(
@@ -162,7 +148,7 @@ extension TheBrains {
         guard refresh() != nil else {
             return treeUnavailableResult(method: .waitFor)
         }
-        let before = captureBeforeState()
+        let before = captureSemanticState()
         let result = await executeWaitFor(elementTarget: elementTarget, absent: absent ?? false, timeout: min(timeout ?? 10, 30))
         let errorKind: ErrorKind? = {
             guard !result.success else { return nil }
@@ -290,6 +276,8 @@ extension TheBrains {
             return .timeout
         case .inputValidation:
             return .validationError
+        case .targetUnavailable:
+            return .elementNotFound
         case .none:
             return .elementNotFound
         }
@@ -304,10 +292,10 @@ extension TheBrains {
             return .timeout
         case .inputValidation:
             return .validationError
+        case .targetUnavailable:
+            return .elementNotFound
         case .none:
-            return (result.method == .elementNotFound || result.method == .elementDeallocated)
-                ? .elementNotFound
-                : .actionFailed
+            return .actionFailed
         }
     }
 
@@ -318,29 +306,6 @@ extension TheBrains {
         guard stash.refresh() != nil else { return false }
         _ = await navigation.exploreAndPrune(target: target)
         return true
-    }
-
-    /// Full screen exploration.
-    func performExplore() async -> ActionResult {
-        guard refresh() != nil else {
-            return treeUnavailableResult(method: .explore)
-        }
-        let before = captureBeforeState()
-
-        let manifest = await navigation.exploreAndPrune()
-        let interface = stash.interface()
-        let accessibilityTrace = makeAccessibilityTrace(afterInterface: interface, parentCapture: before.capture)
-
-        var builder = ActionResultBuilder(method: .explore)
-        builder.accessibilityTrace = accessibilityTrace
-        return builder.success(
-            payload: .explore(ExploreResult(
-                elementCount: interface.elements.count,
-                scrollCount: manifest.scrollCount,
-                containersExplored: manifest.exploredContainers.count,
-                explorationTime: manifest.explorationTime
-            ))
-        )
     }
 
 }

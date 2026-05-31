@@ -13,8 +13,6 @@ extension FenceResponse {
             return message
         case .error(let message, let details):
             return Self.compactError(message, details: details)
-        case .help(let commands):
-            return commands.joined(separator: ", ")
         case .status(let connected, let deviceName):
             if connected, let name = deviceName { return "connected: \(name)" }
             return "not connected"
@@ -30,8 +28,8 @@ extension FenceResponse {
             }
                 .joined(separator: "\n")
         case .interface(let interface, let detail):
-            let header = "\(interface.elements.count) elements"
-            var lines: [String] = [interface.screenDescription, header]
+            let header = "\(interface.projectedElements.count) elements"
+            var lines: [String] = [InterfaceSummary.screenDescription(for: interface), header]
             lines.append(contentsOf: Self.compactTreeLines(interface, detail: detail))
             return lines.joined(separator: "\n")
         case .action(let command, let result, let expectation):

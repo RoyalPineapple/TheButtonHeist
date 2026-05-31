@@ -30,10 +30,6 @@ private extension ErrorKind {
             return "request.element_not_found"
         case .timeout:
             return "request.timeout"
-        case .unsupported:
-            return "request.unsupported"
-        case .inputError:
-            return "request.input_error"
         case .validationError:
             return "request.validation_error"
         case .actionFailed:
@@ -49,8 +45,7 @@ private extension ErrorKind {
 
     var phase: FailurePhase {
         switch self {
-        case .elementNotFound, .timeout, .unsupported, .inputError,
-             .validationError, .actionFailed:
+        case .elementNotFound, .timeout, .validationError, .actionFailed:
             return .request
         case .authFailure, .authApprovalPending:
             return .authentication
@@ -65,8 +60,7 @@ private extension ErrorKind {
             return true
         case .authApprovalPending:
             return true
-        case .elementNotFound, .unsupported, .inputError, .validationError,
-             .actionFailed, .authFailure, .general:
+        case .elementNotFound, .validationError, .actionFailed, .authFailure, .general:
             return false
         }
     }
@@ -77,10 +71,6 @@ private extension ErrorKind {
             return "Refresh the interface and verify the target's accessibility properties."
         case .timeout:
             return "The request timed out; retry on the same session if the app is responsive."
-        case .unsupported:
-            return "Use a supported command or target for this element."
-        case .inputError:
-            return "Fix the request input before retrying."
         case .validationError:
             return "Fix the request so it satisfies the server-side validation rules."
         case .actionFailed:

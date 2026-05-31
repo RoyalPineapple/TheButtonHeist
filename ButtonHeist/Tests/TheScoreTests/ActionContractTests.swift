@@ -8,13 +8,13 @@ final class ActionContractTests: XCTestCase {
         let plan = BatchPlan(steps: [
             BatchStep(
                 command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                expectation: .delivery,
+                expectation: nil,
                 deadline: Deadline()
             ),
         ])
         let step = BatchStep(
             command: .batchExecutionPlan(plan),
-            expectation: .delivery,
+            expectation: nil,
             deadline: Deadline()
         )
 
@@ -26,7 +26,7 @@ final class ActionContractTests: XCTestCase {
         }
     }
 
-    func testBatchStepRejectsImplicitExpectationAndDeadline() throws {
+    func testBatchStepRejectsMissingDeadline() throws {
         let command = ClientMessage.waitForChange(WaitForChangeTarget(
             expect: .elementsChanged,
             timeout: 0.25
@@ -34,7 +34,7 @@ final class ActionContractTests: XCTestCase {
 
         let data = try JSONEncoder().encode(BatchStepCommandOnlyFixture(command: command))
         XCTAssertThrowsError(try JSONDecoder().decode(BatchStep.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("expect") || "\(error)".contains("deadline"))
+            XCTAssertTrue("\(error)".contains("deadline"), "Expected missing deadline rejection, got \(error)")
         }
     }
 

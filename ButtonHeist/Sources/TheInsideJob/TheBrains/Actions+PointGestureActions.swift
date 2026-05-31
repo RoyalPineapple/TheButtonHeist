@@ -13,37 +13,11 @@ extension Actions {
         method: ActionMethod,
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
-        let elementTarget: ElementTarget?
-        switch selection {
-        case .element(let target):
-            elementTarget = target
-        case .coordinate:
-            elementTarget = nil
-        }
-        let actionableTarget: SemanticActionability.SemanticActionableTarget?
-        if let elementTarget {
-            switch await navigation.actionability.makeActionable(
-                for: elementTarget,
-                method: method,
-                deallocatedBoundary: "gesture action"
-            ) {
-            case .actionable(let target):
-                actionableTarget = target
-            case .failed(let failure):
-                return failure.interactionResult(commandMethod: method)
-            }
-        } else {
-            actionableTarget = nil
-        }
-        switch resolveGesturePoint(from: actionableTarget, selection: selection, method: method) {
+        switch await resolveGesturePoint(selection: selection, method: method) {
         case .failure(let result):
             return result
         case .success(let point):
-            if let failure = geometryFailure(method: method, field: "point", point: point) {
-                return failure
-            }
             let success = await action(point)
-            if success { safecracker.showFingerprint(at: point) }
             return gestureDispatchResult(method: method, diagnosticPoint: point, success: success)
         }
     }
@@ -62,50 +36,31 @@ extension Actions {
 
     func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult {
         let selection = target.gesturePointSelection()
-        let duration = clampDuration(target.duration)
         return await performPointAction(
             selection: selection,
             method: .syntheticLongPress
         ) { point in
-            await self.safecracker.longPress(at: point, duration: duration)
+            await self.safecracker.longPress(at: point, duration: target.duration)
         }
     }
 
     func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult {
         let selection = target.gestureSelection()
         switch selection {
-        case .unitElement(let elementTarget, let start, let end, _):
-            let actionableTarget: SemanticActionability.SemanticActionableTarget
-            switch await navigation.actionability.makeActionable(
-                for: elementTarget,
-                method: .syntheticSwipe,
-                deallocatedBoundary: "gesture action"
-            ) {
-            case .actionable(let target):
-                actionableTarget = target
-            case .failed(let failure):
-                return failure.interactionResult(commandMethod: .syntheticSwipe)
-            }
-            let frame: CGRect
-            switch resolveGestureFrame(for: actionableTarget, method: .syntheticSwipe) {
-            case .success(let liveFrame):
-                frame = liveFrame
-            case .failure(let result):
-                return result
-            }
-            let startPoint = CGPoint(
-                x: frame.origin.x + start.x * frame.width,
-                y: frame.origin.y + start.y * frame.height
+        case .unitElement(let elementTarget, let start, let end):
+            return await performElementFrameSwipe(
+                elementTarget: elementTarget,
+                start: start,
+                end: end,
+                duration: target.resolvedDuration
             )
-            let endPoint = CGPoint(
-                x: frame.origin.x + end.x * frame.width,
-                y: frame.origin.y + end.y * frame.height
+        case .elementDirection(let elementTarget, let direction):
+            return await performElementFrameSwipe(
+                elementTarget: elementTarget,
+                start: direction.defaultStart,
+                end: direction.defaultEnd,
+                duration: target.resolvedDuration
             )
-            if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
-                return failure
-            }
-            let duration = clampDuration(target.resolvedDuration)
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
         case .point(let startSelection, let destination):
             let startPoint: CGPoint
             switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe) {
@@ -130,15 +85,52 @@ extension Actions {
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
-            let duration = clampDuration(target.resolvedDuration)
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
+            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         }
+    }
+
+    private func performElementFrameSwipe(
+        elementTarget: ElementTarget,
+        start: UnitPoint,
+        end: UnitPoint,
+        duration: GestureDuration
+    ) async -> TheSafecracker.InteractionResult {
+        let actionableTarget: SemanticActionability.SemanticActionableTarget
+        switch await navigation.actionability.makeActionable(
+            for: elementTarget,
+            method: .syntheticSwipe,
+            deallocatedBoundary: "gesture action"
+        ) {
+        case .actionable(let target):
+            actionableTarget = target
+        case .failed(let failure):
+            return failure.interactionResult(commandMethod: .syntheticSwipe)
+        }
+        let frame: CGRect
+        switch resolveGestureFrame(for: actionableTarget, method: .syntheticSwipe) {
+        case .success(let liveFrame):
+            frame = liveFrame
+        case .failure(let result):
+            return result
+        }
+        let startPoint = CGPoint(
+            x: frame.origin.x + start.x * frame.width,
+            y: frame.origin.y + start.y * frame.height
+        )
+        let endPoint = CGPoint(
+            x: frame.origin.x + end.x * frame.width,
+            y: frame.origin.y + end.y * frame.height
+        )
+        if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
+            return failure
+        }
+        return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
     }
 
     private func performResolvedSwipe(
         from startPoint: CGPoint,
         to endPoint: CGPoint,
-        duration: TimeInterval
+        duration: GestureDuration
     ) async -> TheSafecracker.InteractionResult {
         let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
         return gestureDispatchResult(method: .syntheticSwipe, diagnosticPoint: startPoint, success: success)
@@ -150,104 +142,12 @@ extension Actions {
         if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }
-        let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             selection: selection,
             method: .syntheticDrag
         ) { startPoint in
-            await self.safecracker.drag(from: startPoint, to: endPoint, duration: duration)
+            await self.safecracker.drag(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         }
-    }
-
-    func executePinch(_ target: PinchTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.centerSelection()
-        let spread = target.resolvedSpread
-        let duration = clampDuration(target.resolvedDuration)
-        return await performPointAction(
-            selection: selection,
-            method: .syntheticPinch
-        ) { center in
-            await self.safecracker.pinch(
-                center: center, scale: CGFloat(target.scale),
-                spread: CGFloat(spread), duration: duration
-            )
-        }
-    }
-
-    func executeRotate(_ target: RotateTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.centerSelection()
-        let radius = target.resolvedRadius
-        let duration = clampDuration(target.resolvedDuration)
-        return await performPointAction(
-            selection: selection,
-            method: .syntheticRotate
-        ) { center in
-            await self.safecracker.rotate(
-                center: center, angle: CGFloat(target.angle),
-                radius: CGFloat(radius), duration: duration
-            )
-        }
-    }
-
-    func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.centerSelection()
-        let spread = target.resolvedSpread
-        return await performPointAction(
-            selection: selection,
-            method: .syntheticTwoFingerTap
-        ) { center in
-            await self.safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
-        }
-    }
-
-    func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult {
-        guard target.points.count <= 10_000 else {
-            return .failure(.syntheticDrawPath, message: "Too many points (max 10,000)")
-        }
-        let cgPoints = target.points.map { $0.cgPoint }
-        guard cgPoints.count >= 2 else {
-            return .failure(.syntheticDrawPath, message: "Path requires at least 2 points")
-        }
-        if let failure = geometryFailure(method: .syntheticDrawPath, field: "path point", points: cgPoints) {
-            return failure
-        }
-        let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        return await performResolvedDrawPath(points: cgPoints, duration: duration)
-    }
-
-    func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult {
-        guard target.segments.count <= 1_000 else {
-            return .failure(.syntheticDrawPath, message: "Too many segments (max 1,000)")
-        }
-        guard !target.segments.isEmpty else {
-            return .failure(.syntheticDrawPath, message: "Bezier path requires at least 1 segment")
-        }
-        let samplesPerSegment = target.resolvedSamplesPerSegment
-        let cgPoints = TheSafecracker.BezierSampler.sampleBezierPath(
-            startPoint: target.startPoint,
-            segments: target.segments,
-            samplesPerSegment: samplesPerSegment
-        )
-        guard cgPoints.count >= 2 else {
-            return .failure(.syntheticDrawPath, message: "Sampled bezier produced fewer than 2 points")
-        }
-        if let failure = geometryFailure(method: .syntheticDrawPath, field: "bezier point", points: cgPoints) {
-            return failure
-        }
-        let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        return await performResolvedDrawPath(points: cgPoints, duration: duration)
-    }
-
-    private func performResolvedDrawPath(
-        points: [CGPoint],
-        duration: TimeInterval
-    ) async -> TheSafecracker.InteractionResult {
-        let success = await safecracker.drawPath(points: points, duration: duration)
-        return gestureDispatchResult(
-            method: .syntheticDrawPath,
-            diagnosticPoint: points[0],
-            success: success
-        )
     }
 
     private func gestureDispatchResult(

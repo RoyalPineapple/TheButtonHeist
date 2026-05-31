@@ -9,11 +9,9 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let message: String?
     let value: String?
     let rotor: PublicRotorResult?
-    let animating: Bool?
     let delta: PublicDelta?
     let screenName: String?
     let screenId: String?
-    let explore: PublicExploreResult?
     let errorClass: String?
     let errorCode: String?
     let phase: String?
@@ -39,15 +37,9 @@ struct PublicActionResponse: FencePublicJSONResponse {
         } else {
             self.rotor = nil
         }
-        self.animating = result.animating == true ? true : nil
-        self.delta = result.accessibilityDelta.map(PublicDelta.init)
-        self.screenName = result.screenName
-        self.screenId = result.screenId
-        if case .explore(let explore) = result.payload {
-            self.explore = PublicExploreResult(result: explore)
-        } else {
-            self.explore = nil
-        }
+        self.delta = result.accessibilityTrace?.endpointDeltaProjection.map(PublicDelta.init)
+        self.screenName = result.accessibilityTrace?.endpointScreenNameProjection
+        self.screenId = result.accessibilityTrace?.endpointScreenIdProjection
         if result.success {
             self.errorClass = nil
             self.errorCode = nil
@@ -95,20 +87,6 @@ struct PublicRotorTextRange: Encodable {
     }
 }
 
-struct PublicExploreResult: Encodable {
-    let elementCount: Int
-    let scrollCount: Int
-    let containersExplored: Int
-    let explorationTime: String
-
-    init(result: ExploreResult) {
-        self.elementCount = result.elementCount
-        self.scrollCount = result.scrollCount
-        self.containersExplored = result.containersExplored
-        self.explorationTime = String(format: "%.2f", result.explorationTime)
-    }
-}
-
 struct PublicExpectationResult: Encodable {
     let met: Bool
     let actual: String?
@@ -130,19 +108,33 @@ struct PublicDelta: Encodable {
     let newInterface: PublicInterface?
 
     init(delta: AccessibilityTrace.Delta) {
-        self.kind = delta.kindRawValue
-        self.elementCount = delta.elementCount
-        self.captureEdge = delta.captureEdge
-        self.transient = delta.transient.isEmpty ? nil : delta.transient.map { PublicElement(element: $0, detail: .summary) }
         switch delta {
-        case .noChange:
+        case .noChange(let payload):
+            self.kind = AccessibilityTrace.DeltaKind.noChange.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = payload.transient.isEmpty
+                ? nil
+                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
             self.newInterface = nil
         case .elementsChanged(let payload):
+            self.kind = AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = payload.transient.isEmpty
+                ? nil
+                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
             let edits = PublicElementEdits(edits: payload.edits)
             self.edits = edits.isEmpty ? nil : edits
             self.newInterface = nil
         case .screenChanged(let payload):
+            self.kind = AccessibilityTrace.DeltaKind.screenChanged.rawValue
+            self.elementCount = payload.elementCount
+            self.captureEdge = payload.captureEdge
+            self.transient = payload.transient.isEmpty
+                ? nil
+                : payload.transient.map { PublicElement(element: $0, detail: .summary) }
             self.edits = nil
             self.newInterface = PublicInterface(interface: payload.newInterface, detail: .summary)
         }
@@ -153,12 +145,9 @@ struct PublicElementEdits: Encodable {
     let added: [PublicElement]?
     let removed: [String]?
     let updated: [PublicElementUpdate]?
-    let treeInserted: [PublicTreeInsertion]?
-    let treeRemoved: [TreeRemoval]?
-    let treeMoved: [TreeMove]?
 
     var isEmpty: Bool {
-        added == nil && removed == nil && updated == nil && treeInserted == nil && treeRemoved == nil && treeMoved == nil
+        added == nil && removed == nil && updated == nil
     }
 
     init(edits: ElementEdits) {
@@ -166,9 +155,6 @@ struct PublicElementEdits: Encodable {
         self.removed = edits.removed.isEmpty ? nil : edits.removed
         let filteredUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
         self.updated = filteredUpdates.isEmpty ? nil : filteredUpdates
-        self.treeInserted = edits.treeInserted.isEmpty ? nil : edits.treeInserted.map { PublicTreeInsertion(insertion: $0) }
-        self.treeRemoved = edits.treeRemoved.isEmpty ? nil : edits.treeRemoved
-        self.treeMoved = edits.treeMoved.isEmpty ? nil : edits.treeMoved
     }
 }
 
@@ -184,23 +170,6 @@ struct PublicElementUpdate: Encodable {
     }
 }
 
-struct PublicTreeInsertion: Encodable {
-    let location: TreeLocation
-    let node: PublicTreeNode
-
-    init(insertion: TreeInsertion) {
-        self.location = insertion.location
-        self.node = PublicTreeNode.node(
-            from: insertion.node,
-            path: .root,
-            detail: .summary,
-            counter: nil,
-            elementAnnotations: insertion.annotations.elementByPath,
-            containerAnnotations: insertion.annotations.containerByPath
-        )
-    }
-}
-
 struct PublicBatchResponse: FencePublicJSONResponse {
     let status: PublicStatus
     let results: [PublicResponseModel]
@@ -208,7 +177,6 @@ struct PublicBatchResponse: FencePublicJSONResponse {
     let totalTimingMs: Int
     let failedIndex: Int?
     let expectations: PublicBatchExpectations?
-    let stepSummaries: [PublicBatchStepSummary]?
     let netDelta: PublicDelta?
 
     init(
@@ -236,14 +204,6 @@ struct PublicBatchResponse: FencePublicJSONResponse {
         self.expectations = checked > 0
             ? PublicBatchExpectations(checked: checked, met: result.expectationsMet(steps: steps))
             : nil
-        let summaries = result.steps.map { step in
-            PublicBatchStepSummary(
-                step: step,
-                command: commands.indices.contains(step.index) ? commands[step.index] : nil,
-                typedStep: steps.indices.contains(step.index) ? steps[step.index] : nil
-            )
-        }
-        self.stepSummaries = summaries.isEmpty ? nil : summaries
         self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
     }
 }
@@ -257,62 +217,5 @@ struct PublicBatchExpectations: Encodable {
         self.checked = checked
         self.met = met
         self.allMet = checked == met
-    }
-}
-
-struct PublicBatchStepSummary: Encodable {
-    let index: Int
-    let command: String
-    let deltaKind: String?
-    let screenName: String?
-    let screenId: String?
-    let expectationMet: Bool?
-    let elementCount: Int?
-    let error: String?
-    let errorCode: String?
-    let phase: String?
-    let nextCommand: String?
-
-    init(
-        step: BatchExecutionStepResult,
-        command: TheFence.Command?,
-        typedStep: TheScore.BatchStep?
-    ) {
-        self.index = step.index
-        self.command = command?.rawValue ?? "step \(step.index)"
-        let actionResult = step.finalActionResult()
-        self.deltaKind = actionResult?.accessibilityDelta?.kindRawValue
-        self.screenName = actionResult?.screenName
-        self.screenId = actionResult?.screenId
-        self.expectationMet = typedStep.flatMap { step.expectationMet(for: $0) }
-        self.elementCount = nil
-        if let skipped = step.skipped {
-            self.error = skipped.reason
-            self.errorCode = nil
-            self.phase = nil
-            self.nextCommand = nil
-        } else if actionResult?.success == false {
-            self.error = actionResult?.message
-            self.errorCode = nil
-            self.phase = nil
-            self.nextCommand = nil
-        } else if let typedStep,
-                  let command,
-                  case .error(let message, let details) = step.actionResponse(command: command, step: typedStep) {
-            self.error = message
-            self.errorCode = details?.errorCode
-            self.phase = details?.phase.rawValue
-            self.nextCommand = Self.batchNextCommand(from: details)
-        } else {
-            self.error = nil
-            self.errorCode = nil
-            self.phase = nil
-            self.nextCommand = nil
-        }
-    }
-
-    private static func batchNextCommand(from details: FailureDetails?) -> String? {
-        guard details?.errorCode == FenceRequestErrorCode.missingTarget else { return nil }
-        return details?.hint
     }
 }

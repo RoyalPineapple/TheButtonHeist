@@ -5,6 +5,19 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
+private extension AccessibilityTrace.Delta {
+    var testCaptureEdge: AccessibilityTrace.CaptureEdge? {
+        switch self {
+        case .noChange(let payload):
+            return payload.captureEdge
+        case .elementsChanged(let payload):
+            return payload.captureEdge
+        case .screenChanged(let payload):
+            return payload.captureEdge
+        }
+    }
+}
+
 @MainActor
 final class SemanticActionabilityProductTests: XCTestCase {
 
@@ -70,7 +83,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
         ))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.errorKind, .elementNotFound)
         XCTAssertEqual(fixture.first.activationCount, 0)
         XCTAssertEqual(fixture.second.activationCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
@@ -147,7 +161,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
         XCTAssertEqual(result.method, .scroll)
         XCTAssertGreaterThan(fixture.scrollView.contentOffset.y, 0)
         XCTAssertNotNil(result.accessibilityTrace)
-        XCTAssertNotNil(result.accessibilityDelta?.captureEdge)
+        let delta = try XCTUnwrap(result.accessibilityTrace?.endpointDeltaProjection)
+        XCTAssertNotNil(delta.testCaptureEdge)
     }
 
     private func runSemanticActivateThroughCommand(
@@ -167,7 +182,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
             let plan = BatchPlan(steps: [
                 BatchStep(
                     command: .activate(.matcher(ElementMatcher(identifier: identifier, traits: [.button]))),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline()
                 ),
             ])

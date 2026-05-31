@@ -76,21 +76,6 @@ extension ElementTarget: Codable {
         static let allInlineKeys: [CodingKeys] = [.heistId] + matcherKeys + [.ordinal]
     }
 
-    private struct UnknownCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     /// Decode an optional `ElementTarget` flattened into the same JSON object
     /// the decoder is currently reading. Returns `nil` when none of the
     /// matcher / heistId keys are present; throws if at least one key is
@@ -171,14 +156,7 @@ extension ElementTarget: Codable {
         let allowedKeys = Set(CodingKeys.allInlineKeys
             .filter { allowsInlineOrdinal || $0 != .ordinal }
             .map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown element target field \"\(unknownKey.stringValue)\""
-        ))
+        try decoder.rejectUnknownKeys(allowed: allowedKeys, typeName: "element target")
     }
 
     private static func hasMatcherFields(in container: KeyedDecodingContainer<CodingKeys>) -> Bool {

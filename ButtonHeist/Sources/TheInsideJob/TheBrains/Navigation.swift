@@ -45,10 +45,10 @@ final class Navigation {
     // MARK: - Nested Types
 
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
-    static let swipeGestureDuration: TimeInterval = 0.12
+    static let swipeGestureDuration: GestureDuration = .scrollSwipeDefault
 
-    /// Layout frames to yield after a non-animated UIScrollView scroll or
-    /// `scrollToMakeVisible` before re-reading the accessibility tree.
+    /// Layout frames to yield after a non-animated UIScrollView scroll before
+    /// re-reading the accessibility tree.
     /// Empirical: 3 frames covers a CATransaction flush plus a UIKit layout
     /// pass without waiting for animations.
     static let postScrollLayoutFrames: Int = 3
@@ -190,9 +190,9 @@ final class Navigation {
 
     /// Bookkeeping for a single exploration pass.
     ///
-    /// Only fields that are actually consumed downstream (by `ExploreResult` or
-    /// explore-loop control flow) live here. Anything that was "tracked for future
-    /// use" was removed — add fields back when they have a real consumer.
+    /// Only fields that are actually consumed by explore-loop control flow live
+    /// here. Anything that was "tracked for future use" was removed — add fields
+    /// back when they have a real consumer.
     struct ScreenManifest {
 
         /// Containers that have been fully explored.
@@ -201,10 +201,10 @@ final class Navigation {
         /// Containers discovered but not yet explored.
         var pendingContainers = Set<AccessibilityContainer>()
 
-        /// Total scrollByPage calls during exploration. Surfaced as `ExploreResult.scrollCount`.
+        /// Total scrollByPage calls during exploration.
         var scrollCount = 0
 
-        /// Wall-clock time spent exploring, in seconds. Surfaced as `ExploreResult.explorationTime`.
+        /// Wall-clock time spent exploring, in seconds.
         var explorationTime: TimeInterval = 0
 
         /// Safety cap on per-container scroll iterations.

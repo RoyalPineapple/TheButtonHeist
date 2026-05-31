@@ -66,8 +66,6 @@ public final class TheFence {
         }
     }
 
-    static let supportedCommands: [String] = Command.allCases.map(\.rawValue)
-
     /// Fires on informational status strings (e.g. `BUTTONHEIST_TOKEN=<value>`
     /// on server-generated token, connection events).
     public var onStatus: (@ButtonHeistActor (String) -> Void)? {
@@ -96,7 +94,6 @@ public final class TheFence {
 
     // Lifecycle owners
     let playback = FencePlaybackLifecycle()
-    let commandExecutionState = CommandExecutionState()
 
     public init(configuration: Configuration) {
         self.config = configuration
@@ -200,15 +197,6 @@ public final class TheFence {
             return .error(error.coreMessage, details: error.failureDetails)
         }
         return try await execute(parsed: parsed)
-    }
-
-    func handleImmediateCommand(_ command: Command) -> FenceResponse? {
-        switch command {
-        case .help:
-            return .help(commands: Self.supportedCommands)
-        default:
-            return nil
-        }
     }
 
     // MARK: - Command Dispatch (thin router)

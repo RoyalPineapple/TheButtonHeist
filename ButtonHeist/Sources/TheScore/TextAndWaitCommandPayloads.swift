@@ -87,24 +87,6 @@ extension EditActionTarget: CustomStringConvertible {
     }
 }
 
-/// Target for waitForIdle command
-public struct WaitForIdleTarget: Codable, Sendable {
-    /// Maximum time to wait in seconds (default 5.0)
-    public let timeout: Double?
-
-    public init(timeout: Double? = nil) {
-        self.timeout = timeout
-    }
-}
-
-extension WaitForIdleTarget: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("waitForIdle", [
-            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
-        ].compactMap { $0 })
-    }
-}
-
 /// Target for wait_for_change command — wait for the UI to change in a way
 /// that matches an expectation. With no expectation, returns on any tree change.
 public struct WaitForChangeTarget: Codable, Sendable {

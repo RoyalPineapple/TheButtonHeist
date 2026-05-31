@@ -28,32 +28,6 @@ extension TheTripwire {
         }
     }
 
-    /// State transitions detected by the pulse.
-    enum PulseTransition {
-        case settled
-        case unsettled
-        case tripwireTriggered(from: TripwireSignal, to: TripwireSignal)
-    }
-
-    struct PulseTickBaseline {
-        let previous: PulseReading?
-
-        func transitions(to reading: PulseReading) -> [PulseTransition] {
-            guard let previous else { return [] }
-
-            var transitions: [PulseTransition] = []
-            if reading.tripwireSignal != previous.tripwireSignal {
-                transitions.append(.tripwireTriggered(from: previous.tripwireSignal, to: reading.tripwireSignal))
-            }
-            if reading.isSettled && !previous.isSettled {
-                transitions.append(.settled)
-            } else if !reading.isSettled && previous.isSettled {
-                transitions.append(.unsettled)
-            }
-            return transitions
-        }
-    }
-
     // MARK: - Presentation Layer Fingerprinting
 
     /// Fingerprint of all presentation layer positions in the window hierarchy.
@@ -304,10 +278,6 @@ extension TheTripwire {
             quietFrames: isQuiet ? (prev?.quietFrames ?? 0) + 1 : 0
         )
         context.latestReading = reading
-
-        for transition in PulseTickBaseline(previous: prev).transitions(to: reading) {
-            onTransition?(transition)
-        }
 
         resolveSettleWaiters(context: context, now: now, isQuiet: isQuiet)
     }

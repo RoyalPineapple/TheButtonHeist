@@ -12,7 +12,7 @@ extension FenceResponse {
                     search,
                     commandName: commandName,
                     errorKind: Self.compactActionErrorKind(result),
-                    screenId: result.screenId
+                    screenId: result.accessibilityTrace?.endpointScreenIdProjection
                 )
             }
             return Self.compactActionFailure(result, commandName: commandName)
@@ -26,14 +26,14 @@ extension FenceResponse {
             text = Self.compactRotor(search)
         case .batchExecution(let batch):
             text = "\(TheFence.Command.runBatch.rawValue): \(batch.steps.count) step(s)"
-        case .value, .explore, .none:
-            if let delta = result.accessibilityDelta {
+        case .value, .none:
+            if let delta = result.accessibilityTrace?.endpointDeltaProjection {
                 text = Self.compactDelta(delta, method: commandName)
             } else {
                 text = "\(commandName): ok"
             }
         }
-        if let screenId = result.screenId {
+        if let screenId = result.accessibilityTrace?.endpointScreenIdProjection {
             text = "\(screenId) | \(text)"
         }
         if case .value(let value) = result.payload {
@@ -75,7 +75,7 @@ extension FenceResponse {
         let message = result.message ?? commandName
         let errorCode = Self.actionFailureDetails(result)?.errorCode ?? compactActionErrorKind(result).rawValue
         var text = "\(commandName): error[\(errorCode)]: \(message)"
-        if let screenId = result.screenId {
+        if let screenId = result.accessibilityTrace?.endpointScreenIdProjection {
             text = "\(screenId) | \(text)"
         }
         return text
@@ -88,12 +88,7 @@ extension FenceResponse {
         if case .scrollSearch = result.payload {
             return .elementNotFound
         }
-        switch result.method {
-        case .elementNotFound, .elementDeallocated:
-            return .elementNotFound
-        default:
-            return .actionFailed
-        }
+        return .actionFailed
     }
 
     private static func compactScrollSearchFound(
@@ -136,10 +131,7 @@ extension FenceResponse {
     }
 
     private static func scrollSearchItemInfo(_ search: ScrollSearchResult) -> String {
-        if let total = search.totalItems {
-            let percentage = total > 0 ? Int(Double(search.uniqueElementsSeen) / Double(total) * 100) : 0
-            return " (\(search.uniqueElementsSeen)/\(total) items seen, \(percentage)%)"
-        } else if search.uniqueElementsSeen > 0 {
+        if search.uniqueElementsSeen > 0 {
             return " (\(search.uniqueElementsSeen) unique elements seen)"
         }
         return ""

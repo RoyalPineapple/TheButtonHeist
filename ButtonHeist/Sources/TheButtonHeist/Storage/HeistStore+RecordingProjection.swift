@@ -128,7 +128,7 @@ extension HeistStore {
 
         if case .heistId(let heistId)? = elementTarget {
             guard let targetCapture,
-                  let element = targetCapture.interface.elements.last(where: { $0.heistId == heistId }),
+                  let element = targetCapture.interface.projectedElements.last(where: { $0.heistId == heistId }),
                   let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
             else { return nil }
             target = .matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)

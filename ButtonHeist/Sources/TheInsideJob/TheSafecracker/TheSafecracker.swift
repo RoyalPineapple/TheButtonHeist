@@ -3,20 +3,10 @@
 import UIKit
 import TheScore
 
-/// Result of resolving a screen coordinate from an element target or explicit point.
-/// Shared by gesture point resolution and gesture dispatch.
-///
-/// `@MainActor` justification: carries `TheSafecracker.InteractionResult` which
-/// references MainActor-bound state — isolation aligns with consumers.
-@MainActor enum PointResolution { // swiftlint:disable:this agent_main_actor_value_type
-    case success(CGPoint)
-    case failure(TheSafecracker.InteractionResult)
-}
-
 /// Cracks open the app's touch system for remote gesture injection.
 ///
-/// Supports tap, long press, swipe, drag, pinch, rotate, and two-finger tap
-/// gestures using synthetic UITouch/UIEvent injection via IOKit.
+/// Supports tap, long press, swipe, and drag gestures using synthetic
+/// UITouch/UIEvent injection via IOKit.
 /// Implementation based on KIF (Keep It Functional) testing framework.
 /// Key iOS 26 fix: Creates a fresh UIEvent for each touch phase
 /// instead of reusing the same event.
@@ -69,17 +59,6 @@ final class TheSafecracker {
 
     @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
     @objc private func keyboardDidHide() { keyboardVisibleFlag = false }
-
-    // MARK: - Fingerprints
-
-    /// Visual interaction indicators for taps and gesture tracking.
-    lazy var fingerprints = TheFingerprints()
-
-    /// Show a brief fingerprint indicator at a screen point.
-    func showFingerprint(at point: CGPoint) {
-        guard GeometryValidation.validateScreenPoint(point) == nil else { return }
-        fingerprints.showFingerprint(at: point)
-    }
 
     // MARK: - Interaction Result
 
@@ -149,12 +128,9 @@ final class TheSafecracker {
         case timeout
         /// Input geometry or other client-controlled values failed validation.
         case inputValidation
+        /// The command target was not present or its live accessibility object expired.
+        case targetUnavailable
     }
-
-    // MARK: - Internal Touch State
-
-    private var activeTouches: [SyntheticTouch] = []
-    private var activeWindow: UIWindow?
 
     // MARK: - Public: Single-Finger Gestures
 
@@ -166,9 +142,7 @@ final class TheSafecracker {
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
     func tap(at point: CGPoint) async -> Bool {
         guard Self.geometryIsValid([point], field: "tap point") else { return false }
-        guard touchesDown(at: [point]) else { return false }
-        guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
-        return touchesUp()
+        return await performTouchTap(at: point)
     }
 
     /// Simulate a long press at the given screen coordinates.
@@ -177,23 +151,20 @@ final class TheSafecracker {
     /// - Parameters:
     ///   - point: Point in screen coordinates
     ///   - duration: How long to hold the press (seconds, default 0.5)
-    func longPress(at point: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+    func longPress(at point: CGPoint, duration: GestureDuration = .longPressDefault) async -> Bool {
         guard Self.geometryIsValid([point], field: "long press point") else { return false }
-        guard Self.durationIsValid(duration, field: "long press duration") else { return false }
-        guard touchesDown(at: [point]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [point])
+        guard var touchState = beginTouch(at: point) else { return false }
 
         var elapsed: TimeInterval = 0
-        while elapsed < duration && !Task.isCancelled {
+        while elapsed < duration.seconds && !Task.isCancelled {
             guard await Task.cancellableSleep(
                 nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
             ) else { break }
             elapsed += Self.touchGestureStepDelay
-            sendStationary()
+            sendStationary(&touchState.touch)
         }
 
-        fingerprints.endTrackingFingerprints()
-        return touchesUp()
+        return endTouch(&touchState.touch)
     }
 
     /// Simulate a swipe gesture between two screen points.
@@ -204,9 +175,8 @@ final class TheSafecracker {
     ///   - start: Starting point in screen coordinates
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the swipe (seconds, default 0.15)
-    func swipe(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.15) async -> Bool {
+    func swipe(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .swipeDefault) async -> Bool {
         guard Self.geometryIsValid([start, end], field: "swipe point") else { return false }
-        guard Self.durationIsValid(duration, field: "swipe duration") else { return false }
         return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 3)
     }
 
@@ -217,77 +187,18 @@ final class TheSafecracker {
     ///   - start: Starting point in screen coordinates
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the drag (seconds, default 0.5)
-    func drag(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+    func drag(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .dragDefault) async -> Bool {
         guard Self.geometryIsValid([start, end], field: "drag point") else { return false }
-        guard Self.durationIsValid(duration, field: "drag duration") else { return false }
         return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 5)
-    }
-
-    /// Simulate drawing along a path of waypoints.
-    /// Pre-computes all interpolated waypoints at uniform speed before
-    /// the gesture loop begins.
-    /// - Parameters:
-    ///   - points: Ordered array of screen coordinates to trace through
-    ///   - duration: Total duration of the gesture in seconds
-    func drawPath(points: [CGPoint], duration: TimeInterval) async -> Bool {
-        guard points.count >= 2 else { return false }
-        guard Self.geometryIsValid(points, field: "path point") else { return false }
-        guard Self.durationIsValid(duration, field: "path duration") else { return false }
-
-        // Pre-compute: calculate segment lengths and total path length
-        var totalLength: CGFloat = 0
-        var segmentLengths: [CGFloat] = []
-        for index in 1..<points.count {
-            let dx = points[index].x - points[index - 1].x
-            let dy = points[index].y - points[index - 1].y
-            let length = sqrt(dx * dx + dy * dy)
-            segmentLengths.append(length)
-            totalLength += length
-        }
-
-        guard totalLength > 0 else {
-            // Degenerate path — just tap the start point
-            guard touchesDown(at: [points[0]]) else { return false }
-            return touchesUp()
-        }
-
-        let totalSteps = max(Int(duration / Self.touchGestureStepDelay), points.count)
-
-        // Pre-compute: build full waypoint array at uniform speed
-        let waypoints = (1...totalSteps).map { step -> CGPoint in
-            let progress = CGFloat(step) / CGFloat(totalSteps)
-            let targetDist = progress * totalLength
-
-            var accumulated: CGFloat = 0
-            for index in 0..<segmentLengths.count {
-                let segmentLength = segmentLengths[index]
-                if accumulated + segmentLength >= targetDist {
-                    let segmentProgress = (targetDist - accumulated) / segmentLength
-                    return CGPoint(
-                        x: points[index].x + segmentProgress * (points[index + 1].x - points[index].x),
-                        y: points[index].y + segmentProgress * (points[index + 1].y - points[index].y)
-                    )
-                }
-                accumulated += segmentLength
-            }
-            return points[points.count - 1]
-        }
-
-        return await performTouchPath(
-            start: [points[0]],
-            waypoints: waypoints.map { [$0] }
-        )
     }
 
     // MARK: - Public: Text Input (via KeyboardBridge)
 
     /// Check if the software keyboard is currently visible.
-    /// Reads the notification-driven flag (frame-based detection, matching
-    /// KIF's approach) with a fallback to KeyboardBridge for hardware
-    /// keyboard scenarios.
+    /// Reads the notification-driven frame state only. Focused text input is a
+    /// separate fact exposed by `hasActiveTextInput()`.
     func isKeyboardVisible() -> Bool {
-        if keyboardVisibleFlag { return true }
-        return activeKeyboardInput() != nil
+        keyboardVisibleFlag
     }
 
     /// Type text by injecting characters into the active keyboard.
@@ -345,117 +256,93 @@ final class TheSafecracker {
     // MARK: - Internal: Touch Path Dispatch
 
     @discardableResult
-    func performTouchPath(start: [CGPoint], waypoints: [[CGPoint]]) async -> Bool {
-        guard touchesDown(at: start) else { return false }
-        fingerprints.beginTrackingFingerprints(at: start)
+    private func performTouchPath(start: CGPoint, waypoints: [CGPoint]) async -> Bool {
+        guard var touchState = beginTouch(at: start) else { return false }
 
-        for points in waypoints {
+        for point in waypoints {
             if Task.isCancelled { break }
-            moveTouches(to: points)
-            fingerprints.updateTrackingFingerprints(to: points)
+            moveTouch(&touchState.touch, in: touchState.window, to: point)
             guard await Task.cancellableSleep(
                 nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
             ) else { break }
         }
 
-        fingerprints.endTrackingFingerprints()
-        return touchesUp()
+        return endTouch(&touchState.touch)
+    }
+
+    private func performTouchTap(at point: CGPoint) async -> Bool {
+        guard var touchState = beginTouch(at: point) else { return false }
+        guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
+        return endTouch(&touchState.touch)
     }
 
     private func performLineGesture(
         from start: CGPoint,
         to end: CGPoint,
-        duration: TimeInterval,
+        duration: GestureDuration,
         minimumSteps: Int
     ) async -> Bool {
-        let steps = max(Int(duration / Self.touchGestureStepDelay), minimumSteps)
+        let steps = max(Int(duration.seconds / Self.touchGestureStepDelay), minimumSteps)
         return await performTouchPath(
-            start: [start],
-            waypoints: Self.linearPath(from: start, to: end, steps: steps).map { [$0] }
+            start: start,
+            waypoints: Self.linearPath(from: start, to: end, steps: steps)
         )
     }
 
-    // MARK: - Internal: N-Finger Primitives
+    // MARK: - Internal: Touch Primitive
 
-    /// Begin touches at N screen points simultaneously.
-    func touchesDown(at points: [CGPoint]) -> Bool {
-        guard !points.isEmpty else { return false }
-        guard Self.geometryIsValid(points, field: "touch point") else { return false }
-        guard let window = windowForPoint(points[0]) else {
-            insideJobLogger.error("No window found for point \(String(describing: points[0]))")
-            return false
+    private func beginTouch(at point: CGPoint) -> (touch: SyntheticTouch, window: UIWindow)? {
+        guard Self.geometryIsValid([point], field: "touch point") else { return nil }
+        guard let window = windowForPoint(point) else {
+            insideJobLogger.error("No window found for point \(String(describing: point))")
+            return nil
         }
 
-        var touches: [SyntheticTouch] = []
-        for point in points {
-            let target = TouchTarget.resolve(at: point, in: window)
-            guard let touch = target.makeTouch(phase: .began) else {
-                insideJobLogger.error("Failed to create touch")
-                return false
-            }
-            touches.append(touch)
+        let target = TouchTarget.resolve(at: point, in: window)
+        guard let touch = target.makeTouch(phase: .began) else {
+            insideJobLogger.error("Failed to create touch")
+            return nil
         }
 
-        guard let event = TouchEvent(touches: touches) else {
+        guard let event = TouchEvent(touches: [touch]) else {
             insideJobLogger.error("Failed to create began event")
-            return false
+            return nil
         }
 
         event.send()
-        activeTouches = touches
-        activeWindow = window
-        return true
+        return (touch, window)
     }
 
-    /// Move all active touches to new screen points.
-    /// points.count must equal activeTouches.count.
     @discardableResult
-    func moveTouches(to points: [CGPoint]) -> Bool {
-        guard !activeTouches.isEmpty, let window = activeWindow else { return false }
-        guard points.count == activeTouches.count else { return false }
-        guard Self.geometryIsValid(points, field: "touch move point") else { return false }
+    private func moveTouch(_ touch: inout SyntheticTouch, in window: UIWindow, to point: CGPoint) -> Bool {
+        guard Self.geometryIsValid([point], field: "touch move point") else { return false }
 
-        for index in activeTouches.indices {
-            let windowPoint = window.convert(points[index], from: nil)
-            activeTouches[index].update(phase: .moved, location: windowPoint)
-        }
+        let windowPoint = window.convert(point, from: nil)
+        touch.update(phase: .moved, location: windowPoint)
 
-        guard let event = TouchEvent(touches: activeTouches) else { return false }
+        guard let event = TouchEvent(touches: [touch]) else { return false }
         event.send()
         return true
     }
 
-    /// Send a stationary event for all active touches without moving them.
-    /// Used during long press to keep gesture recognizers processing (matches KIF).
     @discardableResult
-    private func sendStationary() -> Bool {
-        guard !activeTouches.isEmpty else { return false }
+    private func sendStationary(_ touch: inout SyntheticTouch) -> Bool {
+        touch.update(phase: .stationary)
 
-        for index in activeTouches.indices {
-            activeTouches[index].update(phase: .stationary)
-        }
-
-        guard let event = TouchEvent(touches: activeTouches) else { return false }
+        guard let event = TouchEvent(touches: [touch]) else { return false }
         event.send()
         return true
     }
 
-    /// Lift all active touches.
-    func touchesUp() -> Bool {
-        guard !activeTouches.isEmpty else { return false }
+    private func endTouch(_ touch: inout SyntheticTouch) -> Bool {
+        touch.update(phase: .ended)
 
-        for index in activeTouches.indices {
-            activeTouches[index].update(phase: .ended)
-        }
-
-        guard let event = TouchEvent(touches: activeTouches) else {
+        guard let event = TouchEvent(touches: [touch]) else {
             insideJobLogger.error("Failed to create ended event")
             return false
         }
 
         event.send()
-        activeTouches = []
-        activeWindow = nil
         return true
     }
 
@@ -464,14 +351,6 @@ final class TheSafecracker {
     static func geometryIsValid(_ points: [CGPoint], field: String) -> Bool {
         if let reason = GeometryValidation.validateScreenPoints(points, field: field) {
             insideJobLogger.error("Rejected synthetic touch geometry: \(reason, privacy: .public)")
-            return false
-        }
-        return true
-    }
-
-    static func durationIsValid(_ duration: TimeInterval, field: String) -> Bool {
-        guard duration.isFinite, duration > 0 else {
-            insideJobLogger.error("Rejected synthetic touch timing: \(field, privacy: .public) must be finite and > 0")
             return false
         }
         return true
@@ -510,9 +389,6 @@ nonisolated extension TheSafecracker {
 
     /// Default inter-key delay for text injection (30ms).
     static let defaultInterKeyDelay: UInt64 = 30_000_000
-
-    /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
-    static let maxInterKeyDelay: UInt64 = 500_000_000
 
     /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
     /// pipeline has run-loop time to transition from "possible" to "recognized".

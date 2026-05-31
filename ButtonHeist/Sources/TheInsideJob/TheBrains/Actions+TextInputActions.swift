@@ -66,8 +66,7 @@ extension Actions {
         let elementTarget = target.elementTarget
         if let failure = await focusTextInput(elementTarget) { return failure }
 
-        let interKeyDelay = min(TheSafecracker.defaultInterKeyDelay, TheSafecracker.maxInterKeyDelay)
-        let typingResult = await safecracker.typeText(target.text, interKeyDelay: interKeyDelay)
+        let typingResult = await safecracker.typeText(target.text)
         if let diagnostic = typingResult.diagnostic {
             return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic))
         }
@@ -135,7 +134,6 @@ extension Actions {
                 )
             )
         }
-        safecracker.showFingerprint(at: point)
 
         guard await waitForActiveTextInput() else {
             return .failure(

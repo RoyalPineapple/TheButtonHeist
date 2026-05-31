@@ -4,50 +4,6 @@ import UIKit
 
 @MainActor
 extension TheInsideJob {
-    // MARK: - Pulse Handling
-
-    func handlePulseTransition(_ transition: TheTripwire.PulseTransition) {
-        switch transition {
-        case .tripwireTriggered, .unsettled, .settled:
-            break
-        }
-    }
-
-    func makePollingTask(interval: TimeInterval) -> Task<Void, Never> {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            while self.isPollingEnabled && !Task.isCancelled {
-                _ = await self.tripwire.waitForAllClear(timeout: interval)
-            }
-        }
-    }
-
-    // MARK: - Accessibility Observation
-
-    func startAccessibilityObservation() {
-        guard !accessibilityObservationActive else { return }
-        accessibilityObservationActive = true
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(accessibilityDidChange),
-            name: UIAccessibility.elementFocusedNotification, object: nil
-        )
-        NotificationCenter.default.addObserver(
-            self, selector: #selector(accessibilityDidChange),
-            name: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil
-        )
-    }
-
-    func stopAccessibilityObservation() {
-        guard accessibilityObservationActive else { return }
-        accessibilityObservationActive = false
-        NotificationCenter.default.removeObserver(self, name: UIAccessibility.elementFocusedNotification, object: nil)
-        NotificationCenter.default.removeObserver(self, name: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil)
-    }
-
-    @objc private func accessibilityDidChange() {
-        // Observation is command-owned; notifications do not mutate command evidence.
-    }
-
     // MARK: - App Lifecycle
 
     func startLifecycleObservation() {

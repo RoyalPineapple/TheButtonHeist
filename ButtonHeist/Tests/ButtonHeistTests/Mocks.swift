@@ -206,7 +206,9 @@ final class MockConnection: TransportReachabilityConnecting {
             }
 
             let actionResult = actionResult(for: step.command, handler: handler)
-            let expectation = actionResult.success ? step.expectation.validate(against: actionResult) : nil
+            let expectation = actionResult.success
+                ? step.expectation?.validate(against: actionResult)
+                : nil
             let shouldStop = plan.policy == .stopOnError
                 && (actionResult.success == false || expectation?.met == false)
             stepResults.append(BatchExecutionStepResult(
@@ -269,20 +271,14 @@ final class MockConnection: TransportReachabilityConnecting {
         case .longPress: return .syntheticLongPress
         case .swipe: return .syntheticSwipe
         case .drag: return .syntheticDrag
-        case .pinch: return .syntheticPinch
-        case .rotate: return .syntheticRotate
-        case .twoFingerTap: return .syntheticTwoFingerTap
-        case .drawPath, .drawBezier: return .syntheticDrawPath
         case .typeText: return .typeText
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
         case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
-        case .waitForIdle: return .waitForIdle
         case .waitFor: return .waitFor
         case .waitForChange: return .waitForChange
         case .batchExecutionPlan: return .batchExecutionPlan
-        case .explore: return .explore
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen:
             return .batchExecutionPlan

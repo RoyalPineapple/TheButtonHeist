@@ -39,10 +39,6 @@ extension TheStash {
     func performCustomAction(named name: String, on liveTarget: LiveActionTarget) -> CustomActionOutcome {
         performCustomAction(named: name, on: liveTarget.object)
     }
-
-    func performCustomAction(named name: String, on containerTarget: LiveContainerTarget) -> CustomActionOutcome {
-        performCustomAction(named: name, on: containerTarget.object)
-    }
 }
 
 private extension TheStash {

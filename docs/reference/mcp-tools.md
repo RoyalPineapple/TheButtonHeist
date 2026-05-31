@@ -10,8 +10,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `connect` | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | Drag from one point to another using explicit coordinates or a semantic target. |
-| `draw_bezier` | Draw a Bezier path from a start point through one or more curve segments. |
-| `draw_path` | Draw a free-form path through explicit screen-coordinate points. |
 | `edit_action` | Perform an edit action on the current first responder. |
 | `element_search` | Search scrollable content for a semantic element match without performing an action. |
 | `get_interface` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
@@ -22,10 +20,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_targets` | List configured connection targets and the default target. |
 | `long_press` | Long-press a coordinate or semantic target for a resolved duration. |
 | `one_finger_tap` | Tap a coordinate or semantic target after actionability resolution. |
-| `pinch` | Pinch around a resolved center point using scale, angle, and duration. |
 | `ping` | Check connection health without reading accessibility state. |
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
-| `rotate` | Rotate around a resolved center point using angle, radius, and duration. |
 | `rotor` | Move through an element rotor using direction and continuation metadata. |
 | `run_batch` | Execute ordered command steps with batch policy and per-step expectations. |
 | `scroll` | Scroll one page in a selected container or semantic target's owning scroll ancestor. |
@@ -35,7 +31,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `start_heist` | Start recording replayable heist steps from successful commands. |
 | `stop_heist` | Stop heist recording and save a deterministic heist fixture. |
 | `swipe` | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
-| `two_finger_tap` | Tap with two fingers at a coordinate or actionable semantic target. |
 | `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
 | `wait_for` | Wait for a semantic element to appear or disappear. |
 | `wait_for_change` | Wait for any UI change or for an expectation to become true. |
@@ -93,37 +88,6 @@ Parameters:
 | `startX` | `number` | no | - | - |
 | `startY` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_bezier`
-
-Draw a Bezier path from a start point through one or more curve segments.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `startX` | `number` | yes | - | - |
-| `startY` | `number` | yes | - | - |
-| `segments` | `array` | yes | - | - |
-| `samplesPerSegment` | `integer` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_path`
-
-Draw a free-form path through explicit screen-coordinate points.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `points` | `array` | yes | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -241,23 +205,6 @@ Parameters:
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `pinch`
-
-Pinch around a resolved center point using scale, angle, and duration.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `scale` | `number` | yes | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `spread` | `number` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
 ### `ping`
 
 Check connection health without reading accessibility state.
@@ -275,23 +222,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `input` | `string` | yes | - | - |
-
-### `rotate`
-
-Rotate around a resolved center point using angle, radius, and duration.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `angle` | `number` | yes | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `radius` | `number` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
 
 ### `rotor`
 
@@ -329,7 +259,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `stableId` | `string` | no | - | - |
-| `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
@@ -345,7 +274,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `stableId` | `string` | no | - | - |
-| `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
@@ -414,21 +342,6 @@ Parameters:
 | `endX` | `number` | no | - | - |
 | `endY` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `two_finger_tap`
-
-Tap with two fingers at a coordinate or actionable semantic target.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `spread` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 

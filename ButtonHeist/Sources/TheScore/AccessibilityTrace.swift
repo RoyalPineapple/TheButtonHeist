@@ -4,8 +4,8 @@ import Foundation
 
 /// Accessibility state observed during a session.
 ///
-/// Captures are the durable source of truth. Segments and replayable patches
-/// are derived projections for callers that need compact change summaries.
+/// Captures are the durable source of truth. Deltas are derived projections
+/// for callers that need compact change summaries.
 public struct AccessibilityTrace: Codable, Sendable, Equatable {
     public let captures: [Capture]
 
@@ -88,43 +88,6 @@ public struct AccessibilityTrace: Codable, Sendable, Equatable {
             guard captures[index].parentHash == expectedParent else { return false }
         }
         return true
-    }
-
-    public var receipts: [Receipt] {
-        captures.map(Receipt.init(capture:))
-    }
-
-    public var integrityIssues: [IntegrityIssue] {
-        var issues: [IntegrityIssue] = []
-        var expectedParentHash: String?
-
-        for (index, capture) in captures.enumerated() {
-            let computedHash = Capture.hash(interface: capture.interface, context: capture.context)
-            if capture.hash != computedHash {
-                issues.append(.captureHashMismatch(
-                    index: index,
-                    sequence: capture.sequence,
-                    recordedHash: capture.hash,
-                    computedHash: computedHash
-                ))
-            }
-            if capture.parentHash != expectedParentHash {
-                issues.append(.parentHashMismatch(
-                    index: index,
-                    sequence: capture.sequence,
-                    recordedParentHash: capture.parentHash,
-                    expectedParentHash: expectedParentHash
-                ))
-            }
-
-            expectedParentHash = capture.hash
-        }
-
-        return issues
-    }
-
-    public var hasValidIntegrity: Bool {
-        integrityIssues.isEmpty
     }
 
 }

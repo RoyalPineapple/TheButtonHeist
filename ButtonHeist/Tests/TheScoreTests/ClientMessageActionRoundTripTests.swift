@@ -104,14 +104,14 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testClientMessageLongPressEncoding() throws {
         let message = ClientMessage.longPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 50, y: 75)),
-            duration: 1.0
+            duration: try GestureDuration(seconds: 1.0)
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .longPress(let target) = decoded {
             XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 50, y: 75)))
-            XCTAssertEqual(target.duration, 1.0)
+            XCTAssertEqual(target.duration.seconds, 1.0)
         } else {
             XCTFail("Expected longPress message")
         }
@@ -121,7 +121,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let message = ClientMessage.drag(DragTarget(
             start: .coordinate(ScreenPoint(x: 50, y: 100)),
             end: ScreenPoint(x: 250, y: 100),
-            duration: 0.5
+            duration: try GestureDuration(seconds: 0.5)
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
@@ -129,99 +129,13 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         if case .drag(let target) = decoded {
             XCTAssertEqual(target.start, .coordinate(ScreenPoint(x: 50, y: 100)))
             XCTAssertEqual(target.end, ScreenPoint(x: 250, y: 100))
-            XCTAssertEqual(target.duration, 0.5)
+            XCTAssertEqual(target.duration?.seconds, 0.5)
         } else {
             XCTFail("Expected drag message")
         }
     }
 
-    func testClientMessagePinchEncoding() throws {
-        let message = ClientMessage.pinch(PinchTarget(
-            center: .coordinate(ScreenPoint(x: 200, y: 300)),
-            scale: 2.0
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .pinch(let target) = decoded {
-            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 200, y: 300)))
-            XCTAssertEqual(target.scale, 2.0)
-        } else {
-            XCTFail("Expected pinch message")
-        }
-    }
-
-    func testClientMessageRotateEncoding() throws {
-        let message = ClientMessage.rotate(RotateTarget(
-            center: .coordinate(ScreenPoint(x: 150, y: 250)),
-            angle: 1.57
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .rotate(let target) = decoded {
-            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 150, y: 250)))
-            XCTAssertEqual(target.angle, 1.57)
-        } else {
-            XCTFail("Expected rotate message")
-        }
-    }
-
-    func testClientMessageTwoFingerTapEncoding() throws {
-        let message = ClientMessage.twoFingerTap(TwoFingerTapTarget(
-            center: .coordinate(ScreenPoint(x: 100, y: 200)),
-            spread: 50
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .twoFingerTap(let target) = decoded {
-            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 100, y: 200)))
-            XCTAssertEqual(target.spread, 50)
-        } else {
-            XCTFail("Expected twoFingerTap message")
-        }
-    }
-
-    func testClientMessageDrawPathEncoding() throws {
-        let message = ClientMessage.drawPath(DrawPathTarget(
-            points: [PathPoint(x: 10, y: 20), PathPoint(x: 30, y: 40)],
-            duration: 0.5
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .drawPath(let target) = decoded {
-            XCTAssertEqual(target.points.count, 2)
-            XCTAssertEqual(target.points[0].x, 10)
-            XCTAssertEqual(target.duration, 0.5)
-        } else {
-            XCTFail("Expected drawPath message")
-        }
-    }
-
-    func testClientMessageDrawBezierEncoding() throws {
-        let message = ClientMessage.drawBezier(DrawBezierTarget(
-            startX: 50, startY: 100,
-            segments: [
-                BezierSegment(cp1X: 50, cp1Y: 50, cp2X: 150, cp2Y: 50, endX: 150, endY: 100)
-            ],
-            duration: 0.8
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .drawBezier(let target) = decoded {
-            XCTAssertEqual(target.startPoint, CGPoint(x: 50, y: 100))
-            XCTAssertEqual(target.segments.count, 1)
-            XCTAssertEqual(target.segments[0].end, CGPoint(x: 150, y: 100))
-            XCTAssertEqual(target.duration, 0.8)
-        } else {
-            XCTFail("Expected drawBezier message")
-        }
-    }
-
-    // MARK: - Edit / ResignFirstResponder / WaitForIdle
+    // MARK: - Edit / ResignFirstResponder
 
     func testClientMessageEditActionEncoding() throws {
         let message = ClientMessage.editAction(EditActionTarget(action: .paste))
@@ -247,38 +161,20 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
     }
 
-    func testWaitForIdleTargetDefaultTimeout() throws {
-        let target = WaitForIdleTarget()
-        let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(WaitForIdleTarget.self, from: data)
-
-        XCTAssertNil(decoded.timeout)
-    }
-
-    func testClientMessageWaitForIdleEncoding() throws {
-        let message = ClientMessage.waitForIdle(WaitForIdleTarget(timeout: 5.0))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .waitForIdle(let target) = decoded {
-            XCTAssertEqual(target.timeout, 5.0)
-        } else {
-            XCTFail("Expected waitForIdle message")
-        }
-    }
-
     func testActionResultWithFailureMessage() throws {
         let result = ActionResult(
             success: false,
-            method: .elementNotFound,
-            message: "Element not found"
+            method: .activate,
+            message: "Element not found",
+            errorKind: .elementNotFound
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
         XCTAssertFalse(decoded.success)
-        XCTAssertEqual(decoded.method, .elementNotFound)
+        XCTAssertEqual(decoded.method, .activate)
         XCTAssertEqual(decoded.message, "Element not found")
+        XCTAssertEqual(decoded.errorKind, .elementNotFound)
     }
 
     func testActionResultWithValueField() throws {

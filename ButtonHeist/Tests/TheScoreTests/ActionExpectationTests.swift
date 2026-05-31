@@ -35,24 +35,6 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertEqual(decoded, result)
     }
 
-    // MARK: - Implicit Delivery Validation
-
-    func testDeliveryMetWhenSuccess() {
-        let action = makeResult(success: true)
-        let result = ActionExpectation.validateDelivery(action)
-        XCTAssertTrue(result.met)
-        XCTAssertNil(result.expectation)
-        XCTAssertEqual(result.actual, "delivered")
-    }
-
-    func testDeliveryNotMetWhenFailed() {
-        let action = makeResult(success: false, message: "element not found")
-        let result = ActionExpectation.validateDelivery(action)
-        XCTAssertFalse(result.met)
-        XCTAssertNil(result.expectation)
-        XCTAssertEqual(result.actual, "element not found")
-    }
-
     // MARK: - Validation: screenChanged
 
     func testScreenChangedMetWhenDeltaIsScreenChanged() {
@@ -306,40 +288,6 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertFalse(result.met)
     }
 
-    // MARK: - compound
-
-    func testCompoundCodableRoundTrip() throws {
-        let expectation = ActionExpectation.compound([
-            .elementsChanged,
-            .elementAppeared(ElementMatcher(label: "New", traits: [.staticText])),
-        ])
-        let data = try JSONEncoder().encode(expectation)
-        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
-        XCTAssertEqual(decoded, expectation)
-    }
-
-    func testCompoundAllMet() {
-        let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
-        let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.compound([
-            .elementsChanged,
-            .elementAppeared(ElementMatcher(label: "New Task", traits: [.staticText])),
-        ]).validate(against: action)
-        XCTAssertTrue(result.met)
-    }
-
-    func testCompoundFailsIfAnyUnmet() {
-        let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
-        let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.compound([
-            .elementsChanged,
-            .elementAppeared(ElementMatcher(label: "Missing Element")),
-        ]).validate(against: action)
-        XCTAssertFalse(result.met)
-    }
-
     // MARK: - Helpers
 
     private func makeElement(
@@ -389,7 +337,6 @@ final class ActionExpectationTests: XCTestCase {
             payload: value.map { .value($0) },
             accessibilityTrace: delta.map(AccessibilityTrace.projectingForTests)
         )
-        // Note: animating param omitted (defaults to nil)
     }
 
     // MARK: - Round-Trip: associated-value and recursive cases
@@ -405,27 +352,6 @@ final class ActionExpectationTests: XCTestCase {
     func testElementDisappearedRoundTrip() throws {
         let matcher = ElementMatcher(value: "Loading…", excludeTraits: [.selected])
         let expectation = ActionExpectation.elementDisappeared(matcher)
-        let data = try JSONEncoder().encode(expectation)
-        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
-        XCTAssertEqual(decoded, expectation)
-    }
-
-    func testCompoundRoundTrip() throws {
-        let expectation = ActionExpectation.compound([
-            .screenChanged,
-            .elementUpdated(heistId: "counter", property: .value, newValue: "5"),
-            .elementAppeared(ElementMatcher(label: "Success")),
-        ])
-        let data = try JSONEncoder().encode(expectation)
-        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
-        XCTAssertEqual(decoded, expectation)
-    }
-
-    func testNestedCompoundRoundTrip() throws {
-        let expectation = ActionExpectation.compound([
-            .compound([.screenChanged, .elementsChanged]),
-            .elementAppeared(ElementMatcher(identifier: "deep")),
-        ])
         let data = try JSONEncoder().encode(expectation)
         let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
         XCTAssertEqual(decoded, expectation)

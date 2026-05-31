@@ -3,6 +3,7 @@
 // Requires the BH Demo test host for a live UIWindow and UIApplication.sendEvent pipeline.
 import XCTest
 @testable import TheInsideJob
+import TheScore
 
 @MainActor
 final class TheSafecrackerIntegrationTests: XCTestCase {
@@ -35,7 +36,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         XCTAssertTrue(result)
     }
 
-    func testLongPressDoesNotCrash() async {
+    func testLongPressDoesNotCrash() async throws {
         let button = UIButton(type: .system)
         button.frame = CGRect(x: 50, y: 300, width: 200, height: 44)
         window.addSubview(button)
@@ -46,74 +47,34 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
             to: nil
         )
 
-        let result = await safecracker.longPress(at: screenPoint, duration: 0.1)
+        let result = await safecracker.longPress(
+            at: screenPoint,
+            duration: try GestureDuration(seconds: 0.1)
+        )
         XCTAssertTrue(result)
     }
 
-    func testSwipeCompletesSuccessfully() async {
+    func testSwipeCompletesSuccessfully() async throws {
         let start = CGPoint(x: 200, y: 400)
         let end = CGPoint(x: 200, y: 200)
 
-        let result = await safecracker.swipe(from: start, to: end, duration: 0.1)
+        let result = await safecracker.swipe(
+            from: start,
+            to: end,
+            duration: try GestureDuration(seconds: 0.1)
+        )
         XCTAssertTrue(result)
     }
 
-    func testDragCompletesSuccessfully() async {
+    func testDragCompletesSuccessfully() async throws {
         let start = CGPoint(x: 100, y: 300)
         let end = CGPoint(x: 300, y: 300)
 
-        let result = await safecracker.drag(from: start, to: end, duration: 0.1)
-        XCTAssertTrue(result)
-    }
-
-    // MARK: - N-Finger Primitives
-
-    func testTouchLifecycleDoesNotCrash() {
-        let downResult = safecracker.touchesDown(at: [CGPoint(x: 150, y: 300)])
-        XCTAssertTrue(downResult, "touchesDown should succeed")
-
-        let moveResult = safecracker.moveTouches(to: [CGPoint(x: 160, y: 310)])
-        XCTAssertTrue(moveResult, "moveTouches should succeed")
-
-        let upResult = safecracker.touchesUp()
-        XCTAssertTrue(upResult, "touchesUp should succeed")
-    }
-
-    func testMultiTouchLifecycle() {
-        let points = [CGPoint(x: 100, y: 300), CGPoint(x: 200, y: 300)]
-        let downResult = safecracker.touchesDown(at: points)
-        XCTAssertTrue(downResult)
-
-        let movedPoints = [CGPoint(x: 80, y: 300), CGPoint(x: 220, y: 300)]
-        let moveResult = safecracker.moveTouches(to: movedPoints)
-        XCTAssertTrue(moveResult)
-
-        let upResult = safecracker.touchesUp()
-        XCTAssertTrue(upResult)
-    }
-
-    func testTouchesUpWithoutDownReturnsFalse() {
-        let result = safecracker.touchesUp()
-        XCTAssertFalse(result, "touchesUp with no active touches should return false")
-    }
-
-    // MARK: - Multi-Touch Gestures
-
-    func testPinchCompletesSuccessfully() async {
-        let center = CGPoint(x: 200, y: 400)
-        let result = await safecracker.pinch(center: center, scale: 2.0, spread: 80, duration: 0.1)
-        XCTAssertTrue(result)
-    }
-
-    func testRotateCompletesSuccessfully() async {
-        let center = CGPoint(x: 200, y: 400)
-        let result = await safecracker.rotate(center: center, angle: .pi / 4, radius: 80, duration: 0.1)
-        XCTAssertTrue(result)
-    }
-
-    func testTwoFingerTapCompletesSuccessfully() async {
-        let center = CGPoint(x: 200, y: 400)
-        let result = await safecracker.twoFingerTap(at: center)
+        let result = await safecracker.drag(
+            from: start,
+            to: end,
+            duration: try GestureDuration(seconds: 0.1)
+        )
         XCTAssertTrue(result)
     }
 

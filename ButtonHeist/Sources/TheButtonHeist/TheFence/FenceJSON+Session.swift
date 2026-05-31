@@ -13,7 +13,6 @@ struct PublicSessionStateResponse: FencePublicJSONResponse {
     let connectionType: String?
     let shortId: String?
     let lastFailure: PublicSessionFailure?
-    let lastAction: PublicSessionLastAction?
 
     init(payload: SessionStatePayload) {
         self.connected = payload.connected
@@ -25,7 +24,6 @@ struct PublicSessionStateResponse: FencePublicJSONResponse {
         self.connectionType = payload.device?.connectionType.rawValue
         self.shortId = payload.device?.shortId
         self.lastFailure = payload.lastFailure.map { PublicSessionFailure(payload: $0) }
-        self.lastAction = payload.lastAction.map { PublicSessionLastAction(payload: $0) }
     }
 }
 
@@ -45,35 +43,9 @@ struct PublicSessionFailure: Encodable {
     }
 }
 
-struct PublicSessionLastAction: Encodable {
-    let method: String
-    let success: Bool
-    let message: String?
-    let latencyMs: Int
-
-    private enum CodingKeys: String, CodingKey {
-        case method
-        case success
-        case message
-        case latencyMs = "latency_ms"
-    }
-
-    init(payload: SessionLastActionPayload) {
-        self.method = payload.method.rawValue
-        self.success = payload.success
-        self.message = payload.message
-        self.latencyMs = payload.latencyMs
-    }
-}
-
 struct PublicOKResponse: FencePublicJSONResponse {
     let status = PublicStatus.ok
     let message: String
-}
-
-struct PublicHelpResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
-    let commands: [String]
 }
 
 struct PublicStatusResponse: FencePublicJSONResponse {

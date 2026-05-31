@@ -3,29 +3,6 @@ import XCTest
 
 final class ActionExpectationValidationTests: XCTestCase {
 
-    // MARK: - validateDelivery
-
-    func testValidateDeliverySuccess() {
-        let result = ActionResult(success: true, method: .activate)
-        let expectation = ActionExpectation.validateDelivery(result)
-        XCTAssertTrue(expectation.met)
-        XCTAssertNil(expectation.expectation)
-    }
-
-    func testValidateDeliveryFailure() {
-        let result = ActionResult(success: false, method: .activate, message: "element not found")
-        let expectation = ActionExpectation.validateDelivery(result)
-        XCTAssertFalse(expectation.met)
-        XCTAssertEqual(expectation.actual, "element not found")
-    }
-
-    func testValidateDeliveryFailureNoMessage() {
-        let result = ActionResult(success: false, method: .activate)
-        let expectation = ActionExpectation.validateDelivery(result)
-        XCTAssertFalse(expectation.met)
-        XCTAssertEqual(expectation.actual, "failed")
-    }
-
     // MARK: - screenChanged
 
     func testScreenChangedMet() {
@@ -415,46 +392,7 @@ final class ActionExpectationValidationTests: XCTestCase {
         XCTAssertEqual(outcome.actual, "screen changed but element still present in new interface")
     }
 
-    // MARK: - compound
-
-    func testCompoundAllMet() {
-        let trace = AccessibilityTrace.projectingForTests(.screenChanged(.init(
-            elementCount: 5,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        )))
-        let result = ActionResult(
-            success: true, method: .activate,
-            accessibilityTrace: trace
-        )
-        let expectation = ActionExpectation.compound([
-            .screenChanged,
-            .elementsChanged,
-        ])
-        let outcome = expectation.validate(against: result)
-        XCTAssertTrue(outcome.met)
-    }
-
-    func testCompoundPartialFailure() {
-        let result = ActionResult(
-            success: true, method: .activate,
-            accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits())))
-        )
-        let expectation = ActionExpectation.compound([
-            .elementsChanged,
-            .screenChanged,
-        ])
-        let outcome = expectation.validate(against: result)
-        XCTAssertFalse(outcome.met)
-        XCTAssertTrue(outcome.actual?.contains("screen_changed") == true)
-    }
-
     // MARK: - ActionExpectation Codable
-
-    func testCompoundEmptyRejectsConstruction() throws {
-        XCTAssertThrowsError(try NonEmptyActionExpectations([])) { error in
-            XCTAssertTrue("\(error)".contains("at least one expectation"), "\(error)")
-        }
-    }
 
     func testActionExpectationRoundTrip() throws {
         let expectations: [ActionExpectation] = [
@@ -463,7 +401,6 @@ final class ActionExpectationValidationTests: XCTestCase {
             .elementUpdated(heistId: "btn", property: .value, oldValue: "A", newValue: "B"),
             .elementAppeared(ElementMatcher(label: "New")),
             .elementDisappeared(ElementMatcher(identifier: "old")),
-            .compound([.screenChanged, .elementsChanged]),
         ]
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()

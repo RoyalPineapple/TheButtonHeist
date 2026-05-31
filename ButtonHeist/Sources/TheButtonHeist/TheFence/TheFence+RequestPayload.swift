@@ -74,16 +74,13 @@ extension TheFence {
         let executableMessages: [ClientMessage]?
         let handler: ParsedRequestHandler
         let expectationPayload: ExpectationPayload
-        /// Non-nil when the command short-circuits before dispatch.
-        let immediateResponse: FenceResponse?
 
         init(
             command: Command,
             requestId: String,
             arguments: CommandArgumentEnvelope,
             dispatch: DecodedRequestDispatch,
-            expectationPayload: ExpectationPayload,
-            immediateResponse: FenceResponse?
+            expectationPayload: ExpectationPayload
         ) {
             self.command = command
             self.requestId = requestId
@@ -91,19 +88,12 @@ extension TheFence {
             self.executableMessages = dispatch.executableMessages
             self.handler = dispatch.handler
             self.expectationPayload = expectationPayload
-            self.immediateResponse = immediateResponse
         }
     }
 
     static func clientActionDispatch(_ messages: [ClientMessage]) -> DecodedRequestDispatch {
         DecodedRequestDispatch(executableMessages: messages) { fence, request in
             try await fence.handleClientActionRequest(request)
-        }
-    }
-
-    static func emptyDispatch(command: Command) -> DecodedRequestDispatch {
-        DecodedRequestDispatch { _, _ in
-            .error("Unexpected command in dispatch: \(command.rawValue)")
         }
     }
 
@@ -130,20 +120,10 @@ extension TheFence {
         }
         try validateRequestKeys(command: command, arguments: arguments)
         try validateTypedElementTarget(command: command, arguments: arguments)
-        if let immediate = handleImmediateCommand(command) {
-            return ParsedRequest(
-                command: command,
-                requestId: "",
-                arguments: arguments,
-                dispatch: Self.emptyDispatch(command: command),
-                expectationPayload: ExpectationPayload(expectation: nil, timeout: nil),
-                immediateResponse: immediate
-            )
-        }
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try ExpectationPayload(arguments: arguments)
         let dispatch: DecodedRequestDispatch
-        if command.descriptor.requestPayloadKind == .waitForChange {
+        if command == .waitForChange {
             let target = WaitForChangeTarget(
                 expect: expectationPayload.expectation,
                 timeout: expectationPayload.timeout
@@ -158,8 +138,7 @@ extension TheFence {
             requestId: requestId,
             arguments: arguments,
             dispatch: dispatch,
-            expectationPayload: expectationPayload,
-            immediateResponse: nil
+            expectationPayload: expectationPayload
         )
     }
 
@@ -193,16 +172,14 @@ extension TheFence {
         arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> DecodedRequestDispatch {
-        switch command.descriptor.requestPayloadKind {
-        case .none:
-            if command == .dismissKeyboard {
-                return Self.clientActionDispatch([.resignFirstResponder])
-            }
-            if command == .getPasteboard {
-                return Self.clientActionDispatch([.getPasteboard])
-            }
+        switch command {
+        case .dismissKeyboard:
+            return Self.clientActionDispatch([.resignFirstResponder])
+        case .getPasteboard:
+            return Self.clientActionDispatch([.getPasteboard])
+        case .ping, .listDevices, .getSessionState, .listTargets:
             return try decodeControlDispatch(command)
-        case .observation:
+        case .getInterface, .getScreen:
             return try decodeObservationDispatch(
                 command: command,
                 arguments: arguments,
@@ -210,11 +187,12 @@ extension TheFence {
             )
         case .waitForChange:
             throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
-        case .gesture:
+        case .oneFingerTap, .longPress, .swipe, .drag:
             return try decodeGestureAction(command: command, request: arguments)
-        case .elementAction:
+        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge, .activate, .rotor, .typeText,
+             .editAction, .setPasteboard, .waitFor:
             return try decodeElementActionDispatch(command: command, arguments: arguments)
-        case .session:
+        case .runBatch, .connect, .startHeist, .stopHeist, .playHeist:
             return try decodeSessionDispatch(command: command, arguments: arguments)
         }
     }

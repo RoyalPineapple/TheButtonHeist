@@ -119,20 +119,6 @@ struct TheMuscleAdmission {
         )
     }
 
-    mutating func handleUnauthenticatedMessage(
-        _ clientId: Int,
-        data: Data,
-        respond: @escaping ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> MuscleAdmissionDecision {
-        authentication.handleUnauthenticatedMessage(
-            clientId,
-            data: data,
-            respond: respond,
-            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
-        )
-    }
-
     mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> MuscleAdmissionEffect {
         self.authentication.completeAuthentication(authentication)
     }

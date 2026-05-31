@@ -25,18 +25,13 @@ extension TheFence {
                 throw FenceError.invalidRequest("Unit-point swipe requires target object")
             }
             return SwipeTarget(
-                selection: .unitElement(elementTarget, start: start, end: end, direction: nil),
+                selection: .unitElement(elementTarget, start: start, end: end),
                 duration: try request.gestureDuration()
             )
         }
         if let elementTarget, let direction, startPoint == nil, endPoint == nil {
             return SwipeTarget(
-                selection: .unitElement(
-                    elementTarget,
-                    start: direction.defaultStart,
-                    end: direction.defaultEnd,
-                    direction: direction
-                ),
+                selection: .elementDirection(elementTarget, direction),
                 duration: try request.gestureDuration()
             )
         }

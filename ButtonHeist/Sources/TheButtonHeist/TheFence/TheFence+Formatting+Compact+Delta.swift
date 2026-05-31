@@ -4,6 +4,17 @@ import TheScore
 
 extension FenceResponse {
 
+    static func compactDeltaKind(_ delta: AccessibilityTrace.Delta) -> String {
+        switch delta {
+        case .noChange:
+            return AccessibilityTrace.DeltaKind.noChange.rawValue
+        case .elementsChanged:
+            return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+        case .screenChanged:
+            return AccessibilityTrace.DeltaKind.screenChanged.rawValue
+        }
+    }
+
     static func compactDelta(_ delta: AccessibilityTrace.Delta, method: String) -> String {
         switch delta {
         case .noChange(let payload):
@@ -47,14 +58,6 @@ extension FenceResponse {
             for change in update.changes where !change.property.isGeometry {
                 lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
             }
-        }
-        let structuralCount = edits.treeInserted.count + edits.treeRemoved.count + edits.treeMoved.count
-        if structuralCount > 0 {
-            var parts: [String] = []
-            if !edits.treeInserted.isEmpty { parts.append("+\(edits.treeInserted.count)") }
-            if !edits.treeRemoved.isEmpty { parts.append("-\(edits.treeRemoved.count)") }
-            if !edits.treeMoved.isEmpty { parts.append("moved \(edits.treeMoved.count)") }
-            lines.append("  hierarchy changed (\(parts.joined(separator: ", ")))")
         }
         return lines
     }

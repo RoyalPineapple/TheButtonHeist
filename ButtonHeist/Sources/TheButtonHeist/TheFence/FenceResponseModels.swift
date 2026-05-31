@@ -25,7 +25,7 @@ extension BatchExecutionStepResult {
         return .action(
             command: command,
             result: finalResult,
-            expectation: expectation ?? step.expectation.validate(against: finalResult)
+            expectation: expectation ?? step.expectation?.validate(against: finalResult)
         )
     }
 
@@ -35,12 +35,12 @@ extension BatchExecutionStepResult {
 
     func expectationResult(for step: TheScore.BatchStep) -> ExpectationResult? {
         if let expectation { return expectation }
-        return finalActionResult().map { step.expectation.validate(against: $0) }
+        guard let plannedExpectation = step.expectation else { return nil }
+        return finalActionResult().map { plannedExpectation.validate(against: $0) }
     }
 
     func expectationCounted(for step: TheScore.BatchStep) -> Bool {
-        guard let checked = expectationResult(for: step)?.expectation else { return false }
-        return checked != .delivery
+        expectationResult(for: step)?.expectation != nil
     }
 
     func expectationMet(for step: TheScore.BatchStep) -> Bool? {
@@ -121,20 +121,6 @@ public struct SessionFailurePayload: Sendable, Equatable {
     }
 }
 
-public struct SessionLastActionPayload: Sendable, Equatable {
-    public let method: ActionMethod
-    public let success: Bool
-    public let message: String?
-    public let latencyMs: Int
-
-    public init(method: ActionMethod, success: Bool, message: String?, latencyMs: Int) {
-        self.method = method
-        self.success = success
-        self.message = message
-        self.latencyMs = latencyMs
-    }
-}
-
 public struct SessionStatePayload: Sendable, Equatable {
     public let connected: Bool
     public let phase: SessionConnectionPhase
@@ -142,7 +128,6 @@ public struct SessionStatePayload: Sendable, Equatable {
     public let actionTimeoutSeconds: TimeInterval
     public let longActionTimeoutSeconds: TimeInterval
     public let lastFailure: SessionFailurePayload?
-    public let lastAction: SessionLastActionPayload?
 
     public init(
         connected: Bool,
@@ -150,8 +135,7 @@ public struct SessionStatePayload: Sendable, Equatable {
         device: SessionDevicePayload?,
         actionTimeoutSeconds: TimeInterval,
         longActionTimeoutSeconds: TimeInterval,
-        lastFailure: SessionFailurePayload?,
-        lastAction: SessionLastActionPayload?
+        lastFailure: SessionFailurePayload?
     ) {
         self.connected = connected
         self.phase = phase
@@ -159,7 +143,6 @@ public struct SessionStatePayload: Sendable, Equatable {
         self.actionTimeoutSeconds = actionTimeoutSeconds
         self.longActionTimeoutSeconds = longActionTimeoutSeconds
         self.lastFailure = lastFailure
-        self.lastAction = lastAction
     }
 }
 
@@ -176,7 +159,6 @@ enum FenceRequestErrorCode {
 public enum FenceResponse {
     case ok(message: String)
     case error(String, details: FailureDetails? = nil)
-    case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case pong(PongPayload)
     case devices([DiscoveredDevice])

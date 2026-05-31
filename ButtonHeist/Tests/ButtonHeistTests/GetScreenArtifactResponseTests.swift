@@ -75,7 +75,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             return XCTFail("Expected inline screenshot response with interface, got \(includedInterfaceResponse)")
         }
         XCTAssertEqual(includedInterfacePayload.pngData, pngData)
-        XCTAssertEqual(includedInterfacePayload.interface?.elements.map(\.heistId), ["visible_button"])
+        XCTAssertEqual(includedInterfacePayload.interface?.projectedElements.map(\.heistId), ["visible_button"])
         XCTAssertTrue(includedInterfaceOptions.includeInterface)
         XCTAssertNotNil(publicJSONObject(includedInterfaceResponse)["interface"])
     }

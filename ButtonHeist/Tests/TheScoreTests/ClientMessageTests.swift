@@ -180,7 +180,7 @@ final class ClientMessageTests: XCTestCase {
                     text: "hello",
                     elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
                 )),
-                expectation: .delivery,
+                expectation: nil,
                 deadline: Deadline()
             ),
         ])
@@ -196,7 +196,7 @@ final class ClientMessageTests: XCTestCase {
         guard case .batchExecutionPlan(let decodedPlan) = decoded.message,
               let step = decodedPlan.steps.first,
               case .typeText(let target) = step.command,
-              step.expectation == .delivery else {
+              step.expectation == nil else {
             return XCTFail("Expected batchExecutionPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(target.text, "hello")
@@ -474,80 +474,7 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(target.timeout, 8.0)
     }
 
-    // MARK: - Explore
-
-    func testExploreEncodeDecode() throws {
-        let message = ClientMessage.explore
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .explore = decoded {
-        } else {
-            XCTFail("Expected explore, got \(decoded)")
-        }
-    }
-
-    func testExploreEnvelopeRoundTrip() throws {
-        let envelope = RequestEnvelope(
-            requestId: "explore-1",
-            message: .explore
-        )
-        let data = try JSONEncoder().encode(envelope)
-        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
-
-        XCTAssertEqual(decoded.requestId, "explore-1")
-        if case .explore = decoded.message {
-        } else {
-            XCTFail("Expected explore, got \(decoded.message)")
-        }
-    }
-
-    func testExploreResultEncodeDecode() throws {
-        let result = ExploreResult(
-            elementCount: 3, scrollCount: 6,
-            containersExplored: 3, explorationTime: 1.25
-        )
-        let data = try JSONEncoder().encode(result)
-        let decoded = try JSONDecoder().decode(ExploreResult.self, from: data)
-        XCTAssertEqual(decoded.elementCount, 3)
-        XCTAssertEqual(decoded.scrollCount, 6)
-        XCTAssertEqual(decoded.containersExplored, 3)
-        XCTAssertEqual(decoded.explorationTime, 1.25)
-    }
-
-    func testActionResultWithExploreResult() throws {
-        let exploreResult = ExploreResult(
-            elementCount: 100, scrollCount: 12,
-            containersExplored: 2, explorationTime: 3.5
-        )
-        let result = ActionResult(
-            success: true, method: .explore,
-            message: "100 elements, 12 scrolls, 3.50s",
-            payload: .explore(exploreResult)
-        )
-        let data = try JSONEncoder().encode(result)
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
-        XCTAssertTrue(decoded.success)
-        XCTAssertEqual(decoded.method, .explore)
-        guard case .explore(let explore) = decoded.payload else {
-            XCTFail("Expected .explore payload, got \(String(describing: decoded.payload))")
-            return
-        }
-        XCTAssertEqual(explore.elementCount, 100)
-        XCTAssertEqual(explore.scrollCount, 12)
-        XCTAssertEqual(explore.containersExplored, 2)
-        XCTAssertEqual(explore.explorationTime, 3.5)
-    }
-
-    func testExploreResultRejectsObsoleteElementSnapshots() throws {
-        let json = Data("""
-        {"elements":[],"scrollCount":1,"containersExplored":1,"explorationTime":0.1}
-        """.utf8)
-
-        XCTAssertThrowsError(try JSONDecoder().decode(ExploreResult.self, from: json))
-    }
-
-    func testActionResultWithoutExploreResult() throws {
+    func testActionResultWithoutPayload() throws {
         let result = ActionResult(success: true, method: .activate)
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -659,8 +586,7 @@ final class ClientMessageTests: XCTestCase {
             selection: .unitElement(
                 .heistId("scrollable"),
                 start: UnitPoint(x: 0.8, y: 0.5),
-                end: UnitPoint(x: 0.2, y: 0.5),
-                direction: nil
+                end: UnitPoint(x: 0.2, y: 0.5)
             )
         )
         let message = ClientMessage.swipe(swipe)

@@ -31,18 +31,9 @@ public extension ElementEdits {
 
     /// Compare two full interfaces.
     static func between(_ before: Interface, _ after: Interface) -> ElementEdits {
-        let elementEdits = AccessibilityTraceElementDiff.projectElementEdits(
-            beforeElements: before.elements,
-            afterElements: after.elements
-        )
-        let treeEdits = betweenTrees(before: before, after: after)
-        return ElementEdits(
-            added: elementEdits.added,
-            removed: elementEdits.removed,
-            updated: elementEdits.updated,
-            treeInserted: treeEdits.treeInserted,
-            treeRemoved: treeEdits.treeRemoved,
-            treeMoved: treeEdits.treeMoved
+        AccessibilityTraceElementDiff.projectElementEdits(
+            beforeElements: before.projectedElements,
+            afterElements: after.projectedElements
         )
     }
 
@@ -56,7 +47,4 @@ public extension ElementEdits {
         )
     }
 
-    static func betweenTrees(before: Interface, after: Interface) -> ElementEdits {
-        AccessibilityTraceTreeDiff.projectTreeEdits(before: before, after: after)
-    }
 }

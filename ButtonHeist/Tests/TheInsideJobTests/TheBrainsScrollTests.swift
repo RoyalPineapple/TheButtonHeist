@@ -178,21 +178,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.right), .horizontal)
     }
 
-    func testRequiredAxisForScrollSearchDirection() {
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.up), .vertical)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.down), .vertical)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.left), .horizontal)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.right), .horizontal)
-    }
-
     // MARK: - uiScrollDirection Mapping
-
-    func testUIScrollDirectionFromScrollSearchDirection() {
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.down), .down)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.up), .up)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.left), .left)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.right), .right)
-    }
 
     func testUIScrollDirectionFromScrollDirection() {
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.up), .up)
@@ -518,7 +504,6 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected semantic actionability failure, got \(result)")
         }
-        XCTAssertNil(failure.method)
         XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("has no content-space position"))
@@ -679,7 +664,8 @@ final class TheBrainsScrollTests: XCTestCase {
         let result = await brains.executeCommand(.activate(.heistId("old_offscreen")))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.errorKind, .elementNotFound)
         XCTAssertEqual(staleScrollView.contentOffset, .zero)
         XCTAssertFalse(
             result.message?.contains("after semantic reveal") ?? false,

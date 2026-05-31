@@ -95,8 +95,8 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
         if case .interface(let decodedPayload) = decoded {
-            XCTAssertEqual(decodedPayload.elements.count, 1)
-            XCTAssertEqual(decodedPayload.elements[0].label, "Submit")
+            XCTAssertEqual(decodedPayload.projectedElements.count, 1)
+            XCTAssertEqual(decodedPayload.projectedElements[0].label, "Submit")
         } else {
             XCTFail("Expected interface, got \(decoded)")
         }
@@ -260,7 +260,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultPayloadScrollSearchWireShape() throws {
         let search = ScrollSearchResult(
-            scrollCount: 2, uniqueElementsSeen: 10, totalItems: nil, exhaustive: false
+            scrollCount: 2, uniqueElementsSeen: 10, exhaustive: false
         )
         let result = ActionResult(success: true, method: .elementSearch, payload: .scrollSearch(search))
         let data = try JSONEncoder().encode(result)
@@ -343,7 +343,7 @@ final class ServerMessageTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertNil(decoded.accessibilityDelta)
+        XCTAssertNil(decoded.accessibilityTrace?.endpointDeltaProjection)
     }
 
     func testActionResultScreenContextProjectsFromTrace() throws {
@@ -360,8 +360,8 @@ final class ServerMessageTests: XCTestCase {
             accessibilityTrace: trace
         )
 
-        XCTAssertEqual(result.screenName, "Trace Screen")
-        XCTAssertEqual(result.screenId, "trace_screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenNameProjection, "Trace Screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenIdProjection, "trace_screen")
     }
 
     func testActionResultScreenContextRoundTripsTraceProjection() throws {
@@ -383,8 +383,8 @@ final class ServerMessageTests: XCTestCase {
 
         XCTAssertNil(json["screenName"])
         XCTAssertNil(json["screenId"])
-        XCTAssertEqual(decoded.screenName, "Trace Screen")
-        XCTAssertEqual(decoded.screenId, "trace_screen")
+        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenNameProjection, "Trace Screen")
+        XCTAssertEqual(decoded.accessibilityTrace?.endpointScreenIdProjection, "trace_screen")
     }
 
     func testActionResultScreenContextDoesNotFallbackWhenTraceProjectsNil() throws {
@@ -396,8 +396,8 @@ final class ServerMessageTests: XCTestCase {
             accessibilityTrace: trace
         )
 
-        XCTAssertNil(result.screenName)
-        XCTAssertNil(result.screenId)
+        XCTAssertNil(result.accessibilityTrace?.endpointScreenNameProjection)
+        XCTAssertNil(result.accessibilityTrace?.endpointScreenIdProjection)
     }
 
     func testActionResultDecodedScreenContextProjectsFromTrace() throws {
@@ -411,8 +411,8 @@ final class ServerMessageTests: XCTestCase {
 
         let result = try JSONDecoder().decode(ActionResult.self, from: data)
 
-        XCTAssertEqual(result.screenName, "Trace Screen")
-        XCTAssertEqual(result.screenId, "trace_screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenNameProjection, "Trace Screen")
+        XCTAssertEqual(result.accessibilityTrace?.endpointScreenIdProjection, "trace_screen")
     }
 
     func testActionResultRejectsStoredScreenContextFields() {
@@ -533,9 +533,9 @@ final class ServerMessageTests: XCTestCase {
             XCTAssertEqual(decodedPayload.pngData, payload.pngData)
             XCTAssertEqual(decodedPayload.width, 390)
             XCTAssertEqual(decodedPayload.height, 844)
-            XCTAssertEqual(decodedPayload.interface?.elements, [element])
-            XCTAssertEqual(decodedPayload.interface?.elements.first?.frameX, 20)
-            XCTAssertEqual(decodedPayload.interface?.elements.first?.activationPointX, 100)
+            XCTAssertEqual(decodedPayload.interface?.projectedElements, [element])
+            XCTAssertEqual(decodedPayload.interface?.projectedElements.first?.frameX, 20)
+            XCTAssertEqual(decodedPayload.interface?.projectedElements.first?.activationPointX, 100)
         } else {
             XCTFail("Expected screen, got \(decoded)")
         }

@@ -70,32 +70,6 @@ final class WireCommandParityTests: XCTestCase {
             return ["target": target, "direction": .string(SwipeDirection.left.rawValue)]
         case .drag:
             return ["target": target, "endX": .double(120), "endY": .double(240)]
-        case .pinch:
-            return ["centerX": .double(50), "centerY": .double(60), "scale": .double(1.25)]
-        case .rotate:
-            return ["centerX": .double(50), "centerY": .double(60), "angle": .double(0.5)]
-        case .twoFingerTap:
-            return ["centerX": .double(50), "centerY": .double(60)]
-        case .drawPath:
-            return ["points": .array([
-                .object(["x": .double(0), "y": .double(0)]),
-                .object(["x": .double(10), "y": .double(10)]),
-            ])]
-        case .drawBezier:
-            return [
-                "startX": .double(0),
-                "startY": .double(0),
-                "segments": .array([
-                    .object([
-                        "cp1X": .double(10),
-                        "cp1Y": .double(0),
-                        "cp2X": .double(10),
-                        "cp2Y": .double(10),
-                        "endX": .double(20),
-                        "endY": .double(20),
-                    ]),
-                ]),
-            ]
         case .scroll:
             return ["direction": .string(ScrollDirection.down.rawValue)]
         case .scrollToVisible, .elementSearch, .activate, .waitFor:
@@ -112,7 +86,7 @@ final class WireCommandParityTests: XCTestCase {
             return ["text": .string("clipboard")]
         case .waitForChange, .dismissKeyboard:
             return [:]
-        case .help, .ping, .listDevices, .getInterface, .getScreen, .getPasteboard,
+        case .ping, .listDevices, .getInterface, .getScreen, .getPasteboard,
              .runBatch, .getSessionState, .connect, .listTargets, .startHeist,
              .stopHeist, .playHeist:
             XCTFail("Unexpected non-batch command \(command.rawValue)")
@@ -132,7 +106,6 @@ final class WireCommandParityTests: XCTestCase {
             .resignFirstResponder,
             .getPasteboard,
             .requestScreen,
-            .explore,
             .activate(target),
             .increment(target),
             .decrement(target),
@@ -142,32 +115,17 @@ final class WireCommandParityTests: XCTestCase {
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
             .oneFingerTap(TapTarget(selection: point)),
             .longPress(LongPressTarget(selection: point)),
-            .swipe(SwipeTarget(selection: .unitElement(
-                target,
-                start: SwipeDirection.left.defaultStart,
-                end: SwipeDirection.left.defaultEnd,
-                direction: .left
-            ))),
+            .swipe(SwipeTarget(selection: .elementDirection(target, .left))),
             .drag(DragTarget(start: .element(target), end: ScreenPoint(x: 30, y: 40))),
-            .pinch(PinchTarget(center: point, scale: 1.25)),
-            .rotate(RotateTarget(center: point, angle: 0.5)),
-            .twoFingerTap(TwoFingerTapTarget(center: point)),
-            .drawPath(DrawPathTarget(points: [PathPoint(x: 0, y: 0), PathPoint(x: 10, y: 10)])),
-            .drawBezier(DrawBezierTarget(
-                startX: 0,
-                startY: 0,
-                segments: [BezierSegment(cp1X: 10, cp1Y: 0, cp2X: 10, cp2Y: 10, endX: 20, endY: 20)]
-            )),
             .typeText(TypeTextTarget(text: "hello")),
             .scroll(ScrollTarget(direction: .down)),
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),
             .elementSearch(ElementSearchTarget(elementTarget: target)),
             .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
-            .waitForIdle(WaitForIdleTarget(timeout: 1)),
             .waitFor(WaitForTarget(elementTarget: target)),
             .waitForChange(WaitForChangeTarget(timeout: 1)),
             .batchExecutionPlan(BatchPlan(steps: [
-                BatchStep(command: .activate(target), expectation: .delivery, deadline: Deadline()),
+                BatchStep(command: .activate(target), expectation: nil, deadline: Deadline()),
             ])),
         ]
     }

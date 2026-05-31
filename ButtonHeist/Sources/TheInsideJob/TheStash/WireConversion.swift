@@ -84,13 +84,6 @@ extension TheStash {
         return activate + adjustable + custom
     }
 
-    static func buildActions(for container: AccessibilityContainer) -> [ElementAction] {
-        let names = container.customActions
-            .map { $0.name }
-            .filter { !$0.isEmpty }
-        return names.map(ElementAction.custom)
-    }
-
     // MARK: - Interface Conversion
 
     /// Convert a Screen into the canonical interface capture. The parser
@@ -162,8 +155,7 @@ extension TheStash {
             return InterfaceContainerAnnotation(
                 path: path,
                 stableId: screen.liveCapture.containerStableIdsByPath[path]
-                    ?? screen.liveCapture.containerStableIds[container],
-                actions: buildActions(for: container)
+                    ?? screen.liveCapture.containerStableIds[container]
             )
         }
     }

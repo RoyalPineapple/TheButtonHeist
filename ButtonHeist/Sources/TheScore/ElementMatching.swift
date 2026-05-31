@@ -126,23 +126,8 @@ extension ElementMatcher: Codable {
         case label, identifier, value, traits, excludeTraits
     }
 
-    private struct UnknownCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element matcher")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             label: try container.decodeIfPresent(String.self, forKey: .label),
@@ -162,17 +147,6 @@ extension ElementMatcher: Codable {
         try container.encodeIfPresent(excludeTraits, forKey: .excludeTraits)
     }
 
-    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown element matcher field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 extension ElementMatcher: CustomStringConvertible {
@@ -203,23 +177,8 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         case ordinal
     }
 
-    private struct UnknownCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "subtree selector")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let hasElement = container.contains(.element)
         let hasContainer = container.contains(.container)
@@ -268,18 +227,6 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
             try container.encode(matcher, forKey: .container)
             try container.encodeIfPresent(ordinal, forKey: .ordinal)
         }
-    }
-
-    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown subtree selector field \"\(unknownKey.stringValue)\""
-        ))
     }
 
     public var ordinal: Int? {

@@ -96,7 +96,6 @@ public final class TheInsideJob {
     // MARK: - Properties
 
     var serverPhase: ServerPhase = .stopped
-    let pollingRuntime = InsideJobPollingRuntime()
 
     let muscle: TheMuscle
     let tripwire = TheTripwire()
@@ -114,7 +113,6 @@ public final class TheInsideJob {
     /// it to wait on a foreground resume cycle synchronously.
     var pendingForegroundResumeTask: Task<Void, Never>?
     var idleTimerProtection: IdleTimerProtection = .unmodified
-    var accessibilityObservationActive = false
     var lifecycleObservationActive = false
 
     // MARK: - Computed State
@@ -130,21 +128,6 @@ public final class TheInsideJob {
         if case .running(let lease) = serverPhase { return lease.transport }
         return nil
     }
-
-    var isPollingEnabled: Bool {
-        pollingRuntime.isEnabled
-    }
-
-    var pollingTimeoutSeconds: TimeInterval {
-        pollingRuntime.timeoutSeconds(default: Self.defaultPollingTimeout)
-    }
-
-    var pollingPhase: PollingPhase {
-        get { pollingRuntime.phase }
-        set { pollingRuntime.phase = newValue }
-    }
-
-    static let defaultPollingTimeout: TimeInterval = 2.0
 
     // MARK: - Initialization
 
@@ -248,19 +231,6 @@ public final class TheInsideJob {
         await getaway.tearDown()
 
         insideJobLogger.info("Server stopped")
-    }
-
-    public func notifyChange() {
-        guard isRunning else { return }
-    }
-
-    public func startPolling(interval timeout: TimeInterval = 2.0) {
-        pollingRuntime.enableIntent(interval: timeout, runtimeActive: transport != nil, makeTask: makePollingTask(interval:))
-        insideJobLogger.info("Polling enabled (settle timeout: \(self.pollingTimeoutSeconds)s)")
-    }
-
-    public func stopPolling() {
-        pollingRuntime.stop()
     }
 }
 

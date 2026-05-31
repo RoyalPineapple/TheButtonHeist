@@ -2,129 +2,44 @@ import Foundation
 
 /// Target for custom actions.
 ///
-/// Element targeting uses the public `elementTarget` wire field.
-/// Container targeting uses the same `container` target object shape as
-/// `get_interface.subtree`, with `ordinal` as the disambiguator.
-public struct CustomActionTarget: Codable, Sendable {
-    public let selection: CustomActionSelection
+/// Custom actions are element actions. Containers remain addressable by the
+/// commands whose product subject is a container, such as scroll commands.
+public struct CustomActionTarget: Codable, Sendable, Equatable, CustomStringConvertible {
+    public let elementTarget: ElementTarget
+    public let actionName: String
 
     public init(elementTarget: ElementTarget, actionName: String) {
-        self.selection = .element(elementTarget, actionName: actionName)
-    }
-
-    public init(containerTarget: ContainerMatcher, ordinal: Int? = nil, actionName: String) {
-        self.selection = .container(containerTarget, ordinal: ordinal, actionName: actionName)
-    }
-
-    public var actionName: String {
-        selection.actionName
-    }
-}
-
-public enum CustomActionSelection: Sendable, Equatable, CustomStringConvertible {
-    case element(ElementTarget, actionName: String)
-    case container(ContainerMatcher, ordinal: Int?, actionName: String)
-
-    public var actionName: String {
-        switch self {
-        case .element(_, let actionName), .container(_, _, let actionName):
-            return actionName
-        }
+        self.elementTarget = elementTarget
+        self.actionName = actionName
     }
 
     public var description: String {
-        switch self {
-        case .element(let target, let actionName):
-            return ScoreDescription.call("customAction", [
-                target.description,
-                ScoreDescription.stringField("action", actionName),
-            ].compactMap { $0 })
-        case .container(let target, let ordinal, let actionName):
-            return ScoreDescription.call("customAction", [
-                ScoreDescription.call("container", [
-                    target.description,
-                    ScoreDescription.valueField("ordinal", ordinal),
-                ].compactMap { $0 }),
-                ScoreDescription.stringField("action", actionName),
-            ].compactMap { $0 })
-        }
-    }
-}
-
-extension CustomActionTarget: CustomStringConvertible {
-    public var description: String {
-        selection.description
+        ScoreDescription.call("customAction", [
+            elementTarget.description,
+            ScoreDescription.stringField("action", actionName),
+        ].compactMap { $0 })
     }
 }
 
 extension CustomActionTarget {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case elementTarget
-        case container
-        case ordinal
         case actionName
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "custom action target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let actionName = try container.decode(String.self, forKey: .actionName)
-        let hasElementTarget = container.contains(.elementTarget)
-        let hasContainerTarget = container.contains(.container)
-        guard hasElementTarget != hasContainerTarget else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .elementTarget,
-                in: container,
-                debugDescription: "CustomActionTarget requires exactly one of elementTarget or container"
-            )
-        }
-        if hasElementTarget {
-            selection = .element(
-                try container.decode(ElementTarget.self, forKey: .elementTarget),
-                actionName: actionName
-            )
-        } else {
-            let matcher = try container.decode(ContainerMatcher.self, forKey: .container)
-            let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
-            guard matcher.hasPredicates else {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .container,
-                    in: container,
-                    debugDescription: """
-                    CustomActionTarget container requires stableId, type, label, value, identifier, \
-                    or isModalBoundary; ordinal only disambiguates a container matcher
-                    """
-                )
-            }
-            if let ordinal, ordinal < 0 {
-                throw DecodingError.dataCorruptedError(
-                    forKey: .ordinal,
-                    in: container,
-                    debugDescription: "ordinal must be non-negative, got \(ordinal)"
-                )
-            }
-            selection = .container(matcher, ordinal: ordinal, actionName: actionName)
-        }
+        self.init(
+            elementTarget: try container.decode(ElementTarget.self, forKey: .elementTarget),
+            actionName: try container.decode(String.self, forKey: .actionName)
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(actionName, forKey: .actionName)
-        switch selection {
-        case .element(let elementTarget, _):
-            try container.encode(elementTarget, forKey: .elementTarget)
-        case .container(let containerTarget, let containerOrdinal, _):
-            guard containerTarget.hasPredicates else {
-                throw EncodingError.invalidValue(containerTarget, .init(
-                    codingPath: encoder.codingPath + [CodingKeys.container],
-                    debugDescription: """
-                    CustomActionTarget container requires stableId, type, label, value, identifier, \
-                    or isModalBoundary; ordinal only disambiguates a container matcher
-                    """
-                ))
-            }
-            try container.encode(containerTarget, forKey: .container)
-            try container.encodeIfPresent(containerOrdinal, forKey: .ordinal)
-        }
+        try container.encode(elementTarget, forKey: .elementTarget)
     }
 }
 
@@ -217,28 +132,16 @@ extension RotorContinuation: CustomStringConvertible {
 }
 
 extension RotorContinuation: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case heistId
         case textRange
     }
 
-    private struct UnknownCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(from: decoder)
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            typeName: "rotor continuation"
+        )
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let heistId = try container.decode(HeistId.self, forKey: .heistId)
         if let textRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .textRange) {
@@ -272,17 +175,6 @@ extension RotorContinuation: Codable {
         }
     }
 
-    private static func rejectUnknownKeys(from decoder: Decoder) throws {
-        let allowedKeys = Set([CodingKeys.heistId, .textRange].map(\.stringValue))
-        let container = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = container.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown rotor continuation field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 /// Target for moving through a rotor.
@@ -324,21 +216,6 @@ extension RotorTarget: Codable {
         case rotorIndex
         case direction
         case continuation
-    }
-
-    private struct UnknownCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -403,13 +280,6 @@ extension RotorTarget: Codable {
                 CodingKeys.continuation.stringValue,
             ]
         )
-        let container = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = container.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown rotor target field \"\(unknownKey.stringValue)\""
-        ))
+        try decoder.rejectUnknownKeys(allowed: allowedKeys, typeName: "rotor target")
     }
 }

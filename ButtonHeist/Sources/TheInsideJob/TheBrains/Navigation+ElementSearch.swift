@@ -14,7 +14,7 @@ extension Navigation {
     /// `element_search` never delegates to semantic reveal/actionability commands.
     func executeElementSearch(
         elementTarget: ElementTarget?,
-        direction: ScrollSearchDirection
+        direction: ScrollDirection
     ) async -> TheSafecracker.InteractionResult {
         guard let searchTarget = elementTarget else {
             return .failure(.elementSearch, message: "Element target required for element_search")
@@ -105,7 +105,7 @@ extension Navigation {
             payload: .scrollSearch(ScrollSearchResult(
                 scrollCount: progress.scrollCount,
                 uniqueElementsSeen: progress.uniqueElementsSeen,
-                totalItems: nil, exhaustive: progress.exhaustive
+                exhaustive: progress.exhaustive
             ))
         )
     }
@@ -120,7 +120,6 @@ extension Navigation {
             payload: .scrollSearch(ScrollSearchResult(
                 scrollCount: scrollCount,
                 uniqueElementsSeen: uniqueElementsSeen,
-                totalItems: nil,
                 exhaustive: false,
                 foundHeistId: found.heistId
             ))

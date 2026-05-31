@@ -2,44 +2,6 @@ import Foundation
 
 // MARK: - Action Expectations
 
-public struct NonEmptyActionExpectations: Sendable, Equatable {
-    public let elements: [ActionExpectation]
-
-    public init(_ elements: [ActionExpectation]) throws {
-        guard !elements.isEmpty else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: [],
-                debugDescription: "Compound expectation requires at least one expectation"
-            ))
-        }
-        self.elements = elements
-    }
-}
-
-extension NonEmptyActionExpectations: ExpressibleByArrayLiteral {
-    public init(arrayLiteral elements: ActionExpectation...) {
-        precondition(!elements.isEmpty, "Compound expectation requires at least one expectation")
-        self.elements = elements
-    }
-}
-
-extension NonEmptyActionExpectations: RandomAccessCollection {
-    public typealias Index = Array<ActionExpectation>.Index
-
-    public var startIndex: Index { elements.startIndex }
-    public var endIndex: Index { elements.endIndex }
-
-    public subscript(position: Index) -> ActionExpectation {
-        elements[position]
-    }
-}
-
-extension NonEmptyActionExpectations: CustomStringConvertible {
-    public var description: String {
-        elements.map(\.description).joined(separator: ", ")
-    }
-}
-
 /// Outcome signal classifiers for actions.
 /// Attached to a request (not to a target type) so any action can opt in.
 ///
@@ -67,13 +29,9 @@ extension NonEmptyActionExpectations: CustomStringConvertible {
 ///  "oldValue": "...", "newValue": "..."}   // all payload fields optional
 /// {"type": "element_appeared", "matcher": { ...ElementMatcher... }}
 /// {"type": "element_disappeared", "matcher": { ...ElementMatcher... }}
-/// {"type": "compound", "expectations": [ ...ActionExpectation... ]}
 /// ```
 /// See `docs/WIRE-PROTOCOL.md` for the full shape.
 public enum ActionExpectation: Sendable, Equatable {
-    /// Expected the action to be delivered successfully. This is the explicit
-    /// operation-pipeline form of the baseline delivery check.
-    case delivery
     /// Expected a screen-level change (VC identity changed).
     case screenChanged
     /// Expected elements to be added, removed, updated, or the screen to change.
@@ -90,16 +48,12 @@ public enum ActionExpectation: Sendable, Equatable {
     /// Expected an element matching this predicate to disappear from the delta's removed list.
     /// Validation requires elements derived from the pre-action capture to resolve removed heistIds to matchers.
     case elementDisappeared(ElementMatcher)
-    /// Compound: all sub-expectations must be met.
-    case compound(NonEmptyActionExpectations)
 
 }
 
 extension ActionExpectation: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .delivery:
-            return "delivery"
         case .screenChanged:
             return "screen_changed"
         case .elementsChanged:
@@ -115,8 +69,6 @@ extension ActionExpectation: CustomStringConvertible {
             return ScoreDescription.call("element_appeared", [matcher.description])
         case .elementDisappeared(let matcher):
             return ScoreDescription.call("element_disappeared", [matcher.description])
-        case .compound(let expectations):
-            return "compound(\(expectations))"
         }
     }
 }
@@ -130,13 +82,11 @@ extension ActionExpectation: Codable {
 
     /// Discriminator strings for the `type` field on the wire.
     private enum WireType: String, CaseIterable {
-        case delivery
         case screenChanged = "screen_changed"
         case elementsChanged = "elements_changed"
         case elementUpdated = "element_updated"
         case elementAppeared = "element_appeared"
         case elementDisappeared = "element_disappeared"
-        case compound
     }
 
     /// Discriminator strings accepted in object-form expectation payloads.
@@ -150,25 +100,6 @@ extension ActionExpectation: Codable {
         case type, matcher
     }
 
-    private enum CompoundKey: String, CodingKey, CaseIterable {
-        case type, expectations
-    }
-
-    private struct DynamicCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            intValue = nil
-        }
-
-        init?(intValue: Int) {
-            stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     public init(from decoder: Decoder) throws {
         let typeContainer = try decoder.container(keyedBy: DiscriminatorKey.self)
         let typeString = try typeContainer.decode(String.self, forKey: .type)
@@ -179,9 +110,6 @@ extension ActionExpectation: Codable {
             )
         }
         switch wireType {
-        case .delivery:
-            try Self.rejectUnknownKeys(from: decoder, allowed: ["type"], expectationType: wireType.rawValue)
-            self = .delivery
         case .screenChanged:
             try Self.rejectUnknownKeys(from: decoder, allowed: ["type"], expectationType: wireType.rawValue)
             self = .screenChanged
@@ -208,11 +136,6 @@ extension ActionExpectation: Codable {
             let container = try decoder.container(keyedBy: MatcherKey.self)
             let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
             self = .elementDisappeared(matcher)
-        case .compound:
-            try Self.rejectUnknownKeys(from: decoder, allowed: CompoundKey.self, expectationType: wireType.rawValue)
-            let container = try decoder.container(keyedBy: CompoundKey.self)
-            let expectations = try container.decode([ActionExpectation].self, forKey: .expectations)
-            self = .compound(try NonEmptyActionExpectations(expectations))
         }
     }
 
@@ -237,10 +160,9 @@ extension ActionExpectation: Codable {
         allowed keyType: K.Type,
         expectationType: String
     ) throws where K: CodingKey & CaseIterable {
-        try rejectUnknownKeys(
-            from: decoder,
-            allowed: Set(keyType.allCases.map(\.stringValue)),
-            expectationType: expectationType
+        try decoder.rejectUnknownKeys(
+            allowed: keyType,
+            typeName: "\(expectationType) expectation"
         )
     }
 
@@ -249,21 +171,14 @@ extension ActionExpectation: Codable {
         allowed: Set<String>,
         expectationType: String
     ) throws {
-        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
-        guard let unknownKey = container.allKeys.first(where: { !allowed.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: #"\#(expectationType) expectation does not accept "\#(unknownKey.stringValue)""#
-        ))
+        try decoder.rejectUnknownKeys(
+            allowed: allowed,
+            typeName: "\(expectationType) expectation"
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
         switch self {
-        case .delivery:
-            var container = encoder.container(keyedBy: DiscriminatorKey.self)
-            try container.encode(WireType.delivery.rawValue, forKey: .type)
         case .screenChanged:
             var container = encoder.container(keyedBy: DiscriminatorKey.self)
             try container.encode(WireType.screenChanged.rawValue, forKey: .type)
@@ -285,10 +200,6 @@ extension ActionExpectation: Codable {
             var container = encoder.container(keyedBy: MatcherKey.self)
             try container.encode(WireType.elementDisappeared.rawValue, forKey: .type)
             try container.encode(matcher, forKey: .matcher)
-        case .compound(let expectations):
-            var container = encoder.container(keyedBy: CompoundKey.self)
-            try container.encode(WireType.compound.rawValue, forKey: .type)
-            try container.encode(expectations.elements, forKey: .expectations)
         }
     }
 }
@@ -329,23 +240,16 @@ extension ActionExpectation {
         preActionElements: [HeistId: HeistElement] = [:]
     ) -> ExpectationResult {
         switch self {
-        case .delivery:
-            return ExpectationResult(
-                met: result.success,
-                expectation: self,
-                actual: result.success ? "delivered" : (result.message ?? "failed")
-            )
         case .screenChanged:
-            let kindString = result.accessibilityDelta?.kindRawValue ?? "noTrace"
+            let delta = result.accessibilityTrace?.endpointDeltaProjection
             return ExpectationResult(
-                met: result.accessibilityDelta?.isScreenChanged == true,
+                met: delta?.isScreenChangeProjection == true,
                 expectation: self,
-                actual: kindString
+                actual: delta?.kindDescription ?? "noTrace"
             )
         case .elementsChanged:
             // Superset rule: screen_changed implies elements_changed.
-            let delta = result.accessibilityDelta
-            let kindString = delta?.kindRawValue ?? "noTrace"
+            let delta = result.accessibilityTrace?.endpointDeltaProjection
             let met: Bool = {
                 guard let delta else { return false }
                 switch delta {
@@ -356,7 +260,7 @@ extension ActionExpectation {
             return ExpectationResult(
                 met: met,
                 expectation: self,
-                actual: kindString
+                actual: delta?.kindDescription ?? "noTrace"
             )
         case .elementUpdated(let heistId, let property, let oldValue, let newValue):
             return Self.validateElementUpdated(
@@ -374,23 +278,6 @@ extension ActionExpectation {
                 preActionElements: preActionElements
             )
 
-        case .compound(let expectations):
-            var failures: [String] = []
-            for expectation in expectations {
-                let subResult = expectation.validate(
-                    against: result, preActionElements: preActionElements
-                )
-                if !subResult.met {
-                    failures.append("\(expectation): \(subResult.actual ?? "failed")")
-                }
-            }
-            if failures.isEmpty {
-                return ExpectationResult(met: true, expectation: self, actual: nil)
-            }
-            return ExpectationResult(
-                met: false, expectation: self,
-                actual: failures.joined(separator: "; ")
-            )
         }
     }
 
@@ -399,7 +286,7 @@ extension ActionExpectation {
         oldValue: String?, newValue: String?,
         expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let updates = result.accessibilityDelta?.elementEdits?.updated ?? []
+        let updates = result.accessibilityTrace?.endpointDeltaProjection?.elementEditsProjection.updated ?? []
         guard !updates.isEmpty else {
             return ExpectationResult(met: false, expectation: expectation, actual: "no element updates")
         }
@@ -434,10 +321,10 @@ extension ActionExpectation {
     private static func validateElementAppeared(
         matcher: ElementMatcher, expectation: ActionExpectation, result: ActionResult
     ) -> ExpectationResult {
-        let delta = result.accessibilityDelta
+        let delta = result.accessibilityTrace?.endpointDeltaProjection
 
         // Normal path: check the added list from element-level diffs.
-        let added = delta?.elementEdits?.added ?? []
+        let added = delta?.elementEditsProjection.added ?? []
         if !added.isEmpty {
             if added.contains(where: { $0.matches(matcher) }) {
                 return ExpectationResult(met: true, expectation: expectation, actual: nil)
@@ -452,7 +339,7 @@ extension ActionExpectation {
         // Screen-change path: the entire interface is new, so every element
         // on the new screen effectively "appeared". Check newInterface.
         if case .screenChanged(let payload)? = delta {
-            if payload.newInterface.elements.contains(where: { $0.matches(matcher) }) {
+            if payload.newInterface.projectedElements.contains(where: { $0.matches(matcher) }) {
                 return ExpectationResult(met: true, expectation: expectation, actual: nil)
             }
             return ExpectationResult(
@@ -473,10 +360,10 @@ extension ActionExpectation {
         result: ActionResult,
         preActionElements: [HeistId: HeistElement]
     ) -> ExpectationResult {
-        let delta = result.accessibilityDelta
+        let delta = result.accessibilityTrace?.endpointDeltaProjection
 
         // Normal path: check the removed list from element-level diffs.
-        let removed = delta?.elementEdits?.removed ?? []
+        let removed = delta?.elementEditsProjection.removed ?? []
         if !removed.isEmpty {
             let matched = removed.contains { heistId in
                 guard let element = preActionElements[heistId] else { return false }
@@ -496,7 +383,7 @@ extension ActionExpectation {
         // matching element existed before and is absent from the new interface.
         if case .screenChanged(let payload)? = delta {
             let matchedBefore = preActionElements.values.contains { $0.matches(matcher) }
-            let stillPresent = payload.newInterface.elements.contains { $0.matches(matcher) }
+            let stillPresent = payload.newInterface.projectedElements.contains { $0.matches(matcher) }
             if matchedBefore, !stillPresent {
                 return ExpectationResult(met: true, expectation: expectation, actual: nil)
             }
@@ -511,12 +398,24 @@ extension ActionExpectation {
         return ExpectationResult(met: false, expectation: expectation, actual: "no elements removed")
     }
 
-    /// Baseline delivery check — always run for every action.
-    public static func validateDelivery(_ result: ActionResult) -> ExpectationResult {
-        ExpectationResult(
-            met: result.success,
-            expectation: nil,
-            actual: result.success ? "delivered" : (result.message ?? "failed")
-        )
+}
+
+private extension AccessibilityTrace.Delta {
+    var kindDescription: String {
+        switch self {
+        case .noChange: return AccessibilityTrace.DeltaKind.noChange.rawValue
+        case .elementsChanged: return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+        case .screenChanged: return AccessibilityTrace.DeltaKind.screenChanged.rawValue
+        }
+    }
+
+    var isScreenChangeProjection: Bool {
+        if case .screenChanged = self { return true }
+        return false
+    }
+
+    var elementEditsProjection: ElementEdits {
+        if case .elementsChanged(let payload) = self { return payload.edits }
+        return ElementEdits()
     }
 }

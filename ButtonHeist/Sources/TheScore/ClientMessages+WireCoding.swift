@@ -14,26 +14,11 @@ private enum RequestEnvelopeCodingKeys: String, CodingKey, CaseIterable {
     case payload
 }
 
-private struct RequestEnvelopeUnknownKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init?(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
-    }
-}
-
 // MARK: - RequestEnvelope Codable
 
 extension RequestEnvelope {
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownEnvelopeKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: RequestEnvelopeCodingKeys.self, typeName: "request envelope")
         let container = try decoder.container(keyedBy: RequestEnvelopeCodingKeys.self)
         buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
@@ -55,17 +40,6 @@ extension RequestEnvelope {
         }
     }
 
-    private static func rejectUnknownEnvelopeKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(RequestEnvelopeCodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: RequestEnvelopeUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown request envelope field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 // MARK: - ClientMessage Wire Representation
@@ -89,7 +63,6 @@ extension ClientMessage {
         case .resignFirstResponder: return (.resignFirstResponder, nil)
         case .getPasteboard: return (.getPasteboard, nil)
         case .requestScreen: return (.requestScreen, nil)
-        case .explore: return (.explore, nil)
         case .authenticate(let payload): return (.authenticate, payload)
         case .activate(let payload): return (.activate, payload)
         case .increment(let payload): return (.increment, payload)
@@ -102,17 +75,11 @@ extension ClientMessage {
         case .longPress(let payload): return (.longPress, payload)
         case .swipe(let payload): return (.swipe, payload)
         case .drag(let payload): return (.drag, payload)
-        case .pinch(let payload): return (.pinch, payload)
-        case .rotate(let payload): return (.rotate, payload)
-        case .twoFingerTap(let payload): return (.twoFingerTap, payload)
-        case .drawPath(let payload): return (.drawPath, payload)
-        case .drawBezier(let payload): return (.drawBezier, payload)
         case .typeText(let payload): return (.typeText, payload)
         case .scroll(let payload): return (.scroll, payload)
         case .scrollToVisible(let payload): return (.scrollToVisible, payload)
         case .elementSearch(let payload): return (.elementSearch, payload)
         case .scrollToEdge(let payload): return (.scrollToEdge, payload)
-        case .waitForIdle(let payload): return (.waitForIdle, payload)
         case .waitFor(let payload): return (.waitFor, payload)
         case .waitForChange(let payload): return (.waitForChange, payload)
         case .batchExecutionPlan(let payload): return (.batchExecutionPlan, payload)
@@ -151,9 +118,6 @@ extension ClientMessage {
         case .requestScreen:
             try noPayload()
             return .requestScreen
-        case .explore:
-            try noPayload()
-            return .explore
         case .authenticate: return .authenticate(try AuthenticatePayload(from: try payload()))
         case .activate: return .activate(try ElementTarget(from: try payload()))
         case .increment: return .increment(try ElementTarget(from: try payload()))
@@ -166,17 +130,11 @@ extension ClientMessage {
         case .longPress: return .longPress(try LongPressTarget(from: try payload()))
         case .swipe: return .swipe(try SwipeTarget(from: try payload()))
         case .drag: return .drag(try DragTarget(from: try payload()))
-        case .pinch: return .pinch(try PinchTarget(from: try payload()))
-        case .rotate: return .rotate(try RotateTarget(from: try payload()))
-        case .twoFingerTap: return .twoFingerTap(try TwoFingerTapTarget(from: try payload()))
-        case .drawPath: return .drawPath(try DrawPathTarget(from: try payload()))
-        case .drawBezier: return .drawBezier(try DrawBezierTarget(from: try payload()))
         case .typeText: return .typeText(try TypeTextTarget(from: try payload()))
         case .scroll: return .scroll(try ScrollTarget(from: try payload()))
         case .scrollToVisible: return .scrollToVisible(try ScrollToVisibleTarget(from: try payload()))
         case .elementSearch: return .elementSearch(try ElementSearchTarget(from: try payload()))
         case .scrollToEdge: return .scrollToEdge(try ScrollToEdgeTarget(from: try payload()))
-        case .waitForIdle: return .waitForIdle(try WaitForIdleTarget(from: try payload()))
         case .waitFor: return .waitFor(try WaitForTarget(from: try payload()))
         case .waitForChange: return .waitForChange(try WaitForChangeTarget(from: try payload()))
         case .batchExecutionPlan: return .batchExecutionPlan(try TheScore.BatchPlan(from: try payload()))
@@ -186,7 +144,7 @@ extension ClientMessage {
     // MARK: - Codable Conformance
 
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownMessageKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: ClientMessageCodingKeys.self, typeName: "client message")
         let container = try decoder.container(keyedBy: ClientMessageCodingKeys.self)
         let type = try container.decode(ClientWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
@@ -204,17 +162,6 @@ extension ClientMessage {
         }
     }
 
-    private static func rejectUnknownMessageKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(ClientMessageCodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: RequestEnvelopeUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown client message field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 // MARK: - Helpers

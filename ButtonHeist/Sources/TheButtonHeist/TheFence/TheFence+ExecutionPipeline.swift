@@ -26,10 +26,7 @@ extension TheFence {
     }
 
     func execute(parsed: ParsedRequest) async throws -> FenceResponse {
-        if let immediate = parsed.immediateResponse { return immediate }
-
         let dispatched = try await dispatchCommand(parsed)
-        commandExecutionState.noteDispatchedResponse(dispatched.response, latencyMs: dispatched.durationMs)
 
         let postDispatch = capturePostDispatchEffects(response: dispatched.response)
         let validatedResponse = try await validateActionResponse(
@@ -54,7 +51,7 @@ extension TheFence {
     }
 
     private func capturePostDispatchEffects(response: FenceResponse) -> PostDispatchOutcome {
-        let elements = response.actionResult?.accessibilityTrace?.captures.first?.interface.elements ?? []
+        let elements = response.actionResult?.accessibilityTrace?.captures.first?.interface.projectedElements ?? []
         return PostDispatchOutcome(preActionElements: Dictionary(
             elements.map { ($0.heistId, $0) },
             uniquingKeysWith: { _, latest in latest }
@@ -93,7 +90,7 @@ extension TheFence {
         preActionElements: [HeistId: HeistElement]
     ) async throws -> ValidatedResponse {
         if let actionResult = response.actionResult {
-            let delivery = ActionExpectation.validateDelivery(actionResult)
+            let delivery = deliveryExpectationResult(for: actionResult)
             if !delivery.met {
                 return ValidatedResponse(
                     response: .action(command: command, result: actionResult, expectation: delivery)
@@ -122,6 +119,14 @@ extension TheFence {
         return ValidatedResponse(response: response)
     }
 
+    private func deliveryExpectationResult(for result: ActionResult) -> ExpectationResult {
+        ExpectationResult(
+            met: result.success,
+            expectation: nil,
+            actual: result.success ? "delivered" : (result.message ?? "failed")
+        )
+    }
+
     private func waitForPostActionExpectation(
         _ expectation: ActionExpectation,
         command: Command,
@@ -136,7 +141,6 @@ extension TheFence {
                 .waitForChange(target),
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
-            commandExecutionState.completeAction(waitResult)
             let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(
                 response: .action(

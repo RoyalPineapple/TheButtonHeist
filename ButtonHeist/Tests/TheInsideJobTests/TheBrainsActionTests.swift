@@ -85,94 +85,10 @@ final class TheBrainsActionTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - clampDuration
-
-    func testClampDurationNilReturnsDefault() {
-        let result = brains.actions.clampDuration(nil)
-        XCTAssertEqual(result, 0.5, accuracy: 0.001,
-                       "nil duration should return default (0.5)")
-    }
-
-    func testClampDurationRespectsMinimum() {
-        let result = brains.actions.clampDuration(0.001)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Duration below minimum should clamp to 0.01")
-    }
-
-    func testClampDurationRespectsMaximum() {
-        let result = brains.actions.clampDuration(120.0)
-        XCTAssertEqual(result, 60.0, accuracy: 0.001,
-                       "Duration above maximum should clamp to 60.0")
-    }
-
-    func testClampDurationPassesThroughValidValue() {
-        let result = brains.actions.clampDuration(1.5)
-        XCTAssertEqual(result, 1.5, accuracy: 0.001,
-                       "Valid duration should pass through unchanged")
-    }
-
-    // MARK: - resolveDuration
-
-    func testResolveDurationUsesExplicitDuration() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.actions.resolveDuration(2.0, velocity: nil, points: points)
-        XCTAssertEqual(result, 2.0, accuracy: 0.001,
-                       "Explicit duration should pass through")
-    }
-
-    func testResolveDurationFromVelocity() {
-        let points = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 100, y: 0),
-            CGPoint(x: 200, y: 0),
-        ]
-        let result = brains.actions.resolveDuration(nil, velocity: 100.0, points: points)
-        XCTAssertEqual(result, 2.0, accuracy: 0.01,
-                       "200pt path at 100pt/s = 2.0s")
-    }
-
-    func testResolveDurationFromVelocityDiagonal() {
-        let points = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 300, y: 400),
-        ]
-        let result = brains.actions.resolveDuration(nil, velocity: 500.0, points: points)
-        XCTAssertEqual(result, 1.0, accuracy: 0.01,
-                       "500pt diagonal path at 500pt/s = 1.0s")
-    }
-
-    func testResolveDurationNilBothReturnsDefault() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: nil, points: points)
-        XCTAssertEqual(result, 0.5, accuracy: 0.001,
-                       "No duration and no velocity should return default")
-    }
-
-    func testResolveDurationZeroVelocityReturnsDefault() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: 0.0, points: points)
-        XCTAssertEqual(result, 0.5, accuracy: 0.001,
-                       "Zero velocity should fall through to default")
-    }
-
-    func testResolveDurationVelocityResultIsClamped() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 10000, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: 1.0, points: points)
-        XCTAssertEqual(result, 60.0, accuracy: 0.001,
-                       "Very long path at low velocity should clamp to max")
-    }
-
-    func testResolveDurationVelocitySmallPathClamps() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 0.0001, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: 1000.0, points: points)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Tiny path at high velocity should clamp to minimum")
-    }
-
     // MARK: - BeforeState Capture
 
     func testCaptureBeforeStateReturnsEmptySnapshotWhenRegistryEmpty() {
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         XCTAssertTrue(before.snapshot.isEmpty,
                       "Snapshot should be empty when no elements in registry")
         XCTAssertTrue(before.elements.isEmpty,
@@ -184,7 +100,7 @@ final class TheBrainsActionTests: XCTestCase {
         let heistId = "header_title"
         installScreen(elements: [(element, heistId)])
 
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         XCTAssertEqual(before.snapshot.count, 1)
         XCTAssertEqual(before.snapshot.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)
@@ -385,82 +301,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(customActionTarget.invocationCount, 1)
     }
 
-    func testExecuteCustomActionDispatchesLiveContainerCustomAction() async {
-        let path = TreePath([0])
-        let container = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
-            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 200, height: 80)),
-            customActions: [.init(name: "Archive")]
-        )
-        let liveObject = UIView(frame: CGRect(x: 0, y: 0, width: 200, height: 80))
-        liveObject.accessibilityFrame = CGRect(x: 0, y: 0, width: 200, height: 80)
-        liveObject.accessibilityActivationPoint = CGPoint(x: 100, y: 40)
-        let customActionTarget = CustomActionTargetObject()
-        liveObject.accessibilityCustomActions = [
-            UIAccessibilityCustomAction(
-                name: "Archive",
-                target: customActionTarget,
-                selector: #selector(CustomActionTargetObject.archive(_:))
-            ),
-        ]
-        brains.stash.currentScreen = Screen(
-            elements: [:],
-            hierarchy: [.container(container, children: [])],
-            containerStableIds: [container: "semantic_actions__actions"],
-            containerStableIdsByPath: [path: "semantic_actions__actions"],
-            heistIdByElement: [:],
-            elementRefs: [:],
-            containerRefsByPath: [path: Screen.ContainerRef(object: liveObject)],
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
-        )
-
-        let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(
-                containerTarget: ContainerMatcher(stableId: "semantic_actions__actions"),
-                actionName: "Archive"
-            )
-        )
-
-        XCTAssertTrue(result.success)
-        XCTAssertEqual(result.method, .customAction)
-        XCTAssertEqual(customActionTarget.invocationCount, 1)
-    }
-
-    func testExecuteCustomActionFailsClosedWhenContainerObjectIsUnavailable() async {
-        let path = TreePath([0])
-        let container = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
-            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 200, height: 80)),
-            customActions: [.init(name: "Archive")]
-        )
-        brains.stash.currentScreen = Screen(
-            elements: [:],
-            hierarchy: [.container(container, children: [])],
-            containerStableIds: [container: "semantic_actions__actions"],
-            containerStableIdsByPath: [path: "semantic_actions__actions"],
-            heistIdByElement: [:],
-            elementRefs: [:],
-            containerRefsByPath: [path: Screen.ContainerRef(object: nil)],
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
-        )
-
-        let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(
-                containerTarget: ContainerMatcher(stableId: "semantic_actions__actions"),
-                actionName: "Archive"
-            )
-        )
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .customAction)
-        XCTAssertDiagnostic(result.message, contains: [
-            "semantic actionability failed [staleRefresh]",
-            "container target became stale before dispatch",
-        ])
-    }
-
     func testExecuteActivateSucceedsForNoTraitElementWithActivationOverride() async {
         let heistId = "plain_action"
         let liveObject = ActionActivationOverrideView()
@@ -611,7 +451,8 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.actions.executeIncrement(.heistId("quantity_0"))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertEqual(currentObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
             "Element not found",
@@ -658,12 +499,7 @@ final class TheBrainsActionTests: XCTestCase {
             )), false),
             ("rotor", .rotor(RotorTarget(elementTarget: target, selection: .named("Links"))), false),
             ("tap", .oneFingerTap(TapTarget(selection: .element(target))), false),
-            ("swipe", .swipe(SwipeTarget(selection: .unitElement(
-                target,
-                start: SwipeDirection.left.defaultStart,
-                end: SwipeDirection.left.defaultEnd,
-                direction: .left
-            ))), false),
+            ("swipe", .swipe(SwipeTarget(selection: .elementDirection(target, .left))), false),
             ("type text", .typeText(TypeTextTarget(text: "hello", elementTarget: target)), false),
             ("scroll", .scroll(ScrollTarget(elementTarget: target, direction: .down)), false),
             ("wait", .waitFor(WaitForTarget(elementTarget: target, timeout: 0.01)), true),
@@ -985,12 +821,12 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(dispatchedPoint, rawPoint)
     }
 
-    func testExecuteDragReadsTypedEndpointFromDragTarget() async {
+    func testExecuteDragReadsTypedEndpointFromDragTarget() async throws {
         let result = await brains.actions.executeDrag(
             DragTarget(
                 start: .coordinate(ScreenPoint(x: 10, y: 10)),
                 end: ScreenPoint(x: .infinity, y: 20),
-                duration: 0.01
+                duration: try GestureDuration(seconds: 0.01)
             )
         )
 
@@ -1167,30 +1003,6 @@ final class TheBrainsActionTests: XCTestCase {
 
     // MARK: - Accessibility Tree Availability
 
-    func testExecuteWaitForIdleFailsWhenAccessibilityTreeUnavailable() async {
-        let result = await withNoTraversableWindows {
-            await brains.executeWaitForIdle(timeout: 0.1)
-        }
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .waitForIdle)
-        XCTAssertEqual(result.errorKind, .actionFailed)
-        // The public wire kind stays actionFailed. The factual
-        // message is what lets TheFence surface the local tree-unavailable
-        // diagnostic without adding a new ErrorKind raw value.
-        XCTAssertEqual(result.message, "Could not access accessibility tree: no traversable app windows")
-    }
-
-    func testExecuteCommandExploreFailsWhenAccessibilityTreeUnavailable() async {
-        let result = await withNoTraversableWindows {
-            await brains.executeCommand(.explore)
-        }
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .explore)
-        XCTAssertEqual(result.errorKind, .actionFailed)
-    }
-
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
         let target = WaitForTarget(
             elementTarget: .matcher(ElementMatcher(label: "never"))
@@ -1210,6 +1022,7 @@ final class TheBrainsActionTests: XCTestCase {
             .actionFailed
         )
         XCTAssertEqual(TheBrains.waitForErrorKind(for: .timeout), .timeout)
+        XCTAssertEqual(TheBrains.waitForErrorKind(for: .targetUnavailable), .elementNotFound)
         XCTAssertEqual(TheBrains.waitForErrorKind(for: nil), .elementNotFound)
     }
 
@@ -1299,7 +1112,7 @@ final class TheBrainsActionTests: XCTestCase {
             sequence: 1,
             interface: TheStash.WireConversion.toInterface(from: screen)
         )
-        let element = try XCTUnwrap(capture.interface.elements.first { $0.heistId == heistId })
+        let element = try XCTUnwrap(capture.interface.projectedElements.first { $0.heistId == heistId })
         let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: element, in: capture))
         return .matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
     }
@@ -1359,7 +1172,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func batchStepResult(for command: ClientMessage) async -> ActionResult {
         let result = await brains.executeBatchExecutionPlan(BatchPlan(steps: [
-            BatchStep(command: command, expectation: .delivery, deadline: Deadline()),
+            BatchStep(command: command, expectation: nil, deadline: Deadline()),
         ], policy: .continueOnError))
         guard case .batchExecution(let batch) = result.payload,
               let stepResult = batch.steps.first,

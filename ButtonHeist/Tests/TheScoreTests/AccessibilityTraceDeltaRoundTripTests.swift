@@ -58,7 +58,10 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(afterJson["hash"] as? String, "sha256:after")
 
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
-        XCTAssertEqual(decoded.captureEdge, edge)
+        guard case .noChange(let payload) = decoded else {
+            return XCTFail("Expected .noChange, got \(decoded)")
+        }
+        XCTAssertEqual(payload.captureEdge, edge)
     }
 
     // MARK: - elementsChanged
@@ -115,19 +118,6 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             updated: [ElementUpdate(
                 heistId: "counter",
                 changes: [PropertyChange(property: .value, old: "1", new: "2")]
-            )],
-            treeInserted: [TreeInsertion(
-                location: TreeLocation(parentId: nil, index: 0),
-                node: .element(makeTestAccessibilityElement(added), traversalIndex: 0)
-            )],
-            treeRemoved: [TreeRemoval(
-                ref: TreeNodeRef(id: "old", kind: .element),
-                location: TreeLocation(parentId: nil, index: 1)
-            )],
-            treeMoved: [TreeMove(
-                ref: TreeNodeRef(id: "moved", kind: .element),
-                from: TreeLocation(parentId: nil, index: 2),
-                to: TreeLocation(parentId: nil, index: 3)
             )]
         )
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(
@@ -142,10 +132,15 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.edits.added.map(\.heistId), ["new"])
         XCTAssertEqual(payload.edits.removed, ["old"])
         XCTAssertEqual(payload.edits.updated.first?.heistId, "counter")
-        XCTAssertEqual(payload.edits.treeInserted.count, 1)
-        XCTAssertEqual(payload.edits.treeRemoved.count, 1)
-        XCTAssertEqual(payload.edits.treeMoved.count, 1)
         XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
+    }
+
+    func testElementEditsRejectsObsoleteTreeProjectionFields() throws {
+        let json = Data("""
+        {"kind":"elementsChanged","elementCount":1,"edits":{"treeInserted":[]}}
+        """.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(AccessibilityTrace.Delta.self, from: json))
     }
 
     // MARK: - screenChanged
@@ -188,63 +183,6 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             return XCTFail("Expected .screenChanged, got \(decoded)")
         }
         XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
-    }
-
-    // MARK: - Cross-Case Accessors
-
-    func testElementCountAccessor() {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        XCTAssertEqual(AccessibilityTrace.Delta.noChange(.init(elementCount: 4)).elementCount, 4)
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 7, edits: ElementEdits())).elementCount,
-            7
-        )
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.screenChanged(.init(elementCount: 9, newInterface: interface)).elementCount,
-            9
-        )
-    }
-
-    func testKindRawValueAccessor() {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        XCTAssertEqual(AccessibilityTrace.Delta.noChange(.init(elementCount: 0)).kindRawValue, "noChange")
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 0, edits: ElementEdits())).kindRawValue,
-            "elementsChanged"
-        )
-        XCTAssertEqual(
-            AccessibilityTrace.Delta.screenChanged(.init(elementCount: 0, newInterface: interface)).kindRawValue,
-            "screenChanged"
-        )
-    }
-
-    func testIsScreenChangedAccessor() {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        XCTAssertFalse(AccessibilityTrace.Delta.noChange(.init(elementCount: 0)).isScreenChanged)
-        XCTAssertFalse(
-            AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 0, edits: ElementEdits())).isScreenChanged
-        )
-        XCTAssertTrue(
-            AccessibilityTrace.Delta.screenChanged(.init(elementCount: 0, newInterface: interface)).isScreenChanged
-        )
-    }
-
-    func testElementEditsAccessorReadsElementsChangedOnly() {
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
-        let element = makeElement(heistId: "x", label: "X")
-        let elementsChanged = AccessibilityTrace.Delta.elementsChanged(
-            .init(elementCount: 1, edits: ElementEdits(added: [element]))
-        )
-        XCTAssertEqual(elementsChanged.elementEdits?.added.map(\.heistId), ["x"])
-
-        let screenChanged = AccessibilityTrace.Delta.screenChanged(.init(
-            elementCount: 1,
-            newInterface: interface
-        ))
-        XCTAssertNil(screenChanged.elementEdits)
-
-        let noChange = AccessibilityTrace.Delta.noChange(.init(elementCount: 0))
-        XCTAssertNil(noChange.elementEdits)
     }
 
     // MARK: - Malformed Input Rejection

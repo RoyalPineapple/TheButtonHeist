@@ -46,10 +46,10 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
 
     case clientHello, authenticate, requestInterface, ping, status
     case activate, increment, decrement, performCustomAction, rotor
-    case oneFingerTap, longPress, swipe, drag, pinch, rotate, twoFingerTap
-    case drawPath, drawBezier, typeText, editAction, setPasteboard, getPasteboard
+    case oneFingerTap, longPress, swipe, drag
+    case typeText, editAction, setPasteboard, getPasteboard
     case scroll, scrollToVisible, elementSearch, scrollToEdge, resignFirstResponder
-    case requestScreen, explore, waitForIdle
+    case requestScreen
     case waitFor, waitForChange, batchExecutionPlan
 }
 
@@ -92,8 +92,6 @@ public enum EnvironmentKey: String, Sendable {
     case insideJobToken = "INSIDEJOB_TOKEN"
     case insideJobPort = "INSIDEJOB_PORT"
     case insideJobDisable = "INSIDEJOB_DISABLE"
-    case insideJobDisableFingerprints = "INSIDEJOB_DISABLE_FINGERPRINTS"
-    case insideJobPollingInterval = "INSIDEJOB_POLLING_INTERVAL"
     case insideJobId = "INSIDEJOB_ID"
     case insideJobScope = "INSIDEJOB_SCOPE"
     case insideJobSessionTimeout = "INSIDEJOB_SESSION_TIMEOUT"

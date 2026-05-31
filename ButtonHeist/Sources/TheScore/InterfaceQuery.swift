@@ -5,21 +5,6 @@ private enum InterfaceQueryCodingKeys: String, CodingKey, CaseIterable {
     case matcher
 }
 
-private struct InterfaceQueryUnknownKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init?(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
-    }
-}
-
 public struct InterfaceQuery: Sendable, Equatable {
     public let subtree: SubtreeSelector?
     public let matcher: ElementMatcher
@@ -35,7 +20,7 @@ public struct InterfaceQuery: Sendable, Equatable {
 
 extension InterfaceQuery: Codable {
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: InterfaceQueryCodingKeys.self, typeName: "interface query")
         let container = try decoder.container(keyedBy: InterfaceQueryCodingKeys.self)
         self.subtree = try container.decodeIfPresent(SubtreeSelector.self, forKey: .subtree)
         self.matcher = try container.decodeIfPresent(ElementMatcher.self, forKey: .matcher) ?? ElementMatcher()
@@ -49,17 +34,6 @@ extension InterfaceQuery: Codable {
         }
     }
 
-    private static func rejectUnknownKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(InterfaceQueryCodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: InterfaceQueryUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown interface query field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 extension InterfaceQuery: CustomStringConvertible {

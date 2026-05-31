@@ -10,23 +10,18 @@ _Generated from `TheFence.Command.descriptors`._
 | `connect` | `connect` | direct | no | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | `dismiss_keyboard` | direct | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `drag` | direct | yes | Drag from one point to another using explicit coordinates or a semantic target. |
-| `draw_bezier` | `draw_bezier` | direct | yes | Draw a Bezier path from a start point through one or more curve segments. |
-| `draw_path` | `draw_path` | direct | yes | Draw a free-form path through explicit screen-coordinate points. |
 | `edit_action` | `edit_action` | direct | yes | Perform an edit action on the current first responder. |
 | `element_search` | `element_search` | direct | yes | Search scrollable content for a semantic element match without performing an action. |
 | `get_interface` | `get_interface` | direct | no | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `get_pasteboard` | direct | no | Read text from the general pasteboard. |
 | `get_screen` | `get_screen` | direct | no | Capture a PNG screenshot with optional inline data and interface state. |
 | `get_session_state` | `get_session_state` | direct | no | Inspect connection, device, and last-action session state. |
-| `help` | `help` | - | no | Return descriptor-backed help for the current Button Heist command surface. |
 | `list_devices` | `list_devices` | direct | no | List discovered iOS devices and configured connection targets. |
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
 | `long_press` | `long_press` | direct | yes | Long-press a coordinate or semantic target for a resolved duration. |
 | `one_finger_tap` | `one_finger_tap` | direct | yes | Tap a coordinate or semantic target after actionability resolution. |
-| `pinch` | `pinch` | direct | yes | Pinch around a resolved center point using scale, angle, and duration. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
-| `rotate` | `rotate` | direct | yes | Rotate around a resolved center point using angle, radius, and duration. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor using direction and continuation metadata. |
 | `run_batch` | `run_batch` | direct | no | Execute ordered command steps with batch policy and per-step expectations. |
 | `scroll` | `scroll` | direct | yes | Scroll one page in a selected container or semantic target's owning scroll ancestor. |
@@ -36,7 +31,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
 | `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic heist fixture. |
 | `swipe` | `swipe` | direct | yes | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
-| `two_finger_tap` | `two_finger_tap` | direct | yes | Tap with two fingers at a coordinate or actionable semantic target. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
 | `wait_for` | `wait_for` | direct | yes | Wait for a semantic element to appear or disappear. |
 | `wait_for_change` | `wait_for_change` | direct | yes | Wait for any UI change or for an expectation to become true. |
@@ -114,47 +108,6 @@ Parameters:
 | `startX` | `number` | no | - | - |
 | `startY` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_bezier`
-
-Draw a Bezier path from a start point through one or more curve segments.
-
-- CLI: direct command `draw_bezier`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `startX` | `number` | yes | - | - |
-| `startY` | `number` | yes | - | - |
-| `segments` | `array` | yes | - | - |
-| `samplesPerSegment` | `integer` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_path`
-
-Draw a free-form path through explicit screen-coordinate points.
-
-- CLI: direct command `draw_path`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `points` | `array` | yes | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -257,19 +210,6 @@ Parameters:
 
 _None._
 
-### `help`
-
-Return descriptor-backed help for the current Button Heist command surface.
-
-- CLI: session-only `help`
-- MCP: not exposed
-- Batch: no
-- Connection before dispatch: no
-
-Parameters:
-
-_None._
-
 ### `list_devices`
 
 List discovered iOS devices and configured connection targets.
@@ -335,28 +275,6 @@ Parameters:
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `pinch`
-
-Pinch around a resolved center point using scale, angle, and duration.
-
-- CLI: direct command `pinch`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `scale` | `number` | yes | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `spread` | `number` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
 ### `ping`
 
 Check connection health without reading accessibility state.
@@ -384,28 +302,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `input` | `string` | yes | - | - |
-
-### `rotate`
-
-Rotate around a resolved center point using angle, radius, and duration.
-
-- CLI: direct command `rotate`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `angle` | `number` | yes | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `radius` | `number` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
 
 ### `rotor`
 
@@ -458,7 +354,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `stableId` | `string` | no | - | - |
-| `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
@@ -479,7 +374,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `stableId` | `string` | no | - | - |
-| `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
@@ -573,26 +467,6 @@ Parameters:
 | `endX` | `number` | no | - | - |
 | `endY` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `two_finger_tap`
-
-Tap with two fingers at a coordinate or actionable semantic target.
-
-- CLI: direct command `two_finger_tap`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `centerX` | `number` | no | - | - |
-| `centerY` | `number` | no | - | - |
-| `spread` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 

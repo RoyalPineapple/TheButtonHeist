@@ -12,8 +12,6 @@ extension FenceResponse {
             return message
         case .error(let message, _):
             return "Error: \(message)"
-        case .help(let commands):
-            return "Commands:\n" + commands.map { "  \($0)" }.joined(separator: "\n")
         case .status(let connected, let deviceName):
             if connected, let name = deviceName {
                 return "Connected to \(name)"
@@ -159,13 +157,13 @@ extension FenceResponse {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
 
-        var output = "\(interface.elements.count) elements (\(formatter.string(from: interface.timestamp)))\n"
+        var output = "\(interface.projectedElements.count) elements (\(formatter.string(from: interface.timestamp)))\n"
         output += String(repeating: "-", count: 60) + "\n"
 
-        if interface.elements.isEmpty {
+        if interface.projectedElements.isEmpty {
             output += "  (no elements)\n"
         } else {
-            for (i, element) in interface.elements.enumerated() {
+            for (i, element) in interface.projectedElements.enumerated() {
                 output += formatElement(element, displayIndex: i)
             }
         }
@@ -214,11 +212,8 @@ extension FenceResponse {
                     }
                 }
             }
-            if let delta = result.accessibilityDelta {
+            if let delta = result.accessibilityTrace?.endpointDeltaProjection {
                 output += "  \(formatDelta(delta))"
-            }
-            if result.animating == true {
-                output += "  (still animating)"
             }
             return output
         }
@@ -247,9 +242,6 @@ extension FenceResponse {
             if !edits.added.isEmpty { parts.append("+\(edits.added.count) added") }
             if !edits.removed.isEmpty { parts.append("-\(edits.removed.count) removed") }
             if !edits.updated.isEmpty { parts.append("~\(edits.updated.count) updated") }
-            if !edits.treeInserted.isEmpty { parts.append("+\(edits.treeInserted.count) tree inserted") }
-            if !edits.treeRemoved.isEmpty { parts.append("-\(edits.treeRemoved.count) tree removed") }
-            if !edits.treeMoved.isEmpty { parts.append("↕\(edits.treeMoved.count) moved") }
             return "[" + parts.joined(separator: ", ") + "]"
         case .screenChanged(let payload):
             return "[\(payload.elementCount) elements, screen changed]"
