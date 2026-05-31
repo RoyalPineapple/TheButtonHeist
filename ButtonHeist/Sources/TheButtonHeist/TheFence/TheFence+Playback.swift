@@ -9,15 +9,21 @@ extension TheFence {
     struct ValidatedHeistPlayback {
         let app: String
         let steps: [ValidatedHeistStep]
-        let batchRequest: RunBatchRequest
+
+        var batchRequest: RunBatchRequest {
+            RunBatchRequest(
+                steps: steps.map(\.preparedStep),
+                policy: .stopOnError
+            )
+        }
     }
 
     struct ValidatedHeistStep {
         let index: Int
-        let command: Command
         let target: ElementTarget?
-        let parsedRequest: ParsedRequest
         let preparedStep: RunBatchPreparedStep
+
+        var command: Command { preparedStep.command }
     }
 
     @ButtonHeistActor
@@ -46,10 +52,8 @@ extension TheFence {
                 let parsedRequest = try parseHeistStep(sourceStep, stepIndex: index)
                 return ValidatedHeistStep(
                     index: index,
-                    command: parsedRequest.command,
                     target: sourceStep.target,
-                    parsedRequest: parsedRequest,
-                    preparedStep: try prepareBatchStep(originalIndex: index, request: parsedRequest)
+                    preparedStep: try batchPreparedStep(originalIndex: index, request: parsedRequest)
                 )
             } catch let error as SchemaValidationError {
                 throw FenceError.invalidRequest("Invalid heist step \(index): \(error.message)")
@@ -63,11 +67,7 @@ extension TheFence {
         }
         return ValidatedHeistPlayback(
             app: playback.app,
-            steps: steps,
-            batchRequest: RunBatchRequest(
-                steps: steps.map(\.preparedStep),
-                policy: .stopOnError
-            )
+            steps: steps
         )
     }
 }
