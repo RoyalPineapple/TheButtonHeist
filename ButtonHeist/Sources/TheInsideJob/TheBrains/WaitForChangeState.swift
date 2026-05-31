@@ -4,7 +4,8 @@ import Foundation
 
 import TheScore
 
-/// Owns the single in-flight wait_for_change lifecycle.
+/// Owns the wait_for_change lifecycle and the last semantic state delivered to
+/// the driver, which is the command's baseline for "already changed" checks.
 @MainActor
 final class WaitForChangeState {
     struct Predicate {
@@ -18,6 +19,14 @@ final class WaitForChangeState {
     }
 
     private var phase: Phase = .idle
+    private var deliveredBaseline: TheBrains.BeforeState?
+
+    var lastDeliveredBaseline: TheBrains.BeforeState? {
+        guard let deliveredBaseline, !deliveredBaseline.capture.hash.isEmpty else {
+            return nil
+        }
+        return deliveredBaseline
+    }
 
     func install(
         expectation: ActionExpectation?,
@@ -35,6 +44,14 @@ final class WaitForChangeState {
 
     func finish() {
         phase = .idle
+    }
+
+    func recordDeliveredBaseline(_ beforeState: TheBrains.BeforeState) {
+        deliveredBaseline = beforeState
+    }
+
+    func resetDeliveredBaseline() {
+        deliveredBaseline = nil
     }
 }
 

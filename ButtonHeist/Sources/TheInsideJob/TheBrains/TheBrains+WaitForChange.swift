@@ -20,7 +20,7 @@ extension TheBrains {
         }
         defer { waitForChangeState.finish() }
 
-        let sentBaseline = responseStateHistory.waitForChangeBaseline
+        let sentBaseline = waitForChangeState.lastDeliveredBaseline
 
         guard let initial = await refreshSemanticSnapshot(baseline: sentBaseline) else {
             return treeUnavailableResult(method: .waitForChange)

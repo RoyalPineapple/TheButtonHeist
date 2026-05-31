@@ -26,7 +26,6 @@ final class TheBrains {
     let tripwire: TheTripwire
     let navigation: Navigation
     let actions: Actions
-    let responseStateHistory = ResponseStateHistory()
     let waitForChangeState = WaitForChangeState()
 
     enum InterfaceObservation {
@@ -256,7 +255,7 @@ final class TheBrains {
     func clearCache() {
         stash.clearCache()
         navigation.clearCache()
-        responseStateHistory.reset()
+        waitForChangeState.resetDeliveredBaseline()
     }
 
     func failureActionResult(
@@ -278,7 +277,7 @@ final class TheBrains {
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
-        responseStateHistory.record(captureSemanticState())
+        waitForChangeState.recordDeliveredBaseline(captureSemanticState())
     }
 
     static func shouldRecordAccessibilityTrace(
