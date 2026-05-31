@@ -114,10 +114,10 @@ final class TheBrains {
             hierarchy: stash.currentHierarchy,
             interface: interface,
             interfaceHash: interfaceHash,
-            semanticHash: stash.currentScreen.semanticHash,
+            semanticHash: stash.semanticHash,
             capture: capture,
             tripwireSignal: tripwireSignal,
-            screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
+            screenSnapshot: ScreenClassifier.snapshot(of: stash),
             screenId: stash.lastScreenId
         )
     }

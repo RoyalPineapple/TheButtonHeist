@@ -29,7 +29,7 @@ extension Navigation {
     /// holds every element seen during this exploration; the final commit keeps
     /// semantic content targetable while action execution owns reachability.
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        var union = stash.currentScreen
+        var union = stash.explorationBaseline()
         let manifest = await exploreScreen(target: target, union: &union)
         stash.commitExploredScreen(union)
         return manifest
@@ -253,10 +253,7 @@ extension Navigation {
     }
 
     private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
-        Dictionary(
-            stash.currentScreen.semantic.elements.values.map { ($0.element, $0.contentSpaceOrigin) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        stash.knownContentOriginIndex()
     }
 
     private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
