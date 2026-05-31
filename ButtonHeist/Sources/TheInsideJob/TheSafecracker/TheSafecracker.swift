@@ -155,9 +155,7 @@ final class TheSafecracker {
     /// - Returns: True if the touch events were dispatched (not necessarily handled)
     func tap(at point: CGPoint) async -> Bool {
         guard Self.geometryIsValid([point], field: "tap point") else { return false }
-        guard touchesDown(at: [point]) else { return false }
-        guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
-        return touchesUp()
+        return await performTouchTap(at: [point])
     }
 
     /// Simulate a long press at the given screen coordinates.
@@ -290,6 +288,12 @@ final class TheSafecracker {
         return touchesUp()
     }
 
+    func performTouchTap(at points: [CGPoint]) async -> Bool {
+        guard touchesDown(at: points) else { return false }
+        guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
+        return touchesUp()
+    }
+
     private func performLineGesture(
         from start: CGPoint,
         to end: CGPoint,
@@ -306,7 +310,7 @@ final class TheSafecracker {
     // MARK: - Internal: N-Finger Primitives
 
     /// Begin touches at N screen points simultaneously.
-    func touchesDown(at points: [CGPoint]) -> Bool {
+    private func touchesDown(at points: [CGPoint]) -> Bool {
         guard !points.isEmpty else { return false }
         guard Self.geometryIsValid(points, field: "touch point") else { return false }
         guard let window = windowForPoint(points[0]) else {
@@ -338,7 +342,7 @@ final class TheSafecracker {
     /// Move all active touches to new screen points.
     /// points.count must equal activeTouches.count.
     @discardableResult
-    func moveTouches(to points: [CGPoint]) -> Bool {
+    private func moveTouches(to points: [CGPoint]) -> Bool {
         guard !activeTouches.isEmpty, let window = activeWindow else { return false }
         guard points.count == activeTouches.count else { return false }
         guard Self.geometryIsValid(points, field: "touch move point") else { return false }
@@ -369,7 +373,7 @@ final class TheSafecracker {
     }
 
     /// Lift all active touches.
-    func touchesUp() -> Bool {
+    private func touchesUp() -> Bool {
         guard !activeTouches.isEmpty else { return false }
 
         for index in activeTouches.indices {

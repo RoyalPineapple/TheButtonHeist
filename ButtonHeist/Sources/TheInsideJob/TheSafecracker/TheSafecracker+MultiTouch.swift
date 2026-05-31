@@ -124,9 +124,7 @@ extension TheSafecracker {
         let p1 = CGPoint(x: center.x - spread / 2, y: center.y)
         let p2 = CGPoint(x: center.x + spread / 2, y: center.y)
         guard Self.geometryIsValid([p1, p2], field: "two finger tap point") else { return false }
-        guard touchesDown(at: [p1, p2]) else { return false }
-        guard await Task.cancellableSleep(for: TheSafecracker.gestureYieldDelay) else { return false }
-        return touchesUp()
+        return await performTouchTap(at: [p1, p2])
     }
 
 }
