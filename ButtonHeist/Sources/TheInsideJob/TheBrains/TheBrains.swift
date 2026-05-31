@@ -179,7 +179,7 @@ final class TheBrains {
             return builder.failure(errorKind: .actionFailed, payload: payload)
         }
 
-        stash.currentScreen = afterScreen
+        stash.commitVisiblePage(afterScreen)
 
         _ = await navigation.exploreAndPrune()
         let finalState = captureSemanticState()

@@ -6,18 +6,11 @@ import TheScore
 
 import AccessibilitySnapshotParser
 
-/// The stash — holds the goods and answers questions about them.
+/// The stash — holds semantic UI memory plus the latest disposable live parse.
 ///
-/// TheStash owns exactly one mutable accessibility belief: the latest
-/// committed `Screen`. It exposes lookup, matcher resolution, and
-/// wire-conversion facades over that value; parsing, diagnostics, capture,
-/// response memory, and UIKit actions are boundary transforms or
-/// owned by other crew members. `currentScreen.knownInterface` is targetable
-/// semantic state; `currentScreen.liveCapture` is the latest parse
-/// used for geometry, live objects, and scrolling. Callers call `parse()` to
-/// obtain a Screen value, then decide when to write it back via
-/// `currentScreen = ...`. The exploration accumulator lives in TheBrains as
-/// a local `var union`.
+/// Semantic state is targetable memory. Live capture is viewport/action
+/// evidence. Callers parse a `Screen`, then commit it through the method that
+/// matches the product event: visible page, visible refresh, or explored union.
 @MainActor
 final class TheStash {
 
@@ -28,19 +21,19 @@ final class TheStash {
 
     // MARK: - Mutable State
 
-    /// Latest committed interface state.
-    ///
-    /// **Writer audit** — the call sites that set this field:
-    /// - `refresh()` — single parse + commit (page-only)
-    /// - `Navigation+Explore.exploreContainer` mid-loop — page-only commits
-    ///   per scroll page, required for the termination heuristics above
-    /// - `Navigation+Explore.exploreAndPrune` end-of-cycle — union commit
-    /// - `clearCache()` / `clearScreen()` — reset to `.empty`
-    /// - `TheBrains.actionResultWithDelta` — page-only commit after settle
-    ///
-    /// Readers that specifically want "what's on-screen in the latest parse"
-    /// read `visibleIds`; target resolution reads the known semantic set.
-    var currentScreen: Screen = .empty
+    private var semanticState: SemanticScreen = .empty
+    private var liveCapture: LiveCapture = .empty
+
+    /// Projected screen value for read paths and test setup. Runtime writers
+    /// should use the explicit commit methods below.
+    var currentScreen: Screen {
+        get {
+            Screen(semantic: semanticState, liveCapture: liveCapture)
+        }
+        set {
+            commitScreen(newValue)
+        }
+    }
 
     // MARK: - Aliases
 
@@ -103,14 +96,14 @@ final class TheStash {
 
     /// Clear cached element data (used on suspend).
     func clearCache() {
-        currentScreen = .empty
+        clearCommittedScreen()
     }
 
     /// Clear screen-level state on screen change. Screens are values, so
     /// "clear screen" is identical to "clear everything" — the next parse
     /// produces a fresh screen.
     func clearScreen() {
-        currentScreen = .empty
+        clearCommittedScreen()
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -135,8 +128,29 @@ final class TheStash {
     @discardableResult
     func refresh() -> Screen? {
         guard let screen = parse() else { return nil }
-        currentScreen = currentScreen.refreshingVisibleState(with: screen)
+        commitVisibleRefresh(screen)
         return screen
+    }
+
+    func commitVisiblePage(_ screen: Screen) {
+        commitScreen(screen)
+    }
+
+    func commitVisibleRefresh(_ screen: Screen) {
+        commitScreen(currentScreen.refreshingVisibleState(with: screen))
+    }
+
+    func commitExploredScreen(_ screen: Screen) {
+        commitScreen(screen)
+    }
+
+    private func clearCommittedScreen() {
+        commitScreen(.empty)
+    }
+
+    private func commitScreen(_ screen: Screen) {
+        semanticState = screen.semantic
+        liveCapture = screen.liveCapture
     }
 
     // MARK: - Interface Read Helpers
