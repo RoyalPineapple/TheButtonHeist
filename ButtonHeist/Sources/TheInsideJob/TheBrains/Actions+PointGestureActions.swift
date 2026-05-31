@@ -13,29 +13,7 @@ extension Actions {
         method: ActionMethod,
         action: (CGPoint) async -> Bool
     ) async -> TheSafecracker.InteractionResult {
-        let elementTarget: ElementTarget?
-        switch selection {
-        case .element(let target):
-            elementTarget = target
-        case .coordinate:
-            elementTarget = nil
-        }
-        let actionableTarget: SemanticActionability.SemanticActionableTarget?
-        if let elementTarget {
-            switch await navigation.actionability.makeActionable(
-                for: elementTarget,
-                method: method,
-                deallocatedBoundary: "gesture action"
-            ) {
-            case .actionable(let target):
-                actionableTarget = target
-            case .failed(let failure):
-                return failure.interactionResult(commandMethod: method)
-            }
-        } else {
-            actionableTarget = nil
-        }
-        switch resolveGesturePoint(from: actionableTarget, selection: selection, method: method) {
+        switch await resolveGesturePoint(selection: selection, method: method) {
         case .failure(let result):
             return result
         case .success(let point):
