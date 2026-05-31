@@ -13,6 +13,7 @@ final class TheHandoff {
 
     let connectionLifecycle = HandoffConnectionLifecycle()
     private let discoveryLifecycle = HandoffDiscoveryLifecycle()
+    private var admission = HandoffAdmission()
 
     // MARK: - Derived State
 
@@ -69,14 +70,20 @@ final class TheHandoff {
     var onServerMessage: (@ButtonHeistActor (ServerMessage, String?) -> Void)?
     /// Transport send failures reported after Network.framework processes an enqueued write.
     var onSendFailure: (@ButtonHeistActor (DeviceSendFailure, String?) -> Void)?
-    /// Auth approved. The parameter is the approved token, or nil when reusing a persistent session.
+    /// Auth approved. The parameter is the approved token.
     var onAuthApproved: (@ButtonHeistActor (String) -> Void)?
     // MARK: - Configuration
 
-    var token: String?
+    var token: String? {
+        get { admission.token }
+        set { admission.token = newValue }
+    }
     /// Explicit driver ID override (e.g. from BUTTONHEIST_DRIVER_ID env var).
     /// When nil, a persistent auto-generated ID is used instead.
-    var driverId: String?
+    var driverId: String? {
+        get { admission.driverId }
+        set { admission.driverId = newValue }
+    }
 
     // MARK: - Internal Reconnect Settings
 
@@ -106,11 +113,6 @@ final class TheHandoff {
 
     var hasActiveDiscoverySession: Bool {
         discoveryLifecycle.hasDiscoverySession
-    }
-
-    /// Resolved driver ID: explicit override if set, otherwise a persistent auto-generated UUID.
-    var effectiveDriverId: String {
-        HandoffDriverIdentity.effectiveDriverId(explicit: driverId)
     }
 
     // MARK: - Init
@@ -225,56 +227,49 @@ final class TheHandoff {
         _ message: ServerMessage,
         requestId: String?
     ) {
+        if let decision = admission.decision(for: message) {
+            applyAdmissionDecision(decision)
+            return
+        }
+
         switch message {
         case .info(let info):
             connectionLifecycle.recordServerInfo(info)
         case .interface, .actionResult, .screen:
-            forwardServerMessage(message, requestId: requestId)
+            onServerMessage?(message, requestId)
         case .error(let serverError):
-            switch serverError.kind {
-            case .authFailure:
-                failActiveConnection(.disconnected(.authFailed(serverError.message)))
-            case .authApprovalPending:
-                failActiveConnection(.disconnected(.authApprovalPending(serverError.message)))
-            default:
-                if let requestId {
-                    forwardServerMessage(message, requestId: requestId)
-                } else {
-                    connectionLifecycle.markFailed(.connectionFailed(serverError.message))
-                }
+            if let requestId {
+                onServerMessage?(message, requestId)
+            } else {
+                connectionLifecycle.markFailed(.connectionFailed(serverError.message))
             }
-        case .authApproved(let payload):
-            token = payload.token
-            onAuthApproved?(payload.token)
-        case .authApprovalPending(let payload):
-            connectionLifecycle.recordAttemptFailure(.disconnected(.authApprovalPending(payload.message)))
-            onStatus?(payload.hint)
-        case .sessionLocked(let payload):
-            failActiveConnection(.disconnected(.sessionLocked(payload.message)))
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
-        case .protocolMismatch(let payload):
-            failActiveConnection(.disconnected(.buttonHeistVersionMismatch(
-                serverVersion: payload.serverButtonHeistVersion,
-                clientVersion: payload.clientButtonHeistVersion
-            )))
         case .pong:
             connectionLifecycle.markPongReceived()
             if let requestId {
-                forwardServerMessage(message, requestId: requestId)
+                onServerMessage?(message, requestId)
             }
-        case .serverHello:
-            sendAdmissionMessage(.clientHello)
-        case .authRequired:
-            sendAdmissionMessage(.authenticate(AuthenticatePayload(
-                token: token ?? "",
-                driverId: effectiveDriverId
-            )))
+        case .authApproved, .authApprovalPending, .sessionLocked, .protocolMismatch, .serverHello, .authRequired:
+            assertionFailure("HandoffAdmission must consume admission messages before routing")
         }
     }
 
-    private func forwardServerMessage(_ message: ServerMessage, requestId: String?) {
-        onServerMessage?(message, requestId)
+    private func applyAdmissionDecision(_ decision: HandoffAdmissionDecision) {
+        switch decision {
+        case .send(let message):
+            sendAdmissionMessage(message)
+        case .approved(let token):
+            admission.token = token
+            onAuthApproved?(token)
+        case .recordFailure(let failure, let status):
+            connectionLifecycle.recordAttemptFailure(failure)
+            if let status {
+                onStatus?(status)
+            }
+        case .terminalFailure(let failure):
+            failActiveConnection(failure)
+        }
     }
 
     private func failActiveConnection(_ failure: HandoffConnectionError) {
