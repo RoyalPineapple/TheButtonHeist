@@ -118,8 +118,6 @@ private extension TheFence {
         }
 
         switch message {
-        case .waitForIdle(let target):
-            return Deadline(timeout: target.timeout ?? 5)
         case .waitFor(let target):
             return Deadline(timeout: target.resolvedTimeout)
         case .waitForChange(let target):

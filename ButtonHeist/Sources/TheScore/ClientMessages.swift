@@ -108,9 +108,6 @@ public enum ClientMessage: Codable, Sendable {
     /// Read text from the general pasteboard
     case getPasteboard
 
-    /// Wait for all animations to complete, then return the settled interface
-    case waitForIdle(WaitForIdleTarget)
-
     /// Wait for an element matching a predicate to appear (or disappear)
     case waitFor(WaitForTarget)
 

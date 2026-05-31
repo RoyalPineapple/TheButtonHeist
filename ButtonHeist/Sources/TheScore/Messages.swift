@@ -49,7 +49,7 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
     case oneFingerTap, longPress, swipe, drag
     case typeText, editAction, setPasteboard, getPasteboard
     case scroll, scrollToVisible, elementSearch, scrollToEdge, resignFirstResponder
-    case requestScreen, waitForIdle
+    case requestScreen
     case waitFor, waitForChange, batchExecutionPlan
 }
 

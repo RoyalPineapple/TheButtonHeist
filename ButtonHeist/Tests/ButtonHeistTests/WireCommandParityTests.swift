@@ -127,7 +127,6 @@ final class WireCommandParityTests: XCTestCase {
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),
             .elementSearch(ElementSearchTarget(elementTarget: target)),
             .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
-            .waitForIdle(WaitForIdleTarget(timeout: 1)),
             .waitFor(WaitForTarget(elementTarget: target)),
             .waitForChange(WaitForChangeTarget(timeout: 1)),
             .batchExecutionPlan(BatchPlan(steps: [

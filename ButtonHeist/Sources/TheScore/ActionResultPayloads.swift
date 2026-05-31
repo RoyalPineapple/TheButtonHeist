@@ -347,7 +347,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case setPasteboard
     case getPasteboard
     case rotor
-    case waitForIdle
     case waitForChange
     case batchExecutionPlan
     case scroll
