@@ -400,6 +400,19 @@ final class TheBrainsPipelineTests: XCTestCase {
                         "exploreAndPrune always commits a screen value")
     }
 
+    func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
+        guard let screen = brains.refresh(),
+              let heistId = screen.visibleIds.first else {
+            throw XCTSkip("No live hierarchy available for target short-circuit test")
+        }
+
+        let exploration = await brains.navigation.exploreScreen(target: .heistId(heistId))
+
+        XCTAssertEqual(exploration.manifest.scrollCount, 0)
+        XCTAssertTrue(exploration.manifest.pendingContainers.isEmpty)
+        XCTAssertTrue(exploration.manifest.exploredContainers.isEmpty)
+    }
+
     func testExploreScreenExploresSwipeableContainer() async throws {
         guard brains.refresh() != nil else {
             throw XCTSkip("No live hierarchy available for swipeable explore test")
@@ -411,8 +424,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No non-UIScrollView scrollable container in host UI")
         }
 
-        var union = brains.stash.currentScreen
-        let manifest = await brains.navigation.exploreScreen(union: &union)
+        let exploration = await brains.navigation.exploreScreen()
+        let manifest = exploration.manifest
 
         XCTAssertTrue(manifest.exploredContainers.contains(container))
     }

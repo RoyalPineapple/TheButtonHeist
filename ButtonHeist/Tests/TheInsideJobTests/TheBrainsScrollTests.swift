@@ -66,15 +66,15 @@ final class TheBrainsScrollTests: XCTestCase {
             uniqueKeysWithValues: unsafeTargets.map { (ObjectIdentifier($0), $0.contentOffset) }
         )
 
-        var union = brains.stash.currentScreen
-        let manifest = await brains.navigation.exploreScreen(union: &union)
+        let exploration = await brains.navigation.exploreScreen()
+        let manifest = exploration.manifest
 
         XCTAssertEqual(manifest.scrollCount, 0)
         for scrollView in unsafeTargets {
             XCTAssertEqual(Optional(scrollView.contentOffset), unsafeOffsets[ObjectIdentifier(scrollView)])
         }
         XCTAssertTrue(
-            union.semantic.elements.values.contains {
+            exploration.screen.semantic.elements.values.contains {
                 $0.element.label == "Page One Visible Label"
             },
             "Visible page content should remain discoverable without scrolling the private queuing scroll view"
