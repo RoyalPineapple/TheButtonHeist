@@ -47,7 +47,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.heistId("btn_save"), actionName: "Delete Item"))
+        XCTAssertEqual(decoded, .element(.heistId("btn_save"), actionName: "Delete Item"))
         XCTAssertEqual(decoded.actionName, "Delete Item")
     }
 
@@ -58,7 +58,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.matcher(ElementMatcher(label: "Menu")), actionName: "Open Submenu"))
+        XCTAssertEqual(decoded, .element(.matcher(ElementMatcher(label: "Menu")), actionName: "Open Submenu"))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
     }
 
@@ -70,7 +70,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
         XCTAssertEqual(
-            decoded.selection,
+            decoded,
             .container(ContainerMatcher(stableId: "semantic_actions__actions"), ordinal: nil, actionName: "Dismiss")
         )
         XCTAssertEqual(decoded.actionName, "Dismiss")

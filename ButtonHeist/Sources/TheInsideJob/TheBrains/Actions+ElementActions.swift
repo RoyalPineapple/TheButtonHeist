@@ -159,7 +159,7 @@ extension Actions {
     func executeCustomAction(
         _ target: CustomActionTarget
     ) async -> TheSafecracker.InteractionResult {
-        switch target.selection {
+        switch target {
         case .container(let containerTarget, let ordinal, let actionName):
             return await executeContainerCustomAction(
                 containerTarget,

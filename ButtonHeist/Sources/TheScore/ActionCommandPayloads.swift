@@ -5,25 +5,17 @@ import Foundation
 /// Element targeting uses the public `elementTarget` wire field.
 /// Container targeting uses the same `container` target object shape as
 /// `get_interface.subtree`, with `ordinal` as the disambiguator.
-public struct CustomActionTarget: Codable, Sendable {
-    public let selection: CustomActionSelection
+public enum CustomActionTarget: Codable, Sendable, Equatable, CustomStringConvertible {
+    case element(ElementTarget, actionName: String)
+    case container(ContainerMatcher, ordinal: Int?, actionName: String)
 
     public init(elementTarget: ElementTarget, actionName: String) {
-        self.selection = .element(elementTarget, actionName: actionName)
+        self = .element(elementTarget, actionName: actionName)
     }
 
     public init(containerTarget: ContainerMatcher, ordinal: Int? = nil, actionName: String) {
-        self.selection = .container(containerTarget, ordinal: ordinal, actionName: actionName)
+        self = .container(containerTarget, ordinal: ordinal, actionName: actionName)
     }
-
-    public var actionName: String {
-        selection.actionName
-    }
-}
-
-public enum CustomActionSelection: Sendable, Equatable, CustomStringConvertible {
-    case element(ElementTarget, actionName: String)
-    case container(ContainerMatcher, ordinal: Int?, actionName: String)
 
     public var actionName: String {
         switch self {
@@ -51,12 +43,6 @@ public enum CustomActionSelection: Sendable, Equatable, CustomStringConvertible 
     }
 }
 
-extension CustomActionTarget: CustomStringConvertible {
-    public var description: String {
-        selection.description
-    }
-}
-
 extension CustomActionTarget {
     private enum CodingKeys: String, CodingKey {
         case elementTarget
@@ -78,7 +64,7 @@ extension CustomActionTarget {
             )
         }
         if hasElementTarget {
-            selection = .element(
+            self = .element(
                 try container.decode(ElementTarget.self, forKey: .elementTarget),
                 actionName: actionName
             )
@@ -102,14 +88,14 @@ extension CustomActionTarget {
                     debugDescription: "ordinal must be non-negative, got \(ordinal)"
                 )
             }
-            selection = .container(matcher, ordinal: ordinal, actionName: actionName)
+            self = .container(matcher, ordinal: ordinal, actionName: actionName)
         }
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(actionName, forKey: .actionName)
-        switch selection {
+        switch self {
         case .element(let elementTarget, _):
             try container.encode(elementTarget, forKey: .elementTarget)
         case .container(let containerTarget, let containerOrdinal, _):
