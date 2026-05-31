@@ -6,7 +6,7 @@ import TheScore
 
 extension TheGetaway {
 
-    /// Broadcast a server message to every authenticated client.
+    /// Broadcast a server message to every active session connection.
     ///
     /// Awaits the transport so two back-to-back `broadcastToAll` calls from
     /// the same caller deliver in FIFO order. The previous sync shape used
@@ -32,7 +32,7 @@ extension TheGetaway {
             return result
         }
         var firstFailure: DeliveryResult?
-        for clientId in await muscle.authenticatedClientIDs.sorted() {
+        for clientId in await muscle.activeSessionConnections.sorted() {
             switch await sendEncodedData(data, toClient: clientId) {
             case .delivered:
                 continue

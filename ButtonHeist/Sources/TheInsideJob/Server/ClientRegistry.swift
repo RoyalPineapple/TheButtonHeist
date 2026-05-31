@@ -4,18 +4,6 @@ import Foundation
 struct TheMuscleClientRegistry {
     private var clients: [Int: ClientAuthenticationState] = [:]
 
-    var authenticatedClientIDs: Set<Int> {
-        Set(clients.lazy.filter { $0.value.isAuthenticated }.map(\.key))
-    }
-
-    var authenticatedClientCount: Int {
-        clients.values.lazy.filter(\.isAuthenticated).count
-    }
-
-    var helloValidatedClients: Set<Int> {
-        Set(clients.lazy.filter { $0.value.hasCompletedHello }.map(\.key))
-    }
-
     var hasPendingApproval: Bool {
         clients.values.contains { phase in
             if case .pendingApproval = phase { return true }
@@ -25,10 +13,6 @@ struct TheMuscleClientRegistry {
 
     mutating func registerAddress(_ clientId: Int, address: String) {
         clients[clientId] = .connected(address: address)
-    }
-
-    mutating func installAuthenticatedForTest(_ clientId: Int, address: String, driverIdentity: String) {
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
     }
 
     mutating func removeAll() {
@@ -62,17 +46,11 @@ struct TheMuscleClientRegistry {
         clients[clientId] = .pendingApproval(address: address, respond: respond, driverId: driverId)
     }
 
-    mutating func authenticate(_ clientId: Int, address: String, driverIdentity: String) {
-        clients[clientId] = .authenticated(address: address, driverIdentity: driverIdentity)
+    mutating func authenticate(_ clientId: Int, address: String) {
+        clients[clientId] = .authenticated(address: address)
     }
 
     mutating func restoreHelloValidated(_ clientId: Int, address: String) {
         clients[clientId] = .helloValidated(address: address)
-    }
-
-    func clientIDs(for driverIdentity: String) -> [Int] {
-        clients.compactMap { clientId, phase in
-            phase.driverIdentity == driverIdentity ? clientId : nil
-        }
     }
 }
