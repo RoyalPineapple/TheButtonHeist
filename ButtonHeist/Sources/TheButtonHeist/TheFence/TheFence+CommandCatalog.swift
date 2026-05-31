@@ -37,6 +37,7 @@ extension TheFence {
 
 public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
+    public let payloadFamily: FenceCommandPayloadFamily
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
     public let isBatchExecutable: Bool
@@ -64,6 +65,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
 
     public init(
         command: TheFence.Command,
+        payloadFamily: FenceCommandPayloadFamily,
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
         isBatchExecutable: Bool,
@@ -73,6 +75,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         description: String
     ) {
         self.command = command
+        self.payloadFamily = payloadFamily
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
         self.isBatchExecutable = isBatchExecutable
@@ -81,6 +84,16 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.mcpAnnotations = mcpAnnotations
         self.description = description
     }
+}
+
+public enum FenceCommandPayloadFamily: Sendable, Equatable {
+    case control
+    case observation
+    case waitForChange
+    case gestureAction
+    case elementAction
+    case directClientAction
+    case session
 }
 
 public extension TheFence.Command {
@@ -116,18 +129,21 @@ extension TheFence.Command {
         switch self {
         case .ping:
             return descriptor(
+                payloadFamily: .control,
                 requiresConnectionBeforeDispatch: false,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "Check connection health without reading accessibility state."
             )
         case .listDevices:
             return descriptor(
+                payloadFamily: .control,
                 requiresConnectionBeforeDispatch: false,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "List discovered iOS devices and configured connection targets."
             )
         case .getInterface:
             return descriptor(
+                payloadFamily: .observation,
                 parameters: filter + [
                     FenceParameterBlocks.interfaceSubtree,
                     param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
@@ -137,12 +153,14 @@ extension TheFence.Command {
             )
         case .getScreen:
             return descriptor(
+                payloadFamily: .observation,
                 parameters: [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)],
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "Capture a PNG screenshot with optional inline data and interface state."
             )
         case .waitForChange:
             return descriptor(
+                payloadFamily: .waitForChange,
                 isBatchExecutable: true,
                 parameters: expectation,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
@@ -150,18 +168,21 @@ extension TheFence.Command {
             )
         case .oneFingerTap:
             return descriptor(
+                payloadFamily: .gestureAction,
                 isBatchExecutable: true,
                 parameters: target + FenceParameterBlocks.coordinateXY + expectation,
                 description: "Tap a coordinate or semantic target after actionability resolution."
             )
         case .longPress:
             return descriptor(
+                payloadFamily: .gestureAction,
                 isBatchExecutable: true,
                 parameters: target + FenceParameterBlocks.coordinateXY + [duration] + expectation,
                 description: "Long-press a coordinate or semantic target for a resolved duration."
             )
         case .swipe:
             return descriptor(
+                payloadFamily: .gestureAction,
                 isBatchExecutable: true,
                 parameters: target + [
                     param(.direction, .string, enumValues: fenceEnumValues(SwipeDirection.self)),
@@ -172,12 +193,14 @@ extension TheFence.Command {
             )
         case .drag:
             return descriptor(
+                payloadFamily: .gestureAction,
                 isBatchExecutable: true,
                 parameters: target + FenceParameterBlocks.requiredEnd + FenceParameterBlocks.optionalStart + [duration] + expectation,
                 description: "Drag from one point to another using explicit coordinates or a semantic target."
             )
         case .scroll:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: scrollContainerTarget + target + [
                     param(
@@ -190,12 +213,14 @@ extension TheFence.Command {
             )
         case .scrollToVisible:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: target + expectation,
                 description: "Make a semantic target actionable and report its fresh geometry."
             )
         case .elementSearch:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: target + [
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self)),
@@ -204,6 +229,7 @@ extension TheFence.Command {
             )
         case .scrollToEdge:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: scrollContainerTarget + target + [
                     param(
@@ -216,12 +242,14 @@ extension TheFence.Command {
             )
         case .activate:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation,
                 description: "Activate a semantic UI element or one of its named accessibility actions."
             )
         case .rotor:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: target + [
                     param(.rotor, .string),
@@ -251,41 +279,48 @@ extension TheFence.Command {
             )
         case .typeText:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: target + [param(.text, .string, required: true, minLength: 1)] + expectation,
                 description: "Type non-empty text, optionally after making a semantic target actionable."
             )
         case .editAction:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + expectation,
                 description: "Perform an edit action on the current first responder."
             )
         case .setPasteboard:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: [param(.text, .string, required: true)] + expectation,
                 description: "Write text to the general pasteboard from within the app."
             )
         case .getPasteboard:
             return descriptor(
+                payloadFamily: .directClientAction,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
                 description: "Read text from the general pasteboard."
             )
         case .waitFor:
             return descriptor(
+                payloadFamily: .elementAction,
                 isBatchExecutable: true,
                 parameters: target + [param(.absent, .boolean), FenceParameterBlocks.expectationTimeout, expect],
                 description: "Wait for a semantic element to appear or disappear."
             )
         case .dismissKeyboard:
             return descriptor(
+                payloadFamily: .directClientAction,
                 isBatchExecutable: true,
                 parameters: expectation,
                 description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
             )
         case .runBatch:
             return descriptor(
+                payloadFamily: .session,
                 parameters: [
                     param(
                         .steps, .array, required: true,
@@ -307,36 +342,42 @@ extension TheFence.Command {
             )
         case .getSessionState:
             return descriptor(
+                payloadFamily: .control,
                 requiresConnectionBeforeDispatch: false,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "Inspect connection, device, and last-action session state."
             )
         case .connect:
             return descriptor(
+                payloadFamily: .session,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [param(.target, .string), param(.device, .string), param(.token, .string)],
                 description: "Establish or switch the active connection to a Button Heist app."
             )
         case .listTargets:
             return descriptor(
+                payloadFamily: .control,
                 requiresConnectionBeforeDispatch: false,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
                 description: "List configured connection targets and the default target."
             )
         case .startHeist:
             return descriptor(
+                payloadFamily: .session,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [param(.app, .string), param(.identifier, .string)],
                 description: "Start recording replayable heist steps from successful commands."
             )
         case .stopHeist:
             return descriptor(
+                payloadFamily: .session,
                 requiresConnectionBeforeDispatch: false,
                 parameters: [param(.output, .string, required: true)],
                 description: "Stop heist recording and save a deterministic heist fixture."
             )
         case .playHeist:
             return descriptor(
+                payloadFamily: .session,
                 parameters: [param(.input, .string, required: true)],
                 description: "Play back a heist file and return step diagnostics on failure."
             )
@@ -344,6 +385,7 @@ extension TheFence.Command {
     }
 
     private func descriptor(
+        payloadFamily: FenceCommandPayloadFamily,
         cliExposure: CLIExposure = .directCommand,
         mcpExposure: MCPExposure = .directTool,
         isBatchExecutable: Bool = false,
@@ -354,6 +396,7 @@ extension TheFence.Command {
     ) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
             command: self,
+            payloadFamily: payloadFamily,
             cliExposure: cliExposure,
             mcpExposure: mcpExposure,
             isBatchExecutable: isBatchExecutable,

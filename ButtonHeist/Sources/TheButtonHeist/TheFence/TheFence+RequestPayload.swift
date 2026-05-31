@@ -122,16 +122,12 @@ extension TheFence {
         try validateTypedElementTarget(command: command, arguments: arguments)
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try ExpectationPayload(arguments: arguments)
-        let dispatch: DecodedRequestDispatch
-        if command == .waitForChange {
-            let target = WaitForChangeTarget(
-                expect: expectationPayload.expectation,
-                timeout: expectationPayload.timeout
-            )
-            dispatch = Self.clientActionDispatch([.waitForChange(target)])
-        } else {
-            dispatch = try decodeRequestDispatch(command: command, arguments: arguments, requestId: requestId)
-        }
+        let dispatch = try decodeRequestDispatch(
+            command: command,
+            arguments: arguments,
+            requestId: requestId,
+            expectationPayload: expectationPayload
+        )
 
         return ParsedRequest(
             command: command,
@@ -170,30 +166,43 @@ extension TheFence {
     func decodeRequestDispatch(
         command: Command,
         arguments: CommandArgumentEnvelope,
-        requestId: String
+        requestId: String,
+        expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        switch command {
-        case .dismissKeyboard:
-            return Self.clientActionDispatch([.resignFirstResponder])
-        case .getPasteboard:
-            return Self.clientActionDispatch([.getPasteboard])
-        case .ping, .listDevices, .getSessionState, .listTargets:
+        switch command.descriptor.payloadFamily {
+        case .directClientAction:
+            return try decodeDirectClientActionDispatch(command)
+        case .control:
             return try decodeControlDispatch(command)
-        case .getInterface, .getScreen:
+        case .observation:
             return try decodeObservationDispatch(
                 command: command,
                 arguments: arguments,
                 requestId: requestId
             )
         case .waitForChange:
-            throw FenceError.invalidRequest("wait_for_change payload is decoded through expectation parsing")
-        case .oneFingerTap, .longPress, .swipe, .drag:
+            let target = WaitForChangeTarget(
+                expect: expectationPayload.expectation,
+                timeout: expectationPayload.timeout
+            )
+            return Self.clientActionDispatch([.waitForChange(target)])
+        case .gestureAction:
             return try decodeGestureAction(command: command, request: arguments)
-        case .scroll, .scrollToVisible, .elementSearch, .scrollToEdge, .activate, .rotor, .typeText,
-             .editAction, .setPasteboard, .waitFor:
+        case .elementAction:
             return try decodeElementActionDispatch(command: command, arguments: arguments)
-        case .runBatch, .connect, .startHeist, .stopHeist, .playHeist:
+        case .session:
             return try decodeSessionDispatch(command: command, arguments: arguments)
+        }
+    }
+
+    private func decodeDirectClientActionDispatch(_ command: Command) throws -> DecodedRequestDispatch {
+        switch command {
+        case .dismissKeyboard:
+            return Self.clientActionDispatch([.resignFirstResponder])
+        case .getPasteboard:
+            return Self.clientActionDispatch([.getPasteboard])
+        default:
+            throw FenceError.invalidRequest("Unexpected direct client-action command: \(command.rawValue)")
         }
     }
 
