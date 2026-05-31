@@ -3484,6 +3484,32 @@ final class TheFenceHandlerTests: XCTestCase {
                 "schema validation failed for target: observed target(matcher(identifier=\"ignored\")); "
                     + "expected edit_action command without element target"
             ),
+            (
+                "request id inside arguments",
+                try HeistStep(
+                    command: "activate",
+                    target: semanticTarget(identifier: "submit"),
+                    arguments: ["requestId": .string("recorded-request")]
+                ),
+                "heist step arguments must match descriptor-owned recording projection"
+            ),
+            (
+                "expectation inside arguments",
+                try HeistStep(
+                    command: "activate",
+                    target: semanticTarget(identifier: "submit"),
+                    arguments: ["expect": .object(["type": .string("screen_changed")])]
+                ),
+                "heist step arguments, expectation must match descriptor-owned recording projection"
+            ),
+            (
+                "target inside arguments",
+                try HeistStep(
+                    command: "activate",
+                    arguments: ["target": .object(["identifier": .string("submit")])]
+                ),
+                "heist step target, arguments must match descriptor-owned recording projection"
+            ),
         ]
 
         let (fence, _) = makeConnectedFence()
