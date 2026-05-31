@@ -126,20 +126,50 @@ extension TheFence {
     }
 
     private func playbackRequest(from sourceStep: HeistStep, stepIndex: Int? = nil) throws -> ParsedRequest {
+        guard let command = Command(rawValue: sourceStep.command) else {
+            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
+            throw FenceError.invalidRequest(
+                prefix + "heist step command must be a canonical TheFence.Command; unknown command \"\(sourceStep.command)\""
+            )
+        }
+        guard command.descriptor.isBatchExecutable else {
+            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
+            throw FenceError.invalidRequest(prefix + "heist step command \"\(command.rawValue)\" is not supported")
+        }
         var values = sourceStep.arguments
-        values["command"] = .string(sourceStep.command)
         if let expectation = sourceStep.expectation {
             values["expect"] = try heistValue(expectation)
         }
-        switch TheFence.Command.routeBatchStep(
-            CommandArgumentEnvelope(values: values, elementTarget: sourceStep.target),
-            context: "heist step"
-        ) {
-        case .success(let routed):
-            return try parseRequest(command: routed.command, arguments: routed.arguments)
-        case .failure(let error):
+        let parsedRequest = try parseRequest(
+            command: command,
+            arguments: CommandArgumentEnvelope(values: values, elementTarget: sourceStep.target)
+        )
+        try validateRecordedProjection(sourceStep: sourceStep, parsedRequest: parsedRequest, stepIndex: stepIndex)
+        return parsedRequest
+    }
+
+    private func validateRecordedProjection(
+        sourceStep: HeistStep,
+        parsedRequest: ParsedRequest,
+        stepIndex: Int?
+    ) throws {
+        let projection = try parsedRequest.heistStepProjection()
+        var mismatchedFields: [String] = []
+        if projection.elementTarget != sourceStep.target {
+            mismatchedFields.append("target")
+        }
+        if projection.arguments != sourceStep.arguments {
+            mismatchedFields.append("arguments")
+        }
+        if projection.expectation != sourceStep.expectation {
+            mismatchedFields.append("expectation")
+        }
+        guard mismatchedFields.isEmpty else {
             let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
-            throw FenceError.invalidRequest(prefix + error.message)
+            throw FenceError.invalidRequest(
+                prefix + "heist step \(mismatchedFields.joined(separator: ", ")) " +
+                    "must match descriptor-owned recording projection"
+            )
         }
     }
 

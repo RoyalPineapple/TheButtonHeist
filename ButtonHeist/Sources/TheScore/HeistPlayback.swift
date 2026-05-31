@@ -94,7 +94,6 @@ public struct HeistStep: Codable, Sendable, Equatable {
         expectation: ActionExpectation? = nil
     ) throws {
         try Self.validateDurableTarget(target)
-        try Self.validateArgumentPlacement(arguments)
         self.command = command
         self.target = target
         self.arguments = arguments
@@ -112,17 +111,7 @@ public struct HeistStep: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         command = try container.decode(String.self, forKey: .command)
         target = try Self.decodeDurableTarget(from: container, forKey: .target)
-        let decodedArguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
-        do {
-            try Self.validateArgumentPlacement(decodedArguments)
-        } catch HeistStepError.reservedArgumentKey(let key) {
-            throw DecodingError.dataCorruptedError(
-                forKey: .arguments,
-                in: container,
-                debugDescription: "HeistStep arguments.\(key) is reserved for the heist step boundary"
-            )
-        }
-        arguments = decodedArguments
+        arguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
         expectation = try container.decodeIfPresent(ActionExpectation.self, forKey: .expectation)
     }
 
@@ -174,12 +163,6 @@ public struct HeistStep: Codable, Sendable, Equatable {
         }
     }
 
-    private static func validateArgumentPlacement(_ arguments: [String: HeistValue]) throws {
-        let reservedKeys = Set(["command", "target", "expect", "requestId"])
-        guard let key = arguments.keys.sorted().first(where: reservedKeys.contains) else { return }
-        throw HeistStepError.reservedArgumentKey(key)
-    }
-
     private func encodeDurableTarget(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
         guard let target else { return }
         switch target {
@@ -203,7 +186,6 @@ public struct HeistStep: Codable, Sendable, Equatable {
 public enum HeistStepError: Error, Sendable, Equatable {
     case captureHandleTarget
     case emptyMatcherTarget
-    case reservedArgumentKey(String)
 }
 
 extension HeistStep: CustomStringConvertible {
