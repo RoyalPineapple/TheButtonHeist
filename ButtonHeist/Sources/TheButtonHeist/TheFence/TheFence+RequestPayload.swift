@@ -4,6 +4,13 @@ import TheScore
 
 extension TheFence {
 
+    typealias RequestDecoder = @ButtonHeistActor @Sendable (
+        TheFence,
+        CommandArgumentEnvelope,
+        String,
+        ExpectationPayload
+    ) throws -> DecodedRequestDispatch
+
     struct MissingElementTarget: Error {
         let command: String
     }
@@ -122,12 +129,7 @@ extension TheFence {
         try validateTypedElementTarget(command: command, arguments: arguments)
         let requestId = arguments.string("requestId") ?? UUID().uuidString
         let expectationPayload = try ExpectationPayload(arguments: arguments)
-        let dispatch = try decodeRequestDispatch(
-            command: command,
-            arguments: arguments,
-            requestId: requestId,
-            expectationPayload: expectationPayload
-        )
+        let dispatch = try command.descriptor.requestDecoder(self, arguments, requestId, expectationPayload)
 
         return ParsedRequest(
             command: command,
@@ -163,61 +165,58 @@ extension TheFence {
         )
     }
 
-    func decodeRequestDispatch(
-        command: Command,
-        arguments: CommandArgumentEnvelope,
-        requestId: String,
-        expectationPayload: ExpectationPayload
+    static func decodePingRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        switch command.descriptor.payloadFamily {
-        case .directClientAction:
-            return try decodeDirectClientActionDispatch(command)
-        case .control:
-            return try decodeControlDispatch(command)
-        case .observation:
-            return try decodeObservationDispatch(
-                command: command,
-                arguments: arguments,
-                requestId: requestId
-            )
-        case .waitForChange:
-            let target = WaitForChangeTarget(
-                expect: expectationPayload.expectation,
-                timeout: expectationPayload.timeout
-            )
-            return Self.clientActionDispatch([.waitForChange(target)])
-        case .gestureAction:
-            return try decodeGestureAction(command: command, request: arguments)
-        case .elementAction:
-            return try decodeElementActionDispatch(command: command, arguments: arguments)
-        case .session:
-            return try decodeSessionDispatch(command: command, arguments: arguments)
-        }
+        DecodedRequestDispatch { fence, _ in try await fence.handlePing() }
     }
 
-    private func decodeDirectClientActionDispatch(_ command: Command) throws -> DecodedRequestDispatch {
-        switch command {
-        case .dismissKeyboard:
-            return Self.clientActionDispatch([.resignFirstResponder])
-        case .getPasteboard:
-            return Self.clientActionDispatch([.getPasteboard])
-        default:
-            throw FenceError.invalidRequest("Unexpected direct client-action command: \(command.rawValue)")
-        }
+    static func decodeListDevicesRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence, _ in try await fence.handleListDevices() }
     }
 
-    private func decodeControlDispatch(_ command: Command) throws -> DecodedRequestDispatch {
-        switch command {
-        case .ping:
-            return DecodedRequestDispatch { fence, _ in try await fence.handlePing() }
-        case .listDevices:
-            return DecodedRequestDispatch { fence, _ in try await fence.handleListDevices() }
-        case .getSessionState:
-            return DecodedRequestDispatch { fence, _ in .sessionState(payload: fence.currentSessionState()) }
-        case .listTargets:
-            return DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
-        default:
-            throw FenceError.invalidRequest("Unexpected no-payload command: \(command.rawValue)")
-        }
+    static func decodeGetSessionStateRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence, _ in .sessionState(payload: fence.currentSessionState()) }
     }
+
+    static func decodeListTargetsRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
+    }
+
+    static func decodeGetPasteboardRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        clientActionDispatch([.getPasteboard])
+    }
+
+    static func decodeDismissKeyboardRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        clientActionDispatch([.resignFirstResponder])
+    }
+
 }

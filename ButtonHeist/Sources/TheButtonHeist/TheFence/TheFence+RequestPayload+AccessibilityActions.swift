@@ -4,17 +4,16 @@ private let accessibilityAdjustmentCountRange = 1...100
 
 extension TheFence {
 
-    func decodeAccessibilityActionDispatch(
-        command: Command,
-        input: CommandArgumentEnvelope
+    static func decodeActivateRequest(
+        _ fence: TheFence,
+        _ input: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        guard command == .activate else {
-            throw FenceError.invalidRequest("Unexpected accessibility action command: \(command.rawValue)")
-        }
         let target = try input.requiredElementTarget(command: .activate)
         let actionName = try input.optionalNonEmptyString("action")
         let count = try input.countArgument()
-        return Self.clientActionDispatch(
+        return clientActionDispatch(
             try Self.accessibilityClientMessages(
                 target: target,
                 actionName: actionName,

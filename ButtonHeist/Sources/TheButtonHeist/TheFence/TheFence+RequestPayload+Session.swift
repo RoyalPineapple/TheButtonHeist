@@ -2,36 +2,61 @@ import Foundation
 
 extension TheFence {
 
-    func decodeSessionDispatch(
-        command: Command,
-        arguments: CommandArgumentEnvelope
+    static func decodeRunBatchCommandRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        switch command {
-        case .runBatch:
-            let request = try decodeRunBatchRequest(arguments)
-            return DecodedRequestDispatch { fence, _ in try await fence.handleRunBatch(request) }
-        case .connect:
-            let request = try decodeConnectRequest(arguments)
-            return DecodedRequestDispatch { fence, _ in try await fence.handleConnect(request) }
-        case .startHeist:
-            let request = StartHeistRequest(
-                app: try arguments.schemaString("app") ?? "com.buttonheist.testapp",
-                identifier: try arguments.schemaString("identifier") ?? "heist"
-            )
-            return DecodedRequestDispatch { fence, _ in try fence.handleStartHeist(request) }
-        case .stopHeist:
-            let request = StopHeistRequest(
-                outputPath: try arguments.requiredSchemaString("output")
-            )
-            return DecodedRequestDispatch { fence, _ in try fence.handleStopHeist(request) }
-        case .playHeist:
-            let request = PlayHeistRequest(
-                inputPath: try arguments.requiredSchemaString("input")
-            )
-            return DecodedRequestDispatch { fence, _ in try await fence.handlePlayHeist(request) }
-        default:
-            throw FenceError.invalidRequest("Unexpected session command: \(command.rawValue)")
-        }
+        let request = try fence.decodeRunBatchRequest(arguments)
+        return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handleRunBatch(request) }
+    }
+
+    static func decodeConnectCommandRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        let request = try fence.decodeConnectRequest(arguments)
+        return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handleConnect(request) }
+    }
+
+    static func decodeStartHeistRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        let request = StartHeistRequest(
+            app: try arguments.schemaString("app") ?? "com.buttonheist.testapp",
+            identifier: try arguments.schemaString("identifier") ?? "heist"
+        )
+        return DecodedRequestDispatch { fence, _ in try fence.handleStartHeist(request) }
+    }
+
+    static func decodeStopHeistRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        let request = StopHeistRequest(
+            outputPath: try arguments.requiredSchemaString("output")
+        )
+        return DecodedRequestDispatch { fence, _ in try fence.handleStopHeist(request) }
+    }
+
+    static func decodePlayHeistRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        let request = PlayHeistRequest(
+            inputPath: try arguments.requiredSchemaString("input")
+        )
+        return DecodedRequestDispatch { fence, _ in try await fence.handlePlayHeist(request) }
     }
 
     private func decodeConnectRequest(_ arguments: CommandArgumentEnvelope) throws -> ConnectRequest {

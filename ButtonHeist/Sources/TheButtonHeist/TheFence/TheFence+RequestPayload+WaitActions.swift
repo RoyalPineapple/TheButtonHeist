@@ -2,14 +2,25 @@ import TheScore
 
 extension TheFence {
 
-    func decodeWaitActionDispatch(
-        command: Command,
-        input: CommandArgumentEnvelope
+    static func decodeWaitForChangeRequest(
+        _ fence: TheFence,
+        _ input: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        guard command == .waitFor else {
-            throw FenceError.invalidRequest("Unexpected wait action command: \(command.rawValue)")
-        }
-        return try decodedExecutablePayload(.waitFor(WaitForTarget(
+        decodedExecutablePayload(.waitForChange(WaitForChangeTarget(
+            expect: expectationPayload.expectation,
+            timeout: expectationPayload.timeout
+        )))
+    }
+
+    static func decodeWaitForRequest(
+        _ fence: TheFence,
+        _ input: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        try decodedExecutablePayload(.waitFor(WaitForTarget(
             elementTarget: input.requiredElementTarget(command: .waitFor),
             absent: input.schemaBoolean("absent"),
             timeout: input.schemaNumber("timeout")

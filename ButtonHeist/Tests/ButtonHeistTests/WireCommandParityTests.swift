@@ -5,7 +5,7 @@ import TheScore
 final class WireCommandParityTests: XCTestCase {
 
     @ButtonHeistActor
-    func testEveryPublicCommandRoutesThroughDescriptorPayloadFamily() async throws {
+    func testEveryPublicCommandRoutesThroughDescriptorOwnedDecoder() async throws {
         let (fence, _) = makeConnectedFence()
 
         for descriptor in TheFence.Command.descriptors where descriptor.isPublicRequestContract {

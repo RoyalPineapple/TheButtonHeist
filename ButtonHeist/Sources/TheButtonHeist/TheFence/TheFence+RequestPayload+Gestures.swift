@@ -4,25 +4,43 @@ import TheScore
 
 extension TheFence {
 
-    func decodeGestureAction(
-        command: Command,
-        request: CommandArgumentEnvelope
+    static func decodeOneFingerTapRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        switch command {
-        case .oneFingerTap:
-            return decodedGestureAction(.oneFingerTap(try decodeTapTarget(request)))
-        case .longPress:
-            return decodedGestureAction(.longPress(try decodeLongPressTarget(request)))
-        case .swipe:
-            return decodedGestureAction(.swipe(try decodeSwipeTarget(request)))
-        case .drag:
-            return decodedGestureAction(.drag(try decodeDragTarget(request)))
-        default:
-            throw FenceError.invalidRequest("Unexpected gesture command: \(command.rawValue)")
-        }
+        decodedGestureAction(.oneFingerTap(try fence.decodeTapTarget(arguments)))
     }
 
-    private func decodedGestureAction(_ message: ClientMessage) -> DecodedRequestDispatch {
+    static func decodeLongPressRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        decodedGestureAction(.longPress(try fence.decodeLongPressTarget(arguments)))
+    }
+
+    static func decodeSwipeRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        decodedGestureAction(.swipe(try fence.decodeSwipeTarget(arguments)))
+    }
+
+    static func decodeDragRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        decodedGestureAction(.drag(try fence.decodeDragTarget(arguments)))
+    }
+
+    private static func decodedGestureAction(_ message: ClientMessage) -> DecodedRequestDispatch {
         Self.clientActionDispatch([message])
     }
 }

@@ -4,24 +4,27 @@ import TheScore
 
 extension TheFence {
 
-    func decodeObservationDispatch(
-        command: Command,
-        arguments: CommandArgumentEnvelope,
-        requestId: String
+    static func decodeGetInterfaceRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        switch command {
-        case .getInterface:
-            let request = try decodeGetInterfaceRequest(arguments)
-            return DecodedRequestDispatch { fence, _ in try await fence.handleGetInterface(request) }
-        case .getScreen:
-            let request = try decodeScreenRequest(arguments, requestId: requestId)
-            return DecodedRequestDispatch { fence, _ in try await fence.handleGetScreen(request) }
-        default:
-            throw FenceError.invalidRequest("Unexpected observation command: \(command.rawValue)")
-        }
+        let request = try fence.makeGetInterfaceRequest(arguments)
+        return DecodedRequestDispatch { fence, _ in try await fence.handleGetInterface(request) }
     }
 
-    private func decodeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
+    static func decodeGetScreenRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        let request = try fence.makeScreenRequest(arguments, requestId: requestId)
+        return DecodedRequestDispatch { fence, _ in try await fence.handleGetScreen(request) }
+    }
+
+    private func makeGetInterfaceRequest(_ arguments: CommandArgumentEnvelope) throws -> GetInterfaceRequest {
         GetInterfaceRequest(
             detail: try arguments.schemaEnum("detail", as: InterfaceDetail.self) ?? .summary,
             query: InterfaceQuery(
@@ -31,7 +34,7 @@ extension TheFence {
         )
     }
 
-    private func decodeScreenRequest(
+    private func makeScreenRequest(
         _ arguments: CommandArgumentEnvelope,
         requestId: String
     ) throws -> ScreenRequest {
