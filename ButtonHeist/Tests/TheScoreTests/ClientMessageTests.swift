@@ -586,8 +586,7 @@ final class ClientMessageTests: XCTestCase {
             selection: .unitElement(
                 .heistId("scrollable"),
                 start: UnitPoint(x: 0.8, y: 0.5),
-                end: UnitPoint(x: 0.2, y: 0.5),
-                direction: nil
+                end: UnitPoint(x: 0.2, y: 0.5)
             )
         )
         let message = ClientMessage.swipe(swipe)
