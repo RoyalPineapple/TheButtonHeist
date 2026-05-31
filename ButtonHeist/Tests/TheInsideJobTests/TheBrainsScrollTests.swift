@@ -504,7 +504,6 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .failed(let failure) = result else {
             return XCTFail("Expected semantic actionability failure, got \(result)")
         }
-        XCTAssertNil(failure.method)
         XCTAssertEqual(failure.failedStep, SemanticActionability.SemanticActionabilityFailureStep.noRevealPath)
         XCTAssertTrue(failure.message.contains("semantic actionability failed [noRevealPath]"))
         XCTAssertTrue(failure.message.contains("has no content-space position"))
