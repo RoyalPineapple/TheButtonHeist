@@ -103,6 +103,28 @@ final class PresentationObscuringTests: XCTestCase {
 
         window.isHidden = true
     }
+
+    func testViewBehindPresentedControllerIsObscured() {
+        let window = UIWindow()
+        let rootVC = StubViewController()
+        let presented = UIViewController()
+        rootVC.fakePresented = presented
+        window.rootViewController = rootVC
+        window.makeKeyAndVisible()
+        _ = rootVC.view
+
+        let testView = UIView()
+        rootVC.view.addSubview(testView)
+
+        XCTAssertTrue(Navigation.isObscuredByPresentation(view: testView))
+
+        window.isHidden = true
+    }
+
+    private final class StubViewController: UIViewController {
+        var fakePresented: UIViewController?
+        override var presentedViewController: UIViewController? { fakePresented }
+    }
 }
 
 #endif

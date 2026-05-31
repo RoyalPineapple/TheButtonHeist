@@ -7,16 +7,6 @@ import TheScore
 import AccessibilitySnapshotParser
 
 // MARK: - Screen Exploration
-//
-// Scrolls every scrollable container to discover the whole reachable hierarchy.
-//
-// TheStash has no exploration mode. The accumulator is a local `var union:
-// Screen`; page commits keep scroll termination tied to the latest parse, and
-// the final commit stores the explored semantic union.
-//
-// Visible pages are physical evidence; known state is semantic memory.
-// Exploration keeps page evidence visible for scroll termination and commits
-// only the final union as targetable semantic state.
 
 extension Navigation {
 
@@ -25,161 +15,133 @@ extension Navigation {
         let origins: [CGPoint?]
     }
 
-    /// Explore and accumulate the unioned screen. The local `union: Screen`
-    /// holds every element seen during this exploration; the final commit keeps
-    /// semantic content targetable while action execution owns reachability.
-    func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
-        var union = stash.explorationBaseline()
-        let manifest = await exploreScreen(target: target, union: &union)
-        stash.commitExploredScreen(union)
-        return manifest
-    }
+    fileprivate struct ContainerExploration {
+        let container: AccessibilityContainer
+        let scrollTarget: ScrollableTarget
+        let hasHOverflow: Bool
+        let hasVOverflow: Bool
 
-    /// Scroll all scrollable containers to discover reachable elements.
-    /// Accumulates discovered elements into `union`. Mid-exploration page
-    /// commits happen as scrolls land so termination heuristics compare the
-    /// latest parsed page.
-    func exploreScreen(target: ElementTarget? = nil, union: inout Screen) async -> ScreenManifest {
-        let startTime = CACurrentMediaTime()
-        var manifest = ScreenManifest()
+        var direction: UIAccessibilityScrollDirection { hasHOverflow ? .right : .down }
 
-        if let parsed = stash.refresh() {
-            union = union.merging(parsed)
-        }
+        var leadingEdge: ScrollEdge { hasHOverflow ? .left : .top }
 
-        if let target, hasTerminalExplorationResolution(target) {
-            manifest.explorationTime = CACurrentMediaTime() - startTime
-            return manifest
-        }
-
-        manifest.addPendingContainers(stash.currentHierarchy.scrollableContainers)
-        while !manifest.pendingContainers.isEmpty {
-            let batch = manifest.pendingContainers
-                .map { (container: $0, overflow: Self.totalOverflow(of: $0)) }
-                .sorted { $0.overflow > $1.overflow }
-                .map(\.container)
-
-            for container in batch {
-                guard case .scrollable(let contentSize) = container.type else {
-                    manifest.markExplored(container)
-                    continue
-                }
-
-                if let view = stash.scrollableContainerViews[container],
-                   view.window != nil,
-                   Self.isObscuredByPresentation(view: view) {
-                    manifest.markExplored(container)
-                    continue
-                }
-
-                let hasHOverflow = contentSize.width > container.frame.width + 1
-                let hasVOverflow = contentSize.height > container.frame.height + 1
-                guard hasHOverflow || hasVOverflow else {
-                    manifest.markExplored(container)
-                    continue
-                }
-
-                // A scroll-shaped container with inflated `contentSize` (e.g. a SwiftUI
-                // `NavigationStack` host wrapping a non-scrolling canvas) reports overflow
-                // even when no descendant element actually lives off-screen. Require at
-                // least one descendant whose AX frame extends past the container frame
-                // before paying for swipes.
-                guard Self.hasContentBeyondFrame(of: container, in: stash.currentHierarchy) else {
-                    manifest.markExplored(container)
-                    continue
-                }
-
-                guard let scrollTarget = scrollableTarget(for: container, contentSize: contentSize) else {
-                    manifest.markExplored(container)
-                    continue
-                }
-                let found = await exploreContainer(
-                    container: container, scrollTarget: scrollTarget,
-                    hasHOverflow: hasHOverflow, hasVOverflow: hasVOverflow,
-                    target: target, manifest: &manifest,
-                    union: &union
-                )
-                if found {
-                    manifest.explorationTime = CACurrentMediaTime() - startTime
-                    return manifest
-                }
-            }
-        }
-
-        manifest.explorationTime = CACurrentMediaTime() - startTime
-        return manifest
-    }
-
-    /// Scroll a single container to discover all elements. Returns true if the
-    /// target was found during exploration (caller should return early).
-    private func exploreContainer(
-        container: AccessibilityContainer,
-        scrollTarget: ScrollableTarget,
-        hasHOverflow: Bool,
-        hasVOverflow: Bool,
-        target: ElementTarget?,
-        manifest: inout ScreenManifest,
-        union: inout Screen
-    ) async -> Bool {
-        let savedVisualOrigin: CGPoint? = {
+        @MainActor
+        var savedVisualOrigin: CGPoint? {
             guard case .uiScrollView(let scrollView) = scrollTarget else { return nil }
             return CGPoint(
                 x: scrollView.contentOffset.x + scrollView.adjustedContentInset.left,
                 y: scrollView.contentOffset.y + scrollView.adjustedContentInset.top
             )
-        }()
-        let direction: UIAccessibilityScrollDirection = hasHOverflow ? .right : .down
+        }
+    }
 
-        let leadingEdge: ScrollEdge = hasHOverflow ? .left : .top
-        switch scrollTarget {
-        case .uiScrollView(let scrollView):
-            if safecracker.scrollToEdge(scrollView, edge: leadingEdge, animated: false) {
-                await tripwire.yieldFrames(2)
-                if let parsed = stash.refresh() {
-                    union = union.merging(parsed)
-                }
+    struct ExploredScreen {
+        let screen: Screen
+        let manifest: ScreenManifest
+    }
+
+    fileprivate struct SemanticExploration {
+        var screen: Screen
+        var manifest = ScreenManifest()
+
+        init(baseline: Screen) {
+            screen = baseline
+        }
+
+        mutating func absorb(_ parsed: Screen?) {
+            guard let parsed else { return }
+            screen = screen.merging(parsed)
+        }
+
+        mutating func markExplored(_ container: AccessibilityContainer) {
+            manifest.markExplored(container)
+        }
+
+        mutating func addDiscoveredContainers(_ containers: [AccessibilityContainer]) {
+            let newContainers = containers.filter {
+                !manifest.exploredContainers.contains($0)
+                    && !manifest.pendingContainers.contains($0)
             }
-        case .swipeable:
-            let toLeading = Self.edgeDirection(for: leadingEdge)
-            for _ in 0..<50 {
-                let proof = await scrollOnePageAndSettle(
-                    scrollTarget, direction: toLeading, animated: false
-                )
-                if proof.result == .moved, let parsed = stash.parse() {
-                    stash.commitVisiblePage(parsed)
-                    union = union.merging(parsed)
+            manifest.addPendingContainers(newContainers)
+        }
+
+        mutating func finish(startTime: CFTimeInterval) -> ExploredScreen {
+            manifest.explorationTime = CACurrentMediaTime() - startTime
+            return ExploredScreen(screen: screen, manifest: manifest)
+        }
+    }
+
+    func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
+        let exploration = await exploreScreen(target: target)
+        stash.commitExploredScreen(exploration.screen)
+        return exploration.manifest
+    }
+
+    func exploreScreen(target: ElementTarget? = nil) async -> ExploredScreen {
+        let startTime = CACurrentMediaTime()
+        var exploration = SemanticExploration(baseline: stash.explorationBaseline())
+
+        exploration.absorb(stash.refresh())
+
+        if let target, hasTerminalExplorationResolution(target) {
+            return exploration.finish(startTime: startTime)
+        }
+
+        exploration.manifest.addPendingContainers(stash.currentHierarchy.scrollableContainers)
+        while !exploration.manifest.pendingContainers.isEmpty {
+            let batch = sortedPendingContainers(in: exploration)
+
+            for container in batch {
+                guard let containerExploration = containerExploration(for: container) else {
+                    exploration.markExplored(container)
+                    continue
                 }
-                if proof.result == .unchanged || stash.visibleIds == proof.previousVisibleIds {
-                    break
+                let found = await exploreContainer(
+                    containerExploration,
+                    target: target,
+                    exploration: &exploration
+                )
+                if found {
+                    return exploration.finish(startTime: startTime)
                 }
             }
         }
 
+        return exploration.finish(startTime: startTime)
+    }
+
+    private func exploreContainer(
+        _ containerExploration: ContainerExploration,
+        target: ElementTarget?,
+        exploration: inout SemanticExploration
+    ) async -> Bool {
+        let savedVisualOrigin = containerExploration.savedVisualOrigin
+        await moveToLeadingEdge(containerExploration, exploration: &exploration)
+
         var originByElement = buildOriginIndex()
 
-        let initialPage = visibleElementsInContainer(container)
+        let initialPage = visibleElementsInContainer(containerExploration.container)
         var accumulated = initialPage.elements
         var accumulatedOrigins = initialPage.origins
 
         for _ in 0..<ScreenManifest.maxScrollsPerContainer {
             let proof = await scrollOnePageAndSettle(
-                scrollTarget, direction: direction, animated: false
+                containerExploration.scrollTarget,
+                direction: containerExploration.direction,
+                animated: false
             )
             guard proof.result == .moved else { break }
-            manifest.scrollCount += 1
-            if let parsed = stash.parse() {
-                stash.commitVisiblePage(parsed)
-                union = union.merging(parsed)
-            }
+            exploration.manifest.scrollCount += 1
+            parseVisiblePage(into: &exploration)
             originByElement = buildOriginIndex()
 
-            let page = visibleElementsInContainer(container)
+            let page = visibleElementsInContainer(containerExploration.container)
             let result = reconcilePage(
                 accumulated: accumulated,
                 accumulatedOrigins: accumulatedOrigins,
                 page: page.elements,
                 pageOrigins: page.origins,
-                orderingAxis: hasHOverflow ? .horizontal : .vertical
+                orderingAxis: containerExploration.hasHOverflow ? .horizontal : .vertical
             )
             accumulated = result.elements
             accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
@@ -188,29 +150,22 @@ extension Navigation {
 
             if let target, hasTerminalExplorationResolution(target) {
                 await restoreAndMarkExplored(
-                    scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
-                    container: container,
-                    manifest: &manifest,
-                    union: &union
+                    containerExploration,
+                    savedVisualOrigin: savedVisualOrigin,
+                    exploration: &exploration
                 )
                 return true
             }
         }
 
         await restoreAndMarkExplored(
-            scrollTarget: scrollTarget, savedVisualOrigin: savedVisualOrigin,
-            container: container,
-            manifest: &manifest,
-            union: &union
+            containerExploration,
+            savedVisualOrigin: savedVisualOrigin,
+            exploration: &exploration
         )
-
-        let newContainers = stash.currentHierarchy.scrollableContainers
-            .filter { !manifest.exploredContainers.contains($0) && !manifest.pendingContainers.contains($0) }
-        manifest.addPendingContainers(newContainers)
+        exploration.addDiscoveredContainers(stash.currentHierarchy.scrollableContainers)
         return false
     }
-
-    // MARK: - Exploration Helpers
 
     private func hasTerminalExplorationResolution(_ target: ElementTarget) -> Bool {
         switch stash.resolveTarget(target) {
@@ -221,22 +176,81 @@ extension Navigation {
         }
     }
 
-    private func restoreAndMarkExplored(
-        scrollTarget: ScrollableTarget,
-        savedVisualOrigin: CGPoint?,
-        container: AccessibilityContainer,
-        manifest: inout ScreenManifest,
-        union: inout Screen
+    private func sortedPendingContainers(in exploration: SemanticExploration) -> [AccessibilityContainer] {
+        exploration.manifest.pendingContainers
+            .map { (container: $0, overflow: Self.totalOverflow(of: $0)) }
+            .sorted { $0.overflow > $1.overflow }
+            .map(\.container)
+    }
+
+    private func containerExploration(for container: AccessibilityContainer) -> ContainerExploration? {
+        guard case .scrollable(let contentSize) = container.type else { return nil }
+
+        if let view = stash.scrollableContainerViews[container],
+           view.window != nil,
+           Self.isObscuredByPresentation(view: view) {
+            return nil
+        }
+
+        let hasHOverflow = contentSize.width > container.frame.width + 1
+        let hasVOverflow = contentSize.height > container.frame.height + 1
+        guard hasHOverflow || hasVOverflow else { return nil }
+        guard Self.hasContentBeyondFrame(of: container, in: stash.currentHierarchy) else { return nil }
+        guard let scrollTarget = scrollableTarget(for: container, contentSize: contentSize) else { return nil }
+        return ContainerExploration(
+            container: container,
+            scrollTarget: scrollTarget,
+            hasHOverflow: hasHOverflow,
+            hasVOverflow: hasVOverflow
+        )
+    }
+
+    private func moveToLeadingEdge(
+        _ containerExploration: ContainerExploration,
+        exploration: inout SemanticExploration
     ) async {
-        if case .uiScrollView(let scrollView) = scrollTarget,
+        switch containerExploration.scrollTarget {
+        case .uiScrollView(let scrollView):
+            if safecracker.scrollToEdge(scrollView, edge: containerExploration.leadingEdge, animated: false) {
+                await tripwire.yieldFrames(2)
+                exploration.absorb(stash.refresh())
+            }
+        case .swipeable:
+            let toLeading = Self.edgeDirection(for: containerExploration.leadingEdge)
+            for _ in 0..<50 {
+                let proof = await scrollOnePageAndSettle(
+                    containerExploration.scrollTarget,
+                    direction: toLeading,
+                    animated: false
+                )
+                if proof.result == .moved {
+                    parseVisiblePage(into: &exploration)
+                }
+                if proof.result == .unchanged || stash.visibleIds == proof.previousVisibleIds {
+                    break
+                }
+            }
+        }
+    }
+
+    private func parseVisiblePage(into exploration: inout SemanticExploration) {
+        guard let parsed = stash.parse() else { return }
+        stash.commitVisiblePage(parsed)
+        exploration.absorb(parsed)
+    }
+
+    private func restoreAndMarkExplored(
+        _ containerExploration: ContainerExploration,
+        savedVisualOrigin: CGPoint?,
+        exploration: inout SemanticExploration
+    ) async {
+        if case .uiScrollView(let scrollView) = containerExploration.scrollTarget,
            let savedVisualOrigin {
             Self.restoreVisualOrigin(savedVisualOrigin, in: scrollView)
             await tripwire.yieldFrames(2)
-            if let parsed = stash.refresh() {
-                union = union.merging(parsed)
-            }
+            exploration.absorb(stash.refresh())
         }
-        manifest.markExplored(container)
+        exploration.markExplored(containerExploration.container)
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
@@ -271,18 +285,12 @@ extension Navigation {
         scrollView.setContentOffset(clampedOffset, animated: false)
     }
 
-    // MARK: - Container Overflow
-
-    /// Sum of horizontal and vertical content overflow for a container.
-    /// Zero for containers that don't overflow their frame (or aren't `.scrollable`).
     static func totalOverflow(of container: AccessibilityContainer) -> CGFloat {
         guard case .scrollable(let contentSize) = container.type else { return 0 }
         return max(0, contentSize.width - container.frame.width)
             + max(0, contentSize.height - container.frame.height)
     }
 
-    /// Returns true if any accessibility-element descendant of `container` has a
-    /// frame extending past `container.frame` by more than `tolerance` points.
     static func hasContentBeyondFrame(
         of container: AccessibilityContainer,
         in hierarchy: [AccessibilityHierarchy],
@@ -307,9 +315,6 @@ extension Navigation {
         return !hits.isEmpty
     }
 
-    // MARK: - Presentation Obscuring
-
-    /// Returns true if the view is behind a presented view controller.
     static func isObscuredByPresentation(view: UIView) -> Bool {
         guard let window = view.window,
               let rootVC = window.rootViewController else {
@@ -350,11 +355,8 @@ extension Navigation {
     }
 }
 
-// MARK: - UIView Responder Chain
-
 extension UIView {
 
-    /// Walks the responder chain to find the nearest UIViewController that owns this view.
     var nearestViewController: UIViewController? {
         var responder: UIResponder? = self
         while let next = responder?.next {
@@ -365,13 +367,8 @@ extension UIView {
     }
 }
 
-// MARK: - UIViewController Hierarchy
-
 extension UIViewController {
 
-    /// Returns true if this view controller is a descendant of the given ancestor —
-    /// checking parent, presenting, navigation, and tab controller chains, as well
-    /// as child view controllers of container types.
     func isDescendant(of ancestor: UIViewController) -> Bool {
         var queue: [UIViewController] = [ancestor]
         while !queue.isEmpty {
