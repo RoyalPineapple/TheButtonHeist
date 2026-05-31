@@ -126,62 +126,26 @@ extension TheFence {
     }
 
     private func playbackRequest(from sourceStep: HeistStep, stepIndex: Int? = nil) throws -> ParsedRequest {
-        let command = try playbackCommand(for: sourceStep, stepIndex: stepIndex)
-        try validatePlaybackArguments(sourceStep.arguments, command: command)
-        return try parseRequest(
-            command: command,
-            arguments: try playbackArguments(for: sourceStep)
-        )
-    }
-
-    private func playbackArguments(for sourceStep: HeistStep) throws -> CommandArgumentEnvelope {
         var values = sourceStep.arguments
+        values["command"] = .string(sourceStep.command)
         if let expectation = sourceStep.expectation {
             values["expect"] = try heistValue(expectation)
         }
-        return CommandArgumentEnvelope(values: values, elementTarget: sourceStep.target)
+        switch TheFence.Command.routeBatchStep(
+            CommandArgumentEnvelope(values: values, elementTarget: sourceStep.target),
+            context: "heist step"
+        ) {
+        case .success(let routed):
+            return try parseRequest(command: routed.command, arguments: routed.arguments)
+        case .failure(let error):
+            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
+            throw FenceError.invalidRequest(prefix + error.message)
+        }
     }
 
     private func heistValue(_ expectation: ActionExpectation) throws -> HeistValue {
         let data = try JSONEncoder().encode(expectation)
         return try JSONDecoder().decode(HeistValue.self, from: data)
-    }
-
-    private func validatePlaybackArguments(_ arguments: [String: HeistValue], command: Command) throws {
-        guard arguments["expect"] == nil else {
-            throw SchemaValidationError(
-                field: "expect",
-                observed: arguments["expect"]?.schemaObservedDescription ?? "missing",
-                expected: "top-level heist expectation field"
-            )
-        }
-        let acceptedKeys = Set(
-            command.descriptor.parameters
-                .map(\.key)
-                .filter { !command.descriptor.elementTargetParameterKeys.contains($0) }
-                .filter { $0 != "expect" }
-        )
-        guard let unexpectedKey = arguments.keys.sorted().first(where: { !acceptedKeys.contains($0) }) else {
-            return
-        }
-        throw SchemaValidationError(
-            field: unexpectedKey,
-            observed: arguments[unexpectedKey]?.schemaObservedDescription ?? "missing",
-            expected: "valid \(command.rawValue) playback argument"
-        )
-    }
-
-    private func playbackCommand(for sourceStep: HeistStep, stepIndex: Int?) throws -> Command {
-        switch TheFence.Command.routeBatchStep(
-            CommandArgumentEnvelope(values: ["command": .string(sourceStep.command)]),
-            context: "heist step"
-        ) {
-        case .success(let command):
-            return command.command
-        case .failure(let error):
-            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
-            throw FenceError.invalidRequest(prefix + error.message)
-        }
     }
 
     private struct PlaybackBatchResult {

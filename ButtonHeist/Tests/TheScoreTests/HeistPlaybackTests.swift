@@ -146,6 +146,16 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
+    func testStepRejectsBoundaryFieldsInsideArguments() {
+        let keys = ["command", "target", "expect", "requestId"]
+        for key in keys {
+            let json = #"{"command":"activate","arguments":{"\#(key)":"value"}}"#
+            XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8)), key) { error in
+                XCTAssertTrue("\(error)".contains("arguments.\(key)"), "\(error)")
+            }
+        }
+    }
+
     func testStepRejectsNegativeOrdinal() throws {
         let step = try HeistStep(
             command: "activate",
@@ -218,6 +228,12 @@ final class HeistPlaybackTests: XCTestCase {
     func testProgrammaticStepRejectsEmptyMatcherTargetWithoutCrashing() {
         XCTAssertThrowsError(try HeistStep(command: "activate", target: .matcher(ElementMatcher()))) { error in
             XCTAssertEqual(error as? HeistStepError, .emptyMatcherTarget)
+        }
+    }
+
+    func testProgrammaticStepRejectsBoundaryFieldsInsideArguments() {
+        XCTAssertThrowsError(try HeistStep(command: "activate", arguments: ["expect": .string("screen_changed")])) { error in
+            XCTAssertEqual(error as? HeistStepError, .reservedArgumentKey("expect"))
         }
     }
 
