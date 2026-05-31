@@ -176,6 +176,54 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRecordHeistStepKeepsOnlyDescriptorOwnedReplayArguments() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "descriptor-args", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: [
+                "target": targetArgumentValue(label: "Save"),
+                "expect": .object(["type": .string("screen_changed")]),
+                "timeout": .double(2.5),
+            ],
+            targetCapture: nil
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            try HeistStep(
+                command: "activate",
+                target: semanticTarget(label: "Save"),
+                arguments: ["timeout": .double(2.5)],
+                expectation: .screenChanged
+            ),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testRecordHeistStepDropsUnusedExpectationTimeout() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "unused-timeout", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: [
+                "target": targetArgumentValue(label: "Save"),
+                "timeout": .int(3),
+            ],
+            targetCapture: nil
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            try HeistStep(command: "activate", target: semanticTarget(label: "Save")),
+        ])
+    }
+
+    @ButtonHeistActor
     func testWriteAndReadHeist() async throws {
         let heist = HeistPlayback(
             app: "com.example.app",
