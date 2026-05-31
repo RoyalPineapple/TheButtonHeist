@@ -38,16 +38,6 @@ public extension AccessibilityTrace {
         return AccessibilityTrace(captures: captures)
     }
 
-    /// Raw compact projection across a set of per-step traces.
-    static func endpointDeltaProjection(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
-        endpointTraceProjection(from: traces)?.endpointDeltaProjection
-    }
-
-    /// Background/summary projection across a set of per-step traces.
-    static func meaningfulEndpointDeltaProjection(from traces: [AccessibilityTrace]) -> AccessibilityTrace.Delta? {
-        endpointTraceProjection(from: traces)?.meaningfulEndpointDeltaProjection
-    }
-
     var endpointScreenNameProjection: String? {
         captures.last?.screenNameProjection
     }
