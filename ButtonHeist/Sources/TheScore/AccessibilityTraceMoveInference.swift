@@ -39,28 +39,6 @@ enum AccessibilityTraceMoveInference {
         )
     }
 
-    static func inferFunctionalTreePairs(
-        oldRecords: [TreeNodeRef: AccessibilityTraceHierarchyRecord],
-        newRecords: [TreeNodeRef: AccessibilityTraceHierarchyRecord],
-        removedIds: Set<TreeNodeRef>,
-        insertedIds: Set<TreeNodeRef>
-    ) -> [(removedId: TreeNodeRef, insertedId: TreeNodeRef)] {
-        let removedById = Dictionary(
-            removedIds.compactMap { identifier in
-                oldRecords[identifier].map { (identifier, $0) }
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
-        let insertedById = Dictionary(
-            insertedIds.compactMap { identifier in
-                newRecords[identifier].map { (identifier, $0) }
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
-
-        return inferFunctionalTreeRecordPairs(removedById: removedById, addedById: insertedById)
-    }
-
     private static func inferFunctionalHeistElementPairs(
         removedById: [HeistId: HeistElement],
         addedById: [HeistId: HeistElement]
@@ -70,19 +48,6 @@ enum AccessibilityTraceMoveInference {
         }
         let added = addedById.map { identifier, element in
             (identifier, pairingSignature(for: element))
-        }
-        return inferFunctionalPairs(removed: removed, added: added)
-    }
-
-    private static func inferFunctionalTreeRecordPairs(
-        removedById: [TreeNodeRef: AccessibilityTraceHierarchyRecord],
-        addedById: [TreeNodeRef: AccessibilityTraceHierarchyRecord]
-    ) -> [(removedId: TreeNodeRef, insertedId: TreeNodeRef)] {
-        let removed = removedById.compactMap { identifier, record -> (TreeNodeRef, ElementPairingSignature)? in
-            pairingSignature(for: record).map { (identifier, $0) }
-        }
-        let added = addedById.compactMap { identifier, record -> (TreeNodeRef, ElementPairingSignature)? in
-            pairingSignature(for: record).map { (identifier, $0) }
         }
         return inferFunctionalPairs(removed: removed, added: added)
     }
@@ -138,10 +103,6 @@ private struct ElementStateSignature: Hashable {
 private struct ElementPairingSignature: Hashable {
     let identity: ElementIdentitySignature
     let state: ElementStateSignature
-}
-
-private func pairingSignature(for record: AccessibilityTraceHierarchyRecord) -> ElementPairingSignature? {
-    record.element.map(pairingSignature(for:))
 }
 
 private func pairingSignature(for element: HeistElement) -> ElementPairingSignature {
