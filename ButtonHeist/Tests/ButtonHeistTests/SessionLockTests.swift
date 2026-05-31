@@ -20,14 +20,20 @@ final class SessionLockTests: XCTestCase {
     // MARK: - Tests
 
     @ButtonHeistActor
-    func testSessionLockedDisconnectsClient() async throws {
+    func testSessionLockedEmitsPayloadWithoutDisconnectingTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
-        var disconnectReason: DisconnectReason?
+        var receivedPayload: SessionLockedPayload?
+        var disconnected = false
         conn.onEvent = { event in
-            if case .disconnected(let reason) = event {
-                disconnectReason = reason
+            switch event {
+            case .message(.sessionLocked(let payload), _):
+                receivedPayload = payload
+            case .disconnected:
+                disconnected = true
+            default:
+                break
             }
         }
 
@@ -37,12 +43,10 @@ final class SessionLockTests: XCTestCase {
         )
         try conn.handleMessage(encode(.sessionLocked(payload)))
 
-        assertDeviceConnectionDisconnected(conn)
-        if case .sessionLocked(let msg) = disconnectReason {
-            XCTAssertEqual(msg, payload.message)
-        } else {
-            XCTFail("Expected sessionLocked disconnect reason, got \(String(describing: disconnectReason))")
-        }
+        assertDeviceConnectionConnected(conn)
+        XCTAssertEqual(receivedPayload?.message, payload.message)
+        XCTAssertEqual(receivedPayload?.activeConnections, payload.activeConnections)
+        XCTAssertFalse(disconnected)
     }
 
     @ButtonHeistActor

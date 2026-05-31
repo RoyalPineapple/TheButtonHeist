@@ -233,9 +233,9 @@ final class TheHandoff {
         case .error(let serverError):
             switch serverError.kind {
             case .authFailure:
-                connectionLifecycle.markFailed(.disconnected(.authFailed(serverError.message)))
+                failActiveConnection(.disconnected(.authFailed(serverError.message)))
             case .authApprovalPending:
-                connectionLifecycle.markFailed(.disconnected(.authApprovalPending(serverError.message)))
+                failActiveConnection(.disconnected(.authApprovalPending(serverError.message)))
             default:
                 if let requestId {
                     forwardServerMessage(message, requestId: requestId)
@@ -250,11 +250,11 @@ final class TheHandoff {
             connectionLifecycle.recordAttemptFailure(.disconnected(.authApprovalPending(payload.message)))
             onStatus?(payload.hint)
         case .sessionLocked(let payload):
-            connectionLifecycle.markFailed(.disconnected(.sessionLocked(payload.message)))
+            failActiveConnection(.disconnected(.sessionLocked(payload.message)))
         case .status(let payload):
             logger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
         case .protocolMismatch(let payload):
-            connectionLifecycle.markFailed(.disconnected(.buttonHeistVersionMismatch(
+            failActiveConnection(.disconnected(.buttonHeistVersionMismatch(
                 serverVersion: payload.serverButtonHeistVersion,
                 clientVersion: payload.clientButtonHeistVersion
             )))
@@ -275,6 +275,11 @@ final class TheHandoff {
 
     private func forwardServerMessage(_ message: ServerMessage, requestId: String?) {
         onServerMessage?(message, requestId)
+    }
+
+    private func failActiveConnection(_ failure: HandoffConnectionError) {
+        connectionLifecycle.markFailed(failure)
+        closeConnection()
     }
 
     private func sendAdmissionMessage(_ message: ClientMessage) {
