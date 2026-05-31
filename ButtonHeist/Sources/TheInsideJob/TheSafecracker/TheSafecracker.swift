@@ -324,7 +324,7 @@ final class TheSafecracker {
     /// Move the active touch to a new screen point.
     @discardableResult
     private func moveTouch(to point: CGPoint) -> Bool {
-        guard let activeTouch, let window = activeWindow else { return false }
+        guard var activeTouch, let window = activeWindow else { return false }
         guard Self.geometryIsValid([point], field: "touch move point") else { return false }
 
         let windowPoint = window.convert(point, from: nil)
@@ -332,6 +332,7 @@ final class TheSafecracker {
 
         guard let event = TouchEvent(touches: [activeTouch]) else { return false }
         event.send()
+        self.activeTouch = activeTouch
         return true
     }
 
@@ -339,18 +340,19 @@ final class TheSafecracker {
     /// Used during long press to keep gesture recognizers processing (matches KIF).
     @discardableResult
     private func sendStationary() -> Bool {
-        guard let activeTouch else { return false }
+        guard var activeTouch else { return false }
 
         activeTouch.update(phase: .stationary)
 
         guard let event = TouchEvent(touches: [activeTouch]) else { return false }
         event.send()
+        self.activeTouch = activeTouch
         return true
     }
 
     /// Lift the active touch.
     private func touchUp() -> Bool {
-        guard let activeTouch else { return false }
+        guard var activeTouch else { return false }
 
         activeTouch.update(phase: .ended)
 

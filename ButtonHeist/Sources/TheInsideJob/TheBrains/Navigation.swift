@@ -45,7 +45,7 @@ final class Navigation {
     // MARK: - Nested Types
 
     /// Keep swipe gesture timing stable; scrolling cadence is frame-driven.
-    static let swipeGestureDuration: TimeInterval = 0.12
+    static let swipeGestureDuration: GestureDuration = .scrollSwipeDefault
 
     /// Layout frames to yield after a non-animated UIScrollView scroll before
     /// re-reading the accessibility tree.

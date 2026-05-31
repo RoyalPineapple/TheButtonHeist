@@ -53,6 +53,7 @@ struct ActivationPolicy {
         )
     }
 
+    @MainActor
     private func activationFailureMessage(
         screenElement: TheStash.ScreenElement,
         activateOutcome: TheStash.ActivateOutcome
