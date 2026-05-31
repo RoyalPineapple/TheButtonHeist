@@ -3851,10 +3851,11 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let (fence, _) = makeConnectedFence()
         let step = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep])).steps[0]
-        guard case .activate(.matcher(let matcher, _)) = step.preparedStep.typedStep.command else {
+        guard case .activate(.matcher(let matcher, let ordinal)) = step.preparedStep.typedStep.command else {
             return XCTFail("Expected playback to dispatch matcher target, got \(step.preparedStep.typedStep.command)")
         }
         XCTAssertEqual(matcher.identifier, "btn1")
+        XCTAssertNil(ordinal)
     }
 
     @ButtonHeistActor

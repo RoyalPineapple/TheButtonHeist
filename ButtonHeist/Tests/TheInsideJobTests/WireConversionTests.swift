@@ -637,7 +637,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.removedOptional)
     }
 
-    func testFunctionallyIdenticalRemoveAddSuppressesChurn() {
+    func testFunctionallyIdenticalRemoveAddWithSiblingReorderReturnsNoChange() {
         let beforeElement = makeScreenElement(
             heistId: "telescope_far_light_3_32_button",
             label: "Telescope, Far Light, 3:32",
@@ -671,7 +671,7 @@ final class WireConverterTests: XCTestCase {
         )
 
         XCTAssertFalse(delta.isScreenChanged)
-        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
+        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
     }
