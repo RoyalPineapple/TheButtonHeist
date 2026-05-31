@@ -191,6 +191,12 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.direction, .up)
     }
 
+    func testScrollContainerTargetRejectsCaptureLocalRefAlias() throws {
+        let data = Data(#"{"captureLocalRef":"main_scroll"}"#.utf8)
+
+        XCTAssertThrowsError(try decoder.decode(ScrollContainerTarget.self, from: data))
+    }
+
     // MARK: - ScrollToEdgeTarget
 
     func testScrollToEdgeTargetAllEdges() throws {
