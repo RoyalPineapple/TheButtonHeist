@@ -56,12 +56,10 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
 public struct InterfaceContainerAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
     public let stableId: HeistContainer?
-    public let actions: [ElementAction]
 
-    public init(path: TreePath, stableId: HeistContainer?, actions: [ElementAction] = []) {
+    public init(path: TreePath, stableId: HeistContainer?) {
         self.path = path
         self.stableId = stableId
-        self.actions = actions
     }
 }
 
@@ -170,8 +168,7 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = containersByPath[oldPath] else { return nil }
             return InterfaceContainerAnnotation(
                 path: newPath,
-                stableId: annotation.stableId,
-                actions: annotation.actions
+                stableId: annotation.stableId
             )
         }
         return InterfaceAnnotations(elements: elements, containers: containers)
