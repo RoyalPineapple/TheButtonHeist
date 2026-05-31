@@ -63,9 +63,9 @@ final class CommandProjectionTests: XCTestCase {
         )
     }
 
-    func testCustomActionTargetProjectsToOneSelection() {
+    func testCustomActionTargetOwnsOneSelection() {
         XCTAssertEqual(
-            CustomActionTarget(elementTarget: .heistId("button"), actionName: "Archive").selection,
+            CustomActionTarget(elementTarget: .heistId("button"), actionName: "Archive"),
             .element(.heistId("button"), actionName: "Archive")
         )
         XCTAssertEqual(
@@ -73,7 +73,7 @@ final class CommandProjectionTests: XCTestCase {
                 containerTarget: ContainerMatcher(stableId: "toolbar"),
                 ordinal: 1,
                 actionName: "Dismiss"
-            ).selection,
+            ),
             .container(ContainerMatcher(stableId: "toolbar"), ordinal: 1, actionName: "Dismiss")
         )
     }
