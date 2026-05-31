@@ -66,7 +66,7 @@ extension TheFence {
 private extension TheFence {
 
     func decodeRunBatchStep(_ step: CommandArgumentEnvelope, index: Int) throws -> RunBatchPreparedStep {
-        switch FenceOperationCatalog.normalizeBatchStep(step) {
+        switch TheFence.Command.routeBatchStep(step) {
         case .success(let routed):
             return try decodeRunBatchStep(command: routed.command, arguments: routed.arguments, index: index)
 

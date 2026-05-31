@@ -46,7 +46,7 @@ struct ButtonHeistMCPServer {
         defer { idleMonitor.resetTimer() }
         do {
             let arguments = try decodeArguments(params.arguments)
-            let routed = FenceOperationCatalog.normalizeToolCall(name: params.name)
+            let routed = TheFence.Command.routeToolCall(named: params.name)
             let command: TheFence.Command
             switch routed {
             case .success(let value):

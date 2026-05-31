@@ -109,7 +109,7 @@ struct ToolRoutingTests {
     private func routeToolRequest(
         name: String
     ) -> Result<TheFence.Command, FenceOperationRoutingError> {
-        FenceOperationCatalog.normalizeToolCall(name: name)
+        TheFence.Command.routeToolCall(named: name)
     }
 
     private func routed(
@@ -140,7 +140,7 @@ struct ToolRoutingTests {
     private func normalizeBatchStepResult(
         _ step: [String: Argument]
     ) -> Result<RoutedCommand, FenceOperationRoutingError> {
-        FenceOperationCatalog.normalizeBatchStep(TheFence.CommandArgumentEnvelope(values: step, fieldPrefix: nil))
+        TheFence.Command.routeBatchStep(TheFence.CommandArgumentEnvelope(values: step, fieldPrefix: nil))
     }
 
     private func envelope(_ arguments: [String: Argument] = [:]) -> TheFence.CommandArgumentEnvelope {

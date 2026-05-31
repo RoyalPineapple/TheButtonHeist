@@ -172,7 +172,7 @@ extension TheFence {
     }
 
     private func playbackCommand(for sourceStep: HeistStep, stepIndex: Int?) throws -> Command {
-        switch FenceOperationCatalog.normalizePlaybackStep(commandName: sourceStep.command) {
+        switch TheFence.Command.routePlaybackStep(commandName: sourceStep.command) {
         case .success(let command):
             return command
         case .failure(let error):

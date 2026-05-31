@@ -1893,7 +1893,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     func testNormalizeToolCallRoutesWithoutParsingRequestArguments() throws {
-        let result = FenceOperationCatalog.normalizeToolCall(name: "activate")
+        let result = TheFence.Command.routeToolCall(named: "activate")
 
         guard case .success(let command) = result else {
             return XCTFail("Expected successful command, got \(result)")
@@ -1903,7 +1903,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     func testNormalizeToolCallRejectsNonMCPCommands() {
-        let result = FenceOperationCatalog.normalizeToolCall(name: "help")
+        let result = TheFence.Command.routeToolCall(named: "help")
 
         guard case .failure(let error) = result else {
             return XCTFail("Expected non-MCP command rejection, got \(result)")
@@ -1927,7 +1927,7 @@ final class TheFenceHandlerTests: XCTestCase {
         for commandName in removedCommands {
             XCTAssertNil(TheFence.Command(rawValue: commandName), commandName)
 
-            let routed = FenceOperationCatalog.normalizeCommandEnvelope(
+            let routed = TheFence.Command.routeCommandEnvelope(
                 .init(values: [
                     "command": .string(commandName),
                 ]),
