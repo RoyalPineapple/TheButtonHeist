@@ -39,9 +39,6 @@ extension Actions {
         case .failure(let result):
             return result
         case .success(let point):
-            if let failure = geometryFailure(method: method, field: "point", point: point) {
-                return failure
-            }
             let success = await action(point)
             return gestureDispatchResult(method: method, diagnosticPoint: point, success: success)
         }
@@ -61,12 +58,11 @@ extension Actions {
 
     func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult {
         let selection = target.gesturePointSelection()
-        let duration = clampDuration(target.duration)
         return await performPointAction(
             selection: selection,
             method: .syntheticLongPress
         ) { point in
-            await self.safecracker.longPress(at: point, duration: duration)
+            await self.safecracker.longPress(at: point, duration: target.duration.seconds)
         }
     }
 
@@ -103,8 +99,7 @@ extension Actions {
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
-            let duration = clampDuration(target.resolvedDuration)
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
+            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration.seconds)
         case .point(let startSelection, let destination):
             let startPoint: CGPoint
             switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe) {
@@ -129,8 +124,7 @@ extension Actions {
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
-            let duration = clampDuration(target.resolvedDuration)
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
+            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration.seconds)
         }
     }
 
@@ -149,12 +143,11 @@ extension Actions {
         if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }
-        let duration = clampDuration(target.resolvedDuration)
         return await performPointAction(
             selection: selection,
             method: .syntheticDrag
         ) { startPoint in
-            await self.safecracker.drag(from: startPoint, to: endPoint, duration: duration)
+            await self.safecracker.drag(from: startPoint, to: endPoint, duration: target.resolvedDuration.seconds)
         }
     }
 

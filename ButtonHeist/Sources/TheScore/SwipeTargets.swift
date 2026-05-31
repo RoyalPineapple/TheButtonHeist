@@ -109,13 +109,13 @@ private func swipeDestinationSelection(
 }
 
 public struct SwipeTarget: Codable, Sendable {
-    public static let defaultDuration = 0.15
+    public static let defaultDuration = GestureDuration.swipeDefault
 
     public let selection: SwipeGestureSelection
     /// Duration in seconds (default 0.15).
-    public let duration: Double?
+    public let duration: GestureDuration?
 
-    public init(selection: SwipeGestureSelection, duration: Double? = nil) {
+    public init(selection: SwipeGestureSelection, duration: GestureDuration? = nil) {
         self.selection = selection
         self.duration = duration
     }
@@ -143,7 +143,7 @@ public struct SwipeTarget: Codable, Sendable {
         return end
     }
 
-    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
+    public var resolvedDuration: GestureDuration { duration ?? Self.defaultDuration }
 
     public func gestureSelection() -> SwipeGestureSelection {
         selection
@@ -164,7 +164,7 @@ public struct SwipeTarget: Codable, Sendable {
         let direction = try pointContainer.decodeIfPresent(SwipeDirection.self, forKey: .direction)
         let start = try pointContainer.decodeIfPresent(UnitPoint.self, forKey: .start)
         let end = try pointContainer.decodeIfPresent(UnitPoint.self, forKey: .end)
-        self.duration = try pointContainer.decodeIfPresent(Double.self, forKey: .duration)
+        self.duration = try pointContainer.decodeIfPresent(GestureDuration.self, forKey: .duration)
         if start != nil || end != nil {
             guard let start, let end else {
                 throw GestureProjectionError.partialUnitPoints
@@ -243,7 +243,7 @@ extension SwipeTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("swipe", [
             selection.description,
-            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+            duration.map { "duration=\($0)" },
         ].compactMap { $0 })
     }
 }

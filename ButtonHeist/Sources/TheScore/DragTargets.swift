@@ -1,18 +1,18 @@
 public struct DragTarget: Codable, Sendable {
-    public static let defaultDuration = 0.5
+    public static let defaultDuration = GestureDuration.dragDefault
 
     public let start: GesturePointSelection
     public let end: ScreenPoint
     /// Duration in seconds (default 0.5).
-    public let duration: Double?
+    public let duration: GestureDuration?
 
-    public init(start: GesturePointSelection, end: ScreenPoint, duration: Double? = nil) {
+    public init(start: GesturePointSelection, end: ScreenPoint, duration: GestureDuration? = nil) {
         self.start = start
         self.end = end
         self.duration = duration
     }
 
-    public var resolvedDuration: Double { duration ?? Self.defaultDuration }
+    public var resolvedDuration: GestureDuration { duration ?? Self.defaultDuration }
 
     public func startSelection() -> GesturePointSelection {
         start
@@ -41,7 +41,7 @@ public struct DragTarget: Codable, Sendable {
             x: try container.decode(Double.self, forKey: .endX),
             y: try container.decode(Double.self, forKey: .endY)
         )
-        self.duration = try container.decodeIfPresent(Double.self, forKey: .duration)
+        self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -72,7 +72,7 @@ extension DragTarget: CustomStringConvertible {
         ScoreDescription.call("drag", [
             "start=\(start)",
             "end=\(end)",
-            duration.map { "duration=\(ScoreDescription.decimal($0))" },
+            duration.map { "duration=\($0)" },
         ].compactMap { $0 })
     }
 }

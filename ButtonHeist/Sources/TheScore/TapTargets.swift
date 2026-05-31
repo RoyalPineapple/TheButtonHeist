@@ -37,9 +37,9 @@ public struct LongPressTarget: Codable, Sendable {
 
     public let selection: GesturePointSelection
     /// Duration in seconds.
-    public let duration: Double
+    public let duration: GestureDuration
 
-    public init(selection: GesturePointSelection, duration: Double = 0.5) {
+    public init(selection: GesturePointSelection, duration: GestureDuration = .longPressDefault) {
         self.selection = selection
         self.duration = duration
     }
@@ -56,7 +56,7 @@ public struct LongPressTarget: Codable, Sendable {
         )
         self.selection = try decodeRequiredGesturePointSelection(from: decoder)
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.duration = try container.decodeIfPresent(Double.self, forKey: .duration) ?? 0.5
+        self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration) ?? .longPressDefault
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -70,7 +70,7 @@ extension LongPressTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("longPress", [
             selection.description,
-            "duration=\(ScoreDescription.decimal(duration))",
+            "duration=\(duration)",
         ])
     }
 }

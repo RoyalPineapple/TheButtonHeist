@@ -22,16 +22,12 @@ extension TheFence.CommandArgumentEnvelope {
         return value
     }
 
-    func gestureDuration() throws -> Double? {
-        try boundedPositiveNumber("duration", maximum: TheFence.DecodeLimits.maxGestureDurationSeconds)
-    }
-
-    func boundedPositiveNumber(_ key: String, maximum: Double) throws -> Double? {
-        guard let value = try positiveNumber(key) else { return nil }
-        guard value <= maximum else {
-            throw SchemaValidationError(field: key, observed: value, expected: "number in 0...\(maximum)")
+    func gestureDuration() throws -> GestureDuration? {
+        guard let value = try schemaNumber("duration") else { return nil }
+        if let expected = GestureDuration.validationFailure(for: value) {
+            throw SchemaValidationError(field: "duration", observed: value, expected: expected)
         }
-        return value
+        return try GestureDuration(seconds: value)
     }
 
     func boundedPositiveInteger(_ key: String, minimum: Int, maximum: Int) throws -> Int? {

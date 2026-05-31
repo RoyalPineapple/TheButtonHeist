@@ -3,16 +3,6 @@
 import UIKit
 import TheScore
 
-/// Result of resolving a screen coordinate from an element target or explicit point.
-/// Shared by gesture point resolution and gesture dispatch.
-///
-/// `@MainActor` justification: carries `TheSafecracker.InteractionResult` which
-/// references MainActor-bound state — isolation aligns with consumers.
-@MainActor enum PointResolution { // swiftlint:disable:this agent_main_actor_value_type
-    case success(CGPoint)
-    case failure(TheSafecracker.InteractionResult)
-}
-
 /// Cracks open the app's touch system for remote gesture injection.
 ///
 /// Supports tap, long press, swipe, and drag gestures using synthetic

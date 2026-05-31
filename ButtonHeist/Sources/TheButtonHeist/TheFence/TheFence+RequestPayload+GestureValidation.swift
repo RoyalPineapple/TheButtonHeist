@@ -18,22 +18,4 @@ extension TheFence {
         }
     }
 
-    func validatePositiveGestureNumber(_ value: Double?, field: String) throws {
-        guard let value else { return }
-        guard value > 0 else {
-            throw SchemaValidationError(field: field, observed: value, expected: "number > 0")
-        }
-    }
-
-    func validateGestureDuration(_ duration: Double?) throws {
-        try validatePositiveGestureNumber(duration, field: "duration")
-        guard let duration else { return }
-        guard duration <= DecodeLimits.maxGestureDurationSeconds else {
-            throw SchemaValidationError(
-                field: "duration",
-                observed: duration,
-                expected: "number in 0...\(DecodeLimits.maxGestureDurationSeconds)"
-            )
-        }
-    }
 }

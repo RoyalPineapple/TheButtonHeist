@@ -104,14 +104,14 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testClientMessageLongPressEncoding() throws {
         let message = ClientMessage.longPress(LongPressTarget(
             selection: .coordinate(ScreenPoint(x: 50, y: 75)),
-            duration: 1.0
+            duration: try GestureDuration(seconds: 1.0)
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .longPress(let target) = decoded {
             XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 50, y: 75)))
-            XCTAssertEqual(target.duration, 1.0)
+            XCTAssertEqual(target.duration.seconds, 1.0)
         } else {
             XCTFail("Expected longPress message")
         }
@@ -121,7 +121,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         let message = ClientMessage.drag(DragTarget(
             start: .coordinate(ScreenPoint(x: 50, y: 100)),
             end: ScreenPoint(x: 250, y: 100),
-            duration: 0.5
+            duration: try GestureDuration(seconds: 0.5)
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
@@ -129,7 +129,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         if case .drag(let target) = decoded {
             XCTAssertEqual(target.start, .coordinate(ScreenPoint(x: 50, y: 100)))
             XCTAssertEqual(target.end, ScreenPoint(x: 250, y: 100))
-            XCTAssertEqual(target.duration, 0.5)
+            XCTAssertEqual(target.duration?.seconds, 0.5)
         } else {
             XCTFail("Expected drag message")
         }

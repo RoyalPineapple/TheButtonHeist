@@ -85,32 +85,6 @@ final class TheBrainsActionTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - clampDuration
-
-    func testClampDurationNilReturnsDefault() {
-        let result = brains.actions.clampDuration(nil)
-        XCTAssertEqual(result, 0.5, accuracy: 0.001,
-                       "nil duration should return default (0.5)")
-    }
-
-    func testClampDurationRespectsMinimum() {
-        let result = brains.actions.clampDuration(0.001)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Duration below minimum should clamp to 0.01")
-    }
-
-    func testClampDurationRespectsMaximum() {
-        let result = brains.actions.clampDuration(120.0)
-        XCTAssertEqual(result, 60.0, accuracy: 0.001,
-                       "Duration above maximum should clamp to 60.0")
-    }
-
-    func testClampDurationPassesThroughValidValue() {
-        let result = brains.actions.clampDuration(1.5)
-        XCTAssertEqual(result, 1.5, accuracy: 0.001,
-                       "Valid duration should pass through unchanged")
-    }
-
     // MARK: - BeforeState Capture
 
     func testCaptureBeforeStateReturnsEmptySnapshotWhenRegistryEmpty() {
@@ -852,12 +826,12 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(dispatchedPoint, rawPoint)
     }
 
-    func testExecuteDragReadsTypedEndpointFromDragTarget() async {
+    func testExecuteDragReadsTypedEndpointFromDragTarget() async throws {
         let result = await brains.actions.executeDrag(
             DragTarget(
                 start: .coordinate(ScreenPoint(x: 10, y: 10)),
                 end: ScreenPoint(x: .infinity, y: 20),
-                duration: 0.01
+                duration: try GestureDuration(seconds: 0.01)
             )
         )
 

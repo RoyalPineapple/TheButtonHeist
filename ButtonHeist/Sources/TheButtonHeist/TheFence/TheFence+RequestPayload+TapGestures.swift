@@ -25,7 +25,7 @@ extension TheFence {
             field: "x/y",
             missingMessage: "Must specify target object or coordinates (x, y)"
         )
-        return LongPressTarget(selection: selection, duration: try request.gestureDuration() ?? 0.5)
+        return LongPressTarget(selection: selection, duration: try request.gestureDuration() ?? .longPressDefault)
     }
 
 }

@@ -29,8 +29,6 @@ extension TheFence {
         static let maxRunBatchNestingDepth = 32
         static let maxBatchResultRows = maxRunBatchSteps
         static let maxInlineScreenshotBase64Bytes = 1_000_000
-
-        static let maxGestureDurationSeconds = 60.0
     }
 }
 
@@ -279,7 +277,7 @@ enum FenceParameterBlocks: Sendable {
     ]
     static let gestureDuration = param(
         .duration, .number,
-        maximum: TheFence.DecodeLimits.maxGestureDurationSeconds
+        maximum: GestureDuration.maximumSeconds
     )
     static let incrementCount = param(.count, .integer, minimum: 1, maximum: 100)
 
