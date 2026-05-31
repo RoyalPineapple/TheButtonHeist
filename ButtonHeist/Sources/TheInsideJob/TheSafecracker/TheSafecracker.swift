@@ -156,13 +156,12 @@ final class TheSafecracker {
     /// - Parameters:
     ///   - point: Point in screen coordinates
     ///   - duration: How long to hold the press (seconds, default 0.5)
-    func longPress(at point: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+    func longPress(at point: CGPoint, duration: GestureDuration = .longPressDefault) async -> Bool {
         guard Self.geometryIsValid([point], field: "long press point") else { return false }
-        guard Self.durationIsValid(duration, field: "long press duration") else { return false }
         guard touchDown(at: point) else { return false }
 
         var elapsed: TimeInterval = 0
-        while elapsed < duration && !Task.isCancelled {
+        while elapsed < duration.seconds && !Task.isCancelled {
             guard await Task.cancellableSleep(
                 nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
             ) else { break }
@@ -181,9 +180,8 @@ final class TheSafecracker {
     ///   - start: Starting point in screen coordinates
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the swipe (seconds, default 0.15)
-    func swipe(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.15) async -> Bool {
+    func swipe(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .swipeDefault) async -> Bool {
         guard Self.geometryIsValid([start, end], field: "swipe point") else { return false }
-        guard Self.durationIsValid(duration, field: "swipe duration") else { return false }
         return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 3)
     }
 
@@ -194,9 +192,8 @@ final class TheSafecracker {
     ///   - start: Starting point in screen coordinates
     ///   - end: Ending point in screen coordinates
     ///   - duration: Duration of the drag (seconds, default 0.5)
-    func drag(from start: CGPoint, to end: CGPoint, duration: TimeInterval = 0.5) async -> Bool {
+    func drag(from start: CGPoint, to end: CGPoint, duration: GestureDuration = .dragDefault) async -> Bool {
         guard Self.geometryIsValid([start, end], field: "drag point") else { return false }
-        guard Self.durationIsValid(duration, field: "drag duration") else { return false }
         return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 5)
     }
 
@@ -287,10 +284,10 @@ final class TheSafecracker {
     private func performLineGesture(
         from start: CGPoint,
         to end: CGPoint,
-        duration: TimeInterval,
+        duration: GestureDuration,
         minimumSteps: Int
     ) async -> Bool {
-        let steps = max(Int(duration / Self.touchGestureStepDelay), minimumSteps)
+        let steps = max(Int(duration.seconds / Self.touchGestureStepDelay), minimumSteps)
         return await performTouchPath(
             start: start,
             waypoints: Self.linearPath(from: start, to: end, steps: steps)
@@ -378,14 +375,6 @@ final class TheSafecracker {
         return true
     }
 
-    static func durationIsValid(_ duration: TimeInterval, field: String) -> Bool {
-        guard duration.isFinite, duration > 0 else {
-            insideJobLogger.error("Rejected synthetic touch timing: \(field, privacy: .public) must be finite and > 0")
-            return false
-        }
-        return true
-    }
-
     static func linearPath(from start: CGPoint, to end: CGPoint, steps: Int) -> [CGPoint] {
         (1...steps).map { step in
             let progress = Double(step) / Double(steps)
@@ -419,9 +408,6 @@ nonisolated extension TheSafecracker {
 
     /// Default inter-key delay for text injection (30ms).
     static let defaultInterKeyDelay: UInt64 = 30_000_000
-
-    /// Maximum allowed inter-key delay (500ms) to prevent unreasonably slow typing.
-    static let maxInterKeyDelay: UInt64 = 500_000_000
 
     /// Yield between touch began/ended phases (50ms) so SwiftUI's gesture
     /// pipeline has run-loop time to transition from "possible" to "recognized".
