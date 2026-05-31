@@ -8,19 +8,7 @@ import AccessibilitySnapshotParser
 
 // MARK: - Screen Value Type
 
-/// Immutable interface state with pure value semantics.
-///
-/// `Screen` is the currency type for the resolution layer post-0.2.25. It
-/// replaces the dozen mutable fields previously held on TheStash
-/// (`heistIdIndex`, `currentHierarchy`, `reverseIndex`, `knownIds`,
-/// `currentContainers`, `firstResponderHeistId`, `lastScreenName`, ...) with
-/// two named values: `semantic` is durable targetable state, and `liveCapture`
-/// is the latest parse used for geometry, live object dispatch, scrolling,
-/// and wire-tree projection.
-///
-/// Exploration accumulates a local `var union: Screen` in the caller; the
-/// final union is committed by writing it back into `stash.currentScreen`.
-/// TheStash never knows whether an exploration is in progress.
+/// Immutable interface snapshot used by resolution and projection code.
 ///
 /// `name` and `id` are derived from the live interface on demand — never
 /// stored — so they cannot drift from the underlying tree.

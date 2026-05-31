@@ -21,9 +21,10 @@ extension TheFence {
     struct ValidatedHeistStep {
         let index: Int
         let target: ElementTarget?
+        let parsedRequest: ParsedRequest
         let preparedStep: RunBatchPreparedStep
 
-        var command: Command { preparedStep.command }
+        var command: Command { parsedRequest.command }
     }
 
     @ButtonHeistActor
@@ -53,6 +54,7 @@ extension TheFence {
                 return ValidatedHeistStep(
                     index: index,
                     target: sourceStep.target,
+                    parsedRequest: parsedRequest,
                     preparedStep: try batchPreparedStep(originalIndex: index, request: parsedRequest)
                 )
             } catch let error as SchemaValidationError {

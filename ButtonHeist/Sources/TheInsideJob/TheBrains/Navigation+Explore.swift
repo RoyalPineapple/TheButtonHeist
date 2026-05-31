@@ -10,12 +10,9 @@ import AccessibilitySnapshotParser
 //
 // Scrolls every scrollable container to discover the whole reachable hierarchy.
 //
-// Post-0.2.25: TheStash has no exploration mode. The accumulator is a local
-// `var union: Screen` in exploreAndPrune; the final union is committed by
-// writing it back into `stash.currentScreen`. Mid-exploration writes to
-// `currentScreen` keep in-cycle scroll-termination checks working — they read
-// `stash.visibleIds`, which mirrors the latest page-only parse, not the
-// in-flight union.
+// TheStash has no exploration mode. The accumulator is a local `var union:
+// Screen`; page commits keep scroll termination tied to the latest parse, and
+// the final commit stores the explored semantic union.
 //
 // Visible pages are physical evidence; known state is semantic memory.
 // Exploration keeps page evidence visible for scroll termination and commits
@@ -29,28 +26,19 @@ extension Navigation {
     }
 
     /// Explore and accumulate the unioned screen. The local `union: Screen`
-    /// holds every element seen during this exploration; the final union is
-    /// committed to `stash.currentScreen` so subsequent operations can target
-    /// known semantic content while action execution owns reachability.
-    ///
-    /// During this call, `stash.currentScreen.liveCapture` is rebound
-    /// to each latest parse so termination heuristics (`stash.visibleIds ==
-    /// before`) compare page-to-page ids. On return,
-    /// `stash.currentScreen.knownInterface` contains all elements observed
-    /// during exploration.
+    /// holds every element seen during this exploration; the final commit keeps
+    /// semantic content targetable while action execution owns reachability.
     func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
         var union = stash.currentScreen
         let manifest = await exploreScreen(target: target, union: &union)
-        // End-of-cycle union commit: knownInterface contains the semantic set;
-        // liveCapture still reflects the last parsed page.
-        stash.currentScreen = union
+        stash.commitExploredScreen(union)
         return manifest
     }
 
     /// Scroll all scrollable containers to discover reachable elements.
-    /// Accumulates discovered elements into `union`. Mid-exploration writes
-    /// to `stash.currentScreen` happen as scrolls land so termination
-    /// heuristics compare the latest parsed page.
+    /// Accumulates discovered elements into `union`. Mid-exploration page
+    /// commits happen as scrolls land so termination heuristics compare the
+    /// latest parsed page.
     func exploreScreen(target: ElementTarget? = nil, union: inout Screen) async -> ScreenManifest {
         let startTime = CACurrentMediaTime()
         var manifest = ScreenManifest()
@@ -158,10 +146,7 @@ extension Navigation {
                     scrollTarget, direction: toLeading, animated: false
                 )
                 if proof.result == .moved, let parsed = stash.parse() {
-                    // Page-only commit: visible termination compares page-to-page;
-                    // the union accumulator becomes semantic memory only at the
-                    // end of exploration.
-                    stash.currentScreen = parsed
+                    stash.commitVisiblePage(parsed)
                     union = union.merging(parsed)
                 }
                 if proof.result == .unchanged || stash.visibleIds == proof.previousVisibleIds {
@@ -183,9 +168,7 @@ extension Navigation {
             guard proof.result == .moved else { break }
             manifest.scrollCount += 1
             if let parsed = stash.parse() {
-                // Page-only commit: reconciliation reads the visible page;
-                // the union accumulator absorbs it as semantic memory.
-                stash.currentScreen = parsed
+                stash.commitVisiblePage(parsed)
                 union = union.merging(parsed)
             }
             originByElement = buildOriginIndex()
