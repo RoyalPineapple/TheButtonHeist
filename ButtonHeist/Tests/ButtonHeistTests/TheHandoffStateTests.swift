@@ -86,6 +86,21 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testServerHelloSendsClientHelloBeforeHandoffIsConnected() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _ in mock }
+
+        handoff.connect(to: device)
+        handoff.handleServerMessage(.serverHello, requestId: nil)
+
+        assertConnecting(handoff.connectionPhase, device: device)
+        XCTAssertEqual(mock.sent.map { $0.0.wireType }, [.clientHello])
+    }
+
+    @ButtonHeistActor
     func testAuthRequiredSendsConfiguredTokenAndDriverFromHandoff() async {
         let handoff = TheHandoff()
         handoff.token = "test-token"
@@ -94,6 +109,28 @@ final class TheHandoffStateTests: XCTestCase {
 
         handoff.handleServerMessage(.authRequired, requestId: nil)
 
+        guard case .authenticate(let payload) = mock.sent.first?.0 else {
+            return XCTFail("Expected Handoff to send authenticate, got \(String(describing: mock.sent.first?.0))")
+        }
+        XCTAssertEqual(payload.token, "test-token")
+        XCTAssertEqual(payload.driverId, "test-driver")
+        XCTAssertEqual(mock.sent.count, 1)
+    }
+
+    @ButtonHeistActor
+    func testAuthRequiredSendsAuthenticateBeforeHandoffIsConnected() async {
+        let handoff = TheHandoff()
+        handoff.token = "test-token"
+        handoff.driverId = "test-driver"
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = MockConnection()
+        mock.connectEventsOverride = []
+        handoff.makeConnection = { _ in mock }
+
+        handoff.connect(to: device)
+        handoff.handleServerMessage(.authRequired, requestId: nil)
+
+        assertConnecting(handoff.connectionPhase, device: device)
         guard case .authenticate(let payload) = mock.sent.first?.0 else {
             return XCTFail("Expected Handoff to send authenticate, got \(String(describing: mock.sent.first?.0))")
         }

@@ -264,17 +264,28 @@ final class TheHandoff {
                 forwardServerMessage(message, requestId: requestId)
             }
         case .serverHello:
-            _ = send(.clientHello, requestId: nil)
+            sendAdmissionMessage(.clientHello)
         case .authRequired:
-            _ = send(.authenticate(AuthenticatePayload(
+            sendAdmissionMessage(.authenticate(AuthenticatePayload(
                 token: token ?? "",
                 driverId: effectiveDriverId
-            )), requestId: nil)
+            )))
         }
     }
 
     private func forwardServerMessage(_ message: ServerMessage, requestId: String?) {
         onServerMessage?(message, requestId)
+    }
+
+    private func sendAdmissionMessage(_ message: ClientMessage) {
+        guard let connection else {
+            connectionLifecycle.markFailed(.connectionFailed("Cannot send admission message without an active transport"))
+            return
+        }
+        let outcome = connection.send(message, requestId: nil)
+        if case .failed(let failure) = outcome {
+            connectionLifecycle.markFailed(.connectionFailed(failure.localizedDescription))
+        }
     }
 
     func disconnect() {
