@@ -49,7 +49,7 @@ extension TheFence {
 
         let steps = try playback.steps.enumerated().map { index, sourceStep in
             do {
-                let parsedRequest = try playbackRequest(from: sourceStep, stepIndex: index)
+                let parsedRequest = try playbackRequest(fromDiskStep: sourceStep, stepIndex: index)
                 return HeistPlaybackStepContract(
                     index: index,
                     reportTarget: parsedRequest.arguments.elementTarget,
@@ -125,15 +125,14 @@ extension TheFence {
         )
     }
 
-    private func playbackRequest(from sourceStep: HeistStep, stepIndex: Int? = nil) throws -> ParsedRequest {
+    private func playbackRequest(fromDiskStep sourceStep: HeistStep, stepIndex: Int) throws -> ParsedRequest {
+        let prefix = "Invalid heist step \(stepIndex): "
         guard let command = Command(rawValue: sourceStep.command) else {
-            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
             throw FenceError.invalidRequest(
                 prefix + "heist step command must be a canonical TheFence.Command; unknown command \"\(sourceStep.command)\""
             )
         }
         guard command.descriptor.isBatchExecutable else {
-            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
             throw FenceError.invalidRequest(prefix + "heist step command \"\(command.rawValue)\" is not supported")
         }
         var values = sourceStep.arguments
@@ -148,13 +147,11 @@ extension TheFence {
         do {
             canonicalStep = try parsedRequest.heistStepProjection().heistStep(command: command)
         } catch is HeistStepError {
-            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
             throw FenceError.invalidRequest(
                 prefix + "heist step must match descriptor-owned recording projection"
             )
         }
         guard canonicalStep == sourceStep else {
-            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
             throw FenceError.invalidRequest(
                 prefix + "heist step must match descriptor-owned recording projection"
             )
