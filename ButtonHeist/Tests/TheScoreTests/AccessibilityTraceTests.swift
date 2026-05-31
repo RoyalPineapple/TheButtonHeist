@@ -126,8 +126,6 @@ final class AccessibilityTraceTests: XCTestCase {
 
         XCTAssertEqual(trace.capture(hash: second.hash)?.hash, second.hash)
         XCTAssertEqual(trace.capture(ref: AccessibilityTrace.CaptureRef(capture: second))?.hash, second.hash)
-        XCTAssertEqual(trace.receipts.map(\.hash), [first.hash, second.hash])
-        XCTAssertEqual(trace.receipts[1].parentHash, first.hash)
         XCTAssertTrue(trace.isLinearChain)
     }
 

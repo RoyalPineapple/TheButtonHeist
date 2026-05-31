@@ -162,21 +162,6 @@ public extension AccessibilityTrace {
         public var afterHash: String { after.hash }
     }
 
-    enum IntegrityIssue: Sendable, Equatable {
-        case captureHashMismatch(
-            index: Int,
-            sequence: Int,
-            recordedHash: String,
-            computedHash: String
-        )
-        case parentHashMismatch(
-            index: Int,
-            sequence: Int,
-            recordedParentHash: String?,
-            expectedParentHash: String?
-        )
-    }
-
     struct Context: Codable, Sendable, Equatable, Hashable {
         public static let empty = Context()
 
@@ -217,46 +202,6 @@ public extension AccessibilityTrace {
         }
     }
 
-    enum ReceiptKind: String, Codable, Sendable, Equatable {
-        case capture
-    }
-
-    struct ReceiptSample: Codable, Sendable, Equatable {
-        public let heistId: HeistId?
-        public let summary: String
-
-        public init(heistId: HeistId? = nil, summary: String) {
-            self.heistId = heistId
-            self.summary = summary
-        }
-    }
-
-    /// Receipt projection over an accessibility capture.
-    struct Receipt: Codable, Sendable, Equatable {
-        public let capture: Capture
-
-        public init(capture: Capture) {
-            self.capture = capture
-        }
-
-        public var sequence: Int { capture.sequence }
-        public var hash: String { capture.hash }
-        public var parentHash: String? { capture.parentHash }
-        public var summary: String { capture.summary }
-        public var interface: Interface { capture.interface }
-        public var kind: ReceiptKind { .capture }
-
-        public var samples: [ReceiptSample] {
-            Array(interface.elements.prefix(5)).map {
-                ReceiptSample(heistId: nonEmpty($0.heistId), summary: truncate(elementSummary($0), to: 80))
-            }
-        }
-
-        public var omittedCount: Int? {
-            let omitted = interface.elements.count - samples.count
-            return omitted > 0 ? omitted : nil
-        }
-    }
 }
 
 private struct StableCaptureContent: Codable {
@@ -272,25 +217,4 @@ private func normalized(_ value: String?) -> String? {
         .replacingOccurrences(of: "\r", with: " ")
         .trimmingCharacters(in: .whitespacesAndNewlines)
     return normalized.isEmpty ? nil : normalized
-}
-
-private func nonEmpty(_ value: String?) -> String? {
-    guard let normalized = normalized(value), !normalized.isEmpty else { return nil }
-    return normalized
-}
-
-private func truncate(_ value: String, to limit: Int) -> String {
-    guard limit > 3, value.count > limit else { return value }
-    return String(value.prefix(limit - 3)) + "..."
-}
-
-private func elementSummary(_ element: HeistElement) -> String {
-    let role = element.traits.first?.rawValue ?? nonEmpty(element.description) ?? "element"
-    if let label = nonEmpty(element.label) {
-        return "\(role) \"\(label)\""
-    }
-    if let value = nonEmpty(element.value) {
-        return "\(role) = \"\(value)\""
-    }
-    return role
 }
