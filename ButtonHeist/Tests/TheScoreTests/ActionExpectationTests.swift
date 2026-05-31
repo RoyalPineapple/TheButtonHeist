@@ -35,24 +35,6 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertEqual(decoded, result)
     }
 
-    // MARK: - Implicit Delivery Validation
-
-    func testDeliveryMetWhenSuccess() {
-        let action = makeResult(success: true)
-        let result = ActionExpectation.validateDelivery(action)
-        XCTAssertTrue(result.met)
-        XCTAssertNil(result.expectation)
-        XCTAssertEqual(result.actual, "delivered")
-    }
-
-    func testDeliveryNotMetWhenFailed() {
-        let action = makeResult(success: false, message: "element not found")
-        let result = ActionExpectation.validateDelivery(action)
-        XCTAssertFalse(result.met)
-        XCTAssertNil(result.expectation)
-        XCTAssertEqual(result.actual, "element not found")
-    }
-
     // MARK: - Validation: screenChanged
 
     func testScreenChangedMetWhenDeltaIsScreenChanged() {

@@ -398,14 +398,6 @@ extension ActionExpectation {
         return ExpectationResult(met: false, expectation: expectation, actual: "no elements removed")
     }
 
-    /// Baseline delivery check — always run for every action.
-    public static func validateDelivery(_ result: ActionResult) -> ExpectationResult {
-        ExpectationResult(
-            met: result.success,
-            expectation: nil,
-            actual: result.success ? "delivered" : (result.message ?? "failed")
-        )
-    }
 }
 
 private extension AccessibilityTrace.Delta {

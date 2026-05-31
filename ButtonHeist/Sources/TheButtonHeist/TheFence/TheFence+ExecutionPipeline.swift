@@ -90,7 +90,7 @@ extension TheFence {
         preActionElements: [HeistId: HeistElement]
     ) async throws -> ValidatedResponse {
         if let actionResult = response.actionResult {
-            let delivery = ActionExpectation.validateDelivery(actionResult)
+            let delivery = deliveryExpectationResult(for: actionResult)
             if !delivery.met {
                 return ValidatedResponse(
                     response: .action(command: command, result: actionResult, expectation: delivery)
@@ -117,6 +117,14 @@ extension TheFence {
         }
 
         return ValidatedResponse(response: response)
+    }
+
+    private func deliveryExpectationResult(for result: ActionResult) -> ExpectationResult {
+        ExpectationResult(
+            met: result.success,
+            expectation: nil,
+            actual: result.success ? "delivered" : (result.message ?? "failed")
+        )
     }
 
     private func waitForPostActionExpectation(
