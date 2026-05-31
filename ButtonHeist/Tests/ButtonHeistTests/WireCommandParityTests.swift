@@ -4,6 +4,12 @@ import TheScore
 
 final class WireCommandParityTests: XCTestCase {
 
+    func testEveryCommandHasExactlyOneDescriptor() {
+        let descriptorCommands = TheFence.Command.descriptors.map(\.command)
+        XCTAssertEqual(descriptorCommands.count, TheFence.Command.allCases.count)
+        XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
+    }
+
     @ButtonHeistActor
     func testEveryPublicCommandRoutesThroughDescriptorOwnedDecoder() async throws {
         let (fence, _) = makeConnectedFence()

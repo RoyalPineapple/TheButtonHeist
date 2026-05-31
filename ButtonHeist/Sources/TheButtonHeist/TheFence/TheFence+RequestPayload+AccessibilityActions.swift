@@ -4,6 +4,11 @@ private let accessibilityAdjustmentCountRange = 1...100
 
 extension TheFence {
 
+    struct CountArgument {
+        let value: Int?
+        let observed: String?
+    }
+
     static func decodeActivateRequest(
         _ fence: TheFence,
         _ input: CommandArgumentEnvelope,

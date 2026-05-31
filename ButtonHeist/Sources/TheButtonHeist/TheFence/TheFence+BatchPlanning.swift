@@ -4,6 +4,27 @@ import TheScore
 
 extension TheFence {
 
+    struct RunBatchRequest {
+        let steps: [RunBatchPreparedStep]
+        let policy: BatchExecutionPolicy
+    }
+
+    struct RunBatchPreparedStep {
+        let originalIndex: Int
+        let command: Command
+        let typedStep: TheScore.BatchStep
+
+        init(
+            originalIndex: Int,
+            command: Command,
+            typedStep: TheScore.BatchStep
+        ) {
+            self.originalIndex = originalIndex
+            self.command = command
+            self.typedStep = typedStep
+        }
+    }
+
     struct BatchStepPlanBuildError: Error {
         let message: String
     }
