@@ -1,0 +1,85 @@
+#if canImport(UIKit)
+#if DEBUG
+import UIKit
+
+@MainActor
+final class SafecrackerKeyboardInput {
+
+    private var keyboardVisibleFlag = false
+
+    var keyboardBridgeProvider: () -> KeyboardBridge? = { KeyboardBridge.shared() }
+
+    func startObservation() {
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(keyboardFrameDidChange),
+                           name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+        center.addObserver(self, selector: #selector(keyboardWillShow),
+                           name: UIResponder.keyboardWillShowNotification, object: nil)
+        center.addObserver(self, selector: #selector(keyboardDidHide),
+                           name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+
+    func stopObservation() {
+        let center = NotificationCenter.default
+        center.removeObserver(self, name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
+        center.removeObserver(self, name: UIResponder.keyboardWillShowNotification, object: nil)
+        center.removeObserver(self, name: UIResponder.keyboardDidHideNotification, object: nil)
+    }
+
+    func isKeyboardVisible() -> Bool {
+        keyboardVisibleFlag
+    }
+
+    func hasActiveTextInput() -> Bool {
+        activeKeyboardInput() != nil
+    }
+
+    func typeText(
+        _ text: String,
+        interKeyDelay: UInt64 = TheSafecracker.defaultInterKeyDelay
+    ) async -> KeyboardTextInjectionResult {
+        guard let keyboard = activeKeyboardInput() else {
+            return .failed(.noActiveInput(strategy: UIKeyboardImplTextInjection.strategyName))
+        }
+        var iterator = text.makeIterator()
+        guard var character = iterator.next() else { return .dispatched }
+
+        while true {
+            let result = keyboard.type(character)
+            if case .failed = result { return result }
+            guard let nextCharacter = iterator.next() else { return .dispatched }
+            guard await Task.cancellableSleep(nanoseconds: interKeyDelay) else {
+                return .failed(.cancelled(strategy: UIKeyboardImplTextInjection.strategyName))
+            }
+            character = nextCharacter
+        }
+    }
+
+    @objc private func keyboardFrameDidChange(_ notification: Notification) {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+        let screenBounds = notification.object
+            .flatMap { $0 as? UIScreen }?.bounds
+            ?? UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.screen.bounds
+            ?? .zero
+        keyboardVisibleFlag = endFrame.intersects(screenBounds)
+            && endFrame.height > 0
+            && endFrame.origin.y < screenBounds.height
+    }
+
+    @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
+    @objc private func keyboardDidHide() { keyboardVisibleFlag = false }
+
+    private func activeKeyboardInput() -> KeyboardBridge? {
+        guard let keyboard = keyboardBridgeProvider(), keyboard.hasActiveInput else {
+            return nil
+        }
+        return keyboard
+    }
+}
+
+#endif // DEBUG
+#endif // canImport(UIKit)
