@@ -97,14 +97,12 @@ actor TheMuscle {
     func installCallbacks(
         sendToClient: @escaping @Sendable (Data, Int) async -> ServerSendOutcome,
         disconnectClient: @escaping @Sendable (Int) async -> Void,
-        onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void,
-        onSessionActiveChanged: @escaping @MainActor @Sendable (Bool) async -> Void
+        onClientAuthenticated: @escaping @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void
     ) {
         delivery.install(ClientDelivery.Callbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnectClient,
-            onClientAuthenticated: onClientAuthenticated,
-            onSessionActiveChanged: onSessionActiveChanged
+            onClientAuthenticated: onClientAuthenticated
         ))
     }
 
@@ -195,10 +193,7 @@ actor TheMuscle {
             driverIdentity: authentication.driverIdentity,
             clientId: authentication.clientId
         ) {
-        case .accepted(let notifyActiveChanged):
-            if notifyActiveChanged {
-                _ = await delivery.sessionActiveChanged(true)
-            }
+        case .accepted:
             let effect = admission.completeAuthentication(authentication)
             cancelAuthenticationDeadline(for: authentication.clientId)
             await applyAdmissionEffect(effect)
@@ -287,9 +282,7 @@ actor TheMuscle {
     }
 
     private func releaseSession() async {
-        if session.release() {
-            _ = await delivery.sessionActiveChanged(false)
-        }
+        _ = session.release()
     }
 
     // MARK: - Alert Presentation

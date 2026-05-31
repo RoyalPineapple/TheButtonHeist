@@ -38,14 +38,10 @@ extension TheGetaway {
         let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { [weak self] clientId, respond in
             self?.handleClientConnected(clientId, respond: respond)
         }
-        let onSessionActiveChanged: @MainActor @Sendable (Bool) async -> Void = { [weak self] isActive in
-            self?.transport?.updateTXTRecord([TXTRecordKey.sessionActive.rawValue: isActive ? "1" : "0"])
-        }
         await muscle.installCallbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnect,
-            onClientAuthenticated: onAuthenticated,
-            onSessionActiveChanged: onSessionActiveChanged
+            onClientAuthenticated: onAuthenticated
         )
 
         eventConsumerTask?.cancel()

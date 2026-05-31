@@ -249,7 +249,6 @@ final class DeviceDiscovery: DeviceDiscovering {
         var installationId: String?
         var displayDeviceName: String?
         var instanceId: String?
-        var sessionActive: Bool?
         var certFingerprint: String?
         if let txtRecord {
             simUDID = txtRecord[TXTRecordKey.simUDID.rawValue]
@@ -257,9 +256,6 @@ final class DeviceDiscovery: DeviceDiscovering {
             displayDeviceName = txtRecord[TXTRecordKey.deviceName.rawValue]
             instanceId = txtRecord[TXTRecordKey.instanceId.rawValue]
             certFingerprint = txtRecord[TXTRecordKey.certFingerprint.rawValue]
-            if let value = txtRecord[TXTRecordKey.sessionActive.rawValue] {
-                sessionActive = value == "1"
-            }
         }
 
         return DiscoveredDevice(
@@ -270,7 +266,6 @@ final class DeviceDiscovery: DeviceDiscovering {
             installationId: installationId,
             displayDeviceName: displayDeviceName,
             instanceId: instanceId,
-            sessionActive: sessionActive,
             certFingerprint: certFingerprint
         )
     }

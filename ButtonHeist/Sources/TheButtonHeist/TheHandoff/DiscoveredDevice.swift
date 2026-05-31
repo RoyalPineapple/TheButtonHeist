@@ -19,8 +19,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
     let displayDeviceName: String?
     /// Instance identifier from Bonjour TXT record (human-readable label)
     let instanceId: String?
-    /// Whether the device has an active session (from Bonjour TXT record)
-    let sessionActive: Bool?
     /// TLS certificate fingerprint from Bonjour TXT record (sha256:hex)
     let certFingerprint: String?
 
@@ -29,7 +27,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
                 installationId: String? = nil,
                 displayDeviceName: String? = nil,
                 instanceId: String? = nil,
-                sessionActive: Bool? = nil,
                 certFingerprint: String? = nil) {
         self.id = id
         self.name = name
@@ -38,7 +35,6 @@ public struct DiscoveredDevice: Identifiable, Hashable, Sendable {
         self.installationId = installationId
         self.displayDeviceName = displayDeviceName
         self.instanceId = instanceId
-        self.sessionActive = sessionActive
         self.certFingerprint = certFingerprint
     }
 

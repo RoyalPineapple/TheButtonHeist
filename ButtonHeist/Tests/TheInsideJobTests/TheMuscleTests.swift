@@ -15,7 +15,6 @@ private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:thi
     private var sentMessagesStorage: [(data: Data, clientId: Int)] = []
     private var disconnectedClientsStorage: [Int] = []
     private var authenticatedCallbacksStorage: [(clientId: Int, respond: @Sendable (Data) -> Void)] = []
-    private var sessionChangesStorage: [Bool] = []
     private let lock = NSLock()
 
     var sentMessages: [(data: Data, clientId: Int)] { lock.withLock { sentMessagesStorage } }
@@ -23,14 +22,12 @@ private final class CallbackSink: @unchecked Sendable { // swiftlint:disable:thi
     var authenticatedCallbacks: [(clientId: Int, respond: @Sendable (Data) -> Void)] {
         lock.withLock { authenticatedCallbacksStorage }
     }
-    var sessionChanges: [Bool] { lock.withLock { sessionChangesStorage } }
 
     func appendSent(_ entry: (Data, Int)) { lock.withLock { sentMessagesStorage.append(entry) } }
     func appendDisconnected(_ clientId: Int) { lock.withLock { disconnectedClientsStorage.append(clientId) } }
     func appendAuthenticatedCallback(_ entry: (Int, @Sendable (Data) -> Void)) {
         lock.withLock { authenticatedCallbacksStorage.append(entry) }
     }
-    func appendSessionChange(_ value: Bool) { lock.withLock { sessionChangesStorage.append(value) } }
 }
 
 @MainActor
@@ -45,7 +42,7 @@ final class TheMuscleTests: XCTestCase {
         try await super.setUp()
         muscle = TheMuscle(explicitToken: "test-token")
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: false)
+        await installCallbacks()
     }
 
     override func tearDown() async throws {
@@ -64,7 +61,7 @@ final class TheMuscleTests: XCTestCase {
     /// Install test callbacks. Each callback writes to the shared `CallbackSink`,
     /// which is thread-safe so the closures don't need to hop back to the harness's
     /// `@MainActor` isolation.
-    private func installCallbacks(observeSessionChanges: Bool) async {
+    private func installCallbacks() async {
         let sink = self.sink!
         let sendToClient: @Sendable (Data, Int) async -> ServerSendOutcome = { data, clientId in
             sink.appendSent((data, clientId))
@@ -76,16 +73,10 @@ final class TheMuscleTests: XCTestCase {
         let onAuthenticated: @MainActor @Sendable (Int, @escaping @Sendable (Data) -> Void) -> Void = { clientId, respond in
             sink.appendAuthenticatedCallback((clientId, respond))
         }
-        let recordChanges: @MainActor @Sendable (Bool) async -> Void = { value in sink.appendSessionChange(value) }
-        let ignoreChanges: @MainActor @Sendable (Bool) async -> Void = { _ in }
-        let onSessionActiveChanged: @MainActor @Sendable (Bool) async -> Void = observeSessionChanges
-            ? recordChanges
-            : ignoreChanges
         await muscle.installCallbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnect,
-            onClientAuthenticated: onAuthenticated,
-            onSessionActiveChanged: onSessionActiveChanged
+            onClientAuthenticated: onAuthenticated
         )
     }
 
@@ -280,7 +271,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: false)
+        await installCallbacks()
         let (respond, responses) = collectResponses()
         try await authenticate(clientId: 1, token: "", respond: respond)
 
@@ -294,7 +285,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: false)
+        await installCallbacks()
         let (respond, responses) = collectResponses()
 
         try await authenticate(clientId: 1, token: "", respond: respond)
@@ -308,7 +299,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: false)
+        await installCallbacks()
         let generatedToken = await muscle.sessionToken
         let (respond, responses) = collectResponses()
         try await authenticate(clientId: 1, token: "", respond: respond)
@@ -327,7 +318,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: false)
+        await installCallbacks()
 
         let generatedToken = await muscle.sessionToken
         let generatedResponses = collectResponses()
@@ -342,7 +333,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: false)
+        await installCallbacks()
         let (respond, responses) = collectResponses()
 
         try await authenticate(clientId: 1, token: "wrong-token", respond: respond)
@@ -361,7 +352,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: nil)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: false)
+        await installCallbacks()
         let generatedToken = await muscle.sessionToken
         try await authenticate(clientId: 1, token: generatedToken, respond: respondSink())
         let (respond, responses) = collectResponses()
@@ -498,13 +489,13 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertNotNil(driverIdDuringDrain, "Driver should still own session while draining")
 
         // Same driver reconnects — should rejoin the draining session, not claim a new one.
-        // Re-install callbacks with the session-change observer enabled.
-        await installCallbacks(observeSessionChanges: true)
+        await installCallbacks()
         try await authenticate(clientId: 2, token: "test-token", respond: respondSink())
 
         let connectionsAfter = await muscle.activeSessionConnections
+        let driverIdAfter = await muscle.activeSessionDriverId
         XCTAssertTrue(connectionsAfter.contains(2), "New client should be in session")
-        XCTAssertTrue(sink.sessionChanges.isEmpty, "Session should not have been released and reclaimed")
+        XCTAssertEqual(driverIdAfter, driverIdDuringDrain)
     }
 
     func testDifferentDriverBlockedDuringGracePeriod() async throws {
@@ -531,7 +522,7 @@ final class TheMuscleTests: XCTestCase {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: "test-token", sessionReleaseTimeout: 0)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: true)
+        await installCallbacks()
 
         try await authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
         await muscle.registerClientAddress(2, address: "127.0.0.1")
@@ -541,14 +532,15 @@ final class TheMuscleTests: XCTestCase {
 
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.contains(1))
-        XCTAssertEqual(sink.sessionChanges, [true])
+        let driverId = await muscle.activeSessionDriverId
+        XCTAssertEqual(driverId, "driver:driver-a")
     }
 
     func testLastSessionConnectionStartsReleaseTimer() async throws {
         await muscle.tearDown()
         muscle = TheMuscle(explicitToken: "test-token", sessionReleaseTimeout: 0)
         sink = CallbackSink()
-        await installCallbacks(observeSessionChanges: true)
+        await installCallbacks()
 
         try await authenticate(clientId: 1, token: "test-token", driverId: "driver-a", respond: respondSink())
         await muscle.handleClientDisconnected(1)
@@ -556,7 +548,6 @@ final class TheMuscleTests: XCTestCase {
 
         let driverId = await muscle.activeSessionDriverId
         XCTAssertNil(driverId)
-        XCTAssertEqual(sink.sessionChanges, [true, false])
     }
 
     func testTokenBackedSessionLockDoesNotExposeTokenAsOwner() async throws {

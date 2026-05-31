@@ -9,7 +9,6 @@ enum ClientDelivery: Sendable {
             _ clientId: Int,
             _ respond: @escaping @Sendable (Data) -> Void
         ) -> Void
-        var onSessionActiveChanged: @MainActor @Sendable (_ isActive: Bool) async -> Void
     }
 
     enum CallbackOutcome: Equatable, Sendable {
@@ -57,15 +56,6 @@ enum ClientDelivery: Sendable {
             return .failed(.callbacksNotInstalled("onClientAuthenticated"))
         }
         await callbacks.onClientAuthenticated(clientId, respond)
-        return .delivered
-    }
-
-    @discardableResult
-    func sessionActiveChanged(_ isActive: Bool) async -> CallbackOutcome {
-        guard case .wired(let callbacks) = self else {
-            return .failed(.callbacksNotInstalled("onSessionActiveChanged"))
-        }
-        await callbacks.onSessionActiveChanged(isActive)
         return .delivered
     }
 }

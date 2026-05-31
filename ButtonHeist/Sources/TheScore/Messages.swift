@@ -71,7 +71,6 @@ public enum TXTRecordKey: String, Sendable {
     case instanceId = "instanceid"
     case certFingerprint = "certfp"
     case transport = "transport"
-    case sessionActive = "sessionactive"
 }
 
 extension TXTRecordKey: CustomStringConvertible {
