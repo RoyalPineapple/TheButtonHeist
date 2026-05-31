@@ -606,7 +606,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(TXTRecordKey.instanceId.rawValue, "instanceid")
         XCTAssertEqual(TXTRecordKey.certFingerprint.rawValue, "certfp")
         XCTAssertEqual(TXTRecordKey.transport.rawValue, "transport")
-        XCTAssertEqual(TXTRecordKey.sessionActive.rawValue, "sessionactive")
     }
 
     // MARK: - EnvironmentKey

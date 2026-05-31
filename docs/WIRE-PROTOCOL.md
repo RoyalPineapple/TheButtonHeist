@@ -48,15 +48,14 @@ clients may use TLS without pinning.
 
 Bonjour is published only when `INSIDEJOB_SCOPE` includes `network`.
 
-TXT metadata includes app/device identity, session availability, transport
-mode, and certificate fingerprint:
+TXT metadata includes app/device identity, transport mode, and certificate
+fingerprint:
 
 ```text
 simudid=<simulator UDID when available>
 installationid=<stable app installation identifier>
 instanceid=<human-readable instance id>
 devicename=<device name>
-sessionactive=0|1
 certfp=sha256:<64 hex chars>
 transport=tls
 ```

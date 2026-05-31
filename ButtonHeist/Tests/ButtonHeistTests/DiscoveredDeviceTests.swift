@@ -132,10 +132,9 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertNil(device.simulatorUDID)
         XCTAssertNil(device.installationId)
         XCTAssertNil(device.instanceId)
-        XCTAssertNil(device.sessionActive)
     }
 
-    func testAllTXTRecordFields() {
+    func testAllStoredTXTRecordFields() {
         let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
         let device = DiscoveredDevice(
             id: "test", name: "TestApp#abc",
@@ -143,15 +142,13 @@ final class DiscoveredDeviceTests: XCTestCase {
             simulatorUDID: "SIM-UUID",
             installationId: "install-1",
             displayDeviceName: "Chris's iPhone",
-            instanceId: "my-instance",
-            sessionActive: true
+            instanceId: "my-instance"
         )
 
         XCTAssertEqual(device.simulatorUDID, "SIM-UUID")
         XCTAssertEqual(device.installationId, "install-1")
         XCTAssertEqual(device.deviceName, "Chris's iPhone")
         XCTAssertEqual(device.instanceId, "my-instance")
-        XCTAssertEqual(device.sessionActive, true)
     }
 
     func testDeviceNamePrefersBroadcastDeviceName() {
@@ -165,17 +162,6 @@ final class DiscoveredDeviceTests: XCTestCase {
 
         XCTAssertEqual(device.appName, "AccessibilityTestApp")
         XCTAssertEqual(device.deviceName, "Office iPhone")
-    }
-
-    func testSessionActiveFalse() {
-        let endpoint = NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil)
-        let device = DiscoveredDevice(
-            id: "test", name: "TestApp",
-            endpoint: endpoint,
-            sessionActive: false
-        )
-
-        XCTAssertEqual(device.sessionActive, false)
     }
 
     // MARK: - Filter Matching
@@ -419,7 +405,6 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertEqual(device.id, "127.0.0.1:8080")
         XCTAssertEqual(device.name, "127.0.0.1:8080")
         XCTAssertNil(device.simulatorUDID)
-        XCTAssertNil(device.sessionActive)
     }
 
     func testDirectConnectTargetParsesLoopbackFilters() {
@@ -472,7 +457,6 @@ final class DiscoveredDeviceTests: XCTestCase {
             installationId: "install-1",
             displayDeviceName: "Chris's iPhone",
             instanceId: "my-instance",
-            sessionActive: true,
             certFingerprint: fingerprint
         )
 
@@ -480,7 +464,6 @@ final class DiscoveredDeviceTests: XCTestCase {
         XCTAssertEqual(device.installationId, "install-1")
         XCTAssertEqual(device.deviceName, "Chris's iPhone")
         XCTAssertEqual(device.instanceId, "my-instance")
-        XCTAssertEqual(device.sessionActive, true)
         XCTAssertEqual(device.certFingerprint, fingerprint)
     }
 
