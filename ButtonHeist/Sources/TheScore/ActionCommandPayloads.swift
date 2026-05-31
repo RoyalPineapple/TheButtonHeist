@@ -217,28 +217,16 @@ extension RotorContinuation: CustomStringConvertible {
 }
 
 extension RotorContinuation: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case heistId
         case textRange
     }
 
-    private struct UnknownCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownKeys(from: decoder)
+        try decoder.rejectUnknownKeys(
+            allowed: CodingKeys.self,
+            typeName: "rotor continuation"
+        )
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let heistId = try container.decode(HeistId.self, forKey: .heistId)
         if let textRange = try container.decodeIfPresent(TextRangeReference.self, forKey: .textRange) {
@@ -272,17 +260,6 @@ extension RotorContinuation: Codable {
         }
     }
 
-    private static func rejectUnknownKeys(from decoder: Decoder) throws {
-        let allowedKeys = Set([CodingKeys.heistId, .textRange].map(\.stringValue))
-        let container = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = container.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown rotor continuation field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 /// Target for moving through a rotor.
@@ -324,21 +301,6 @@ extension RotorTarget: Codable {
         case rotorIndex
         case direction
         case continuation
-    }
-
-    private struct UnknownCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            self.intValue = nil
-        }
-
-        init?(intValue: Int) {
-            self.stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
     }
 
     public init(from decoder: Decoder) throws {
@@ -403,13 +365,6 @@ extension RotorTarget: Codable {
                 CodingKeys.continuation.stringValue,
             ]
         )
-        let container = try decoder.container(keyedBy: UnknownCodingKey.self)
-        guard let unknownKey = container.allKeys.first(where: { !allowedKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown rotor target field \"\(unknownKey.stringValue)\""
-        ))
+        try decoder.rejectUnknownKeys(allowed: allowedKeys, typeName: "rotor target")
     }
 }

@@ -2439,7 +2439,7 @@ final class TheFenceHandlerTests: XCTestCase {
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"delivery expectation does not accept "matcher""#)
+            XCTAssertEqual(message, #"Unknown delivery expectation field "matcher""#)
         }
     }
 

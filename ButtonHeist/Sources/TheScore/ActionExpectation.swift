@@ -154,21 +154,6 @@ extension ActionExpectation: Codable {
         case type, expectations
     }
 
-    private struct DynamicCodingKey: CodingKey {
-        var stringValue: String
-        var intValue: Int?
-
-        init(stringValue: String) {
-            self.stringValue = stringValue
-            intValue = nil
-        }
-
-        init?(intValue: Int) {
-            stringValue = "\(intValue)"
-            self.intValue = intValue
-        }
-    }
-
     public init(from decoder: Decoder) throws {
         let typeContainer = try decoder.container(keyedBy: DiscriminatorKey.self)
         let typeString = try typeContainer.decode(String.self, forKey: .type)
@@ -237,10 +222,9 @@ extension ActionExpectation: Codable {
         allowed keyType: K.Type,
         expectationType: String
     ) throws where K: CodingKey & CaseIterable {
-        try rejectUnknownKeys(
-            from: decoder,
-            allowed: Set(keyType.allCases.map(\.stringValue)),
-            expectationType: expectationType
+        try decoder.rejectUnknownKeys(
+            allowed: keyType,
+            typeName: "\(expectationType) expectation"
         )
     }
 
@@ -249,14 +233,10 @@ extension ActionExpectation: Codable {
         allowed: Set<String>,
         expectationType: String
     ) throws {
-        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
-        guard let unknownKey = container.allKeys.first(where: { !allowed.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: #"\#(expectationType) expectation does not accept "\#(unknownKey.stringValue)""#
-        ))
+        try decoder.rejectUnknownKeys(
+            allowed: allowed,
+            typeName: "\(expectationType) expectation"
+        )
     }
 
     public func encode(to encoder: Encoder) throws {
