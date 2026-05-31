@@ -26,8 +26,6 @@ extension DeviceConnection {
                 serverButtonHeistVersion: envelope.buttonHeistVersion,
                 clientButtonHeistVersion: buttonHeistVersion
             )), requestId: envelope.requestId)
-            disconnect()
-            onEvent?(.disconnected(.protocolMismatch(message)))
             return
         }
 
@@ -42,8 +40,6 @@ extension DeviceConnection {
             )
             deviceConnectionLogger.error("buttonHeistVersion mismatch: \(message)")
             emitMessage(.protocolMismatch(payload), requestId: envelope.requestId)
-            disconnect()
-            onEvent?(.disconnected(.protocolMismatch(message)))
         case .authRequired:
             emitMessage(.authRequired, requestId: nil)
         case .authApprovalPending(let payload):
@@ -52,21 +48,15 @@ extension DeviceConnection {
         case .error(let serverError) where serverError.kind == .authFailure:
             deviceConnectionLogger.error("Auth failed: \(serverError.message)")
             emitMessage(.error(serverError), requestId: nil)
-            disconnect()
-            onEvent?(.disconnected(.authFailed(serverError.message)))
         case .error(let serverError) where serverError.kind == .authApprovalPending:
             deviceConnectionLogger.error("Auth approval timed out: \(serverError.message)")
             emitMessage(.error(serverError), requestId: nil)
-            disconnect()
-            onEvent?(.disconnected(.authApprovalPending(serverError.message)))
         case .authApproved(let payload):
             deviceConnectionLogger.info("Auth approved via UI, received token")
             emitMessage(.authApproved(payload), requestId: nil)
         case .sessionLocked(let payload):
             deviceConnectionLogger.warning("Session locked: \(payload.message, privacy: .public)")
             emitMessage(.sessionLocked(payload), requestId: nil)
-            disconnect()
-            onEvent?(.disconnected(.sessionLocked(payload.message)))
         case .info(let info):
             deviceConnectionLogger.info("Received server info: \(info.appName)")
             onEvent?(.connected)

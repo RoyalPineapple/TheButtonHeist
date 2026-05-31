@@ -140,6 +140,67 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testAuthFailureMessageFailsHandoffAndClosesTransport() async {
+        let handoff = TheHandoff()
+        let mock = connectPendingMockHandoff(handoff)
+
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .authFailure, message: "bad token")),
+            requestId: nil
+        )
+
+        assertFailed(handoff.connectionPhase, failure: .disconnected(.authFailed("bad token")))
+        XCTAssertEqual(mock.disconnectCount, 1)
+    }
+
+    @ButtonHeistActor
+    func testAuthApprovalTimeoutFailsHandoffAndClosesTransport() async {
+        let handoff = TheHandoff()
+        let mock = connectPendingMockHandoff(handoff)
+        let message = "Approval timed out"
+
+        handoff.handleServerMessage(
+            .error(ServerError(kind: .authApprovalPending, message: message)),
+            requestId: nil
+        )
+
+        assertFailed(handoff.connectionPhase, failure: .disconnected(.authApprovalPending(message)))
+        XCTAssertEqual(mock.disconnectCount, 1)
+    }
+
+    @ButtonHeistActor
+    func testSessionLockedFailsHandoffAndClosesTransport() async {
+        let handoff = TheHandoff()
+        let mock = connectPendingMockHandoff(handoff)
+        let payload = SessionLockedPayload(message: "locked by another driver", activeConnections: 1)
+
+        handoff.handleServerMessage(.sessionLocked(payload), requestId: nil)
+
+        assertFailed(handoff.connectionPhase, failure: .disconnected(.sessionLocked(payload.message)))
+        XCTAssertEqual(mock.disconnectCount, 1)
+    }
+
+    @ButtonHeistActor
+    func testProtocolMismatchFailsHandoffAndClosesTransport() async {
+        let handoff = TheHandoff()
+        let mock = connectPendingMockHandoff(handoff)
+
+        handoff.handleServerMessage(
+            .protocolMismatch(ProtocolMismatchPayload(
+                serverButtonHeistVersion: "0.0.0",
+                clientButtonHeistVersion: buttonHeistVersion
+            )),
+            requestId: nil
+        )
+
+        assertFailed(handoff.connectionPhase, failure: .disconnected(.buttonHeistVersionMismatch(
+            serverVersion: "0.0.0",
+            clientVersion: buttonHeistVersion
+        )))
+        XCTAssertEqual(mock.disconnectCount, 1)
+    }
+
+    @ButtonHeistActor
     func testMultipleDisconnectsSafe() async {
         let handoff = TheHandoff()
 

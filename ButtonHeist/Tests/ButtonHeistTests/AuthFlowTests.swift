@@ -63,18 +63,18 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testProtocolMismatchNamesBothSidesAndDoesNotReportServerClosed() async throws {
+    func testProtocolMismatchEmitsPayloadWithoutDisconnectingTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var protocolMismatchPayload: ProtocolMismatchPayload?
-        var disconnectReasons: [DisconnectReason] = []
+        var disconnected = false
         conn.onEvent = { event in
             switch event {
             case .message(.protocolMismatch(let payload), _):
                 protocolMismatchPayload = payload
-            case .disconnected(let reason):
-                disconnectReasons.append(reason)
+            case .disconnected:
+                disconnected = true
             default:
                 break
             }
@@ -84,13 +84,8 @@ final class AuthFlowTests: XCTestCase {
 
         XCTAssertEqual(protocolMismatchPayload?.serverButtonHeistVersion, "0.0.0")
         XCTAssertEqual(protocolMismatchPayload?.clientButtonHeistVersion, buttonHeistVersion)
-        XCTAssertEqual(disconnectReasons.count, 1)
-        guard case .protocolMismatch(let message) = disconnectReasons.first else {
-            return XCTFail("Expected protocol mismatch, got \(String(describing: disconnectReasons.first))")
-        }
-        XCTAssertTrue(message.contains("Button Heist version mismatch"))
-        XCTAssertTrue(message.contains("app/Inside Job is 0.0.0"))
-        XCTAssertTrue(message.contains("client/CLI/MCP is \(buttonHeistVersion)"))
+        assertDeviceConnectionConnected(conn)
+        XCTAssertFalse(disconnected)
     }
 
     @ButtonHeistActor
@@ -151,18 +146,18 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthDeniedFiresCallbackAndDisconnects() async throws {
+    func testAuthDeniedEmitsErrorWithoutDisconnectingTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var authFailedReason: String?
-        var disconnectReason: DisconnectReason?
+        var disconnected = false
         conn.onEvent = { event in
             switch event {
             case .message(.error(let serverError), _) where serverError.kind == .authFailure:
                 authFailedReason = serverError.message
-            case .disconnected(let reason):
-                disconnectReason = reason
+            case .disconnected:
+                disconnected = true
             default:
                 break
             }
@@ -173,12 +168,8 @@ final class AuthFlowTests: XCTestCase {
         ))
 
         XCTAssertEqual(authFailedReason, "Connection denied by user")
-        assertDeviceConnectionDisconnected(conn)
-        if case .authFailed(let reason) = disconnectReason {
-            XCTAssertEqual(reason, "Connection denied by user")
-        } else {
-            XCTFail("Expected authFailed disconnect reason")
-        }
+        assertDeviceConnectionConnected(conn)
+        XCTAssertFalse(disconnected)
     }
 
     @ButtonHeistActor
@@ -208,18 +199,18 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthApprovalPendingErrorDisconnectsWithDistinctReason() async throws {
+    func testAuthApprovalPendingErrorEmitsErrorWithoutDisconnectingTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var serverError: ServerError?
-        var disconnectReason: DisconnectReason?
+        var disconnected = false
         conn.onEvent = { event in
             switch event {
             case .message(.error(let error), _):
                 serverError = error
-            case .disconnected(let reason):
-                disconnectReason = reason
+            case .disconnected:
+                disconnected = true
             default:
                 break
             }
@@ -231,11 +222,8 @@ final class AuthFlowTests: XCTestCase {
         ))))
 
         XCTAssertEqual(serverError?.kind, .authApprovalPending)
-        assertDeviceConnectionDisconnected(conn)
-        XCTAssertEqual(
-            disconnectReason,
-            .authApprovalPending("Approval timed out — user did not respond to the approval prompt on the device.")
-        )
+        assertDeviceConnectionConnected(conn)
+        XCTAssertFalse(disconnected)
     }
 
     @ButtonHeistActor

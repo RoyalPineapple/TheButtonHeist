@@ -121,6 +121,19 @@ func connectMockHandoff(
     return mock
 }
 
+@ButtonHeistActor
+@discardableResult
+func connectPendingMockHandoff(
+    _ handoff: TheHandoff,
+    device: DiscoveredDevice = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+) -> MockConnection {
+    let mock = MockConnection()
+    mock.connectEventsOverride = []
+    handoff.makeConnection = { _ in mock }
+    handoff.connect(to: device)
+    return mock
+}
+
 // MARK: - Mock Implementations for DeviceConnecting / DeviceDiscovering
 
 @ButtonHeistActor

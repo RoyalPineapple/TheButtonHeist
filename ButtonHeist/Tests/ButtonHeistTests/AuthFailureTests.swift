@@ -61,7 +61,7 @@ final class AuthFailureTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthFailedFiresBeforeDisconnected() async throws {
+    func testAuthFailedDoesNotDisconnectTransport() async throws {
         let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
@@ -81,6 +81,7 @@ final class AuthFailureTests: XCTestCase {
             .error(ServerError(kind: .authFailure, message: "Invalid token. Retry without a token to request a fresh session."))
         ))
 
-        XCTAssertEqual(callOrder.first, "authFailed", "authFailed should fire before disconnected")
+        XCTAssertEqual(callOrder.first, "authFailed")
+        assertDeviceConnectionConnected(conn)
     }
 }

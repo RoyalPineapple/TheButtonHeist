@@ -23,16 +23,8 @@ struct MuscleAuthenticationFlow {
         )
     }
 
-    var authenticatedClientIDs: Set<Int> {
-        clientRegistry.authenticatedClientIDs
-    }
-
     mutating func registerClientAddress(_ clientId: Int, address: String) {
         clientRegistry.registerAddress(clientId, address: address)
-    }
-
-    mutating func installAuthenticatedForTest(_ clientId: Int, address: String, driverIdentity: String) {
-        clientRegistry.installAuthenticatedForTest(clientId, address: address, driverIdentity: driverIdentity)
     }
 
     mutating func removeAllClients() {
@@ -76,8 +68,7 @@ struct MuscleAuthenticationFlow {
     mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> MuscleAdmissionEffect {
         clientRegistry.authenticate(
             authentication.clientId,
-            address: authentication.address,
-            driverIdentity: authentication.driverIdentity
+            address: authentication.address
         )
 
         switch authentication.source {

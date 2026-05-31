@@ -230,9 +230,9 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 1, token: "test-token", respond: respond)
         await flushCallbacks()
 
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertTrue(authenticatedIDs.contains(1))
-        XCTAssertEqual(authenticatedIDs.count, 1)
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(1))
+        XCTAssertEqual(connections.count, 1)
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         for msg in serverMessages {
             if case .error(let serverError) = msg, serverError.kind == .authFailure {
@@ -247,9 +247,9 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 1, token: "wrong-token", respond: respond)
         await flushCallbacks()
 
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertFalse(authenticatedIDs.contains(1))
-        XCTAssertEqual(authenticatedIDs.count, 0)
+        let connections = await muscle.activeSessionConnections
+        XCTAssertFalse(connections.contains(1))
+        XCTAssertEqual(connections.count, 0)
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
         let authFailure = serverMessages.compactMap { msg -> ServerError? in
@@ -271,9 +271,9 @@ final class TheMuscleTests: XCTestCase {
             return error
         }.first
         XCTAssertTrue(authFailure?.message.contains("generated the session token") == true)
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertFalse(authenticatedIDs.contains(1))
-        XCTAssertEqual(authenticatedIDs.count, 0)
+        let connections = await muscle.activeSessionConnections
+        XCTAssertFalse(connections.contains(1))
+        XCTAssertEqual(connections.count, 0)
     }
 
     func testGeneratedTokenEmptyTokenTriggersPendingApproval() async throws {
@@ -371,8 +371,8 @@ final class TheMuscleTests: XCTestCase {
         let payload = try XCTUnwrap(sessionLockedPayloads(from: responses()).first)
         XCTAssertTrue(payload.message.contains("UI approval is unavailable"))
         XCTAssertEqual(payload.activeConnections, 1)
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertFalse(authenticatedIDs.contains(2))
+        let connections = await muscle.activeSessionConnections
+        XCTAssertFalse(connections.contains(2))
     }
 
     func testNonAuthMessageReturnsAuthFailure() async throws {
@@ -427,8 +427,7 @@ final class TheMuscleTests: XCTestCase {
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.contains(1))
         XCTAssertFalse(connections.contains(2))
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertEqual(authenticatedIDs.count, 1)
+        XCTAssertEqual(connections.count, 1)
 
         let payload = try XCTUnwrap(
             sessionLockedPayloads(from: responses()).first,
@@ -447,8 +446,6 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 2, token: "test-token", driverId: "driver-b", respond: respond)
         await flushCallbacks()
 
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertFalse(authenticatedIDs.contains(2), "Driver B should not be authenticated")
         let connections = await muscle.activeSessionConnections
         XCTAssertFalse(connections.contains(2))
 
@@ -614,8 +611,8 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 1, token: "test-token", respond: respondSink())
         await flushCallbacks()
 
-        let authenticatedIDsBefore = await muscle.authenticatedClientIDs
-        XCTAssertTrue(authenticatedIDsBefore.contains(1))
+        let connectionsBefore = await muscle.activeSessionConnections
+        XCTAssertTrue(connectionsBefore.contains(1))
 
         await muscle.tearDown()
 
@@ -623,8 +620,6 @@ final class TheMuscleTests: XCTestCase {
         XCTAssertNil(driverId)
         let connections = await muscle.activeSessionConnections
         XCTAssertTrue(connections.isEmpty)
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertTrue(authenticatedIDs.isEmpty)
     }
 
     // MARK: - Brute-Force Protection Tests
@@ -676,8 +671,8 @@ final class TheMuscleTests: XCTestCase {
         try await authenticate(clientId: 10, token: "test-token", address: "192.168.1.200", respond: respond)
         await flushCallbacks()
 
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertTrue(authenticatedIDs.contains(10), "Clients from other addresses should not be affected by lockout")
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(10), "Clients from other addresses should not be affected by lockout")
     }
 
     func testSuccessfulAuthClearsFailedAttempts() async throws {
@@ -692,8 +687,8 @@ final class TheMuscleTests: XCTestCase {
         // Succeed from same address
         try await authenticate(clientId: 4, token: "test-token", address: address, respond: respondSink())
         await flushCallbacks()
-        let authenticatedIDs = await muscle.authenticatedClientIDs
-        XCTAssertTrue(authenticatedIDs.contains(4), "Should authenticate after failed attempts below threshold")
+        let connections = await muscle.activeSessionConnections
+        XCTAssertTrue(connections.contains(4), "Should authenticate after failed attempts below threshold")
 
         // Disconnect and try failing again — counter should be reset
         await muscle.handleClientDisconnected(4)

@@ -85,16 +85,8 @@ struct TheMuscleAdmission {
         )
     }
 
-    var authenticatedClientIDs: Set<Int> {
-        authentication.authenticatedClientIDs
-    }
-
     mutating func registerClientAddress(_ clientId: Int, address: String) {
         authentication.registerClientAddress(clientId, address: address)
-    }
-
-    mutating func installAuthenticatedForTest(_ clientId: Int, address: String, driverIdentity: String) {
-        authentication.installAuthenticatedForTest(clientId, address: address, driverIdentity: driverIdentity)
     }
 
     mutating func removeAllClients() {

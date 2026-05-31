@@ -58,25 +58,9 @@ actor TheMuscle {
     /// Test seam: how many delayed-disconnect Tasks are currently tracked.
     var pendingLockoutTaskCount: Int { delayedDisconnectTasks.taskCountForTesting }
 
-    /// Test seam: install an authenticated client without a real transport handshake.
-    func installAuthenticatedClientForTest(
-        _ clientId: Int,
-        address: String = "127.0.0.1",
-        driverIdentity: String = "test-driver"
-    ) {
-        admission.installAuthenticatedForTest(clientId, address: address, driverIdentity: driverIdentity)
-    }
-
     /// Test seam: drop transport wiring to simulate a targeted-send race.
     func clearSendToClientForTest() {
         delivery.clearForTesting()
-    }
-
-    // MARK: - Client Accessors
-
-    /// IDs of all authenticated clients.
-    var authenticatedClientIDs: Set<Int> {
-        admission.authenticatedClientIDs
     }
 
     // MARK: - Session Accessors
