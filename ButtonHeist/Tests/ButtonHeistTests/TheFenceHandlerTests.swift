@@ -2203,15 +2203,14 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationRejectsExtraKeysForType() async {
+    func testParseExpectationRejectsDeletedDeliveryType() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("delivery"),
-            "matcher": .object(["label": .string("Done")]),
         ]))) { error in
             guard case FenceError.invalidRequest(let message) = error else {
                 return XCTFail("Expected FenceError.invalidRequest, got \(error)")
             }
-            XCTAssertEqual(message, #"Unknown delivery expectation field "matcher""#)
+            XCTAssertTrue(message.contains(#"Unknown expectation type: "delivery""#), message)
         }
     }
 
@@ -2487,7 +2486,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(actionTarget, .heistId("leaf-123"))
 
-        XCTAssertEqual(steps[1].typedStep.expectation, .delivery)
+        XCTAssertNil(steps[1].typedStep.expectation)
     }
 
     @ButtonHeistActor

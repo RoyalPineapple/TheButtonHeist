@@ -206,7 +206,9 @@ final class MockConnection: TransportReachabilityConnecting {
             }
 
             let actionResult = actionResult(for: step.command, handler: handler)
-            let expectation = actionResult.success ? step.expectation.validate(against: actionResult) : nil
+            let expectation = actionResult.success
+                ? step.expectation?.validate(against: actionResult)
+                : nil
             let shouldStop = plan.policy == .stopOnError
                 && (actionResult.success == false || expectation?.met == false)
             stepResults.append(BatchExecutionStepResult(

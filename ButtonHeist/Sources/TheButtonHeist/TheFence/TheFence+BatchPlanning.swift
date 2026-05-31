@@ -95,7 +95,7 @@ private extension TheFence {
         )
     }
 
-    func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> ActionExpectation {
+    func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> ActionExpectation? {
         if let explicit = request.expectationPayload.expectation {
             return explicit
         }
@@ -103,7 +103,7 @@ private extension TheFence {
         switch message {
         case .waitFor(let target):
             guard let matcher = target.elementTarget.batchExpectationMatcher else {
-                return .delivery
+                return nil
             }
             return target.resolvedAbsent
                 ? .elementDisappeared(matcher)
@@ -111,7 +111,7 @@ private extension TheFence {
         case .waitForChange(let target):
             return target.expect ?? .screenChanged
         default:
-            return .delivery
+            return nil
         }
     }
 

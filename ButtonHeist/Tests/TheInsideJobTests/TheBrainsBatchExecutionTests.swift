@@ -117,17 +117,17 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             steps: [
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "first")),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline()
                 ),
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "next")),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline()
                 ),
                 BatchStep(
                     command: .waitForIdle(WaitForIdleTarget(timeout: 0.1)),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline(timeout: 0.1)
                 ),
             ],
@@ -163,7 +163,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 return results.removeFirst()
             },
             waitForExpectation: { _, _ in
-                XCTFail("Delivery expectation should not wait")
+                XCTFail("Steps without explicit expectations should not wait")
                 return ActionResult(success: true, method: .waitForChange)
             },
             settleRefreshRecordBaseline: {
@@ -174,12 +174,12 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             steps: [
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "first")),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline()
                 ),
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "second")),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline()
                 ),
             ],
@@ -219,7 +219,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 return ActionResult(success: true, method: method)
             },
             waitForExpectation: { _, _ in
-                XCTFail("Delivery expectation should not wait")
+                XCTFail("Steps without explicit expectations should not wait")
                 return ActionResult(success: true, method: .waitForChange)
             },
             settleRefreshRecordBaseline: {
@@ -228,8 +228,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                BatchStep(command: .getPasteboard, expectation: .delivery, deadline: Deadline()),
-                BatchStep(command: .resignFirstResponder, expectation: .delivery, deadline: Deadline()),
+                BatchStep(command: .getPasteboard, expectation: nil, deadline: Deadline()),
+                BatchStep(command: .resignFirstResponder, expectation: nil, deadline: Deadline()),
             ],
             policy: .continueOnError
         )
@@ -292,7 +292,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let plan = TheScore.BatchPlan(steps: [
             BatchStep(
                 command: .waitForIdle(WaitForIdleTarget(timeout: 0.01)),
-                expectation: .delivery,
+                expectation: nil,
                 deadline: Deadline(timeout: 0.01)
             ),
         ])

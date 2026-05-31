@@ -25,7 +25,7 @@ extension BatchExecutionStepResult {
         return .action(
             command: command,
             result: finalResult,
-            expectation: expectation ?? step.expectation.validate(against: finalResult)
+            expectation: expectation ?? step.expectation?.validate(against: finalResult)
         )
     }
 
@@ -35,12 +35,12 @@ extension BatchExecutionStepResult {
 
     func expectationResult(for step: TheScore.BatchStep) -> ExpectationResult? {
         if let expectation { return expectation }
-        return finalActionResult().map { step.expectation.validate(against: $0) }
+        guard let plannedExpectation = step.expectation else { return nil }
+        return finalActionResult().map { plannedExpectation.validate(against: $0) }
     }
 
     func expectationCounted(for step: TheScore.BatchStep) -> Bool {
-        guard let checked = expectationResult(for: step)?.expectation else { return false }
-        return checked != .delivery
+        expectationResult(for: step)?.expectation != nil
     }
 
     func expectationMet(for step: TheScore.BatchStep) -> Bool? {

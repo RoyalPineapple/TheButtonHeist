@@ -180,7 +180,7 @@ final class ClientMessageTests: XCTestCase {
                     text: "hello",
                     elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
                 )),
-                expectation: .delivery,
+                expectation: nil,
                 deadline: Deadline()
             ),
         ])
@@ -196,7 +196,7 @@ final class ClientMessageTests: XCTestCase {
         guard case .batchExecutionPlan(let decodedPlan) = decoded.message,
               let step = decodedPlan.steps.first,
               case .typeText(let target) = step.command,
-              step.expectation == .delivery else {
+              step.expectation == nil else {
             return XCTFail("Expected batchExecutionPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(target.text, "hello")

@@ -39,7 +39,7 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
                 ),
                 BatchStep(
                     command: .waitForIdle(WaitForIdleTarget(timeout: 0.25)),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline(timeout: 0.25)
                 ),
                 BatchStep(
@@ -73,7 +73,7 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         let waitCommand = try XCTUnwrap(steps[1]["command"] as? [String: Any])
         XCTAssertEqual(waitCommand["type"] as? String, "waitForIdle")
         XCTAssertEqual(((waitCommand["payload"] as? [String: Any])?["timeout"] as? Double), 0.25)
-        XCTAssertEqual((steps[1]["expect"] as? [String: Any])?["type"] as? String, "delivery")
+        XCTAssertNil(steps[1]["expect"])
 
         let waitChangeCommand = try XCTUnwrap(steps[2]["command"] as? [String: Any])
         XCTAssertEqual(waitChangeCommand["type"] as? String, "waitForChange")
