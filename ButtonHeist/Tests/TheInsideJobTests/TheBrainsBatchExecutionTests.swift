@@ -300,7 +300,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let result = await brains.executeCommand(.batchExecutionPlan(plan))
 
         XCTAssertEqual(result.method, .batchExecutionPlan)
-        XCTAssertNotEqual(result.errorKind, .unsupported)
+        XCTAssertNil(result.errorKind)
         XCTAssertNotNil(result.batchExecutionPayload)
     }
 
