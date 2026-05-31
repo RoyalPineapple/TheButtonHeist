@@ -18,10 +18,10 @@ public enum PlaybackFailure: Sendable {
 
     /// The step that failed — command name and element target.
     public struct FailedStep: Sendable {
-        public let command: String
+        public let command: TheFence.Command
         public let target: ElementTarget?
 
-        public init(command: String, target: ElementTarget?) {
+        public init(command: TheFence.Command, target: ElementTarget?) {
             self.command = command
             self.target = target
         }

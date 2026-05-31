@@ -1998,9 +1998,8 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         let (fence, _) = makeConnectedFence()
-        let result = try parseTypedExpectation(
-            try fence.parseHeistStep(sourceStep).arguments.argumentValues["expect"]
-        )
+        let contract = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep]))
+        let result = try XCTUnwrap(contract.steps.first?.preparedStep.typedStep.expectation)
 
         XCTAssertEqual(
             result,
@@ -3329,7 +3328,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.steps.count, 2)
         XCTAssertEqual(operation.command, .typeText)
         XCTAssertEqual(playback.steps[1].command, "activate")
-        XCTAssertEqual(operation.target, semanticTarget(identifier: "email", ordinal: 1))
+        XCTAssertEqual(operation.reportTarget, semanticTarget(identifier: "email", ordinal: 1))
 
         XCTAssertEqual(operation.preparedStep.command, .typeText)
         guard case .typeText(let target) = operation.preparedStep.typedStep.command else {
@@ -3363,7 +3362,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         XCTAssertEqual(playback.app, "com.test.mock")
         XCTAssertEqual(playback.steps.map(\.command), [.activate])
-        XCTAssertEqual(playback.steps.first?.target, semanticTarget(identifier: "submit"))
+        XCTAssertEqual(playback.steps.first?.reportTarget, semanticTarget(identifier: "submit"))
         let step = try XCTUnwrap(playback.steps.first)
         XCTAssertEqual(step.preparedStep.typedStep.expectation, .screenChanged)
     }
@@ -3400,8 +3399,8 @@ final class TheFenceHandlerTests: XCTestCase {
         )
 
         let (fence, _) = makeConnectedFence()
-        let expect = try fence.parseHeistStep(sourceStep).arguments.argumentValues["expect"]
-        XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
+        let contract = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep]))
+        XCTAssertEqual(contract.steps.first?.preparedStep.typedStep.expectation, .screenChanged)
     }
 
     @ButtonHeistActor
@@ -3518,7 +3517,7 @@ final class TheFenceHandlerTests: XCTestCase {
                 }
                 XCTAssertTrue(message.contains("Invalid heist step 0"))
                 XCTAssertTrue(
-                    message.contains("heist step command \"\(command.rawValue)\" is not batch-executable"),
+                    message.contains("heist step command \"\(command.rawValue)\" is not supported"),
                     "Unexpected error for \(command.rawValue): \(message)"
                 )
             }
@@ -3616,7 +3615,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .actionFailed(let step, let result, _, _, _) = failure else {
             return XCTFail("Expected typed actionFailed playback failure, got \(String(describing: failure))")
         }
-        XCTAssertEqual(step.command, "activate")
+        XCTAssertEqual(step.command, .activate)
         XCTAssertTrue(result.message?.contains("server exploded") == true)
 
         guard case .failed(let reportMessage, let errorKind) = report?.steps.first?.outcome else {
@@ -3667,7 +3666,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .actionFailed(let step, let result, _, let interface, let diagnosticCaptureFailure) = failure else {
             return XCTFail("Expected actionFailed playback failure, got \(String(describing: failure))")
         }
-        XCTAssertEqual(step.command, "activate")
+        XCTAssertEqual(step.command, .activate)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.message, "missing")
         XCTAssertNil(interface)

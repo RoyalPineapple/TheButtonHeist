@@ -45,21 +45,6 @@ public extension TheFence.Command {
         routeCanonicalStep(arguments, context: context, isExecutable: nil)
     }
 
-    static func routePlaybackStep(commandName: String) -> Result<Self, FenceOperationRoutingError> {
-        guard let command = Self(rawValue: commandName) else {
-            return .failure(FenceOperationRoutingError(
-                message: "heist step command must be a canonical TheFence.Command; unknown command \"\(commandName)\""
-            ))
-        }
-
-        guard command.descriptor.isBatchExecutable else {
-            return .failure(FenceOperationRoutingError(
-                message: "heist step command \"\(command.rawValue)\" is not batch-executable"
-            ))
-        }
-
-        return .success(command)
-    }
 }
 
 private extension TheFence.Command {

@@ -38,8 +38,10 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
             let sourceStep = try heistStep(command: command, fields: arguments)
-            let playbackRequest = try fence.parseHeistStep(sourceStep)
-            let playbackMessages = try fence.executableActionMessages(for: playbackRequest)
+            let playback = try fence.validateHeistPlayback(
+                HeistPlayback(app: "com.test.mock", steps: [sourceStep])
+            )
+            let playbackMessages = playback.batchRequest.steps.map(\.typedStep.command)
 
             XCTAssertEqual(
                 String(reflecting: playbackMessages),
