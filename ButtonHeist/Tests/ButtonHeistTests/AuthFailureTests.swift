@@ -41,7 +41,7 @@ final class AuthFailureTests: XCTestCase {
 
     @ButtonHeistActor
     func testAuthFailedCallbackFires() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var authFailedReason: String?
@@ -62,7 +62,7 @@ final class AuthFailureTests: XCTestCase {
 
     @ButtonHeistActor
     func testAuthFailedFiresBeforeDisconnected() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "wrong-token")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         let callOrder = CallOrder()

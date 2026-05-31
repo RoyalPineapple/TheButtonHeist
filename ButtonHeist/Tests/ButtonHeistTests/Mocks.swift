@@ -116,7 +116,7 @@ func connectMockHandoff(
     device: DiscoveredDevice = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 ) -> MockConnection {
     let mock = MockConnection()
-    handoff.makeConnection = { _, _, _ in mock }
+    handoff.makeConnection = { _ in mock }
     handoff.connect(to: device)
     return mock
 }

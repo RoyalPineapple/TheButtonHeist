@@ -365,7 +365,7 @@ final class TheFenceHandlerTests: XCTestCase {
             autoReconnect: false
         ))
         fence.handoff.makeDiscovery = { mockDiscovery }
-        fence.handoff.makeConnection = { _, _, _ in mockConn }
+        fence.handoff.makeConnection = { _ in mockConn }
 
         let previousReachability = makeReachabilityConnection
         makeReachabilityConnection = { _ in
@@ -1655,7 +1655,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mockConn = MockConnection()
         let fence = TheFence(configuration: .init(autoReconnect: false, directDevice: device))
-        fence.handoff.makeConnection = { _, _, _ in mockConn }
+        fence.handoff.makeConnection = { _ in mockConn }
 
         do {
             _ = try await fence.execute(command: .ping)

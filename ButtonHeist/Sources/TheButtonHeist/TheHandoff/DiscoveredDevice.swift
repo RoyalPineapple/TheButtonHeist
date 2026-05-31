@@ -212,8 +212,7 @@ extension Array where Element == DiscoveredDevice {
 
 @ButtonHeistActor
 var makeReachabilityConnection: (DiscoveredDevice) -> any TransportReachabilityConnecting = { device in
-    let connection = DeviceConnection(device: device, token: nil, driverId: nil)
-    connection.autoRespondToAuthRequired = false
+    let connection = DeviceConnection(device: device)
     return connection
 }
 

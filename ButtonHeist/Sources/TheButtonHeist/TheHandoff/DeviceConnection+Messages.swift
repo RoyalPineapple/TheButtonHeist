@@ -34,7 +34,7 @@ extension DeviceConnection {
         switch envelope.message {
         case .serverHello:
             deviceConnectionLogger.info("Received server hello")
-            send(.clientHello, requestId: nil)
+            emitEnvelopeMessage(envelope)
         case .protocolMismatch(let payload):
             let message = DisconnectReason.buttonHeistVersionMismatchMessage(
                 serverVersion: payload.serverButtonHeistVersion,
@@ -45,11 +45,7 @@ extension DeviceConnection {
             disconnect()
             onEvent?(.disconnected(.protocolMismatch(message)))
         case .authRequired:
-            if autoRespondToAuthRequired {
-                handleAuthRequired()
-            } else {
-                emitMessage(.authRequired, requestId: nil)
-            }
+            emitMessage(.authRequired, requestId: nil)
         case .authApprovalPending(let payload):
             deviceConnectionLogger.info("Auth approval pending: \(payload.message, privacy: .public)")
             emitMessage(.authApprovalPending(payload), requestId: envelope.requestId)
@@ -65,7 +61,6 @@ extension DeviceConnection {
             onEvent?(.disconnected(.authApprovalPending(serverError.message)))
         case .authApproved(let payload):
             deviceConnectionLogger.info("Auth approved via UI, received token")
-            updateToken(payload.token)
             emitMessage(.authApproved(payload), requestId: nil)
         case .sessionLocked(let payload):
             deviceConnectionLogger.warning("Session locked: \(payload.message, privacy: .public)")
@@ -103,14 +98,6 @@ extension DeviceConnection {
             message,
             requestId: requestId
         ))
-    }
-
-    private func handleAuthRequired() {
-        deviceConnectionLogger.info("Auth required, sending token")
-        send(.authenticate(AuthenticatePayload(
-            token: token ?? "",
-            driverId: driverId
-        )))
     }
 
     private func decodeEnvelope(from data: Data) -> ResponseEnvelope? {

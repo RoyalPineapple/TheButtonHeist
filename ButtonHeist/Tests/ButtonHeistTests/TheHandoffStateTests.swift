@@ -35,7 +35,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
         mock.onTransportReady?()
@@ -76,6 +76,33 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testServerHelloSendsClientHelloFromHandoff() async {
+        let handoff = TheHandoff()
+        let mock = connectMockHandoff(handoff)
+
+        handoff.handleServerMessage(.serverHello, requestId: nil)
+
+        XCTAssertEqual(mock.sent.map { $0.0.wireType }, [.clientHello])
+    }
+
+    @ButtonHeistActor
+    func testAuthRequiredSendsConfiguredTokenAndDriverFromHandoff() async {
+        let handoff = TheHandoff()
+        handoff.token = "test-token"
+        handoff.driverId = "test-driver"
+        let mock = connectMockHandoff(handoff)
+
+        handoff.handleServerMessage(.authRequired, requestId: nil)
+
+        guard case .authenticate(let payload) = mock.sent.first?.0 else {
+            return XCTFail("Expected Handoff to send authenticate, got \(String(describing: mock.sent.first?.0))")
+        }
+        XCTAssertEqual(payload.token, "test-token")
+        XCTAssertEqual(payload.driverId, "test-driver")
+        XCTAssertEqual(mock.sent.count, 1)
+    }
+
+    @ButtonHeistActor
     func testMultipleDisconnectsSafe() async {
         let handoff = TheHandoff()
 
@@ -94,7 +121,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.reconnectInterval = 0.01
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         var connectionCount = 0
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             connectionCount += 1
             let mock = MockConnection()
             mock.connectEventsOverride = [
@@ -137,7 +164,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.startDiscovery()
 
         var connectedIDs: [String] = []
-        handoff.makeConnection = { device, _, _ in
+        handoff.makeConnection = { device in
             connectedIDs.append(device.id)
             let connection = MockConnection()
             connection.connectEventsOverride = connectedIDs.count == 1
@@ -168,7 +195,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         let reconnected = expectation(description: "reconnect connection made")
         var connectionCount = 0
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             connectionCount += 1
             let connection = MockConnection()
             if connectionCount == 1 {
@@ -215,7 +242,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.reconnectInterval = 60
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
 
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             let connection = MockConnection()
             connection.connectEventsOverride = [
                 .connected,
@@ -239,7 +266,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         let disconnected = expectation(description: "disconnect event received")
         var connectionCount = 0
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             connectionCount += 1
             let connection = MockConnection()
             connection.connectEventsOverride = [
@@ -273,7 +300,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         let disconnected = expectation(description: "disconnect event received")
         var connectionCount = 0
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             connectionCount += 1
             let connection = MockConnection()
             connection.connectEventsOverride = [
@@ -318,7 +345,7 @@ final class TheHandoffStateTests: XCTestCase {
         let connectionB = MockConnection()
         connectionA.connectEventsOverride = []
         connectionB.connectEventsOverride = []
-        handoff.makeConnection = { device, _, _ in
+        handoff.makeConnection = { device in
             switch device.id {
             case deviceA.id: return connectionA
             case deviceB.id: return connectionB
@@ -355,7 +382,7 @@ final class TheHandoffStateTests: XCTestCase {
         let reconnected = expectation(description: "direct endpoint reconnected")
 
         var connectedIDs: [String] = []
-        handoff.makeConnection = { device, _, _ in
+        handoff.makeConnection = { device in
             connectedIDs.append(device.id)
             let connection = MockConnection()
             connection.connectEventsOverride = connectedIDs.count == 1
@@ -386,7 +413,7 @@ final class TheHandoffStateTests: XCTestCase {
         let reconnected = expectation(description: "runner survived failed reconnect attempt")
 
         var connectionCount = 0
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             connectionCount += 1
             let connection = MockConnection()
             switch connectionCount {
@@ -419,7 +446,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice.fromHostPort("127.0.0.1:1458")!
 
         var connections: [MockConnection] = []
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             let connection = MockConnection()
             connections.append(connection)
             connection.connectEventsOverride = connections.count == 1
@@ -474,7 +501,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.startDiscovery()
 
         var connectedIDs: [String] = []
-        handoff.makeConnection = { device, _, _ in
+        handoff.makeConnection = { device in
             connectedIDs.append(device.id)
             let connection = MockConnection()
             connection.connectEventsOverride = [.connected, .disconnected(.serverClosed)]
@@ -651,7 +678,7 @@ final class TheHandoffStateTests: XCTestCase {
         handoff.makeDiscovery = { mockDiscovery }
 
         var connectedDeviceID: String?
-        handoff.makeConnection = { device, _, _ in
+        handoff.makeConnection = { device in
             connectedDeviceID = device.id
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
@@ -700,7 +727,7 @@ final class TheHandoffStateTests: XCTestCase {
         mockDiscovery.discoveredDevices = [delayedDevice]
         handoff.makeDiscovery = { mockDiscovery }
 
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             let connection = MockConnection()
             connection.serverInfo = ServerInfo(
                 appName: "AccessibilityTestApp",
@@ -826,7 +853,7 @@ final class TheHandoffStateTests: XCTestCase {
 
         let handoff = TheHandoff()
         let existingConnection = MockConnection()
-        handoff.makeConnection = { _, _, _ in existingConnection }
+        handoff.makeConnection = { _ in existingConnection }
 
         var disconnectReasons: [DisconnectReason] = []
         handoff.onConnectionStateChanged = { _ in
@@ -842,7 +869,7 @@ final class TheHandoffStateTests: XCTestCase {
         let mockDiscovery = MockDiscovery()
         mockDiscovery.discoveredDevices = [firstDevice, secondDevice]
         handoff.makeDiscovery = { mockDiscovery }
-        handoff.makeConnection = { _, _, _ in
+        handoff.makeConnection = { _ in
             XCTFail("Discovery selection failed; no replacement connection should be opened")
             return MockConnection()
         }
@@ -889,7 +916,7 @@ final class TheHandoffStateTests: XCTestCase {
         let handoff = TheHandoff()
         let existingConnection = MockConnection()
         let replacementConnection = MockConnection()
-        handoff.makeConnection = { device, _, _ in
+        handoff.makeConnection = { device in
             switch device.id {
             case existingDevice.id:
                 return existingConnection
@@ -948,7 +975,7 @@ final class TheHandoffStateTests: XCTestCase {
             listeningPort: 49152,
             tlsActive: true
         )
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
         XCTAssertTrue(handoff.isConnected)
@@ -988,7 +1015,7 @@ final class TheHandoffStateTests: XCTestCase {
         // Don't auto-connect — caller will trigger the .connected event manually
         // so we can verify the continuation wakes on the transition.
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
         // Phase is now .connecting; waiter should suspend.
@@ -1013,7 +1040,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []  // Stays in .connecting until cancelled
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
 
@@ -1041,7 +1068,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
 
@@ -1075,7 +1102,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
 
@@ -1109,7 +1136,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
 
@@ -1145,7 +1172,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
 
@@ -1177,7 +1204,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         var receivedMessage: ServerMessage?
         var receivedRequestID: String?
@@ -1210,7 +1237,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         var receivedMessages: [(message: ServerMessage, requestID: String?)] = []
         handoff.onServerMessage = { message, requestID in
@@ -1256,7 +1283,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
         mock.onEvent?(.connected)
@@ -1282,7 +1309,7 @@ final class TheHandoffStateTests: XCTestCase {
         mock.connectEventsOverride = [
             .disconnected(.missingFingerprint),
         ]
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
 
@@ -1307,7 +1334,7 @@ final class TheHandoffStateTests: XCTestCase {
         let handoff = TheHandoff()
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
         handoff.connect(to: device)
         handoff.disconnect()
 
@@ -1331,7 +1358,7 @@ final class TheHandoffStateTests: XCTestCase {
         let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
         let mock = MockConnection()
         mock.connectEventsOverride = []  // Stay in .connecting indefinitely
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         handoff.connect(to: device)
 
@@ -1403,7 +1430,7 @@ final class TheHandoffStateTests: XCTestCase {
         // Mock that stays in .connecting until we manually fire .connected.
         let mock = MockConnection()
         mock.connectEventsOverride = []
-        handoff.makeConnection = { _, _, _ in mock }
+        handoff.makeConnection = { _ in mock }
 
         // Phase starts at .disconnected. `connect()` first runs replacement
         // teardown (a no-op .disconnected → .disconnected transition), then
