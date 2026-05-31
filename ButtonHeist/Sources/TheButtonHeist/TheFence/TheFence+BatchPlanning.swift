@@ -38,9 +38,29 @@ extension TheFence {
         )
     }
 
-    func prepareBatchStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
-        try batchPreparedStep(originalIndex: originalIndex, request: request)
+    func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
+        let messages = try executableActionMessages(for: request)
+        guard let message = messages.first, messages.count == 1 else {
+            let commandName = request.command.rawValue
+            throw BatchStepPlanBuildError(
+                message: """
+                run_batch step command "\(commandName)" expands to \(messages.count) actions; \
+                express repeats as separate ordered steps
+                """
+            )
+        }
+        let typedStep = TheScore.BatchStep(
+            command: message,
+            expectation: batchExpectation(for: message, request: request),
+            deadline: batchDeadline(for: message, request: request)
+        )
+        return RunBatchPreparedStep(
+            originalIndex: originalIndex,
+            command: request.command,
+            typedStep: typedStep
+        )
     }
+
 }
 
 private extension TheFence {
@@ -70,29 +90,6 @@ private extension TheFence {
         } catch {
             throw FenceError.invalidRequest(error.localizedDescription)
         }
-    }
-
-    func batchPreparedStep(originalIndex: Int, request: ParsedRequest) throws -> RunBatchPreparedStep {
-        let messages = try executableActionMessages(for: request)
-        guard let message = messages.first, messages.count == 1 else {
-            let commandName = request.command.rawValue
-            throw BatchStepPlanBuildError(
-                message: """
-                run_batch step command "\(commandName)" expands to \(messages.count) actions; \
-                express repeats as separate ordered steps
-                """
-            )
-        }
-        let typedStep = TheScore.BatchStep(
-            command: message,
-            expectation: batchExpectation(for: message, request: request),
-            deadline: batchDeadline(for: message, request: request)
-        )
-        return RunBatchPreparedStep(
-            originalIndex: originalIndex,
-            command: request.command,
-            typedStep: typedStep
-        )
     }
 
     func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> ActionExpectation? {
