@@ -239,7 +239,7 @@ extension TheBrains {
             baselineTripwireSignal: baseline.tripwireSignal
         )
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
-        stash.commitVisiblePage(screen)
+        stash.commitVisibleRefresh(screen)
         return await semanticStateAfterVisibleRefresh(baseline: baseline)
     }
 
