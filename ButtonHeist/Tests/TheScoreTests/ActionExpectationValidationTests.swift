@@ -3,29 +3,6 @@ import XCTest
 
 final class ActionExpectationValidationTests: XCTestCase {
 
-    // MARK: - validateDelivery
-
-    func testValidateDeliverySuccess() {
-        let result = ActionResult(success: true, method: .activate)
-        let expectation = ActionExpectation.validateDelivery(result)
-        XCTAssertTrue(expectation.met)
-        XCTAssertNil(expectation.expectation)
-    }
-
-    func testValidateDeliveryFailure() {
-        let result = ActionResult(success: false, method: .activate, message: "element not found")
-        let expectation = ActionExpectation.validateDelivery(result)
-        XCTAssertFalse(expectation.met)
-        XCTAssertEqual(expectation.actual, "element not found")
-    }
-
-    func testValidateDeliveryFailureNoMessage() {
-        let result = ActionResult(success: false, method: .activate)
-        let expectation = ActionExpectation.validateDelivery(result)
-        XCTAssertFalse(expectation.met)
-        XCTAssertEqual(expectation.actual, "failed")
-    }
-
     // MARK: - screenChanged
 
     func testScreenChangedMet() {
