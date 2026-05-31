@@ -413,6 +413,60 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertTrue(exploration.manifest.exploredContainers.isEmpty)
     }
 
+    func testSemanticExplorationAbsorbsSameIdElementChange() {
+        let before = AccessibilityElement.make(
+            label: "Total",
+            value: "$4.00",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        let after = AccessibilityElement.make(
+            label: "Total",
+            value: "$8.00",
+            traits: .staticText,
+            respondsToUserInteraction: false
+        )
+        var exploration = Navigation.SemanticExploration(
+            baseline: .makeForTests(elements: [(before, "total_staticText")])
+        )
+
+        exploration.absorb(.makeForTests(elements: [(after, "total_staticText")]))
+
+        XCTAssertEqual(
+            exploration.screen.findElement(heistId: "total_staticText")?.element.value,
+            "$8.00"
+        )
+    }
+
+    func testSemanticExplorationAddsNestedContainersAfterOuterContainerIsExplored() {
+        let outer = makeScrollableContainer(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400),
+            contentSize: CGSize(width: 320, height: 1_200)
+        )
+        let nested = makeScrollableContainer(
+            frame: CGRect(x: 20, y: 520, width: 280, height: 240),
+            contentSize: CGSize(width: 280, height: 900)
+        )
+        var exploration = Navigation.SemanticExploration(baseline: .empty)
+        exploration.manifest.addPendingContainers([outer])
+
+        exploration.markExplored(outer)
+        exploration.addDiscoveredContainers([outer, nested])
+
+        XCTAssertTrue(exploration.manifest.exploredContainers.contains(outer))
+        XCTAssertFalse(exploration.manifest.pendingContainers.contains(outer))
+        XCTAssertTrue(exploration.manifest.pendingContainers.contains(nested))
+    }
+
+    func testSemanticExplorationFinishOwnsExplorationTimestamp() {
+        var exploration = Navigation.SemanticExploration(baseline: .empty)
+
+        let result = exploration.finish(startTime: CACurrentMediaTime() - 0.01)
+
+        XCTAssertGreaterThan(result.manifest.explorationTime, 0)
+        XCTAssertEqual(result.screen, .empty)
+    }
+
     func testExploreScreenExploresSwipeableContainer() async throws {
         guard brains.refresh() != nil else {
             throw XCTSkip("No live hierarchy available for swipeable explore test")
@@ -446,6 +500,13 @@ final class TheBrainsPipelineTests: XCTestCase {
             return (element, entry.heistId)
         }
         return .makeForTests(elements: pairs)
+    }
+
+    private func makeScrollableContainer(frame: CGRect, contentSize: CGSize) -> AccessibilityContainer {
+        AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(contentSize)),
+            frame: AccessibilityRect(frame)
+        )
     }
 
     private func settledOutcome(

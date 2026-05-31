@@ -46,7 +46,7 @@ extension Navigation {
         let manifest: ScreenManifest
     }
 
-    fileprivate struct SemanticExploration {
+    struct SemanticExploration {
         var screen: Screen
         var manifest = ScreenManifest()
 
