@@ -47,7 +47,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded, .element(.heistId("btn_save"), actionName: "Delete Item"))
+        XCTAssertEqual(decoded, CustomActionTarget(elementTarget: .heistId("btn_save"), actionName: "Delete Item"))
         XCTAssertEqual(decoded.actionName, "Delete Item")
     }
 
@@ -58,36 +58,24 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded, .element(.matcher(ElementMatcher(label: "Menu")), actionName: "Open Submenu"))
+        XCTAssertEqual(decoded, CustomActionTarget(
+            elementTarget: .matcher(ElementMatcher(label: "Menu")),
+            actionName: "Open Submenu"
+        ))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
     }
 
-    func testCustomActionTargetWithContainerRoundTrip() throws {
-        let target = CustomActionTarget(
-            containerTarget: ContainerMatcher(stableId: "semantic_actions__actions"),
-            actionName: "Dismiss"
-        )
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(
-            decoded,
-            .container(ContainerMatcher(stableId: "semantic_actions__actions"), ordinal: nil, actionName: "Dismiss")
-        )
-        XCTAssertEqual(decoded.actionName, "Dismiss")
-    }
+    func testCustomActionTargetRejectsContainerField() throws {
+        let data = Data("""
+        {
+          "container": {"stableId": "toolbar"},
+          "actionName": "Dismiss"
+        }
+        """.utf8)
 
-    func testCustomActionTargetRejectsContainerOrdinalOnly() throws {
-        let target = CustomActionTarget(
-            containerTarget: ContainerMatcher(),
-            ordinal: 1,
-            actionName: "Dismiss"
-        )
-
-        XCTAssertThrowsError(try encoder.encode(target)) { error in
-            guard case EncodingError.invalidValue = error else {
-                return XCTFail("Expected invalidValue, got \(error)")
-            }
-            XCTAssertTrue("\(error)".contains("ordinal only disambiguates"))
+        XCTAssertThrowsError(try decoder.decode(CustomActionTarget.self, from: data)) { error in
+            XCTAssertTrue("\(error)".contains("Unknown custom action target field"), "\(error)")
+            XCTAssertTrue("\(error)".contains("container"), "\(error)")
         }
     }
 
