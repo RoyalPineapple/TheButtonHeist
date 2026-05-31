@@ -596,16 +596,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(EnvironmentKey.insideJobPort.rawValue, "INSIDEJOB_PORT")
     }
 
-    // MARK: - ScrollSearchDirection
-
-    func testScrollSearchDirectionAllCasesRoundTrip() throws {
-        for direction in ScrollSearchDirection.allCases {
-            let data = try encoder.encode(direction)
-            let decoded = try decoder.decode(ScrollSearchDirection.self, from: data)
-            XCTAssertEqual(decoded, direction)
-        }
-    }
-
     // MARK: - ErrorKind
 
     func testErrorKindAllCasesRoundTrip() throws {

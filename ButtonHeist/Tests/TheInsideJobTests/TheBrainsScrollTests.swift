@@ -178,21 +178,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(Navigation.requiredAxis(for: ScrollEdge.right), .horizontal)
     }
 
-    func testRequiredAxisForScrollSearchDirection() {
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.up), .vertical)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.down), .vertical)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.left), .horizontal)
-        XCTAssertEqual(Navigation.requiredAxis(for: ScrollSearchDirection.right), .horizontal)
-    }
-
     // MARK: - uiScrollDirection Mapping
-
-    func testUIScrollDirectionFromScrollSearchDirection() {
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.down), .down)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.up), .up)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.left), .left)
-        XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollSearchDirection.right), .right)
-    }
 
     func testUIScrollDirectionFromScrollDirection() {
         XCTAssertEqual(Navigation.uiScrollDirection(for: ScrollDirection.up), .up)
