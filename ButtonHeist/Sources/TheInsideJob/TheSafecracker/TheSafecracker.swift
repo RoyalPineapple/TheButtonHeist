@@ -132,11 +132,6 @@ final class TheSafecracker {
         case targetUnavailable
     }
 
-    // MARK: - Internal Touch State
-
-    private var activeTouch: SyntheticTouch?
-    private var activeWindow: UIWindow?
-
     // MARK: - Public: Single-Finger Gestures
 
     /// Simulate a tap at the given screen coordinates.
@@ -158,7 +153,7 @@ final class TheSafecracker {
     ///   - duration: How long to hold the press (seconds, default 0.5)
     func longPress(at point: CGPoint, duration: GestureDuration = .longPressDefault) async -> Bool {
         guard Self.geometryIsValid([point], field: "long press point") else { return false }
-        guard touchDown(at: point) else { return false }
+        guard var touchState = beginTouch(at: point) else { return false }
 
         var elapsed: TimeInterval = 0
         while elapsed < duration.seconds && !Task.isCancelled {
@@ -166,10 +161,10 @@ final class TheSafecracker {
                 nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
             ) else { break }
             elapsed += Self.touchGestureStepDelay
-            sendStationary()
+            sendStationary(&touchState.touch)
         }
 
-        return touchUp()
+        return endTouch(&touchState.touch)
     }
 
     /// Simulate a swipe gesture between two screen points.
@@ -262,23 +257,23 @@ final class TheSafecracker {
 
     @discardableResult
     private func performTouchPath(start: CGPoint, waypoints: [CGPoint]) async -> Bool {
-        guard touchDown(at: start) else { return false }
+        guard var touchState = beginTouch(at: start) else { return false }
 
         for point in waypoints {
             if Task.isCancelled { break }
-            moveTouch(to: point)
+            moveTouch(&touchState.touch, in: touchState.window, to: point)
             guard await Task.cancellableSleep(
                 nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
             ) else { break }
         }
 
-        return touchUp()
+        return endTouch(&touchState.touch)
     }
 
     private func performTouchTap(at point: CGPoint) async -> Bool {
-        guard touchDown(at: point) else { return false }
+        guard var touchState = beginTouch(at: point) else { return false }
         guard await Task.cancellableSleep(for: Self.gestureYieldDelay) else { return false }
-        return touchUp()
+        return endTouch(&touchState.touch)
     }
 
     private func performLineGesture(
@@ -296,74 +291,58 @@ final class TheSafecracker {
 
     // MARK: - Internal: Touch Primitive
 
-    /// Begin one touch at a screen point.
-    private func touchDown(at point: CGPoint) -> Bool {
-        guard Self.geometryIsValid([point], field: "touch point") else { return false }
+    private func beginTouch(at point: CGPoint) -> (touch: SyntheticTouch, window: UIWindow)? {
+        guard Self.geometryIsValid([point], field: "touch point") else { return nil }
         guard let window = windowForPoint(point) else {
             insideJobLogger.error("No window found for point \(String(describing: point))")
-            return false
+            return nil
         }
 
         let target = TouchTarget.resolve(at: point, in: window)
         guard let touch = target.makeTouch(phase: .began) else {
             insideJobLogger.error("Failed to create touch")
-            return false
+            return nil
         }
 
         guard let event = TouchEvent(touches: [touch]) else {
             insideJobLogger.error("Failed to create began event")
-            return false
+            return nil
         }
 
         event.send()
-        activeTouch = touch
-        activeWindow = window
-        return true
+        return (touch, window)
     }
 
-    /// Move the active touch to a new screen point.
     @discardableResult
-    private func moveTouch(to point: CGPoint) -> Bool {
-        guard var activeTouch, let window = activeWindow else { return false }
+    private func moveTouch(_ touch: inout SyntheticTouch, in window: UIWindow, to point: CGPoint) -> Bool {
         guard Self.geometryIsValid([point], field: "touch move point") else { return false }
 
         let windowPoint = window.convert(point, from: nil)
-        activeTouch.update(phase: .moved, location: windowPoint)
+        touch.update(phase: .moved, location: windowPoint)
 
-        guard let event = TouchEvent(touches: [activeTouch]) else { return false }
+        guard let event = TouchEvent(touches: [touch]) else { return false }
         event.send()
-        self.activeTouch = activeTouch
         return true
     }
 
-    /// Send a stationary event without moving the active touch.
-    /// Used during long press to keep gesture recognizers processing (matches KIF).
     @discardableResult
-    private func sendStationary() -> Bool {
-        guard var activeTouch else { return false }
+    private func sendStationary(_ touch: inout SyntheticTouch) -> Bool {
+        touch.update(phase: .stationary)
 
-        activeTouch.update(phase: .stationary)
-
-        guard let event = TouchEvent(touches: [activeTouch]) else { return false }
+        guard let event = TouchEvent(touches: [touch]) else { return false }
         event.send()
-        self.activeTouch = activeTouch
         return true
     }
 
-    /// Lift the active touch.
-    private func touchUp() -> Bool {
-        guard var activeTouch else { return false }
+    private func endTouch(_ touch: inout SyntheticTouch) -> Bool {
+        touch.update(phase: .ended)
 
-        activeTouch.update(phase: .ended)
-
-        guard let event = TouchEvent(touches: [activeTouch]) else {
+        guard let event = TouchEvent(touches: [touch]) else {
             insideJobLogger.error("Failed to create ended event")
             return false
         }
 
         event.send()
-        self.activeTouch = nil
-        activeWindow = nil
         return true
     }
 
