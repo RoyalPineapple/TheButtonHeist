@@ -7,8 +7,7 @@ import TheScore
 
 let muscleAuthenticationLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
-/// Owns the authentication phases inside TheMuscle admission:
-/// hello validation, token auth, UI approval, and lockout.
+/// Owns the authentication phases inside TheMuscle admission.
 struct MuscleAuthenticationFlow {
     private var clientRegistry = TheMuscleClientRegistry()
     private var tokenAdmission: SessionAdmission
@@ -41,28 +40,25 @@ struct MuscleAuthenticationFlow {
         respond: @escaping TheMuscleAdmission.ResponseHandler,
         uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
     ) -> MuscleAdmissionDecision {
-        guard let envelope = decodeRequest(data) else {
-            guard clientRegistry.phase(for: clientId)?.isAuthenticated == true else {
-                return .handled(rejectUndecodableUnauthenticatedMessage(clientId, respond: respond))
-            }
-            return .handled(rejectUndecodableAuthenticatedMessage(clientId, respond: respond))
+        guard let envelope = MuscleAuthenticationRequestDecoder.decode(data) else {
+            let effect = clientRegistry.phase(for: clientId)?.isAuthenticated == true
+                ? MuscleAuthenticationRejection.undecodableAuthenticatedMessage(clientId, respond: respond)
+                : MuscleAuthenticationRejection.undecodableUnauthenticatedMessage(clientId, respond: respond)
+            return .handled(effect)
         }
 
-        guard clientRegistry.phase(for: clientId)?.isAuthenticated == true else {
-            return handleUnauthenticatedMessage(
-                clientId,
-                envelope: envelope,
-                respond: respond,
-                uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
-            )
+        guard clientRegistry.phase(for: clientId)?.isAuthenticated != true else {
+            return MuscleAuthenticatedCommandPhase.admit(clientId, envelope: envelope, respond: respond)
         }
 
-        switch envelope.message {
-        case .clientHello, .authenticate:
-            return .handled(rejectAuthenticatedProtocolMessage(clientId, envelope: envelope, respond: respond))
-        default:
-            return .admitted(AdmittedClientMessage(clientId: clientId, envelope: envelope))
-        }
+        return MuscleHandshakePhase.handle(
+            clientId,
+            envelope: envelope,
+            respond: respond,
+            clientRegistry: &clientRegistry,
+            tokenAdmission: &tokenAdmission,
+            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
+        )
     }
 
     mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> MuscleAdmissionEffect {
@@ -134,220 +130,11 @@ struct MuscleAuthenticationFlow {
     }
 
     func authenticationDeadline(_ clientId: Int, deadlineSeconds: UInt64) -> MuscleAdmissionEffect {
-        guard let phase = clientRegistry.phase(for: clientId),
-              !phase.isAuthenticated else {
-            return .none
-        }
-
-        let error: ServerError
-        switch phase {
-        case .pendingApproval:
-            muscleAuthenticationLogger.warning(
-                "Client \(clientId): approval timed out - user did not respond to the approval prompt on the device"
-            )
-            error = ServerError(
-                kind: .authApprovalPending,
-                message: "Approval timed out — user did not respond to the approval prompt on the device."
-            )
-        case .connected, .helloValidated:
-            muscleAuthenticationLogger.warning("Client \(clientId) did not authenticate within \(deadlineSeconds)s deadline")
-            error = ServerError(
-                kind: .authFailure,
-                message: "Authentication timed out after \(deadlineSeconds) seconds."
-            )
-        case .authenticated:
-            return .none
-        }
-
-        return .client(.error(error), clientId: clientId, disconnect: true)
-    }
-
-    private mutating func handleUnauthenticatedMessage(
-        _ clientId: Int,
-        envelope: RequestEnvelope,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> MuscleAdmissionDecision {
-        guard envelope.buttonHeistVersion == buttonHeistVersion else {
-            muscleAuthenticationLogger.warning(
-                "Client \(clientId) buttonHeistVersion mismatch: server=\(buttonHeistVersion), client=\(envelope.buttonHeistVersion)"
-            )
-            return .handled(.response(
-                .protocolMismatch(ProtocolMismatchPayload(
-                    serverButtonHeistVersion: buttonHeistVersion,
-                    clientButtonHeistVersion: envelope.buttonHeistVersion
-                )),
-                respond: respond,
-                disconnect: clientId
-            ))
-        }
-
-        switch envelope.message {
-        case .clientHello:
-            return handleClientHello(clientId, envelope: envelope, respond: respond)
-        case .authenticate(let payload):
-            return handleAuthenticate(
-                clientId,
-                envelope: envelope,
-                payload: payload,
-                respond: respond,
-                uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
-            )
-        default:
-            return .handled(rejectUnauthenticatedMessage(
-                clientId,
-                message: "Authentication required before \(envelope.message.wireType.rawValue).",
-                requestId: envelope.requestId,
-                respond: respond
-            ))
-        }
-    }
-
-    private mutating func handleClientHello(
-        _ clientId: Int,
-        envelope: RequestEnvelope,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> MuscleAdmissionDecision {
-        guard clientRegistry.markHelloValidated(clientId) != nil else {
-            return .handled(rejectUnauthenticatedMessage(
-                clientId,
-                message: "Connection is not registered; reconnect before starting the auth handshake.",
-                requestId: envelope.requestId,
-                respond: respond
-            ))
-        }
-        return .handled(.response(.authRequired, respond: respond))
-    }
-
-    private mutating func handleAuthenticate(
-        _ clientId: Int,
-        envelope: RequestEnvelope,
-        payload: AuthenticatePayload,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> MuscleAdmissionDecision {
-        guard clientRegistry.phase(for: clientId)?.hasCompletedHello == true else {
-            return .handled(rejectUnauthenticatedMessage(
-                clientId,
-                message: "Authentication requires clientHello first.",
-                requestId: envelope.requestId,
-                respond: respond
-            ))
-        }
-        return processAuthentication(
-            clientId,
-            payload: payload,
-            respond: respond,
-            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
+        MuscleAuthenticationDeadlinePhase.effect(
+            clientId: clientId,
+            phase: clientRegistry.phase(for: clientId),
+            deadlineSeconds: deadlineSeconds
         )
-    }
-
-    private mutating func processAuthentication(
-        _ clientId: Int,
-        payload: AuthenticatePayload,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> MuscleAdmissionDecision {
-        guard let phase = clientRegistry.phase(for: clientId) else {
-            muscleAuthenticationLogger.warning("Client \(clientId) has no registered address, rejecting auth")
-            return .handled(.response(
-                .error(ServerError(kind: .authFailure, message: "Connection rejected.")),
-                respond: respond,
-                disconnect: clientId
-            ))
-        }
-
-        if payload.token.isEmpty {
-            return MuscleUIApprovalPhase.request(
-                clientId,
-                address: phase.address,
-                driverId: payload.driverId,
-                clientRegistry: &clientRegistry,
-                tokenAdmission: tokenAdmission,
-                respond: respond,
-                uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
-            )
-        }
-
-        return MuscleTokenAuthenticationPhase.authenticate(
-            clientId,
-            address: phase.address,
-            payload: payload,
-            tokenAdmission: &tokenAdmission,
-            respond: respond
-        )
-    }
-
-    private func rejectUndecodableUnauthenticatedMessage(
-        _ clientId: Int,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> MuscleAdmissionEffect {
-        muscleAuthenticationLogger.warning("Client \(clientId) sent unparsable message before authenticating")
-        return .response(
-            .error(ServerError(
-                kind: .validationError,
-                message: """
-                    Could not decode client message before authentication. \
-                    Check that the client and app are built from the same Button Heist version.
-                    """
-            )),
-            respond: respond,
-            disconnect: clientId
-        )
-    }
-
-    private func rejectUndecodableAuthenticatedMessage(
-        _ clientId: Int,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> MuscleAdmissionEffect {
-        muscleAuthenticationLogger.warning("Authenticated client \(clientId) sent unparsable message")
-        return .response(
-            .error(ServerError(kind: .general, message: "Malformed message — could not decode")),
-            respond: respond
-        )
-    }
-
-    private func rejectAuthenticatedProtocolMessage(
-        _ clientId: Int,
-        envelope: RequestEnvelope,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> MuscleAdmissionEffect {
-        let name = envelope.message.wireType.rawValue
-        muscleAuthenticationLogger.warning(
-            "Authenticated client \(clientId) sent protocol message \(name, privacy: .public) after admission"
-        )
-        return .response(
-            .error(ServerError(
-                kind: .validationError,
-                message: "Protocol message \(name) is not an app command after authentication."
-            )),
-            requestId: envelope.requestId,
-            respond: respond
-        )
-    }
-
-    private func rejectUnauthenticatedMessage(
-        _ clientId: Int,
-        message: String,
-        requestId: String?,
-        respond: @escaping TheMuscleAdmission.ResponseHandler
-    ) -> MuscleAdmissionEffect {
-        muscleAuthenticationLogger.warning("Client \(clientId) rejected before auth: \(message, privacy: .public)")
-        return .response(
-            .error(ServerError(kind: .authFailure, message: message)),
-            requestId: requestId,
-            respond: respond,
-            disconnect: clientId
-        )
-    }
-
-    private func decodeRequest(_ data: Data) -> RequestEnvelope? {
-        do {
-            return try RequestEnvelope.decoded(from: data)
-        } catch {
-            muscleAuthenticationLogger.error("Failed to decode client message: \(error)")
-            return nil
-        }
     }
 }
 #endif // DEBUG
