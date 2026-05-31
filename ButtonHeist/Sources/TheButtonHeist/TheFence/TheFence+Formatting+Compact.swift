@@ -31,7 +31,7 @@ extension FenceResponse {
                 .joined(separator: "\n")
         case .interface(let interface, let detail):
             let header = "\(interface.elements.count) elements"
-            var lines: [String] = [interface.screenDescription, header]
+            var lines: [String] = [InterfaceSummary.screenDescription(for: interface), header]
             lines.append(contentsOf: Self.compactTreeLines(interface, detail: detail))
             return lines.joined(separator: "\n")
         case .action(let command, let result, let expectation):

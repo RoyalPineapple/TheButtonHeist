@@ -66,7 +66,7 @@ public extension AccessibilityTrace {
 
         public var summary: String {
             let countSummary = "\(interface.elements.count) elements"
-            let description = normalized(interface.screenDescription)
+            let description = normalized(InterfaceSummary.screenDescription(for: interface))
             return description == countSummary
                 ? countSummary
                 : "\(description ?? countSummary) (\(interface.elements.count) elements)"

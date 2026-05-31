@@ -103,12 +103,10 @@ public extension AccessibilityTrace {
 
 extension AccessibilityTrace.Capture {
     var screenNameProjection: String? {
-        interface.elements
-            .first(where: { $0.traits.contains(.header) })
-            .flatMap(\.label)
+        InterfaceSummary.screenTitle(from: interface.elements)
     }
 
     var screenIdProjection: String? {
-        context.screenId ?? interface.screenId
+        context.screenId ?? InterfaceSummary.screenId(for: interface)
     }
 }

@@ -25,9 +25,9 @@ struct PublicInterface: Encodable {
     init(interface: Interface, detail: InterfaceDetail) {
         let formatter = ISO8601DateFormatter()
         self.timestamp = formatter.string(from: interface.timestamp)
-        self.screenDescription = interface.screenDescription
-        self.screenId = interface.screenId
-        self.navigation = PublicNavigation(navigation: interface.navigation)
+        self.screenDescription = InterfaceSummary.screenDescription(for: interface)
+        self.screenId = InterfaceSummary.screenId(for: interface)
+        self.navigation = PublicNavigation(elements: interface.elements)
         let counter = PublicIndexCounter()
         self.tree = PublicTreeNode.nodes(
             from: interface.tree,
@@ -44,10 +44,16 @@ struct PublicNavigation: Encodable {
     let backButton: PublicNavigationItem?
     let tabBarItems: [PublicTabBarItem]?
 
-    init(navigation: NavigationContext) {
-        self.screenTitle = navigation.screenTitle
-        self.backButton = navigation.backButton.map { PublicNavigationItem(item: $0) }
-        self.tabBarItems = navigation.tabBarItems?.map { PublicTabBarItem(item: $0) }
+    init(elements: [HeistElement]) {
+        self.screenTitle = InterfaceSummary.screenTitle(from: elements)
+        self.backButton = elements
+            .first(where: { $0.traits.contains(.backButton) })
+            .map { PublicNavigationItem(element: $0) }
+
+        let tabBarItems = elements
+            .filter { $0.traits.contains(.tabBarItem) }
+            .map(PublicTabBarItem.init(element:))
+        self.tabBarItems = tabBarItems.isEmpty ? nil : tabBarItems
     }
 }
 
@@ -56,10 +62,10 @@ struct PublicNavigationItem: Encodable {
     let label: String?
     let value: String?
 
-    init(item: NavigationContext.NavigationItem) {
-        self.heistId = item.heistId
-        self.label = item.label
-        self.value = item.value
+    init(element: HeistElement) {
+        self.heistId = element.heistId
+        self.label = element.label
+        self.value = element.value
     }
 }
 
@@ -69,11 +75,11 @@ struct PublicTabBarItem: Encodable {
     let value: String?
     let selected: Bool?
 
-    init(item: NavigationContext.TabBarItem) {
-        self.heistId = item.heistId
-        self.label = item.label
-        self.value = item.value
-        self.selected = item.selected ? true : nil
+    init(element: HeistElement) {
+        self.heistId = element.heistId
+        self.label = element.label
+        self.value = element.value
+        self.selected = element.traits.contains(.selected) ? true : nil
     }
 }
 
