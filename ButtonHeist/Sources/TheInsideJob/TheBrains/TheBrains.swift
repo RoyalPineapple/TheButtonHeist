@@ -100,27 +100,6 @@ final class TheBrains {
         let screenId: String?
     }
 
-    /// Capture the current state for delta computation before an action.
-    /// Caller must have called `refresh()` already this frame.
-    func captureBeforeState() -> BeforeState {
-        let snapshot = stash.selectElements()
-        let (interface, interfaceHash) = stash.semanticInterfaceWithHash()
-        let tripwireSignal = tripwire.tripwireSignal()
-        let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
-        return BeforeState(
-            snapshot: snapshot,
-            elements: snapshot.map(\.element),
-            hierarchy: stash.currentHierarchy,
-            interface: interface,
-            interfaceHash: interfaceHash,
-            semanticHash: stash.currentScreen.semanticHash,
-            capture: capture,
-            tripwireSignal: tripwireSignal,
-            screenSnapshot: ScreenClassifier.snapshot(of: stash.currentScreen),
-            screenId: stash.lastScreenId
-        )
-    }
-
     /// Capture the known semantic state. Exploration updates the targetable
     /// semantic set; this capture projects that state so deltas compare the
     /// whole discovered interface rather than the latest viewport parse.
@@ -364,21 +343,6 @@ final class TheBrains {
         )
     }
 
-    func makeAccessibilityTrace(afterCapture: AccessibilityTrace.Capture, parentCapture: AccessibilityTrace.Capture? = nil) -> AccessibilityTrace {
-        let capture = AccessibilityTrace.Capture(
-            sequence: parentCapture == nil ? 1 : 2,
-            interface: afterCapture.interface,
-            parentHash: parentCapture?.hash,
-            context: afterCapture.context,
-            transition: afterCapture.transition,
-            hash: afterCapture.hash
-        )
-        if let parentCapture {
-            return AccessibilityTrace(captures: [parentCapture, capture])
-        }
-        return AccessibilityTrace(capture: capture)
-    }
-
     func makeClassifiedAccessibilityTrace(after: BeforeState, parent: BeforeState) -> AccessibilityTrace {
         let classification = ScreenClassifier.classify(
             before: parent.screenSnapshot,
@@ -392,7 +356,7 @@ final class TheBrains {
             transition: AccessibilityTrace.Transition(screenChangeReason: classification.reason?.rawValue),
             hash: after.capture.hash
         )
-        return makeAccessibilityTrace(afterCapture: capture, parentCapture: parent.capture)
+        return AccessibilityTrace(captures: [parent.capture, capture])
     }
 
     /// A Tripwire tick is permission to parse visible state, not to tickle

@@ -114,7 +114,7 @@ final class TheBrainsActionTests: XCTestCase {
     // MARK: - BeforeState Capture
 
     func testCaptureBeforeStateReturnsEmptySnapshotWhenRegistryEmpty() {
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         XCTAssertTrue(before.snapshot.isEmpty,
                       "Snapshot should be empty when no elements in registry")
         XCTAssertTrue(before.elements.isEmpty,
@@ -126,7 +126,7 @@ final class TheBrainsActionTests: XCTestCase {
         let heistId = "header_title"
         installScreen(elements: [(element, heistId)])
 
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         XCTAssertEqual(before.snapshot.count, 1)
         XCTAssertEqual(before.snapshot.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)
