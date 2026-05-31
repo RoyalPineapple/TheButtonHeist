@@ -112,7 +112,7 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
-| `direction` | `string` | no | - | `down`, `up`, `left`, `right` |
+| `direction` | `string` | no | - | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
