@@ -2,6 +2,61 @@ import Foundation
 
 extension TheFence {
 
+    struct ConnectRequest {
+        let targetName: String?
+        let device: String?
+        let token: String?
+    }
+
+    struct StartHeistRequest {
+        let app: String
+        let identifier: String
+    }
+
+    struct StopHeistRequest {
+        let outputPath: String
+    }
+
+    struct PlayHeistRequest {
+        let inputPath: String
+    }
+
+    static func decodePingRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence, _ in try await fence.handlePing() }
+    }
+
+    static func decodeListDevicesRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence, _ in try await fence.handleListDevices() }
+    }
+
+    static func decodeGetSessionStateRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence, _ in .sessionState(payload: fence.currentSessionState()) }
+    }
+
+    static func decodeListTargetsRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
+    }
+
     static func decodeRunBatchCommandRequest(
         _ fence: TheFence,
         _ arguments: CommandArgumentEnvelope,

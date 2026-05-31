@@ -2,6 +2,24 @@ import TheScore
 
 extension TheFence {
 
+    static func decodeGetPasteboardRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        clientActionDispatch([.getPasteboard])
+    }
+
+    static func decodeDismissKeyboardRequest(
+        _ fence: TheFence,
+        _ arguments: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
+    ) throws -> DecodedRequestDispatch {
+        clientActionDispatch([.resignFirstResponder])
+    }
+
     static func decodeTypeTextRequest(
         _ fence: TheFence,
         _ input: CommandArgumentEnvelope,

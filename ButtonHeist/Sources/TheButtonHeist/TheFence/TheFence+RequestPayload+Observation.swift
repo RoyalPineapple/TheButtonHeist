@@ -4,6 +4,18 @@ import TheScore
 
 extension TheFence {
 
+    struct GetInterfaceRequest {
+        let detail: InterfaceDetail
+        let query: InterfaceQuery
+    }
+
+    struct ScreenRequest {
+        let outputPath: String?
+        let requestId: String
+        let inlineData: Bool
+        let includeInterface: Bool
+    }
+
     static func decodeGetInterfaceRequest(
         _ fence: TheFence,
         _ arguments: CommandArgumentEnvelope,
