@@ -260,7 +260,6 @@ Button Heist is a distributed system: an iOS framework inside the app, a macOS c
 | **TheBrains** | Action execution, scroll orchestration, delta generation, waits, and exploration |
 | **TheGetaway** | Message dispatch, encoding/decoding, transport wiring, and response state |
 | **TheMuscle** | Token validation, approval UI, and session locking |
-| **TheFingerprints** | Touch indicators for live interaction |
 | **TheTripwire** | UI readiness checks: animation detection, presentation-layer fingerprints, and settle waits |
 | **ThePlant** | ObjC `+load` hook that starts TheInsideJob when the framework loads |
 

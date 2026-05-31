@@ -70,17 +70,6 @@ final class TheSafecracker {
     @objc private func keyboardWillShow() { keyboardVisibleFlag = true }
     @objc private func keyboardDidHide() { keyboardVisibleFlag = false }
 
-    // MARK: - Fingerprints
-
-    /// Visual interaction indicators for taps and gesture tracking.
-    lazy var fingerprints = TheFingerprints()
-
-    /// Show a brief fingerprint indicator at a screen point.
-    func showFingerprint(at point: CGPoint) {
-        guard GeometryValidation.validateScreenPoint(point) == nil else { return }
-        fingerprints.showFingerprint(at: point)
-    }
-
     // MARK: - Interaction Result
 
     /// Outcome of a high-level interaction (action, gesture, text entry).
@@ -181,7 +170,6 @@ final class TheSafecracker {
         guard Self.geometryIsValid([point], field: "long press point") else { return false }
         guard Self.durationIsValid(duration, field: "long press duration") else { return false }
         guard touchesDown(at: [point]) else { return false }
-        fingerprints.beginTrackingFingerprints(at: [point])
 
         var elapsed: TimeInterval = 0
         while elapsed < duration && !Task.isCancelled {
@@ -192,7 +180,6 @@ final class TheSafecracker {
             sendStationary()
         }
 
-        fingerprints.endTrackingFingerprints()
         return touchesUp()
     }
 
@@ -291,18 +278,15 @@ final class TheSafecracker {
     @discardableResult
     func performTouchPath(start: [CGPoint], waypoints: [[CGPoint]]) async -> Bool {
         guard touchesDown(at: start) else { return false }
-        fingerprints.beginTrackingFingerprints(at: start)
 
         for points in waypoints {
             if Task.isCancelled { break }
             moveTouches(to: points)
-            fingerprints.updateTrackingFingerprints(to: points)
             guard await Task.cancellableSleep(
                 nanoseconds: UInt64(Self.touchGestureStepDelay * 1_000_000_000)
             ) else { break }
         }
 
-        fingerprints.endTrackingFingerprints()
         return touchesUp()
     }
 

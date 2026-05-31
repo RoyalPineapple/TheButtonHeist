@@ -32,7 +32,6 @@ final class ActivationPolicyTests: XCTestCase {
         var activateCount = 0
         var didRefresh = false
         var tappedPoints: [CGPoint] = []
-        var fingerprintPoints: [CGPoint] = []
 
         let result = await makePolicy(
             activate: { _ in
@@ -46,8 +45,7 @@ final class ActivationPolicyTests: XCTestCase {
             syntheticTap: { point in
                 tappedPoints.append(point)
                 return true
-            },
-            showFingerprint: { fingerprintPoints.append($0) }
+            }
         ).apply(to: initialTarget)
 
         XCTAssertTrue(result.success)
@@ -55,7 +53,6 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(activateCount, 1)
         XCTAssertFalse(didRefresh)
         XCTAssertTrue(tappedPoints.isEmpty)
-        XCTAssertEqual(fingerprintPoints, [CGPoint(x: 10, y: 20)])
     }
 
     func testRefreshReresolveRetryCanSucceed() async {
@@ -63,7 +60,6 @@ final class ActivationPolicyTests: XCTestCase {
         let retryTarget = makeLiveTarget(heistId: "retry", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
         var tappedPoints: [CGPoint] = []
-        var fingerprintPoints: [CGPoint] = []
 
         let result = await makePolicy(
             activate: { _ in
@@ -76,22 +72,19 @@ final class ActivationPolicyTests: XCTestCase {
             syntheticTap: { point in
                 tappedPoints.append(point)
                 return true
-            },
-            showFingerprint: { fingerprintPoints.append($0) }
+            }
         ).apply(to: initialTarget)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
         XCTAssertTrue(tappedPoints.isEmpty)
-        XCTAssertEqual(fingerprintPoints, [CGPoint(x: 30, y: 40)])
     }
 
     func testRefreshReresolveFailureReturnsWithoutSyntheticTap() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         var activateCount = 0
         var tappedPoints: [CGPoint] = []
-        var fingerprintPoints: [CGPoint] = []
 
         let result = await makePolicy(
             activate: { _ in
@@ -104,8 +97,7 @@ final class ActivationPolicyTests: XCTestCase {
             syntheticTap: { point in
                 tappedPoints.append(point)
                 return true
-            },
-            showFingerprint: { fingerprintPoints.append($0) }
+            }
         ).apply(to: initialTarget)
 
         XCTAssertFalse(result.success)
@@ -113,7 +105,6 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.message, "retry actionability failed")
         XCTAssertEqual(activateCount, 1)
         XCTAssertTrue(tappedPoints.isEmpty)
-        XCTAssertTrue(fingerprintPoints.isEmpty)
     }
 
     func testSyntheticTapRecoveryCanSucceed() async {
@@ -121,7 +112,6 @@ final class ActivationPolicyTests: XCTestCase {
         let retryTarget = makeLiveTarget(heistId: "retry", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
         var tappedPoints: [CGPoint] = []
-        var fingerprintPoints: [CGPoint] = []
 
         let result = await makePolicy(
             activate: { _ in
@@ -134,15 +124,13 @@ final class ActivationPolicyTests: XCTestCase {
             syntheticTap: { point in
                 tappedPoints.append(point)
                 return true
-            },
-            showFingerprint: { fingerprintPoints.append($0) }
+            }
         ).apply(to: initialTarget)
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .syntheticTap)
         XCTAssertEqual(activateCount, 2)
         XCTAssertEqual(tappedPoints, [CGPoint(x: 30, y: 40)])
-        XCTAssertEqual(fingerprintPoints, [CGPoint(x: 30, y: 40)])
     }
 
     func testSyntheticTapRecoveryFailureCarriesTapReceiverObservation() async {
@@ -229,14 +217,12 @@ final class ActivationPolicyTests: XCTestCase {
         activate: @escaping @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
         syntheticTap: @escaping @MainActor (CGPoint) async -> Bool,
-        showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
         tapReceiverDiagnostic: @escaping @MainActor (CGPoint) -> TheSafecracker.TapReceiverDiagnostic? = { _ in nil }
     ) -> ActivationPolicy {
         ActivationPolicy(
             activate: activate,
             refreshAndResolve: refreshAndResolve,
             syntheticTap: syntheticTap,
-            showFingerprint: showFingerprint,
             tapReceiverDiagnostic: tapReceiverDiagnostic,
             screenBounds: { CGRect(x: 0, y: 0, width: 393, height: 852) }
         )

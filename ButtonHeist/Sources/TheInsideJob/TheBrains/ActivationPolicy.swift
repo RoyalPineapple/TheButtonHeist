@@ -28,7 +28,6 @@ struct ActivationPolicy {
     var activate: @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome
     var refreshAndResolve: @MainActor () async -> RefreshResult
     var syntheticTap: @MainActor (CGPoint) async -> Bool
-    var showFingerprint: @MainActor (CGPoint) -> Void
     var tapReceiverDiagnostic: @MainActor (CGPoint) -> TheSafecracker.TapReceiverDiagnostic?
     var screenBounds: @MainActor () -> CGRect
 
@@ -36,7 +35,6 @@ struct ActivationPolicy {
     func apply(to liveTarget: TheStash.LiveActionTarget) async -> TheSafecracker.InteractionResult {
         let initialOutcome = activate(liveTarget)
         if initialOutcome == .success {
-            showFingerprint(liveTarget.activationPoint)
             return .success(method: .activate)
         }
 
@@ -52,14 +50,12 @@ struct ActivationPolicy {
 
         let retryOutcome = activate(retryLiveTarget)
         if retryOutcome == .success {
-            showFingerprint(retryLiveTarget.activationPoint)
             return .success(method: .activate)
         }
 
         let tapPoint = retryLiveTarget.activationPoint
         switch await attemptSyntheticTapRecovery(at: tapPoint) {
         case .succeeded:
-            showFingerprint(tapPoint)
             return .success(method: .syntheticTap)
         case .failed(let tapReceiver):
             return finalDiagnosticFailure(

@@ -171,34 +171,6 @@ extension TheSafecracker {
         return await swipe(from: path.start, to: path.end, duration: duration)
     }
 
-    // MARK: - Scroll Fingerprint Animation
-
-    /// Animate a fingerprint sweep across a frame in the given scroll direction.
-    /// The finger moves opposite to content — scrolling "down" (content moves up)
-    /// shows a finger sweeping from bottom to top, matching a real swipe gesture.
-    /// Duration matches UIScrollView's animated setContentOffset (~300ms).
-    func animateScrollFingerprint(
-        frame: CGRect,
-        direction: UIAccessibilityScrollDirection,
-        duration: TimeInterval = 0.3
-    ) async {
-        guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.5) else { return }
-
-        let steps = 15
-        let stepDelay = duration / Double(steps)
-
-        fingerprints.beginTrackingFingerprints(at: [path.start])
-        defer { fingerprints.endTrackingFingerprints() }
-        for point in Self.linearPath(from: path.start, to: path.end, steps: steps) {
-            fingerprints.updateTrackingFingerprints(to: [point])
-            do {
-                try await Task.sleep(for: .milliseconds(Int(stepDelay * 1000)))
-            } catch {
-                break
-            }
-        }
-    }
-
     private static func scrollFingerPath(
         frame: CGRect,
         direction: UIAccessibilityScrollDirection,

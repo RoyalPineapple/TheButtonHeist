@@ -100,7 +100,6 @@ extension Actions {
                     await self.refreshActivationTarget(context.target)
                 },
                 syntheticTap: safecracker.tap,
-                showFingerprint: safecracker.showFingerprint,
                 tapReceiverDiagnostic: safecracker.tapReceiverDiagnostic,
                 screenBounds: { ScreenMetrics.current.bounds }
             ).apply(to: context.liveTarget)
@@ -127,7 +126,6 @@ extension Actions {
             action: { context in
                 let liveTarget = context.liveTarget
                 _ = self.stash.increment(liveTarget)
-                self.safecracker.showFingerprint(at: liveTarget.activationPoint)
                 return .success(method: .increment)
             }
         )
@@ -153,7 +151,6 @@ extension Actions {
             action: { context in
                 let liveTarget = context.liveTarget
                 _ = self.stash.decrement(liveTarget)
-                self.safecracker.showFingerprint(at: liveTarget.activationPoint)
                 return .success(method: .decrement)
             }
         )
@@ -286,7 +283,6 @@ extension Actions {
                 message: "custom action failed: requestedAction=\"\(actionName)\" declined by container handler"
             )
         case .succeeded:
-            safecracker.showFingerprint(at: liveContainerTarget.activationPoint)
             return .success(method: .customAction)
         }
     }

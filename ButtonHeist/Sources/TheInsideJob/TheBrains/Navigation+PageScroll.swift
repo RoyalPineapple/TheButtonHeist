@@ -87,10 +87,7 @@ extension Navigation {
                 return ScrollSettleProof(result: .unchanged, previousVisibleIds: before)
             }
             if animated {
-                let screenFrame = sv.convert(sv.bounds, to: nil)
-                await safecracker.animateScrollFingerprint(
-                    frame: screenFrame, direction: direction
-                )
+                _ = await tripwire.waitForAllClear(timeout: 0.5)
             } else {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }

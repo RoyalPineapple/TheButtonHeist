@@ -43,7 +43,6 @@ extension Actions {
                 return failure
             }
             let success = await action(point)
-            if success { safecracker.showFingerprint(at: point) }
             return gestureDispatchResult(method: method, diagnosticPoint: point, success: success)
         }
     }

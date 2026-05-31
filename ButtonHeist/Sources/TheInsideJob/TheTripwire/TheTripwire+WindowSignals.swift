@@ -59,21 +59,20 @@ extension TheTripwire {
     /// windows — so system-managed windows (popup menus, action sheets, alerts
     /// presented in their own UIWindow) are included without leaking inactive
     /// multi-window scenes into the accessibility tree.
-    static func orderedVisibleWindows(includeFingerprints: Bool = false) -> [UIWindow] {
+    static func orderedVisibleWindows() -> [UIWindow] {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .filter { $0.activationState == .foregroundActive }
             .flatMap { $0.windows }
             .filter { window in
-                (includeFingerprints || !(window is TheFingerprints.FingerprintWindow))
-                    && !window.isHidden
+                !window.isHidden
                     && window.bounds.size != .zero
             }
             .sorted { $0.windowLevel > $1.windowLevel }
     }
 
-    /// All visible, non-fingerprint windows in foreground-active scenes, sorted
-    /// by window level (front to back).
+    /// All visible windows in foreground-active scenes, sorted by window level
+    /// (front to back).
     func getTraversableWindows() -> [(window: UIWindow, rootView: UIView)] {
         Self.orderedVisibleWindows()
             .map { ($0, $0 as UIView) }
