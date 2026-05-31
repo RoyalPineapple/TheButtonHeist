@@ -2,13 +2,12 @@ import TheScore
 
 extension TheFence {
 
-    func decodeRotorActionDispatch(
-        command: Command,
-        input: CommandArgumentEnvelope
+    static func decodeRotorRequest(
+        _ fence: TheFence,
+        _ input: CommandArgumentEnvelope,
+        _ requestId: String,
+        _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        guard command == .rotor else {
-            throw FenceError.invalidRequest("Unexpected rotor action command: \(command.rawValue)")
-        }
         let rotor = try input.schemaString("rotor")
         let rotorIndex = try input.schemaNonNegativeInteger("rotorIndex")
         if rotor != nil, rotorIndex != nil {
@@ -26,7 +25,7 @@ extension TheFence {
             .automatic
         }
         let continuation = try input.rotorContinuation()
-        return try decodedExecutablePayload(.rotor(RotorTarget(
+        return try Self.decodedExecutablePayload(.rotor(RotorTarget(
             elementTarget: input.requiredElementTarget(command: .rotor),
             selection: selection,
             direction: input.schemaEnum("direction", as: RotorDirection.self) ?? .next,
