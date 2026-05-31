@@ -9,24 +9,14 @@ final class CommandProjectionTests: XCTestCase {
         XCTAssertEqual(target.gesturePointSelection(), GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20)))
     }
 
-    func testSwipeProjectionConvertsElementDirectionIntoUnitFrameGesture() {
+    func testSwipeProjectionPreservesElementDirectionIntent() {
         let target = SwipeTarget(
-            selection: .unitElement(
-                .heistId("carousel"),
-                start: SwipeDirection.left.defaultStart,
-                end: SwipeDirection.left.defaultEnd,
-                direction: .left
-            )
+            selection: .elementDirection(.heistId("carousel"), .left)
         )
 
         XCTAssertEqual(
             target.gestureSelection(),
-            .unitElement(
-                .heistId("carousel"),
-                start: SwipeDirection.left.defaultStart,
-                end: SwipeDirection.left.defaultEnd,
-                direction: .left
-            )
+            .elementDirection(.heistId("carousel"), .left)
         )
     }
 

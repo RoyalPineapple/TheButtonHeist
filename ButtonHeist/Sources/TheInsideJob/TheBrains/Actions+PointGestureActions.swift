@@ -47,37 +47,20 @@ extension Actions {
     func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult {
         let selection = target.gestureSelection()
         switch selection {
-        case .unitElement(let elementTarget, let start, let end, _):
-            let actionableTarget: SemanticActionability.SemanticActionableTarget
-            switch await navigation.actionability.makeActionable(
-                for: elementTarget,
-                method: .syntheticSwipe,
-                deallocatedBoundary: "gesture action"
-            ) {
-            case .actionable(let target):
-                actionableTarget = target
-            case .failed(let failure):
-                return failure.interactionResult(commandMethod: .syntheticSwipe)
-            }
-            let frame: CGRect
-            switch resolveGestureFrame(for: actionableTarget, method: .syntheticSwipe) {
-            case .success(let liveFrame):
-                frame = liveFrame
-            case .failure(let result):
-                return result
-            }
-            let startPoint = CGPoint(
-                x: frame.origin.x + start.x * frame.width,
-                y: frame.origin.y + start.y * frame.height
+        case .unitElement(let elementTarget, let start, let end):
+            return await performElementFrameSwipe(
+                elementTarget: elementTarget,
+                start: start,
+                end: end,
+                duration: target.resolvedDuration
             )
-            let endPoint = CGPoint(
-                x: frame.origin.x + end.x * frame.width,
-                y: frame.origin.y + end.y * frame.height
+        case .elementDirection(let elementTarget, let direction):
+            return await performElementFrameSwipe(
+                elementTarget: elementTarget,
+                start: direction.defaultStart,
+                end: direction.defaultEnd,
+                duration: target.resolvedDuration
             )
-            if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
-                return failure
-            }
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         case .point(let startSelection, let destination):
             let startPoint: CGPoint
             switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe) {
@@ -104,6 +87,44 @@ extension Actions {
             }
             return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         }
+    }
+
+    private func performElementFrameSwipe(
+        elementTarget: ElementTarget,
+        start: UnitPoint,
+        end: UnitPoint,
+        duration: GestureDuration
+    ) async -> TheSafecracker.InteractionResult {
+        let actionableTarget: SemanticActionability.SemanticActionableTarget
+        switch await navigation.actionability.makeActionable(
+            for: elementTarget,
+            method: .syntheticSwipe,
+            deallocatedBoundary: "gesture action"
+        ) {
+        case .actionable(let target):
+            actionableTarget = target
+        case .failed(let failure):
+            return failure.interactionResult(commandMethod: .syntheticSwipe)
+        }
+        let frame: CGRect
+        switch resolveGestureFrame(for: actionableTarget, method: .syntheticSwipe) {
+        case .success(let liveFrame):
+            frame = liveFrame
+        case .failure(let result):
+            return result
+        }
+        let startPoint = CGPoint(
+            x: frame.origin.x + start.x * frame.width,
+            y: frame.origin.y + start.y * frame.height
+        )
+        let endPoint = CGPoint(
+            x: frame.origin.x + end.x * frame.width,
+            y: frame.origin.y + end.y * frame.height
+        )
+        if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
+            return failure
+        }
+        return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
     }
 
     private func performResolvedSwipe(

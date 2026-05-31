@@ -13,18 +13,23 @@ public enum SwipeDestinationSelection: Sendable, Equatable, CustomStringConverti
 }
 
 public enum SwipeGestureSelection: Sendable, Equatable, CustomStringConvertible {
-    case unitElement(ElementTarget, start: UnitPoint, end: UnitPoint, direction: SwipeDirection?)
+    case unitElement(ElementTarget, start: UnitPoint, end: UnitPoint)
+    case elementDirection(ElementTarget, SwipeDirection)
     case point(start: GesturePointSelection, destination: SwipeDestinationSelection)
 
     public var description: String {
         switch self {
-        case .unitElement(let target, let start, let end, let direction):
-            return ScoreDescription.call("unitSwipe", ([
+        case .unitElement(let target, let start, let end):
+            return ScoreDescription.call("unitSwipe", [
                 target.description,
                 "start=\(start)",
                 "end=\(end)",
-                ScoreDescription.valueField("direction", direction),
-            ] as [String?]).compactMap { $0 })
+            ])
+        case .elementDirection(let target, let direction):
+            return ScoreDescription.call("elementDirectionSwipe", [
+                target.description,
+                "direction=\(direction)",
+            ])
         case .point(let start, let destination):
             return ScoreDescription.call("pointSwipe", [
                 "start=\(start)",
@@ -122,24 +127,22 @@ public struct SwipeTarget: Codable, Sendable {
 
     public var direction: SwipeDirection? {
         switch selection {
-        case .unitElement(_, _, _, let direction):
+        case .elementDirection(_, let direction):
             return direction
         case .point(_, .direction(let direction)):
             return direction
-        case .point:
+        case .unitElement, .point:
             return nil
         }
     }
 
-    /// Direction-based swipes derive their own start/end at dispatch time.
     public var start: UnitPoint? {
-        guard case .unitElement(_, let start, _, let direction) = selection, direction == nil else { return nil }
+        guard case .unitElement(_, let start, _) = selection else { return nil }
         return start
     }
 
-    /// Direction-based swipes derive their own start/end at dispatch time.
     public var end: UnitPoint? {
-        guard case .unitElement(_, _, let end, let direction) = selection, direction == nil else { return nil }
+        guard case .unitElement(_, _, let end) = selection else { return nil }
         return end
     }
 
@@ -175,16 +178,11 @@ public struct SwipeTarget: Codable, Sendable {
             guard direction == nil else {
                 throw GestureProjectionError.mixedCoordinateAndDirection(field: "unitPoints")
             }
-            self.selection = .unitElement(elementTarget, start: start, end: end, direction: nil)
+            self.selection = .unitElement(elementTarget, start: start, end: end)
             return
         }
         if let direction, let elementTarget, startX == nil, startY == nil, endX == nil, endY == nil {
-            self.selection = .unitElement(
-                elementTarget,
-                start: direction.defaultStart,
-                end: direction.defaultEnd,
-                direction: direction
-            )
+            self.selection = .elementDirection(elementTarget, direction)
             return
         }
         let startSelection = try makeGesturePointSelection(
@@ -202,21 +200,16 @@ public struct SwipeTarget: Codable, Sendable {
 
     public func encode(to encoder: Encoder) throws {
         switch selection {
-        case .unitElement(let target, let start, let end, let direction):
+        case .unitElement(let target, let start, let end):
             try target.encode(to: encoder)
             var container = encoder.container(keyedBy: SwipePointCodingKeys.self)
-            if let direction {
-                guard start == direction.defaultStart, end == direction.defaultEnd else {
-                    throw EncodingError.invalidValue(self, .init(
-                        codingPath: encoder.codingPath,
-                        debugDescription: "direction swipe must use the direction default start/end; omit direction for explicit unit points"
-                    ))
-                }
-                try container.encode(direction, forKey: .direction)
-            } else {
-                try container.encode(start, forKey: .start)
-                try container.encode(end, forKey: .end)
-            }
+            try container.encode(start, forKey: .start)
+            try container.encode(end, forKey: .end)
+            try container.encodeIfPresent(duration, forKey: .duration)
+        case .elementDirection(let target, let direction):
+            try target.encode(to: encoder)
+            var container = encoder.container(keyedBy: SwipePointCodingKeys.self)
+            try container.encode(direction, forKey: .direction)
             try container.encodeIfPresent(duration, forKey: .duration)
         case .point(let start, let destination):
             var container = encoder.container(keyedBy: SwipePointCodingKeys.self)

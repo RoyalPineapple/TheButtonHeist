@@ -115,12 +115,7 @@ final class WireCommandParityTests: XCTestCase {
             .setPasteboard(SetPasteboardTarget(text: "clipboard")),
             .oneFingerTap(TapTarget(selection: point)),
             .longPress(LongPressTarget(selection: point)),
-            .swipe(SwipeTarget(selection: .unitElement(
-                target,
-                start: SwipeDirection.left.defaultStart,
-                end: SwipeDirection.left.defaultEnd,
-                direction: .left
-            ))),
+            .swipe(SwipeTarget(selection: .elementDirection(target, .left))),
             .drag(DragTarget(start: .element(target), end: ScreenPoint(x: 30, y: 40))),
             .typeText(TypeTextTarget(text: "hello")),
             .scroll(ScrollTarget(direction: .down)),

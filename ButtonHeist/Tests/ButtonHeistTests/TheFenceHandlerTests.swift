@@ -918,7 +918,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testSwipeDirectionWithElementDispatchesUnitElementPayload() async {
+    func testSwipeDirectionWithElementDispatchesElementDirectionPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .swipe, values: [
             "target": heistTargetValue("row_5"),
@@ -926,13 +926,11 @@ final class TheFenceHandlerTests: XCTestCase {
         ])
         guard let (message, _ ) = mockConn.sent.last,
               case .swipe(let target) = message,
-              case .unitElement(let elementTarget, let start, let end, let direction) = target.selection else {
-            XCTFail("Expected element direction swipe to lower to unit element swipe")
+              case .elementDirection(let elementTarget, let direction) = target.selection else {
+            XCTFail("Expected element direction swipe to lower to element direction swipe")
             return
         }
         XCTAssertEqual(elementTarget, .heistId("row_5"))
-        XCTAssertEqual(start, SwipeDirection.left.defaultStart)
-        XCTAssertEqual(end, SwipeDirection.left.defaultEnd)
         XCTAssertEqual(direction, .left)
     }
 

@@ -499,12 +499,7 @@ final class TheBrainsActionTests: XCTestCase {
             )), false),
             ("rotor", .rotor(RotorTarget(elementTarget: target, selection: .named("Links"))), false),
             ("tap", .oneFingerTap(TapTarget(selection: .element(target))), false),
-            ("swipe", .swipe(SwipeTarget(selection: .unitElement(
-                target,
-                start: SwipeDirection.left.defaultStart,
-                end: SwipeDirection.left.defaultEnd,
-                direction: .left
-            ))), false),
+            ("swipe", .swipe(SwipeTarget(selection: .elementDirection(target, .left))), false),
             ("type text", .typeText(TypeTextTarget(text: "hello", elementTarget: target)), false),
             ("scroll", .scroll(ScrollTarget(elementTarget: target, direction: .down)), false),
             ("wait", .waitFor(WaitForTarget(elementTarget: target, timeout: 0.01)), true),
