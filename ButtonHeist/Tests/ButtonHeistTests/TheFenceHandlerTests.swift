@@ -3475,6 +3475,14 @@ final class TheFenceHandlerTests: XCTestCase {
                 "schema validation failed for action: observed integer 7; expected string"
             ),
             (
+                "type_text missing required text",
+                try HeistStep(
+                    command: "type_text",
+                    target: semanticTarget(identifier: "email")
+                ),
+                "schema validation failed for text: observed missing; expected string"
+            ),
+            (
                 "non-target command carries playback target",
                 try HeistStep(
                     command: "edit_action",
