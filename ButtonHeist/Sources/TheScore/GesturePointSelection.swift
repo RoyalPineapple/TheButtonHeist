@@ -26,6 +26,7 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
     case missingSwipeIntent
     case partialUnitPoints
     case unitPointsRequireElementTarget
+    case invalidDuration(observed: Double, expected: String)
 
     public var description: String {
         switch self {
@@ -43,6 +44,8 @@ public enum GestureProjectionError: Error, Sendable, Equatable, CustomStringConv
             return "unit-point swipe requires both start and end unit points"
         case .unitPointsRequireElementTarget:
             return "unit-point swipe requires a semantic target"
+        case .invalidDuration(let observed, let expected):
+            return "duration must be \(expected) (observed \(ScoreDescription.decimal(observed)))"
         }
     }
 }

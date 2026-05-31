@@ -84,25 +84,47 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testLongPressTargetRoundTrip() throws {
         let target = LongPressTarget(
             selection: .element(.heistId("cell_1")),
-            duration: 1.5
+            duration: try GestureDuration(seconds: 1.5)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
         XCTAssertEqual(decoded.selection, .element(.heistId("cell_1")))
-        XCTAssertEqual(decoded.duration, 1.5)
+        XCTAssertEqual(decoded.duration.seconds, 1.5)
     }
 
     func testLongPressTargetWithPointRoundTrip() throws {
-        let target = LongPressTarget(selection: .coordinate(ScreenPoint(x: 100, y: 200)), duration: 0.8)
+        let target = LongPressTarget(
+            selection: .coordinate(ScreenPoint(x: 100, y: 200)),
+            duration: try GestureDuration(seconds: 0.8)
+        )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
         XCTAssertEqual(decoded.selection, .coordinate(ScreenPoint(x: 100, y: 200)))
-        XCTAssertEqual(decoded.duration, 0.8)
+        XCTAssertEqual(decoded.duration.seconds, 0.8)
     }
 
     func testLongPressTargetDefaultDuration() {
         let target = LongPressTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
-        XCTAssertEqual(target.duration, 0.5)
+        XCTAssertEqual(target.duration.seconds, 0.5)
+    }
+
+    func testLongPressTargetRejectsInvalidDurationAtDecode() {
+        let json = #"{"pointX":10,"pointY":20,"duration":61}"#
+        XCTAssertThrowsError(try decoder.decode(LongPressTarget.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("duration must be number in 0...60.0"), "\(error)")
+        }
+    }
+
+    func testSwipeAndDragRejectInvalidDurationAtDecode() {
+        let swipeJSON = #"{"startX":10,"startY":20,"direction":"down","duration":0}"#
+        XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(swipeJSON.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("duration must be number > 0"), "\(error)")
+        }
+
+        let dragJSON = #"{"startX":10,"startY":20,"endX":30,"endY":40,"duration":61}"#
+        XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(dragJSON.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("duration must be number in 0...60.0"), "\(error)")
+        }
     }
 
     // MARK: - DragTarget
@@ -111,13 +133,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         let target = DragTarget(
             start: .element(.heistId("handle")),
             end: ScreenPoint(x: 200, y: 300),
-            duration: 0.8
+            duration: try GestureDuration(seconds: 0.8)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)
         XCTAssertEqual(decoded.start, .element(.heistId("handle")))
         XCTAssertEqual(decoded.end, ScreenPoint(x: 200, y: 300))
-        XCTAssertEqual(decoded.duration, 0.8)
+        XCTAssertEqual(decoded.duration?.seconds, 0.8)
     }
 
     func testDragTargetCoordinateStartRoundTrip() throws {
@@ -150,11 +172,11 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(
             SwipeTarget(selection: .point(start: .element(.heistId("list")), destination: .direction(.down))).resolvedDuration,
-            0.15
+            .swipeDefault
         )
         XCTAssertEqual(
             DragTarget(start: .coordinate(ScreenPoint(x: 10, y: 20)), end: ScreenPoint(x: 30, y: 40)).resolvedDuration,
-            0.5
+            .dragDefault
         )
     }
 
