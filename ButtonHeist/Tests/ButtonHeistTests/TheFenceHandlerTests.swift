@@ -28,6 +28,19 @@ private extension ClientMessage {
     }
 }
 
+private extension AccessibilityTrace.Delta {
+    var testKind: String {
+        switch self {
+        case .noChange:
+            return AccessibilityTrace.DeltaKind.noChange.rawValue
+        case .elementsChanged:
+            return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+        case .screenChanged:
+            return AccessibilityTrace.DeltaKind.screenChanged.rawValue
+        }
+    }
+}
+
 // MARK: - TheFence Handler Dispatch & Validation Tests
 //
 // These tests exercise the command dispatch router and the argument-validation
@@ -2509,7 +2522,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertNil(batch.failedIndex)
         XCTAssertEqual(batch.results.compactMap { $0["message"] as? String }, ["first", "second"])
         XCTAssertEqual(
-            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.kindRawValue },
+            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.testKind },
             [nil, nil]
         )
         XCTAssertNil(batch.results[0]["delta"])
@@ -2566,7 +2579,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected batch response, got \(response)")
         }
         XCTAssertEqual(
-            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.kindRawValue },
+            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.testKind },
             ["elementsChanged", "elementsChanged"]
         )
         XCTAssertEqual(batch.accessibilityTrace?.captures.count, 3)
@@ -2646,7 +2659,7 @@ final class TheFenceHandlerTests: XCTestCase {
             "run_batch should dispatch one typed plan; InsideJob owns stop-on-error after step failure"
         )
         XCTAssertEqual(batch.executionResult.steps.count, 2)
-        XCTAssertEqual(batch.executionResult.steps[0].finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.kindRawValue, "screenChanged")
+        XCTAssertEqual(batch.executionResult.steps[0].finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.testKind, "screenChanged")
         XCTAssertEqual(
             batch.executionResult.steps[0].finalActionResult()?.message,
             "activate failed: target could not be made actionable"

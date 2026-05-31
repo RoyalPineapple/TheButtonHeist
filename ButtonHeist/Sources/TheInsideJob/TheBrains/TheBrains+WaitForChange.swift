@@ -151,7 +151,7 @@ extension TheBrains {
             }
 
             settleBaseline = current
-            insideJobLogger.debug("wait_for_change round \(round): \(delta.kindRawValue), expectation not yet met")
+            insideJobLogger.debug("wait_for_change round \(round): \(Self.deltaKindDescription(delta)), expectation not yet met")
         }
 
         return nil
@@ -167,7 +167,7 @@ extension TheBrains {
         var parts = [
             "timed out after \(elapsed)s",
             "expected: \(expected)",
-            "observed: \(delta?.kindRawValue ?? "noTrace")",
+            "observed: \(delta.map(Self.deltaKindDescription) ?? "noTrace")",
             "known: \(elementCount) elements",
         ]
         if let screenId = stash.lastScreenId {
@@ -241,6 +241,17 @@ extension TheBrains {
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
         stash.currentScreen = screen
         return await semanticStateAfterVisibleRefresh(baseline: baseline)
+    }
+
+    private static func deltaKindDescription(_ delta: AccessibilityTrace.Delta) -> String {
+        switch delta {
+        case .noChange:
+            return AccessibilityTrace.DeltaKind.noChange.rawValue
+        case .elementsChanged:
+            return AccessibilityTrace.DeltaKind.elementsChanged.rawValue
+        case .screenChanged:
+            return AccessibilityTrace.DeltaKind.screenChanged.rawValue
+        }
     }
 }
 

@@ -2,6 +2,35 @@ import XCTest
 import AccessibilitySnapshotModel
 @testable import TheScore
 
+private extension AccessibilityTrace.Delta {
+    var testElementEdits: ElementEdits {
+        if case .elementsChanged(let payload) = self { return payload.edits }
+        return ElementEdits()
+    }
+
+    var testTransient: [HeistElement] {
+        switch self {
+        case .noChange(let payload):
+            return payload.transient
+        case .elementsChanged(let payload):
+            return payload.transient
+        case .screenChanged(let payload):
+            return payload.transient
+        }
+    }
+
+    var testCaptureEdge: AccessibilityTrace.CaptureEdge? {
+        switch self {
+        case .noChange(let payload):
+            return payload.captureEdge
+        case .elementsChanged(let payload):
+            return payload.captureEdge
+        case .screenChanged(let payload):
+            return payload.captureEdge
+        }
+    }
+}
+
 final class AccessibilityTraceDiffTests: XCTestCase {
 
     func testElementDiffIsSingleElementHierarchyDiff() {
@@ -15,7 +44,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ElementEdits.between(beforeInterface, afterInterface)
         )
         let delta = captureDelta(before: beforeInterface, after: afterInterface)
-        XCTAssertEqual(delta.elementEdits, ElementEdits.between(before, after))
+        XCTAssertEqual(delta.testElementEdits, ElementEdits.between(before, after))
     }
 
     func testNodeDiffIsTreeDiff() {
@@ -32,7 +61,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
         let edits = ElementEdits.between(before, after)
         let delta = captureDelta(before: before, after: after)
-        XCTAssertEqual(delta.elementEdits, edits)
+        XCTAssertEqual(delta.testElementEdits, edits)
     }
 
     func testFunctionalElementMoveDoesNotReportRemoveInsertChurn() {
@@ -82,7 +111,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ElementEdits.between(beforeInterface, afterInterface).updated
         )
         let delta = AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
-        XCTAssertEqual(delta.elementEdits, ElementEdits.between(beforeInterface, afterInterface))
+        XCTAssertEqual(delta.testElementEdits, ElementEdits.between(beforeInterface, afterInterface))
     }
 
     func testCaptureBackedNoChangeDeltaCarriesSourceEdgeAndDerivesFromTrace() throws {
@@ -147,9 +176,9 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let delta = AccessibilityTrace.Delta.between(before, after)
 
         XCTAssertEqual(after.transition.transient, [transient])
-        XCTAssertEqual(delta.transient, [transient])
-        XCTAssertEqual(delta.captureEdge?.before.hash, before.hash)
-        XCTAssertEqual(delta.captureEdge?.after.hash, after.hash)
+        XCTAssertEqual(delta.testTransient, [transient])
+        XCTAssertEqual(delta.testCaptureEdge?.before.hash, before.hash)
+        XCTAssertEqual(delta.testCaptureEdge?.after.hash, after.hash)
     }
 
     func testCaptureContextOnlyDiffsAsElementsChanged() {
@@ -258,7 +287,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) throws {
-        let edge = try XCTUnwrap(delta.captureEdge, "Delta did not carry capture edge", file: file, line: line)
+        let edge = try XCTUnwrap(delta.testCaptureEdge, "Delta did not carry capture edge", file: file, line: line)
         let before = try XCTUnwrap(trace.capture(ref: edge.before), "Trace did not contain before ref", file: file, line: line)
         let after = try XCTUnwrap(trace.capture(ref: edge.after), "Trace did not contain after ref", file: file, line: line)
 
@@ -283,7 +312,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             parentHash: before.hash
         )
         let delta = AccessibilityTrace.Delta.between(before, after)
-        XCTAssertNotNil(delta.captureEdge, file: file, line: line)
+        XCTAssertNotNil(delta.testCaptureEdge, file: file, line: line)
         return delta
     }
 
