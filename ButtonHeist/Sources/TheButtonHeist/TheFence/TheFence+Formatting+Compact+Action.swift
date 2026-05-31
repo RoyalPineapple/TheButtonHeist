@@ -50,8 +50,8 @@ extension FenceResponse {
 
     private static func compactRotor(_ search: RotorResult) -> String {
         var text = "rotor \(search.direction.rawValue): \(search.rotor)"
-        if let element = search.foundElement {
-            text += "\n  \(compactElementLine(element))"
+        if let foundHeistId = search.foundHeistId {
+            text += "\n  heistId=\(foundHeistId)"
         }
         if let range = search.textRange {
             text += "\n  textRange=\(range.rangeDescription)"
@@ -107,8 +107,8 @@ extension FenceResponse {
             let itemInfo = scrollSearchItemInfo(search)
             header = "\(commandName): found after \(search.scrollCount) scrolls\(itemInfo)"
         }
-        if let element = search.foundElement {
-            header += "\n  \(compactElementLine(element))"
+        if let foundHeistId = search.foundHeistId {
+            header += "\n  heistId=\(foundHeistId)"
         }
         return header
     }

@@ -134,12 +134,10 @@ extension Actions {
         _ hit: TheStash.RotorHit,
         direction: RotorDirection
     ) -> TheSafecracker.InteractionResult {
-        let found = hit.screenElement.map {
-            TheStash.WireConversion.convert($0.element, heistId: $0.heistId)
-        }
+        let foundHeistId = hit.screenElement?.heistId
         var message = "Rotor '\(hit.rotor)' found"
-        if let found {
-            message += " \(found.heistId)"
+        if let foundHeistId {
+            message += " \(foundHeistId)"
         }
         if let textRange = hit.textRange {
             message += " text range \(textRange.rangeDescription)"
@@ -150,7 +148,7 @@ extension Actions {
             payload: .rotor(RotorResult(
                 rotor: hit.rotor,
                 direction: direction,
-                foundElement: found,
+                foundHeistId: foundHeistId,
                 textRange: hit.textRange
             ))
         )

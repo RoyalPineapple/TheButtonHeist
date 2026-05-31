@@ -275,14 +275,7 @@ final class ServerMessageTests: XCTestCase {
         let rotor = RotorResult(
             rotor: "Errors",
             direction: .next,
-            foundElement: HeistElement(
-                description: "Email",
-                label: "Email",
-                value: nil,
-                identifier: nil,
-                frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
-                actions: []
-            ),
+            foundHeistId: "email",
             textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
         )
         let result = ActionResult(success: true, method: .rotor, payload: .rotor(rotor))
@@ -293,12 +286,21 @@ final class ServerMessageTests: XCTestCase {
         let inner = try XCTUnwrap(payload["data"] as? [String: Any])
         XCTAssertEqual(inner["rotor"] as? String, "Errors")
         XCTAssertEqual(inner["direction"] as? String, "next")
-        XCTAssertNotNil(inner["foundElement"])
+        XCTAssertEqual(inner["foundHeistId"] as? String, "email")
+        XCTAssertNil(inner["foundElement"])
         let textRange = try XCTUnwrap(inner["textRange"] as? [String: Any])
         XCTAssertEqual(textRange["text"] as? String, "@maria")
         XCTAssertEqual(textRange["startOffset"] as? Int, 10)
         XCTAssertEqual(textRange["endOffset"] as? Int, 16)
         XCTAssertEqual(textRange["rangeDescription"] as? String, "[10..<16]")
+    }
+
+    func testRotorResultRejectsObsoleteFoundElementSnapshot() throws {
+        let json = Data("""
+        {"rotor":"Errors","direction":"next","foundElement":{"heistId":"old"}}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(RotorResult.self, from: json))
     }
 
     func testActionResultAccessibilityTraceWireShape() throws {

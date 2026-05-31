@@ -503,28 +503,21 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testExploreResultEncodeDecode() throws {
-        let elements = (0..<3).map { i in
-            HeistElement.stub(heistId: "el_\(i)", label: "Element \(i)")
-        }
         let result = ExploreResult(
-            elements: elements, scrollCount: 6,
+            elementCount: 3, scrollCount: 6,
             containersExplored: 3, explorationTime: 1.25
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ExploreResult.self, from: data)
-        XCTAssertEqual(decoded.elements.count, 3)
-        XCTAssertEqual(decoded.elements[0].heistId, "el_0")
+        XCTAssertEqual(decoded.elementCount, 3)
         XCTAssertEqual(decoded.scrollCount, 6)
         XCTAssertEqual(decoded.containersExplored, 3)
         XCTAssertEqual(decoded.explorationTime, 1.25)
     }
 
     func testActionResultWithExploreResult() throws {
-        let elements = (0..<100).map { i in
-            HeistElement.stub(heistId: "el_\(i)", label: "Element \(i)")
-        }
         let exploreResult = ExploreResult(
-            elements: elements, scrollCount: 12,
+            elementCount: 100, scrollCount: 12,
             containersExplored: 2, explorationTime: 3.5
         )
         let result = ActionResult(
@@ -540,10 +533,18 @@ final class ClientMessageTests: XCTestCase {
             XCTFail("Expected .explore payload, got \(String(describing: decoded.payload))")
             return
         }
-        XCTAssertEqual(explore.elements.count, 100)
+        XCTAssertEqual(explore.elementCount, 100)
         XCTAssertEqual(explore.scrollCount, 12)
         XCTAssertEqual(explore.containersExplored, 2)
         XCTAssertEqual(explore.explorationTime, 3.5)
+    }
+
+    func testExploreResultRejectsObsoleteElementSnapshots() throws {
+        let json = Data("""
+        {"elements":[],"scrollCount":1,"containersExplored":1,"explorationTime":0.1}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ExploreResult.self, from: json))
     }
 
     func testActionResultWithoutExploreResult() throws {

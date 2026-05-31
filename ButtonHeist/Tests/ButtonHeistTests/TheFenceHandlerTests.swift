@@ -300,7 +300,7 @@ final class TheFenceHandlerTests: XCTestCase {
             success: true,
             method: .explore,
             payload: .explore(ExploreResult(
-                elements: elements,
+                elementCount: elements.count,
                 scrollCount: 1,
                 containersExplored: 1,
                 explorationTime: 0.1
@@ -313,7 +313,7 @@ final class TheFenceHandlerTests: XCTestCase {
             success: true,
             method: .explore,
             payload: .explore(ExploreResult(
-                elements: interface.elements,
+                elementCount: interface.elements.count,
                 scrollCount: 1,
                 containersExplored: 1,
                 explorationTime: 0.1

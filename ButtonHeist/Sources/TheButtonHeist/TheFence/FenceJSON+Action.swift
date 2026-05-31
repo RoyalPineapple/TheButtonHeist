@@ -70,13 +70,13 @@ struct PublicActionResponse: FencePublicJSONResponse {
 struct PublicRotorResult: Encodable {
     let name: String
     let direction: String
-    let foundElement: PublicElement?
+    let foundHeistId: HeistId?
     let textRange: PublicRotorTextRange?
 
     init(result: RotorResult) {
         self.name = result.rotor
         self.direction = result.direction.rawValue
-        self.foundElement = result.foundElement.map { PublicElement(element: $0, detail: .summary) }
+        self.foundHeistId = result.foundHeistId
         self.textRange = result.textRange.map { PublicRotorTextRange(range: $0) }
     }
 }
@@ -102,7 +102,7 @@ struct PublicExploreResult: Encodable {
     let explorationTime: String
 
     init(result: ExploreResult) {
-        self.elementCount = result.elements.count
+        self.elementCount = result.elementCount
         self.scrollCount = result.scrollCount
         self.containersExplored = result.containersExplored
         self.explorationTime = String(format: "%.2f", result.explorationTime)

@@ -128,16 +128,9 @@ final class ScrollToVisibleTests: XCTestCase {
     // MARK: - ScrollSearchResult
 
     func testScrollSearchResultEncodeDecode() throws {
-        let element = HeistElement(
-            heistId: "button_color_picker", description: "Color Picker",
-            label: "Color Picker", value: nil, identifier: nil,
-            traits: [.button],
-            frameX: 0, frameY: 200, frameWidth: 375, frameHeight: 44,
-            actions: [.activate]
-        )
         let result = ScrollSearchResult(
             scrollCount: 6, uniqueElementsSeen: 47, totalItems: 80,
-            exhaustive: false, foundElement: element
+            exhaustive: false, foundHeistId: "button_color_picker"
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ScrollSearchResult.self, from: data)
@@ -145,7 +138,7 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertEqual(decoded.uniqueElementsSeen, 47)
         XCTAssertEqual(decoded.totalItems, 80)
         XCTAssertFalse(decoded.exhaustive)
-        XCTAssertEqual(decoded.foundElement?.heistId, "button_color_picker")
+        XCTAssertEqual(decoded.foundHeistId, "button_color_picker")
     }
 
     func testScrollSearchResultNotFound() throws {
@@ -156,7 +149,15 @@ final class ScrollToVisibleTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ScrollSearchResult.self, from: data)
         XCTAssertEqual(decoded.scrollCount, 20)
         XCTAssertTrue(decoded.exhaustive)
-        XCTAssertNil(decoded.foundElement)
+        XCTAssertNil(decoded.foundHeistId)
+    }
+
+    func testScrollSearchResultRejectsObsoleteFoundElementSnapshot() throws {
+        let json = Data("""
+        {"scrollCount":1,"uniqueElementsSeen":1,"exhaustive":false,"foundElement":{"heistId":"old"}}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ScrollSearchResult.self, from: json))
     }
 
     // MARK: - ActionResult with ScrollSearchResult

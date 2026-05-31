@@ -229,14 +229,17 @@ final class TheStashRotorTests: XCTestCase {
 
         XCTAssertTrue(searchResult.success, searchResult.message ?? "rotor failed")
         guard case .rotor(let rotorResult)? = searchResult.payload,
-              let foundElement = rotorResult.foundElement else {
-            XCTFail("Expected rotor to return a found element")
+              let foundHeistId = rotorResult.foundHeistId else {
+            XCTFail("Expected rotor to return a found heist id")
             return
         }
 
+        let foundElement = try XCTUnwrap(searchResult.accessibilityTrace?.captures.last?.interface.elements.first {
+            $0.heistId == foundHeistId
+        })
         XCTAssertEqual(foundElement.identifier, "rotor_activation_target")
 
-        let activateResult = await brains.executeCommand(.activate(.heistId(foundElement.heistId)))
+        let activateResult = await brains.executeCommand(.activate(.heistId(foundHeistId)))
 
         XCTAssertTrue(activateResult.success, activateResult.message ?? "activate failed")
         XCTAssertEqual(resultView.activationCount, 1)

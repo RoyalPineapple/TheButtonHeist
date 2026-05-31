@@ -341,7 +341,7 @@ final class TargetConfigTests: XCTestCase {
                 return .actionResult(ActionResult(
                     success: true, method: .explore,
                     payload: .explore(ExploreResult(
-                        elements: [], scrollCount: 0,
+                        elementCount: 0, scrollCount: 0,
                         containersExplored: 0, explorationTime: 0
                     ))
                 ))
