@@ -133,19 +133,17 @@ extension Navigation {
     }
 
     private func scrollSearchContainer(for scrollView: UIScrollView) -> AccessibilityContainer? {
-        stash.currentScreen.liveCapture.scrollableContainerViews.first { _, ref in
-            ref.view === scrollView
-        }?.key
+        stash.liveScrollContainer(matching: scrollView)
     }
 
     func stableId(for container: AccessibilityContainer) -> HeistContainer? {
-        if let stableId = stash.currentScreen.liveCapture.containerStableIds[container] {
+        if let stableId = stash.liveContainerStableId(for: container) {
             return stableId
         }
         return stash.currentHierarchy.containerPaths.first { candidate, _ in
             candidate == container
         }.flatMap { _, path in
-            stash.currentScreen.liveCapture.containerStableIdsByPath[path]
+            stash.liveContainerStableId(forPath: path)
         }
     }
 

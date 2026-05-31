@@ -351,10 +351,10 @@ final class TheBrainsScrollTests: XCTestCase {
         liveHierarchy: [(AccessibilityElement, String)],
         offViewport: [(AccessibilityElement, String, CGPoint?)]
     ) {
-        brains.stash.currentScreen = makeScreenWithOffViewportEntry(
+        brains.stash.installScreenForTesting(makeScreenWithOffViewportEntry(
             liveHierarchy: liveHierarchy,
             offViewport: offViewport
-        )
+        ))
     }
 
     private func installScreenWithKnownOffscreen(
@@ -378,7 +378,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollContainerStableId: scrollStableId,
             element: offscreen.0
         )
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [
                 visibleEntry.heistId: visibleEntry,
                 offscreenEntry.heistId: offscreenEntry,
@@ -397,7 +397,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViews: includeLiveScrollAncestor
                 ? [scrollContainer: .init(view: offscreen.3)]
                 : [:]
-        )
+        ))
     }
 
     func testSemanticRevealNoOpsWhenAlreadyVisible() {
@@ -471,9 +471,9 @@ final class TheBrainsScrollTests: XCTestCase {
 
     func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async {
         let visible = makeElement(label: "Visible")
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: [(visible, "visible_element")]
-        )
+        ))
 
         let result = await brains.navigation.executeScrollToVisible(
             ScrollToVisibleTarget(elementTarget: .heistId("missing_button"))
@@ -554,7 +554,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: element
         )
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             containerStableIds: [:],
@@ -562,7 +562,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         let result = await brains.navigation.actionability.makeActionable(
             for: .heistId("escaped_button"),
@@ -594,7 +594,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: element
         )
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             containerStableIds: [:],
@@ -602,7 +602,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elementRefs: [entry.heistId: .init(object: object, scrollView: nil)],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         let result = await brains.navigation.actionability.makeActionable(
             for: .heistId("escaped_button"),
@@ -677,9 +677,9 @@ final class TheBrainsScrollTests: XCTestCase {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: [(visible, "visible_element")]
-        )
+        ))
 
         let result = await brains.navigation.executeScrollToVisible(
             ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button"))
@@ -747,14 +747,14 @@ final class TheBrainsScrollTests: XCTestCase {
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerStableIds: [container: "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [container: .init(view: scrollView)]
-        )
+        ))
 
         let result = await brains.navigation.executeScroll(ScrollTarget())
 
@@ -767,14 +767,14 @@ final class TheBrainsScrollTests: XCTestCase {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         scrollView.contentOffset.y = 600
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerStableIds: [container: "main_scroll"],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [container: .init(view: scrollView)]
-        )
+        ))
 
         let result = await brains.navigation.executeScrollToEdge(ScrollToEdgeTarget())
 
@@ -789,7 +789,7 @@ final class TheBrainsScrollTests: XCTestCase {
         second.contentSize = CGSize(width: 320, height: 1_600)
         let firstContainer = makeScrollableContainer(contentSize: first.contentSize, frame: first.frame)
         let secondContainer = makeScrollableContainer(contentSize: second.contentSize, frame: second.frame)
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -805,7 +805,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 firstContainer: .init(view: first),
                 secondContainer: .init(view: second),
             ]
-        )
+        ))
 
         let result = await brains.navigation.executeScroll(
             ScrollTarget(containerTarget: ScrollContainerTarget(stableId: "second_scroll"))
@@ -820,7 +820,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let firstContainer = makeScrollableContainer()
         let secondContainer = makeScrollableContainer(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
         installScrollableContainers([firstContainer, secondContainer])
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [
                 .container(firstContainer, children: []),
@@ -833,7 +833,7 @@ final class TheBrainsScrollTests: XCTestCase {
             heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         let result = await brains.navigation.executeScroll(ScrollTarget())
 
@@ -876,7 +876,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: element
         )
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
             containerStableIds: [:],
@@ -884,7 +884,7 @@ final class TheBrainsScrollTests: XCTestCase {
             elementRefs: [entry.heistId: .init(object: object, scrollView: scrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         let result = await brains.navigation.executeElementSearch(
             elementTarget: .heistId("visible_button"),
@@ -1000,7 +1000,7 @@ final class TheBrainsScrollTests: XCTestCase {
                 scrollContainer: .init(view: scrollView)
             ]
         )
-        brains.stash.currentScreen = knownScreen
+        brains.stash.installScreenForTesting(knownScreen)
 
         let result = await brains.navigation.actionability.makeActionable(
             for: .matcher(ElementMatcher(label: "Jump Target")),
@@ -1029,14 +1029,14 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: makeElement(label: "Item")
         )
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
             hierarchy: [.element(screenElement.element, traversalIndex: 0)],
             containerStableIds: [:],
             heistIdByElement: [screenElement.element: screenElement.heistId],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         let result = await brains.navigation.executeScroll(
             ScrollTarget(elementTarget: .heistId("item"), direction: .down)
@@ -1241,12 +1241,12 @@ final class TheBrainsScrollTests: XCTestCase {
         defer {
             window.isHidden = true
         }
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             firstResponderHeistId: nil,
             scrollableContainerViews: [container: .init(view: backingView)]
-        )
+        ))
 
         let target = try XCTUnwrap(brains.navigation.scrollableTarget(for: container, contentSize: contentSize))
 
@@ -1298,12 +1298,12 @@ final class TheBrainsScrollTests: XCTestCase {
         // must be clipped to end at its top edge.
         let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
         let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: AccessibilityRect(tabBarFrame))
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: [.container(tabBarContainer, children: [])],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
         let result = try XCTUnwrap(
             brains.navigation.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
         )
@@ -1346,12 +1346,12 @@ final class TheBrainsScrollTests: XCTestCase {
     }
 
     private func installScrollableContainers(_ containers: [AccessibilityContainer]) {
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [:],
             hierarchy: containers.map { .container($0, children: []) },
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
     }
 
     private func installLiveScrollTarget(
@@ -1363,7 +1363,7 @@ final class TheBrainsScrollTests: XCTestCase {
             contentSize: scrollView.contentSize,
             frame: scrollView.frame
         )
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
             hierarchy: [.element(screenElement.element, traversalIndex: 0)],
             containerStableIds: [container: stableId],
@@ -1375,7 +1375,7 @@ final class TheBrainsScrollTests: XCTestCase {
             scrollableContainerViews: [
                 container: .init(view: scrollView)
             ]
-        )
+        ))
     }
 
     private func makeButton(label: String, frame: CGRect) -> UIButton {

@@ -327,10 +327,10 @@ final class SemanticActionabilityProductTests: XCTestCase {
             scrollableContainerViews: screen.liveCapture.scrollableContainerViews,
             scrollableContainerViewsByPath: screen.liveCapture.scrollableContainerViewsByPath
         )
-        targetBrains.stash.currentScreen = Screen(
+        targetBrains.stash.installScreenForTesting(Screen(
             semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
             liveCapture: liveCapture
-        )
+        ))
     }
 
     private func firstScrollableStableId(in screen: Screen) -> HeistContainer? {

@@ -132,7 +132,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testActionResultWithDeltaSuccessReturnsTraceAfterElementChange() async {
         let beforeScreen = makeScreen(elements: [("Total", .staticText, "total")])
-        brains.stash.currentScreen = beforeScreen
+        brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Total $12.00", .staticText, "total")])
 
@@ -150,7 +150,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testActionResultWithDeltaSuccessReportsScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
-        brains.stash.currentScreen = beforeScreen
+        brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Checkout", .header, "checkout_header")])
 
@@ -169,7 +169,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testActionResultWithDeltaSettleTimeoutStillReturnsSuccessfulAction() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
-        brains.stash.currentScreen = beforeScreen
+        brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
 
@@ -187,7 +187,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testActionResultWithDeltaCancelledSettleFailsActionResult() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
-        brains.stash.currentScreen = beforeScreen
+        brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
@@ -207,7 +207,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaParseFailureFailsActionResult() async {
         seedScreen(elements: [("Save", .button, "save")])
         let before = brains.captureSemanticState()
-        brains.stash.currentScreen = .empty
+        brains.stash.installScreenForTesting(.empty)
 
         let result = await brains.actionResultWithDelta(
             success: true,
@@ -289,10 +289,10 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .button,
             respondsToUserInteraction: false
         )
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: [(visible, "button_visible")],
             offViewport: [.init(offViewport, heistId: "button_below_fold")]
-        )
+        ))
         let state = brains.captureSemanticState()
 
         XCTAssertEqual(
@@ -318,7 +318,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 100, y: 22),
             respondsToUserInteraction: false
         )
-        brains.stash.currentScreen = .makeForTests(elements: [(beforeElement, "chicken_tikka_button")])
+        brains.stash.installScreenForTesting(.makeForTests(elements: [(beforeElement, "chicken_tikka_button")]))
         let baseline = brains.captureSemanticState()
 
         let afterElement = AccessibilityElement.make(
@@ -328,7 +328,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             activationPoint: CGPoint(x: 100, y: -278),
             respondsToUserInteraction: false
         )
-        brains.stash.currentScreen = .makeForTests(elements: [(afterElement, "chicken_tikka_button")])
+        brains.stash.installScreenForTesting(.makeForTests(elements: [(afterElement, "chicken_tikka_button")]))
         let current = brains.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
@@ -352,7 +352,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        brains.stash.currentScreen = .makeForTests(elements: [(beforeElement, "total_staticText")])
+        brains.stash.installScreenForTesting(.makeForTests(elements: [(beforeElement, "total_staticText")]))
         let baseline = brains.captureSemanticState()
 
         let afterElement = AccessibilityElement.make(
@@ -361,7 +361,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .staticText,
             respondsToUserInteraction: false
         )
-        brains.stash.currentScreen = .makeForTests(elements: [(afterElement, "total_staticText")])
+        brains.stash.installScreenForTesting(.makeForTests(elements: [(afterElement, "total_staticText")]))
         let current = brains.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
@@ -420,7 +420,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Helpers
 
     private func seedScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) {
-        brains.stash.currentScreen = makeScreen(elements: elements)
+        brains.stash.installScreenForTesting(makeScreen(elements: elements))
     }
 
     private func makeScreen(elements: [(label: String, traits: UIAccessibilityTraits, heistId: HeistId)]) -> Screen {

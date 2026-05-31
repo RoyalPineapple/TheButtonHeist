@@ -558,9 +558,9 @@ final class WaitForIntegrationTests: XCTestCase {
         let offViewportMemory = Screen.makeForTests(
             offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
         )
-        insideJob.brains.stash.currentScreen = offViewportMemory.merging(
+        insideJob.brains.stash.installScreenForTesting(offViewportMemory.merging(
             insideJob.brains.stash.currentScreen
-        )
+        ))
         insideJob.brains.recordSentState()
         XCTAssertNotNil(insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId))
 

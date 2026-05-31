@@ -65,7 +65,7 @@ extension TheStash {
     }
 
     func resolveLiveContainerTarget(for containerTarget: SemanticScreen.Container) -> LiveContainerTargetResolution {
-        guard let object = currentScreen.liveCapture.containerObject(forPath: containerTarget.path) else {
+        guard let object = liveContainerObject(forPath: containerTarget.path) else {
             return .objectUnavailable
         }
         guard let geometry = Self.liveGeometry(for: containerTarget.container) else {
@@ -83,17 +83,13 @@ extension TheStash {
         dispatchObject(for: screenElement)
     }
 
-    func liveScrollView(for screenElement: ScreenElement) -> UIScrollView? {
-        currentScreen.liveCapture.scrollView(for: screenElement)
-    }
-
     func liveScrollView(forContainerPath path: TreePath) -> UIScrollView? {
         var ancestorIndices = path.indices
         while !ancestorIndices.isEmpty {
             ancestorIndices.removeLast()
             guard !ancestorIndices.isEmpty else { break }
             let ancestorPath = TreePath(ancestorIndices)
-            let scrollView = currentScreen.liveCapture.scrollableContainerViewsByPath[ancestorPath]?.view as? UIScrollView
+            let scrollView = liveScrollableContainerView(forPath: ancestorPath) as? UIScrollView
             if let scrollView {
                 return scrollView
             }
@@ -103,7 +99,7 @@ extension TheStash {
 
     private func dispatchObject(for screenElement: ScreenElement) -> NSObject? {
         if visibleIds.contains(screenElement.heistId) {
-            return currentScreen.liveCapture.object(for: screenElement.heistId)
+            return liveObject(for: screenElement.heistId)
         }
         return nil
     }

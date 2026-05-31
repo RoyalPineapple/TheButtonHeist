@@ -114,7 +114,7 @@ extension TheStash {
     func ids(in scope: InterfaceElementScope) -> Set<HeistId> {
         switch scope {
         case .visible:
-            return currentScreen.liveCapture.heistIds
+            return liveHeistIds()
         case .known:
             return currentScreen.knownInterface.heistIds
         }
@@ -129,7 +129,7 @@ extension TheStash {
         guard let entry = currentScreen.knownInterface.findElement(heistId: heistId) else { return nil }
         switch scope {
         case .visible:
-            return currentScreen.liveCapture.contains(heistId: heistId) ? entry : nil
+            return liveContains(heistId: heistId) ? entry : nil
         case .known:
             return entry
         }
@@ -141,7 +141,7 @@ extension TheStash {
     /// `heistIdByElement`. Off-screen known elements cannot be found with this
     /// overload.
     func screenElement(for element: AccessibilityElement, in scope: InterfaceElementScope) -> ScreenElement? {
-        guard let heistId = currentScreen.liveCapture.heistId(for: element) else { return nil }
+        guard let heistId = liveHeistId(for: element) else { return nil }
         return screenElement(heistId: heistId, in: scope)
     }
 
