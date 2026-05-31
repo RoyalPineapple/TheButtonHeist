@@ -68,7 +68,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Save", traits: [.button]),
             makeElement(label: "Cancel", traits: [.button]),
         ]
-        let description = InterfaceSummary.screenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "Settings — 2 buttons")
     }
 
@@ -76,7 +76,7 @@ final class InterfaceComputedTests: XCTestCase {
         let elements = [
             makeElement(label: "Username", traits: [.textEntry]),
         ]
-        let description = InterfaceSummary.screenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "1 text field")
     }
 
@@ -84,7 +84,7 @@ final class InterfaceComputedTests: XCTestCase {
         let elements = [
             makeElement(label: "Hello", traits: [.staticText]),
         ]
-        let description = InterfaceSummary.screenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "1 elements")
     }
 
@@ -93,7 +93,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "About", traits: [.header]),
             makeElement(label: "Version 1.0", traits: [.staticText]),
         ]
-        let description = InterfaceSummary.screenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "About")
     }
 
@@ -108,7 +108,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Volume", traits: [.adjustable]),
             makeElement(label: "Docs", traits: [.link]),
         ]
-        let description = InterfaceSummary.screenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertTrue(description.hasPrefix("Login — "))
         XCTAssertTrue(description.contains("1 text field"))
         XCTAssertTrue(description.contains("1 password field"))
@@ -125,7 +125,7 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Display", traits: [.header], frameY: 72),
             makeElement(label: "Favorite star", traits: [.image], frameY: 180),
         ]
-        let description = InterfaceSummary.screenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "Display")
     }
 
@@ -134,12 +134,12 @@ final class InterfaceComputedTests: XCTestCase {
             makeElement(label: "Back", traits: [.button, .backButton]),
             makeElement(label: "Save", traits: [.button]),
         ]
-        let description = InterfaceSummary.screenDescription(from: elements)
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: elements, timestamp: Date()))
         XCTAssertEqual(description, "1 button")
     }
 
     func testScreenDescriptionEmpty() {
-        let description = InterfaceSummary.screenDescription(from: [])
+        let description = InterfaceSummary.screenDescription(for: makeTestInterface(elements: [], timestamp: Date()))
         XCTAssertEqual(description, "0 elements")
     }
 

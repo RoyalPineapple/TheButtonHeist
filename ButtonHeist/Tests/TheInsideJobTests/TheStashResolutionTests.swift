@@ -214,7 +214,7 @@ final class TheStashResolutionTests: XCTestCase {
             sequence: 1,
             interface: TheStash.WireConversion.toInterface(from: sourceScreen)
         )
-        let sourceWireElement = try XCTUnwrap(capture.interface.elements.first { $0.heistId == "quantity_0" })
+        let sourceWireElement = try XCTUnwrap(capture.interface.projectedElements.first { $0.heistId == "quantity_0" })
         let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(
             element: sourceWireElement,
             in: capture

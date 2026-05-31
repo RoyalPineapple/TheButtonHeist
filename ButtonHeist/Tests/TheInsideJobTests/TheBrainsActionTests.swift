@@ -1117,7 +1117,7 @@ final class TheBrainsActionTests: XCTestCase {
             sequence: 1,
             interface: TheStash.WireConversion.toInterface(from: screen)
         )
-        let element = try XCTUnwrap(capture.interface.elements.first { $0.heistId == heistId })
+        let element = try XCTUnwrap(capture.interface.projectedElements.first { $0.heistId == heistId })
         let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: element, in: capture))
         return .matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
     }

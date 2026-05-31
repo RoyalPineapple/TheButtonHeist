@@ -157,13 +157,13 @@ extension FenceResponse {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
 
-        var output = "\(interface.elements.count) elements (\(formatter.string(from: interface.timestamp)))\n"
+        var output = "\(interface.projectedElements.count) elements (\(formatter.string(from: interface.timestamp)))\n"
         output += String(repeating: "-", count: 60) + "\n"
 
-        if interface.elements.isEmpty {
+        if interface.projectedElements.isEmpty {
             output += "  (no elements)\n"
         } else {
-            for (i, element) in interface.elements.enumerated() {
+            for (i, element) in interface.projectedElements.enumerated() {
                 output += formatElement(element, displayIndex: i)
             }
         }

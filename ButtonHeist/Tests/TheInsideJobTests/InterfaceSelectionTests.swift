@@ -11,7 +11,7 @@ final class InterfaceSelectorTests: XCTestCase {
         let interface = try select(InterfaceQuery(
             matcher: ElementMatcher(label: "Submit")
         ))
-        XCTAssertEqual(interface.elements.map { $0.heistId }, ["submit"])
+        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit"])
         XCTAssertEqual(interface.annotations.elements.map { $0.heistId }, ["submit"])
         XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
@@ -20,14 +20,14 @@ final class InterfaceSelectorTests: XCTestCase {
         let interface = try select(InterfaceQuery(
             subtree: .element(.matcher(ElementMatcher(identifier: "submit_button")))
         ))
-        XCTAssertEqual(interface.elements.map { $0.heistId }, ["submit"])
+        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit"])
     }
 
     func testElementSubtreeSelectsHeistIdLeaf() throws {
         let interface = try select(InterfaceQuery(
             subtree: .element(.heistId("cancel"))
         ))
-        XCTAssertEqual(interface.elements.map { $0.heistId }, ["cancel"])
+        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["cancel"])
         XCTAssertEqual(interface.annotations.elements.map { $0.heistId }, ["cancel"])
         XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
@@ -36,7 +36,7 @@ final class InterfaceSelectorTests: XCTestCase {
         let interface = try select(InterfaceQuery(
             subtree: .container(ContainerMatcher(stableId: "semantic_actions__actions"))
         ))
-        XCTAssertEqual(interface.elements.map { $0.heistId }, ["submit", "cancel"])
+        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit", "cancel"])
     }
 
     func testAmbiguousSubtreeReportsTypedCandidates() {
@@ -60,7 +60,7 @@ final class InterfaceSelectorTests: XCTestCase {
             InterfaceQuery(subtree: .container(ContainerMatcher(label: "Actions"), ordinal: 1)),
             in: Self.makeInterface(includeDuplicateGroup: true)
         )
-        XCTAssertEqual(interface.elements.map { $0.heistId }, ["archive"])
+        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["archive"])
     }
 
     func testMissingSubtreeReportsTypedError() {

@@ -300,7 +300,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
-            Set(state.interface.elements.map(\.heistId)),
+            Set(state.interface.projectedElements.map(\.heistId)),
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(

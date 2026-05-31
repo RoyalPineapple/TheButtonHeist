@@ -340,7 +340,7 @@ extension ActionExpectation {
         // Screen-change path: the entire interface is new, so every element
         // on the new screen effectively "appeared". Check newInterface.
         if case .screenChanged(let payload)? = delta {
-            if payload.newInterface.elements.contains(where: { $0.matches(matcher) }) {
+            if payload.newInterface.projectedElements.contains(where: { $0.matches(matcher) }) {
                 return ExpectationResult(met: true, expectation: expectation, actual: nil)
             }
             return ExpectationResult(
@@ -384,7 +384,7 @@ extension ActionExpectation {
         // matching element existed before and is absent from the new interface.
         if case .screenChanged(let payload)? = delta {
             let matchedBefore = preActionElements.values.contains { $0.matches(matcher) }
-            let stillPresent = payload.newInterface.elements.contains { $0.matches(matcher) }
+            let stillPresent = payload.newInterface.projectedElements.contains { $0.matches(matcher) }
             if matchedBefore, !stillPresent {
                 return ExpectationResult(met: true, expectation: expectation, actual: nil)
             }

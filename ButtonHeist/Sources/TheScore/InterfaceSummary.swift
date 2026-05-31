@@ -6,10 +6,18 @@ import Foundation
 /// are projections from elements, not stored interface state.
 public enum InterfaceSummary {
     public static func screenDescription(for interface: Interface) -> String {
-        screenDescription(from: interface.elements)
+        screenDescription(from: interface.projectedElements)
     }
 
-    public static func screenDescription(from elements: [HeistElement]) -> String {
+    public static func screenId(for interface: Interface) -> String? {
+        slugify(screenTitle(for: interface))
+    }
+
+    public static func screenTitle(for interface: Interface) -> String? {
+        screenTitle(from: interface.projectedElements)
+    }
+
+    private static func screenDescription(from elements: [HeistElement]) -> String {
         let screenName = screenTitle(from: elements)
 
         var textFields = 0
@@ -61,15 +69,7 @@ public enum InterfaceSummary {
         }
     }
 
-    public static func screenId(for interface: Interface) -> String? {
-        screenId(from: interface.elements)
-    }
-
-    public static func screenId(from elements: [HeistElement]) -> String? {
-        slugify(screenTitle(from: elements))
-    }
-
-    public static func screenTitle(from elements: [HeistElement]) -> String? {
+    private static func screenTitle(from elements: [HeistElement]) -> String? {
         elements
             .enumerated()
             .compactMap { index, element -> (index: Int, element: HeistElement)? in

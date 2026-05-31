@@ -27,7 +27,7 @@ struct PublicInterface: Encodable {
         self.timestamp = formatter.string(from: interface.timestamp)
         self.screenDescription = InterfaceSummary.screenDescription(for: interface)
         self.screenId = InterfaceSummary.screenId(for: interface)
-        self.navigation = PublicNavigation(elements: interface.elements)
+        self.navigation = PublicNavigation(interface: interface)
         let counter = PublicIndexCounter()
         self.tree = PublicTreeNode.nodes(
             from: interface.tree,
@@ -44,8 +44,9 @@ struct PublicNavigation: Encodable {
     let backButton: PublicNavigationItem?
     let tabBarItems: [PublicTabBarItem]?
 
-    init(elements: [HeistElement]) {
-        self.screenTitle = InterfaceSummary.screenTitle(from: elements)
+    init(interface: Interface) {
+        let elements = interface.projectedElements
+        self.screenTitle = InterfaceSummary.screenTitle(for: interface)
         self.backButton = elements
             .first(where: { $0.traits.contains(.backButton) })
             .map { PublicNavigationItem(element: $0) }

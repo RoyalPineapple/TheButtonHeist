@@ -63,7 +63,7 @@ extension FenceResponse {
     }
 
     static func compactInterface(_ interface: Interface) -> String {
-        var lines: [String] = ["\(interface.elements.count) elements"]
+        var lines: [String] = ["\(interface.projectedElements.count) elements"]
         lines.append(contentsOf: compactTreeLines(interface, detail: .summary))
         return lines.joined(separator: "\n")
     }

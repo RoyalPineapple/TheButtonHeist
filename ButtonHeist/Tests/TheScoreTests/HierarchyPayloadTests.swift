@@ -14,7 +14,7 @@ final class SnapshotTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(Interface.self, from: data)
 
-        XCTAssertTrue(decoded.elements.isEmpty)
+        XCTAssertTrue(decoded.projectedElements.isEmpty)
     }
 
     func testPayloadWithMultipleElements() throws {
@@ -40,9 +40,9 @@ final class SnapshotTests: XCTestCase {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(Interface.self, from: data)
 
-        XCTAssertEqual(decoded.elements.count, 10)
+        XCTAssertEqual(decoded.projectedElements.count, 10)
         for i in 0..<10 {
-            XCTAssertEqual(decoded.elements[i].label, "Label \(i)")
+            XCTAssertEqual(decoded.projectedElements[i].label, "Label \(i)")
         }
     }
 

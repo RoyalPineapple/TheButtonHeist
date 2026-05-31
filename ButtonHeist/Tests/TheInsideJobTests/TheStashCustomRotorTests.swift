@@ -234,7 +234,7 @@ final class TheStashRotorTests: XCTestCase {
             return
         }
 
-        let foundElement = try XCTUnwrap(searchResult.accessibilityTrace?.captures.last?.interface.elements.first {
+        let foundElement = try XCTUnwrap(searchResult.accessibilityTrace?.captures.last?.interface.projectedElements.first {
             $0.heistId == foundHeistId
         })
         XCTAssertEqual(foundElement.identifier, "rotor_activation_target")

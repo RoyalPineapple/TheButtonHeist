@@ -51,7 +51,7 @@ extension TheFence {
     }
 
     private func capturePostDispatchEffects(response: FenceResponse) -> PostDispatchOutcome {
-        let elements = response.actionResult?.accessibilityTrace?.captures.first?.interface.elements ?? []
+        let elements = response.actionResult?.accessibilityTrace?.captures.first?.interface.projectedElements ?? []
         return PostDispatchOutcome(preActionElements: Dictionary(
             elements.map { ($0.heistId, $0) },
             uniquingKeysWith: { _, latest in latest }

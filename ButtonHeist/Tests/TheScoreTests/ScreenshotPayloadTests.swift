@@ -18,7 +18,7 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertEqual(payload.width, 390)
         XCTAssertEqual(payload.height, 844)
         XCTAssertEqual(payload.timestamp, timestamp)
-        XCTAssertEqual(payload.interface?.elements, [])
+        XCTAssertEqual(payload.interface?.projectedElements, [])
     }
 
     func testDefaultTimestamp() {
@@ -69,9 +69,9 @@ final class ScreenshotPayloadTests: XCTestCase {
         XCTAssertEqual(payload.pngData, decoded.pngData)
         XCTAssertEqual(payload.width, decoded.width)
         XCTAssertEqual(payload.height, decoded.height)
-        XCTAssertEqual(decoded.interface?.elements, [element])
-        XCTAssertEqual(decoded.interface?.elements.first?.frameY, 680)
-        XCTAssertEqual(decoded.interface?.elements.first?.activationPointY, 696)
+        XCTAssertEqual(decoded.interface?.projectedElements, [element])
+        XCTAssertEqual(decoded.interface?.projectedElements.first?.frameY, 680)
+        XCTAssertEqual(decoded.interface?.projectedElements.first?.activationPointY, 696)
     }
 
     func testEncodingRoundTripWithoutInterfaceEvidence() throws {

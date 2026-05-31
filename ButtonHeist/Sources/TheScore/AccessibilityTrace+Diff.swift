@@ -32,8 +32,8 @@ public extension ElementEdits {
     /// Compare two full interfaces.
     static func between(_ before: Interface, _ after: Interface) -> ElementEdits {
         AccessibilityTraceElementDiff.projectElementEdits(
-            beforeElements: before.elements,
-            afterElements: after.elements
+            beforeElements: before.projectedElements,
+            afterElements: after.projectedElements
         )
     }
 
