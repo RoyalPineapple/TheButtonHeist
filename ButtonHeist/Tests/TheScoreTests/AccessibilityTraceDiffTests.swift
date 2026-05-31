@@ -35,34 +35,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(delta.elementEdits, edits)
     }
 
-    func testTreeDiffKeepsElementAndContainerIdentityNamespacesSeparate() {
-        let shared = makeElement(heistId: "shared", label: "Shared", traits: [.button])
-        let container = makeContainer()
-        let before = makeTestInterface(nodes: [
-            testElement(shared),
-            testContainer(container, stableId: "shared", children: []),
-        ])
-        let after = makeTestInterface(nodes: [
-            testContainer(container, stableId: "shared", children: []),
-            testElement(shared),
-        ])
-
-        let edits = AccessibilityTraceTreeDiff.projectTreeEdits(before: before, after: after)
-
-        XCTAssertEqual(edits.moved.count, 2)
-        XCTAssertTrue(edits.moved.contains {
-            $0.ref == TreeNodeRef(id: "shared", kind: .container)
-                && $0.from == TreeLocation(parentId: nil, index: 1)
-                && $0.to == TreeLocation(parentId: nil, index: 0)
-        })
-        XCTAssertTrue(edits.moved.contains {
-            $0.ref == TreeNodeRef(id: "shared", kind: .element)
-                && $0.from == TreeLocation(parentId: nil, index: 0)
-                && $0.to == TreeLocation(parentId: nil, index: 1)
-        })
-    }
-
-    func testFunctionalTreeMoveDoesNotReportRemoveInsertChurn() {
+    func testFunctionalElementMoveDoesNotReportRemoveInsertChurn() {
         let before = makeTestInterface(nodes: [
             testContainer(makeContainer(), stableId: "list", children: [
                 testElement(makeElement(heistId: "generated-a", label: "Pasta", traits: [.button])),
@@ -76,67 +49,10 @@ final class AccessibilityTraceDiffTests: XCTestCase {
             ]),
         ])
 
-        let edits = AccessibilityTraceTreeDiff.projectTreeEdits(before: before, after: after)
         let elementEdits = ElementEdits.between(before, after)
 
         XCTAssertTrue(elementEdits.added.isEmpty)
         XCTAssertTrue(elementEdits.removed.isEmpty)
-        XCTAssertTrue(edits.inserted.isEmpty)
-        XCTAssertTrue(edits.removed.isEmpty)
-        XCTAssertTrue(edits.moved.contains {
-            $0.ref == TreeNodeRef(id: "generated-a", kind: .element)
-                && $0.from == TreeLocation(parentId: "list", index: 0)
-                && $0.to == TreeLocation(parentId: "list", index: 1)
-        })
-    }
-
-    func testPatchProjectionUsesIncrementalPatchWhenItReconstructsTarget() {
-        let before = makeTestInterface(nodes: [
-            testElement(makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])),
-        ])
-        let after = makeTestInterface(nodes: [
-            testElement(makeElement(heistId: "total", label: "Total", value: "$7.00", traits: [.staticText])),
-        ])
-
-        let decision = AccessibilityTracePatchProjection.project(
-            between: before,
-            and: after,
-            context: AccessibilityTrace.Context()
-        )
-
-        guard case .incremental(let patch) = decision else {
-            return XCTFail("Expected incremental patch, got \(decision)")
-        }
-        XCTAssertEqual(patch.apply(to: before), after)
-        XCTAssertFalse(patch.operations.contains { operation in
-            if case .replaceTree = operation { return true }
-            return false
-        })
-    }
-
-    func testPatchProjectionNamesFullReplacementWhenIncrementalCannotReconstructTarget() {
-        let before = makeTestInterface(nodes: [
-            testElement(makeElement(heistId: "", label: "Anonymous", traits: [.staticText])),
-        ])
-        let after = makeTestInterface(nodes: [
-            testElement(makeElement(heistId: "", label: "Anonymous", traits: [.staticText])),
-            testElement(makeElement(heistId: "", label: "Untracked", traits: [.staticText])),
-        ])
-
-        let decision = AccessibilityTracePatchProjection.project(
-            between: before,
-            and: after,
-            context: AccessibilityTrace.Context()
-        )
-
-        guard case .fullReplacement(
-            let patch,
-            reason: .incrementalProjectionDidNotReconstructTarget
-        ) = decision else {
-            return XCTFail("Expected explicit full replacement patch, got \(decision)")
-        }
-        XCTAssertEqual(patch.apply(to: before), after)
-        XCTAssertEqual(patch.operations, [.replaceTree(tree: after.tree)])
     }
 
     func testTreeInterfaceAndCaptureDiffsShareTheSameEdits() {

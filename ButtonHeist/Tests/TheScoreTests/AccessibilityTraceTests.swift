@@ -161,53 +161,6 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
     }
 
-    func testSameScreenChangesProjectAsPatchInsideScreenSegment() throws {
-        let before = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: makeInterface(label: "Menu", saveValue: "1")
-        )
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeInterface(label: "Menu", saveValue: "2"),
-            parentHash: before.hash
-        )
-
-        let trace = AccessibilityTrace(captures: [before, after])
-
-        XCTAssertEqual(trace.screenSegmentsProjection.count, 1)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].baseline.hash, before.hash)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].transitions.count, 1)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].transitions[0].fromHash, before.hash)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].transitions[0].toHash, after.hash)
-        XCTAssertEqual(trace.captures.map(\.interface), [before.interface, after.interface])
-        XCTAssertTrue(trace.hasValidIntegrity)
-    }
-
-    func testSameScreenStructuralEditsStayInOneSegmentAndMaterialize() throws {
-        let baselineInterface = makeListInterface(["Antipasti"])
-        let insertedInterface = makeListInterface(["Antipasti", "Pasta"])
-        let movedInterface = makeListInterface(["Pasta", "Antipasti"])
-        let removedInterface = makeListInterface(["Pasta"])
-        let baseline = AccessibilityTrace.Capture(sequence: 1, interface: baselineInterface)
-        let inserted = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: insertedInterface,
-            parentHash: baseline.hash
-        )
-        let moved = AccessibilityTrace.Capture(sequence: 3, interface: movedInterface, parentHash: inserted.hash)
-        let removed = AccessibilityTrace.Capture(sequence: 4, interface: removedInterface, parentHash: moved.hash)
-
-        let trace = AccessibilityTrace(captures: [baseline, inserted, moved, removed])
-
-        XCTAssertEqual(trace.screenSegmentsProjection.count, 1)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].transitions.count, 3)
-        XCTAssertEqual(
-            trace.captures.map(\.interface),
-            [baselineInterface, insertedInterface, movedInterface, removedInterface]
-        )
-        XCTAssertTrue(trace.hasValidIntegrity)
-    }
-
     func testInterfaceProjectsDuplicateTraversalIndexesByPath() throws {
         let first = makeElement(heistId: "first", label: "First", actions: [.activate])
         let second = makeElement(heistId: "second", label: "Second", actions: [.increment])
@@ -235,38 +188,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(interface.elements.map(\.actions), [[.activate], [.increment]])
     }
 
-    func testTracePatchUpdatesOnlyChangedPathWhenTraversalIndexesRepeatAcrossRoots() throws {
-        let beforeInterface = makeDuplicateTraversalIndexInterface(secondLabel: "Before")
-        let afterInterface = makeDuplicateTraversalIndexInterface(secondLabel: "After")
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: beforeInterface)
-        let after = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: before.hash)
-
-        let transition = try XCTUnwrap(AccessibilityTrace.ObservedTransitionProjection.between(before, after))
-
-        XCTAssertEqual(transition.patch.operations, [
-            .updateElement(path: TreePath([1]), element: afterInterface.tree.pathIndexedElements[1].element),
-        ])
-        XCTAssertEqual(transition.patch.apply(to: before, sequence: after.sequence).interface, afterInterface)
-    }
-
-    func testScreenChangesStartNewBaselineSegment() throws {
-        let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
-        let after = AccessibilityTrace.Capture(
-            sequence: 2,
-            interface: makeInterface(label: "Checkout"),
-            parentHash: before.hash,
-            transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
-        )
-
-        let trace = AccessibilityTrace(captures: [before, after])
-
-        XCTAssertEqual(trace.screenSegmentsProjection.count, 2)
-        XCTAssertEqual(trace.screenSegmentsProjection.map(\.baseline.hash), [before.hash, after.hash])
-        XCTAssertEqual(trace.screenSegmentsProjection.flatMap(\.transitions), [])
-        XCTAssertEqual(trace.captures.map(\.hash), [before.hash, after.hash])
-    }
-
-    func testObservedTransitionDoesNotRepresentScreenChange() throws {
+    func testScreenChangeReasonProjectsScreenChangedDelta() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface(label: "Menu"))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -276,10 +198,9 @@ final class AccessibilityTraceTests: XCTestCase {
         )
 
         XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
-        XCTAssertNil(AccessibilityTrace.ObservedTransitionProjection.between(before, after))
     }
 
-    func testScreenChangeReasonStartsNewSegmentEvenForStructuralChange() throws {
+    func testScreenChangeReasonOverridesStructuralChange() throws {
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeListInterface(["Antipasti"]))
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -288,15 +209,10 @@ final class AccessibilityTraceTests: XCTestCase {
             transition: AccessibilityTrace.Transition(screenChangeReason: "primaryHeaderChanged")
         )
 
-        let trace = AccessibilityTrace(captures: [before, after])
-
-        XCTAssertEqual(trace.screenSegmentsProjection.map(\.baseline.hash), [before.hash, after.hash])
-        XCTAssertEqual(trace.screenSegmentsProjection.flatMap(\.transitions), [])
-        XCTAssertEqual(trace.screenSegmentsProjection[1].baseline.interface, after.interface)
-        XCTAssertTrue(trace.hasValidIntegrity)
+        XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
     }
 
-    func testScreenIdChangeStartsNewBaselineSegmentUsingDeltaSemantics() throws {
+    func testScreenIdChangeProjectsScreenChangedDelta() throws {
         let interface = makeInterface(label: "Menu")
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -310,15 +226,10 @@ final class AccessibilityTraceTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "checkout")
         )
 
-        let trace = AccessibilityTrace(captures: [before, after])
-
         XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .screenChanged)
-        XCTAssertEqual(trace.screenSegmentsProjection.count, 2)
-        XCTAssertEqual(trace.screenSegmentsProjection.map(\.baseline.hash), [before.hash, after.hash])
-        XCTAssertEqual(trace.screenSegmentsProjection.flatMap(\.transitions), [])
     }
 
-    func testSameScreenContextChangeStaysPatchUsingDeltaSemantics() throws {
+    func testSameScreenContextChangeProjectsElementChangedDelta() throws {
         let interface = makeInterface(label: "Menu")
         let before = AccessibilityTrace.Capture(
             sequence: 1,
@@ -332,13 +243,7 @@ final class AccessibilityTraceTests: XCTestCase {
             context: AccessibilityTrace.Context(focusedElementId: "total", keyboardVisible: false)
         )
 
-        let trace = AccessibilityTrace(captures: [before, after])
-
         XCTAssertEqual(AccessibilityTrace.Delta.between(before, after).kind, .elementsChanged)
-        XCTAssertEqual(trace.screenSegmentsProjection.count, 1)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].baseline.hash, before.hash)
-        XCTAssertEqual(trace.screenSegmentsProjection[0].transitions.map(\.toHash), [after.hash])
-        XCTAssertEqual(trace.captures.map(\.hash), [before.hash, after.hash])
     }
 
     func testTraceProjectsEndpointScreenContext() throws {

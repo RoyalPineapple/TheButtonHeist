@@ -198,18 +198,6 @@ final class WireConverterTests: XCTestCase {
         return AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
     }
 
-    private func computeTreeEdits(
-        before: [Screen.ScreenElement],
-        after: [Screen.ScreenElement],
-        beforeTree: [TestInterfaceNode]? = nil,
-        afterTree: [TestInterfaceNode]? = nil
-    ) -> AccessibilityTreeEdits {
-        let resolvedAfterTree = afterTree.flatMap { $0.isEmpty ? nil : $0 } ?? after.map(wireLeaf)
-        let beforeInterface = makeInterface(nodes: beforeTree ?? before.map(wireLeaf), timestamp: Date(timeIntervalSince1970: 0))
-        let afterInterface = makeInterface(nodes: resolvedAfterTree, timestamp: Date(timeIntervalSince1970: 1))
-        return AccessibilityTraceTreeDiff.projectTreeEdits(before: beforeInterface, after: afterInterface)
-    }
-
     // MARK: - Trait Mapping
 
     func testSingleTraitMapped() {
@@ -597,7 +585,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertEqual(payload.elementCount, 1)
     }
 
-    func testTreeOnlyChangeReturnsStructuralInsertion() {
+    func testTreeOnlyChangeStaysOutOfElementDelta() {
         let element = makeScreenElement(heistId: "button_ok", label: "OK", traits: [.button])
         let beforeTree = [wireLeaf(element)]
         let afterTree = [
@@ -619,32 +607,11 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertFalse(delta.isScreenChanged)
         if case .elementsChanged = delta { XCTFail("Expected tree-only change to stay out of ElementEdits") }
-        let treeEdits = computeTreeEdits(
-            before: [element],
-            after: [element],
-            beforeTree: beforeTree,
-            afterTree: afterTree
-        )
-        XCTAssertEqual(treeEdits.inserted.count, 1)
-        XCTAssertEqual(treeEdits.inserted.first?.location, TreeLocation(parentId: nil, index: 0))
-        let insertion = treeEdits.inserted.first
-        guard case .container(_, let children) = insertion?.node else {
-            return XCTFail("Expected inserted container")
-        }
-        XCTAssertEqual(insertion?.annotations.containers.first?.stableId, "list_0")
-        XCTAssertEqual(insertion?.annotations.elements.map(\.heistId), ["button_ok"])
-        XCTAssertEqual(children.elements.map(\.traversalIndex), [0])
-        XCTAssertEqual(
-            treeEdits.moved,
-            [TreeMove(
-                ref: TreeNodeRef(id: "button_ok", kind: .element),
-                from: TreeLocation(parentId: nil, index: 0),
-                to: TreeLocation(parentId: "list_0", index: 0)
-            )]
-        )
+        XCTAssertNil(delta.testEdits.addedOptional)
+        XCTAssertNil(delta.testEdits.removedOptional)
     }
 
-    func testTreeReorderReturnsMoves() {
+    func testTreeReorderStaysOutOfElementDelta() {
         let first = makeScreenElement(heistId: "first", label: "First")
         let second = makeScreenElement(heistId: "second", label: "Second")
         let beforeTree = [
@@ -666,28 +633,11 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertFalse(delta.isScreenChanged)
         if case .elementsChanged = delta { XCTFail("Expected tree-only reorder to stay out of ElementEdits") }
-        let treeEdits = computeTreeEdits(
-            before: [first, second],
-            after: [second, first],
-            beforeTree: beforeTree,
-            afterTree: afterTree
-        )
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
-        XCTAssertEqual(treeEdits.moved.count, 2)
-        XCTAssertTrue(treeEdits.moved.contains {
-            $0.ref == TreeNodeRef(id: "second", kind: .element)
-                && $0.from == TreeLocation(parentId: nil, index: 1)
-                && $0.to == TreeLocation(parentId: nil, index: 0)
-        })
-        XCTAssertTrue(treeEdits.moved.contains {
-            $0.ref == TreeNodeRef(id: "first", kind: .element)
-                && $0.from == TreeLocation(parentId: nil, index: 0)
-                && $0.to == TreeLocation(parentId: nil, index: 1)
-        })
     }
 
-    func testFunctionallyIdenticalRemoveAddReturnsTreeMove() {
+    func testFunctionallyIdenticalRemoveAddSuppressesChurn() {
         let beforeElement = makeScreenElement(
             heistId: "telescope_far_light_3_32_button",
             label: "Telescope, Far Light, 3:32",
@@ -722,24 +672,11 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertFalse(delta.isScreenChanged)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        let treeEdits = computeTreeEdits(
-            before: [beforeElement, other],
-            after: [other, afterElement],
-            beforeTree: beforeTree,
-            afterTree: afterTree
-        )
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
-        XCTAssertTrue(treeEdits.inserted.isEmpty)
-        XCTAssertTrue(treeEdits.removed.isEmpty)
-        XCTAssertTrue(treeEdits.moved.contains {
-            $0.ref == TreeNodeRef(id: "telescope_far_light_3_32_button", kind: .element)
-                && $0.from == TreeLocation(parentId: nil, index: 0)
-                && $0.to == TreeLocation(parentId: nil, index: 1)
-        })
     }
 
-    func testStableMatchWithStateChangeReturnsTreeMoveAndUpdate() {
+    func testStableMatchWithStateChangeReturnsElementUpdate() {
         let beforeElement = makeScreenElement(
             heistId: "favorite_button",
             label: "Favorite",
@@ -776,21 +713,8 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertFalse(delta.isScreenChanged)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        let treeEdits = computeTreeEdits(
-            before: [beforeElement, other],
-            after: [other, afterElement],
-            beforeTree: beforeTree,
-            afterTree: afterTree
-        )
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
-        XCTAssertTrue(treeEdits.inserted.isEmpty)
-        XCTAssertTrue(treeEdits.removed.isEmpty)
-        XCTAssertTrue(treeEdits.moved.contains {
-            $0.ref == TreeNodeRef(id: "favorite_button", kind: .element)
-                && $0.from == TreeLocation(parentId: nil, index: 0)
-                && $0.to == TreeLocation(parentId: nil, index: 1)
-        })
         let update = delta.testEdits.updatedOptional?.first { $0.heistId == "favorite_button" }
         XCTAssertNotNil(update)
         XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.old == "0" && $0.new == "1" } == true)
@@ -825,20 +749,11 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertFalse(delta.isScreenChanged)
         if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
-        let treeEdits = computeTreeEdits(
-            before: [beforeElement],
-            after: [afterElement],
-            beforeTree: beforeTree,
-            afterTree: afterTree
-        )
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
-        XCTAssertTrue(treeEdits.inserted.isEmpty)
-        XCTAssertTrue(treeEdits.removed.isEmpty)
-        XCTAssertTrue(treeEdits.moved.isEmpty)
     }
 
-    func testTreeDeletionReturnsRemovalLocation() {
+    func testElementDeletionReturnsRemovedId() {
         let first = makeScreenElement(heistId: "first", label: "First")
         let second = makeScreenElement(heistId: "second", label: "Second")
         let beforeTree = [
@@ -857,20 +772,7 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertFalse(delta.isScreenChanged)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        let treeEdits = computeTreeEdits(
-            before: [first, second],
-            after: [first],
-            beforeTree: beforeTree,
-            afterTree: afterTree
-        )
         XCTAssertEqual(delta.testEdits.removedOptional, ["second"])
-        XCTAssertEqual(
-            treeEdits.removed,
-            [TreeRemoval(
-                ref: TreeNodeRef(id: "second", kind: .element),
-                location: TreeLocation(parentId: nil, index: 1)
-            )]
-        )
     }
 
     // MARK: - Delta: Duplicate heistId Pairing
