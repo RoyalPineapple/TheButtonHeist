@@ -51,16 +51,17 @@ extension TheHandoff {
     }
 
     func setupAutoReconnect(filter: String?) {
-        connectionLifecycle.setupAutoReconnect(filter: filter)
+        if reconnect.setup(filter: filter) {
+            connectionLifecycle.leaveReconnectIfActive()
+        }
     }
 
     func scheduleAutoReconnectIfNeeded(disconnectedDevice: DiscoveredDevice) {
-        connectionLifecycle.scheduleAutoReconnectIfNeeded(
-            disconnectedDevice: disconnectedDevice,
-            policy: autoReconnectRecoveryPolicy,
-            attemptTimeout: reconnectAttemptTimeout,
-            owner: self
-        )
+        guard let target = reconnect.targetForDisconnectedDevice(disconnectedDevice) else { return }
+        connectionLifecycle.markReconnecting(target: target)
+        reconnect.run(target: target) { [weak self] target in
+            await self?.runAutoReconnect(target: target)
+        }
     }
 
     /// Compute display name with disambiguation when multiple devices have the same app.
@@ -90,5 +91,45 @@ extension TheHandoff {
             getDiscoveredDevices: { [weak self] in self?.discoveredDevices ?? [] }
         )
         return try await resolver.resolve()
+    }
+
+    private func runAutoReconnect(target: HandoffReconnectTarget) async {
+        let policy = autoReconnectRecoveryPolicy
+        onStatus?("Device disconnected — watching for reconnection...")
+
+        for _ in policy.attempts {
+            guard reconnect.isCurrentTarget(target) else { return }
+            connectionLifecycle.markReconnecting(target: target)
+
+            let sleepDuration = policy.sleepDuration(afterConsecutiveDiscoveryMisses: 0)
+            guard await Task.cancellableSleep(for: .seconds(sleepDuration)) else { return }
+            guard reconnect.isCurrentTarget(target) else { return }
+
+            let device = target.device
+            onStatus?("Reconnecting to \(device.name)...")
+            closeConnection()
+            let attemptID = openConnection(to: device)
+            do {
+                try await waitForConnectionResult(timeout: reconnectAttemptTimeout)
+            } catch let error as HandoffConnectionError where error == .timeout {
+                abortConnectionAttempt(attemptID, failure: .timeout)
+            } catch is CancellationError {
+                return
+            } catch {
+                // The connection phase already recorded the attempt failure; keep retrying until the bounded policy expires.
+            }
+
+            guard reconnect.isCurrentTarget(target) else { return }
+            if isConnected {
+                guard reconnect.finishSuccess(target: target) else { return }
+                onStatus?("Reconnected to \(device.name)")
+                return
+            }
+        }
+
+        let failure = policy.terminalFailure(targetDisplayName: target.device.name)
+        onStatus?(failure.errorDescription ?? "Auto-reconnect gave up")
+        guard reconnect.finishFailure(target: target) else { return }
+        connectionLifecycle.markFailed(failure)
     }
 }
