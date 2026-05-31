@@ -146,6 +146,11 @@ struct Screen: Equatable {
         knownInterface.heistIds
     }
 
+    /// Count of elements retained in committed semantic memory.
+    var knownElementCount: Int {
+        semantic.elements.count
+    }
+
     /// The heistId set backed by the latest parsed live hierarchy.
     var visibleIds: Set<HeistId> {
         liveCapture.heistIds
@@ -164,6 +169,17 @@ struct Screen: Equatable {
     /// O(1) heistId lookup.
     func findElement(heistId: HeistId) -> ScreenElement? {
         knownInterface.findElement(heistId: heistId)
+    }
+
+    /// Live parse id lookup for a parsed accessibility element.
+    func findLiveHeistId(for element: AccessibilityElement) -> HeistId? {
+        liveCapture.heistIdByElement[element]
+    }
+
+    /// Semantic containers in deterministic traversal order.
+    var orderedContainers: [SemanticScreen.Container] {
+        semantic.containers.values
+            .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
     }
 
     /// A pure view of this screen restricted to ids present in the latest live

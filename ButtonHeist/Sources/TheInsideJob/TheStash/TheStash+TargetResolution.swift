@@ -62,9 +62,9 @@ extension TheStash {
     /// Resolve a target to a unique element. Returns `.resolved` on success,
     /// `.notFound` or `.ambiguous` with diagnostics on failure.
     ///
-    /// Resolution reads the committed semantic state. If an element is not in
-    /// `currentScreen.knownInterface`, resolution fails with a near-miss
-    /// suggestion. Live coordinate revalidation happens later in action execution.
+    /// Resolution reads committed semantic memory. If an element is not known,
+    /// resolution fails with a near-miss suggestion. Live coordinate
+    /// revalidation happens later in action execution.
     func resolveTarget(_ target: ElementTarget) -> TargetResolution {
         resolveTarget(target, in: currentScreen, resolutionScope: .known)
     }
@@ -80,8 +80,7 @@ extension TheStash {
         guard matcher.hasPredicates else {
             return .notFound(diagnostics: "container target requires stableId, type, label, value, or identifier")
         }
-        let matches = currentScreen.semantic.containers.values
-            .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
+        let matches = semanticContainersInTraversalOrder
             .compactMap { item -> SemanticScreen.Container? in
                 let annotation = InterfaceContainerAnnotation(
                     path: item.path,
@@ -114,9 +113,9 @@ extension TheStash {
     func ids(in scope: InterfaceElementScope) -> Set<HeistId> {
         switch scope {
         case .visible:
-            return liveHeistIds()
+            return visibleElementIds
         case .known:
-            return currentScreen.knownInterface.heistIds
+            return knownElementIds
         }
     }
 
@@ -126,7 +125,7 @@ extension TheStash {
     /// exploration union. `.visible` only returns ids backed by the latest live
     /// hierarchy parse.
     func screenElement(heistId: HeistId, in scope: InterfaceElementScope) -> ScreenElement? {
-        guard let entry = currentScreen.knownInterface.findElement(heistId: heistId) else { return nil }
+        guard let entry = knownElement(heistId: heistId) else { return nil }
         switch scope {
         case .visible:
             return liveContains(heistId: heistId) ? entry : nil
@@ -174,11 +173,14 @@ extension TheStash {
     /// All elements in the current screen.
     ///
     /// Live elements appear first in hierarchy (depth-first) traversal order;
-    /// any heistIds present in `currentScreen.semantic.elements` but not in the live
+    /// any known heistIds not present in the live
     /// hierarchy (post-exploration union) appear after, sorted by heistId so
     /// the snapshot order is stable across runs.
     func selectElements(in screen: Screen? = nil) -> [ScreenElement] {
-        (screen ?? currentScreen).orderedElements
+        if let screen {
+            return screen.orderedElements
+        }
+        return orderedSemanticElements
     }
 }
 
@@ -194,8 +196,8 @@ private extension TheStash {
             guard let entry = screen.findElement(heistId: heistId) else {
                 return .notFound(diagnostics: Diagnostics.heistIdNotFound(
                     heistId,
-                    knownIds: screen.semantic.elements.keys,
-                    knownCount: screen.semantic.elements.count
+                    knownIds: screen.knownIds,
+                    knownCount: screen.knownElementCount
                 ))
             }
             return .resolved(entry)

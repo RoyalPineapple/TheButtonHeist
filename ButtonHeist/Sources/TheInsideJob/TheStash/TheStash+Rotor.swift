@@ -119,7 +119,7 @@ private extension TheStash {
     /// object by live object identity.
     func knownObject(_ object: NSObject) -> ScreenElement? {
         guard let heistId = liveElementHeistId(matching: object),
-            let cached = currentScreen.findElement(heistId: heistId)
+            let cached = knownElement(heistId: heistId)
         else {
             return nil
         }
@@ -137,8 +137,8 @@ private extension TheStash {
             return nil
         }
         let screen = TheBurglar.buildScreen(from: result)
-        guard let heistId = screen.liveCapture.heistIdByElement[parsedElement] else { return nil }
-        return screen.semantic.elements[heistId]
+        guard let heistId = screen.findLiveHeistId(for: parsedElement) else { return nil }
+        return screen.findElement(heistId: heistId)
     }
 
     func parseRotorResultObject(_ object: NSObject) -> ScreenElement? {
