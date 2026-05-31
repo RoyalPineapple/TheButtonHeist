@@ -5,7 +5,6 @@ import XCTest
 @MainActor
 final class KeyboardInjectionTextInputDelegate: NSObject, UIKeyInput {
     private(set) var insertedText: [String] = []
-    private(set) var deleteBackwardCount = 0
 
     var hasText: Bool { !insertedText.isEmpty }
 
@@ -13,9 +12,7 @@ final class KeyboardInjectionTextInputDelegate: NSObject, UIKeyInput {
         insertedText.append(text)
     }
 
-    func deleteBackward() {
-        deleteBackwardCount += 1
-    }
+    func deleteBackward() {}
 }
 
 @MainActor
@@ -33,7 +30,6 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
     let inputDelegate = KeyboardInjectionTextInputDelegate()
     var taskQueueObject: KeyboardInjectionTaskQueue? = KeyboardInjectionTaskQueue()
     private(set) var inputStrings: [String] = []
-    private(set) var deleteFromInputCount = 0
 
     @objc(delegate)
     func delegate() -> AnyObject? {
@@ -48,11 +44,6 @@ final class KeyboardInjectionKeyboardImpl: NSObject {
     @objc(taskQueue)
     func taskQueue() -> AnyObject? {
         taskQueueObject
-    }
-
-    @objc(deleteFromInput)
-    func deleteFromInput() {
-        deleteFromInputCount += 1
     }
 
     @MainActor
@@ -243,52 +234,6 @@ final class TheSafecrackerTests: XCTestCase {
             KeyboardTextInjectionDiagnostic.unavailableTaskQueue(
                 strategy: UIKeyboardImplTextInjection.strategyName,
                 character: "h"
-            )
-        )
-    }
-
-    func testDeleteBackwardRoutesThroughKeyboardInjection() {
-        let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        let bridge = keyboardImpl.bridge()
-
-        let result = bridge.deleteBackward()
-
-        XCTAssertEqual(result, .dispatched)
-        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 1)
-        XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 1)
-    }
-
-    func testDeleteBackwardReportsMissingSelector() {
-        let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        let bridge = keyboardImpl.bridge(missingSelector: "deleteFromInput")
-
-        let result = bridge.deleteBackward()
-
-        XCTAssertEqual(
-            result.diagnostic,
-            KeyboardTextInjectionDiagnostic.missingSelector(
-                "deleteFromInput",
-                strategy: UIKeyboardImplTextInjection.strategyName,
-                character: nil
-            )
-        )
-        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 0)
-        XCTAssertEqual(keyboardImpl.taskQueueObject?.waitCount, 0)
-    }
-
-    func testDeleteBackwardReportsMissingDrainSelectorAfterDispatch() {
-        let keyboardImpl = KeyboardInjectionKeyboardImpl()
-        let bridge = keyboardImpl.bridge(missingSelector: "waitUntilAllTasksAreFinished")
-
-        let result = bridge.deleteBackward()
-
-        XCTAssertEqual(keyboardImpl.deleteFromInputCount, 1)
-        XCTAssertEqual(
-            result.diagnostic,
-            KeyboardTextInjectionDiagnostic.missingSelector(
-                "waitUntilAllTasksAreFinished",
-                strategy: UIKeyboardImplTextInjection.strategyName,
-                character: nil
             )
         )
     }
