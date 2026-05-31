@@ -124,20 +124,6 @@ final class DeviceConnectionTLSTests: XCTestCase {
         XCTAssertEqual(disconnectReason, .missingFingerprint)
     }
 
-    @ButtonHeistActor
-    func testDeviceConnectionWithToken() async {
-        let fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-        let device = DiscoveredDevice(
-            id: "test",
-            name: "TestApp#abc",
-            endpoint: NWEndpoint.service(name: "test", type: "_test._tcp", domain: "local.", interface: nil),
-            certFingerprint: fingerprint
-        )
-
-        let connection = DeviceConnection(device: device, token: "my-token", driverId: "driver-1")
-        XCTAssertEqual(connection.token, "my-token")
-    }
-
     // MARK: - Loopback Detection
 
     func testIPv4LoopbackDetected() {

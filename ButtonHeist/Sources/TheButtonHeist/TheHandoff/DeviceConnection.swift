@@ -35,11 +35,9 @@ final class DeviceConnection: TransportReachabilityConnecting {
     // Internal for testing (tests use @testable import to set state directly)
     var connectionState: ConnectionState = .disconnected
     private let device: DiscoveredDevice
-    private(set) var token: String?
 
     var onEvent: (@ButtonHeistActor (ConnectionEvent) -> Void)?
     var onTransportReady: (@ButtonHeistActor () -> Void)?
-    var autoRespondToAuthRequired = true
     var sendContent: (
         @Sendable (
             _ connection: NWConnection,
@@ -49,9 +47,6 @@ final class DeviceConnection: TransportReachabilityConnecting {
     ) = { connection, content, completion in
         connection.send(content: content, completion: completion)
     }
-
-    /// Driver identity for session locking (set via BUTTONHEIST_DRIVER_ID)
-    var driverId: String?
 
     private let expectedFingerprint: String?
 
@@ -65,10 +60,8 @@ final class DeviceConnection: TransportReachabilityConnecting {
     private var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
     private var tlsFailureTracker: TLSFailureTracker?
 
-    init(device: DiscoveredDevice, token: String? = nil, driverId: String? = nil) {
+    init(device: DiscoveredDevice) {
         self.device = device
-        self.token = token
-        self.driverId = driverId
         self.expectedFingerprint = device.certFingerprint
     }
 
@@ -297,10 +290,6 @@ final class DeviceConnection: TransportReachabilityConnecting {
         deviceConnectionLogger.error("Connection event backlog exceeded \(Self.eventStreamBufferLimit), disconnecting")
         disconnect()
         onEvent?(.disconnected(.eventBacklogOverflow(maxEvents: Self.eventStreamBufferLimit)))
-    }
-
-    func updateToken(_ token: String?) {
-        self.token = token
     }
 
     // Internal for testing stale-callback handling.

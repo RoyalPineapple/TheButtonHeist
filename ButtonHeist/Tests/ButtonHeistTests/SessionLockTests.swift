@@ -21,7 +21,7 @@ final class SessionLockTests: XCTestCase {
 
     @ButtonHeistActor
     func testSessionLockedDisconnectsClient() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var disconnectReason: DisconnectReason?
@@ -47,7 +47,7 @@ final class SessionLockTests: XCTestCase {
 
     @ButtonHeistActor
     func testSessionLockedCallbackFires() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var receivedPayload: SessionLockedPayload?
@@ -66,24 +66,5 @@ final class SessionLockTests: XCTestCase {
         XCTAssertNotNil(receivedPayload)
         XCTAssertEqual(receivedPayload?.message, "Another driver active; owner driver id: driver-a; active connections: 3.")
         XCTAssertEqual(receivedPayload?.activeConnections, 3)
-    }
-
-    @ButtonHeistActor
-    func testAuthRequiredSendsDriverId() async {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token", driverId: "test-driver-id")
-        conn.simulateConnected()
-
-        // handleMessage will call send(.authenticate(...)) internally,
-        // which requires a real connection. We just verify it doesn't crash
-        // and the driverId is stored correctly.
-        XCTAssertEqual(conn.driverId, "test-driver-id")
-    }
-
-    @ButtonHeistActor
-    func testNilDriverIdIsNil() async {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "test-token")
-        conn.simulateConnected()
-
-        XCTAssertNil(conn.driverId)
     }
 }

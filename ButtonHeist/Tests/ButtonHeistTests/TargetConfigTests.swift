@@ -347,7 +347,7 @@ final class TargetConfigTests: XCTestCase {
 
         let fence = TheFence(configuration: .init(fileConfig: fileConfig))
         fence.handoff.makeDiscovery = { mockDisc }
-        fence.handoff.makeConnection = { _, _, _ in mockConn }
+        fence.handoff.makeConnection = { _ in mockConn }
 
         makeReachabilityConnection = { _ in
             let probe = MockConnection()
@@ -429,7 +429,7 @@ final class TargetConfigTests: XCTestCase {
         let mockDisc = MockDiscovery()
         mockDisc.discoveredDevices = [Self.testDevice]
         fence.handoff.makeDiscovery = { mockDisc }
-        fence.handoff.makeConnection = { _, _, _ in
+        fence.handoff.makeConnection = { _ in
             connectAttempt += 1
             let failing = MockConnection()
             failing.connectEventsOverride = [

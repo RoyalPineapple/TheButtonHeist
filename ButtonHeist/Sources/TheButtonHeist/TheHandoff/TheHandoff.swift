@@ -96,8 +96,8 @@ final class TheHandoff {
     // MARK: - Injectable Closures
 
     var makeDiscovery: () -> any DeviceDiscovering = { DeviceDiscovery() }
-    var makeConnection: (DiscoveredDevice, String?, String) -> any DeviceConnecting = {
-        DeviceConnection(device: $0, token: $1, driverId: $2)
+    var makeConnection: (DiscoveredDevice) -> any DeviceConnecting = {
+        DeviceConnection(device: $0)
     }
 
     // MARK: - Discovery / Connection Handles
@@ -181,7 +181,7 @@ final class TheHandoff {
     func openConnection(to device: DiscoveredDevice) -> UUID {
         let attemptID = connectionLifecycle.beginConnecting(device: device)
 
-        connection = makeConnection(device, token, effectiveDriverId)
+        connection = makeConnection(device)
 
         connection?.onEvent = { [weak self, attemptID] event in
             guard let self else { return }
@@ -263,15 +263,29 @@ final class TheHandoff {
             if let requestId {
                 forwardServerMessage(message, requestId: requestId)
             }
-        // Handshake messages are consumed inside DeviceConnection before bubbling here; no caller-visible side effect needed at this layer.
-        // swiftlint:disable:next agent_wire_message_arm_no_op_break
-        case .serverHello, .authRequired:
-            break
+        case .serverHello:
+            sendAdmissionMessage(.clientHello)
+        case .authRequired:
+            sendAdmissionMessage(.authenticate(AuthenticatePayload(
+                token: token ?? "",
+                driverId: effectiveDriverId
+            )))
         }
     }
 
     private func forwardServerMessage(_ message: ServerMessage, requestId: String?) {
         onServerMessage?(message, requestId)
+    }
+
+    private func sendAdmissionMessage(_ message: ClientMessage) {
+        guard let connection else {
+            connectionLifecycle.markFailed(.connectionFailed("Cannot send admission message without an active transport"))
+            return
+        }
+        let outcome = connection.send(message, requestId: nil)
+        if case .failed(let failure) = outcome {
+            connectionLifecycle.markFailed(.connectionFailed(failure.localizedDescription))
+        }
     }
 
     func disconnect() {

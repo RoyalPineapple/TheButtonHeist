@@ -46,21 +46,25 @@ final class AuthFlowTests: XCTestCase {
     // MARK: - Tests
 
     @ButtonHeistActor
-    func testAuthRequiredTriggersAuthenticate() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "test-secret-token")
+    func testAuthRequiredIsEmittedToHandoff() async throws {
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
-        // Feeding authRequired should trigger send(.authenticate(...)) internally.
-        // Without a real NWConnection, send() is a no-op (guards on connection != nil).
-        // We verify this doesn't crash and the token is preserved.
+        var receivedAuthRequired = false
+        conn.onEvent = { event in
+            if case .message(.authRequired, _) = event {
+                receivedAuthRequired = true
+            }
+        }
+
         try conn.handleMessage(encode(.authRequired))
 
-        XCTAssertEqual(conn.token, "test-secret-token")
+        XCTAssertTrue(receivedAuthRequired)
     }
 
     @ButtonHeistActor
     func testProtocolMismatchNamesBothSidesAndDoesNotReportServerClosed() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "test-secret-token")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var protocolMismatchPayload: ProtocolMismatchPayload?
@@ -90,21 +94,8 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEmptyTokenStillSendsAuthenticate() async throws {
-        // When token is empty, DeviceConnection still sends .authenticate
-        // (this triggers the UI approval flow on the server side)
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
-        conn.simulateConnected()
-
-        try conn.handleMessage(encode(.authRequired))
-
-        // Token should remain empty (no crash, no mutation)
-        XCTAssertEqual(conn.token, "")
-    }
-
-    @ButtonHeistActor
-    func testAuthApprovedUpdatesToken() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+    func testAuthApprovedEmitsTokenForHandoff() async throws {
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var approvedToken: String?
@@ -118,12 +109,11 @@ final class AuthFlowTests: XCTestCase {
         try conn.handleMessage(encode(.authApproved(AuthApprovedPayload(token: approvalToken))))
 
         XCTAssertEqual(approvedToken, approvalToken)
-        XCTAssertEqual(conn.token, approvalToken)
     }
 
     @ButtonHeistActor
     func testAuthApprovedFollowedByInfo() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var connectedFired = false
@@ -162,7 +152,7 @@ final class AuthFlowTests: XCTestCase {
 
     @ButtonHeistActor
     func testAuthDeniedFiresCallbackAndDisconnects() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var authFailedReason: String?
@@ -193,7 +183,7 @@ final class AuthFlowTests: XCTestCase {
 
     @ButtonHeistActor
     func testAuthApprovalPendingIsNonTerminalStatus() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var pendingPayload: AuthApprovalPendingPayload?
@@ -219,7 +209,7 @@ final class AuthFlowTests: XCTestCase {
 
     @ButtonHeistActor
     func testAuthApprovalPendingErrorDisconnectsWithDistinctReason() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
 
         var serverError: ServerError?
@@ -249,28 +239,9 @@ final class AuthFlowTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testAuthRequiredOnlyUsesAuthenticate() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "my-token")
+    func testAuthRequiredDoesNotSendFromConnection() async throws {
+        let conn = DeviceConnection(device: makeDummyDevice())
         conn.simulateConnected()
-        let sentMessages = SendContentRecorder()
-        conn.sendContent = { _, content, completion in
-            sentMessages.capture(content: content, completion: completion)
-        }
-
-        try conn.handleMessage(encode(.authRequired))
-
-        guard case .authenticate(let payload) = sentMessages.messages.first else {
-            return XCTFail("Expected authRequired to send authenticate")
-        }
-        XCTAssertEqual(payload.token, "my-token")
-        XCTAssertEqual(sentMessages.messages.count, 1)
-    }
-
-    @ButtonHeistActor
-    func testPassiveModeDoesNotAutoAuthenticateOnAuthRequired() async throws {
-        let conn = DeviceConnection(device: makeDummyDevice(), token: "")
-        conn.simulateConnected()
-        conn.autoRespondToAuthRequired = false
 
         var receivedAuthRequired = false
         let sentMessages = SendContentRecorder()
@@ -286,6 +257,6 @@ final class AuthFlowTests: XCTestCase {
         try conn.handleMessage(encode(.authRequired))
 
         XCTAssertTrue(receivedAuthRequired)
-        XCTAssertTrue(sentMessages.messages.isEmpty, "Passive probes must not send auth replies")
+        XCTAssertTrue(sentMessages.messages.isEmpty, "Transport must not own auth replies")
     }
 }
