@@ -2,6 +2,34 @@ import Foundation
 
 import TheScore
 
+extension TheFence.CommandArgumentEnvelope {
+    func schemaUnitPoint(_ key: String) throws -> UnitPoint? {
+        guard let value = argumentValues[key] else { return nil }
+        guard case .object(let values) = value else {
+            throw SchemaValidationError(
+                field: field(key),
+                observed: value.schemaObservedDescription,
+                expected: "object with numeric x and y"
+            )
+        }
+        let object = TheFence.CommandArgumentEnvelope(values: values, fieldPrefix: field(key))
+        try object.rejectUnknownKeys(allowed: UnitPoint.fieldNames, expected: "valid unit point field")
+        guard let x = try object.schemaNumber("x") else {
+            throw SchemaValidationError(field: object.field("x"), observed: "missing", expected: "number")
+        }
+        guard let y = try object.schemaNumber("y") else {
+            throw SchemaValidationError(field: object.field("y"), observed: "missing", expected: "number")
+        }
+        guard (0...1).contains(x) else {
+            throw SchemaValidationError(field: object.field("x"), observed: x, expected: "number in 0...1")
+        }
+        guard (0...1).contains(y) else {
+            throw SchemaValidationError(field: object.field("y"), observed: y, expected: "number in 0...1")
+        }
+        return UnitPoint(x: x, y: y)
+    }
+}
+
 extension TheFence {
 
     func decodeRequiredPointIntent(
