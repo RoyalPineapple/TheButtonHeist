@@ -73,23 +73,6 @@ struct MuscleAuthenticationFlow {
         }
     }
 
-    mutating func handleUnauthenticatedMessage(
-        _ clientId: Int,
-        data: Data,
-        respond: @escaping TheMuscleAdmission.ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
-    ) -> MuscleAdmissionDecision {
-        guard let envelope = decodeRequest(data) else {
-            return .handled(rejectUndecodableUnauthenticatedMessage(clientId, respond: respond))
-        }
-        return handleUnauthenticatedMessage(
-            clientId,
-            envelope: envelope,
-            respond: respond,
-            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
-        )
-    }
-
     mutating func completeAuthentication(_ authentication: MuscleAuthentication) -> MuscleAdmissionEffect {
         clientRegistry.authenticate(
             authentication.clientId,

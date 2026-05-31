@@ -133,7 +133,7 @@ final class TheMuscleTests: XCTestCase {
             XCTFail("Failed to encode clientHello")
             return
         }
-        await muscle.handleUnauthenticatedMessage(clientId, data: data, respond: respond)
+        _ = await muscle.admitClientMessage(clientId, data: data, respond: respond)
     }
 
     private func authenticate(
@@ -145,7 +145,11 @@ final class TheMuscleTests: XCTestCase {
     ) async throws {
         await muscle.registerClientAddress(clientId, address: address)
         await performHello(clientId: clientId, respond: respond)
-        await muscle.handleUnauthenticatedMessage(clientId, data: try encodeAuth(token: token, driverId: driverId), respond: respond)
+        _ = await muscle.admitClientMessage(
+            clientId,
+            data: try encodeAuth(token: token, driverId: driverId),
+            respond: respond
+        )
     }
 
     private func respondSink() -> @Sendable (Data) -> Void {
@@ -375,7 +379,7 @@ final class TheMuscleTests: XCTestCase {
         // Send a ping message before authenticating
         let pingData = try JSONEncoder().encode(RequestEnvelope(message: .ping))
         let (respond, responses) = collectResponses()
-        await muscle.handleUnauthenticatedMessage(1, data: pingData, respond: respond)
+        _ = await muscle.admitClientMessage(1, data: pingData, respond: respond)
         await flushCallbacks()
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
@@ -389,7 +393,7 @@ final class TheMuscleTests: XCTestCase {
     func testMalformedPreAuthMessageSendsErrorBeforeDisconnect() async throws {
         let (respond, responses) = collectResponses()
 
-        await muscle.handleUnauthenticatedMessage(1, data: Data("not json".utf8), respond: respond)
+        _ = await muscle.admitClientMessage(1, data: Data("not json".utf8), respond: respond)
         await flushCallbacks()
 
         let serverMessages = responses().compactMap { decodeServerMessage($0) }
