@@ -1,15 +1,5 @@
 import Foundation
 
-@ButtonHeistActor
-protocol HandoffReconnectRuntime: AnyObject {
-    var isConnected: Bool { get }
-
-    func publishReconnectStatus(_ message: String)
-    func connectForAutoReconnect(to device: DiscoveredDevice) -> UUID
-    func waitForAutoReconnectResult(timeout: TimeInterval) async throws
-    func disconnectAutoReconnectAttempt(_ attemptID: UUID, failure: HandoffConnectionError)
-}
-
 /// Invariant: connection phase, attempt failure, and result waiters advance together.
 @ButtonHeistActor
 final class HandoffConnectionLifecycle {
@@ -193,22 +183,22 @@ final class HandoffConnectionLifecycle {
         disconnectedDevice: DiscoveredDevice,
         policy: AutoReconnectRecoveryPolicy,
         attemptTimeout: TimeInterval,
-        runtime: any HandoffReconnectRuntime
+        owner: TheHandoff
     ) {
         guard reconnectRunnerTask == nil, var plan = reconnectPlan else { return }
 
         let target = plan.target ?? HandoffReconnectTarget(filter: plan.filter, device: disconnectedDevice)
         plan.target = target
         reconnectPlan = plan
-        setPhase(.reconnecting(HandoffReconnectAttempt(id: UUID(), target: target)))
+        setPhase(.reconnecting(HandoffReconnectAttempt(target: target)))
 
-        reconnectRunnerTask = Task<Void, Never> { @ButtonHeistActor [weak self, weak runtime] in
-            guard let self, let runtime else { return }
+        reconnectRunnerTask = Task<Void, Never> { @ButtonHeistActor [weak self, weak owner] in
+            guard let self, let owner else { return }
             await self.runAutoReconnect(
                 target: target,
                 policy: policy,
                 attemptTimeout: attemptTimeout,
-                runtime: runtime
+                owner: owner
             )
         }
     }
@@ -284,25 +274,26 @@ final class HandoffConnectionLifecycle {
         target: HandoffReconnectTarget,
         policy: AutoReconnectRecoveryPolicy,
         attemptTimeout: TimeInterval,
-        runtime: any HandoffReconnectRuntime
+        owner: TheHandoff
     ) async {
-        runtime.publishReconnectStatus("Device disconnected — watching for reconnection...")
+        owner.onStatus?("Device disconnected — watching for reconnection...")
 
         for _ in policy.attempts {
             guard isCurrentReconnectTarget(target) else { return }
-            setPhase(.reconnecting(HandoffReconnectAttempt(id: UUID(), target: target)))
+            setPhase(.reconnecting(HandoffReconnectAttempt(target: target)))
 
             let sleepDuration = policy.sleepDuration(afterConsecutiveDiscoveryMisses: 0)
             guard await Task.cancellableSleep(for: .seconds(sleepDuration)) else { return }
             guard isCurrentReconnectTarget(target) else { return }
 
             let device = target.device
-            runtime.publishReconnectStatus("Reconnecting to \(device.name)...")
-            let attemptID = runtime.connectForAutoReconnect(to: device)
+            owner.onStatus?("Reconnecting to \(device.name)...")
+            owner.closeConnection()
+            let attemptID = owner.openConnection(to: device)
             do {
-                try await runtime.waitForAutoReconnectResult(timeout: attemptTimeout)
+                try await owner.waitForConnectionResult(timeout: attemptTimeout)
             } catch let error as HandoffConnectionError where error == .timeout {
-                runtime.disconnectAutoReconnectAttempt(attemptID, failure: .timeout)
+                owner.abortConnectionAttempt(attemptID, failure: .timeout)
             } catch is CancellationError {
                 return
             } catch {
@@ -310,8 +301,8 @@ final class HandoffConnectionLifecycle {
             }
 
             guard isCurrentReconnectTarget(target) else { return }
-            if runtime.isConnected {
-                runtime.publishReconnectStatus("Reconnected to \(device.name)")
+            if owner.isConnected {
+                owner.onStatus?("Reconnected to \(device.name)")
                 reconnectRunnerTask = nil
                 reconnectPlan?.target = target
                 return
@@ -319,7 +310,7 @@ final class HandoffConnectionLifecycle {
         }
 
         let failure = policy.terminalFailure(targetDisplayName: target.device.name)
-        runtime.publishReconnectStatus(failure.errorDescription ?? "Auto-reconnect gave up")
+        owner.onStatus?(failure.errorDescription ?? "Auto-reconnect gave up")
         guard isCurrentReconnectTarget(target) else { return }
         reconnectRunnerTask = nil
         reconnectPlan = nil

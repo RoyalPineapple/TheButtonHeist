@@ -7,7 +7,7 @@ private let logger = Logger(subsystem: "com.buttonheist.thehandoff", category: "
 ///
 /// TheFence owns a TheHandoff and delegates connection management here.
 @ButtonHeistActor
-final class TheHandoff: HandoffReconnectRuntime {
+final class TheHandoff {
 
     // MARK: - State
 

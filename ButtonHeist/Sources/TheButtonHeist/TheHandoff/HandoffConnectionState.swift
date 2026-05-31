@@ -117,7 +117,6 @@ struct HandoffConnectionAttempt {
 }
 
 struct HandoffReconnectAttempt {
-    let id: UUID
     let target: HandoffReconnectTarget
 }
 
