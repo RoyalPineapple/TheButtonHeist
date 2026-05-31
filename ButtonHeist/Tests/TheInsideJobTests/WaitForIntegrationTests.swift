@@ -3,6 +3,7 @@
 // for an element to appear or disappear. Requires the BH Demo test host
 // since wait_for polls the semantic accessibility tree via TheStash.
 import XCTest
+@testable import AccessibilitySnapshotParser
 @testable import TheInsideJob
 @testable import TheScore
 
@@ -535,6 +536,51 @@ final class WaitForIntegrationTests: XCTestCase {
         guard case .elementsChanged = result.accessibilityTrace?.endpointDeltaProjection else {
             return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
         }
+    }
+
+    func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {
+        let visible = addLabel(
+            "WaitForChange-KnownMemory-Old",
+            identifier: "wait_change_visible_anchor"
+        )
+        defer { visible.removeFromSuperview() }
+
+        guard insideJob.brains.refresh() != nil else {
+            throw XCTSkip("No live hierarchy available for wait_for_change memory test")
+        }
+
+        let offViewportElement = AccessibilityElement.make(
+            label: "WaitForChange-KnownMemory-OffViewport",
+            traits: .button,
+            respondsToUserInteraction: false
+        )
+        let offViewportHeistId = "wait_change_known_offviewport_button"
+        let offViewportMemory = Screen.makeForTests(
+            offViewport: [.init(offViewportElement, heistId: offViewportHeistId)]
+        )
+        insideJob.brains.stash.currentScreen = offViewportMemory.merging(
+            insideJob.brains.stash.currentScreen
+        )
+        insideJob.brains.recordSentState()
+        XCTAssertNotNil(insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId))
+
+        let updateTask = Task { @MainActor in
+            await self.insideJob.tripwire.yieldRealFrames(2)
+            visible.text = "WaitForChange-KnownMemory-New"
+            visible.accessibilityLabel = "WaitForChange-KnownMemory-New"
+        }
+
+        let result = await waitForChange(
+            expectation: .elementsChanged,
+            timeout: 5.0
+        )
+        await updateTask.value
+
+        XCTAssertTrue(result.success, result.message ?? "wait_for_change did not observe visible update")
+        XCTAssertNotNil(
+            insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId),
+            "wait_for_change must refresh visible evidence without deleting explored off-viewport semantic memory"
+        )
     }
 
     func testWaitForChangeElementDisappearedTimesOutWhenElementStillPresent() async throws {
