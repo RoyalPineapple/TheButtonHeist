@@ -260,7 +260,7 @@ final class ServerMessageTests: XCTestCase {
 
     func testActionResultPayloadScrollSearchWireShape() throws {
         let search = ScrollSearchResult(
-            scrollCount: 2, uniqueElementsSeen: 10, totalItems: nil, exhaustive: false
+            scrollCount: 2, uniqueElementsSeen: 10, exhaustive: false
         )
         let result = ActionResult(success: true, method: .elementSearch, payload: .scrollSearch(search))
         let data = try JSONEncoder().encode(result)

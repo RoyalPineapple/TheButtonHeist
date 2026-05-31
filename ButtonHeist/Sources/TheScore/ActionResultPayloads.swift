@@ -218,8 +218,6 @@ public struct ScrollSearchResult: Codable, Sendable {
     public let scrollCount: Int
     /// Number of unique elements seen across all scroll positions
     public let uniqueElementsSeen: Int
-    /// Total items in the data source (UITableView/UICollectionView only)
-    public let totalItems: Int?
     /// Whether every item in the data source was checked
     public let exhaustive: Bool
     /// The matched element id, if found. The action trace owns the element snapshot.
@@ -228,13 +226,11 @@ public struct ScrollSearchResult: Codable, Sendable {
     public init(
         scrollCount: Int,
         uniqueElementsSeen: Int,
-        totalItems: Int? = nil,
         exhaustive: Bool,
         foundHeistId: HeistId? = nil
     ) {
         self.scrollCount = scrollCount
         self.uniqueElementsSeen = uniqueElementsSeen
-        self.totalItems = totalItems
         self.exhaustive = exhaustive
         self.foundHeistId = foundHeistId
     }
@@ -242,7 +238,6 @@ public struct ScrollSearchResult: Codable, Sendable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case scrollCount
         case uniqueElementsSeen
-        case totalItems
         case exhaustive
         case foundHeistId
     }
@@ -253,7 +248,6 @@ public struct ScrollSearchResult: Codable, Sendable {
         self.init(
             scrollCount: try container.decode(Int.self, forKey: .scrollCount),
             uniqueElementsSeen: try container.decode(Int.self, forKey: .uniqueElementsSeen),
-            totalItems: try container.decodeIfPresent(Int.self, forKey: .totalItems),
             exhaustive: try container.decode(Bool.self, forKey: .exhaustive),
             foundHeistId: try container.decodeIfPresent(HeistId.self, forKey: .foundHeistId)
         )

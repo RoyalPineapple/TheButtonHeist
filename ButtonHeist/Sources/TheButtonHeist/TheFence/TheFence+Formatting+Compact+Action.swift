@@ -136,10 +136,7 @@ extension FenceResponse {
     }
 
     private static func scrollSearchItemInfo(_ search: ScrollSearchResult) -> String {
-        if let total = search.totalItems {
-            let percentage = total > 0 ? Int(Double(search.uniqueElementsSeen) / Double(total) * 100) : 0
-            return " (\(search.uniqueElementsSeen)/\(total) items seen, \(percentage)%)"
-        } else if search.uniqueElementsSeen > 0 {
+        if search.uniqueElementsSeen > 0 {
             return " (\(search.uniqueElementsSeen) unique elements seen)"
         }
         return ""
