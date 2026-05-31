@@ -30,26 +30,24 @@ extension TheFence {
         let heistName = resolvedURL.deletingPathExtension().lastPathComponent
         let playbackStart = CFAbsoluteTimeGetCurrent()
         let batchResponse = try await handleRunBatch(playbackContract.batchRequest)
-        let batchResult = try playbackBatchResult(batchResponse)
-        var failure = playbackFailure(contract: playbackContract, batch: batchResult)
+        let projection = try playbackProjection(contract: playbackContract, batchResponse: batchResponse)
+        var failure = projection.failure
 
         if let currentFailure = failure {
             failure = await currentFailure.withPlaybackDiagnostics(capturingWith: self)
         }
 
         let totalTimeSeconds = CFAbsoluteTimeGetCurrent() - playbackStart
-        let stepResults = stepResults(contract: playbackContract, batch: batchResult)
-        let failedIndex = firstPlaybackFailureIndex(contract: playbackContract, batch: batchResult)
         let report = HeistPlaybackReport(
             heistName: heistName,
             app: playbackContract.app,
             totalStepCount: playbackContract.steps.count,
             totalTimeSeconds: totalTimeSeconds,
-            steps: stepResults
+            steps: projection.stepResults
         )
         return .heistPlayback(
-            completedSteps: stepResults.prefix { $0.passed }.count,
-            failedIndex: failedIndex,
+            completedSteps: projection.stepResults.prefix { $0.passed }.count,
+            failedIndex: projection.failedIndex,
             totalTimingMs: Int(totalTimeSeconds * 1000),
             failure: failure,
             report: report

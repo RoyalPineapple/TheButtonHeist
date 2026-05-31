@@ -27,54 +27,11 @@ extension Navigation {
         }
 
         exploration.manifest.addPendingContainers(stash.currentHierarchy.scrollableContainers)
-        while !exploration.manifest.pendingContainers.isEmpty {
-            let batch = sortedPendingContainers(in: exploration)
-
-            for container in batch {
-                guard let containerExploration = prepareContainerExploration(for: container) else {
-                    exploration.markExplored(container)
-                    continue
-                }
-                let found = await exploreContainer(
-                    containerExploration,
-                    target: target,
-                    exploration: &exploration
-                )
-                if found {
-                    return exploration.finish(startTime: startTime)
-                }
-            }
+        if await scanPendingContainers(target: target, exploration: &exploration) {
+            return exploration.finish(startTime: startTime)
         }
 
         return exploration.finish(startTime: startTime)
-    }
-
-    private func exploreContainer(
-        _ containerExploration: ContainerExploration,
-        target: ElementTarget?,
-        exploration: inout SemanticExploration
-    ) async -> Bool {
-        let savedVisualOrigin = containerExploration.savedVisualOrigin
-        await moveToLeadingEdge(containerExploration, exploration: &exploration)
-
-        var scan = preparePageScan(in: containerExploration)
-        let foundTarget = await scanForwardPages(
-            containerExploration,
-            target: target,
-            scan: &scan,
-            exploration: &exploration
-        )
-
-        await restoreContainerPosition(
-            containerExploration,
-            savedVisualOrigin: savedVisualOrigin,
-            exploration: &exploration
-        )
-        exploration.markExplored(containerExploration.container)
-
-        guard !foundTarget else { return true }
-        discoverNewContainers(in: &exploration)
-        return false
     }
 
     func hasTerminalExplorationResolution(_ target: ElementTarget) -> Bool {

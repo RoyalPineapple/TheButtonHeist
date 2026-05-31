@@ -8,14 +8,38 @@ import TheScore
 
 extension Navigation {
 
-    func sortedPendingContainers(in exploration: SemanticExploration) -> [AccessibilityContainer] {
+    func scanPendingContainers(
+        target: ElementTarget?,
+        exploration: inout SemanticExploration
+    ) async -> Bool {
+        while !exploration.manifest.pendingContainers.isEmpty {
+            let batch = sortedPendingContainers(in: exploration)
+
+            for container in batch {
+                guard let containerExploration = prepareContainerExploration(for: container) else {
+                    exploration.markExplored(container)
+                    continue
+                }
+                if await exploreContainer(
+                    containerExploration,
+                    target: target,
+                    exploration: &exploration
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    private func sortedPendingContainers(in exploration: SemanticExploration) -> [AccessibilityContainer] {
         exploration.manifest.pendingContainers
-            .map { (container: $0, overflow: Self.totalOverflow(of: $0)) }
+            .map { (container: $0, overflow: totalOverflow(of: $0)) }
             .sorted { $0.overflow > $1.overflow }
             .map(\.container)
     }
 
-    func prepareContainerExploration(for container: AccessibilityContainer) -> ContainerExploration? {
+    private func prepareContainerExploration(for container: AccessibilityContainer) -> ContainerExploration? {
         guard case .scrollable(let contentSize) = container.type else { return nil }
 
         if let view = stash.scrollableContainerViews[container],
@@ -37,7 +61,35 @@ extension Navigation {
         )
     }
 
-    func preparePageScan(in containerExploration: ContainerExploration) -> ContainerScan {
+    private func exploreContainer(
+        _ containerExploration: ContainerExploration,
+        target: ElementTarget?,
+        exploration: inout SemanticExploration
+    ) async -> Bool {
+        let savedVisualOrigin = containerExploration.savedVisualOrigin
+        await moveToLeadingEdge(containerExploration, exploration: &exploration)
+
+        var scan = preparePageScan(in: containerExploration)
+        let foundTarget = await scanForwardPages(
+            containerExploration,
+            target: target,
+            scan: &scan,
+            exploration: &exploration
+        )
+
+        await restoreContainerPosition(
+            containerExploration,
+            savedVisualOrigin: savedVisualOrigin,
+            exploration: &exploration
+        )
+        exploration.markExplored(containerExploration.container)
+
+        guard !foundTarget else { return true }
+        exploration.addDiscoveredContainers(stash.currentHierarchy.scrollableContainers)
+        return false
+    }
+
+    private func preparePageScan(in containerExploration: ContainerExploration) -> ContainerScan {
         let initialPage = visibleElementsInContainer(containerExploration.container)
         return ContainerScan(
             accumulated: initialPage.elements,
@@ -46,7 +98,7 @@ extension Navigation {
         )
     }
 
-    func scanForwardPages(
+    private func scanForwardPages(
         _ containerExploration: ContainerExploration,
         target: ElementTarget?,
         scan: inout ContainerScan,
@@ -74,7 +126,7 @@ extension Navigation {
         return false
     }
 
-    func moveToLeadingEdge(
+    private func moveToLeadingEdge(
         _ containerExploration: ContainerExploration,
         exploration: inout SemanticExploration
     ) async {
@@ -102,14 +154,14 @@ extension Navigation {
         }
     }
 
-    func absorbVisiblePage(in exploration: inout SemanticExploration) -> Bool {
+    private func absorbVisiblePage(in exploration: inout SemanticExploration) -> Bool {
         guard let parsed = stash.parse() else { return false }
         stash.commitVisiblePage(parsed)
         exploration.absorb(parsed)
         return true
     }
 
-    func reconcileVisiblePage(
+    private func reconcileVisiblePage(
         in containerExploration: ContainerExploration,
         scan: inout ContainerScan
     ) -> PageReconciliation {
@@ -126,7 +178,7 @@ extension Navigation {
         return result
     }
 
-    func restoreContainerPosition(
+    private func restoreContainerPosition(
         _ containerExploration: ContainerExploration,
         savedVisualOrigin: CGPoint?,
         exploration: inout SemanticExploration
@@ -139,11 +191,7 @@ extension Navigation {
         }
     }
 
-    func discoverNewContainers(in exploration: inout SemanticExploration) {
-        exploration.addDiscoveredContainers(stash.currentHierarchy.scrollableContainers)
-    }
-
-    func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
+    private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {
         let pairs = stash.currentHierarchy.compactMap(
             context: false,
             container: { isInside, current in isInside || current == container },
@@ -156,11 +204,11 @@ extension Navigation {
         return ContainerPage(elements: pairs.map(\.element), origins: pairs.map(\.origin))
     }
 
-    func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
+    private func buildOriginIndex() -> [AccessibilityElement: CGPoint?] {
         stash.knownContentOriginIndex()
     }
 
-    static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
+    private static func restoreVisualOrigin(_ visualOrigin: CGPoint, in scrollView: UIScrollView) {
         let insets = scrollView.adjustedContentInset
         let restoredOffset = CGPoint(
             x: visualOrigin.x - insets.left,
@@ -175,7 +223,7 @@ extension Navigation {
         scrollView.setContentOffset(clampedOffset, animated: false)
     }
 
-    static func totalOverflow(of container: AccessibilityContainer) -> CGFloat {
+    private func totalOverflow(of container: AccessibilityContainer) -> CGFloat {
         guard case .scrollable(let contentSize) = container.type else { return 0 }
         return max(0, contentSize.width - container.frame.width)
             + max(0, contentSize.height - container.frame.height)
