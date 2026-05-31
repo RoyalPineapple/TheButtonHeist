@@ -3136,6 +3136,12 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let json = publicJSONObject(response)
         let interface = json["interface"] as! [String: Any]
+        XCTAssertEqual(interface["screenDescription"] as? String, "Menu — 2 buttons")
+        XCTAssertEqual(interface["screenId"] as? String, "menu")
+        let navigation = interface["navigation"] as! [String: Any]
+        XCTAssertEqual(navigation["screenTitle"] as? String, "Menu")
+        XCTAssertNil(navigation["backButton"])
+        XCTAssertNil(navigation["tabBarItems"])
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 3)
         let container = tree[1]["container"] as! [String: Any]

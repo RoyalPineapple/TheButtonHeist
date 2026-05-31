@@ -105,8 +105,6 @@ public struct Interface: Codable, Equatable, Sendable {
         case annotations
     }
 
-    // MARK: - Computed Properties
-
     /// Button Heist element projection in VoiceOver traversal order.
     ///
     /// Computed from `tree + annotations`; not stored as a second source of
@@ -119,25 +117,6 @@ public struct Interface: Codable, Equatable, Sendable {
                 annotation: annotationsByPath[path]
             )
         }
-    }
-
-    /// Deterministic one-line screen summary built from element metadata.
-    /// Format: "{screen name} — {interactive element counts}"
-    public var screenDescription: String {
-        Self.buildScreenDescription(from: elements)
-    }
-
-    /// Slugified screen name for machine use (e.g. "controls_demo").
-    /// Derived from the topmost header element's label.
-    public var screenId: String? {
-        slugify(Self.primaryHeaderLabel(from: elements))
-    }
-
-    /// Structured navigation context extracted from element traits.
-    /// Provides screen title, back button, and tab bar items with heistIds
-    /// so agents can orient and navigate without scanning the element list.
-    public var navigation: NavigationContext {
-        Self.buildNavigation(from: elements)
     }
 
     public init(
@@ -198,103 +177,6 @@ public struct Interface: Codable, Equatable, Sendable {
         return InterfaceAnnotations(elements: elements, containers: containers)
     }
 
-    // MARK: - Navigation Context
-
-    static func buildNavigation(from elements: [HeistElement]) -> NavigationContext {
-        let screenTitle = Self.primaryHeaderLabel(from: elements)
-
-        let backButton = elements
-            .first(where: { $0.traits.contains(.backButton) })
-            .map { NavigationContext.NavigationItem(heistId: $0.heistId, label: $0.label, value: $0.value) }
-
-        let tabBarItems = elements
-            .filter { $0.traits.contains(.tabBarItem) }
-            .map { element in
-                NavigationContext.TabBarItem(
-                    heistId: element.heistId,
-                    label: element.label,
-                    value: element.value,
-                    selected: element.traits.contains(.selected)
-                )
-            }
-
-        return NavigationContext(
-            screenTitle: screenTitle,
-            backButton: backButton,
-            tabBarItems: tabBarItems.isEmpty ? nil : tabBarItems
-        )
-    }
-
-    // MARK: - Deterministic Screen Description
-
-    /// Build a one-line screen summary from element metadata.
-    static func buildScreenDescription(from elements: [HeistElement]) -> String {
-        let screenName = Self.primaryHeaderLabel(from: elements)
-
-        var textFields = 0
-        var buttons = 0
-        var switches = 0
-        var sliders = 0
-        var searchFields = 0
-        var links = 0
-        var secureFields = 0
-
-        for element in elements {
-            let traits = element.traits
-            if traits.contains(.secureTextField) {
-                secureFields += 1
-            } else if traits.contains(.textEntry) {
-                textFields += 1
-            } else if traits.contains(.searchField) {
-                searchFields += 1
-            } else if traits.contains(.switchButton) {
-                switches += 1
-            } else if traits.contains(.adjustable) {
-                sliders += 1
-            } else if traits.contains(.link) {
-                links += 1
-            } else if traits.contains(.button) && !traits.contains(.backButton) {
-                buttons += 1
-            }
-        }
-
-        var parts: [String] = []
-        if textFields > 0 { parts.append("\(textFields) text field\(textFields == 1 ? "" : "s")") }
-        if secureFields > 0 { parts.append("\(secureFields) password field\(secureFields == 1 ? "" : "s")") }
-        if searchFields > 0 { parts.append("\(searchFields) search field\(searchFields == 1 ? "" : "s")") }
-        if buttons > 0 { parts.append("\(buttons) button\(buttons == 1 ? "" : "s")") }
-        if switches > 0 { parts.append("\(switches) toggle\(switches == 1 ? "" : "s")") }
-        if sliders > 0 { parts.append("\(sliders) slider\(sliders == 1 ? "" : "s")") }
-        if links > 0 { parts.append("\(links) link\(links == 1 ? "" : "s")") }
-
-        let summary = parts.joined(separator: ", ")
-
-        if let name = screenName, !summary.isEmpty {
-            return "\(name) — \(summary)"
-        } else if let name = screenName {
-            return name
-        } else if !summary.isEmpty {
-            return summary
-        } else {
-            return "\(elements.count) elements"
-        }
-    }
-
-    private static func primaryHeaderLabel(from elements: [HeistElement]) -> String? {
-        elements
-            .enumerated()
-            .compactMap { index, element -> (index: Int, element: HeistElement)? in
-                guard element.traits.contains(.header), element.label != nil else { return nil }
-                return (index, element)
-            }
-            .min { left, right in
-                if left.element.frameY != right.element.frameY { return left.element.frameY < right.element.frameY }
-                if left.element.frameX != right.element.frameX { return left.element.frameX < right.element.frameX }
-                return left.index < right.index
-            }?
-            .element
-            .label
-    }
 }
 
 // MARK: - Interface Tree Wire Shape
@@ -424,48 +306,6 @@ private struct InterfaceContainerWirePayload: Codable {
     }
 }
 
-// MARK: - Navigation Context
-
-/// Structured navigation context derived from element traits.
-/// Gives agents immediate orientation — screen title, back button, and tab bar —
-/// with heistIds for direct activation.
-public struct NavigationContext: Codable, Equatable, Sendable {
-    public struct NavigationItem: Codable, Equatable, Sendable {
-        public let heistId: HeistId
-        public let label: String?
-        public let value: String?
-
-        public init(heistId: HeistId, label: String?, value: String?) {
-            self.heistId = heistId
-            self.label = label
-            self.value = value
-        }
-    }
-
-    public struct TabBarItem: Codable, Equatable, Sendable {
-        public let heistId: HeistId
-        public let label: String?
-        public let value: String?
-        public let selected: Bool
-
-        public init(heistId: HeistId, label: String?, value: String?, selected: Bool) {
-            self.heistId = heistId
-            self.label = label
-            self.value = value
-            self.selected = selected
-        }
-    }
-
-    public let screenTitle: String?
-    public let backButton: NavigationItem?
-    public let tabBarItems: [TabBarItem]?
-
-    public init(screenTitle: String?, backButton: NavigationItem?, tabBarItems: [TabBarItem]?) {
-        self.screenTitle = screenTitle
-        self.backButton = backButton
-        self.tabBarItems = tabBarItems
-    }
-}
 // MARK: - Parser Hierarchy Algebra
 
 public extension AccessibilityHierarchy {
