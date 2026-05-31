@@ -276,7 +276,6 @@ final class MockConnection: TransportReachabilityConnecting {
         case .scrollToVisible: return .scrollToVisible
         case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
-        case .waitForIdle: return .waitForIdle
         case .waitFor: return .waitFor
         case .waitForChange: return .waitForChange
         case .batchExecutionPlan: return .batchExecutionPlan

@@ -296,24 +296,6 @@ final class TheBrains {
         }
     }
 
-    // MARK: - Wait For Idle
-
-    /// Run the wait-for-idle pipeline: refresh → before → settle → delta → result.
-    func executeWaitForIdle(timeout: TimeInterval) async -> ActionResult {
-        guard refresh() != nil else {
-            return treeUnavailableResult(method: .waitForIdle)
-        }
-        let before = captureBeforeState()
-        let settled = await tripwire.waitForAllClear(timeout: timeout)
-
-        return await actionResultWithDelta(
-            success: true,
-            method: .waitForIdle,
-            message: settled ? "UI idle" : "Timed out after \(timeout)s, UI may still be animating",
-            before: before
-        )
-    }
-
     // MARK: - Private Helpers
 
     func makeTraceCapture(

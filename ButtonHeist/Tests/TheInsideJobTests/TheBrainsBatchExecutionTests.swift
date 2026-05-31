@@ -126,7 +126,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                     deadline: Deadline()
                 ),
                 BatchStep(
-                    command: .waitForIdle(WaitForIdleTarget(timeout: 0.1)),
+                    command: .waitForChange(WaitForChangeTarget(timeout: 0.1)),
                     expectation: nil,
                     deadline: Deadline(timeout: 0.1)
                 ),
@@ -291,7 +291,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
     func testClientBatchPlanDispatchesToBatchRunner() async throws {
         let plan = TheScore.BatchPlan(steps: [
             BatchStep(
-                command: .waitForIdle(WaitForIdleTarget(timeout: 0.01)),
+                command: .setPasteboard(SetPasteboardTarget(text: "batch")),
                 expectation: nil,
                 deadline: Deadline(timeout: 0.01)
             ),

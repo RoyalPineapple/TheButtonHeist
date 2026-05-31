@@ -158,22 +158,6 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
     }
 
-    // MARK: - WaitForIdleTarget
-
-    func testWaitForIdleTargetRoundTrip() throws {
-        let target = WaitForIdleTarget(timeout: 3.0)
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(WaitForIdleTarget.self, from: data)
-        XCTAssertEqual(decoded.timeout, 3.0)
-    }
-
-    func testWaitForIdleTargetNilTimeout() throws {
-        let target = WaitForIdleTarget()
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(WaitForIdleTarget.self, from: data)
-        XCTAssertNil(decoded.timeout)
-    }
-
     // MARK: - ScrollTarget
 
     func testScrollTargetRoundTrip() throws {

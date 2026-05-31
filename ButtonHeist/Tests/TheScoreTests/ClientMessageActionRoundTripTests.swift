@@ -135,7 +135,7 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
     }
 
-    // MARK: - Edit / ResignFirstResponder / WaitForIdle
+    // MARK: - Edit / ResignFirstResponder
 
     func testClientMessageEditActionEncoding() throws {
         let message = ClientMessage.editAction(EditActionTarget(action: .paste))
@@ -158,26 +158,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
             // Success
         } else {
             XCTFail("Expected resignFirstResponder message")
-        }
-    }
-
-    func testWaitForIdleTargetDefaultTimeout() throws {
-        let target = WaitForIdleTarget()
-        let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(WaitForIdleTarget.self, from: data)
-
-        XCTAssertNil(decoded.timeout)
-    }
-
-    func testClientMessageWaitForIdleEncoding() throws {
-        let message = ClientMessage.waitForIdle(WaitForIdleTarget(timeout: 5.0))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .waitForIdle(let target) = decoded {
-            XCTAssertEqual(target.timeout, 5.0)
-        } else {
-            XCTFail("Expected waitForIdle message")
         }
     }
 

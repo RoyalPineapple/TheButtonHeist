@@ -48,8 +48,6 @@ extension TheBrains {
             return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
         case .waitFor(let target):
             return await performWaitFor(target: target)
-        case .waitForIdle(let target):
-            return await executeWaitForIdle(timeout: min(target.timeout ?? 5.0, 60.0))
         case .waitForChange(let target):
             return await executeWaitForChange(
                 timeout: target.resolvedTimeout,

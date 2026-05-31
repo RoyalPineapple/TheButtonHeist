@@ -1033,20 +1033,6 @@ final class TheBrainsActionTests: XCTestCase {
 
     // MARK: - Accessibility Tree Availability
 
-    func testExecuteWaitForIdleFailsWhenAccessibilityTreeUnavailable() async {
-        let result = await withNoTraversableWindows {
-            await brains.executeWaitForIdle(timeout: 0.1)
-        }
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .waitForIdle)
-        XCTAssertEqual(result.errorKind, .actionFailed)
-        // The public wire kind stays actionFailed. The factual
-        // message is what lets TheFence surface the local tree-unavailable
-        // diagnostic without adding a new ErrorKind raw value.
-        XCTAssertEqual(result.message, "Could not access accessibility tree: no traversable app windows")
-    }
-
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
         let target = WaitForTarget(
             elementTarget: .matcher(ElementMatcher(label: "never"))
