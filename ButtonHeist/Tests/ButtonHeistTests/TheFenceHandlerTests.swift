@@ -3476,11 +3476,12 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.steps[1].command, "activate")
         XCTAssertEqual(operation.target, semanticTarget(identifier: "email", ordinal: 1))
 
-        let parsed = operation.parsedRequest
-        XCTAssertEqual(parsed.command, .typeText)
-        XCTAssertNil(parsed.arguments.string("identifier"))
-        XCTAssertEqual(parsed.arguments.string("text"), "user@example.com")
-        guard case .matcher(let matcher, let ordinal)? = parsed.arguments.elementTarget else {
+        XCTAssertEqual(operation.preparedStep.command, .typeText)
+        guard case .typeText(let target) = operation.preparedStep.typedStep.command else {
+            return XCTFail("Expected playback step to validate as type_text")
+        }
+        XCTAssertEqual(target.text, "user@example.com")
+        guard case .matcher(let matcher, let ordinal)? = target.elementTarget else {
             return XCTFail("Expected playback target to bind as typed matcher")
         }
         XCTAssertEqual(matcher.identifier, "email")
@@ -3509,8 +3510,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(playback.steps.map(\.command), [.activate])
         XCTAssertEqual(playback.steps.first?.target, semanticTarget(identifier: "submit"))
         let step = try XCTUnwrap(playback.steps.first)
-        let expect = step.parsedRequest.arguments.argumentValues["expect"]
-        XCTAssertEqual(expect, .object(["type": .string("screen_changed")]))
+        XCTAssertEqual(step.preparedStep.typedStep.expectation, .screenChanged)
     }
 
     @ButtonHeistActor
@@ -3851,14 +3851,6 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let (fence, _) = makeConnectedFence()
         let step = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep])).steps[0]
-        let parsed = step.parsedRequest
-        guard case .matcher(let matcher, nil)? = parsed.arguments.elementTarget else {
-            return XCTFail("Expected playback target to bind as typed matcher")
-        }
-        XCTAssertEqual(matcher.identifier, "btn1")
-        XCTAssertNil(parsed.arguments.argumentValues["heistId"])
-        XCTAssertNil(parsed.arguments.argumentValues["target"])
-
         guard case .activate(.matcher(let matcher, _)) = step.preparedStep.typedStep.command else {
             return XCTFail("Expected playback to dispatch matcher target, got \(step.preparedStep.typedStep.command)")
         }
