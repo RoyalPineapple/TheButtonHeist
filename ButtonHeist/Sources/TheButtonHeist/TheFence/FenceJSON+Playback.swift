@@ -28,13 +28,17 @@ struct PublicPlaybackFailure: Encodable {
     let diagnosticCaptureFailure: String?
 
     init(failure: PlaybackFailure) {
-        self.command = failure.step.command
+        self.command = failure.step.command.rawValue
         self.error = failure.errorMessage
         self.target = failure.step.target
         self.diagnosticCaptureFailure = failure.diagnosticCaptureFailure
         switch failure {
         case .actionFailed(_, let result, let expectation, let interface, _):
-            self.actionResult = PublicActionResponse(commandName: failure.step.command, result: result, expectation: nil)
+            self.actionResult = PublicActionResponse(
+                commandName: failure.step.command.rawValue,
+                result: result,
+                expectation: nil
+            )
             if let expectation, !expectation.met {
                 self.expectation = PublicExpectationResult(result: expectation)
             } else {

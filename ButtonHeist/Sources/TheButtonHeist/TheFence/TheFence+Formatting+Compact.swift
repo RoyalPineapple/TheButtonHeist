@@ -61,7 +61,7 @@ extension FenceResponse {
             var text = "playback: \(completedSteps) steps in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at \(index))" }
             if let failure {
-                text += " [\(failure.step.command): \(failure.errorMessage)]"
+                text += " [\(failure.step.command.rawValue): \(failure.errorMessage)]"
                 if let diagnosticCaptureFailure = failure.diagnosticCaptureFailure {
                     text += " [diagnosticCaptureFailure: \(diagnosticCaptureFailure)]"
                 }

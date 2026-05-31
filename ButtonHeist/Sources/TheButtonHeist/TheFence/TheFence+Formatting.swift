@@ -59,7 +59,7 @@ extension FenceResponse {
             var text = "Playback: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at step \(index))" }
             if let failure {
-                text += "\n  command: \(failure.step.command)"
+                text += "\n  command: \(failure.step.command.rawValue)"
                 if let target = failure.step.target {
                     text += "\n  target: \(target)"
                 }
