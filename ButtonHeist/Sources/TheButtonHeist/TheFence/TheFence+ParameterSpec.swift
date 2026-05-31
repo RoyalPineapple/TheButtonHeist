@@ -49,7 +49,7 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
 
 public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
-    static let centerX = Self("centerX"), centerY = Self("centerY"), command = Self("command")
+    static let command = Self("command")
     static let container = Self("container"), count = Self("count"), captureLocalRef = Self("captureLocalRef")
     static let continuation = Self("continuation")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
@@ -277,7 +277,6 @@ enum FenceParameterBlocks: Sendable {
     static let requiredEnd: [FenceParameterSpec] = [
         param(.endX, .number, required: true), param(.endY, .number, required: true),
     ]
-    static let center: [FenceParameterSpec] = [param(.centerX, .number), param(.centerY, .number)]
     static let gestureDuration = param(
         .duration, .number,
         maximum: TheFence.DecodeLimits.maxGestureDurationSeconds

@@ -99,14 +99,6 @@ final class UIKeyboardImplTextInjection {
         return drainTaskQueue(character: text)
     }
 
-    func deleteBackward() -> KeyboardTextInjectionResult {
-        guard let deleteFromInput = resolveMessage("deleteFromInput", impl) else {
-            return .failed(.missingSelector("deleteFromInput", strategy: Self.strategyName, character: nil))
-        }
-        deleteFromInput.call()
-        return drainTaskQueue(character: nil)
-    }
-
     func drainTaskQueue(character: String?) -> KeyboardTextInjectionResult {
         guard let taskQueueMessage = resolveMessage("taskQueue", impl) else {
             return .failed(.missingSelector("taskQueue", strategy: Self.strategyName, character: character))
@@ -172,11 +164,6 @@ final class UIKeyboardImplTextInjection {
         textInjection.type(character)
     }
 
-    /// Send a single backspace event to the focused text field.
-    @discardableResult
-    func deleteBackward() -> KeyboardTextInjectionResult {
-        textInjection.deleteBackward()
-    }
 }
 
 #endif // DEBUG

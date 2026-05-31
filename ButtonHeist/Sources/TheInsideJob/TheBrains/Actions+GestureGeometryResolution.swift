@@ -53,17 +53,6 @@ extension Actions {
         }
     }
 
-    func gestureProjectionFailure(
-        _ error: Error,
-        method: ActionMethod
-    ) -> TheSafecracker.InteractionResult {
-        .failure(
-            method,
-            message: "\(method.rawValue) failed: \(error)",
-            failureKind: .inputValidation
-        )
-    }
-
     enum GestureFrameResolution {
         case success(CGRect)
         case failure(TheSafecracker.InteractionResult)
