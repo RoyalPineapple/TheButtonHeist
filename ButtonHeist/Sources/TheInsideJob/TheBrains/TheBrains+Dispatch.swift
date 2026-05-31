@@ -238,7 +238,7 @@ extension TheBrains {
         var parts = [
             "timed out after \(elapsed)s waiting for \(expected)",
             "expected: \(waitForTargetDescription(target))",
-            "known: \(stash.currentScreen.semantic.elements.count) elements",
+            "known: \(stash.knownElementCount) elements",
         ]
         if let screenId = stash.lastScreenId {
             parts.append("screen: \(screenId)")

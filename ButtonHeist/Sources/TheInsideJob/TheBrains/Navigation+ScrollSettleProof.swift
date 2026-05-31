@@ -63,10 +63,9 @@ extension Navigation {
     /// randomized per launch, so never persist, log, or compare these values
     /// across processes.
     func visibleAnchorSignature() -> Int? {
-        let anchors = stash.visibleIds.compactMap { heistId -> String? in
-            guard let entry = stash.currentScreen.findElement(heistId: heistId),
-                  let origin = entry.contentSpaceOrigin else { return nil }
-            return "\(heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
+        let anchors = stash.visibleContentOriginAnchors().map { anchor in
+            let origin = anchor.origin
+            return "\(anchor.heistId):\(Int(origin.x.rounded())):\(Int(origin.y.rounded()))"
         }.sorted()
         guard !anchors.isEmpty else { return nil }
         return anchors.joined(separator: "|").hashValue

@@ -68,6 +68,17 @@ final class TheStash {
         ids(in: .visible)
     }
 
+    /// Number of elements retained in committed semantic memory.
+    var knownElementCount: Int {
+        semanticState.elements.count
+    }
+
+    /// Hash of committed semantic memory. Deliberately excludes live viewport
+    /// geometry so scroll position alone does not produce semantic history.
+    var semanticHash: String {
+        semanticState.semanticHash
+    }
+
     /// HeistId of the element whose live object is currently first responder.
     var firstResponderHeistId: HeistId? {
         liveCapture.firstResponderHeistId
@@ -137,6 +148,33 @@ final class TheStash {
 
     func installScreenForTesting(_ screen: Screen) {
         commitScreen(screen)
+    }
+
+    /// Starting value for page-by-page exploration. Exploration is the one
+    /// runtime path that intentionally carries a local Screen union before
+    /// committing it back through `commitExploredScreen`.
+    func explorationBaseline() -> Screen {
+        currentScreen
+    }
+
+    func knownContentOriginIndex() -> [AccessibilityElement: CGPoint?] {
+        Dictionary(
+            selectElements().map { ($0.element, $0.contentSpaceOrigin) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    func visibleContentOriginAnchors() -> [(heistId: HeistId, origin: CGPoint)] {
+        visibleIds.compactMap { heistId in
+            guard let entry = screenElement(heistId: heistId, in: .visible),
+                  let origin = entry.contentSpaceOrigin else { return nil }
+            return (heistId: heistId, origin: origin)
+        }
+    }
+
+    func firstResponderScreenElement() -> ScreenElement? {
+        guard let heistId = firstResponderHeistId else { return nil }
+        return screenElement(heistId: heistId, in: .known)
     }
 
     func liveHeistIds() -> Set<HeistId> {

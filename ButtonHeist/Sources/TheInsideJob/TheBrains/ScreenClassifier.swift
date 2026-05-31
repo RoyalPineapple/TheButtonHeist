@@ -96,6 +96,10 @@ import TheScore
         )
     }
 
+    static func snapshot(of stash: TheStash) -> Snapshot {
+        snapshot(of: stash.currentScreen)
+    }
+
     static func classify(before: Snapshot, after: Snapshot) -> Classification {
         let beforeSignature = before.signature
         let afterSignature = after.signature
