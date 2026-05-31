@@ -81,7 +81,7 @@ extension TheBrains {
         guard refresh() != nil else {
             return treeUnavailableResult(method: method)
         }
-        let before = captureBeforeState()
+        let before = captureSemanticState()
         let result = await interaction()
 
         return await actionResultWithDelta(
@@ -118,7 +118,7 @@ extension TheBrains {
         guard refresh() != nil else {
             return treeUnavailableResult(method: method)
         }
-        let before = captureBeforeState()
+        let before = captureSemanticState()
         let result = await navigation.executeElementSearch(elementTarget: elementTarget, direction: direction)
 
         return await actionResultWithDelta(
@@ -148,7 +148,7 @@ extension TheBrains {
         guard refresh() != nil else {
             return treeUnavailableResult(method: .waitFor)
         }
-        let before = captureBeforeState()
+        let before = captureSemanticState()
         let result = await executeWaitFor(elementTarget: elementTarget, absent: absent ?? false, timeout: min(timeout ?? 10, 30))
         let errorKind: ErrorKind? = {
             guard !result.success else { return nil }

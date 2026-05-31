@@ -320,21 +320,6 @@ public extension AccessibilityHierarchy {
         }
     }
 
-    func folded<Result>(
-        onElement: (AccessibilityElement, Int) -> Result,
-        onContainer: (AccessibilityContainer, [Result]) -> Result
-    ) -> Result {
-        switch self {
-        case .element(let element, let traversalIndex):
-            return onElement(element, traversalIndex)
-        case .container(let container, let children):
-            return onContainer(
-                container,
-                children.map { $0.folded(onElement: onElement, onContainer: onContainer) }
-            )
-        }
-    }
-
     func compactMapSubtrees<Result>(
         path: TreePath = .root,
         _ transform: (AccessibilityHierarchy, TreePath) -> Result?

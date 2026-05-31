@@ -31,7 +31,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testActionResultWithDeltaFailureReturnsBeforeSnapshot() async {
         seedScreen(elements: [("Sign In", .button, "button_sign_in")])
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: false,
@@ -48,7 +48,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testActionResultWithDeltaFailureInfersNotFoundFromMethod() async {
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: false,
@@ -61,7 +61,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testActionResultWithDeltaFailureInfersNotFoundFromDeallocated() async {
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: false,
@@ -74,7 +74,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testActionResultWithDeltaFailureRespectsExplicitErrorKind() async {
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: false,
@@ -88,7 +88,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testActionResultWithDeltaFailureCarriesValueAndMessage() async {
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: false,
@@ -114,7 +114,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
         _ = await brains.navigation.exploreAndPrune()
         let screen = brains.stash.currentScreen
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: true,
@@ -136,7 +136,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaSuccessReturnsTraceAfterElementChange() async {
         let beforeScreen = makeScreen(elements: [("Total", .staticText, "total")])
         brains.stash.currentScreen = beforeScreen
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Total $12.00", .staticText, "total")])
 
         let result = await brains.actionResultWithDelta(
@@ -154,7 +154,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaSuccessReportsScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.currentScreen = beforeScreen
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Checkout", .header, "checkout_header")])
 
         let result = await brains.actionResultWithDelta(
@@ -173,7 +173,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaSettleTimeoutStillReturnsSuccessfulAction() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.currentScreen = beforeScreen
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
 
         let result = await brains.actionResultWithDelta(
@@ -191,7 +191,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaCancelledSettleFailsActionResult() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.currentScreen = beforeScreen
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         let result = await brains.actionResultWithDelta(
             success: true,
@@ -209,7 +209,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testActionResultWithDeltaParseFailureFailsActionResult() async {
         seedScreen(elements: [("Save", .button, "save")])
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
         brains.stash.currentScreen = .empty
 
         let result = await brains.actionResultWithDelta(
@@ -228,7 +228,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         seedScreen(elements: [
             ("Menu", .header, "menu_header"),
@@ -248,7 +248,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testClassifiedTraceStartsSegmentForRealScreenChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         seedScreen(elements: [("Checkout", .header, "checkout_header")])
         let after = brains.captureSemanticState()
@@ -265,7 +265,7 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testClassifiedTraceDeltaIsDerivedFromCaptureEndpoints() throws {
         seedScreen(elements: [("Cart", .header, "cart_header"), ("Total", .staticText, "total_label")])
-        let before = brains.captureBeforeState()
+        let before = brains.captureSemanticState()
 
         seedScreen(elements: [("Cart", .header, "cart_header"), ("Total $12.00", .staticText, "total_label")])
         let after = brains.captureSemanticState()
