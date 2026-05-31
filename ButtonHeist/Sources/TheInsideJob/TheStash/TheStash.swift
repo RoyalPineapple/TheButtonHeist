@@ -7,10 +7,6 @@ import TheScore
 import AccessibilitySnapshotParser
 
 /// The stash — holds semantic UI memory plus the latest disposable live parse.
-///
-/// Semantic state is targetable memory. Live capture is viewport/action
-/// evidence. Callers parse a `Screen`, then commit it through the method that
-/// matches the product event: visible page, visible refresh, or explored union.
 @MainActor
 final class TheStash {
 
@@ -24,15 +20,10 @@ final class TheStash {
     private var semanticState: SemanticScreen = .empty
     private var liveCapture: LiveCapture = .empty
 
-    /// Projected screen value for read paths and test setup. Runtime writers
-    /// should use the explicit commit methods below.
+    /// Projected screen value for read paths. Runtime writers must use the
+    /// event-named commit methods below.
     var currentScreen: Screen {
-        get {
-            Screen(semantic: semanticState, liveCapture: liveCapture)
-        }
-        set {
-            commitScreen(newValue)
-        }
+        Screen(semantic: semanticState, liveCapture: liveCapture)
     }
 
     // MARK: - Aliases
@@ -43,17 +34,17 @@ final class TheStash {
 
     /// Hierarchy from the most recent parse. Proxy for call-site clarity —
     /// reads, matchers, scroll dispatch, and tab-bar geometry all need it
-    /// without spelling out `currentScreen.liveCapture.hierarchy`
+    /// without spelling out live-capture internals
     /// every time.
     var currentHierarchy: [AccessibilityHierarchy] {
-        currentScreen.liveCapture.hierarchy
+        liveCapture.hierarchy
     }
 
     /// Scrollable containers paired with their backing UIView.
     /// Unwraps the weak ref wrapper for call sites that need a live UIView.
     var scrollableContainerViews: [AccessibilityContainer: UIView] {
         var result: [AccessibilityContainer: UIView] = [:]
-        for (container, ref) in currentScreen.liveCapture.scrollableContainerViews {
+        for (container, ref) in liveCapture.scrollableContainerViews {
             if let view = ref.view {
                 result[container] = view
             }
@@ -79,7 +70,7 @@ final class TheStash {
 
     /// HeistId of the element whose live object is currently first responder.
     var firstResponderHeistId: HeistId? {
-        currentScreen.liveCapture.firstResponderHeistId
+        liveCapture.firstResponderHeistId
     }
 
     /// Screen name from the current screen (first header element by traversal order).
@@ -142,6 +133,58 @@ final class TheStash {
 
     func commitExploredScreen(_ screen: Screen) {
         commitScreen(screen)
+    }
+
+    func installScreenForTesting(_ screen: Screen) {
+        commitScreen(screen)
+    }
+
+    func liveHeistIds() -> Set<HeistId> {
+        liveCapture.heistIds
+    }
+
+    func liveContains(heistId: HeistId) -> Bool {
+        liveCapture.contains(heistId: heistId)
+    }
+
+    func liveHeistId(for element: AccessibilityElement) -> HeistId? {
+        liveCapture.heistId(for: element)
+    }
+
+    func liveObject(for heistId: HeistId) -> NSObject? {
+        liveCapture.object(for: heistId)
+    }
+
+    func liveScrollView(for screenElement: ScreenElement) -> UIScrollView? {
+        liveCapture.scrollView(for: screenElement)
+    }
+
+    func liveElementHeistId(matching object: NSObject) -> HeistId? {
+        liveCapture.elementRefs.first { _, ref in
+            ref.object === object
+        }?.key
+    }
+
+    func liveContainerObject(forPath path: TreePath) -> NSObject? {
+        liveCapture.containerObject(forPath: path)
+    }
+
+    func liveScrollContainer(matching scrollView: UIScrollView) -> AccessibilityContainer? {
+        liveCapture.scrollableContainerViews.first { _, ref in
+            ref.view === scrollView
+        }?.key
+    }
+
+    func liveContainerStableId(for container: AccessibilityContainer) -> HeistContainer? {
+        liveCapture.containerStableIds[container]
+    }
+
+    func liveContainerStableId(forPath path: TreePath) -> HeistContainer? {
+        liveCapture.containerStableIdsByPath[path]
+    }
+
+    func liveScrollableContainerView(forPath path: TreePath) -> UIView? {
+        liveCapture.scrollableContainerViewsByPath[path]?.view
     }
 
     private func clearCommittedScreen() {

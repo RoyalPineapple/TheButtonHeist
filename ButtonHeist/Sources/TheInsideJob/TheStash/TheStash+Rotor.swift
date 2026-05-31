@@ -118,9 +118,7 @@ private extension TheStash {
     /// Return the known `ScreenElement` corresponding to a UIKit accessibility
     /// object by live object identity.
     func knownObject(_ object: NSObject) -> ScreenElement? {
-        guard let heistId = currentScreen.liveCapture.elementRefs.first(where: { _, ref in
-            ref.object === object
-        })?.key,
+        guard let heistId = liveElementHeistId(matching: object),
             let cached = currentScreen.findElement(heistId: heistId)
         else {
             return nil

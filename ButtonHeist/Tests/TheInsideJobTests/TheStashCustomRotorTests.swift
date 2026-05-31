@@ -94,7 +94,7 @@ final class TheStashRotorTests: XCTestCase {
             XCTFail("Expected live parse result")
             return
         }
-        stash.currentScreen = screen
+        stash.installScreenForTesting(screen)
 
         let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "rotor_host"))).resolved
         guard let resolvedHost else {
@@ -158,7 +158,7 @@ final class TheStashRotorTests: XCTestCase {
             XCTFail("Expected live parse result")
             return
         }
-        stash.currentScreen = screen
+        stash.installScreenForTesting(screen)
 
         let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "system_rotor_host"))).resolved
         guard let resolvedHost else {
@@ -354,10 +354,10 @@ final class TheStashRotorTests: XCTestCase {
                 frame: CGRect(x: 20, y: 120, width: 280, height: 44)
             )
         )
-        brains.stash.currentScreen = Screen(
+        brains.stash.installScreenForTesting(Screen(
             semantic: SemanticScreen(elements: elements, containers: screen.semantic.containers),
             liveCapture: screen.liveCapture
-        )
+        ))
 
         let search = await brains.actions.executeRotor(
             RotorTarget(
@@ -443,7 +443,7 @@ final class TheStashRotorTests: XCTestCase {
             XCTFail("Expected live parse result")
             return
         }
-        stash.currentScreen = screen
+        stash.installScreenForTesting(screen)
 
         let resolvedTextView = stash.resolveTarget(.matcher(ElementMatcher(identifier: "mentions_text"))).resolved
         guard let resolvedTextView else {
@@ -508,7 +508,7 @@ final class TheStashRotorTests: XCTestCase {
         host.accessibilityCustomRotors = [
             UIAccessibilityCustomRotor(name: "Warnings") { _ in nil }
         ]
-        stash.currentScreen = Screen(
+        stash.installScreenForTesting(Screen(
             elements: [screenElement.heistId: screenElement],
             hierarchy: [.element(element, traversalIndex: 0)],
             containerStableIds: [:],
@@ -518,7 +518,7 @@ final class TheStashRotorTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         let outcome = stash.performRotor(
             selection: .named("Errors"),

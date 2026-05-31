@@ -424,10 +424,10 @@ final class TheBrainsActionTests: XCTestCase {
             frame: CGRect(x: 80, y: 180, width: 180, height: 44),
             activationPoint: CGPoint(x: 170, y: 202)
         )
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
-        )
+        ))
         let target = try matcherTarget(heistId: "quantity_0", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(target)
@@ -443,10 +443,10 @@ final class TheBrainsActionTests: XCTestCase {
             frame: CGRect(x: 80, y: 180, width: 180, height: 44),
             activationPoint: CGPoint(x: 170, y: 202)
         )
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: [(currentElement, "checkout_button")],
             objects: ["checkout_button": currentObject]
-        )
+        ))
 
         let result = await brains.actions.executeIncrement(.heistId("quantity_0"))
 
@@ -475,10 +475,10 @@ final class TheBrainsActionTests: XCTestCase {
             traits: .adjustable
         )
         let liveObject = AdjustableGeometryView(frame: .zero, activationPoint: CGPoint(x: 170, y: 202))
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
-        )
+        ))
         let target = try matcherTarget(heistId: "quantity_0", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(target)
@@ -581,10 +581,10 @@ final class TheBrainsActionTests: XCTestCase {
             frame: CGRect(x: 10, y: 10, width: 120, height: 44),
             respondsToUserInteraction: false
         )
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: [(staleElement, "stale_refreshed_slider")],
             objects: ["stale_refreshed_slider": nil]
-        )
+        ))
         guard let staleResolved = brains.stash.resolveTarget(
             .matcher(ElementMatcher(identifier: "refreshed_slider"))
         ).resolved else {
@@ -1043,18 +1043,18 @@ final class TheBrainsActionTests: XCTestCase {
         elements: [(AccessibilityElement, String)],
         objects: [HeistId: NSObject?] = [:]
     ) {
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             elements: elements.map { ($0.0, $0.1) },
             objects: objects
-        )
+        ))
     }
 
     private func installScreen(
         offViewport: [Screen.OffViewportEntry]
     ) {
-        brains.stash.currentScreen = .makeForTests(
+        brains.stash.installScreenForTesting(.makeForTests(
             offViewport: offViewport
-        )
+        ))
     }
 
     private func installModalWindow(rootView: UIView) throws -> UIWindow {

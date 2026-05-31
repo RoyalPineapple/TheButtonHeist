@@ -79,14 +79,14 @@ final class TheStashResolutionTests: XCTestCase {
                 heistIdByElement[entry.element] = entry.heistId
             }
         }
-        bagman.currentScreen = Screen(
+        bagman.installScreenForTesting(Screen(
             elements: elements,
             hierarchy: hierarchyNodes,
             containerStableIds: [:],
             heistIdByElement: heistIdByElement,
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
     }
 
     func testContainerTargetResolutionUsesCommittedSemanticContainers() {
@@ -96,7 +96,7 @@ final class TheStashResolutionTests: XCTestCase {
             frame: AccessibilityRect(CGRect(x: 0, y: 900, width: 240, height: 80)),
             customActions: [.init(name: "Archive")]
         )
-        bagman.currentScreen = Screen(
+        bagman.installScreenForTesting(Screen(
             semantic: SemanticScreen(
                 elements: [:],
                 containers: [
@@ -109,7 +109,7 @@ final class TheStashResolutionTests: XCTestCase {
                 ]
             ),
             liveCapture: .empty
-        )
+        ))
 
         switch bagman.resolveContainerTarget(
             ContainerMatcher(stableId: "semantic_actions__actions"),
@@ -169,7 +169,7 @@ final class TheStashResolutionTests: XCTestCase {
             identifier: "quantity_stepper",
             traits: .adjustable
         )
-        bagman.currentScreen = Screen.makeForTests(elements: [(currentElement, "quantity_1")])
+        bagman.installScreenForTesting(Screen.makeForTests(elements: [(currentElement, "quantity_1")]))
 
         let target = ElementTarget.heistId("quantity_0")
 
@@ -205,10 +205,10 @@ final class TheStashResolutionTests: XCTestCase {
         let object = UIAccessibilityElement(accessibilityContainer: NSObject())
         object.accessibilityFrame = sourceFrame
         object.accessibilityActivationPoint = sourcePoint
-        bagman.currentScreen = Screen.makeForTests(
+        bagman.installScreenForTesting(Screen.makeForTests(
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": object]
-        )
+        ))
 
         let capture = AccessibilityTrace.Capture(
             sequence: 1,
@@ -656,14 +656,14 @@ final class TheStashResolutionTests: XCTestCase {
             element: offScreen
         )
 
-        bagman.currentScreen = Screen(
+        bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [],
             containerStableIds: [:],
             heistIdByElement: [:],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         guard let resolved = bagman.resolveTarget(.heistId("below_fold_button")).resolved else {
             XCTFail("Known-only heistId should still resolve")
@@ -676,7 +676,7 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
 
-        bagman.currentScreen = Screen(
+        bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(offScreen, traversalIndex: 0)],
             containerStableIds: [:],
@@ -686,7 +686,7 @@ final class TheStashResolutionTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         let refreshed = bagman.resolveTarget(.heistId("below_fold_button")).resolved
         XCTAssertNotNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
@@ -714,7 +714,7 @@ final class TheStashResolutionTests: XCTestCase {
             contentSpaceOrigin: nil,
             element: visible
         )
-        bagman.currentScreen = Screen(
+        bagman.installScreenForTesting(Screen(
             elements: [entry.heistId: entry],
             hierarchy: [.element(visible, traversalIndex: 0)],
             containerStableIds: [:],
@@ -724,7 +724,7 @@ final class TheStashResolutionTests: XCTestCase {
             ],
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
-        )
+        ))
 
         guard let resolved = bagman.resolveTarget(.heistId("button_visible")).resolved else {
             XCTFail("Expected visible target to resolve")
