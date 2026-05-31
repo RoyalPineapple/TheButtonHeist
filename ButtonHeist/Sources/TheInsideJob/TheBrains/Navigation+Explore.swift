@@ -15,6 +15,12 @@ extension Navigation {
         let origins: [CGPoint?]
     }
 
+    fileprivate struct ContainerScan {
+        var accumulated: [AccessibilityElement]
+        var accumulatedOrigins: [CGPoint?]
+        var originByElement: [AccessibilityElement: CGPoint?]
+    }
+
     fileprivate struct ContainerExploration {
         let container: AccessibilityContainer
         let scrollTarget: ScrollableTarget
@@ -92,7 +98,7 @@ extension Navigation {
             let batch = sortedPendingContainers(in: exploration)
 
             for container in batch {
-                guard let containerExploration = containerExploration(for: container) else {
+                guard let containerExploration = prepareContainerExploration(for: container) else {
                     exploration.markExplored(container)
                     continue
                 }
@@ -118,52 +124,23 @@ extension Navigation {
         let savedVisualOrigin = containerExploration.savedVisualOrigin
         await moveToLeadingEdge(containerExploration, exploration: &exploration)
 
-        var originByElement = buildOriginIndex()
+        var scan = preparePageScan(in: containerExploration)
+        let foundTarget = await scanForwardPages(
+            containerExploration,
+            target: target,
+            scan: &scan,
+            exploration: &exploration
+        )
 
-        let initialPage = visibleElementsInContainer(containerExploration.container)
-        var accumulated = initialPage.elements
-        var accumulatedOrigins = initialPage.origins
-
-        for _ in 0..<ScreenManifest.maxScrollsPerContainer {
-            let proof = await scrollOnePageAndSettle(
-                containerExploration.scrollTarget,
-                direction: containerExploration.direction,
-                animated: false
-            )
-            guard proof.result == .moved else { break }
-            exploration.manifest.scrollCount += 1
-            parseVisiblePage(into: &exploration)
-            originByElement = buildOriginIndex()
-
-            let page = visibleElementsInContainer(containerExploration.container)
-            let result = reconcilePage(
-                accumulated: accumulated,
-                accumulatedOrigins: accumulatedOrigins,
-                page: page.elements,
-                pageOrigins: page.origins,
-                orderingAxis: containerExploration.hasHOverflow ? .horizontal : .vertical
-            )
-            accumulated = result.elements
-            accumulatedOrigins = accumulated.map { originByElement[$0] ?? nil }
-
-            if result.inserted.isEmpty { break }
-
-            if let target, hasTerminalExplorationResolution(target) {
-                await restoreAndMarkExplored(
-                    containerExploration,
-                    savedVisualOrigin: savedVisualOrigin,
-                    exploration: &exploration
-                )
-                return true
-            }
-        }
-
-        await restoreAndMarkExplored(
+        await restoreContainerPosition(
             containerExploration,
             savedVisualOrigin: savedVisualOrigin,
             exploration: &exploration
         )
-        exploration.addDiscoveredContainers(stash.currentHierarchy.scrollableContainers)
+        exploration.markExplored(containerExploration.container)
+
+        guard !foundTarget else { return true }
+        discoverNewContainers(in: &exploration)
         return false
     }
 
@@ -183,7 +160,7 @@ extension Navigation {
             .map(\.container)
     }
 
-    private func containerExploration(for container: AccessibilityContainer) -> ContainerExploration? {
+    private func prepareContainerExploration(for container: AccessibilityContainer) -> ContainerExploration? {
         guard case .scrollable(let contentSize) = container.type else { return nil }
 
         if let view = stash.scrollableContainerViews[container],
@@ -205,6 +182,43 @@ extension Navigation {
         )
     }
 
+    private func preparePageScan(in containerExploration: ContainerExploration) -> ContainerScan {
+        let initialPage = visibleElementsInContainer(containerExploration.container)
+        return ContainerScan(
+            accumulated: initialPage.elements,
+            accumulatedOrigins: initialPage.origins,
+            originByElement: buildOriginIndex()
+        )
+    }
+
+    private func scanForwardPages(
+        _ containerExploration: ContainerExploration,
+        target: ElementTarget?,
+        scan: inout ContainerScan,
+        exploration: inout SemanticExploration
+    ) async -> Bool {
+        for _ in 0..<ScreenManifest.maxScrollsPerContainer {
+            let proof = await scrollOnePageAndSettle(
+                containerExploration.scrollTarget,
+                direction: containerExploration.direction,
+                animated: false
+            )
+            guard proof.result == .moved else { return false }
+            exploration.manifest.scrollCount += 1
+
+            guard absorbVisiblePage(in: &exploration) else { return false }
+            scan.originByElement = buildOriginIndex()
+
+            let result = reconcileVisiblePage(in: containerExploration, scan: &scan)
+            guard !result.inserted.isEmpty else { return false }
+
+            if let target, hasTerminalExplorationResolution(target) {
+                return true
+            }
+        }
+        return false
+    }
+
     private func moveToLeadingEdge(
         _ containerExploration: ContainerExploration,
         exploration: inout SemanticExploration
@@ -224,7 +238,7 @@ extension Navigation {
                     animated: false
                 )
                 if proof.result == .moved {
-                    parseVisiblePage(into: &exploration)
+                    _ = absorbVisiblePage(in: &exploration)
                 }
                 if proof.result == .unchanged || stash.visibleIds == proof.previousVisibleIds {
                     break
@@ -233,13 +247,31 @@ extension Navigation {
         }
     }
 
-    private func parseVisiblePage(into exploration: inout SemanticExploration) {
-        guard let parsed = stash.parse() else { return }
+    private func absorbVisiblePage(in exploration: inout SemanticExploration) -> Bool {
+        guard let parsed = stash.parse() else { return false }
         stash.commitVisiblePage(parsed)
         exploration.absorb(parsed)
+        return true
     }
 
-    private func restoreAndMarkExplored(
+    private func reconcileVisiblePage(
+        in containerExploration: ContainerExploration,
+        scan: inout ContainerScan
+    ) -> PageReconciliation {
+        let page = visibleElementsInContainer(containerExploration.container)
+        let result = reconcilePage(
+            accumulated: scan.accumulated,
+            accumulatedOrigins: scan.accumulatedOrigins,
+            page: page.elements,
+            pageOrigins: page.origins,
+            orderingAxis: containerExploration.hasHOverflow ? .horizontal : .vertical
+        )
+        scan.accumulated = result.elements
+        scan.accumulatedOrigins = scan.accumulated.map { scan.originByElement[$0] ?? nil }
+        return result
+    }
+
+    private func restoreContainerPosition(
         _ containerExploration: ContainerExploration,
         savedVisualOrigin: CGPoint?,
         exploration: inout SemanticExploration
@@ -250,7 +282,10 @@ extension Navigation {
             await tripwire.yieldFrames(2)
             exploration.absorb(stash.refresh())
         }
-        exploration.markExplored(containerExploration.container)
+    }
+
+    private func discoverNewContainers(in exploration: inout SemanticExploration) {
+        exploration.addDiscoveredContainers(stash.currentHierarchy.scrollableContainers)
     }
 
     private func visibleElementsInContainer(_ container: AccessibilityContainer) -> ContainerPage {

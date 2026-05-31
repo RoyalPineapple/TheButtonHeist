@@ -1,0 +1,132 @@
+#if canImport(UIKit) && canImport(AccessibilitySnapshotParser)
+import AccessibilitySnapshotParser
+import CoreGraphics
+import UIKit
+
+// MARK: - Safe Numeric Conversions
+
+/// Convert a `CGFloat` to `Int` without trapping on pathological inputs.
+///
+/// `Int(_:)` traps with a Swift runtime SIGTRAP when the input is non-finite
+/// (NaN, +/-infinity) or finite-but-out-of-range (e.g. `1e100`,
+/// `CGFloat.greatestFiniteMagnitude`). Accessibility geometry can contain
+/// those values, and fingerprinting must not let one poisoned frame crash parse.
+///
+/// For any finite value where `Int(cgFloat)` already succeeds, this returns the
+/// same value. Only inputs that would trap are clamped to `Int.min`, `Int.max`,
+/// or `0`.
+func safeInt(_ cgFloat: CGFloat) -> Int {
+    guard cgFloat.isFinite else { return 0 }
+    if cgFloat >= CGFloat(Int.max) { return Int.max }
+    if cgFloat <= CGFloat(Int.min) { return Int.min }
+    return Int(cgFloat)
+}
+
+// MARK: - Safe Path Bounds
+
+extension UIBezierPath {
+    /// Bounds that won't trap on degenerate paths.
+    ///
+    /// `UIBezierPath.bounds` and `cgPath.boundingBoxOfPath` can return `.null`
+    /// for empty paths and may carry non-finite coordinates when callers feed
+    /// in NaN or infinity. Returns `.zero` for any non-finite result so callers
+    /// can hash the rect safely.
+    var safeBounds: CGRect {
+        guard !isEmpty else { return .zero }
+        let rect = cgPath.boundingBoxOfPath
+        guard !rect.isNull,
+              rect.origin.x.isFinite,
+              rect.origin.y.isFinite,
+              rect.size.width.isFinite,
+              rect.size.height.isFinite
+        else { return .zero }
+        return rect
+    }
+}
+
+// MARK: - Content Fingerprint
+
+extension AccessibilityElement {
+    /// Identity hash based on content only: no traversal index, no window-space
+    /// frame when stable content-space geometry is available.
+    ///
+    /// - Parameter contentSpaceOrigin: Position in a scroll view's content
+    ///   coordinate space. When nil, the window-space frame origin is used.
+    func fingerprint(contentSpaceOrigin: CGPoint?) -> Int {
+        var hasher = Hasher()
+        hasher.combine(label)
+        hasher.combine(identifier)
+        hasher.combine(value)
+        hasher.combine(traits)
+        if let origin = contentSpaceOrigin {
+            hasher.combine(safeInt(origin.x))
+            hasher.combine(safeInt(origin.y))
+        } else {
+            switch shape {
+            case let .frame(rect):
+                hasher.combine(safeInt(rect.origin.x))
+                hasher.combine(safeInt(rect.origin.y))
+            case let .path(path):
+                let bounds = safePathBounds(path)
+                hasher.combine(safeInt(bounds.origin.x))
+                hasher.combine(safeInt(bounds.origin.y))
+            }
+        }
+        switch shape {
+        case let .frame(rect):
+            hasher.combine(safeInt(rect.size.width))
+            hasher.combine(safeInt(rect.size.height))
+        case let .path(path):
+            let bounds = safePathBounds(path)
+            hasher.combine(safeInt(bounds.size.width))
+            hasher.combine(safeInt(bounds.size.height))
+        }
+        return hasher.finalize()
+    }
+
+    /// Convenience fingerprint using window-space geometry.
+    var contentFingerprint: Int {
+        fingerprint(contentSpaceOrigin: nil)
+    }
+}
+
+extension AccessibilityHierarchy {
+    /// Content-only fingerprint for a hierarchy node. Ignores traversal indices.
+    var contentFingerprint: Int {
+        folded(
+            onElement: { element, _ in
+                var hasher = Hasher()
+                hasher.combine(0)
+                hasher.combine(element.contentFingerprint)
+                return hasher.finalize()
+            },
+            onContainer: { container, childFingerprints in
+                var hasher = Hasher()
+                hasher.combine(1)
+                hasher.combine(container)
+                for childFingerprint in childFingerprints {
+                    hasher.combine(childFingerprint)
+                }
+                return hasher.finalize()
+            }
+        )
+    }
+}
+
+func contentFingerprints(
+    for elements: [AccessibilityElement],
+    origins: [CGPoint?]
+) -> [Int] {
+    zip(elements, origins).map { element, origin in
+        element.fingerprint(contentSpaceOrigin: origin)
+    }
+}
+
+private func safePathBounds(_ pathElements: [AccessibilityPathElement]) -> CGRect {
+    let path = UIBezierPath()
+    for element in pathElements {
+        element.apply(to: path)
+    }
+    return path.safeBounds
+}
+#endif // canImport(UIKit) && canImport(AccessibilitySnapshotParser)

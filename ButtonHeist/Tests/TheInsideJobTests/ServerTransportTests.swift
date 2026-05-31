@@ -1,4 +1,5 @@
 import XCTest
+import TheScore
 @testable import TheInsideJob
 
 final class ServerTransportTests: XCTestCase {
@@ -40,7 +41,9 @@ final class ServerTransportTests: XCTestCase {
     }
 
     func testTransportEventStreamDropsNewestWhenBufferLimitIsReached() {
-        let (stream, continuation) = ServerTransport.makeEventStream()
+        let (stream, continuation) = TransportEventStream.makeEventStream(
+            bufferLimit: ServerTransport.eventStreamBufferLimit
+        )
         defer {
             continuation.finish()
             withExtendedLifetime(stream) {}
@@ -55,5 +58,46 @@ final class ServerTransportTests: XCTestCase {
         guard case .dropped = continuation.yield(.clientDisconnected(clientId: ServerTransport.eventStreamBufferLimit)) else {
             return XCTFail("Expected newest transport event to drop when the buffer limit is reached")
         }
+    }
+
+    @MainActor
+    func testAdvertiseWithoutActiveListenerDoesNotPublish() {
+        let transport = ServerTransport()
+
+        transport.advertise(serviceName: "Inactive")
+
+        XCTAssertFalse(transport.isAdvertisingForTesting)
+    }
+
+    @MainActor
+    func testBonjourTXTUpdatesPreservePreviousKeys() {
+        let advertisement = BonjourAdvertisement()
+        defer { advertisement.stop() }
+
+        advertisement.publish(
+            serviceName: "TXT Test",
+            port: 12345,
+            tlsFingerprint: "fingerprint",
+            simulatorUDID: "sim",
+            additionalTXT: ["first": "one"]
+        )
+        advertisement.updateTXTRecord(["second": "two"])
+
+        let txt = advertisement.currentTXTRecord
+        XCTAssertEqual(txt["first"].flatMap { String(data: $0, encoding: .utf8) }, "one")
+        XCTAssertEqual(txt["second"].flatMap { String(data: $0, encoding: .utf8) }, "two")
+        XCTAssertEqual(txt[TXTRecordKey.simUDID.rawValue].flatMap { String(data: $0, encoding: .utf8) }, "sim")
+        XCTAssertEqual(txt[TXTRecordKey.certFingerprint.rawValue].flatMap { String(data: $0, encoding: .utf8) }, "fingerprint")
+    }
+
+    @MainActor
+    func testStopUnpublishesBonjour() {
+        let advertisement = BonjourAdvertisement()
+        advertisement.publish(serviceName: "Stop Test", port: 12345, tlsFingerprint: "fingerprint")
+
+        advertisement.stop()
+
+        XCTAssertFalse(advertisement.isAdvertising)
+        XCTAssertTrue(advertisement.currentTXTRecord.isEmpty)
     }
 }
