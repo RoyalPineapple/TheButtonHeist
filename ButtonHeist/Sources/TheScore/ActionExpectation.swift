@@ -2,44 +2,6 @@ import Foundation
 
 // MARK: - Action Expectations
 
-public struct NonEmptyActionExpectations: Sendable, Equatable {
-    public let elements: [ActionExpectation]
-
-    public init(_ elements: [ActionExpectation]) throws {
-        guard !elements.isEmpty else {
-            throw DecodingError.dataCorrupted(.init(
-                codingPath: [],
-                debugDescription: "Compound expectation requires at least one expectation"
-            ))
-        }
-        self.elements = elements
-    }
-}
-
-extension NonEmptyActionExpectations: ExpressibleByArrayLiteral {
-    public init(arrayLiteral elements: ActionExpectation...) {
-        precondition(!elements.isEmpty, "Compound expectation requires at least one expectation")
-        self.elements = elements
-    }
-}
-
-extension NonEmptyActionExpectations: RandomAccessCollection {
-    public typealias Index = Array<ActionExpectation>.Index
-
-    public var startIndex: Index { elements.startIndex }
-    public var endIndex: Index { elements.endIndex }
-
-    public subscript(position: Index) -> ActionExpectation {
-        elements[position]
-    }
-}
-
-extension NonEmptyActionExpectations: CustomStringConvertible {
-    public var description: String {
-        elements.map(\.description).joined(separator: ", ")
-    }
-}
-
 /// Outcome signal classifiers for actions.
 /// Attached to a request (not to a target type) so any action can opt in.
 ///
@@ -67,7 +29,6 @@ extension NonEmptyActionExpectations: CustomStringConvertible {
 ///  "oldValue": "...", "newValue": "..."}   // all payload fields optional
 /// {"type": "element_appeared", "matcher": { ...ElementMatcher... }}
 /// {"type": "element_disappeared", "matcher": { ...ElementMatcher... }}
-/// {"type": "compound", "expectations": [ ...ActionExpectation... ]}
 /// ```
 /// See `docs/WIRE-PROTOCOL.md` for the full shape.
 public enum ActionExpectation: Sendable, Equatable {
@@ -87,8 +48,6 @@ public enum ActionExpectation: Sendable, Equatable {
     /// Expected an element matching this predicate to disappear from the delta's removed list.
     /// Validation requires elements derived from the pre-action capture to resolve removed heistIds to matchers.
     case elementDisappeared(ElementMatcher)
-    /// Compound: all sub-expectations must be met.
-    case compound(NonEmptyActionExpectations)
 
 }
 
@@ -110,8 +69,6 @@ extension ActionExpectation: CustomStringConvertible {
             return ScoreDescription.call("element_appeared", [matcher.description])
         case .elementDisappeared(let matcher):
             return ScoreDescription.call("element_disappeared", [matcher.description])
-        case .compound(let expectations):
-            return "compound(\(expectations))"
         }
     }
 }
@@ -130,7 +87,6 @@ extension ActionExpectation: Codable {
         case elementUpdated = "element_updated"
         case elementAppeared = "element_appeared"
         case elementDisappeared = "element_disappeared"
-        case compound
     }
 
     /// Discriminator strings accepted in object-form expectation payloads.
@@ -142,10 +98,6 @@ extension ActionExpectation: Codable {
 
     private enum MatcherKey: String, CodingKey, CaseIterable {
         case type, matcher
-    }
-
-    private enum CompoundKey: String, CodingKey, CaseIterable {
-        case type, expectations
     }
 
     public init(from decoder: Decoder) throws {
@@ -184,11 +136,6 @@ extension ActionExpectation: Codable {
             let container = try decoder.container(keyedBy: MatcherKey.self)
             let matcher = try container.decode(ElementMatcher.self, forKey: .matcher)
             self = .elementDisappeared(matcher)
-        case .compound:
-            try Self.rejectUnknownKeys(from: decoder, allowed: CompoundKey.self, expectationType: wireType.rawValue)
-            let container = try decoder.container(keyedBy: CompoundKey.self)
-            let expectations = try container.decode([ActionExpectation].self, forKey: .expectations)
-            self = .compound(try NonEmptyActionExpectations(expectations))
         }
     }
 
@@ -253,10 +200,6 @@ extension ActionExpectation: Codable {
             var container = encoder.container(keyedBy: MatcherKey.self)
             try container.encode(WireType.elementDisappeared.rawValue, forKey: .type)
             try container.encode(matcher, forKey: .matcher)
-        case .compound(let expectations):
-            var container = encoder.container(keyedBy: CompoundKey.self)
-            try container.encode(WireType.compound.rawValue, forKey: .type)
-            try container.encode(expectations.elements, forKey: .expectations)
         }
     }
 }
@@ -336,23 +279,6 @@ extension ActionExpectation {
                 preActionElements: preActionElements
             )
 
-        case .compound(let expectations):
-            var failures: [String] = []
-            for expectation in expectations {
-                let subResult = expectation.validate(
-                    against: result, preActionElements: preActionElements
-                )
-                if !subResult.met {
-                    failures.append("\(expectation): \(subResult.actual ?? "failed")")
-                }
-            }
-            if failures.isEmpty {
-                return ExpectationResult(met: true, expectation: self, actual: nil)
-            }
-            return ExpectationResult(
-                met: false, expectation: self,
-                actual: failures.joined(separator: "; ")
-            )
         }
     }
 

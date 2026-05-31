@@ -2138,26 +2138,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationTypedCompoundBadNestedFieldNamesField() async {
-        XCTAssertThrowsError(try parseTypedExpectation(.object([
-            "type": .string("compound"),
-            "expectations": .array([
-                .object([
-                    "type": .string("element_updated"),
-                    "property": .int(7),
-                ]),
-            ]),
-        ]))) { error in
-            guard let error = error as? SchemaValidationError else {
-                XCTFail("Expected SchemaValidationError, got \(error)")
-                return
-            }
-            XCTAssertEqual(error.field, "expectations[0].property")
-            XCTAssertEqual(error.expected, "string")
-        }
-    }
-
-    @ButtonHeistActor
     func testParseExpectationDiscriminatorElementAppearedWithoutMatcherThrows() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object(["type": .string("element_appeared")]))) { error in
             guard let error = error as? SchemaValidationError else {
@@ -2171,39 +2151,16 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationDiscriminatorCompound() async throws {
-        let result = try parseTypedExpectation(.object([
-            "type": .string("compound"),
-            "expectations": .array([
-                .object(["type": .string("screen_changed")]),
-                .object(["type": .string("element_updated"), "heistId": .string("counter")]),
-            ]),
-        ]))
-        XCTAssertEqual(
-            result,
-            .compound([
-                .screenChanged,
-                .elementUpdated(heistId: "counter"),
-            ])
-        )
-    }
-
-    @ButtonHeistActor
-    func testParseExpectationDiscriminatorCompoundRejectsStringSubExpectation() async {
+    func testParseExpectationRejectsCompoundType() async {
         XCTAssertThrowsError(try parseTypedExpectation(.object([
             "type": .string("compound"),
-            "expectations": .array([
-                .string("screen_changed"),
-                .object(["type": .string("elements_changed")]),
-            ]),
         ]))) { error in
-            guard let error = error as? SchemaValidationError else {
-                XCTFail("Expected SchemaValidationError, got \(error)")
+            guard case FenceError.invalidRequest(let message) = error else {
+                XCTFail("Expected FenceError.invalidRequest, got \(error)")
                 return
             }
-            XCTAssertEqual(error.field, "expectations[0]")
-            XCTAssertEqual(error.observed, #"string "screen_changed""#)
-            XCTAssertEqual(error.expected, "object")
+            XCTAssertTrue(message.contains(#"Unknown expectation type: "compound""#), message)
+            XCTAssertTrue(message.contains("screen_changed"), message)
         }
     }
 
@@ -2810,7 +2767,7 @@ final class TheFenceHandlerTests: XCTestCase {
         func nested(_ depth: Int) -> HeistValue {
             depth == 0
                 ? .object(["type": .string("screen_changed")])
-                : .object(["expectations": .array([nested(depth - 1)])])
+                : .object(["unexpected": .array([nested(depth - 1)])])
         }
         await assertValidationError(
             command: .runBatch,
