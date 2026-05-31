@@ -169,6 +169,33 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testAuthApprovalPendingRecordsDiagnosticWithoutMarkingConnected() async {
+        let handoff = TheHandoff()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        let mock = connectPendingMockHandoff(handoff, device: device)
+        var statuses: [String] = []
+        handoff.onStatus = { statuses.append($0) }
+
+        handoff.handleServerMessage(
+            .authApprovalPending(AuthApprovalPendingPayload(
+                message: "Waiting for user approval",
+                hint: "Approve on device"
+            )),
+            requestId: nil
+        )
+
+        assertConnecting(handoff.connectionPhase, device: device)
+        XCTAssertFalse(handoff.isConnected)
+        XCTAssertNil(handoff.connectedDevice)
+        XCTAssertEqual(
+            handoff.connectionDiagnosticFailure,
+            .disconnected(.authApprovalPending("Waiting for user approval"))
+        )
+        XCTAssertEqual(statuses, ["Approve on device"])
+        XCTAssertEqual(mock.disconnectCount, 0)
+    }
+
+    @ButtonHeistActor
     func testSessionLockedFailsHandoffAndClosesTransport() async {
         let handoff = TheHandoff()
         let mock = connectPendingMockHandoff(handoff)
@@ -198,6 +225,28 @@ final class TheHandoffStateTests: XCTestCase {
             clientVersion: buttonHeistVersion
         )))
         XCTAssertEqual(mock.disconnectCount, 1)
+    }
+
+    @ButtonHeistActor
+    func testPongResetsKeepaliveCounterAndForwardsRequestScopedPong() async {
+        let handoff = TheHandoff()
+        _ = connectMockHandoff(handoff)
+        var forwarded: [(ServerMessage, String?)] = []
+        handoff.onServerMessage = { message, requestId in
+            forwarded.append((message, requestId))
+        }
+
+        XCTAssertEqual(handoff.tickKeepalive(), 1)
+        XCTAssertEqual(handoff.tickKeepalive(), 2)
+
+        handoff.handleServerMessage(.pong(PongPayload()), requestId: "ping-1")
+
+        XCTAssertEqual(handoff.missedPongCount, 0)
+        XCTAssertEqual(forwarded.count, 1)
+        XCTAssertEqual(forwarded.first?.1, "ping-1")
+        guard case .pong = forwarded.first?.0 else {
+            return XCTFail("Expected request-scoped pong to be forwarded")
+        }
     }
 
     @ButtonHeistActor
@@ -335,6 +384,45 @@ final class TheHandoffStateTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testReconnectControllerRejectsStaleTargetCompletion() async {
+        let controller = HandoffReconnectController()
+        let oldDevice = DiscoveredDevice(host: "127.0.0.1", port: 1111)
+        let newDevice = DiscoveredDevice(host: "127.0.0.1", port: 2222)
+
+        XCTAssertTrue(controller.setup(filter: "OldApp"))
+        guard let oldTarget = controller.targetForDisconnectedDevice(oldDevice) else {
+            return XCTFail("Expected old reconnect target")
+        }
+        controller.run(target: oldTarget) { _ in }
+
+        XCTAssertTrue(controller.setup(filter: "NewApp"))
+        guard let newTarget = controller.targetForDisconnectedDevice(newDevice) else {
+            return XCTFail("Expected new reconnect target")
+        }
+        controller.run(target: newTarget) { _ in }
+
+        XCTAssertFalse(controller.finishSuccess(target: oldTarget))
+        XCTAssertFalse(controller.finishFailure(target: oldTarget))
+        XCTAssertTrue(controller.finishSuccess(target: newTarget))
+    }
+
+    @ButtonHeistActor
+    func testReconnectFailureClearsActiveTarget() async {
+        let controller = HandoffReconnectController()
+        let device = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+
+        XCTAssertTrue(controller.setup(filter: nil))
+        guard let target = controller.targetForDisconnectedDevice(device) else {
+            return XCTFail("Expected reconnect target")
+        }
+        controller.run(target: target) { _ in }
+
+        XCTAssertTrue(controller.finishFailure(target: target))
+        XCTAssertFalse(controller.finishSuccess(target: target))
+        XCTAssertFalse(controller.finishFailure(target: target))
+    }
+
+    @ButtonHeistActor
     func testRetryableDisconnectEntersConnectionLifecycleReconnectPhase() async {
         let handoff = TheHandoff()
         handoff.reconnectInterval = 60
@@ -388,6 +476,27 @@ final class TheHandoffStateTests: XCTestCase {
         await fulfillment(of: [disconnected], timeout: 5)
 
         XCTAssertEqual(connectionCount, 1)
+    }
+
+    @ButtonHeistActor
+    func testForceDisconnectSchedulesReconnectOnlyWhenPolicyAllows() async {
+        let disabledPolicyHandoff = TheHandoff()
+        let disabledPolicyDevice = DiscoveredDevice(host: "127.0.0.1", port: 1234)
+        _ = connectMockHandoff(disabledPolicyHandoff, device: disabledPolicyDevice)
+
+        disabledPolicyHandoff.forceDisconnect()
+
+        assertDisconnected(disabledPolicyHandoff.connectionPhase)
+
+        let enabledPolicyHandoff = TheHandoff()
+        let enabledPolicyDevice = DiscoveredDevice(host: "127.0.0.1", port: 5678)
+        _ = connectMockHandoff(enabledPolicyHandoff, device: enabledPolicyDevice)
+        enabledPolicyHandoff.setupAutoReconnect(filter: nil)
+
+        enabledPolicyHandoff.forceDisconnect()
+
+        assertReconnecting(enabledPolicyHandoff.connectionPhase, device: enabledPolicyDevice)
+        enabledPolicyHandoff.disableAutoReconnect()
     }
 
     @ButtonHeistActor
