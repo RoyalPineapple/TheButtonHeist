@@ -167,20 +167,6 @@ actor TheMuscle {
         ))
     }
 
-    func handleUnauthenticatedMessage(
-        _ clientId: Int,
-        data: Data,
-        respond: @escaping @Sendable (Data) -> Void
-    ) async {
-        let decision = admission.handleUnauthenticatedMessage(
-            clientId,
-            data: data,
-            respond: respond,
-            uiApprovalUnavailableDiagnostic: session.uiApprovalUnavailableDiagnostic()
-        )
-        _ = await resolveAdmissionDecision(decision)
-    }
-
     func handleClientDisconnected(_ clientId: Int) async {
         cancelAuthenticationDeadline(for: clientId)
         await applyAdmissionEffect(admission.removeClient(clientId))
