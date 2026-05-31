@@ -39,7 +39,7 @@ final class InsideJobRuntimeLease {
         job.startLifecycleObservation()
 
         job.tripwire.startPulse()
-        job.brains.startKeyboardObservation()
+        job.brains.safecracker.startKeyboardObservation()
     }
 
     func release(from job: TheInsideJob, policy: ReleasePolicy) -> Task<Void, Never>? {
@@ -69,7 +69,7 @@ extension TheInsideJob {
         }
 
         tripwire.stopPulse()
-        brains.stopKeyboardObservation()
+        brains.safecracker.stopKeyboardObservation()
     }
 }
 
