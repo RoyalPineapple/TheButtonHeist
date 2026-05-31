@@ -142,9 +142,6 @@ public struct ActionResult: Codable, Sendable {
     public let payload: ResultPayload?
     /// Source-of-truth accessibility capture receipt for this action.
     public let accessibilityTrace: AccessibilityTrace?
-    /// Whether the UI was still animating when this result was produced.
-    /// nil means idle (no animations detected).
-    public let animating: Bool?
     /// True when the response represents a settled UI state — either the
     /// AX tree reached multi-cycle stability, or a screen transition
     /// preempted the settle loop and the new screen has been observed via
@@ -163,7 +160,6 @@ public struct ActionResult: Codable, Sendable {
         errorKind: ErrorKind? = nil,
         payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
-        animating: Bool? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) {
@@ -173,7 +169,6 @@ public struct ActionResult: Codable, Sendable {
         self.errorKind = errorKind
         self.payload = payload
         self.accessibilityTrace = accessibilityTrace
-        self.animating = animating
         self.settled = settled
         self.settleTimeMs = settleTimeMs
     }
@@ -185,7 +180,6 @@ public struct ActionResult: Codable, Sendable {
         case errorKind
         case payload
         case accessibilityTrace
-        case animating
         case settled
         case settleTimeMs
     }
@@ -200,7 +194,6 @@ public struct ActionResult: Codable, Sendable {
             errorKind: try container.decodeIfPresent(ErrorKind.self, forKey: .errorKind),
             payload: try container.decodeIfPresent(ResultPayload.self, forKey: .payload),
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
-            animating: try container.decodeIfPresent(Bool.self, forKey: .animating),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
             settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
         )
@@ -214,7 +207,6 @@ public struct ActionResult: Codable, Sendable {
         try container.encodeIfPresent(errorKind, forKey: .errorKind)
         try container.encodeIfPresent(payload, forKey: .payload)
         try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
-        try container.encodeIfPresent(animating, forKey: .animating)
         try container.encodeIfPresent(settled, forKey: .settled)
         try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
     }

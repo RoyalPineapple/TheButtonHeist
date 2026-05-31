@@ -9,7 +9,6 @@ struct PublicActionResponse: FencePublicJSONResponse {
     let message: String?
     let value: String?
     let rotor: PublicRotorResult?
-    let animating: Bool?
     let delta: PublicDelta?
     let screenName: String?
     let screenId: String?
@@ -38,7 +37,6 @@ struct PublicActionResponse: FencePublicJSONResponse {
         } else {
             self.rotor = nil
         }
-        self.animating = result.animating == true ? true : nil
         self.delta = result.accessibilityTrace?.endpointDeltaProjection.map(PublicDelta.init)
         self.screenName = result.accessibilityTrace?.endpointScreenNameProjection
         self.screenId = result.accessibilityTrace?.endpointScreenIdProjection

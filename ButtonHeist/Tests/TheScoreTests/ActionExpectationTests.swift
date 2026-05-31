@@ -355,7 +355,6 @@ final class ActionExpectationTests: XCTestCase {
             payload: value.map { .value($0) },
             accessibilityTrace: delta.map(AccessibilityTrace.projectingForTests)
         )
-        // Note: animating param omitted (defaults to nil)
     }
 
     // MARK: - Round-Trip: associated-value and recursive cases

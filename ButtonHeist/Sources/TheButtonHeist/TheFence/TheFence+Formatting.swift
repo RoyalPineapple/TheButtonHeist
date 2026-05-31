@@ -215,9 +215,6 @@ extension FenceResponse {
             if let delta = result.accessibilityTrace?.endpointDeltaProjection {
                 output += "  \(formatDelta(delta))"
             }
-            if result.animating == true {
-                output += "  (still animating)"
-            }
             return output
         }
         return "Error: \(result.message ?? methodName)"
