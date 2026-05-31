@@ -79,15 +79,6 @@ public enum ClientMessage: Codable, Sendable {
     /// Drag from one point to another
     case drag(DragTarget)
 
-    /// Pinch/zoom gesture
-    case pinch(PinchTarget)
-
-    /// Rotation gesture
-    case rotate(RotateTarget)
-
-    /// Two-finger tap
-    case twoFingerTap(TwoFingerTapTarget)
-
     /// Type text character-by-character by tapping keyboard keys
     case typeText(TypeTextTarget)
 

@@ -158,47 +158,6 @@ extension Actions {
         }
     }
 
-    func executePinch(_ target: PinchTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.centerSelection()
-        let spread = target.resolvedSpread
-        let duration = clampDuration(target.resolvedDuration)
-        return await performPointAction(
-            selection: selection,
-            method: .syntheticPinch
-        ) { center in
-            await self.safecracker.pinch(
-                center: center, scale: CGFloat(target.scale),
-                spread: CGFloat(spread), duration: duration
-            )
-        }
-    }
-
-    func executeRotate(_ target: RotateTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.centerSelection()
-        let radius = target.resolvedRadius
-        let duration = clampDuration(target.resolvedDuration)
-        return await performPointAction(
-            selection: selection,
-            method: .syntheticRotate
-        ) { center in
-            await self.safecracker.rotate(
-                center: center, angle: CGFloat(target.angle),
-                radius: CGFloat(radius), duration: duration
-            )
-        }
-    }
-
-    func executeTwoFingerTap(_ target: TwoFingerTapTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.centerSelection()
-        let spread = target.resolvedSpread
-        return await performPointAction(
-            selection: selection,
-            method: .syntheticTwoFingerTap
-        ) { center in
-            await self.safecracker.twoFingerTap(at: center, spread: CGFloat(spread))
-        }
-    }
-
     private func gestureDispatchResult(
         method: ActionMethod,
         diagnosticPoint: CGPoint,

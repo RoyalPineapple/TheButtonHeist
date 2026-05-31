@@ -135,54 +135,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
     }
 
-    func testClientMessagePinchEncoding() throws {
-        let message = ClientMessage.pinch(PinchTarget(
-            center: .coordinate(ScreenPoint(x: 200, y: 300)),
-            scale: 2.0
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .pinch(let target) = decoded {
-            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 200, y: 300)))
-            XCTAssertEqual(target.scale, 2.0)
-        } else {
-            XCTFail("Expected pinch message")
-        }
-    }
-
-    func testClientMessageRotateEncoding() throws {
-        let message = ClientMessage.rotate(RotateTarget(
-            center: .coordinate(ScreenPoint(x: 150, y: 250)),
-            angle: 1.57
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .rotate(let target) = decoded {
-            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 150, y: 250)))
-            XCTAssertEqual(target.angle, 1.57)
-        } else {
-            XCTFail("Expected rotate message")
-        }
-    }
-
-    func testClientMessageTwoFingerTapEncoding() throws {
-        let message = ClientMessage.twoFingerTap(TwoFingerTapTarget(
-            center: .coordinate(ScreenPoint(x: 100, y: 200)),
-            spread: 50
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .twoFingerTap(let target) = decoded {
-            XCTAssertEqual(target.center, GesturePointSelection.coordinate(ScreenPoint(x: 100, y: 200)))
-            XCTAssertEqual(target.spread, 50)
-        } else {
-            XCTFail("Expected twoFingerTap message")
-        }
-    }
-
     // MARK: - Edit / ResignFirstResponder / WaitForIdle
 
     func testClientMessageEditActionEncoding() throws {

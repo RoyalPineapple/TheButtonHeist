@@ -70,12 +70,6 @@ final class WireCommandParityTests: XCTestCase {
             return ["target": target, "direction": .string(SwipeDirection.left.rawValue)]
         case .drag:
             return ["target": target, "endX": .double(120), "endY": .double(240)]
-        case .pinch:
-            return ["centerX": .double(50), "centerY": .double(60), "scale": .double(1.25)]
-        case .rotate:
-            return ["centerX": .double(50), "centerY": .double(60), "angle": .double(0.5)]
-        case .twoFingerTap:
-            return ["centerX": .double(50), "centerY": .double(60)]
         case .scroll:
             return ["direction": .string(ScrollDirection.down.rawValue)]
         case .scrollToVisible, .elementSearch, .activate, .waitFor:
@@ -128,9 +122,6 @@ final class WireCommandParityTests: XCTestCase {
                 direction: .left
             ))),
             .drag(DragTarget(start: .element(target), end: ScreenPoint(x: 30, y: 40))),
-            .pinch(PinchTarget(center: point, scale: 1.25)),
-            .rotate(RotateTarget(center: point, angle: 0.5)),
-            .twoFingerTap(TwoFingerTapTarget(center: point)),
             .typeText(TypeTextTarget(text: "hello")),
             .scroll(ScrollTarget(direction: .down)),
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),

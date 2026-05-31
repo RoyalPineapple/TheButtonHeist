@@ -15,8 +15,8 @@ import TheScore
 
 /// Cracks open the app's touch system for remote gesture injection.
 ///
-/// Supports tap, long press, swipe, drag, pinch, rotate, and two-finger tap
-/// gestures using synthetic UITouch/UIEvent injection via IOKit.
+/// Supports tap, long press, swipe, and drag gestures using synthetic
+/// UITouch/UIEvent injection via IOKit.
 /// Implementation based on KIF (Keep It Functional) testing framework.
 /// Key iOS 26 fix: Creates a fresh UIEvent for each touch phase
 /// instead of reusing the same event.

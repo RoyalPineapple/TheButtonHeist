@@ -340,9 +340,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case syntheticLongPress
     case syntheticSwipe
     case syntheticDrag
-    case syntheticPinch
-    case syntheticRotate
-    case syntheticTwoFingerTap
     case typeText
     case customAction
     case editAction

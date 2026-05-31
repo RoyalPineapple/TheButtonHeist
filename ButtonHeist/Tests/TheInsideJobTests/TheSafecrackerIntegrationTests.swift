@@ -66,26 +66,6 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         XCTAssertTrue(result)
     }
 
-    // MARK: - Multi-Touch Gestures
-
-    func testPinchCompletesSuccessfully() async {
-        let center = CGPoint(x: 200, y: 400)
-        let result = await safecracker.pinch(center: center, scale: 2.0, spread: 80, duration: 0.1)
-        XCTAssertTrue(result)
-    }
-
-    func testRotateCompletesSuccessfully() async {
-        let center = CGPoint(x: 200, y: 400)
-        let result = await safecracker.rotate(center: center, angle: .pi / 4, radius: 80, duration: 0.1)
-        XCTAssertTrue(result)
-    }
-
-    func testTwoFingerTapCompletesSuccessfully() async {
-        let center = CGPoint(x: 200, y: 400)
-        let result = await safecracker.twoFingerTap(at: center)
-        XCTAssertTrue(result)
-    }
-
     // MARK: - Text Input
 
     func testTypeTextIntoTextField() async throws {
