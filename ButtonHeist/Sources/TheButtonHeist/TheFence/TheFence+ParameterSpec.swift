@@ -55,7 +55,7 @@ public extension FenceParameterKey {
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
     static let endOffset = Self("endOffset"), endX = Self("endX"), endY = Self("endY"), excludeTraits = Self("excludeTraits")
-    static let expect = Self("expect"), expectations = Self("expectations"), heistId = Self("heistId")
+    static let expect = Self("expect"), heistId = Self("heistId")
     static let identifier = Self("identifier"), includeInterface = Self("includeInterface")
     static let inlineData = Self("inlineData"), input = Self("input"), isModalBoundary = Self("isModalBoundary")
     static let label = Self("label"), matcher = Self("matcher"), mode = Self("mode")
@@ -260,12 +260,6 @@ enum FenceParameterBlocks: Sendable {
             param(.oldValue, .string),
             param(.newValue, .string),
             param(.matcher, .object, objectProperties: matcherFields),
-            param(
-                .expectations, .array,
-                arrayItemType: .object,
-                arrayItemProperties: [expectationType],
-                arrayItemAdditionalProperties: true
-            ),
         ]
     )
 

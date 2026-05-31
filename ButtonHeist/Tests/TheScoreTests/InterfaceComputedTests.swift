@@ -170,15 +170,12 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertNil(InterfaceSummary.screenId(for: interface))
     }
 
-    func testActionExpectationDescriptionComposesMatchers() {
-        let expectation = ActionExpectation.compound([
-            .elementAppeared(ElementMatcher(label: "Done", traits: [.button])),
-            .elementUpdated(heistId: "status", property: .value, oldValue: "Off", newValue: "On"),
-        ])
+    func testActionExpectationDescriptionComposesMatcher() {
+        let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "Done", traits: [.button]))
 
         XCTAssertEqual(
             expectation.description,
-            #"compound(element_appeared(matcher(label="Done" traits=[button])), element_updated(heistId="status" property=value oldValue="Off" newValue="On"))"#
+            #"element_appeared(matcher(label="Done" traits=[button]))"#
         )
     }
 

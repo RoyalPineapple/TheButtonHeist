@@ -608,21 +608,5 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.errorKind, .timeout)
     }
 
-    func testWaitForChangeCompoundTimesOutWhenCurrentStatePartiallyMatches() async throws {
-        let label = addLabel("WaitForChange-CompoundPresent")
-        defer { label.removeFromSuperview() }
-
-        let result = await waitForChange(
-            expectation: .compound([
-                .elementAppeared(ElementMatcher(label: "WaitForChange-CompoundPresent")),
-                .elementAppeared(ElementMatcher(label: "WaitForChange-CompoundMissing")),
-            ]),
-            timeout: 0.2
-        )
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .waitForChange)
-        XCTAssertEqual(result.errorKind, .timeout)
-    }
 }
 #endif

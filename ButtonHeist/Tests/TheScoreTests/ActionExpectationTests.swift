@@ -306,40 +306,6 @@ final class ActionExpectationTests: XCTestCase {
         XCTAssertFalse(result.met)
     }
 
-    // MARK: - compound
-
-    func testCompoundCodableRoundTrip() throws {
-        let expectation = ActionExpectation.compound([
-            .elementsChanged,
-            .elementAppeared(ElementMatcher(label: "New", traits: [.staticText])),
-        ])
-        let data = try JSONEncoder().encode(expectation)
-        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
-        XCTAssertEqual(decoded, expectation)
-    }
-
-    func testCompoundAllMet() {
-        let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
-        let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.compound([
-            .elementsChanged,
-            .elementAppeared(ElementMatcher(label: "New Task", traits: [.staticText])),
-        ]).validate(against: action)
-        XCTAssertTrue(result.met)
-    }
-
-    func testCompoundFailsIfAnyUnmet() {
-        let added = [makeElement(label: "New Task", traits: [.staticText])]
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits(added: added)))
-        let action = makeResult(success: true, delta: delta)
-        let result = ActionExpectation.compound([
-            .elementsChanged,
-            .elementAppeared(ElementMatcher(label: "Missing Element")),
-        ]).validate(against: action)
-        XCTAssertFalse(result.met)
-    }
-
     // MARK: - Helpers
 
     private func makeElement(
@@ -405,27 +371,6 @@ final class ActionExpectationTests: XCTestCase {
     func testElementDisappearedRoundTrip() throws {
         let matcher = ElementMatcher(value: "Loading…", excludeTraits: [.selected])
         let expectation = ActionExpectation.elementDisappeared(matcher)
-        let data = try JSONEncoder().encode(expectation)
-        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
-        XCTAssertEqual(decoded, expectation)
-    }
-
-    func testCompoundRoundTrip() throws {
-        let expectation = ActionExpectation.compound([
-            .screenChanged,
-            .elementUpdated(heistId: "counter", property: .value, newValue: "5"),
-            .elementAppeared(ElementMatcher(label: "Success")),
-        ])
-        let data = try JSONEncoder().encode(expectation)
-        let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
-        XCTAssertEqual(decoded, expectation)
-    }
-
-    func testNestedCompoundRoundTrip() throws {
-        let expectation = ActionExpectation.compound([
-            .compound([.screenChanged, .elementsChanged]),
-            .elementAppeared(ElementMatcher(identifier: "deep")),
-        ])
         let data = try JSONEncoder().encode(expectation)
         let decoded = try JSONDecoder().decode(ActionExpectation.self, from: data)
         XCTAssertEqual(decoded, expectation)
