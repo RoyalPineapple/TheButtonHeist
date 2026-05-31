@@ -144,33 +144,22 @@ extension TheFence {
             command: command,
             arguments: CommandArgumentEnvelope(values: values, elementTarget: sourceStep.target)
         )
-        try validateRecordedProjection(sourceStep: sourceStep, parsedRequest: parsedRequest, stepIndex: stepIndex)
-        return parsedRequest
-    }
-
-    private func validateRecordedProjection(
-        sourceStep: HeistStep,
-        parsedRequest: ParsedRequest,
-        stepIndex: Int?
-    ) throws {
-        let projection = try parsedRequest.heistStepProjection()
-        var mismatchedFields: [String] = []
-        if projection.elementTarget != sourceStep.target {
-            mismatchedFields.append("target")
-        }
-        if projection.arguments != sourceStep.arguments {
-            mismatchedFields.append("arguments")
-        }
-        if projection.expectation != sourceStep.expectation {
-            mismatchedFields.append("expectation")
-        }
-        guard mismatchedFields.isEmpty else {
+        let canonicalStep: HeistStep
+        do {
+            canonicalStep = try parsedRequest.heistStepProjection().heistStep(command: command)
+        } catch is HeistStepError {
             let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
             throw FenceError.invalidRequest(
-                prefix + "heist step \(mismatchedFields.joined(separator: ", ")) " +
-                    "must match descriptor-owned recording projection"
+                prefix + "heist step must match descriptor-owned recording projection"
             )
         }
+        guard canonicalStep == sourceStep else {
+            let prefix = stepIndex.map { "Invalid heist step \($0): " } ?? ""
+            throw FenceError.invalidRequest(
+                prefix + "heist step must match descriptor-owned recording projection"
+            )
+        }
+        return parsedRequest
     }
 
     private func heistValue(_ expectation: ActionExpectation) throws -> HeistValue {
