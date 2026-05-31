@@ -338,29 +338,6 @@ extension AccessibilityTrace.Delta: Codable {
     }
 
     private static func rejectUnknownDeltaKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: DeltaUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown accessibility delta field \"\(unknownKey.stringValue)\""
-        ))
-    }
-}
-
-private struct DeltaUnknownKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init?(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "accessibility delta")
     }
 }

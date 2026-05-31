@@ -33,7 +33,7 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownPlaybackKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist playback")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedVersion = try container.decode(Int.self, forKey: .version)
         guard decodedVersion == Self.currentVersion else {
@@ -49,18 +49,6 @@ public struct HeistPlayback: Codable, Sendable, Equatable {
         version = decodedVersion
         app = try container.decode(String.self, forKey: .app)
         steps = try container.decode([HeistStep].self, forKey: .steps)
-    }
-
-    private static func rejectUnknownPlaybackKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown heist playback field \"\(unknownKey.stringValue)\""
-        ))
     }
 }
 
@@ -119,24 +107,12 @@ public struct HeistStep: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownStepKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist playback step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         command = try container.decode(String.self, forKey: .command)
         target = try Self.decodeDurableTarget(from: container, forKey: .target)
         arguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
         expectation = try container.decodeIfPresent(ActionExpectation.self, forKey: .expectation)
-    }
-
-    private static func rejectUnknownStepKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(CodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: DynamicCodingKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown heist playback step field \"\(unknownKey.stringValue)\""
-        ))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -301,22 +277,5 @@ extension HeistValue: CustomStringConvertible {
                 .map { "\(ScoreDescription.quoted($0.key))=\($0.value)" }
             return "{\(fields.joined(separator: ", "))}"
         }
-    }
-}
-
-// MARK: - Dynamic Coding Key
-
-private struct DynamicCodingKey: CodingKey {
-    var stringValue: String
-    var intValue: Int?
-
-    init(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
     }
 }

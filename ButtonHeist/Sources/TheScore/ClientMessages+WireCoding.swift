@@ -14,26 +14,11 @@ private enum RequestEnvelopeCodingKeys: String, CodingKey, CaseIterable {
     case payload
 }
 
-private struct RequestEnvelopeUnknownKey: CodingKey {
-    let stringValue: String
-    let intValue: Int?
-
-    init?(stringValue: String) {
-        self.stringValue = stringValue
-        self.intValue = nil
-    }
-
-    init?(intValue: Int) {
-        self.stringValue = "\(intValue)"
-        self.intValue = intValue
-    }
-}
-
 // MARK: - RequestEnvelope Codable
 
 extension RequestEnvelope {
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownEnvelopeKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: RequestEnvelopeCodingKeys.self, typeName: "request envelope")
         let container = try decoder.container(keyedBy: RequestEnvelopeCodingKeys.self)
         buttonHeistVersion = try container.decode(String.self, forKey: .buttonHeistVersion)
         requestId = try container.decodeIfPresent(String.self, forKey: .requestId)
@@ -55,17 +40,6 @@ extension RequestEnvelope {
         }
     }
 
-    private static func rejectUnknownEnvelopeKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(RequestEnvelopeCodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: RequestEnvelopeUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown request envelope field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 // MARK: - ClientMessage Wire Representation
@@ -178,7 +152,7 @@ extension ClientMessage {
     // MARK: - Codable Conformance
 
     public init(from decoder: Decoder) throws {
-        try Self.rejectUnknownMessageKeys(decoder)
+        try decoder.rejectUnknownKeys(allowed: ClientMessageCodingKeys.self, typeName: "client message")
         let container = try decoder.container(keyedBy: ClientMessageCodingKeys.self)
         let type = try container.decode(ClientWireMessageType.self, forKey: .type)
         let payloadDecoder: Decoder? = container.contains(.payload)
@@ -196,17 +170,6 @@ extension ClientMessage {
         }
     }
 
-    private static func rejectUnknownMessageKeys(_ decoder: Decoder) throws {
-        let knownKeys = Set(ClientMessageCodingKeys.allCases.map(\.stringValue))
-        let dynamicContainer = try decoder.container(keyedBy: RequestEnvelopeUnknownKey.self)
-        guard let unknownKey = dynamicContainer.allKeys.first(where: { !knownKeys.contains($0.stringValue) }) else {
-            return
-        }
-        throw DecodingError.dataCorrupted(.init(
-            codingPath: decoder.codingPath + [unknownKey],
-            debugDescription: "Unknown client message field \"\(unknownKey.stringValue)\""
-        ))
-    }
 }
 
 // MARK: - Helpers
