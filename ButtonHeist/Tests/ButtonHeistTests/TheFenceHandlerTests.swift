@@ -1007,6 +1007,15 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testScrollRejectsCaptureLocalRefContainerAlias() async {
+        await assertValidationError(
+            command: .scroll,
+            arguments: ["container": .object(["captureLocalRef": .string("main_scroll")])],
+            contains: "schema validation failed for container.captureLocalRef"
+        )
+    }
+
+    @ButtonHeistActor
     func testScrollDefaultsDirectionAndAllowsMissingTarget() async {
         await assertPassesValidation(
             command: .scroll

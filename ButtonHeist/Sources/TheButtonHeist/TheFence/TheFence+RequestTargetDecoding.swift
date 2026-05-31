@@ -28,10 +28,10 @@ extension TheFence.CommandArgumentEnvelope {
 
     func scrollContainerTarget() throws -> ScrollContainerTarget? {
         let container = try schemaDictionary("container")
+        try container?.rejectUnknownKeys(allowed: ["stableId"], expected: "valid scroll container field")
         let stableId = try container?.schemaString("stableId") ?? schemaString("stableId")
-        let captureLocalRef = try container?.schemaString("captureLocalRef") ?? schemaString("captureLocalRef")
-        guard stableId != nil || captureLocalRef != nil else { return nil }
-        return ScrollContainerTarget(stableId: stableId, captureLocalRef: captureLocalRef)
+        guard stableId != nil else { return nil }
+        return ScrollContainerTarget(stableId: stableId)
     }
 
     @ButtonHeistActor

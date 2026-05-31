@@ -354,7 +354,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `stableId` | `string` | no | - | - |
-| `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
@@ -375,7 +374,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `stableId` | `string` | no | - | - |
-| `captureLocalRef` | `string` | no | - | - |
 | `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |

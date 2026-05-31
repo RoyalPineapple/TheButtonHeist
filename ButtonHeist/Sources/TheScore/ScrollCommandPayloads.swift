@@ -9,12 +9,19 @@ public enum ScrollDirection: String, Codable, Sendable, CaseIterable {
 public struct ScrollContainerTarget: Codable, Sendable, Equatable {
     /// Stable container id returned by get_interface.
     public let stableId: HeistContainer?
-    /// Capture-local container ref, for clients that retain a local capture handle.
-    public let captureLocalRef: String?
 
-    public init(stableId: HeistContainer? = nil, captureLocalRef: String? = nil) {
+    public init(stableId: HeistContainer? = nil) {
         self.stableId = stableId
-        self.captureLocalRef = captureLocalRef
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case stableId
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ScrollContainerTarget")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(stableId: try container.decodeIfPresent(HeistContainer.self, forKey: .stableId))
     }
 }
 
@@ -22,7 +29,6 @@ extension ScrollContainerTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("container", [
             ScoreDescription.stringField("stableId", stableId),
-            ScoreDescription.stringField("captureLocalRef", captureLocalRef),
         ].compactMap { $0 })
     }
 }

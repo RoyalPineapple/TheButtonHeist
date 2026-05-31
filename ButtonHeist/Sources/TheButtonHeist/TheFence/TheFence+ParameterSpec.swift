@@ -50,7 +50,7 @@ public struct FenceParameterKey: RawRepresentable, Hashable, Sendable {
 public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
     static let command = Self("command")
-    static let container = Self("container"), count = Self("count"), captureLocalRef = Self("captureLocalRef")
+    static let container = Self("container"), count = Self("count")
     static let continuation = Self("continuation")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
@@ -220,7 +220,7 @@ enum FenceParameterBlocks: Sendable {
     static let elementFilter = matcherFields
 
     private static let scrollContainerFields: [FenceParameterSpec] = [
-        param(.stableId, .string), param(.captureLocalRef, .string),
+        param(.stableId, .string),
     ]
 
     static let scrollContainerTarget: [FenceParameterSpec] = scrollContainerFields + [

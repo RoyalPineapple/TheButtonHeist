@@ -83,11 +83,10 @@ extension Navigation {
     }
 
     func scrollPlan(for target: ScrollContainerTarget, requiredAxis axis: ScrollAxis) -> ScrollPlan? {
-        let ids = [target.stableId, target.captureLocalRef].compactMap { $0 }
-        guard !ids.isEmpty else { return nil }
+        guard let targetStableId = target.stableId else { return nil }
         return scrollSearchCandidates(requiredAxis: axis).first { plan in
             guard let stableId = stableId(for: plan.container) else { return false }
-            return ids.contains(stableId)
+            return targetStableId == stableId
         }
     }
 
