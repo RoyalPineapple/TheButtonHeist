@@ -1291,7 +1291,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func batchStepResult(for command: ClientMessage) async -> ActionResult {
         let result = await brains.executeBatchExecutionPlan(BatchPlan(steps: [
-            BatchStep(command: command, expectation: .delivery, deadline: Deadline()),
+            BatchStep(command: command, expectation: nil, deadline: Deadline()),
         ], policy: .continueOnError))
         guard case .batchExecution(let batch) = result.payload,
               let stepResult = batch.steps.first,

@@ -548,7 +548,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                 ),
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline()
                 ),
             ],
@@ -583,7 +583,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             return XCTFail("Expected set_pasteboard command")
         }
         XCTAssertEqual(pasteboardTarget.text, "ready")
-        XCTAssertEqual(decoded.steps[1].expectation, .delivery)
+        XCTAssertNil(decoded.steps[1].expectation)
     }
 
     func testBatchExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {

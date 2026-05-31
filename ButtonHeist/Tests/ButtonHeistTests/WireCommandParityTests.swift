@@ -140,7 +140,7 @@ final class WireCommandParityTests: XCTestCase {
             .waitFor(WaitForTarget(elementTarget: target)),
             .waitForChange(WaitForChangeTarget(timeout: 1)),
             .batchExecutionPlan(BatchPlan(steps: [
-                BatchStep(command: .activate(target), expectation: .delivery, deadline: Deadline()),
+                BatchStep(command: .activate(target), expectation: nil, deadline: Deadline()),
             ])),
         ]
     }

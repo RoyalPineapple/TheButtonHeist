@@ -167,7 +167,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
             let plan = BatchPlan(steps: [
                 BatchStep(
                     command: .activate(.matcher(ElementMatcher(identifier: identifier, traits: [.button]))),
-                    expectation: .delivery,
+                    expectation: nil,
                     deadline: Deadline()
                 ),
             ])
