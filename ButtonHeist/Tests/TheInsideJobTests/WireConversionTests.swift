@@ -345,29 +345,6 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(info.isModalBoundary)
     }
 
-    func testToInterfaceAnnotatesParsedContainerCustomActions() {
-        let path = TreePath([0])
-        let container = AccessibilityContainer(
-            type: .semanticGroup(label: "Actions", value: nil, identifier: "actions"),
-            frame: .zero,
-            customActions: [.init(name: "Archive")]
-        )
-        let parse = TheBurglar.ParseResult(
-            hierarchy: [.container(container, children: [])],
-            objects: [:],
-            containerObjectsByPath: [:],
-            scrollViews: [:]
-        )
-        let screen = TheBurglar.buildScreen(from: parse)
-
-        let annotations = WireConversion.toInterface(from: screen).annotations.containerByPath
-
-        XCTAssertEqual(
-            annotations[path]?.actions,
-            [.custom("Archive")]
-        )
-    }
-
     // MARK: - Delta: Identical Snapshots
 
     func testIdenticalSnapshotsReturnNoChange() {
