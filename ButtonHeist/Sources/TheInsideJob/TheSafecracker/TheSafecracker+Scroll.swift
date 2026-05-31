@@ -165,7 +165,7 @@ extension TheSafecracker {
     func scrollBySwipe(
         frame: CGRect,
         direction: UIAccessibilityScrollDirection,
-        duration: TimeInterval = 0.25
+        duration: GestureDuration = .scrollSwipeDefault
     ) async -> Bool {
         guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.75) else { return false }
         return await swipe(from: path.start, to: path.end, duration: duration)

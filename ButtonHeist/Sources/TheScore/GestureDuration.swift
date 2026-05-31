@@ -4,6 +4,7 @@ public struct GestureDuration: Codable, Sendable, Equatable, CustomStringConvert
     public static let longPressDefault = GestureDuration(validatedSeconds: 0.5)
     public static let swipeDefault = GestureDuration(validatedSeconds: 0.15)
     public static let dragDefault = GestureDuration(validatedSeconds: 0.5)
+    public static let scrollSwipeDefault = GestureDuration(validatedSeconds: 0.12)
 
     public let seconds: Double
 
