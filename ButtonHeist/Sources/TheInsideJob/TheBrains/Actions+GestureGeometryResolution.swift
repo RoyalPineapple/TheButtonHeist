@@ -132,20 +132,6 @@ extension Actions {
         return min(max(value, Self.minGestureDuration), Self.maxGestureDuration)
     }
 
-    func resolveDuration(_ duration: Double?, velocity: Double?, points: [CGPoint]) -> TimeInterval {
-        let result: Double
-        if let resolvedDuration = duration, resolvedDuration.isFinite, resolvedDuration > 0 {
-            result = resolvedDuration
-        } else if let velocity = velocity, velocity.isFinite, velocity > 0 {
-            let totalLength = zip(points, points.dropFirst()).reduce(0.0) { runningTotal, pair in
-                runningTotal + hypot(pair.1.x - pair.0.x, pair.1.y - pair.0.y)
-            }
-            result = totalLength / velocity
-        } else {
-            result = Self.defaultGestureDuration
-        }
-        return clampDuration(result)
-    }
 }
 
 #endif // DEBUG

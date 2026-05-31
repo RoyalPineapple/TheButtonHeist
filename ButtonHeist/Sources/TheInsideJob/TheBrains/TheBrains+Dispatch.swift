@@ -42,10 +42,6 @@ extension TheBrains {
             return await performInteraction(method: .syntheticRotate) { await self.actions.executeRotate(target) }
         case .twoFingerTap(let target):
             return await performInteraction(method: .syntheticTwoFingerTap) { await self.actions.executeTwoFingerTap(target) }
-        case .drawPath(let target):
-            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawPath(target) }
-        case .drawBezier(let target):
-            return await performInteraction(method: .syntheticDrawPath) { await self.actions.executeDrawBezier(target) }
         case .typeText(let target):
             return await performInteraction(method: .typeText) { await self.actions.executeTypeText(target) }
         case .scroll(let target):

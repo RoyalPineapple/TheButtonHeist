@@ -200,56 +200,6 @@ extension Actions {
         }
     }
 
-    func executeDrawPath(_ target: DrawPathTarget) async -> TheSafecracker.InteractionResult {
-        guard target.points.count <= 10_000 else {
-            return .failure(.syntheticDrawPath, message: "Too many points (max 10,000)")
-        }
-        let cgPoints = target.points.map { $0.cgPoint }
-        guard cgPoints.count >= 2 else {
-            return .failure(.syntheticDrawPath, message: "Path requires at least 2 points")
-        }
-        if let failure = geometryFailure(method: .syntheticDrawPath, field: "path point", points: cgPoints) {
-            return failure
-        }
-        let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        return await performResolvedDrawPath(points: cgPoints, duration: duration)
-    }
-
-    func executeDrawBezier(_ target: DrawBezierTarget) async -> TheSafecracker.InteractionResult {
-        guard target.segments.count <= 1_000 else {
-            return .failure(.syntheticDrawPath, message: "Too many segments (max 1,000)")
-        }
-        guard !target.segments.isEmpty else {
-            return .failure(.syntheticDrawPath, message: "Bezier path requires at least 1 segment")
-        }
-        let samplesPerSegment = target.resolvedSamplesPerSegment
-        let cgPoints = TheSafecracker.BezierSampler.sampleBezierPath(
-            startPoint: target.startPoint,
-            segments: target.segments,
-            samplesPerSegment: samplesPerSegment
-        )
-        guard cgPoints.count >= 2 else {
-            return .failure(.syntheticDrawPath, message: "Sampled bezier produced fewer than 2 points")
-        }
-        if let failure = geometryFailure(method: .syntheticDrawPath, field: "bezier point", points: cgPoints) {
-            return failure
-        }
-        let duration = resolveDuration(target.duration, velocity: target.velocity, points: cgPoints)
-        return await performResolvedDrawPath(points: cgPoints, duration: duration)
-    }
-
-    private func performResolvedDrawPath(
-        points: [CGPoint],
-        duration: TimeInterval
-    ) async -> TheSafecracker.InteractionResult {
-        let success = await safecracker.drawPath(points: points, duration: duration)
-        return gestureDispatchResult(
-            method: .syntheticDrawPath,
-            diagnosticPoint: points[0],
-            success: success
-        )
-    }
-
     private func gestureDispatchResult(
         method: ActionMethod,
         diagnosticPoint: CGPoint,

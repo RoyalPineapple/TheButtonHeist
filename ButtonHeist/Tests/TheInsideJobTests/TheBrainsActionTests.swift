@@ -111,64 +111,6 @@ final class TheBrainsActionTests: XCTestCase {
                        "Valid duration should pass through unchanged")
     }
 
-    // MARK: - resolveDuration
-
-    func testResolveDurationUsesExplicitDuration() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.actions.resolveDuration(2.0, velocity: nil, points: points)
-        XCTAssertEqual(result, 2.0, accuracy: 0.001,
-                       "Explicit duration should pass through")
-    }
-
-    func testResolveDurationFromVelocity() {
-        let points = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 100, y: 0),
-            CGPoint(x: 200, y: 0),
-        ]
-        let result = brains.actions.resolveDuration(nil, velocity: 100.0, points: points)
-        XCTAssertEqual(result, 2.0, accuracy: 0.01,
-                       "200pt path at 100pt/s = 2.0s")
-    }
-
-    func testResolveDurationFromVelocityDiagonal() {
-        let points = [
-            CGPoint(x: 0, y: 0),
-            CGPoint(x: 300, y: 400),
-        ]
-        let result = brains.actions.resolveDuration(nil, velocity: 500.0, points: points)
-        XCTAssertEqual(result, 1.0, accuracy: 0.01,
-                       "500pt diagonal path at 500pt/s = 1.0s")
-    }
-
-    func testResolveDurationNilBothReturnsDefault() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: nil, points: points)
-        XCTAssertEqual(result, 0.5, accuracy: 0.001,
-                       "No duration and no velocity should return default")
-    }
-
-    func testResolveDurationZeroVelocityReturnsDefault() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: 0.0, points: points)
-        XCTAssertEqual(result, 0.5, accuracy: 0.001,
-                       "Zero velocity should fall through to default")
-    }
-
-    func testResolveDurationVelocityResultIsClamped() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 10000, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: 1.0, points: points)
-        XCTAssertEqual(result, 60.0, accuracy: 0.001,
-                       "Very long path at low velocity should clamp to max")
-    }
-
-    func testResolveDurationVelocitySmallPathClamps() {
-        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 0.0001, y: 0)]
-        let result = brains.actions.resolveDuration(nil, velocity: 1000.0, points: points)
-        XCTAssertEqual(result, 0.01, accuracy: 0.001,
-                       "Tiny path at high velocity should clamp to minimum")
-    }
-
     // MARK: - BeforeState Capture
 
     func testCaptureBeforeStateReturnsEmptySnapshotWhenRegistryEmpty() {

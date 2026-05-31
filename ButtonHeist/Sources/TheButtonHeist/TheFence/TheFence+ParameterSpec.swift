@@ -30,12 +30,7 @@ extension TheFence {
         static let maxBatchResultRows = maxRunBatchSteps
         static let maxInlineScreenshotBase64Bytes = 1_000_000
 
-        static let maxDrawPathPoints = 10_000
-        static let maxDrawBezierSegments = 1_000
-        static let minDrawBezierSamplesPerSegment = 2
-        static let maxDrawBezierSamplesPerSegment = DrawBezierTarget.maxSamplesPerSegment
-        static let maxDrawBezierGeneratedPathPoints = 50_000
-        static let maxDrawGestureDurationSeconds = 60.0
+        static let maxGestureDurationSeconds = 60.0
     }
 }
 
@@ -56,7 +51,6 @@ public extension FenceParameterKey {
     static let absent = Self("absent"), action = Self("action"), angle = Self("angle"), app = Self("app")
     static let centerX = Self("centerX"), centerY = Self("centerY"), command = Self("command")
     static let container = Self("container"), count = Self("count"), captureLocalRef = Self("captureLocalRef")
-    static let cp1X = Self("cp1X"), cp1Y = Self("cp1Y"), cp2X = Self("cp2X"), cp2Y = Self("cp2Y")
     static let continuation = Self("continuation")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
@@ -66,15 +60,15 @@ public extension FenceParameterKey {
     static let inlineData = Self("inlineData"), input = Self("input"), isModalBoundary = Self("isModalBoundary")
     static let label = Self("label"), matcher = Self("matcher"), mode = Self("mode")
     static let newValue = Self("newValue"), oldValue = Self("oldValue"), ordinal = Self("ordinal"), output = Self("output")
-    static let points = Self("points"), policy = Self("policy"), property = Self("property"), radius = Self("radius")
-    static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex"), samplesPerSegment = Self("samplesPerSegment")
-    static let scale = Self("scale"), segments = Self("segments"), spread = Self("spread"), start = Self("start")
+    static let policy = Self("policy"), property = Self("property"), radius = Self("radius")
+    static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex")
+    static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")
     static let startX = Self("startX"), startY = Self("startY"), stableId = Self("stableId"), steps = Self("steps")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
     static let timeout = Self("timeout")
     static let token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")
-    static let velocity = Self("velocity"), x = Self("x"), y = Self("y")
+    static let x = Self("x"), y = Self("y")
 }
 
 func fenceEnumValues<E>(_ type: E.Type) -> [String] where E: CaseIterable & RawRepresentable, E.RawValue == String {
@@ -293,7 +287,7 @@ enum FenceParameterBlocks: Sendable {
     static let center: [FenceParameterSpec] = [param(.centerX, .number), param(.centerY, .number)]
     static let gestureDuration = param(
         .duration, .number,
-        maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds
+        maximum: TheFence.DecodeLimits.maxGestureDurationSeconds
     )
     static let incrementCount = param(.count, .integer, minimum: 1, maximum: 100)
 
@@ -310,10 +304,4 @@ enum FenceParameterBlocks: Sendable {
             preconditionFailure("ElementTarget matcher field '\(name)' is not mapped in Fence parameter specs")
         }
     }
-
-    static let bezierSegment: [FenceParameterSpec] = [
-        param(.cp1X, .number, required: true), param(.cp1Y, .number, required: true),
-        param(.cp2X, .number, required: true), param(.cp2Y, .number, required: true),
-        param(.endX, .number, required: true), param(.endY, .number, required: true),
-    ]
 }

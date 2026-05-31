@@ -48,8 +48,6 @@ enum CLICommandAdapterCatalog {
         .pinch: PinchSubcommand.self,
         .rotate: RotateSubcommand.self,
         .twoFingerTap: TwoFingerTapSubcommand.self,
-        .drawPath: DrawPathCommand.self,
-        .drawBezier: DrawBezierCommand.self,
         .scroll: ScrollCommand.self,
         .scrollToVisible: ScrollToVisibleCommand.self,
         .elementSearch: ElementSearchCommand.self,

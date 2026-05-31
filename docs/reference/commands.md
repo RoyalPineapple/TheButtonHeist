@@ -10,8 +10,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `connect` | `connect` | direct | no | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | `dismiss_keyboard` | direct | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `drag` | direct | yes | Drag from one point to another using explicit coordinates or a semantic target. |
-| `draw_bezier` | `draw_bezier` | direct | yes | Draw a Bezier path from a start point through one or more curve segments. |
-| `draw_path` | `draw_path` | direct | yes | Draw a free-form path through explicit screen-coordinate points. |
 | `edit_action` | `edit_action` | direct | yes | Perform an edit action on the current first responder. |
 | `element_search` | `element_search` | direct | yes | Search scrollable content for a semantic element match without performing an action. |
 | `get_interface` | `get_interface` | direct | no | Read the app accessibility hierarchy, optionally scoped to a subtree. |
@@ -114,47 +112,6 @@ Parameters:
 | `startX` | `number` | no | - | - |
 | `startY` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_bezier`
-
-Draw a Bezier path from a start point through one or more curve segments.
-
-- CLI: direct command `draw_bezier`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `startX` | `number` | yes | - | - |
-| `startY` | `number` | yes | - | - |
-| `segments` | `array` | yes | - | - |
-| `samplesPerSegment` | `integer` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_path`
-
-Draw a free-form path through explicit screen-coordinate points.
-
-- CLI: direct command `draw_path`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `points` | `array` | yes | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 

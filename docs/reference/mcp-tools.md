@@ -10,8 +10,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `connect` | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | Drag from one point to another using explicit coordinates or a semantic target. |
-| `draw_bezier` | Draw a Bezier path from a start point through one or more curve segments. |
-| `draw_path` | Draw a free-form path through explicit screen-coordinate points. |
 | `edit_action` | Perform an edit action on the current first responder. |
 | `element_search` | Search scrollable content for a semantic element match without performing an action. |
 | `get_interface` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
@@ -93,37 +91,6 @@ Parameters:
 | `startX` | `number` | no | - | - |
 | `startY` | `number` | no | - | - |
 | `duration` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_bezier`
-
-Draw a Bezier path from a start point through one or more curve segments.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `startX` | `number` | yes | - | - |
-| `startY` | `number` | yes | - | - |
-| `segments` | `array` | yes | - | - |
-| `samplesPerSegment` | `integer` | no | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `draw_path`
-
-Draw a free-form path through explicit screen-coordinate points.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `points` | `array` | yes | - | - |
-| `duration` | `number` | no | - | - |
-| `velocity` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 

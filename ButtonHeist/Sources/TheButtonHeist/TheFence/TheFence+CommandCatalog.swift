@@ -17,8 +17,6 @@ extension TheFence {
         case pinch
         case rotate
         case twoFingerTap = "two_finger_tap"
-        case drawPath = "draw_path"
-        case drawBezier = "draw_bezier"
         case scroll
         case scrollToVisible = "scroll_to_visible"
         case elementSearch = "element_search"
@@ -206,39 +204,6 @@ extension TheFence.Command {
             entry.isBatchExecutable = true
             entry.parameters = target + FenceParameterBlocks.center + [param(.spread, .number)] + expectation
             entry.description = "Tap with two fingers at a coordinate or actionable semantic target."
-        case .drawPath:
-            entry.isBatchExecutable = true
-            entry.parameters = [
-                param(
-                    .points, .array, required: true,
-                    minItems: 2,
-                    maxItems: TheFence.DecodeLimits.maxDrawPathPoints,
-                    arrayItemType: .object,
-                    arrayItemProperties: FenceParameterBlocks.unitPoint
-                ),
-                duration,
-                param(.velocity, .number),
-            ] + expectation
-            entry.description = "Draw a free-form path through explicit screen-coordinate points."
-        case .drawBezier:
-            entry.isBatchExecutable = true
-            entry.parameters = FenceParameterBlocks.requiredStart + [
-                param(
-                    .segments, .array, required: true,
-                    minItems: 1,
-                    maxItems: TheFence.DecodeLimits.maxDrawBezierSegments,
-                    arrayItemType: .object,
-                    arrayItemProperties: FenceParameterBlocks.bezierSegment
-                ),
-                param(
-                    .samplesPerSegment, .integer,
-                    minimum: Double(TheFence.DecodeLimits.minDrawBezierSamplesPerSegment),
-                    maximum: Double(TheFence.DecodeLimits.maxDrawBezierSamplesPerSegment)
-                ),
-                duration,
-                param(.velocity, .number),
-            ] + expectation
-            entry.description = "Draw a Bezier path from a start point through one or more curve segments."
         case .scroll:
             entry.isBatchExecutable = true
             entry.parameters = scrollContainerTarget + target + [

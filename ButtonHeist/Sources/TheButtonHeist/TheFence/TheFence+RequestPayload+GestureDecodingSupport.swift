@@ -23,7 +23,7 @@ extension TheFence.CommandArgumentEnvelope {
     }
 
     func gestureDuration() throws -> Double? {
-        try boundedPositiveNumber("duration", maximum: TheFence.DecodeLimits.maxDrawGestureDurationSeconds)
+        try boundedPositiveNumber("duration", maximum: TheFence.DecodeLimits.maxGestureDurationSeconds)
     }
 
     func boundedPositiveNumber(_ key: String, maximum: Double) throws -> Double? {

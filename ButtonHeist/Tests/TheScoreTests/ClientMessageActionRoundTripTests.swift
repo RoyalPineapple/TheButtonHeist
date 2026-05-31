@@ -183,44 +183,6 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
         }
     }
 
-    func testClientMessageDrawPathEncoding() throws {
-        let message = ClientMessage.drawPath(DrawPathTarget(
-            points: [PathPoint(x: 10, y: 20), PathPoint(x: 30, y: 40)],
-            duration: 0.5
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .drawPath(let target) = decoded {
-            XCTAssertEqual(target.points.count, 2)
-            XCTAssertEqual(target.points[0].x, 10)
-            XCTAssertEqual(target.duration, 0.5)
-        } else {
-            XCTFail("Expected drawPath message")
-        }
-    }
-
-    func testClientMessageDrawBezierEncoding() throws {
-        let message = ClientMessage.drawBezier(DrawBezierTarget(
-            startX: 50, startY: 100,
-            segments: [
-                BezierSegment(cp1X: 50, cp1Y: 50, cp2X: 150, cp2Y: 50, endX: 150, endY: 100)
-            ],
-            duration: 0.8
-        ))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .drawBezier(let target) = decoded {
-            XCTAssertEqual(target.startPoint, CGPoint(x: 50, y: 100))
-            XCTAssertEqual(target.segments.count, 1)
-            XCTAssertEqual(target.segments[0].end, CGPoint(x: 150, y: 100))
-            XCTAssertEqual(target.duration, 0.8)
-        } else {
-            XCTFail("Expected drawBezier message")
-        }
-    }
-
     // MARK: - Edit / ResignFirstResponder / WaitForIdle
 
     func testClientMessageEditActionEncoding() throws {

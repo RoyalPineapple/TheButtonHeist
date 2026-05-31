@@ -223,62 +223,6 @@ final class TheSafecracker {
         return await performLineGesture(from: start, to: end, duration: duration, minimumSteps: 5)
     }
 
-    /// Simulate drawing along a path of waypoints.
-    /// Pre-computes all interpolated waypoints at uniform speed before
-    /// the gesture loop begins.
-    /// - Parameters:
-    ///   - points: Ordered array of screen coordinates to trace through
-    ///   - duration: Total duration of the gesture in seconds
-    func drawPath(points: [CGPoint], duration: TimeInterval) async -> Bool {
-        guard points.count >= 2 else { return false }
-        guard Self.geometryIsValid(points, field: "path point") else { return false }
-        guard Self.durationIsValid(duration, field: "path duration") else { return false }
-
-        // Pre-compute: calculate segment lengths and total path length
-        var totalLength: CGFloat = 0
-        var segmentLengths: [CGFloat] = []
-        for index in 1..<points.count {
-            let dx = points[index].x - points[index - 1].x
-            let dy = points[index].y - points[index - 1].y
-            let length = sqrt(dx * dx + dy * dy)
-            segmentLengths.append(length)
-            totalLength += length
-        }
-
-        guard totalLength > 0 else {
-            // Degenerate path — just tap the start point
-            guard touchesDown(at: [points[0]]) else { return false }
-            return touchesUp()
-        }
-
-        let totalSteps = max(Int(duration / Self.touchGestureStepDelay), points.count)
-
-        // Pre-compute: build full waypoint array at uniform speed
-        let waypoints = (1...totalSteps).map { step -> CGPoint in
-            let progress = CGFloat(step) / CGFloat(totalSteps)
-            let targetDist = progress * totalLength
-
-            var accumulated: CGFloat = 0
-            for index in 0..<segmentLengths.count {
-                let segmentLength = segmentLengths[index]
-                if accumulated + segmentLength >= targetDist {
-                    let segmentProgress = (targetDist - accumulated) / segmentLength
-                    return CGPoint(
-                        x: points[index].x + segmentProgress * (points[index + 1].x - points[index].x),
-                        y: points[index].y + segmentProgress * (points[index + 1].y - points[index].y)
-                    )
-                }
-                accumulated += segmentLength
-            }
-            return points[points.count - 1]
-        }
-
-        return await performTouchPath(
-            start: [points[0]],
-            waypoints: waypoints.map { [$0] }
-        )
-    }
-
     // MARK: - Public: Text Input (via KeyboardBridge)
 
     /// Check if the software keyboard is currently visible.

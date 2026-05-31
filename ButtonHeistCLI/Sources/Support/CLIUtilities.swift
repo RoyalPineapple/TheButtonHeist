@@ -21,8 +21,7 @@ func writeOutput(_ message: String) {
 /// Exactly one of `inline` or `fromFile` must be supplied.
 ///
 /// Used by commands that take a structured array payload (`run_batch`'s
-/// steps, `draw_path`'s points, `draw_bezier`'s segments) to keep the
-/// file-vs-inline decision uniform across the CLI surface. Throws
+/// steps) to keep the file-vs-inline decision uniform across the CLI surface. Throws
 /// `ValidationError` on missing, ambiguous, unreadable, or malformed
 /// input so the error surfaces through ArgumentParser rather than as a
 /// generic crash.

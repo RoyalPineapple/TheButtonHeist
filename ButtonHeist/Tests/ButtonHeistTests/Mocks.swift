@@ -272,7 +272,6 @@ final class MockConnection: TransportReachabilityConnecting {
         case .pinch: return .syntheticPinch
         case .rotate: return .syntheticRotate
         case .twoFingerTap: return .syntheticTwoFingerTap
-        case .drawPath, .drawBezier: return .syntheticDrawPath
         case .typeText: return .typeText
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible

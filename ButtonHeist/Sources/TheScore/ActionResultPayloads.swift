@@ -343,7 +343,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case syntheticPinch
     case syntheticRotate
     case syntheticTwoFingerTap
-    case syntheticDrawPath
     case typeText
     case customAction
     case editAction

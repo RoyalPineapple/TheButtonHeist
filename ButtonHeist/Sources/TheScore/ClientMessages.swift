@@ -88,12 +88,6 @@ public enum ClientMessage: Codable, Sendable {
     /// Two-finger tap
     case twoFingerTap(TwoFingerTapTarget)
 
-    /// Draw along a path (sequence of points)
-    case drawPath(DrawPathTarget)
-
-    /// Draw along a bezier curve (sampled to polyline server-side)
-    case drawBezier(DrawBezierTarget)
-
     /// Type text character-by-character by tapping keyboard keys
     case typeText(TypeTextTarget)
 

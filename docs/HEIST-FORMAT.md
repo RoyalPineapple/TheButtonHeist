@@ -85,14 +85,10 @@ authority and is not stored in the heist step.
 
 ```json
 {
-  "command": "draw_bezier",
+  "command": "one_finger_tap",
   "arguments": {
-    "startX": 200,
-    "startY": 500,
-    "segments": [
-      {"cp1X": 220, "cp1Y": 450, "cp2X": 260, "cp2Y": 450, "endX": 280, "endY": 500}
-    ],
-    "duration": 1.5
+    "x": 200,
+    "y": 500
   }
 }
 ```
