@@ -108,285 +108,39 @@ public extension TheFence.Command {
     }
 
     static var batchExecutableCases: [Self] {
-        allCases.filter { command in
-            command != .runBatch && command.descriptor.isBatchExecutable
-        }
+        batchExecutableCommandDescriptors.map(\.command)
     }
 
 }
 
 extension TheFence.Command {
     static func descriptor(for command: Self) -> FenceCommandDescriptor {
-        command.catalogDescriptor
-    }
-
-    private var catalogDescriptor: FenceCommandDescriptor {
-        let target = FenceParameterBlocks.elementTarget
-        let scrollContainerTarget = FenceParameterBlocks.scrollContainerTarget
-        let filter = FenceParameterBlocks.elementFilter
-        let expect = FenceParameterBlocks.expect
-        let expectation = FenceParameterBlocks.expectation
-        let duration = FenceParameterBlocks.gestureDuration
-
-        switch self {
-        case .ping:
-            return descriptor(
-                requestDecoder: TheFence.decodePingRequest,
-                requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Check connection health without reading accessibility state."
-            )
-        case .listDevices:
-            return descriptor(
-                requestDecoder: TheFence.decodeListDevicesRequest,
-                requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "List discovered iOS devices and configured connection targets."
-            )
-        case .getInterface:
-            return descriptor(
-                requestDecoder: TheFence.decodeGetInterfaceRequest,
-                parameters: filter + [
-                    FenceParameterBlocks.interfaceSubtree,
-                    param(.detail, .string, enumValues: fenceEnumValues(InterfaceDetail.self)),
-                ],
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Read the app accessibility hierarchy, optionally scoped to a subtree."
-            )
-        case .getScreen:
-            return descriptor(
-                requestDecoder: TheFence.decodeGetScreenRequest,
-                parameters: [param(.output, .string), param(.inlineData, .boolean), param(.includeInterface, .boolean)],
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Capture a PNG screenshot with optional inline data and interface state."
-            )
-        case .waitForChange:
-            return descriptor(
-                requestDecoder: TheFence.decodeWaitForChangeRequest,
-                isBatchExecutable: true,
-                parameters: expectation,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-                description: "Wait for any UI change or for an expectation to become true."
-            )
-        case .oneFingerTap:
-            return descriptor(
-                requestDecoder: TheFence.decodeOneFingerTapRequest,
-                isBatchExecutable: true,
-                parameters: target + FenceParameterBlocks.coordinateXY + expectation,
-                description: "Tap a coordinate or semantic target after actionability resolution."
-            )
-        case .longPress:
-            return descriptor(
-                requestDecoder: TheFence.decodeLongPressRequest,
-                isBatchExecutable: true,
-                parameters: target + FenceParameterBlocks.coordinateXY + [duration] + expectation,
-                description: "Long-press a coordinate or semantic target for a resolved duration."
-            )
-        case .swipe:
-            return descriptor(
-                requestDecoder: TheFence.decodeSwipeRequest,
-                isBatchExecutable: true,
-                parameters: target + [
-                    param(.direction, .string, enumValues: fenceEnumValues(SwipeDirection.self)),
-                    param(.start, .object, objectProperties: FenceParameterBlocks.unitPoint),
-                    param(.end, .object, objectProperties: FenceParameterBlocks.unitPoint),
-                ] + FenceParameterBlocks.optionalStart + FenceParameterBlocks.optionalEnd + [duration] + expectation,
-                description: "Swipe in a direction or between explicit points; semantic targets are made actionable first."
-            )
-        case .drag:
-            return descriptor(
-                requestDecoder: TheFence.decodeDragRequest,
-                isBatchExecutable: true,
-                parameters: target + FenceParameterBlocks.requiredEnd + FenceParameterBlocks.optionalStart + [duration] + expectation,
-                description: "Drag from one point to another using explicit coordinates or a semantic target."
-            )
-        case .scroll:
-            return descriptor(
-                requestDecoder: TheFence.decodeScrollRequest,
-                isBatchExecutable: true,
-                parameters: scrollContainerTarget + target + [
-                    param(
-                        .direction, .string,
-                        enumValues: fenceEnumValues(ScrollDirection.self),
-                        defaultValue: .string(ScrollDirection.down.rawValue)
-                    ),
-                ] + expectation,
-                description: "Scroll one page in a selected container or semantic target's owning scroll ancestor."
-            )
-        case .scrollToVisible:
-            return descriptor(
-                requestDecoder: TheFence.decodeScrollToVisibleRequest,
-                isBatchExecutable: true,
-                parameters: target + expectation,
-                description: "Make a semantic target actionable and report its fresh geometry."
-            )
-        case .elementSearch:
-            return descriptor(
-                requestDecoder: TheFence.decodeElementSearchRequest,
-                isBatchExecutable: true,
-                parameters: target + [
-                    param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self)),
-                ] + expectation,
-                description: "Search scrollable content for a semantic element match without performing an action."
-            )
-        case .scrollToEdge:
-            return descriptor(
-                requestDecoder: TheFence.decodeScrollToEdgeRequest,
-                isBatchExecutable: true,
-                parameters: scrollContainerTarget + target + [
-                    param(
-                        .edge, .string,
-                        enumValues: fenceEnumValues(ScrollEdge.self),
-                        defaultValue: .string(ScrollEdge.top.rawValue)
-                    ),
-                ] + expectation,
-                description: "Scroll the selected container, or the target's owning scroll ancestor, to a requested edge."
-            )
-        case .activate:
-            return descriptor(
-                requestDecoder: TheFence.decodeActivateRequest,
-                isBatchExecutable: true,
-                parameters: target + [param(.action, .string), FenceParameterBlocks.incrementCount] + expectation,
-                description: "Activate a semantic UI element or one of its named accessibility actions."
-            )
-        case .rotor:
-            return descriptor(
-                requestDecoder: TheFence.decodeRotorRequest,
-                isBatchExecutable: true,
-                parameters: target + [
-                    param(.rotor, .string),
-                    param(.rotorIndex, .integer, minimum: 0),
-                    param(
-                        .direction, .string,
-                        enumValues: fenceEnumValues(RotorDirection.self),
-                        defaultValue: .string(RotorDirection.next.rawValue)
-                    ),
-                    param(
-                        .continuation,
-                        .object,
-                        objectProperties: [
-                            param(.heistId, .string, required: true),
-                            param(
-                                .textRange,
-                                .object,
-                                objectProperties: [
-                                    param(.startOffset, .integer, required: true, minimum: 0),
-                                    param(.endOffset, .integer, required: true, minimum: 0),
-                                ]
-                            ),
-                        ]
-                    ),
-                ] + expectation,
-                description: "Move through an element rotor using direction and continuation metadata."
-            )
-        case .typeText:
-            return descriptor(
-                requestDecoder: TheFence.decodeTypeTextRequest,
-                isBatchExecutable: true,
-                parameters: target + [param(.text, .string, required: true, minLength: 1)] + expectation,
-                description: "Type non-empty text, optionally after making a semantic target actionable."
-            )
-        case .editAction:
-            return descriptor(
-                requestDecoder: TheFence.decodeEditActionRequest,
-                isBatchExecutable: true,
-                parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + expectation,
-                description: "Perform an edit action on the current first responder."
-            )
-        case .setPasteboard:
-            return descriptor(
-                requestDecoder: TheFence.decodeSetPasteboardRequest,
-                isBatchExecutable: true,
-                parameters: [param(.text, .string, required: true)] + expectation,
-                description: "Write text to the general pasteboard from within the app."
-            )
-        case .getPasteboard:
-            return descriptor(
-                requestDecoder: TheFence.decodeGetPasteboardRequest,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-                description: "Read text from the general pasteboard."
-            )
-        case .waitFor:
-            return descriptor(
-                requestDecoder: TheFence.decodeWaitForRequest,
-                isBatchExecutable: true,
-                parameters: target + [param(.absent, .boolean), FenceParameterBlocks.expectationTimeout, expect],
-                description: "Wait for a semantic element to appear or disappear."
-            )
-        case .dismissKeyboard:
-            return descriptor(
-                requestDecoder: TheFence.decodeDismissKeyboardRequest,
-                isBatchExecutable: true,
-                parameters: expectation,
-                description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
-            )
-        case .runBatch:
-            return descriptor(
-                requestDecoder: TheFence.decodeRunBatchCommandRequest,
-                parameters: [
-                    param(
-                        .steps, .array, required: true,
-                        minItems: 1,
-                        maxItems: TheFence.DecodeLimits.maxRunBatchSteps,
-                        arrayItemType: .object,
-                        arrayItemProperties: [
-                            param(
-                                .command, .string, required: true,
-                                enumValues: Self.batchExecutableCases.map(\.rawValue)
-                            ),
-                            expect,
-                        ],
-                        arrayItemAdditionalProperties: true
-                    ),
-                    param(.policy, .string, enumValues: fenceEnumValues(BatchExecutionPolicy.self)),
-                ],
-                description: "Execute ordered command steps with batch policy and per-step expectations."
-            )
-        case .getSessionState:
-            return descriptor(
-                requestDecoder: TheFence.decodeGetSessionStateRequest,
-                requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "Inspect connection, device, and last-action session state."
-            )
-        case .connect:
-            return descriptor(
-                requestDecoder: TheFence.decodeConnectCommandRequest,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [param(.target, .string), param(.device, .string), param(.token, .string)],
-                description: "Establish or switch the active connection to a Button Heist app."
-            )
-        case .listTargets:
-            return descriptor(
-                requestDecoder: TheFence.decodeListTargetsRequest,
-                requiresConnectionBeforeDispatch: false,
-                mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true),
-                description: "List configured connection targets and the default target."
-            )
-        case .startHeist:
-            return descriptor(
-                requestDecoder: TheFence.decodeStartHeistRequest,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [param(.app, .string), param(.identifier, .string)],
-                description: "Start recording replayable heist steps from successful commands."
-            )
-        case .stopHeist:
-            return descriptor(
-                requestDecoder: TheFence.decodeStopHeistRequest,
-                requiresConnectionBeforeDispatch: false,
-                parameters: [param(.output, .string, required: true)],
-                description: "Stop heist recording and save a deterministic heist fixture."
-            )
-        case .playHeist:
-            return descriptor(
-                requestDecoder: TheFence.decodePlayHeistRequest,
-                parameters: [param(.input, .string, required: true)],
-                description: "Play back a heist file and return step diagnostics on failure."
-            )
+        guard let descriptor = descriptorLookup[command] else {
+            preconditionFailure("Missing descriptor for \(command.rawValue)")
         }
+        return descriptor
     }
 
-    private func descriptor(
+    private static let descriptorLookup: [Self: FenceCommandDescriptor] = {
+        Dictionary(uniqueKeysWithValues: commandDescriptors.map { ($0.command, $0) })
+    }()
+
+    private static var commandDescriptors: [FenceCommandDescriptor] {
+        nonBatchCommandDescriptors + [runBatchCommandDescriptor]
+    }
+
+    private static var nonBatchCommandDescriptors: [FenceCommandDescriptor] {
+        sessionCommandDescriptors
+            + observationCommandDescriptors
+            + actionCommandDescriptors
+    }
+
+    static var batchExecutableCommandDescriptors: [FenceCommandDescriptor] {
+        nonBatchCommandDescriptors.filter(\.isBatchExecutable)
+    }
+
+    static func commandDescriptor(
+        _ command: Self,
         requestDecoder: @escaping TheFence.RequestDecoder,
         cliExposure: CLIExposure = .directCommand,
         mcpExposure: MCPExposure = .directTool,
@@ -397,7 +151,7 @@ extension TheFence.Command {
         description: String
     ) -> FenceCommandDescriptor {
         FenceCommandDescriptor(
-            command: self,
+            command: command,
             requestDecoder: requestDecoder,
             cliExposure: cliExposure,
             mcpExposure: mcpExposure,
