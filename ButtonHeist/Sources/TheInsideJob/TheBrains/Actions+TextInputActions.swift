@@ -135,7 +135,6 @@ extension Actions {
                 )
             )
         }
-        safecracker.showFingerprint(at: point)
 
         guard await waitForActiveTextInput() else {
             return .failure(
