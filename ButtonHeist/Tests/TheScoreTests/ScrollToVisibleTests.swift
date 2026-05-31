@@ -129,21 +129,20 @@ final class ScrollToVisibleTests: XCTestCase {
 
     func testScrollSearchResultEncodeDecode() throws {
         let result = ScrollSearchResult(
-            scrollCount: 6, uniqueElementsSeen: 47, totalItems: 80,
+            scrollCount: 6, uniqueElementsSeen: 47,
             exhaustive: false, foundHeistId: "button_color_picker"
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ScrollSearchResult.self, from: data)
         XCTAssertEqual(decoded.scrollCount, 6)
         XCTAssertEqual(decoded.uniqueElementsSeen, 47)
-        XCTAssertEqual(decoded.totalItems, 80)
         XCTAssertFalse(decoded.exhaustive)
         XCTAssertEqual(decoded.foundHeistId, "button_color_picker")
     }
 
     func testScrollSearchResultNotFound() throws {
         let result = ScrollSearchResult(
-            scrollCount: 20, uniqueElementsSeen: 80, totalItems: 80, exhaustive: true
+            scrollCount: 20, uniqueElementsSeen: 80, exhaustive: true
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ScrollSearchResult.self, from: data)
@@ -160,11 +159,19 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollSearchResult.self, from: json))
     }
 
+    func testScrollSearchResultRejectsObsoleteTotalItems() throws {
+        let json = Data("""
+        {"scrollCount":1,"uniqueElementsSeen":1,"totalItems":10,"exhaustive":false}
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ScrollSearchResult.self, from: json))
+    }
+
     // MARK: - ActionResult with ScrollSearchResult
 
     func testActionResultWithScrollSearchResult() throws {
         let searchResult = ScrollSearchResult(
-            scrollCount: 3, uniqueElementsSeen: 25, totalItems: 50, exhaustive: false
+            scrollCount: 3, uniqueElementsSeen: 25, exhaustive: false
         )
         let result = ActionResult(
             success: true, method: .elementSearch,
@@ -177,7 +184,7 @@ final class ScrollToVisibleTests: XCTestCase {
             return
         }
         XCTAssertEqual(search.scrollCount, 3)
-        XCTAssertEqual(search.totalItems, 50)
+        XCTAssertEqual(search.uniqueElementsSeen, 25)
     }
 
     func testActionResultWithoutScrollSearchResult() throws {
