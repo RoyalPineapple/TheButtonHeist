@@ -3,6 +3,7 @@
 // Requires the BH Demo test host for a live UIWindow and UIApplication.sendEvent pipeline.
 import XCTest
 @testable import TheInsideJob
+import TheScore
 
 @MainActor
 final class TheSafecrackerIntegrationTests: XCTestCase {
@@ -35,7 +36,7 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
         XCTAssertTrue(result)
     }
 
-    func testLongPressDoesNotCrash() async {
+    func testLongPressDoesNotCrash() async throws {
         let button = UIButton(type: .system)
         button.frame = CGRect(x: 50, y: 300, width: 200, height: 44)
         window.addSubview(button)
@@ -46,23 +47,34 @@ final class TheSafecrackerIntegrationTests: XCTestCase {
             to: nil
         )
 
-        let result = await safecracker.longPress(at: screenPoint, duration: 0.1)
+        let result = await safecracker.longPress(
+            at: screenPoint,
+            duration: try GestureDuration(seconds: 0.1)
+        )
         XCTAssertTrue(result)
     }
 
-    func testSwipeCompletesSuccessfully() async {
+    func testSwipeCompletesSuccessfully() async throws {
         let start = CGPoint(x: 200, y: 400)
         let end = CGPoint(x: 200, y: 200)
 
-        let result = await safecracker.swipe(from: start, to: end, duration: 0.1)
+        let result = await safecracker.swipe(
+            from: start,
+            to: end,
+            duration: try GestureDuration(seconds: 0.1)
+        )
         XCTAssertTrue(result)
     }
 
-    func testDragCompletesSuccessfully() async {
+    func testDragCompletesSuccessfully() async throws {
         let start = CGPoint(x: 100, y: 300)
         let end = CGPoint(x: 300, y: 300)
 
-        let result = await safecracker.drag(from: start, to: end, duration: 0.1)
+        let result = await safecracker.drag(
+            from: start,
+            to: end,
+            duration: try GestureDuration(seconds: 0.1)
+        )
         XCTAssertTrue(result)
     }
 

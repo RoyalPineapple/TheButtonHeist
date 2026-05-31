@@ -62,7 +62,7 @@ extension Actions {
             selection: selection,
             method: .syntheticLongPress
         ) { point in
-            await self.safecracker.longPress(at: point, duration: target.duration.seconds)
+            await self.safecracker.longPress(at: point, duration: target.duration)
         }
     }
 
@@ -99,7 +99,7 @@ extension Actions {
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration.seconds)
+            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         case .point(let startSelection, let destination):
             let startPoint: CGPoint
             switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe) {
@@ -124,14 +124,14 @@ extension Actions {
             if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
                 return failure
             }
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration.seconds)
+            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         }
     }
 
     private func performResolvedSwipe(
         from startPoint: CGPoint,
         to endPoint: CGPoint,
-        duration: TimeInterval
+        duration: GestureDuration
     ) async -> TheSafecracker.InteractionResult {
         let success = await safecracker.swipe(from: startPoint, to: endPoint, duration: duration)
         return gestureDispatchResult(method: .syntheticSwipe, diagnosticPoint: startPoint, success: success)
@@ -147,7 +147,7 @@ extension Actions {
             selection: selection,
             method: .syntheticDrag
         ) { startPoint in
-            await self.safecracker.drag(from: startPoint, to: endPoint, duration: target.resolvedDuration.seconds)
+            await self.safecracker.drag(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         }
     }
 
