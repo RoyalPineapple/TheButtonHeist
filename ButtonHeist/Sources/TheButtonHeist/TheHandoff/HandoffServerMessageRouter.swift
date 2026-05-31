@@ -1,0 +1,53 @@
+import Foundation
+import os.log
+
+private let serverMessageLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server-message")
+
+struct HandoffServerMessageRouter {
+    var admission = HandoffAdmission()
+
+    var token: String? {
+        get { admission.token }
+        set { admission.token = newValue }
+    }
+
+    var driverId: String? {
+        get { admission.driverId }
+        set { admission.driverId = newValue }
+    }
+
+    mutating func route(_ message: ServerMessage, requestId: String?) -> HandoffServerMessageRoute {
+        if let decision = admission.decision(for: message) {
+            return .admission(decision)
+        }
+
+        switch message {
+        case .info(let info):
+            return .serverInfo(info)
+        case .interface, .actionResult, .screen:
+            return .forward(message, requestId)
+        case .error(let serverError):
+            if let requestId {
+                return .forward(message, requestId)
+            }
+            return .connectionFailure(serverError.message)
+        case .status(let payload):
+            serverMessageLogger.info("Received status payload: appName=\(payload.identity.appName, privacy: .public)")
+            return .handled
+        case .pong(let payload):
+            return .pong(payload, requestId: requestId)
+        case .authApproved, .authApprovalPending, .sessionLocked, .protocolMismatch, .serverHello, .authRequired:
+            assertionFailure("HandoffAdmission must consume admission messages before routing")
+            return .handled
+        }
+    }
+}
+
+enum HandoffServerMessageRoute {
+    case admission(HandoffAdmissionDecision)
+    case serverInfo(ServerInfo)
+    case forward(ServerMessage, String?)
+    case connectionFailure(String)
+    case pong(PongPayload, requestId: String?)
+    case handled
+}
