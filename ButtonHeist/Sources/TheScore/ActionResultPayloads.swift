@@ -7,8 +7,6 @@ import Foundation
 public enum ErrorKind: String, Codable, Sendable, CaseIterable {
     case elementNotFound
     case timeout
-    case unsupported
-    case inputError
     case validationError
     case actionFailed
     /// Authentication failed (rejected token, denied UI prompt, rate-limited).
