@@ -91,7 +91,7 @@ public struct InterfaceAnnotations: Codable, Equatable, Hashable, Sendable {
 ///
 /// The wire shape carries the parser's full-fidelity `AccessibilityHierarchy`
 /// plus Button Heist annotations. There is no parallel lossy tree on the wire;
-/// `elements` is a projection for matching and formatting.
+/// flat elements are an explicit projection for matching and formatting.
 public struct Interface: Codable, Equatable, Sendable {
     public let timestamp: Date
     public let tree: [AccessibilityHierarchy]
@@ -104,10 +104,7 @@ public struct Interface: Codable, Equatable, Sendable {
     }
 
     /// Button Heist element projection in VoiceOver traversal order.
-    ///
-    /// Computed from `tree + annotations`; not stored as a second source of
-    /// truth on the wire.
-    public var elements: [HeistElement] {
+    public var projectedElements: [HeistElement] {
         let annotationsByPath = annotations.elementByPath
         return tree.pathIndexedElements.map { element, path, _ in
             HeistElement(

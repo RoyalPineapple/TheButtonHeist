@@ -70,7 +70,7 @@ public extension AccessibilityTrace {
 
 extension AccessibilityTrace.Capture {
     var screenNameProjection: String? {
-        InterfaceSummary.screenTitle(from: interface.elements)
+        InterfaceSummary.screenTitle(for: interface)
     }
 
     var screenIdProjection: String? {

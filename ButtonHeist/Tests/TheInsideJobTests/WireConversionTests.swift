@@ -558,7 +558,7 @@ final class WireConverterTests: XCTestCase {
         guard case .screenChanged(let payload) = delta else {
             return XCTFail("Expected .screenChanged, got \(delta)")
         }
-        XCTAssertEqual(payload.newInterface.elements.count, 1)
+        XCTAssertEqual(payload.newInterface.projectedElements.count, 1)
         XCTAssertEqual(payload.elementCount, 1)
     }
 

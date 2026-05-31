@@ -95,8 +95,8 @@ final class ServerMessageTests: XCTestCase {
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
         if case .interface(let decodedPayload) = decoded {
-            XCTAssertEqual(decodedPayload.elements.count, 1)
-            XCTAssertEqual(decodedPayload.elements[0].label, "Submit")
+            XCTAssertEqual(decodedPayload.projectedElements.count, 1)
+            XCTAssertEqual(decodedPayload.projectedElements[0].label, "Submit")
         } else {
             XCTFail("Expected interface, got \(decoded)")
         }
@@ -533,9 +533,9 @@ final class ServerMessageTests: XCTestCase {
             XCTAssertEqual(decodedPayload.pngData, payload.pngData)
             XCTAssertEqual(decodedPayload.width, 390)
             XCTAssertEqual(decodedPayload.height, 844)
-            XCTAssertEqual(decodedPayload.interface?.elements, [element])
-            XCTAssertEqual(decodedPayload.interface?.elements.first?.frameX, 20)
-            XCTAssertEqual(decodedPayload.interface?.elements.first?.activationPointX, 100)
+            XCTAssertEqual(decodedPayload.interface?.projectedElements, [element])
+            XCTAssertEqual(decodedPayload.interface?.projectedElements.first?.frameX, 20)
+            XCTAssertEqual(decodedPayload.interface?.projectedElements.first?.activationPointX, 100)
         } else {
             XCTFail("Expected screen, got \(decoded)")
         }

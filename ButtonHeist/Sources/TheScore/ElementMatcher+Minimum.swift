@@ -29,7 +29,7 @@ public struct MinimumMatcher: Sendable, Equatable {
         element: HeistElement,
         in capture: AccessibilityTrace.Capture
     ) -> MinimumMatcher? {
-        let elements = capture.interface.elements
+        let elements = capture.interface.projectedElements
         if let captureElement = elements.first(where: { $0 == element }) {
             return build(element: captureElement, allElements: elements)
         }
@@ -38,7 +38,7 @@ public struct MinimumMatcher: Sendable, Equatable {
 
     /// Build matchers for every element in a capture, preserving traversal order.
     public static func buildAll(in capture: AccessibilityTrace.Capture) -> [MinimumMatcher] {
-        let elements = capture.interface.elements
+        let elements = capture.interface.projectedElements
         return elements.compactMap { build(element: $0, allElements: elements) }
     }
 

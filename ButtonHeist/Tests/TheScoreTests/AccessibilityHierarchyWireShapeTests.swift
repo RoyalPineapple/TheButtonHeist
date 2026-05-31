@@ -73,7 +73,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         let containers = try XCTUnwrap(annotations["containers"] as? [[String: Any]])
         XCTAssertEqual(containers.first?["stableId"] as? String, "list_0")
 
-        XCTAssertEqual(interface.elements.map(\.heistId), ["header", "row_0"])
+        XCTAssertEqual(interface.projectedElements.map(\.heistId), ["header", "row_0"])
     }
 
     func testNestedInterfaceRoundTripsThroughCanonicalHierarchy() throws {
@@ -100,7 +100,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
         let decoded = try decoder.decode(Interface.self, from: data)
 
         XCTAssertEqual(decoded, original)
-        XCTAssertEqual(decoded.elements, [element])
+        XCTAssertEqual(decoded.projectedElements, [element])
     }
 
     private func encodeInterfacePayload(_ interface: Interface) throws -> [String: Any] {

@@ -182,8 +182,8 @@ final class AccessibilityTraceTests: XCTestCase {
             ])
         )
 
-        XCTAssertEqual(interface.elements.map(\.heistId), ["first", "second"])
-        XCTAssertEqual(interface.elements.map(\.actions), [[.activate], [.increment]])
+        XCTAssertEqual(interface.projectedElements.map(\.heistId), ["first", "second"])
+        XCTAssertEqual(interface.projectedElements.map(\.actions), [[.activate], [.increment]])
     }
 
     func testScreenChangeReasonProjectsScreenChangedDelta() throws {

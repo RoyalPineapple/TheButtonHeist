@@ -13,7 +13,7 @@ enum AccessibilityTraceDiffProjection {
 
         if !screenChanged, before.hash == after.hash {
             return .noChange(AccessibilityTrace.NoChange(
-                elementCount: after.interface.elements.count,
+                elementCount: after.interface.projectedElements.count,
                 captureEdge: edge,
                 transient: after.transition.transient
             ))
@@ -30,7 +30,7 @@ enum AccessibilityTraceDiffProjection {
         guard before.context != after.context else { return interfaceDelta }
         if case .noChange = interfaceDelta {
             return .elementsChanged(AccessibilityTrace.ElementsChanged(
-                elementCount: after.interface.elements.count,
+                elementCount: after.interface.projectedElements.count,
                 edits: ElementEdits(),
                 captureEdge: edge,
                 transient: after.transition.transient
@@ -44,7 +44,7 @@ enum AccessibilityTraceDiffProjection {
         _ after: Interface,
         isScreenChange: Bool
     ) -> AccessibilityTrace.Delta {
-        let afterElements = after.elements
+        let afterElements = after.projectedElements
 
         if isScreenChange {
             return .screenChanged(AccessibilityTrace.ScreenChanged(

@@ -78,7 +78,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let afterCapture = AccessibilityTrace.Capture(sequence: 2, interface: afterInterface, parentHash: beforeCapture.hash)
 
         XCTAssertEqual(
-            ElementEdits.between(beforeInterface.elements, afterInterface.elements).updated,
+            ElementEdits.between(beforeInterface.projectedElements, afterInterface.projectedElements).updated,
             ElementEdits.between(beforeInterface, afterInterface).updated
         )
         let delta = AccessibilityTrace.Delta.between(beforeCapture, afterCapture)
@@ -169,7 +169,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         guard case .elementsChanged(let payload) = AccessibilityTrace.Delta.between(before, after) else {
             return XCTFail("Expected elementsChanged for capture context change")
         }
-        XCTAssertEqual(payload.elementCount, interface.elements.count)
+        XCTAssertEqual(payload.elementCount, interface.projectedElements.count)
         XCTAssertTrue(payload.edits.isEmpty)
     }
 
@@ -201,7 +201,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         XCTAssertEqual(
             AccessibilityTrace.Delta.between(before, after),
             .noChange(AccessibilityTrace.NoChange(
-                elementCount: interface.elements.count,
+                elementCount: interface.projectedElements.count,
                 captureEdge: AccessibilityTrace.CaptureEdge(before: before, after: after)
             ))
         )

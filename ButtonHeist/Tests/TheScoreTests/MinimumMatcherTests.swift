@@ -13,7 +13,7 @@ final class MinimumMatcherTests: XCTestCase {
 
         let derived = MinimumMatcher.buildAll(in: capture)
 
-        XCTAssertEqual(derived.map(\.element), capture.interface.elements)
+        XCTAssertEqual(derived.map(\.element), capture.interface.projectedElements)
         for minimumMatcher in derived {
             let resolved = resolve(minimumMatcher, in: capture)
             XCTAssertEqual(resolved, minimumMatcher.element)
@@ -75,7 +75,7 @@ final class MinimumMatcherTests: XCTestCase {
         let mutatedCapture = makeCapture([mutatedTarget, newConflict])
 
         XCTAssertEqual(
-            mutatedCapture.interface.elements.filter { $0.matches(originalMatcher.matcher) }.count,
+            mutatedCapture.interface.projectedElements.filter { $0.matches(originalMatcher.matcher) }.count,
             2,
             "The prior matcher should become ambiguous after the capture mutates."
         )
@@ -212,7 +212,7 @@ final class MinimumMatcherTests: XCTestCase {
     }
 
     private func resolve(_ minimumMatcher: MinimumMatcher, in capture: AccessibilityTrace.Capture) -> HeistElement? {
-        let matches = capture.interface.elements.filter { $0.matches(minimumMatcher.matcher) }
+        let matches = capture.interface.projectedElements.filter { $0.matches(minimumMatcher.matcher) }
         return matches[safe: minimumMatcher.ordinal ?? 0]
     }
 

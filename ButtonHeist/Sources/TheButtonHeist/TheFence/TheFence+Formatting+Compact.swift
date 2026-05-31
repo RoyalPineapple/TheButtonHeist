@@ -28,7 +28,7 @@ extension FenceResponse {
             }
                 .joined(separator: "\n")
         case .interface(let interface, let detail):
-            let header = "\(interface.elements.count) elements"
+            let header = "\(interface.projectedElements.count) elements"
             var lines: [String] = [InterfaceSummary.screenDescription(for: interface), header]
             lines.append(contentsOf: Self.compactTreeLines(interface, detail: detail))
             return lines.joined(separator: "\n")

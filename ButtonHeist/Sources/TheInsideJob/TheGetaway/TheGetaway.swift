@@ -120,7 +120,7 @@ final class TheGetaway {
     ) async {
         switch await brains.observeInterface(query) {
         case .success(let interface):
-            insideJobLogger.info("Interface: \(interface.elements.count) elements")
+            insideJobLogger.info("Interface: \(interface.projectedElements.count) elements")
             sendMessage(
                 .interface(interface),
                 requestId: requestId,

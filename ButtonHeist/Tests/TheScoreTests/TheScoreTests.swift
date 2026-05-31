@@ -70,8 +70,8 @@ final class MessageIntegrationTests: XCTestCase {
         let decoded = try decoder.decode(ServerMessage.self, from: data)
 
         if case .interface(let decodedPayload) = decoded {
-            XCTAssertEqual(decodedPayload.elements.count, 100)
-            XCTAssertEqual(decodedPayload.elements[50].label, "Label 50")
+            XCTAssertEqual(decodedPayload.projectedElements.count, 100)
+            XCTAssertEqual(decodedPayload.projectedElements[50].label, "Label 50")
         } else {
             XCTFail("Expected interface message")
         }
@@ -170,7 +170,7 @@ final class MessageIntegrationTests: XCTestCase {
             let decoded = try decoder.decode(ServerMessage.self, from: data)
 
             if case .interface(let decodedPayload) = decoded {
-                XCTAssertEqual(decodedPayload.elements[0].label, "Label \(i)")
+                XCTAssertEqual(decodedPayload.projectedElements[0].label, "Label \(i)")
             } else {
                 XCTFail("Expected interface update \(i)")
             }
