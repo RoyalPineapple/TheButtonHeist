@@ -340,6 +340,4 @@ public enum ActionMethod: String, Codable, Sendable {
     case elementSearch
     case scrollToEdge
     case waitFor
-    case elementNotFound
-    case elementDeallocated
 }

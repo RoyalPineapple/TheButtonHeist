@@ -44,38 +44,44 @@ final class SemanticActionability {
 
     struct SemanticActionabilityFailure: Error {
         let failedStep: SemanticActionabilityFailureStep
-        let method: ActionMethod?
+        let failureKind: TheSafecracker.FailureKind?
         let message: String
 
         static func notFound(_ message: String) -> SemanticActionabilityFailure {
-            .init(.notFound, method: .elementNotFound, message: message)
+            .init(.notFound, failureKind: .targetUnavailable, message: message)
         }
         static func ambiguous(_ message: String) -> SemanticActionabilityFailure {
-            .init(.ambiguous, method: .elementNotFound, message: message)
+            .init(.ambiguous, failureKind: .targetUnavailable, message: message)
         }
-        static func noRevealPath(_ message: String) -> SemanticActionabilityFailure { .init(.noRevealPath, method: nil, message: message) }
+        static func noRevealPath(_ message: String) -> SemanticActionabilityFailure {
+            .init(.noRevealPath, failureKind: nil, message: message)
+        }
 
         static func staleRefresh(
             _ message: String,
-            method: ActionMethod? = nil
+            failureKind: TheSafecracker.FailureKind? = nil
         ) -> SemanticActionabilityFailure {
-            .init(.staleRefresh, method: method, message: message)
+            .init(.staleRefresh, failureKind: failureKind, message: message)
         }
 
         static func geometryNotActionable(
             _ message: String,
-            method: ActionMethod? = nil
+            failureKind: TheSafecracker.FailureKind? = nil
         ) -> SemanticActionabilityFailure {
-            .init(.geometryNotActionable, method: method, message: message)
+            .init(.geometryNotActionable, failureKind: failureKind, message: message)
         }
 
         func interactionResult(commandMethod: ActionMethod) -> TheSafecracker.InteractionResult {
-            .failure(method ?? commandMethod, message: message)
+            .failure(commandMethod, message: message, failureKind: failureKind)
         }
 
-        private init(_ step: SemanticActionabilityFailureStep, method: ActionMethod?, message: String) {
+        private init(
+            _ step: SemanticActionabilityFailureStep,
+            failureKind: TheSafecracker.FailureKind?,
+            message: String
+        ) {
             failedStep = step
-            self.method = method
+            self.failureKind = failureKind
             self.message = message.contains("[\(step.rawValue)]")
                 ? message
                 : "semantic actionability failed [\(step.rawValue)]: \(message)"
@@ -158,8 +164,7 @@ final class SemanticActionability {
             return .failed(.geometryNotActionable(
                 "target \(Navigation.ScrollTargetDescription(liveTarget.screenElement).description) "
                     + "did not become actionable after semantic reveal; "
-                    + Self.liveGeometrySummary(liveTarget),
-                method: method
+                    + Self.liveGeometrySummary(liveTarget)
             ))
         }
 
@@ -198,8 +203,7 @@ final class SemanticActionability {
             return .failed(.geometryNotActionable(
                 "target \(Navigation.ScrollTargetDescription(refreshedTarget.screenElement).description) "
                     + "did not become actionable after activation point placement; "
-                    + Self.liveGeometrySummary(refreshedTarget.liveTarget),
-                method: method
+                    + Self.liveGeometrySummary(refreshedTarget.liveTarget)
             ))
         case .failure(let failure):
             return .failed(failure)
@@ -237,7 +241,7 @@ final class SemanticActionability {
                     element: screenElement,
                     isInflated: stash.visibleIds.contains(screenElement.heistId)
                 ),
-                method: .elementDeallocated
+                failureKind: .targetUnavailable
             ))
         case .geometryUnavailable:
             return .failure(.geometryNotActionable(
@@ -245,8 +249,7 @@ final class SemanticActionability {
                     method: method,
                     element: screenElement,
                     isVisible: stash.visibleIds.contains(screenElement.heistId)
-                ),
-                method: method
+                )
             ))
         }
     }
@@ -259,8 +262,7 @@ final class SemanticActionability {
         if ScreenMetrics.current.bounds.intersects(liveTarget.frame) {
             return .geometryNotActionable(
                 "target \(description) has an activation point outside the screen; "
-                    + Self.liveGeometrySummary(liveTarget),
-                method: method
+                    + Self.liveGeometrySummary(liveTarget)
             )
         }
         return .noRevealPath(
@@ -290,7 +292,7 @@ final class SemanticActionability {
             if ScreenMetrics.current.bounds.contains(activationPoint) {
                 return .success(false)
             }
-            return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage, method: method))
+            return .failure(.geometryNotActionable(unsafeProgrammaticScrollMessage))
         }
         guard safecracker.scrollToMakeActivationPointVisible(
             activationPoint,
@@ -302,7 +304,7 @@ final class SemanticActionability {
             if ScreenMetrics.current.bounds.contains(activationPoint) {
                 return .success(false)
             }
-            return .failure(.geometryNotActionable(scrollFailedMessage, method: method))
+            return .failure(.geometryNotActionable(scrollFailedMessage))
         }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
         stash.refresh()

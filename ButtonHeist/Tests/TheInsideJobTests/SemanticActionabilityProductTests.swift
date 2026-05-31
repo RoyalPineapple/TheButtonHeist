@@ -70,7 +70,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
         ))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.errorKind, .elementNotFound)
         XCTAssertEqual(fixture.first.activationCount, 0)
         XCTAssertEqual(fixture.second.activationCount, 0)
         XCTAssertDiagnostic(result.message, contains: [

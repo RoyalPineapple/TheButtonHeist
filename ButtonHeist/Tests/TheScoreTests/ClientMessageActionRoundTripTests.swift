@@ -164,15 +164,17 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     func testActionResultWithFailureMessage() throws {
         let result = ActionResult(
             success: false,
-            method: .elementNotFound,
-            message: "Element not found"
+            method: .activate,
+            message: "Element not found",
+            errorKind: .elementNotFound
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
 
         XCTAssertFalse(decoded.success)
-        XCTAssertEqual(decoded.method, .elementNotFound)
+        XCTAssertEqual(decoded.method, .activate)
         XCTAssertEqual(decoded.message, "Element not found")
+        XCTAssertEqual(decoded.errorKind, .elementNotFound)
     }
 
     func testActionResultWithValueField() throws {

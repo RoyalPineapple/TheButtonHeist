@@ -52,51 +52,50 @@ extension Actions {
             return rotorSuccessResult(hit, direction: direction)
         case .deallocated:
             return rotorFailure(
-                .elementDeallocated,
                 observed: "liveObject=deallocated before rotor step",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
                 element: element,
                 liveObject: liveObject,
-                suggestion: "retry the same semantic target after UI settles"
+                suggestion: "retry the same semantic target after UI settles",
+                failureKind: .targetUnavailable
             )
         case .noRotors:
-            return rotorFailure(.rotor, observed: "customRotors=[]",
+            return rotorFailure(observed: "customRotors=[]",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "target an element exposing custom rotors")
         case .noSuchRotor(let available):
-            return rotorFailure(.rotor, observed: "requestedRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
+            return rotorFailure(observed: "requestedRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
                                 + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "use one of available rotors \(ActionCapabilityDiagnostic.formatQuotedList(available))")
         case .ambiguousRotor(let available):
-            return rotorFailure(.rotor, observed: "ambiguousRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
+            return rotorFailure(observed: "ambiguousRotor=\(ActionCapabilityDiagnostic.quote(rotor ?? "")) "
                                 + "availableRotors=\(ActionCapabilityDiagnostic.formatQuotedList(available))",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "specify rotorIndex or an exact rotor name")
         case .currentItemUnavailable(let heistId):
             return rotorFailure(
-                .elementNotFound,
                 observed: "continuation.heistId=\(ActionCapabilityDiagnostic.quote(heistId)) is not available",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
                 element: element,
                 liveObject: liveObject,
-                suggestion: "use the heistId returned by the previous rotor result"
+                suggestion: "use the heistId returned by the previous rotor result",
+                failureKind: .targetUnavailable
             )
         case .continuationTextRangeUnavailable:
-            return rotorFailure(.rotor, observed: "continuation.textRange is not available",
+            return rotorFailure(observed: "continuation.textRange is not available",
                                 rotor: rotor, rotorIndex: rotorIndex, direction: direction,
                                 element: element, liveObject: liveObject,
                                 suggestion: "use the text range returned by the previous rotor result")
         case .noResult(let rotorName):
             return rotorFailure(
-                .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned no \(direction.rawValue) result",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
@@ -107,7 +106,6 @@ extension Actions {
             )
         case .resultTargetUnavailable(let rotorName):
             return rotorFailure(
-                .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a result without an accessibility target",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
@@ -118,7 +116,6 @@ extension Actions {
             )
         case .resultTargetNotParsed(let rotorName):
             return rotorFailure(
-                .rotor,
                 observed: "rotor=\(ActionCapabilityDiagnostic.quote(rotorName)) returned a target outside the parsed hierarchy",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
@@ -155,17 +152,17 @@ extension Actions {
     }
 
     private static func rotorFailure(
-        _ method: ActionMethod,
         observed: String,
         rotor: String?,
         rotorIndex: Int?,
         direction: RotorDirection,
         element: TheStash.ScreenElement,
         liveObject: NSObject,
-        suggestion: String
+        suggestion: String,
+        failureKind: TheSafecracker.FailureKind? = nil
     ) -> TheSafecracker.InteractionResult {
         .failure(
-            method,
+            .rotor,
             message: rotorDiagnostic(
                 observed: observed,
                 rotor: rotor,
@@ -174,7 +171,8 @@ extension Actions {
                 element: element,
                 liveObject: liveObject,
                 suggestion: suggestion
-            )
+            ),
+            failureKind: failureKind
         )
     }
 

@@ -477,7 +477,8 @@ final class TheBrainsActionTests: XCTestCase {
         let result = await brains.actions.executeIncrement(.heistId("quantity_0"))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.method, .increment)
+        XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertEqual(currentObject.incrementCount, 0)
         XCTAssertDiagnostic(result.message, contains: [
             "Element not found",
@@ -1052,6 +1053,7 @@ final class TheBrainsActionTests: XCTestCase {
             .actionFailed
         )
         XCTAssertEqual(TheBrains.waitForErrorKind(for: .timeout), .timeout)
+        XCTAssertEqual(TheBrains.waitForErrorKind(for: .targetUnavailable), .elementNotFound)
         XCTAssertEqual(TheBrains.waitForErrorKind(for: nil), .elementNotFound)
     }
 

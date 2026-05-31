@@ -234,9 +234,7 @@ final class TheBrains {
         errorKind: ErrorKind?,
         before: BeforeState
     ) -> ActionResult {
-        let kind = errorKind
-            ?? ((method == .elementNotFound || method == .elementDeallocated)
-                ? .elementNotFound : .actionFailed)
+        let kind = errorKind ?? .actionFailed
         var builder = ActionResultBuilder(method: method, capture: before.capture)
         builder.message = message
         return builder.failure(errorKind: kind, payload: payload)

@@ -3544,7 +3544,7 @@ final class TheFenceHandlerTests: XCTestCase {
             case .activate:
                 return .actionResult(ActionResult(
                     success: false,
-                    method: .elementNotFound,
+                    method: .activate,
                     message: "missing",
                     errorKind: .elementNotFound
                 ))
@@ -3636,7 +3636,7 @@ final class TheFenceHandlerTests: XCTestCase {
             case .activate:
                 return .actionResult(ActionResult(
                     success: false,
-                    method: .elementNotFound,
+                    method: .activate,
                     message: "missing",
                     errorKind: .elementNotFound
                 ))
@@ -3657,7 +3657,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected actionFailed playback failure, got \(String(describing: failure))")
         }
         XCTAssertEqual(step.command, "activate")
-        XCTAssertEqual(result.method, .elementNotFound)
+        XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.message, "missing")
         XCTAssertNil(interface)
         XCTAssertEqual(diagnosticCaptureFailure, "Action failed: diagnostic interface unavailable")

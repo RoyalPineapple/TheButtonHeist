@@ -276,6 +276,8 @@ extension TheBrains {
             return .timeout
         case .inputValidation:
             return .validationError
+        case .targetUnavailable:
+            return .elementNotFound
         case .none:
             return .elementNotFound
         }
@@ -290,10 +292,10 @@ extension TheBrains {
             return .timeout
         case .inputValidation:
             return .validationError
+        case .targetUnavailable:
+            return .elementNotFound
         case .none:
-            return (result.method == .elementNotFound || result.method == .elementDeallocated)
-                ? .elementNotFound
-                : .actionFailed
+            return .actionFailed
         }
     }
 

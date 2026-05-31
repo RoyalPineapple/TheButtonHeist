@@ -138,6 +138,8 @@ final class TheSafecracker {
         case timeout
         /// Input geometry or other client-controlled values failed validation.
         case inputValidation
+        /// The command target was not present or its live accessibility object expired.
+        case targetUnavailable
     }
 
     // MARK: - Internal Touch State
