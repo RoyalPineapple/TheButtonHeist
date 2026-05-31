@@ -137,11 +137,10 @@ extension HeistStore {
             target = .matcher(matcher, ordinal: matchedOrdinal)
         }
 
-        return try HeistStep(
-            command: request.command.rawValue,
-            target: target,
+        return try HeistStepProjection(
+            elementTarget: target,
             arguments: projection.arguments,
             expectation: projection.expectation
-        )
+        ).heistStep(command: request.command)
     }
 }

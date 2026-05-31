@@ -4,6 +4,15 @@ struct HeistStepProjection: Sendable, Equatable {
     let elementTarget: ElementTarget?
     let arguments: [String: HeistValue]
     let expectation: ActionExpectation?
+
+    func heistStep(command: TheFence.Command) throws -> HeistStep {
+        try HeistStep(
+            command: command.rawValue,
+            target: elementTarget,
+            arguments: arguments,
+            expectation: expectation
+        )
+    }
 }
 
 extension TheFence.ParsedRequest {
