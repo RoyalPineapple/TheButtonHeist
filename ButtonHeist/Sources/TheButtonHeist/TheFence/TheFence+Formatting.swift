@@ -12,8 +12,6 @@ extension FenceResponse {
             return message
         case .error(let message, _):
             return "Error: \(message)"
-        case .help(let commands):
-            return "Commands:\n" + commands.map { "  \($0)" }.joined(separator: "\n")
         case .status(let connected, let deviceName):
             if connected, let name = deviceName {
                 return "Connected to \(name)"

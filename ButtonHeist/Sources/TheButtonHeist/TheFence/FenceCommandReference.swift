@@ -129,7 +129,7 @@ public enum FenceCommandReference {
 
     private static func cliExposureSummary(_ descriptor: FenceCommandDescriptor) -> String {
         switch descriptor.cliExposure {
-        case .directCommand, .sessionOnly:
+        case .directCommand:
             return "`\(descriptor.command.rawValue)`"
         case .notExposed:
             return "-"
@@ -140,8 +140,6 @@ public enum FenceCommandReference {
         switch descriptor.cliExposure {
         case .directCommand:
             return "direct command `\(descriptor.command.rawValue)`"
-        case .sessionOnly:
-            return "session-only `\(descriptor.command.rawValue)`"
         case .notExposed:
             return "not exposed"
         }

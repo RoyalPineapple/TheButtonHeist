@@ -13,8 +13,6 @@ extension FenceResponse {
             return message
         case .error(let message, let details):
             return Self.compactError(message, details: details)
-        case .help(let commands):
-            return commands.joined(separator: ", ")
         case .status(let connected, let deviceName):
             if connected, let name = deviceName { return "connected: \(name)" }
             return "not connected"

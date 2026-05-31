@@ -203,7 +203,6 @@ public extension FenceParameterSpec {
 
 public enum CLIExposure: Sendable, Equatable {
     case directCommand
-    case sessionOnly
     case notExposed
 }
 

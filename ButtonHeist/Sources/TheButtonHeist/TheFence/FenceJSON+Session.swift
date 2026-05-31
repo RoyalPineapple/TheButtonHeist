@@ -71,11 +71,6 @@ struct PublicOKResponse: FencePublicJSONResponse {
     let message: String
 }
 
-struct PublicHelpResponse: FencePublicJSONResponse {
-    let status = PublicStatus.ok
-    let commands: [String]
-}
-
 struct PublicStatusResponse: FencePublicJSONResponse {
     let status = PublicStatus.ok
     let connected: Bool

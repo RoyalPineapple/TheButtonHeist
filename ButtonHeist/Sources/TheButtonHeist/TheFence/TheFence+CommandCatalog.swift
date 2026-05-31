@@ -4,7 +4,6 @@ import TheScore
 extension TheFence {
 
     public enum Command: String, CaseIterable, Sendable {
-        case help
         case ping
         case listDevices = "list_devices"
         case getInterface = "get_interface"
@@ -136,11 +135,6 @@ extension TheFence.Command {
         let duration = FenceParameterBlocks.gestureDuration
 
         switch self {
-        case .help:
-            entry.cliExposure = .sessionOnly
-            entry.mcpExposure = .notExposed
-            entry.requiresConnectionBeforeDispatch = false
-            entry.description = "Return descriptor-backed help for the current Button Heist command surface."
         case .ping:
             entry.requiresConnectionBeforeDispatch = false
             entry.mcpAnnotations = MCPToolAnnotationSpec(readOnlyHint: true, idempotentHint: true)

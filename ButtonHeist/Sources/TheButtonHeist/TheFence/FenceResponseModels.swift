@@ -176,7 +176,6 @@ enum FenceRequestErrorCode {
 public enum FenceResponse {
     case ok(message: String)
     case error(String, details: FailureDetails? = nil)
-    case help(commands: [String])
     case status(connected: Bool, deviceName: String?)
     case pong(PongPayload)
     case devices([DiscoveredDevice])

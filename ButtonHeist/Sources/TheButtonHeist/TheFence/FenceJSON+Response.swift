@@ -40,8 +40,6 @@ struct PublicResponseModel: FencePublicJSONResponse {
             try PublicOKResponse(message: message).encode(to: encoder)
         case .error(let message, let details):
             try PublicErrorResponse(message: message, details: details).encode(to: encoder)
-        case .help(let commands):
-            try PublicHelpResponse(commands: commands).encode(to: encoder)
         case .status(let connected, let deviceName):
             try PublicStatusResponse(connected: connected, device: deviceName).encode(to: encoder)
         case .pong(let payload):
