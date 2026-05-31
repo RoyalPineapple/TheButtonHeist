@@ -99,9 +99,7 @@ extension Actions {
                 refreshAndResolve: {
                     await self.refreshActivationTarget(context.target)
                 },
-                syntheticTap: safecracker.tap,
-                tapReceiverDiagnostic: safecracker.tapReceiverDiagnostic,
-                screenBounds: { ScreenMetrics.current.bounds }
+                syntheticTap: safecracker.tap
             ).apply(to: context.liveTarget)
         }
     }

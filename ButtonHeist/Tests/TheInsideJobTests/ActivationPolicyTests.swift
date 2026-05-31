@@ -133,41 +133,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(tappedPoints, [CGPoint(x: 30, y: 40)])
     }
 
-    func testSyntheticTapRecoveryFailureCarriesTapReceiverObservation() async {
-        let point = CGPoint(x: 12, y: 34)
-        let tapReceiver = TheSafecracker.TapReceiverDiagnostic(
-            receiverClass: "UIButton",
-            receiverAxLabel: "Retry",
-            receiverAxIdentifier: nil,
-            interactionDisabledInChain: false,
-            hiddenInChain: false,
-            windowLevel: 0,
-            isSwiftUIGestureContainer: false
-        )
-        var tappedPoints: [CGPoint] = []
-        var receiverPoints: [CGPoint] = []
-
-        let outcome = await makePolicy(
-            activate: { _ in .refused },
-            refreshAndResolve: {
-                .failure(.failure(.activate, message: "unexpected refresh"))
-            },
-            syntheticTap: { point in
-                tappedPoints.append(point)
-                return false
-            },
-            tapReceiverDiagnostic: { point in
-                receiverPoints.append(point)
-                return tapReceiver
-            }
-        ).attemptSyntheticTapRecovery(at: point)
-
-        XCTAssertEqual(outcome, .failed(tapReceiver: tapReceiver))
-        XCTAssertEqual(tappedPoints, [point])
-        XCTAssertEqual(receiverPoints, [point])
-    }
-
-    func testFinalDiagnosticFailureUsesRetryTargetAndTapObservation() async {
+    func testFinalFailureUsesRetryTargetAndFreshActivationPoint() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let retryTarget = makeLiveTarget(
             heistId: "retry",
@@ -178,7 +144,6 @@ final class ActivationPolicyTests: XCTestCase {
         )
         var activateCount = 0
         var tappedPoints: [CGPoint] = []
-        var receiverPoints: [CGPoint] = []
 
         let result = await makePolicy(
             activate: { _ in
@@ -191,10 +156,6 @@ final class ActivationPolicyTests: XCTestCase {
             syntheticTap: { point in
                 tappedPoints.append(point)
                 return false
-            },
-            tapReceiverDiagnostic: { point in
-                receiverPoints.append(point)
-                return nil
             }
         ).apply(to: initialTarget)
 
@@ -202,29 +163,23 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
         XCTAssertEqual(tappedPoints, [CGPoint(x: 52, y: 52)])
-        XCTAssertEqual(receiverPoints, [CGPoint(x: 52, y: 52)])
         XCTAssertDiagnostic(result.message, contains: [
-            "activate failed",
-            "accessibilityActivate: returned false",
-            "syntheticTap: no targetable window at activation point",
-            "frame: 12,30,80,44",
-            "activationPoint: 52,52",
-            "traits: button",
+            "activate failed: accessibilityActivate returned false after semantic refresh",
+            "synthetic tap at fresh activation point also failed",
+            "heistId=\"retry\"",
+            "label=\"Retry Button\"",
         ])
     }
 
     private func makePolicy(
         activate: @escaping @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
-        syntheticTap: @escaping @MainActor (CGPoint) async -> Bool,
-        tapReceiverDiagnostic: @escaping @MainActor (CGPoint) -> TheSafecracker.TapReceiverDiagnostic? = { _ in nil }
+        syntheticTap: @escaping @MainActor (CGPoint) async -> Bool
     ) -> ActivationPolicy {
         ActivationPolicy(
             activate: activate,
             refreshAndResolve: refreshAndResolve,
-            syntheticTap: syntheticTap,
-            tapReceiverDiagnostic: tapReceiverDiagnostic,
-            screenBounds: { CGRect(x: 0, y: 0, width: 393, height: 852) }
+            syntheticTap: syntheticTap
         )
     }
 
