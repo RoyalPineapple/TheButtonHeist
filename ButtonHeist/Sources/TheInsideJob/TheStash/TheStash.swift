@@ -73,6 +73,32 @@ final class TheStash {
         semanticState.elements.count
     }
 
+    /// HeistIds retained in committed semantic memory.
+    var knownElementIds: Set<HeistId> {
+        semanticState.heistIds
+    }
+
+    /// HeistIds backed by the latest live parse.
+    var visibleElementIds: Set<HeistId> {
+        liveCapture.heistIds
+    }
+
+    /// O(1) lookup in committed semantic memory.
+    func knownElement(heistId: HeistId) -> ScreenElement? {
+        semanticState.findElement(heistId: heistId)
+    }
+
+    /// Semantic containers in deterministic traversal order.
+    var semanticContainersInTraversalOrder: [SemanticScreen.Container] {
+        semanticState.containers.values
+            .sorted { $0.path.indices.lexicographicallyPrecedes($1.path.indices) }
+    }
+
+    /// Elements in matcher/diagnostic order.
+    var orderedSemanticElements: [ScreenElement] {
+        currentScreen.orderedElements
+    }
+
     /// Hash of committed semantic memory. Deliberately excludes live viewport
     /// geometry so scroll position alone does not produce semantic history.
     var semanticHash: String {
