@@ -10,9 +10,6 @@ extension TheInsideJob {
         case suspended
         case resuming(id: UUID, task: Task<Void, Never>)
     }
-
-    typealias PollingPhase = InsideJobPollingRuntime.Phase
-
     /// Idle-timer baseline state. We force `UIApplication.isIdleTimerDisabled`
     /// on while the server is running so the device doesn't sleep mid-session,
     /// and restore the prior value on suspend/stop.

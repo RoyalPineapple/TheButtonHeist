@@ -50,15 +50,12 @@ enum StartupInfoPlistKey: String {
     case disableAutoStart = "InsideJobDisableAutoStart"
     case token = "InsideJobToken"
     case instanceId = "InsideJobInstanceId"
-    case pollingInterval = "InsideJobPollingInterval"
     case port = "InsideJobPort"
     case scope = "InsideJobScope"
     case sessionTimeout = "InsideJobSessionTimeout"
 }
 
 struct StartupConfiguration: Equatable, Sendable {
-    static let defaultPollingInterval: TimeInterval = 1.0
-    static let minimumPollingInterval: TimeInterval = 0.5
     static let defaultSessionTimeout: TimeInterval = 30.0
     static let minimumSessionTimeout: TimeInterval = 1.0
     static let maximumSessionTimeout: TimeInterval = 3600.0
@@ -67,7 +64,6 @@ struct StartupConfiguration: Equatable, Sendable {
     let token: ResolvedStartupValue<String?>
     let instanceId: ResolvedStartupValue<String?>
     let preferredPort: ResolvedStartupValue<UInt16>
-    let pollingInterval: ResolvedStartupValue<TimeInterval>
     let allowedScopes: ResolvedStartupValue<Set<ConnectionScope>>
     let sessionTimeout: ResolvedStartupValue<TimeInterval>
     let warnings: [StartupConfigurationWarning]
@@ -103,15 +99,6 @@ struct StartupConfiguration: Equatable, Sendable {
             warnings: &warnings
         )
         let preferredPort = resolvePort(env: env, plist: plist, warnings: &warnings)
-        let pollingInterval = resolveTimeInterval(
-            envKey: .insideJobPollingInterval,
-            plistKey: .pollingInterval,
-            defaultValue: defaultPollingInterval,
-            clamp: { max(minimumPollingInterval, $0) },
-            env: env,
-            plist: plist,
-            warnings: &warnings
-        )
         let allowedScopes = resolveAllowedScopes(env: env, plist: plist, warnings: &warnings)
         let sessionTimeout = resolveTimeInterval(
             envKey: .insideJobSessionTimeout,
@@ -128,7 +115,6 @@ struct StartupConfiguration: Equatable, Sendable {
             token: token,
             instanceId: instanceId,
             preferredPort: preferredPort,
-            pollingInterval: pollingInterval,
             allowedScopes: allowedScopes,
             sessionTimeout: sessionTimeout,
             warnings: warnings

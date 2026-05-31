@@ -167,20 +167,6 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertNotNil(reading.topmostVC)
     }
 
-    // MARK: - Settle transition callback
-
-    func testSettleTransitionCallbackFires() async {
-        let expectation = XCTestExpectation(description: "settled callback")
-        tripwire.onTransition = { transition in
-            if case .settled = transition {
-                expectation.fulfill()
-            }
-        }
-
-        tripwire.startPulse()
-        await fulfillment(of: [expectation], timeout: 2.0)
-    }
-
     // MARK: - Fingerprint divergence during animation
 
     func testFingerprintDivergesDuringAnimation() {

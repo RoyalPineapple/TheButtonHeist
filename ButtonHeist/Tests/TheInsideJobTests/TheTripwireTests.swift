@@ -239,28 +239,6 @@ final class TheTripwireTests: XCTestCase {
         XCTAssertFalse(tripwire.isPulseRunning)
     }
 
-    func testFirstTickBaselineDoesNotEmitTripwireTransition() {
-        let reading = pulseReading(tripwireSignal: tripwireSignal(navigationDepth: 1))
-
-        let transitions = TheTripwire.PulseTickBaseline(previous: nil).transitions(to: reading)
-
-        XCTAssertTrue(transitions.isEmpty, "First tick establishes baseline without reporting a synthetic transition")
-    }
-
-    func testObservedBaselineEmitsTripwireTransition() {
-        let previous = pulseReading(tripwireSignal: tripwireSignal(navigationDepth: 1))
-        let current = pulseReading(tripwireSignal: tripwireSignal(navigationDepth: 2))
-
-        let transitions = TheTripwire.PulseTickBaseline(previous: previous).transitions(to: current)
-
-        guard case .tripwireTriggered(let from, let to)? = transitions.first else {
-            XCTFail("Expected tripwire transition from observed baseline")
-            return
-        }
-        XCTAssertEqual(from, previous.tripwireSignal)
-        XCTAssertEqual(to, current.tripwireSignal)
-    }
-
     // MARK: - PresentationFingerprint.matches (pure value type)
 
     func testFingerprintMatchesIdentical() {

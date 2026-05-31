@@ -19,7 +19,6 @@ private let autoStartTask = OSAllocatedUnfairLock<Task<Void, Never>?>(initialSta
 /// - INSIDEJOB_DISABLE / InsideJobDisableAutoStart: Set to true to disable
 /// - INSIDEJOB_TOKEN / InsideJobToken: Auth token (auto-generated if not set)
 /// - INSIDEJOB_ID / InsideJobInstanceId: Human-readable instance identifier
-/// - INSIDEJOB_POLLING_INTERVAL / InsideJobPollingInterval: Polling interval in seconds
 /// - INSIDEJOB_PORT / InsideJobPort: Fixed TCP port to listen on (0 or unset = any available)
 /// - INSIDEJOB_SCOPE / InsideJobScope: Allowed connection scopes
 /// - INSIDEJOB_SESSION_TIMEOUT / InsideJobSessionTimeout: Session release timeout
@@ -51,7 +50,6 @@ public func theInsideJobAutoStartFromLoad() {
         do {
             TheInsideJob.configure(startupConfiguration: configuration)
             try await TheInsideJob.shared.start()
-            TheInsideJob.shared.startPolling(interval: configuration.pollingInterval.value)
             autoStartLogger.info("========== AUTO-START SUCCESS ==========")
         } catch {
             autoStartLogger.error("========== AUTO-START FAILED: \(error) ==========")

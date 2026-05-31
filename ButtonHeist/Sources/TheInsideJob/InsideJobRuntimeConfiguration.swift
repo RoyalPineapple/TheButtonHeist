@@ -12,7 +12,6 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     let preferredPortSource: StartupConfigurationSource
     let allowedScopes: Set<ConnectionScope>
     let allowedScopesSource: StartupConfigurationSource
-    let pollingInterval: ResolvedStartupValue<TimeInterval>?
     let sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>
     let sessionIdentity: InsideJobSessionIdentity
 
@@ -32,7 +31,6 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             preferredPortSource: port == 0 ? .defaultValue : .api,
             allowedScopes: allowedScopes ?? startupConfiguration.allowedScopes.value,
             allowedScopesSource: allowedScopes == nil ? startupConfiguration.allowedScopes.source : .api,
-            pollingInterval: nil,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout
         )
     }
@@ -47,7 +45,6 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
             preferredPortSource: startupConfiguration.preferredPort.source,
             allowedScopes: startupConfiguration.allowedScopes.value,
             allowedScopesSource: startupConfiguration.allowedScopes.source,
-            pollingInterval: startupConfiguration.pollingInterval,
             sessionReleaseTimeout: startupConfiguration.sessionTimeout
         )
     }
@@ -61,7 +58,6 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         preferredPortSource: StartupConfigurationSource,
         allowedScopes: Set<ConnectionScope>,
         allowedScopesSource: StartupConfigurationSource,
-        pollingInterval: ResolvedStartupValue<TimeInterval>?,
         sessionReleaseTimeout: ResolvedStartupValue<TimeInterval>,
         sessionIdentity: InsideJobSessionIdentity? = nil
     ) {
@@ -72,7 +68,6 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
         self.preferredPortSource = preferredPortSource
         self.allowedScopes = allowedScopes
         self.allowedScopesSource = allowedScopesSource
-        self.pollingInterval = pollingInterval
         self.sessionReleaseTimeout = sessionReleaseTimeout
         self.sessionIdentity = sessionIdentity ?? InsideJobSessionIdentity.make(instanceId: instanceId)
     }
