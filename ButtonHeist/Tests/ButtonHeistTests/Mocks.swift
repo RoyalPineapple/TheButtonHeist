@@ -267,6 +267,42 @@ final class MockConnection: TransportReachabilityConnecting {
                 expectation: wait.predicate.validate(against: result),
                 durationMs: heistStepDurationMs
             )
+        case .conditional(let conditional):
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .conditional,
+                message: "mock conditionals do not execute nested steps",
+                durationMs: heistStepDurationMs,
+                caseSelection: HeistCaseSelectionResult(
+                    cases: conditional.cases.map {
+                        HeistCaseMatchResult(
+                            predicate: $0.predicate,
+                            result: ExpectationResult(met: false, predicate: $0.predicate)
+                        )
+                    },
+                    selectedCaseIndex: nil,
+                    elapsedMs: heistStepDurationMs
+                )
+            )
+        case .waitForCases(let waitForCases):
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .waitForCases,
+                message: "mock wait_for_cases timed out",
+                durationMs: heistStepDurationMs,
+                caseSelection: HeistCaseSelectionResult(
+                    cases: waitForCases.cases.map {
+                        HeistCaseMatchResult(
+                            predicate: $0.predicate,
+                            result: ExpectationResult(met: false, predicate: $0.predicate)
+                        )
+                    },
+                    selectedCaseIndex: nil,
+                    elapsedMs: heistStepDurationMs,
+                    timeout: waitForCases.timeout,
+                    timedOut: true
+                )
+            )
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,
@@ -345,7 +381,9 @@ private extension HeistExecutionStepResult {
             message: message,
             durationMs: durationMs,
             stopsHeist: stop,
-            skipped: skipped
+            skipped: skipped,
+            caseSelection: caseSelection,
+            childResults: childResults
         )
     }
 }

@@ -513,6 +513,58 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.steps[1].skipped?.afterFailedIndex, 0)
     }
 
+    func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildResults() throws {
+        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .conditional,
+                    message: "matched case 0",
+                    durationMs: 6,
+                    stopsHeist: true,
+                    caseSelection: HeistCaseSelectionResult(
+                        cases: [
+                            HeistCaseMatchResult(
+                                predicate: predicate,
+                                result: ExpectationResult(met: true, predicate: predicate)
+                            ),
+                        ],
+                        selectedCaseIndex: 0,
+                        elapsedMs: 2,
+                        lastObservedSummary: "screen: login; known: 3 elements"
+                    ),
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(
+                                success: false,
+                                method: .activate,
+                                message: "button disabled",
+                                errorKind: .actionFailed
+                            ),
+                            durationMs: 4,
+                            stopsHeist: true
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 7,
+            failedIndex: 0
+        )
+
+        let data = try encoder.encode(result)
+        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
+
+        let decodedStep = try XCTUnwrap(decoded.steps.first)
+        XCTAssertEqual(decodedStep.caseSelection?.cases.first?.predicate, predicate)
+        XCTAssertEqual(decodedStep.caseSelection?.cases.first?.result.met, true)
+        XCTAssertEqual(decodedStep.caseSelection?.selectedCaseIndex, 0)
+        XCTAssertEqual(decodedStep.childResults?.first?.actionResult?.errorKind, .actionFailed)
+        XCTAssertTrue(decodedStep.childResults?.first?.isFailure == true)
+    }
+
     // MARK: - HeistCustomContent
 
     func testHeistCustomContentRoundTrip() throws {

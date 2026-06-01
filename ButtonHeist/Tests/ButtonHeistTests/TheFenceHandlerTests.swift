@@ -2519,6 +2519,74 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPlayHeistReportSurfacesNestedCaseActionFailure() async throws {
+        let nestedAction = try activateHeistStep(identifier: "nested")
+        let heist = HeistPlan(steps: [
+            .conditional(try ConditionalStep(
+                cases: [
+                    PredicateCase(
+                        predicate: .state(.present(ElementPredicate(label: "Home"))),
+                        steps: [nestedAction]
+                    ),
+                ]
+            )),
+        ])
+        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let executionResult = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .conditional,
+                    message: "matched case 0",
+                    durationMs: 2,
+                    stopsHeist: true,
+                    caseSelection: HeistCaseSelectionResult(
+                        cases: [
+                            HeistCaseMatchResult(
+                                predicate: predicate,
+                                result: ExpectationResult(met: true, predicate: predicate)
+                            ),
+                        ],
+                        selectedCaseIndex: 0,
+                        elapsedMs: 1
+                    ),
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(
+                                success: false,
+                                method: .activate,
+                                message: "nested button failed",
+                                errorKind: .actionFailed
+                            ),
+                            durationMs: 7,
+                            stopsHeist: true
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 9,
+            failedIndex: 0
+        )
+        let (fence, _) = makeConnectedFence()
+        let contract = try fence.validateHeistPlayback(heist)
+
+        let projection = fence.playbackProjection(contract: contract, result: executionResult)
+
+        XCTAssertEqual(projection.stepResults.map(\.command), ["if", "activate"])
+        XCTAssertTrue(projection.stepResults[0].passed)
+        XCTAssertEqual(projection.failedIndex, 1)
+        XCTAssertEqual(projection.failure?.step.command, .activate)
+        guard case .failed(let message, let errorKind) = projection.stepResults[1].outcome else {
+            return XCTFail("Expected nested action failure, got \(projection.stepResults[1].outcome)")
+        }
+        XCTAssertEqual(message, "nested button failed")
+        XCTAssertEqual(errorKind, .action(.actionFailed))
+        XCTAssertEqual(projection.stepResults[1].timeSeconds, 0.007, accuracy: 0.000_001)
+    }
+
+    @ButtonHeistActor
     func testPlayHeistResetsPhaseAfterCompletion() async throws {
         let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)

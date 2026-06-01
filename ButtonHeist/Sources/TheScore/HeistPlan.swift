@@ -63,15 +63,22 @@ extension HeistPlan: CustomStringConvertible {
 public enum HeistStep: Codable, Sendable, Equatable {
     case action(ActionStep)
     case wait(WaitStep)
+    case conditional(ConditionalStep)
+    case waitForCases(WaitForCasesStep)
     case warn(WarnStep)
     case fail(FailStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, warn, fail
+        case type, action, wait, conditional, waitForCases = "wait_for_cases", warn, fail
     }
 
     private enum StepType: String, Codable {
-        case action, wait, warn, fail
+        case action
+        case wait
+        case conditional
+        case waitForCases = "wait_for_cases"
+        case warn
+        case fail
     }
 
     public init(from decoder: Decoder) throws {
@@ -84,6 +91,15 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .wait:
             try decoder.rejectUnknownKeys(allowed: ["type", "wait"], typeName: "wait heist step")
             self = .wait(try container.decode(WaitStep.self, forKey: .wait))
+        case .conditional:
+            try decoder.rejectUnknownKeys(allowed: ["type", "conditional"], typeName: "conditional heist step")
+            self = .conditional(try container.decode(ConditionalStep.self, forKey: .conditional))
+        case .waitForCases:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.waitForCases.stringValue],
+                typeName: "wait_for_cases heist step"
+            )
+            self = .waitForCases(try container.decode(WaitForCasesStep.self, forKey: .waitForCases))
         case .warn:
             try decoder.rejectUnknownKeys(allowed: ["type", "warn"], typeName: "warn heist step")
             self = .warn(try container.decode(WarnStep.self, forKey: .warn))
@@ -102,6 +118,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .wait(let step):
             try container.encode(StepType.wait, forKey: .type)
             try container.encode(step, forKey: .wait)
+        case .conditional(let step):
+            try container.encode(StepType.conditional, forKey: .type)
+            try container.encode(step, forKey: .conditional)
+        case .waitForCases(let step):
+            try container.encode(StepType.waitForCases, forKey: .type)
+            try container.encode(step, forKey: .waitForCases)
         case .warn(let step):
             try container.encode(StepType.warn, forKey: .type)
             try container.encode(step, forKey: .warn)
@@ -117,6 +139,8 @@ extension HeistStep: CustomStringConvertible {
         switch self {
         case .action(let step): return step.description
         case .wait(let step): return step.description
+        case .conditional(let step): return step.description
+        case .waitForCases(let step): return step.description
         case .warn(let step): return step.description
         case .fail(let step): return step.description
         }
@@ -183,9 +207,17 @@ public struct WaitStep: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedTimeout = try container.decode(Double.self, forKey: .timeout)
+        guard decodedTimeout >= 0 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .timeout,
+                in: container,
+                debugDescription: "wait step timeout must be non-negative"
+            )
+        }
         self.init(
             predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
-            timeout: try container.decode(Double.self, forKey: .timeout)
+            timeout: decodedTimeout
         )
     }
 
@@ -201,6 +233,129 @@ extension WaitStep: CustomStringConvertible {
         ScoreDescription.call("wait", [
             predicate.description,
             "timeout=\(ScoreDescription.decimal(timeout))",
+        ])
+    }
+}
+
+public struct ConditionalStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case cases
+        case elseSteps = "else_steps"
+    }
+
+    public let cases: [PredicateCase]
+    public let elseSteps: [HeistStep]?
+
+    public init(cases: [PredicateCase], elseSteps: [HeistStep]? = nil) throws {
+        guard !cases.isEmpty else {
+            throw HeistPlanError.emptyPredicateCases("conditional")
+        }
+        self.cases = cases
+        self.elseSteps = elseSteps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "conditional step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            cases: try container.decode([PredicateCase].self, forKey: .cases),
+            elseSteps: try container.decodeIfPresent([HeistStep].self, forKey: .elseSteps)
+        )
+    }
+}
+
+extension ConditionalStep: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("if", [
+            "cases=\(cases.count)",
+            elseSteps.map { "else=\($0.count)" },
+        ].compactMap { $0 })
+    }
+}
+
+public struct WaitForCasesStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case timeout, cases
+        case elseSteps = "else_steps"
+    }
+
+    public let timeout: Double
+    public let cases: [PredicateCase]
+    public let elseSteps: [HeistStep]?
+
+    public init(
+        timeout: Double,
+        cases: [PredicateCase],
+        elseSteps: [HeistStep]? = nil
+    ) throws {
+        guard timeout >= 0 else {
+            throw HeistPlanError.negativeTimeout(timeout)
+        }
+        guard !cases.isEmpty else {
+            throw HeistPlanError.emptyPredicateCases("wait_for_cases")
+        }
+        self.timeout = timeout
+        self.cases = cases
+        self.elseSteps = elseSteps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait_for_cases step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedTimeout = try container.decode(Double.self, forKey: .timeout)
+        if decodedTimeout < 0 {
+            throw DecodingError.dataCorruptedError(
+                forKey: .timeout,
+                in: container,
+                debugDescription: "wait_for_cases timeout must be non-negative"
+            )
+        }
+        try self.init(
+            timeout: decodedTimeout,
+            cases: try container.decode([PredicateCase].self, forKey: .cases),
+            elseSteps: try container.decodeIfPresent([HeistStep].self, forKey: .elseSteps)
+        )
+    }
+}
+
+extension WaitForCasesStep: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("waitForCases", [
+            "timeout=\(ScoreDescription.decimal(timeout))",
+            "cases=\(cases.count)",
+            elseSteps.map { "else=\($0.count)" },
+        ].compactMap { $0 })
+    }
+}
+
+public struct PredicateCase: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case predicate, steps
+    }
+
+    public let predicate: AccessibilityPredicate
+    public let steps: [HeistStep]
+
+    public init(predicate: AccessibilityPredicate, steps: [HeistStep]) {
+        self.predicate = predicate
+        self.steps = steps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
+            steps: try container.decode([HeistStep].self, forKey: .steps)
+        )
+    }
+}
+
+extension PredicateCase: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("case", [
+            predicate.description,
+            "steps=\(steps.count)",
         ])
     }
 }
@@ -249,6 +404,8 @@ public struct FailStep: Codable, Sendable, Equatable {
 
 public enum HeistPlanError: Error, Sendable, Equatable {
     case unsupportedActionCommand(String)
+    case emptyPredicateCases(String)
+    case negativeTimeout(Double)
 }
 
 public extension ClientMessage {

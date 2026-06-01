@@ -22,6 +22,8 @@ public struct HeistExecutionResult: Codable, Sendable {
 public enum HeistExecutionStepKind: String, Codable, Sendable {
     case action
     case wait
+    case conditional
+    case waitForCases
     case warn
     case fail
     case skipped
@@ -29,6 +31,7 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
 
 /// One typed step result from a `HeistPlan`.
 public struct HeistExecutionStepResult: Codable, Sendable {
+    /// Sibling-local step index inside the containing `steps` or `childResults` array.
     public let index: Int
     public let kind: HeistExecutionStepKind
     public let actionResult: ActionResult?
@@ -38,6 +41,8 @@ public struct HeistExecutionStepResult: Codable, Sendable {
     public let durationMs: Int
     public let stopsHeist: Bool
     public let skipped: HeistExecutionSkippedStepResult?
+    public let caseSelection: HeistCaseSelectionResult?
+    public let childResults: [HeistExecutionStepResult]?
 
     public init(
         index: Int,
@@ -48,7 +53,9 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         message: String? = nil,
         durationMs: Int,
         stopsHeist: Bool = false,
-        skipped: HeistExecutionSkippedStepResult? = nil
+        skipped: HeistExecutionSkippedStepResult? = nil,
+        caseSelection: HeistCaseSelectionResult? = nil,
+        childResults: [HeistExecutionStepResult]? = nil
     ) {
         self.index = index
         self.kind = kind
@@ -59,6 +66,8 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         self.durationMs = durationMs
         self.stopsHeist = stopsHeist
         self.skipped = skipped
+        self.caseSelection = caseSelection
+        self.childResults = childResults
     }
 
     public var isSkipped: Bool {
@@ -67,13 +76,57 @@ public struct HeistExecutionStepResult: Codable, Sendable {
 
     public var isFailure: Bool {
         guard skipped == nil else { return false }
+        if stopsHeist { return true }
         if kind == .fail { return true }
         if actionResult?.success == false { return true }
         if expectationActionResult?.success == false { return true }
         if expectation?.met == false { return true }
         if kind == .action, actionResult == nil { return true }
         if kind == .wait, actionResult?.success != true { return true }
+        if kind == .waitForCases, caseSelection?.timedOut == true, caseSelection?.elseRan != true { return true }
+        if childResults?.contains(where: \.isFailure) == true { return true }
         return false
+    }
+}
+
+public struct HeistCaseSelectionResult: Codable, Sendable {
+    public let cases: [HeistCaseMatchResult]
+    public let selectedCaseIndex: Int?
+    public let elapsedMs: Int
+    public let timeout: Double?
+    public let timedOut: Bool
+    public let elseRan: Bool
+    public let lastObservedSummary: String?
+
+    public init(
+        cases: [HeistCaseMatchResult],
+        selectedCaseIndex: Int?,
+        elapsedMs: Int,
+        timeout: Double? = nil,
+        timedOut: Bool = false,
+        elseRan: Bool = false,
+        lastObservedSummary: String? = nil
+    ) {
+        self.cases = cases
+        self.selectedCaseIndex = selectedCaseIndex
+        self.elapsedMs = elapsedMs
+        self.timeout = timeout
+        self.timedOut = timedOut
+        self.elseRan = elseRan
+        self.lastObservedSummary = lastObservedSummary
+    }
+}
+
+public struct HeistCaseMatchResult: Codable, Sendable {
+    public let predicate: AccessibilityPredicate
+    public let result: ExpectationResult
+
+    public init(
+        predicate: AccessibilityPredicate,
+        result: ExpectationResult
+    ) {
+        self.predicate = predicate
+        self.result = result
     }
 }
 

@@ -9,11 +9,11 @@ public struct HeistPlaybackReport: Sendable, Equatable {
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
-    /// Total number of steps in the heist file (including unexecuted steps after an abort).
+    /// Total number of flattened report steps for the executed playback path.
     public let totalStepCount: Int
     /// Total wall-clock time for the entire playback, in seconds.
     public let totalTimeSeconds: Double
-    /// Per-step outcomes, in execution order. May be shorter than `totalStepCount` if playback aborted.
+    /// Per-step outcomes, flattened in execution order.
     public let steps: [StepResult]
 
     public init(
@@ -42,7 +42,7 @@ public struct HeistPlaybackReport: Sendable, Equatable {
 extension HeistPlaybackReport {
     /// The outcome of executing a single heist step.
     public struct StepResult: Sendable, Equatable {
-        /// 0-based index of this step in the heist.
+        /// 0-based display index in the flattened playback report.
         public let index: Int
         /// TheFence command name (e.g. "activate", "swipe", "type_text").
         public let command: String

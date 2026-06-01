@@ -136,6 +136,136 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertEqual(decoded, plan)
     }
 
+    func testConditionalAndWaitForCasesRoundTrip() throws {
+        let conditionCase = PredicateCase(
+            predicate: .state(.present(ElementPredicate(label: "Home"))),
+            steps: [.warn(WarnStep(message: "home"))]
+        )
+        let plan = HeistPlan(steps: [
+            .conditional(try ConditionalStep(
+                cases: [conditionCase],
+                elseSteps: [.warn(WarnStep(message: "not home"))]
+            )),
+            .waitForCases(try WaitForCasesStep(
+                timeout: 2,
+                cases: [conditionCase],
+                elseSteps: [.fail(FailStep(message: "no known state"))]
+            )),
+        ])
+
+        let data = try JSONEncoder().encode(plan)
+        let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
+
+        XCTAssertEqual(decoded, plan)
+    }
+
+    func testConditionalRejectsCamelCaseElseSteps() {
+        let json = """
+        {
+          "type": "conditional",
+          "conditional": {
+            "cases": [{
+              "predicate": {"type": "present", "element": {"label": "Home"}},
+              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+            }],
+            "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("elseSteps"), "\(error)")
+        }
+    }
+
+    func testWaitForCasesRejectsCamelCaseElseSteps() {
+        let json = """
+        {
+          "type": "wait_for_cases",
+          "wait_for_cases": {
+            "timeout": 1,
+            "cases": [{
+              "predicate": {"type": "present", "element": {"label": "Home"}},
+              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+            }],
+            "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("elseSteps"), "\(error)")
+        }
+    }
+
+    func testConditionalRejectsEmptyCases() {
+        let json = """
+        {
+          "type": "conditional",
+          "conditional": {
+            "cases": []
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("emptyPredicateCases"), "\(error)")
+        }
+    }
+
+    func testWaitForCasesRejectsNegativeTimeout() {
+        let json = """
+        {
+          "type": "wait_for_cases",
+          "wait_for_cases": {
+            "timeout": -1,
+            "cases": [{
+              "predicate": {"type": "present", "element": {"label": "Home"}},
+              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+            }]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("timeout must be non-negative"), "\(error)")
+        }
+    }
+
+    func testWaitForCasesRejectsCamelCaseBodyKey() {
+        let json = """
+        {
+          "type": "wait_for_cases",
+          "waitForCases": {
+            "timeout": 1,
+            "cases": [{
+              "predicate": {"type": "present", "element": {"label": "Home"}},
+              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+            }]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            guard case DecodingError.dataCorrupted(let context) = error else {
+                return XCTFail("Expected dataCorrupted, got \(error)")
+            }
+            XCTAssertEqual(context.debugDescription, "Unknown wait_for_cases heist step field \"waitForCases\"")
+        }
+    }
+
+    func testHeistExecutionStepThatStopsHeistIsFailure() {
+        let result = HeistExecutionStepResult(
+            index: 0,
+            kind: .conditional,
+            message: "Could not observe settled accessibility state before evaluating heist cases",
+            durationMs: 0,
+            stopsHeist: true
+        )
+
+        XCTAssertTrue(result.isFailure)
+    }
+
     func testHeistValueRoundTrips() throws {
         let values: [HeistValue] = [
             .string("hello"),

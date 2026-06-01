@@ -6,29 +6,36 @@ public struct HeistSwiftRenderer {
     public func render(_ plan: HeistPlan) throws -> String {
         var lines = ["Heist {"]
         for step in plan.steps {
-            lines.append(contentsOf: try renderStep(step))
+            lines.append(contentsOf: try renderStep(step, level: 1))
         }
         lines.append("}")
         return lines.joined(separator: "\n")
     }
 
-    private func renderStep(_ step: HeistStep) throws -> [String] {
+    private func renderStep(_ step: HeistStep, level: Int) throws -> [String] {
         switch step {
         case .action(let step):
-            return try renderActionStep(step)
+            return try renderActionStep(step, level: level)
         case .wait(let step):
-            return [indent(renderWait(step))]
+            return [indent(renderWait(step), level: level)]
+        case .conditional(let step):
+            return try renderConditional(step, level: level)
+        case .waitForCases(let step):
+            return try renderWaitForCases(step, level: level)
         case .warn(let step):
-            return [indent("Warn(\(SwiftString.literal(step.message)))")]
+            return [indent("Warn(\(SwiftString.literal(step.message)))", level: level)]
         case .fail(let step):
-            return [indent("Fail(\(SwiftString.literal(step.message)))")]
+            return [indent("Fail(\(SwiftString.literal(step.message)))", level: level)]
         }
     }
 
-    private func renderActionStep(_ step: ActionStep) throws -> [String] {
-        var lines = [indent(try renderAction(step.command))]
+    private func renderActionStep(_ step: ActionStep, level: Int) throws -> [String] {
+        var lines = [indent(try renderAction(step.command), level: level)]
         if let expectation = step.expectation {
-            lines.append(indent(".expect(\(renderPredicate(expectation.predicate)), timeout: \(renderTimeout(expectation.timeout)))", level: 2))
+            lines.append(indent(
+                ".expect(\(renderPredicate(expectation.predicate)), timeout: \(renderTimeout(expectation.timeout)))",
+                level: level + 1
+            ))
         }
         return lines
     }
@@ -58,6 +65,79 @@ public struct HeistSwiftRenderer {
              .requestScreen:
             throw HeistSwiftRendererError.unsupportedCommand(command.wireType.rawValue)
         }
+    }
+
+    private func renderConditional(_ step: ConditionalStep, level: Int) throws -> [String] {
+        if step.cases.count == 1, let onlyCase = step.cases.first {
+            return try renderSingleConditional(
+                predicate: onlyCase.predicate,
+                steps: onlyCase.steps,
+                elseSteps: step.elseSteps,
+                level: level
+            )
+        }
+
+        var lines = [indent("If {", level: level)]
+        lines.append(contentsOf: try renderPredicateCases(step.cases, level: level + 1))
+        if let elseSteps = step.elseSteps {
+            if !step.cases.isEmpty { lines.append("") }
+            lines.append(contentsOf: try renderElse(elseSteps, level: level + 1))
+        }
+        lines.append(indent("}", level: level))
+        return lines
+    }
+
+    private func renderSingleConditional(
+        predicate: AccessibilityPredicate,
+        steps: [HeistStep],
+        elseSteps: [HeistStep]?,
+        level: Int
+    ) throws -> [String] {
+        var lines = [indent("If(\(renderPredicate(predicate))) {", level: level)]
+        lines.append(contentsOf: try renderBody(steps, level: level + 1))
+        if let elseSteps {
+            lines.append(indent("} else: {", level: level))
+            lines.append(contentsOf: try renderBody(elseSteps, level: level + 1))
+        }
+        lines.append(indent("}", level: level))
+        return lines
+    }
+
+    private func renderWaitForCases(_ step: WaitForCasesStep, level: Int) throws -> [String] {
+        var lines = [indent("WaitFor(timeout: \(renderTimeout(step.timeout))) {", level: level)]
+        lines.append(contentsOf: try renderPredicateCases(step.cases, level: level + 1))
+        if let elseSteps = step.elseSteps {
+            if !step.cases.isEmpty { lines.append("") }
+            lines.append(contentsOf: try renderElse(elseSteps, level: level + 1))
+        }
+        lines.append(indent("}", level: level))
+        return lines
+    }
+
+    private func renderPredicateCases(_ cases: [PredicateCase], level: Int) throws -> [String] {
+        var lines: [String] = []
+        for (index, predicateCase) in cases.enumerated() {
+            if index > 0 { lines.append("") }
+            lines.append(indent("Case(\(renderPredicate(predicateCase.predicate))) {", level: level))
+            lines.append(contentsOf: try renderBody(predicateCase.steps, level: level + 1))
+            lines.append(indent("}", level: level))
+        }
+        return lines
+    }
+
+    private func renderElse(_ steps: [HeistStep], level: Int) throws -> [String] {
+        var lines = [indent("Else {", level: level)]
+        lines.append(contentsOf: try renderBody(steps, level: level + 1))
+        lines.append(indent("}", level: level))
+        return lines
+    }
+
+    private func renderBody(_ steps: [HeistStep], level: Int) throws -> [String] {
+        var lines: [String] = []
+        for step in steps {
+            lines.append(contentsOf: try renderStep(step, level: level))
+        }
+        return lines
     }
 
     private func renderScroll(_ target: ScrollTarget) -> String {
