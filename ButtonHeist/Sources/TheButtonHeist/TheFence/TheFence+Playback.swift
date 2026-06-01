@@ -34,7 +34,7 @@ extension TheFence {
         let report = HeistPlaybackReport(
             heistName: heistName,
             app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
-            totalStepCount: playbackContract.plan.steps.count,
+            totalStepCount: projection.stepResults.count,
             totalTimeSeconds: totalTimeSeconds,
             steps: projection.stepResults
         )

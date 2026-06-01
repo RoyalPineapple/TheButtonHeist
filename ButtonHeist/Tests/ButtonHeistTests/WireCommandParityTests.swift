@@ -183,6 +183,12 @@ final class WireCommandParityTests: XCTestCase {
             return [action.command]
         case .wait(let wait):
             return [.wait(WaitTarget(predicate: wait.predicate, timeout: wait.timeout))]
+        case .conditional(let conditional):
+            return conditional.cases.flatMap { $0.steps.flatMap(clientMessages) }
+                + (conditional.elseSteps ?? []).flatMap(clientMessages)
+        case .waitForCases(let waitForCases):
+            return waitForCases.cases.flatMap { $0.steps.flatMap(clientMessages) }
+                + (waitForCases.elseSteps ?? []).flatMap(clientMessages)
         case .warn, .fail:
             return []
         }

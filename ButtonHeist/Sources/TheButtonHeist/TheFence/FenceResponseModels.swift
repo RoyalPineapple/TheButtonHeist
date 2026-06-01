@@ -56,6 +56,8 @@ private extension HeistStep {
             return step.expectation?.predicate
         case .wait(let step):
             return step.predicate
+        case .conditional, .waitForCases:
+            return nil
         case .warn, .fail:
             return nil
         }

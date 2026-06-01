@@ -149,6 +149,110 @@ final class HeistSwiftRendererTests: XCTestCase {
         """)
     }
 
+    func testRendersSingleConditional() throws {
+        let step = try ConditionalStep(cases: [
+            PredicateCase(
+                predicate: .state(.present(ElementPredicate(label: "Allow"))),
+                steps: [.action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Allow")))))]
+            ),
+        ])
+        let output = try render(plan([.conditional(step)]))
+
+        XCTAssertEqual(output, """
+        Heist {
+            If(.present(.label("Allow"))) {
+                Activate(.label("Allow"))
+            }
+        }
+        """)
+    }
+
+    func testRendersConditionalWithElse() throws {
+        let step = try ConditionalStep(
+            cases: [
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Allow"))),
+                    steps: [.action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Allow")))))]
+                ),
+            ],
+            elseSteps: [.warn(WarnStep(message: "Allow prompt was not present"))]
+        )
+        let output = try render(plan([.conditional(step)]))
+
+        XCTAssertEqual(output, """
+        Heist {
+            If(.present(.label("Allow"))) {
+                Activate(.label("Allow"))
+            } else: {
+                Warn("Allow prompt was not present")
+            }
+        }
+        """)
+    }
+
+    func testRendersMultiCaseConditional() throws {
+        let step = try ConditionalStep(
+            cases: [
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Home"))),
+                    steps: [.warn(WarnStep(message: "home"))]
+                ),
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Login"))),
+                    steps: [.warn(WarnStep(message: "login"))]
+                ),
+            ],
+            elseSteps: [.fail(FailStep(message: "Unknown screen"))]
+        )
+        let output = try render(plan([.conditional(step)]))
+
+        XCTAssertEqual(output, """
+        Heist {
+            If {
+                Case(.present(.label("Home"))) {
+                    Warn("home")
+                }
+
+                Case(.present(.label("Login"))) {
+                    Warn("login")
+                }
+
+                Else {
+                    Fail("Unknown screen")
+                }
+            }
+        }
+        """)
+    }
+
+    func testRendersWaitForCases() throws {
+        let step = try WaitForCasesStep(
+            timeout: 5,
+            cases: [
+                PredicateCase(
+                    predicate: .state(.present(ElementPredicate(label: "Home"))),
+                    steps: [.warn(WarnStep(message: "home"))]
+                ),
+            ],
+            elseSteps: [.fail(FailStep(message: "No known state appeared"))]
+        )
+        let output = try render(plan([.waitForCases(step)]))
+
+        XCTAssertEqual(output, """
+        Heist {
+            WaitFor(timeout: .seconds(5)) {
+                Case(.present(.label("Home"))) {
+                    Warn("home")
+                }
+
+                Else {
+                    Fail("No known state appeared")
+                }
+            }
+        }
+        """)
+    }
+
     func testEscapesSwiftStringLiterals() throws {
         let step = try ActionStep(command: .typeText(TypeTextTarget(
             text: "say \"hi\"\\there\nnext\tend\0",

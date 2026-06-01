@@ -20,17 +20,60 @@ private struct PlaybackReportProjection {
     let result: HeistExecutionResult
 
     func project() -> TheFence.PlaybackProjection {
-        let stepResults = contract.plan.steps.enumerated().map(stepResult)
+        var stepResults: [HeistPlaybackReport.StepResult] = []
+        var failures: [PlaybackFailure] = []
+        appendStepResults(
+            steps: contract.plan.steps,
+            outcomes: result.steps,
+            into: &stepResults,
+            failures: &failures
+        )
         return TheFence.PlaybackProjection(
             stepResults: stepResults,
-            failure: firstFailure(),
+            failure: failures.first,
             failedIndex: stepResults.first { !$0.passed }?.index
         )
     }
 
-    private func stepResult(index: Int, step: HeistStep) -> HeistPlaybackReport.StepResult {
-        let outcome = result.steps.first { $0.index == index }
-        let failure = outcome.flatMap { playbackFailure(step: step, outcome: $0) }
+    private func appendStepResults(
+        steps: [HeistStep],
+        outcomes: [HeistExecutionStepResult],
+        into stepResults: inout [HeistPlaybackReport.StepResult],
+        failures: inout [PlaybackFailure]
+    ) {
+        for (siblingIndex, step) in steps.enumerated() {
+            let outcome = outcomes.first { $0.index == siblingIndex }
+            let reportIndex = stepResults.count
+            let failure = outcome.flatMap { playbackFailure(step: step, outcome: $0) }
+            stepResults.append(stepResult(
+                reportIndex: reportIndex,
+                step: step,
+                outcome: outcome,
+                failure: failure
+            ))
+            if let failure {
+                failures.append(failure)
+            }
+            guard
+                let outcome,
+                let childResults = outcome.childResults,
+                let childSteps = childSteps(for: step, outcome: outcome)
+            else { continue }
+            appendStepResults(
+                steps: childSteps,
+                outcomes: childResults,
+                into: &stepResults,
+                failures: &failures
+            )
+        }
+    }
+
+    private func stepResult(
+        reportIndex: Int,
+        step: HeistStep,
+        outcome: HeistExecutionStepResult?,
+        failure: PlaybackFailure?
+    ) -> HeistPlaybackReport.StepResult {
         let reportOutcome: HeistPlaybackReport.Outcome
         if let failure {
             reportOutcome = .failed(
@@ -41,7 +84,7 @@ private struct PlaybackReportProjection {
             reportOutcome = .passed
         }
         return HeistPlaybackReport.StepResult(
-            index: index,
+            index: reportIndex,
             command: step.commandName,
             target: step.reportTarget,
             timeSeconds: Double(outcome?.durationMs ?? 0) / 1000,
@@ -49,15 +92,30 @@ private struct PlaybackReportProjection {
         )
     }
 
-    private func firstFailure() -> PlaybackFailure? {
-        for (index, step) in contract.plan.steps.enumerated() {
-            guard
-                  let outcome = result.steps.first(where: { $0.index == index }),
-                  let failure = playbackFailure(step: step, outcome: outcome)
-            else { continue }
-            return failure
+    private func childSteps(
+        for step: HeistStep,
+        outcome: HeistExecutionStepResult
+    ) -> [HeistStep]? {
+        switch step {
+        case .conditional(let conditional):
+            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
+                return conditional.cases[safe: selectedCaseIndex]?.steps
+            }
+            if outcome.caseSelection?.elseRan == true {
+                return conditional.elseSteps
+            }
+            return nil
+        case .waitForCases(let waitForCases):
+            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
+                return waitForCases.cases[safe: selectedCaseIndex]?.steps
+            }
+            if outcome.caseSelection?.elseRan == true {
+                return waitForCases.elseSteps
+            }
+            return nil
+        case .action, .wait, .warn, .fail:
+            return nil
         }
-        return nil
     }
 
     private func failureErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
@@ -90,7 +148,7 @@ private struct PlaybackReportProjection {
                 diagnosticCaptureFailure: nil
             )
         }
-        guard outcome.isFailure else { return nil }
+        guard outcome.hasOwnPlaybackFailure(for: step) else { return nil }
         if let result = outcome.finalActionResult() {
             return .actionFailed(
                 step: failedStep,
@@ -109,11 +167,34 @@ private struct PlaybackReportProjection {
     }
 }
 
+private extension HeistExecutionStepResult {
+    func hasOwnPlaybackFailure(for step: HeistStep) -> Bool {
+        if isSkipped { return true }
+        if case .fail = step { return true }
+        if actionResult?.success == false { return true }
+        if expectationActionResult?.success == false { return true }
+        if expectation?.met == false { return true }
+        if kind == .action, actionResult == nil { return true }
+        if kind == .wait, actionResult?.success != true { return true }
+        if kind == .waitForCases,
+           caseSelection?.timedOut == true,
+           caseSelection?.elseRan != true {
+            return true
+        }
+        if stopsHeist, childResults?.contains(where: \.isFailure) != true {
+            return true
+        }
+        return false
+    }
+}
+
 private extension HeistStep {
     var commandName: String {
         switch self {
         case .action(let action): return action.command.wireType.rawValue
         case .wait: return "wait"
+        case .conditional: return "if"
+        case .waitForCases: return "wait_for_cases"
         case .warn: return "warn"
         case .fail: return "fail"
         }
@@ -196,5 +277,11 @@ private extension ClientWireMessageType {
         case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
         default: return rawValue
         }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

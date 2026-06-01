@@ -59,6 +59,8 @@ private extension HeistStep {
         switch self {
         case .action(let action): return action.command.wireType.rawValue
         case .wait: return "wait"
+        case .conditional: return "if"
+        case .waitForCases: return "wait_for_cases"
         case .warn: return "warn"
         case .fail: return "fail"
         }
