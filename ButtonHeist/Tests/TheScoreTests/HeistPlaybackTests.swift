@@ -159,6 +159,125 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertEqual(decoded, plan)
     }
 
+    func testRepeatStepsRoundTrip() throws {
+        let body: [HeistStep] = [.warn(WarnStep(message: "scrolling"))]
+        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let plan = HeistPlan(steps: [
+            .repeatCount(try RepeatCountStep(count: 3, steps: body)),
+            .repeatUntil(try RepeatUntilStep(
+                predicate: predicate,
+                timeout: 20,
+                maxIterations: 30,
+                steps: body
+            )),
+        ])
+
+        let data = try JSONEncoder().encode(plan)
+        let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
+
+        XCTAssertEqual(decoded, plan)
+    }
+
+    func testRepeatCountAllowsZeroIterations() throws {
+        let step = try RepeatCountStep(count: 0, steps: [.warn(WarnStep(message: "never"))])
+
+        XCTAssertEqual(step.count, 0)
+    }
+
+    func testRepeatCountRejectsNegativeCount() {
+        let json = """
+        {
+          "type": "repeat_count",
+          "repeat_count": {
+            "count": -1,
+            "steps": [{"type": "warn", "warn": {"message": "never"}}]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("count must be >= 0"), "\(error)")
+        }
+    }
+
+    func testRepeatCountRejectsEmptySteps() {
+        let json = """
+        {
+          "type": "repeat_count",
+          "repeat_count": {
+            "count": 1,
+            "steps": []
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("emptyRepeatSteps"), "\(error)")
+        }
+    }
+
+    func testRepeatUntilRejectsInvalidBounds() {
+        let negativeTimeout = """
+        {
+          "type": "repeat_until",
+          "repeat_until": {
+            "predicate": {"type": "present", "element": {"label": "Done"}},
+            "timeout": -1,
+            "maxIterations": 1,
+            "steps": [{"type": "warn", "warn": {"message": "scroll"}}]
+          }
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(negativeTimeout.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("timeout must be non-negative"), "\(error)")
+        }
+
+        let zeroIterations = """
+        {
+          "type": "repeat_until",
+          "repeat_until": {
+            "predicate": {"type": "present", "element": {"label": "Done"}},
+            "timeout": 1,
+            "maxIterations": 0,
+            "steps": [{"type": "warn", "warn": {"message": "scroll"}}]
+          }
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(zeroIterations.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("maxIterations must be > 0"), "\(error)")
+        }
+    }
+
+    func testRepeatStepsRejectCamelCaseBodyKeys() {
+        let repeatCount = """
+        {
+          "type": "repeat_count",
+          "repeatCount": {
+            "count": 1,
+            "steps": [{"type": "warn", "warn": {"message": "never"}}]
+          }
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(repeatCount.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("repeatCount"), "\(error)")
+        }
+
+        let repeatUntil = """
+        {
+          "type": "repeat_until",
+          "repeatUntil": {
+            "predicate": {"type": "present", "element": {"label": "Done"}},
+            "timeout": 1,
+            "maxIterations": 1,
+            "steps": [{"type": "warn", "warn": {"message": "never"}}]
+          }
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(repeatUntil.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("repeatUntil"), "\(error)")
+        }
+    }
+
     func testConditionalRejectsCamelCaseElseSteps() {
         let json = """
         {

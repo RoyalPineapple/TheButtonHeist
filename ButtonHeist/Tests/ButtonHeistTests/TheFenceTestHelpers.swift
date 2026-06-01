@@ -411,7 +411,7 @@ private extension HeistStep {
             return action.command.fenceCommandForInspection
         case .wait:
             return .wait
-        case .conditional, .waitForCases:
+        case .conditional, .waitForCases, .repeatCount, .repeatUntil:
             return .runHeist
         case .warn:
             return .runHeist
