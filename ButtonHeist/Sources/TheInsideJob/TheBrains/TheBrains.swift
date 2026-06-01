@@ -97,7 +97,7 @@ final class TheBrains {
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() {
-        waitForChangeState.recordDeliveredBaseline(captureSemanticState())
+        waitForChangeState.recordDeliveredBaseline(postActionObservation.captureSemanticState())
     }
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
