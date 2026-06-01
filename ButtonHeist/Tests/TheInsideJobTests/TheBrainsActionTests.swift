@@ -561,6 +561,211 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
     }
 
+    func testHeistRepeatCountRunsBodyExactCount() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .repeatCount(try RepeatCountStep(
+                count: 3,
+                steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.kind, .repeatCount)
+        XCTAssertEqual(step.repeatResult?.iterationCount, 3)
+        XCTAssertEqual(step.childResults?.count, 3)
+        XCTAssertEqual(executedCommands.count, 3)
+    }
+
+    func testHeistRepeatCountZeroIsNoop() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .repeatCount(try RepeatCountStep(
+                count: 0,
+                steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.repeatResult?.iterationCount, 0)
+        XCTAssertNil(step.childResults)
+        XCTAssertTrue(executedCommands.isEmpty)
+    }
+
+    func testHeistRepeatUntilAlreadyMatchedRunsNoBody() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Done"])],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                timeout: 1,
+                maxIterations: 3,
+                steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.repeatResult?.iterationCount, 0)
+        XCTAssertEqual(step.repeatResult?.finalPredicateResult?.met, true)
+        XCTAssertTrue(executedCommands.isEmpty)
+    }
+
+    func testHeistRepeatUntilRunsUntilPredicateMatches() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [
+                observedState(labels: ["Loading"]),
+                observedState(labels: ["Done"]),
+            ],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                timeout: 1,
+                maxIterations: 3,
+                steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.repeatResult?.iterationCount, 1)
+        XCTAssertEqual(step.repeatResult?.finalPredicateResult?.met, true)
+        XCTAssertEqual(step.childResults?.count, 1)
+        XCTAssertEqual(executedCommands.count, 1)
+    }
+
+    func testHeistRepeatUntilTimeoutZeroFailsWithoutBody() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Loading"])],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                timeout: 0,
+                maxIterations: 3,
+                steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(step.repeatResult?.iterationCount, 0)
+        XCTAssertTrue(step.repeatResult?.failureReason?.contains("timed out after 0s") == true)
+        XCTAssertTrue(executedCommands.isEmpty)
+    }
+
+    func testHeistRepeatUntilMaxIterationsFails() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [
+                observedState(labels: ["Loading"]),
+                observedState(labels: ["Still Loading"]),
+                observedState(labels: ["Still Loading"]),
+            ],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .state(.present(ElementPredicate(label: "Done"))),
+                timeout: 1,
+                maxIterations: 2,
+                steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(step.repeatResult?.iterationCount, 2)
+        XCTAssertTrue(step.repeatResult?.failureReason?.contains("maxIterations 2") == true)
+        XCTAssertEqual(executedCommands.count, 2)
+    }
+
+    func testHeistRepeatStopsWhenBodyFails() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(
+                    success: false,
+                    method: .heistPlan,
+                    message: "scroll failed",
+                    errorKind: .actionFailed
+                )
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .repeatCount(try RepeatCountStep(
+                count: 3,
+                steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(step.repeatResult?.iterationCount, 1)
+        XCTAssertTrue(step.repeatResult?.failureReason?.contains("body failed") == true)
+        XCTAssertEqual(step.childResults?.first?.actionResult?.success, false)
+        XCTAssertEqual(executedCommands.count, 1)
+    }
+
     func testHeistCaseObservationScopeMergesRevealTargets() async throws {
         var observedScopes: [HeistPredicateObservationScope] = []
         let runtime = heistRuntime(
@@ -1331,12 +1536,16 @@ final class TheBrainsActionTests: XCTestCase {
     private func heistRuntime(
         observations: [PostActionObservation.BeforeState],
         observedScopes: (@MainActor (HeistPredicateObservationScope) -> Void)? = nil,
+        execute: (@MainActor (ClientMessage) -> ActionResult)? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> TheBrains.HeistExecutionRuntime {
         var remainingObservations = observations
         return TheBrains.HeistExecutionRuntime(
             execute: { command in
+                if let execute {
+                    return execute(command)
+                }
                 ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
             },
             wait: { waitStep in

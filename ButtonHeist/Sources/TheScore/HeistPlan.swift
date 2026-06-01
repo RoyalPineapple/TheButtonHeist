@@ -65,11 +65,16 @@ public enum HeistStep: Codable, Sendable, Equatable {
     case wait(WaitStep)
     case conditional(ConditionalStep)
     case waitForCases(WaitForCasesStep)
+    case repeatCount(RepeatCountStep)
+    case repeatUntil(RepeatUntilStep)
     case warn(WarnStep)
     case fail(FailStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, conditional, waitForCases = "wait_for_cases", warn, fail
+        case type, action, wait, conditional, waitForCases = "wait_for_cases"
+        case repeatCount = "repeat_count"
+        case repeatUntil = "repeat_until"
+        case warn, fail
     }
 
     private enum StepType: String, Codable {
@@ -77,6 +82,8 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case wait
         case conditional
         case waitForCases = "wait_for_cases"
+        case repeatCount = "repeat_count"
+        case repeatUntil = "repeat_until"
         case warn
         case fail
     }
@@ -100,6 +107,18 @@ public enum HeistStep: Codable, Sendable, Equatable {
                 typeName: "wait_for_cases heist step"
             )
             self = .waitForCases(try container.decode(WaitForCasesStep.self, forKey: .waitForCases))
+        case .repeatCount:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.repeatCount.stringValue],
+                typeName: "repeat_count heist step"
+            )
+            self = .repeatCount(try container.decode(RepeatCountStep.self, forKey: .repeatCount))
+        case .repeatUntil:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.repeatUntil.stringValue],
+                typeName: "repeat_until heist step"
+            )
+            self = .repeatUntil(try container.decode(RepeatUntilStep.self, forKey: .repeatUntil))
         case .warn:
             try decoder.rejectUnknownKeys(allowed: ["type", "warn"], typeName: "warn heist step")
             self = .warn(try container.decode(WarnStep.self, forKey: .warn))
@@ -124,6 +143,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .waitForCases(let step):
             try container.encode(StepType.waitForCases, forKey: .type)
             try container.encode(step, forKey: .waitForCases)
+        case .repeatCount(let step):
+            try container.encode(StepType.repeatCount, forKey: .type)
+            try container.encode(step, forKey: .repeatCount)
+        case .repeatUntil(let step):
+            try container.encode(StepType.repeatUntil, forKey: .type)
+            try container.encode(step, forKey: .repeatUntil)
         case .warn(let step):
             try container.encode(StepType.warn, forKey: .type)
             try container.encode(step, forKey: .warn)
@@ -141,6 +166,8 @@ extension HeistStep: CustomStringConvertible {
         case .wait(let step): return step.description
         case .conditional(let step): return step.description
         case .waitForCases(let step): return step.description
+        case .repeatCount(let step): return step.description
+        case .repeatUntil(let step): return step.description
         case .warn(let step): return step.description
         case .fail(let step): return step.description
         }
@@ -328,6 +355,122 @@ extension WaitForCasesStep: CustomStringConvertible {
     }
 }
 
+public struct RepeatCountStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case count, steps
+    }
+
+    public let count: Int
+    public let steps: [HeistStep]
+
+    public init(count: Int, steps: [HeistStep]) throws {
+        guard count >= 0 else {
+            throw HeistPlanError.negativeRepeatCount(count)
+        }
+        guard !steps.isEmpty else {
+            throw HeistPlanError.emptyRepeatSteps("repeat_count")
+        }
+        self.count = count
+        self.steps = steps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_count step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedCount = try container.decode(Int.self, forKey: .count)
+        guard decodedCount >= 0 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .count,
+                in: container,
+                debugDescription: "repeat_count count must be >= 0"
+            )
+        }
+        try self.init(
+            count: decodedCount,
+            steps: try container.decode([HeistStep].self, forKey: .steps)
+        )
+    }
+}
+
+extension RepeatCountStep: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("repeat", [
+            "count=\(count)",
+            "steps=\(steps.count)",
+        ])
+    }
+}
+
+public struct RepeatUntilStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case predicate, timeout, maxIterations, steps
+    }
+
+    public let predicate: AccessibilityPredicate
+    public let timeout: Double
+    public let maxIterations: Int
+    public let steps: [HeistStep]
+
+    public init(
+        predicate: AccessibilityPredicate,
+        timeout: Double,
+        maxIterations: Int,
+        steps: [HeistStep]
+    ) throws {
+        guard timeout >= 0 else {
+            throw HeistPlanError.negativeTimeout(timeout)
+        }
+        guard maxIterations > 0 else {
+            throw HeistPlanError.invalidMaxIterations(maxIterations)
+        }
+        guard !steps.isEmpty else {
+            throw HeistPlanError.emptyRepeatSteps("repeat_until")
+        }
+        self.predicate = predicate
+        self.timeout = timeout
+        self.maxIterations = maxIterations
+        self.steps = steps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "repeat_until step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedTimeout = try container.decode(Double.self, forKey: .timeout)
+        if decodedTimeout < 0 {
+            throw DecodingError.dataCorruptedError(
+                forKey: .timeout,
+                in: container,
+                debugDescription: "repeat_until timeout must be non-negative"
+            )
+        }
+        let decodedMaxIterations = try container.decode(Int.self, forKey: .maxIterations)
+        if decodedMaxIterations <= 0 {
+            throw DecodingError.dataCorruptedError(
+                forKey: .maxIterations,
+                in: container,
+                debugDescription: "repeat_until maxIterations must be > 0"
+            )
+        }
+        try self.init(
+            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
+            timeout: decodedTimeout,
+            maxIterations: decodedMaxIterations,
+            steps: try container.decode([HeistStep].self, forKey: .steps)
+        )
+    }
+}
+
+extension RepeatUntilStep: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("repeatUntil", [
+            predicate.description,
+            "timeout=\(ScoreDescription.decimal(timeout))",
+            "maxIterations=\(maxIterations)",
+            "steps=\(steps.count)",
+        ])
+    }
+}
+
 public struct PredicateCase: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate, steps
@@ -405,7 +548,10 @@ public struct FailStep: Codable, Sendable, Equatable {
 public enum HeistPlanError: Error, Sendable, Equatable {
     case unsupportedActionCommand(String)
     case emptyPredicateCases(String)
+    case emptyRepeatSteps(String)
     case negativeTimeout(Double)
+    case negativeRepeatCount(Int)
+    case invalidMaxIterations(Int)
 }
 
 public extension ClientMessage {

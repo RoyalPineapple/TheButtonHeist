@@ -189,6 +189,10 @@ final class WireCommandParityTests: XCTestCase {
         case .waitForCases(let waitForCases):
             return waitForCases.cases.flatMap { $0.steps.flatMap(clientMessages) }
                 + (waitForCases.elseSteps ?? []).flatMap(clientMessages)
+        case .repeatCount(let repeatCount):
+            return repeatCount.steps.flatMap(clientMessages)
+        case .repeatUntil(let repeatUntil):
+            return repeatUntil.steps.flatMap(clientMessages)
         case .warn, .fail:
             return []
         }

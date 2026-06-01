@@ -29,8 +29,9 @@ extension TheFence {
     private static func heistAccessibilityTrace(
         _ result: HeistExecutionResult
     ) -> AccessibilityTrace? {
-        let actionOutcomeCount = result.steps.count { $0.finalActionResult() != nil }
-        let stepAccessibilityTraces = result.steps.compactMap { $0.finalActionResult()?.accessibilityTrace }
+        let flattenedResults = result.flattenedStepResults
+        let actionOutcomeCount = flattenedResults.count { $0.finalActionResult() != nil }
+        let stepAccessibilityTraces = flattenedResults.compactMap { $0.finalActionResult()?.accessibilityTrace }
         guard actionOutcomeCount > 0,
               stepAccessibilityTraces.count == actionOutcomeCount
         else { return nil }

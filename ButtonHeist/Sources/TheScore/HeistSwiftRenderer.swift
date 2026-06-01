@@ -22,6 +22,10 @@ public struct HeistSwiftRenderer {
             return try renderConditional(step, level: level)
         case .waitForCases(let step):
             return try renderWaitForCases(step, level: level)
+        case .repeatCount(let step):
+            return try renderRepeatCount(step, level: level)
+        case .repeatUntil(let step):
+            return try renderRepeatUntil(step, level: level)
         case .warn(let step):
             return [indent("Warn(\(SwiftString.literal(step.message)))", level: level)]
         case .fail(let step):
@@ -137,6 +141,24 @@ public struct HeistSwiftRenderer {
         for step in steps {
             lines.append(contentsOf: try renderStep(step, level: level))
         }
+        return lines
+    }
+
+    private func renderRepeatCount(_ step: RepeatCountStep, level: Int) throws -> [String] {
+        var lines = [indent("Repeat(\(step.count)) {", level: level)]
+        lines.append(contentsOf: try renderBody(step.steps, level: level + 1))
+        lines.append(indent("}", level: level))
+        return lines
+    }
+
+    private func renderRepeatUntil(_ step: RepeatUntilStep, level: Int) throws -> [String] {
+        var lines = [indent(
+            "Repeat(until: \(renderPredicate(step.predicate)), " +
+                "timeout: \(renderTimeout(step.timeout)), maxIterations: \(step.maxIterations)) {",
+            level: level
+        )]
+        lines.append(contentsOf: try renderBody(step.steps, level: level + 1))
+        lines.append(indent("}", level: level))
         return lines
     }
 

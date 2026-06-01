@@ -20,7 +20,12 @@ extension HeistExecutionStepResult {
     func actionResponse(command: TheFence.Command, step: HeistStep) -> FenceResponse? {
         guard skipped == nil else { return nil }
         guard let finalResult = expectationActionResult ?? actionResult else {
-            return .error("typed heist step produced no action result")
+            switch step {
+            case .action, .wait:
+                return .error("typed heist step produced no action result")
+            case .conditional, .waitForCases, .repeatCount, .repeatUntil, .warn, .fail:
+                return nil
+            }
         }
         return .action(
             command: command,
@@ -56,7 +61,7 @@ private extension HeistStep {
             return step.expectation?.predicate
         case .wait(let step):
             return step.predicate
-        case .conditional, .waitForCases:
+        case .conditional, .waitForCases, .repeatCount, .repeatUntil:
             return nil
         case .warn, .fail:
             return nil
@@ -66,7 +71,7 @@ private extension HeistStep {
 
 extension HeistExecutionResult {
     var completedStepCount: Int {
-        steps.count { !$0.isSkipped }
+        flattenedStepResults.count { !$0.isSkipped }
     }
 
     var stoppedFailedIndex: Int? {
@@ -74,17 +79,92 @@ extension HeistExecutionResult {
     }
 
     func expectationsChecked(steps plannedSteps: [HeistStep]) -> Int {
-        steps.count { step in
-            guard plannedSteps.indices.contains(step.index) else { return false }
-            return step.expectationCounted(for: plannedSteps[step.index])
+        executedStepPairs(plannedSteps: plannedSteps).count { pair in
+            pair.result.expectationCounted(for: pair.plannedStep)
         }
     }
 
     func expectationsMet(steps plannedSteps: [HeistStep]) -> Int {
-        steps.count { step in
-            guard plannedSteps.indices.contains(step.index) else { return false }
-            return step.expectationMet(for: plannedSteps[step.index]) == true
+        executedStepPairs(plannedSteps: plannedSteps).count { pair in
+            pair.result.expectationMet(for: pair.plannedStep) == true
         }
+    }
+
+    var flattenedStepResults: [HeistExecutionStepResult] {
+        steps.flatMap(\.flattenedWithChildren)
+    }
+
+    func executedStepPairs(plannedSteps: [HeistStep]) -> [HeistExecutedStepPair] {
+        Self.executedStepPairs(plannedSteps: plannedSteps, outcomes: steps)
+    }
+
+    private static func executedStepPairs(
+        plannedSteps: [HeistStep],
+        outcomes: [HeistExecutionStepResult]
+    ) -> [HeistExecutedStepPair] {
+        var pairs: [HeistExecutedStepPair] = []
+        for outcome in outcomes {
+            guard plannedSteps.indices.contains(outcome.index) else { continue }
+            let plannedStep = plannedSteps[outcome.index]
+            pairs.append(HeistExecutedStepPair(plannedStep: plannedStep, result: outcome))
+            guard
+                let childResults = outcome.childResults,
+                let childSteps = plannedStep.childSteps(for: outcome)
+            else { continue }
+            pairs.append(contentsOf: executedStepPairs(plannedSteps: childSteps, outcomes: childResults))
+        }
+        return pairs
+    }
+}
+
+struct HeistExecutedStepPair {
+    let plannedStep: HeistStep
+    let result: HeistExecutionStepResult
+}
+
+extension HeistExecutionStepResult {
+    var flattenedWithChildren: [HeistExecutionStepResult] {
+        [self] + (childResults?.flatMap(\.flattenedWithChildren) ?? [])
+    }
+}
+
+private extension HeistStep {
+    func childSteps(for outcome: HeistExecutionStepResult) -> [HeistStep]? {
+        switch self {
+        case .conditional(let conditional):
+            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
+                return conditional.cases[safe: selectedCaseIndex]?.steps
+            }
+            if outcome.caseSelection?.elseRan == true {
+                return conditional.elseSteps
+            }
+            return nil
+        case .waitForCases(let waitForCases):
+            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
+                return waitForCases.cases[safe: selectedCaseIndex]?.steps
+            }
+            if outcome.caseSelection?.elseRan == true {
+                return waitForCases.elseSteps
+            }
+            return nil
+        case .repeatCount(let repeatCount):
+            return repeatedSteps(repeatCount.steps, iterationCount: outcome.repeatResult?.iterationCount ?? 0)
+        case .repeatUntil(let repeatUntil):
+            return repeatedSteps(repeatUntil.steps, iterationCount: outcome.repeatResult?.iterationCount ?? 0)
+        case .action, .wait, .warn, .fail:
+            return nil
+        }
+    }
+
+    func repeatedSteps(_ steps: [HeistStep], iterationCount: Int) -> [HeistStep]? {
+        guard iterationCount > 0 else { return nil }
+        return Array(repeating: steps, count: iterationCount).flatMap { $0 }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 

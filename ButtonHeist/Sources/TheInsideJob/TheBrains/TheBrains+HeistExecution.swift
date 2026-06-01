@@ -126,6 +126,10 @@ extension TheBrains {
             return await executeConditionalStep(conditional, index: index, start: start, runtime: runtime)
         case .waitForCases(let waitForCases):
             return await executeWaitForCasesStep(waitForCases, index: index, start: start, runtime: runtime)
+        case .repeatCount(let repeatCount):
+            return await executeRepeatCountStep(repeatCount, index: index, start: start, runtime: runtime)
+        case .repeatUntil(let repeatUntil):
+            return await executeRepeatUntilStep(repeatUntil, index: index, start: start, runtime: runtime)
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,
@@ -142,6 +146,260 @@ extension TheBrains {
                 stopsHeist: true
             )
         }
+    }
+
+    private func executeRepeatCountStep(
+        _ step: RepeatCountStep,
+        index: Int,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime
+    ) async -> HeistExecutionStepResult {
+        var childResults: [HeistExecutionStepResult] = []
+
+        for iteration in 0..<step.count {
+            let iterationResults = await executeHeistSteps(step.steps, runtime: runtime)
+            childResults.append(contentsOf: iterationResults.reindexed(startingAt: childResults.count))
+
+            if iterationResults.contains(where: \.isFailure) {
+                let elapsed = elapsedMilliseconds(since: start)
+                let failureReason = "body failed during repeat iteration \(iteration)"
+                return HeistExecutionStepResult(
+                    index: index,
+                    kind: .repeatCount,
+                    message: failureReason,
+                    durationMs: elapsed,
+                    repeatResult: HeistRepeatResult(
+                        iterationCount: iteration + 1,
+                        elapsedMs: elapsed,
+                        failureReason: failureReason
+                    ),
+                    childResults: childResults
+                )
+            }
+        }
+
+        let elapsed = elapsedMilliseconds(since: start)
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .repeatCount,
+            message: "completed \(step.count) repeat iteration(s)",
+            durationMs: elapsed,
+            repeatResult: HeistRepeatResult(
+                iterationCount: step.count,
+                elapsedMs: elapsed
+            ),
+            childResults: childResults.isEmpty ? nil : childResults
+        )
+    }
+
+    private func executeRepeatUntilStep(
+        _ step: RepeatUntilStep,
+        index: Int,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime
+    ) async -> HeistExecutionStepResult {
+        let deadline = start + step.timeout
+
+        guard let initialObservation = await observeRepeatPredicate(
+            step,
+            baseline: nil,
+            timeout: step.timeout == 0 ? nil : min(step.timeout, 1.0),
+            runtime: runtime
+        ) else {
+            return repeatUntilFailure(
+                step,
+                index: index,
+                start: start,
+                iterationCount: 0,
+                childResults: [],
+                reason: "Could not observe settled accessibility state before evaluating repeat condition",
+                finalPredicateResult: nil
+            )
+        }
+
+        var runState = RepeatUntilRunState(
+            baseline: initialObservation.state,
+            finalPredicateResult: initialObservation.result
+        )
+        if initialObservation.result.met {
+            return repeatUntilSuccess(
+                step,
+                index: index,
+                start: start,
+                iterationCount: runState.iterationCount,
+                childResults: runState.childResults,
+                finalPredicateResult: initialObservation.result
+            )
+        }
+
+        guard step.timeout > 0 else {
+            return repeatUntilFailure(
+                step,
+                index: index,
+                start: start,
+                iterationCount: runState.iterationCount,
+                childResults: runState.childResults,
+                reason: "timed out after 0s before repeat condition matched",
+                finalPredicateResult: runState.finalPredicateResult
+            )
+        }
+
+        let outcome = await runRepeatUntilIterations(
+            step,
+            deadline: deadline,
+            state: runState,
+            runtime: runtime
+        )
+        runState = outcome.state
+
+        switch outcome.completion {
+        case .matched(let result):
+            return repeatUntilSuccess(
+                step,
+                index: index,
+                start: start,
+                iterationCount: runState.iterationCount,
+                childResults: runState.childResults,
+                finalPredicateResult: result
+            )
+        case .failed(let reason):
+            return repeatUntilFailure(
+                step,
+                index: index,
+                start: start,
+                iterationCount: runState.iterationCount,
+                childResults: runState.childResults,
+                reason: reason,
+                finalPredicateResult: runState.finalPredicateResult
+            )
+        }
+    }
+
+    private func observeRepeatPredicate(
+        _ step: RepeatUntilStep,
+        baseline: PostActionObservation.BeforeState?,
+        timeout: Double?,
+        runtime: HeistExecutionRuntime
+    ) async -> (state: PostActionObservation.BeforeState, result: ExpectationResult)? {
+        guard let observation = await runtime.observeCases(
+            step.observationScope,
+            baseline,
+            timeout
+        ) else {
+            return nil
+        }
+        return (
+            observation.state,
+            evaluatePredicate(step.predicate, observation: observation)
+        )
+    }
+
+    private func runRepeatUntilIterations(
+        _ step: RepeatUntilStep,
+        deadline: CFAbsoluteTime,
+        state initialState: RepeatUntilRunState,
+        runtime: HeistExecutionRuntime
+    ) async -> RepeatUntilRunOutcome {
+        var state = initialState
+
+        while state.iterationCount < step.maxIterations {
+            guard CFAbsoluteTimeGetCurrent() < deadline else {
+                return RepeatUntilRunOutcome(
+                    state: state,
+                    completion: .failed(repeatUntilTimeoutMessage(step, finalPredicateResult: state.finalPredicateResult))
+                )
+            }
+
+            let iterationResults = await executeHeistSteps(step.steps, runtime: runtime)
+            state.childResults.append(contentsOf: iterationResults.reindexed(startingAt: state.childResults.count))
+            state.iterationCount += 1
+
+            if iterationResults.contains(where: \.isFailure) {
+                return RepeatUntilRunOutcome(
+                    state: state,
+                    completion: .failed("body failed during repeat iteration \(state.iterationCount - 1)")
+                )
+            }
+
+            let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
+            guard let observation = await observeRepeatPredicate(
+                step,
+                baseline: state.baseline,
+                timeout: min(remaining, 1.0),
+                runtime: runtime
+            ) else {
+                let failedIteration = state.iterationCount - 1
+                return RepeatUntilRunOutcome(
+                    state: state,
+                    completion: .failed("Could not observe settled accessibility state after repeat iteration \(failedIteration)")
+                )
+            }
+
+            state.baseline = observation.state
+            state.finalPredicateResult = observation.result
+            if observation.result.met {
+                return RepeatUntilRunOutcome(state: state, completion: .matched(observation.result))
+            }
+        }
+
+        return RepeatUntilRunOutcome(
+            state: state,
+            completion: .failed("reached maxIterations \(step.maxIterations) before repeat condition matched")
+        )
+    }
+
+    private func repeatUntilSuccess(
+        _ step: RepeatUntilStep,
+        index: Int,
+        start: CFAbsoluteTime,
+        iterationCount: Int,
+        childResults: [HeistExecutionStepResult],
+        finalPredicateResult: ExpectationResult
+    ) -> HeistExecutionStepResult {
+        let elapsed = elapsedMilliseconds(since: start)
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .repeatUntil,
+            message: "repeat condition matched after \(iterationCount) iteration(s)",
+            durationMs: elapsed,
+            repeatResult: HeistRepeatResult(
+                iterationCount: iterationCount,
+                elapsedMs: elapsed,
+                timeout: step.timeout,
+                maxIterations: step.maxIterations,
+                finalPredicate: step.predicate,
+                finalPredicateResult: finalPredicateResult
+            ),
+            childResults: childResults.isEmpty ? nil : childResults
+        )
+    }
+
+    private func repeatUntilFailure(
+        _ step: RepeatUntilStep,
+        index: Int,
+        start: CFAbsoluteTime,
+        iterationCount: Int,
+        childResults: [HeistExecutionStepResult],
+        reason: String,
+        finalPredicateResult: ExpectationResult?
+    ) -> HeistExecutionStepResult {
+        let elapsed = elapsedMilliseconds(since: start)
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .repeatUntil,
+            message: reason,
+            durationMs: elapsed,
+            repeatResult: HeistRepeatResult(
+                iterationCount: iterationCount,
+                elapsedMs: elapsed,
+                timeout: step.timeout,
+                maxIterations: step.maxIterations,
+                finalPredicate: step.predicate,
+                finalPredicateResult: finalPredicateResult,
+                failureReason: reason
+            ),
+            childResults: childResults.isEmpty ? nil : childResults
+        )
     }
 
     private func executeConditionalStep(
@@ -392,6 +650,16 @@ extension TheBrains {
         )
     }
 
+    private func evaluatePredicate(
+        _ predicate: AccessibilityPredicate,
+        observation: HeistCaseObservation
+    ) -> ExpectationResult {
+        predicate.evaluate(
+            currentElements: observation.state.interface.projectedElements,
+            delta: observation.delta
+        )
+    }
+
     private func caseObservationFailure(
         index: Int,
         kind: HeistExecutionStepKind,
@@ -415,6 +683,18 @@ extension TheBrains {
             "cases: \(step.cases.map(\.predicate.description).joined(separator: "; "))",
             "last observed: \(lastObservedSummary ?? "no settled accessibility state")",
             "Next: add Else, widen predicate, or increase timeout.",
+        ].joined(separator: "; ")
+    }
+
+    private func repeatUntilTimeoutMessage(
+        _ step: RepeatUntilStep,
+        finalPredicateResult: ExpectationResult
+    ) -> String {
+        [
+            "timed out after \(heistTimeoutDescription(step.timeout))s before repeat condition matched",
+            "predicate: \(step.predicate.description)",
+            "last observed: \(finalPredicateResult.actual ?? "no settled accessibility state")",
+            "Next: widen predicate, increase timeout, or increase maxIterations.",
         ].joined(separator: "; ")
     }
 
@@ -452,6 +732,23 @@ private struct PredicateCaseSelection {
             selectedCaseIndex: nil
         )
     }
+}
+
+private struct RepeatUntilRunState {
+    var baseline: PostActionObservation.BeforeState
+    var childResults: [HeistExecutionStepResult] = []
+    var iterationCount = 0
+    var finalPredicateResult: ExpectationResult
+}
+
+private struct RepeatUntilRunOutcome {
+    let state: RepeatUntilRunState
+    let completion: RepeatUntilRunCompletion
+}
+
+private enum RepeatUntilRunCompletion {
+    case matched(ExpectationResult)
+    case failed(String)
 }
 
 struct HeistCaseObservation {
@@ -583,6 +880,12 @@ private extension WaitForCasesStep {
     }
 }
 
+private extension RepeatUntilStep {
+    var observationScope: HeistPredicateObservationScope {
+        predicate.observationScope
+    }
+}
+
 private extension AccessibilityPredicate {
     var observationScope: HeistPredicateObservationScope {
         switch self {
@@ -638,6 +941,34 @@ private extension HeistExecutionStepResult {
             stopsHeist: true,
             skipped: skipped,
             caseSelection: caseSelection,
+            repeatResult: repeatResult,
+            childResults: childResults
+        )
+    }
+}
+
+private extension Array where Element == HeistExecutionStepResult {
+    func reindexed(startingAt offset: Int) -> [HeistExecutionStepResult] {
+        enumerated().map { localIndex, result in
+            result.withIndex(offset + localIndex)
+        }
+    }
+}
+
+private extension HeistExecutionStepResult {
+    func withIndex(_ newIndex: Int) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: newIndex,
+            kind: kind,
+            actionResult: actionResult,
+            expectationActionResult: expectationActionResult,
+            expectation: expectation,
+            message: message,
+            durationMs: durationMs,
+            stopsHeist: stopsHeist,
+            skipped: skipped,
+            caseSelection: caseSelection,
+            repeatResult: repeatResult,
             childResults: childResults
         )
     }

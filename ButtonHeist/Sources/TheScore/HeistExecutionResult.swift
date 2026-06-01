@@ -24,6 +24,8 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
     case wait
     case conditional
     case waitForCases
+    case repeatCount
+    case repeatUntil
     case warn
     case fail
     case skipped
@@ -42,6 +44,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
     public let stopsHeist: Bool
     public let skipped: HeistExecutionSkippedStepResult?
     public let caseSelection: HeistCaseSelectionResult?
+    public let repeatResult: HeistRepeatResult?
     public let childResults: [HeistExecutionStepResult]?
 
     public init(
@@ -55,6 +58,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         stopsHeist: Bool = false,
         skipped: HeistExecutionSkippedStepResult? = nil,
         caseSelection: HeistCaseSelectionResult? = nil,
+        repeatResult: HeistRepeatResult? = nil,
         childResults: [HeistExecutionStepResult]? = nil
     ) {
         self.index = index
@@ -67,6 +71,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         self.stopsHeist = stopsHeist
         self.skipped = skipped
         self.caseSelection = caseSelection
+        self.repeatResult = repeatResult
         self.childResults = childResults
     }
 
@@ -84,6 +89,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         if kind == .action, actionResult == nil { return true }
         if kind == .wait, actionResult?.success != true { return true }
         if kind == .waitForCases, caseSelection?.timedOut == true, caseSelection?.elseRan != true { return true }
+        if repeatResult?.failureReason != nil { return true }
         if childResults?.contains(where: \.isFailure) == true { return true }
         return false
     }
@@ -127,6 +133,34 @@ public struct HeistCaseMatchResult: Codable, Sendable {
     ) {
         self.predicate = predicate
         self.result = result
+    }
+}
+
+public struct HeistRepeatResult: Codable, Sendable {
+    public let iterationCount: Int
+    public let elapsedMs: Int
+    public let timeout: Double?
+    public let maxIterations: Int?
+    public let finalPredicate: AccessibilityPredicate?
+    public let finalPredicateResult: ExpectationResult?
+    public let failureReason: String?
+
+    public init(
+        iterationCount: Int,
+        elapsedMs: Int,
+        timeout: Double? = nil,
+        maxIterations: Int? = nil,
+        finalPredicate: AccessibilityPredicate? = nil,
+        finalPredicateResult: ExpectationResult? = nil,
+        failureReason: String? = nil
+    ) {
+        self.iterationCount = iterationCount
+        self.elapsedMs = elapsedMs
+        self.timeout = timeout
+        self.maxIterations = maxIterations
+        self.finalPredicate = finalPredicate
+        self.finalPredicateResult = finalPredicateResult
+        self.failureReason = failureReason
     }
 }
 

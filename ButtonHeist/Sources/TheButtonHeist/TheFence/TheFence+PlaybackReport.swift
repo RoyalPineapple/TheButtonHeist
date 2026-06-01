@@ -113,9 +113,18 @@ private struct PlaybackReportProjection {
                 return waitForCases.elseSteps
             }
             return nil
+        case .repeatCount(let repeatCount):
+            return repeatedSteps(repeatCount.steps, iterationCount: outcome.repeatResult?.iterationCount ?? 0)
+        case .repeatUntil(let repeatUntil):
+            return repeatedSteps(repeatUntil.steps, iterationCount: outcome.repeatResult?.iterationCount ?? 0)
         case .action, .wait, .warn, .fail:
             return nil
         }
+    }
+
+    private func repeatedSteps(_ steps: [HeistStep], iterationCount: Int) -> [HeistStep]? {
+        guard iterationCount > 0 else { return nil }
+        return Array(repeating: steps, count: iterationCount).flatMap { $0 }
     }
 
     private func failureErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
@@ -181,6 +190,10 @@ private extension HeistExecutionStepResult {
            caseSelection?.elseRan != true {
             return true
         }
+        if repeatResult?.failureReason != nil,
+           childResults?.contains(where: \.isFailure) != true {
+            return true
+        }
         if stopsHeist, childResults?.contains(where: \.isFailure) != true {
             return true
         }
@@ -195,6 +208,8 @@ private extension HeistStep {
         case .wait: return "wait"
         case .conditional: return "if"
         case .waitForCases: return "wait_for_cases"
+        case .repeatCount: return "repeat_count"
+        case .repeatUntil: return "repeat_until"
         case .warn: return "warn"
         case .fail: return "fail"
         }
