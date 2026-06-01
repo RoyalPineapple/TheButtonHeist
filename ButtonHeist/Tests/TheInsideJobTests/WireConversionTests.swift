@@ -481,8 +481,11 @@ final class WireConverterTests: XCTestCase {
     }
 
     func testActionsChangeProducesUpdate() {
-        let before = [makeScreenElement(heistId: "slider", traits: [.button])]
-        let after = [makeScreenElement(heistId: "slider", traits: [.adjustable])]
+        // Same identity (label/identifier/non-transient traits unchanged) so the
+        // elements pair; toggling interactivity flips the `.activate` action,
+        // producing an `.actions` update rather than a remove+add.
+        let before = [makeScreenElement(heistId: "slider", label: "Row", respondsToUserInteraction: true)]
+        let after = [makeScreenElement(heistId: "slider", label: "Row", respondsToUserInteraction: false)]
 
         let delta = computeDelta(
             before: before, after: after, afterTree: [], isScreenChange: false
@@ -490,6 +493,8 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertNotNil(delta.testEdits.updatedOptional)
+        let change = delta.testEdits.updatedOptional?.first?.changes.first
+        XCTAssertEqual(change?.property, .actions)
     }
 
     func testFrameChangeProducesUpdate() {
@@ -623,7 +628,12 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNil(delta.testEdits.removedOptional)
     }
 
-    func testFunctionallyIdenticalRemoveAddWithSiblingReorderReturnsNoChange() {
+    func testMovedIdenticalElementWithSiblingReorderReportsFrameUpdate() {
+        // Same content (label + non-transient `.button`), only the frame and
+        // activation point move. Under content-signature pairing these elements
+        // pair instead of churning, so the move surfaces as a `.frame` update on
+        // a single element — not a remove+add, and not suppressed by move
+        // inference (which only runs on unpaired added/removed).
         let beforeElement = makeScreenElement(
             heistId: "telescope_far_light_3_32_button",
             label: "Telescope, Far Light, 3:32",
@@ -657,9 +667,13 @@ final class WireConverterTests: XCTestCase {
         )
 
         XCTAssertNotScreenChanged(delta)
-        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
+        let update = delta.testEdits.updatedOptional?.first
+        XCTAssertEqual(update?.element.label, "Telescope, Far Light, 3:32")
+        XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
     func testStableMatchWithStateChangeReturnsElementUpdate() {
@@ -707,7 +721,10 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
     }
 
-    func testFunctionallyIdenticalRemoveAddAtSameLocationReturnsNoChange() {
+    func testMovedIdenticalElementReportsFrameUpdate() {
+        // A lone element with identical content moves to a new frame/activation
+        // point. Content-signature pairing keeps it paired, so the move is a
+        // single `.frame` update rather than a remove+add.
         let beforeElement = makeScreenElement(
             heistId: "telescope_far_light_3_32_button",
             label: "Telescope, Far Light, 3:32",
@@ -734,9 +751,13 @@ final class WireConverterTests: XCTestCase {
         )
 
         XCTAssertNotScreenChanged(delta)
-        if case .elementsChanged = delta { XCTFail("Expected .noChange, got .elementsChanged") }
+        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
+        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
+        let update = delta.testEdits.updatedOptional?.first
+        XCTAssertEqual(update?.element.label, "Telescope, Far Light, 3:32")
+        XCTAssertTrue(update?.changes.contains { $0.property == .frame } == true)
     }
 
     func testElementDeletionReturnsRemovedId() {

@@ -797,7 +797,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
         XCTAssertEqual(result.method, .rotor)
-        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found \(heistId)") ?? false)
+        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Rotor host") ?? false,
+                      result.message ?? "missing rotor success message")
     }
 
     func testExecuteRotorUsesOnscreenAccessibilityGeometryAtViewportEdge() async {
@@ -826,7 +827,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
         XCTAssertEqual(result.method, .rotor)
-        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found \(heistId)") ?? false)
+        XCTAssertTrue(result.message?.contains("Rotor 'Live Rotor' found Edge Rotor Host") ?? false,
+                      result.message ?? "missing rotor success message")
     }
 
     func testExecuteRotorNotFoundReportsAvailableRotorsAndNextStep() async {

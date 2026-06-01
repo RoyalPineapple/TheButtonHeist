@@ -400,9 +400,10 @@ final class WaitForIntegrationTests: XCTestCase {
 
     func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {
         let visible = addLabel(
-            "WaitForChange-KnownMemory-Old",
+            "WaitForChange-KnownMemory-Anchor",
             identifier: "wait_change_visible_anchor"
         )
+        visible.accessibilityValue = "Old"
         defer { visible.removeFromSuperview() }
 
         guard insideJob.brains.refresh() != nil else {
@@ -426,8 +427,10 @@ final class WaitForIntegrationTests: XCTestCase {
 
         let updateTask = Task { @MainActor in
             await self.insideJob.tripwire.yieldRealFrames(2)
-            visible.text = "WaitForChange-KnownMemory-New"
-            visible.accessibilityLabel = "WaitForChange-KnownMemory-New"
+            // Mutate a tracked update property (value) while keeping the element's
+            // identity (identifier/label) stable so before/after pair on the same
+            // diffPairingKey and the change registers as an elements update.
+            visible.accessibilityValue = "New"
         }
 
         let result = await waitForChange(

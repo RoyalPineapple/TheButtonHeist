@@ -250,7 +250,10 @@ final class TheStashResolutionTests: XCTestCase {
         }
         XCTAssertTrue(candidates[0].contains("id=save1"))
         XCTAssertTrue(candidates[1].contains("id=save2"))
-        XCTAssertTrue(candidates[0].contains("heistId: save1"))
+        // Candidates are described by their predicate fields (label/identifier/value),
+        // not by an agent-facing heistId — that concept was removed.
+        XCTAssertTrue(candidates[0].contains("\"Save\""))
+        XCTAssertTrue(candidates[0].contains("value=draft"))
         XCTAssertTrue(candidates[0].contains("visible"))
     }
 
@@ -293,7 +296,9 @@ final class TheStashResolutionTests: XCTestCase {
             return
         }
         XCTAssertTrue(diagnostics.contains("Long List"), "Should suggest known offscreen candidate: \(diagnostics)")
-        XCTAssertTrue(diagnostics.contains("long_list_button"))
+        // The near-miss names the candidate by its label predicate, not by an
+        // agent-facing heistId — that concept was removed.
+        XCTAssertTrue(diagnostics.contains("label=\"Long List\""), "Should describe candidate by label predicate: \(diagnostics)")
         XCTAssertTrue(diagnostics.contains("offscreen"))
         XCTAssertTrue(diagnostics.contains("unreachable"))
     }
