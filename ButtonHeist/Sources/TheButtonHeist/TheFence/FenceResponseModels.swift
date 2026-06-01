@@ -82,20 +82,6 @@ extension HeistExecutionResult {
     var stoppedFailedIndex: Int? {
         failedIndex ?? steps.first { $0.stopsHeist }?.index
     }
-
-    func expectationsChecked(steps plannedSteps: [HeistStep]) -> Int {
-        steps.count { step in
-            guard plannedSteps.indices.contains(step.index) else { return false }
-            return step.expectationCounted(for: plannedSteps[step.index])
-        }
-    }
-
-    func expectationsMet(steps plannedSteps: [HeistStep]) -> Int {
-        steps.count { step in
-            guard plannedSteps.indices.contains(step.index) else { return false }
-            return step.expectationMet(for: plannedSteps[step.index]) == true
-        }
-    }
 }
 
 public enum SessionConnectionPhase: String, Sendable, Equatable {

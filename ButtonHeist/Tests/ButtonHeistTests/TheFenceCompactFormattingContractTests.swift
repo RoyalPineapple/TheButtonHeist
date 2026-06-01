@@ -50,4 +50,49 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(output, "drag: ok")
     }
 
+    func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
+        let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
+        let childAction = try HeistStep.action(ActionStep(
+            command: .activate(.predicate(ElementPredicate(label: "Submit"))),
+            expectation: WaitStep(predicate: expected, timeout: 1)
+        ))
+        let casePredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let conditional = try ConditionalStep(cases: [
+            PredicateCase(predicate: casePredicate, steps: [childAction]),
+        ])
+        let plan = HeistPlan(steps: [.conditional(conditional)])
+        let childResult = HeistExecutionStepResult(
+            index: 0,
+            kind: .action,
+            actionResult: ActionResult(success: true, method: .activate),
+            expectation: ExpectationResult(met: true, predicate: expected),
+            durationMs: 1
+        )
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .conditional,
+                    durationMs: 1,
+                    caseSelection: HeistCaseSelectionResult(
+                        cases: [
+                            HeistCaseMatchResult(
+                                predicate: casePredicate,
+                                result: ExpectationResult(met: true, predicate: casePredicate)
+                            ),
+                        ],
+                        selectedCaseIndex: 0,
+                        elapsedMs: 1
+                    ),
+                    childResults: [childResult]
+                ),
+            ],
+            totalTimingMs: 1
+        )
+
+        let output = FenceResponse.heistExecution(plan: plan, result: result).humanFormatted()
+
+        XCTAssertTrue(output.contains("[expectations: 1/1 met]"), output)
+    }
+
 }

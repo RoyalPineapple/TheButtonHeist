@@ -36,9 +36,16 @@ public extension AccessibilityPredicate {
     /// the affected element directly, so no pre-action element resolution is
     /// needed.
     func validate(against result: ActionResult) -> ExpectationResult {
-        evaluate(
-            currentElements: result.accessibilityTrace?.endpointCurrentElements ?? [],
-            delta: result.accessibilityTrace?.endpointDeltaProjection
+        guard let trace = result.accessibilityTrace else {
+            return ExpectationResult(
+                met: false,
+                predicate: self,
+                actual: "no observed accessibility trace"
+            )
+        }
+        return evaluate(
+            currentElements: trace.endpointCurrentElements,
+            delta: trace.endpointDeltaProjection
         )
     }
 }
