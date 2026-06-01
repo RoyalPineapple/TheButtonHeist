@@ -2524,7 +2524,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let heist = HeistPlan(steps: [
             .conditional(try ConditionalStep(
                 cases: [
-                    PredicateCase(
+                    try PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
                         steps: [nestedAction]
                     ),

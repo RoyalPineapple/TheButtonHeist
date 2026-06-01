@@ -403,7 +403,8 @@ extension RepeatCountStep: CustomStringConvertible {
 
 public struct RepeatUntilStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case predicate, timeout, maxIterations, steps
+        case predicate, timeout, steps
+        case maxIterations = "max_iterations"
     }
 
     public let predicate: AccessibilityPredicate
@@ -448,7 +449,7 @@ public struct RepeatUntilStep: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: .maxIterations,
                 in: container,
-                debugDescription: "repeat_until maxIterations must be > 0"
+                debugDescription: "repeat_until max_iterations must be > 0"
             )
         }
         try self.init(
@@ -479,7 +480,10 @@ public struct PredicateCase: Codable, Sendable, Equatable {
     public let predicate: AccessibilityPredicate
     public let steps: [HeistStep]
 
-    public init(predicate: AccessibilityPredicate, steps: [HeistStep]) {
+    public init(predicate: AccessibilityPredicate, steps: [HeistStep]) throws {
+        guard !steps.isEmpty else {
+            throw HeistPlanError.emptyPredicateCaseSteps
+        }
         self.predicate = predicate
         self.steps = steps
     }
@@ -487,7 +491,7 @@ public struct PredicateCase: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(
+        try self.init(
             predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
             steps: try container.decode([HeistStep].self, forKey: .steps)
         )
@@ -548,6 +552,7 @@ public struct FailStep: Codable, Sendable, Equatable {
 public enum HeistPlanError: Error, Sendable, Equatable {
     case unsupportedActionCommand(String)
     case emptyPredicateCases(String)
+    case emptyPredicateCaseSteps
     case emptyRepeatSteps(String)
     case negativeTimeout(Double)
     case negativeRepeatCount(Int)

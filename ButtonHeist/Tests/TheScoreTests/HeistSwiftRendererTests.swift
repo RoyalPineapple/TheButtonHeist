@@ -151,7 +151,7 @@ final class HeistSwiftRendererTests: XCTestCase {
 
     func testRendersSingleConditional() throws {
         let step = try ConditionalStep(cases: [
-            PredicateCase(
+            try PredicateCase(
                 predicate: .state(.present(ElementPredicate(label: "Allow"))),
                 steps: [.action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Allow")))))]
             ),
@@ -170,7 +170,7 @@ final class HeistSwiftRendererTests: XCTestCase {
     func testRendersConditionalWithElse() throws {
         let step = try ConditionalStep(
             cases: [
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Allow"))),
                     steps: [.action(try ActionStep(command: .activate(.predicate(ElementPredicate(label: "Allow")))))]
                 ),
@@ -193,11 +193,11 @@ final class HeistSwiftRendererTests: XCTestCase {
     func testRendersMultiCaseConditional() throws {
         let step = try ConditionalStep(
             cases: [
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
                     steps: [.warn(WarnStep(message: "home"))]
                 ),
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Login"))),
                     steps: [.warn(WarnStep(message: "login"))]
                 ),
@@ -229,7 +229,7 @@ final class HeistSwiftRendererTests: XCTestCase {
         let step = try WaitForCasesStep(
             timeout: 5,
             cases: [
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
                     steps: [.warn(WarnStep(message: "home"))]
                 ),

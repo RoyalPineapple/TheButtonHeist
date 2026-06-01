@@ -23,9 +23,9 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
     case action
     case wait
     case conditional
-    case waitForCases
-    case repeatCount
-    case repeatUntil
+    case waitForCases = "wait_for_cases"
+    case repeatCount = "repeat_count"
+    case repeatUntil = "repeat_until"
     case warn
     case fail
     case skipped
@@ -81,6 +81,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
 
     public var isFailure: Bool {
         guard skipped == nil else { return false }
+        if childResults?.contains(where: \.isFailure) == true { return true }
         if stopsHeist { return true }
         if kind == .fail { return true }
         if actionResult?.success == false { return true }
@@ -90,7 +91,6 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         if kind == .wait, actionResult?.success != true { return true }
         if kind == .waitForCases, caseSelection?.timedOut == true, caseSelection?.elseRan != true { return true }
         if repeatResult?.failureReason != nil { return true }
-        if childResults?.contains(where: \.isFailure) == true { return true }
         return false
     }
 }

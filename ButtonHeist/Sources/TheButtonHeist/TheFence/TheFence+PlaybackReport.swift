@@ -57,7 +57,7 @@ private struct PlaybackReportProjection {
             guard
                 let outcome,
                 let childResults = outcome.childResults,
-                let childSteps = childSteps(for: step, outcome: outcome)
+                let childSteps = step.childSteps(for: outcome)
             else { continue }
             appendStepResults(
                 steps: childSteps,
@@ -90,41 +90,6 @@ private struct PlaybackReportProjection {
             timeSeconds: Double(outcome?.durationMs ?? 0) / 1000,
             outcome: reportOutcome
         )
-    }
-
-    private func childSteps(
-        for step: HeistStep,
-        outcome: HeistExecutionStepResult
-    ) -> [HeistStep]? {
-        switch step {
-        case .conditional(let conditional):
-            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
-                return conditional.cases[safe: selectedCaseIndex]?.steps
-            }
-            if outcome.caseSelection?.elseRan == true {
-                return conditional.elseSteps
-            }
-            return nil
-        case .waitForCases(let waitForCases):
-            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
-                return waitForCases.cases[safe: selectedCaseIndex]?.steps
-            }
-            if outcome.caseSelection?.elseRan == true {
-                return waitForCases.elseSteps
-            }
-            return nil
-        case .repeatCount(let repeatCount):
-            return repeatedSteps(repeatCount.steps, iterationCount: outcome.repeatResult?.iterationCount ?? 0)
-        case .repeatUntil(let repeatUntil):
-            return repeatedSteps(repeatUntil.steps, iterationCount: outcome.repeatResult?.iterationCount ?? 0)
-        case .action, .wait, .warn, .fail:
-            return nil
-        }
-    }
-
-    private func repeatedSteps(_ steps: [HeistStep], iterationCount: Int) -> [HeistStep]? {
-        guard iterationCount > 0 else { return nil }
-        return Array(repeating: steps, count: iterationCount).flatMap { $0 }
     }
 
     private func failureErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
@@ -292,11 +257,5 @@ private extension ClientWireMessageType {
         case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
         default: return rawValue
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

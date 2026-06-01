@@ -131,13 +131,14 @@ final class HeistPlanTests: XCTestCase {
         ])
 
         let data = try JSONEncoder().encode(plan)
+
         let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
 
         XCTAssertEqual(decoded, plan)
     }
 
     func testConditionalAndWaitForCasesRoundTrip() throws {
-        let conditionCase = PredicateCase(
+        let conditionCase = try PredicateCase(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
             steps: [.warn(WarnStep(message: "home"))]
         )
@@ -154,6 +155,10 @@ final class HeistPlanTests: XCTestCase {
         ])
 
         let data = try JSONEncoder().encode(plan)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains(#""else_steps""#), json)
+        XCTAssertFalse(json.contains("elseSteps"), json)
+
         let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
 
         XCTAssertEqual(decoded, plan)
@@ -173,6 +178,10 @@ final class HeistPlanTests: XCTestCase {
         ])
 
         let data = try JSONEncoder().encode(plan)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains(#""max_iterations":30"#), json)
+        XCTAssertFalse(json.contains("maxIterations"), json)
+
         let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
 
         XCTAssertEqual(decoded, plan)
@@ -216,6 +225,26 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
+    func testPredicateCaseRejectsEmptySteps() {
+        let json = """
+        {
+          "type": "conditional",
+          "conditional": {
+            "cases": [
+              {
+                "predicate": {"type": "present", "element": {"label": "Home"}},
+                "steps": []
+              }
+            ]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("emptyPredicateCaseSteps"), "\(error)")
+        }
+    }
+
     func testRepeatUntilRejectsInvalidBounds() {
         let negativeTimeout = """
         {
@@ -223,7 +252,7 @@ final class HeistPlanTests: XCTestCase {
           "repeat_until": {
             "predicate": {"type": "present", "element": {"label": "Done"}},
             "timeout": -1,
-            "maxIterations": 1,
+            "max_iterations": 1,
             "steps": [{"type": "warn", "warn": {"message": "scroll"}}]
           }
         }
@@ -238,13 +267,28 @@ final class HeistPlanTests: XCTestCase {
           "repeat_until": {
             "predicate": {"type": "present", "element": {"label": "Done"}},
             "timeout": 1,
-            "maxIterations": 0,
+            "max_iterations": 0,
             "steps": [{"type": "warn", "warn": {"message": "scroll"}}]
           }
         }
         """
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(zeroIterations.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("maxIterations must be > 0"), "\(error)")
+            XCTAssertTrue("\(error)".contains("max_iterations must be > 0"), "\(error)")
+        }
+
+        let camelCaseIterations = """
+        {
+          "type": "repeat_until",
+          "repeat_until": {
+            "predicate": {"type": "present", "element": {"label": "Done"}},
+            "timeout": 1,
+            "maxIterations": 1,
+            "steps": [{"type": "warn", "warn": {"message": "scroll"}}]
+          }
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(camelCaseIterations.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("maxIterations"), "\(error)")
         }
     }
 
@@ -268,7 +312,7 @@ final class HeistPlanTests: XCTestCase {
           "repeatUntil": {
             "predicate": {"type": "present", "element": {"label": "Done"}},
             "timeout": 1,
-            "maxIterations": 1,
+            "max_iterations": 1,
             "steps": [{"type": "warn", "warn": {"message": "never"}}]
           }
         }

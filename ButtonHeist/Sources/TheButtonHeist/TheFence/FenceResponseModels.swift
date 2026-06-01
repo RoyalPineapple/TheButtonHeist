@@ -128,7 +128,7 @@ extension HeistExecutionStepResult {
     }
 }
 
-private extension HeistStep {
+extension HeistStep {
     func childSteps(for outcome: HeistExecutionStepResult) -> [HeistStep]? {
         switch self {
         case .conditional(let conditional):

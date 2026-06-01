@@ -555,6 +555,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
 
         let data = try encoder.encode(result)
+
         let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
 
         let decodedStep = try XCTUnwrap(decoded.steps.first)
@@ -596,6 +597,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
 
         let data = try encoder.encode(result)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains(#""kind":"repeat_until""#), json)
+        XCTAssertFalse(json.contains("repeatUntil"), json)
+
         let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
 
         let decodedStep = try XCTUnwrap(decoded.steps.first)

@@ -439,11 +439,11 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let plan = HeistPlan(steps: [
             .conditional(try ConditionalStep(cases: [
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
                     steps: [.warn(WarnStep(message: "home flow"))]
                 ),
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Login"))),
                     steps: [.fail(FailStep(message: "wrong branch"))]
                 ),
@@ -466,7 +466,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let plan = HeistPlan(steps: [
             .conditional(try ConditionalStep(cases: [
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
                     steps: [.fail(FailStep(message: "should not run"))]
                 ),
@@ -490,7 +490,7 @@ final class TheBrainsActionTests: XCTestCase {
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
-                    PredicateCase(
+                    try PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
                         steps: [.warn(WarnStep(message: "home flow"))]
                     ),
@@ -516,7 +516,7 @@ final class TheBrainsActionTests: XCTestCase {
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
-                    PredicateCase(
+                    try PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
                         steps: [.fail(FailStep(message: "should not run"))]
                     ),
@@ -544,7 +544,7 @@ final class TheBrainsActionTests: XCTestCase {
             .waitForCases(try WaitForCasesStep(
                 timeout: 1,
                 cases: [
-                    PredicateCase(
+                    try PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
                         steps: [.warn(WarnStep(message: "home flow"))]
                     ),
@@ -774,11 +774,11 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let plan = HeistPlan(steps: [
             .conditional(try ConditionalStep(cases: [
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.present(ElementPredicate(label: "Home"))),
                     steps: [.warn(WarnStep(message: "home"))]
                 ),
-                PredicateCase(
+                try PredicateCase(
                     predicate: .state(.absent(ElementPredicate(label: "Login"))),
                     steps: [.warn(WarnStep(message: "not login"))]
                 ),
@@ -805,7 +805,7 @@ final class TheBrainsActionTests: XCTestCase {
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
-                    PredicateCase(
+                    try PredicateCase(
                         predicate: .changed(.appeared(ElementPredicate(label: "Toast"))),
                         steps: [.warn(WarnStep(message: "toast"))]
                     ),
@@ -829,11 +829,11 @@ final class TheBrainsActionTests: XCTestCase {
             .waitForCases(try WaitForCasesStep(
                 timeout: 0,
                 cases: [
-                    PredicateCase(
+                    try PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
                         steps: [.warn(WarnStep(message: "home"))]
                     ),
-                    PredicateCase(
+                    try PredicateCase(
                         predicate: .changed(.appeared(ElementPredicate(label: "Toast"))),
                         steps: [.warn(WarnStep(message: "toast"))]
                     ),
