@@ -24,7 +24,7 @@ extension TheFence {
         case setPasteboard = "set_pasteboard"
         case getPasteboard = "get_pasteboard"
         case dismissKeyboard = "dismiss_keyboard"
-        case runBatch = "run_batch"
+        case runHeist = "run_heist"
         case getSessionState = "get_session_state"
         case connect
         case listTargets = "list_targets"
@@ -38,7 +38,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     public let command: TheFence.Command
     public let cliExposure: CLIExposure
     public let mcpExposure: MCPExposure
-    public let isBatchExecutable: Bool
+    public let isHeistExecutable: Bool
     public let requiresConnectionBeforeDispatch: Bool
     public let parameters: [FenceParameterSpec]
     public let mcpAnnotations: MCPToolAnnotationSpec?
@@ -46,7 +46,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
     let requestDecoder: TheFence.RequestDecoder
 
     public var isPublicRequestContract: Bool {
-        cliExposure != .notExposed || mcpExposure != .notExposed || isBatchExecutable
+        cliExposure != .notExposed || mcpExposure != .notExposed || isHeistExecutable
     }
 
     public var elementTargetParameterKeys: [String] {
@@ -67,7 +67,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         requestDecoder: @escaping TheFence.RequestDecoder,
         cliExposure: CLIExposure,
         mcpExposure: MCPExposure,
-        isBatchExecutable: Bool,
+        isHeistExecutable: Bool,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec],
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
@@ -77,7 +77,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         self.requestDecoder = requestDecoder
         self.cliExposure = cliExposure
         self.mcpExposure = mcpExposure
-        self.isBatchExecutable = isBatchExecutable
+        self.isHeistExecutable = isHeistExecutable
         self.requiresConnectionBeforeDispatch = requiresConnectionBeforeDispatch
         self.parameters = parameters
         self.mcpAnnotations = mcpAnnotations
@@ -89,7 +89,7 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         lhs.command == rhs.command &&
             lhs.cliExposure == rhs.cliExposure &&
             lhs.mcpExposure == rhs.mcpExposure &&
-            lhs.isBatchExecutable == rhs.isBatchExecutable &&
+            lhs.isHeistExecutable == rhs.isHeistExecutable &&
             lhs.requiresConnectionBeforeDispatch == rhs.requiresConnectionBeforeDispatch &&
             lhs.parameters == rhs.parameters &&
             lhs.mcpAnnotations == rhs.mcpAnnotations &&
@@ -106,8 +106,8 @@ public extension TheFence.Command {
         descriptors.filter { $0.cliExposure == .directCommand }
     }
 
-    static var batchExecutableCases: [Self] {
-        batchExecutableCommandDescriptors.map(\.command)
+    static var heistExecutableCases: [Self] {
+        heistExecutableCommandDescriptors.map(\.command)
     }
 
 }
@@ -125,17 +125,17 @@ extension TheFence.Command {
     }()
 
     private static var commandDescriptors: [FenceCommandDescriptor] {
-        nonBatchCommandDescriptors + [runBatchCommandDescriptor]
+        commandDescriptorsWithoutRunHeist + [runHeistCommandDescriptor]
     }
 
-    private static var nonBatchCommandDescriptors: [FenceCommandDescriptor] {
+    private static var commandDescriptorsWithoutRunHeist: [FenceCommandDescriptor] {
         sessionCommandDescriptors
             + observationCommandDescriptors
             + actionCommandDescriptors
     }
 
-    static var batchExecutableCommandDescriptors: [FenceCommandDescriptor] {
-        nonBatchCommandDescriptors.filter(\.isBatchExecutable)
+    static var heistExecutableCommandDescriptors: [FenceCommandDescriptor] {
+        commandDescriptorsWithoutRunHeist.filter(\.isHeistExecutable)
     }
 
     static func commandDescriptor(
@@ -143,7 +143,7 @@ extension TheFence.Command {
         requestDecoder: @escaping TheFence.RequestDecoder,
         cliExposure: CLIExposure = .directCommand,
         mcpExposure: MCPExposure = .directTool,
-        isBatchExecutable: Bool = false,
+        isHeistExecutable: Bool = false,
         requiresConnectionBeforeDispatch: Bool = true,
         parameters: [FenceParameterSpec] = [],
         mcpAnnotations: MCPToolAnnotationSpec? = nil,
@@ -154,7 +154,7 @@ extension TheFence.Command {
             requestDecoder: requestDecoder,
             cliExposure: cliExposure,
             mcpExposure: mcpExposure,
-            isBatchExecutable: isBatchExecutable,
+            isHeistExecutable: isHeistExecutable,
             requiresConnectionBeforeDispatch: requiresConnectionBeforeDispatch,
             parameters: parameters,
             mcpAnnotations: mcpAnnotations,

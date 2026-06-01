@@ -140,8 +140,8 @@ and parameters.
 
 - `connect` verifies transport, handshake/authentication, and session
   ownership. Observation still starts with `get_interface`.
-- `run_batch` accepts canonical batch-executable Fence command requests inside
-  `steps`.
+- `run_heist` accepts a typed `HeistPlan`; recordings and playback use the same
+  plan contract.
 - Commands that support `expect` validate the expectation against the action
   result and report the observed outcome.
 - Typed responses serialize to human, compact, and JSON forms from the same

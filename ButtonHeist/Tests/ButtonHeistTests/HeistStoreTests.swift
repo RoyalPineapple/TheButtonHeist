@@ -1,5 +1,6 @@
 import XCTest
 @testable import ButtonHeist
+import TheScore
 
 final class HeistStoreTests: XCTestCase {
 
@@ -21,15 +22,14 @@ final class HeistStoreTests: XCTestCase {
         try heistStore.startRecording(identifier: "checkout-flow", app: "com.example.app")
 
         try heistStore.appendStep(
-            try HeistStep(command: "activate", target: semanticTarget(label: "Pay", traits: [.button]))
+            try activateStep(label: "Pay", traits: [.button])
         )
         let heist = try heistStore.finishRecording()
 
         XCTAssertFalse(heistStore.isRecordingHeist)
-        XCTAssertEqual(heist.version, HeistPlayback.currentVersion)
-        XCTAssertEqual(heist.app, "com.example.app")
+        XCTAssertEqual(heist.version, HeistPlan.currentVersion)
         XCTAssertEqual(heist.steps, [
-            try HeistStep(command: "activate", target: semanticTarget(label: "Pay", traits: [.button])),
+            try activateStep(label: "Pay", traits: [.button]),
         ])
     }
 
@@ -85,16 +85,16 @@ final class HeistStoreTests: XCTestCase {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "abandoned", app: "com.example.app")
         let abandonedPath = try XCTUnwrap(heistStore.recordingFilePath)
-        try heistStore.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "Old")))
+        try heistStore.appendStep(try activateStep(label: "Old"))
 
         heistStore.abandonRecording()
 
         XCTAssertFalse(heistStore.isRecordingHeist)
         XCTAssertTrue(FileManager.default.fileExists(atPath: abandonedPath.path))
         try heistStore.startRecording(identifier: "new", app: "com.example.app")
-        try heistStore.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "New")))
+        try heistStore.appendStep(try activateStep(label: "New"))
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps[0].target, semanticTarget(label: "New"))
+        XCTAssertEqual(heist.steps[0], try activateStep(label: "New"))
     }
 
     @ButtonHeistActor
@@ -103,7 +103,7 @@ final class HeistStoreTests: XCTestCase {
         try heistStore.startRecording(identifier: "malformed", app: "com.example.app")
         let path = try XCTUnwrap(heistStore.recordingFilePath)
 
-        try heistStore.appendStep(try HeistStep(command: "activate", target: semanticTarget(label: "Go")))
+        try heistStore.appendStep(try activateStep(label: "Go"))
         let handle = try FileHandle(forWritingTo: path)
         try handle.seekToEnd()
         try handle.write(contentsOf: Data("not-json\n".utf8))
@@ -136,7 +136,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps.map(\.target), [semanticTarget(label: "Go")])
+        XCTAssertEqual(heist.steps, [try activateStep(label: "Go")])
     }
 
     @ButtonHeistActor
@@ -156,11 +156,9 @@ final class HeistStoreTests: XCTestCase {
 
         let heist = try heistStore.finishRecording()
         XCTAssertEqual(heist.steps, [
-            try HeistStep(
-                command: "activate",
-                target: semanticTarget(label: "Save"),
-                arguments: ["timeout": .double(2.5)],
-                expectation: .changed(.screen())
+            try activateStep(
+                label: "Save",
+                expectation: WaitStep(predicate: .changed(.screen()), timeout: 2.5)
             ),
         ])
     }
@@ -181,17 +179,16 @@ final class HeistStoreTests: XCTestCase {
 
         let heist = try heistStore.finishRecording()
         XCTAssertEqual(heist.steps, [
-            try HeistStep(command: "activate", target: semanticTarget(label: "Save")),
+            try activateStep(label: "Save"),
         ])
     }
 
     @ButtonHeistActor
     func testWriteAndReadHeist() async throws {
-        let heist = HeistPlayback(
-            app: "com.example.app",
+        let heist = HeistPlan(
             steps: [
-                try HeistStep(command: "activate", target: semanticTarget(label: "Go", traits: [.button])),
-                try HeistStep(command: "type_text", arguments: ["text": .string("test")]),
+                try activateStep(label: "Go", traits: [.button]),
+                .action(try ActionStep(command: .typeText(TypeTextTarget(text: "test")))),
             ]
         )
 
@@ -206,6 +203,17 @@ final class HeistStoreTests: XCTestCase {
     private func makeHeistStore() -> HeistStore {
         HeistStore(baseDirectory: tempDirectory)
     }
+}
+
+private func activateStep(
+    label: String,
+    traits: [HeistTrait] = [],
+    expectation: WaitStep? = nil
+) throws -> HeistStep {
+    .action(try ActionStep(
+        command: .activate(.predicate(ElementPredicate(label: label, traits: traits))),
+        expectation: expectation
+    ))
 }
 
 @ButtonHeistActor

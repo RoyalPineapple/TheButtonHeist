@@ -64,10 +64,9 @@ struct PublicResponseModel: FencePublicJSONResponse {
                 includePNGData: true,
                 includeInterface: options.includeInterface
             ).encode(to: encoder)
-        case .batch(let commands, let steps, let result, let accessibilityTrace):
-            try PublicBatchResponse(
-                commands: commands,
-                steps: steps,
+        case .heistExecution(let plan, let result, let accessibilityTrace):
+            try PublicHeistExecutionResponse(
+                plan: plan,
                 result: result,
                 accessibilityTrace: accessibilityTrace
             ).encode(to: encoder)

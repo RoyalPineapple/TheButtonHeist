@@ -170,29 +170,27 @@ struct PublicElementUpdate: Encodable {
     }
 }
 
-struct PublicBatchResponse: FencePublicJSONResponse {
+struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     let status: PublicStatus
     let results: [PublicResponseModel]
     let completedSteps: Int
     let totalTimingMs: Int
     let failedIndex: Int?
-    let expectations: PublicBatchExpectations?
+    let expectations: PublicHeistExpectations?
     let netDelta: PublicDelta?
 
     init(
-        commands: [TheFence.Command],
-        steps: [TheScore.BatchStep],
-        result: BatchExecutionResult,
+        plan: HeistPlan,
+        result: HeistExecutionResult,
         accessibilityTrace: AccessibilityTrace?
     ) {
         let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
         self.results = result.steps.compactMap { step in
-            guard commands.indices.contains(step.index),
-                  steps.indices.contains(step.index),
+            guard plan.steps.indices.contains(step.index),
                   let response = step.actionResponse(
-                    command: commands[step.index],
-                    step: steps[step.index]
+                    command: plan.steps[step.index].fenceCommand ?? .runHeist,
+                    step: plan.steps[step.index]
                   )
             else { return nil }
             return PublicResponseModel(response: response)
@@ -200,15 +198,15 @@ struct PublicBatchResponse: FencePublicJSONResponse {
         self.completedSteps = result.completedStepCount
         self.totalTimingMs = result.totalTimingMs
         self.failedIndex = failedIndex
-        let checked = result.expectationsChecked(steps: steps)
+        let checked = result.expectationsChecked(steps: plan.steps)
         self.expectations = checked > 0
-            ? PublicBatchExpectations(checked: checked, met: result.expectationsMet(steps: steps))
+            ? PublicHeistExpectations(checked: checked, met: result.expectationsMet(steps: plan.steps))
             : nil
         self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
     }
 }
 
-struct PublicBatchExpectations: Encodable {
+struct PublicHeistExpectations: Encodable {
     let checked: Int
     let met: Int
     let allMet: Bool
@@ -217,5 +215,35 @@ struct PublicBatchExpectations: Encodable {
         self.checked = checked
         self.met = met
         self.allMet = checked == met
+    }
+}
+
+private extension HeistStep {
+    var fenceCommand: TheFence.Command? {
+        guard case .action(let action) = self else { return nil }
+        return TheFence.Command(clientWireType: action.command.wireType)
+    }
+}
+
+private extension TheFence.Command {
+    init?(clientWireType: ClientWireMessageType) {
+        self.init(rawValue: clientWireType.commandName)
+    }
+}
+
+private extension ClientWireMessageType {
+    var commandName: String {
+        switch self {
+        case .performCustomAction: return TheFence.Command.activate.rawValue
+        case .oneFingerTap: return TheFence.Command.oneFingerTap.rawValue
+        case .longPress: return TheFence.Command.longPress.rawValue
+        case .typeText: return TheFence.Command.typeText.rawValue
+        case .setPasteboard: return TheFence.Command.setPasteboard.rawValue
+        case .scrollToVisible: return TheFence.Command.scrollToVisible.rawValue
+        case .elementSearch: return TheFence.Command.elementSearch.rawValue
+        case .scrollToEdge: return TheFence.Command.scrollToEdge.rawValue
+        case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
+        default: return rawValue
+        }
     }
 }

@@ -44,7 +44,7 @@ extension CustomActionTarget {
 }
 
 /// Direction for a rotor step.
-public enum RotorDirection: String, Codable, Sendable, CaseIterable {
+public enum RotorDirection: String, Codable, Sendable, CaseIterable, Equatable {
     case next
     case previous
 }
@@ -96,7 +96,7 @@ extension RotorSelection: CustomStringConvertible {
 }
 
 /// Target for moving through a rotor.
-public struct RotorTarget: Sendable {
+public struct RotorTarget: Sendable, Equatable {
     /// Element whose `accessibilityCustomRotors` should be used.
     public let elementTarget: ElementTarget
     public let selection: RotorSelection

@@ -21,7 +21,7 @@ public enum FenceCommandReference {
             "",
             "## Summary",
             "",
-            "| Command | CLI | MCP | Batch | Description |",
+            "| Command | CLI | MCP | Heist | Description |",
             "|---------|-----|-----|-------|-------------|",
         ]
 
@@ -30,7 +30,7 @@ public enum FenceCommandReference {
                 "`\(descriptor.command.rawValue)`",
                 cliExposureSummary(descriptor),
                 mcpExposureSummary(descriptor.mcpExposure),
-                yesNo(descriptor.isBatchExecutable),
+                yesNo(descriptor.isHeistExecutable),
                 markdownCell(firstLine(of: descriptor.description)),
             ]
             lines.append("| \(columns.joined(separator: " | ")) |")
@@ -85,7 +85,7 @@ public enum FenceCommandReference {
             "",
             "- CLI: \(cliExposureDetail(descriptor))",
             "- MCP: \(mcpExposureDetail(descriptor.mcpExposure))",
-            "- Batch: \(yesNo(descriptor.isBatchExecutable))",
+            "- Heist: \(yesNo(descriptor.isHeistExecutable))",
             "- Connection before dispatch: \(yesNo(descriptor.requiresConnectionBeforeDispatch))",
         ]
 

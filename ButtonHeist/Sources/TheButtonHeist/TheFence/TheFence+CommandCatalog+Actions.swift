@@ -5,20 +5,20 @@ extension TheFence.Command {
         [
             commandDescriptor(
                 .oneFingerTap, requestDecoder: TheFence.decodeOneFingerTapRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.coordinateXY + FenceParameterBlocks.expectation,
                 description: "Tap a coordinate or semantic target after actionability resolution."
             ),
             commandDescriptor(
                 .longPress, requestDecoder: TheFence.decodeLongPressRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.coordinateXY
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Long-press a coordinate or semantic target for a resolved duration."
             ),
             commandDescriptor(
                 .swipe, requestDecoder: TheFence.decodeSwipeRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.direction, .string, enumValues: fenceEnumValues(SwipeDirection.self)),
                     param(.start, .object, objectProperties: FenceParameterBlocks.unitPoint),
@@ -29,14 +29,14 @@ extension TheFence.Command {
             ),
             commandDescriptor(
                 .drag, requestDecoder: TheFence.decodeDragRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.requiredEnd
                     + FenceParameterBlocks.optionalStart + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
                 description: "Drag from one point to another using explicit coordinates or a semantic target."
             ),
             commandDescriptor(
                 .scroll, requestDecoder: TheFence.decodeScrollRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.scrollContainerTarget + FenceParameterBlocks.elementTarget + [
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
                 ] + FenceParameterBlocks.expectation,
@@ -44,20 +44,20 @@ extension TheFence.Command {
             ),
             commandDescriptor(
                 .scrollToVisible, requestDecoder: TheFence.decodeScrollToVisibleRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
                 description: "Make a semantic target actionable and report its fresh geometry."
             ),
             commandDescriptor(
                 .elementSearch, requestDecoder: TheFence.decodeElementSearchRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self))] + FenceParameterBlocks.expectation,
                 description: "Search scrollable content for a semantic element match without performing an action."
             ),
             commandDescriptor(
                 .scrollToEdge, requestDecoder: TheFence.decodeScrollToEdgeRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.scrollContainerTarget + FenceParameterBlocks.elementTarget + [
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
                 ] + FenceParameterBlocks.expectation,
@@ -65,18 +65,22 @@ extension TheFence.Command {
             ),
             commandDescriptor(
                 .activate, requestDecoder: TheFence.decodeActivateRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.action, .string), FenceParameterBlocks.incrementCount] + FenceParameterBlocks.expectation,
                 description: "Activate a semantic UI element or one of its named accessibility actions."
             ),
             commandDescriptor(
                 .rotor, requestDecoder: TheFence.decodeRotorRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.rotor, .string),
                     param(.rotorIndex, .integer, minimum: 0),
-                    param(.direction, .string, enumValues: fenceEnumValues(RotorDirection.self), defaultValue: .string(RotorDirection.next.rawValue)),
+                    param(
+                        .direction, .string,
+                        enumValues: fenceEnumValues(RotorDirection.self),
+                        defaultValue: .string(RotorDirection.next.rawValue)
+                    ),
                 ] + FenceParameterBlocks.expectation,
                 description: "Move through an element rotor by direction. The server holds the rotor cursor "
                     + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
@@ -84,19 +88,19 @@ extension TheFence.Command {
             ),
             commandDescriptor(
                 .typeText, requestDecoder: TheFence.decodeTypeTextRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + [param(.text, .string, required: true, minLength: 1)] + FenceParameterBlocks.expectation,
                 description: "Type non-empty text, optionally after making a semantic target actionable."
             ),
             commandDescriptor(
                 .editAction, requestDecoder: TheFence.decodeEditActionRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: [param(.action, .string, required: true, enumValues: fenceEnumValues(EditAction.self))] + FenceParameterBlocks.expectation,
                 description: "Perform an edit action on the current first responder."
             ),
             commandDescriptor(
                 .setPasteboard, requestDecoder: TheFence.decodeSetPasteboardRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: [param(.text, .string, required: true)] + FenceParameterBlocks.expectation,
                 description: "Write text to the general pasteboard from within the app."
             ),
@@ -107,7 +111,7 @@ extension TheFence.Command {
             ),
             commandDescriptor(
                 .dismissKeyboard, requestDecoder: TheFence.decodeDismissKeyboardRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.expectation,
                 description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
             ),

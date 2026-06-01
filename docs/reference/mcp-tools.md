@@ -22,8 +22,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `one_finger_tap` | Tap a coordinate or semantic target after actionability resolution. |
 | `ping` | Check connection health without reading accessibility state. |
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
-| `rotor` | Move through an element rotor using direction and continuation metadata. |
-| `run_batch` | Execute ordered command steps with batch policy and per-step expectations. |
+| `rotor` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
+| `run_heist` | Execute an inline typed heist plan. |
 | `scroll` | Scroll one page in a selected container or semantic target's owning scroll ancestor. |
 | `scroll_to_edge` | Scroll the selected container, or the target's owning scroll ancestor, to a requested edge. |
 | `scroll_to_visible` | Make a semantic target actionable and report its fresh geometry. |
@@ -32,8 +32,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `stop_heist` | Stop heist recording and save a deterministic heist fixture. |
 | `swipe` | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
 | `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
-| `wait_for` | Wait for a semantic element to appear or disappear. |
-| `wait_for_change` | Wait for any UI change or for an expectation to become true. |
+| `wait` | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
 
 ## Details
 
@@ -225,7 +224,7 @@ Parameters:
 
 ### `rotor`
 
-Move through an element rotor using direction and continuation metadata.
+Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.
 
 Parameters:
 
@@ -235,20 +234,19 @@ Parameters:
 | `rotor` | `string` | no | - | - |
 | `rotorIndex` | `integer` | no | - | - |
 | `direction` | `string` | no | `"next"` | `next`, `previous` |
-| `continuation` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `run_batch`
+### `run_heist`
 
-Execute ordered command steps with batch policy and per-step expectations.
+Execute an inline typed heist plan.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
+| `version` | `integer` | yes | - | - |
 | `steps` | `array` | yes | - | - |
-| `policy` | `string` | no | - | `stop_on_error`, `continue_on_error` |
 
 ### `scroll`
 
@@ -358,27 +356,14 @@ Parameters:
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `wait_for`
+### `wait`
 
-Wait for a semantic element to appear or disappear.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `absent` | `boolean` | no | - | - |
-| `timeout` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-
-### `wait_for_change`
-
-Wait for any UI change or for an expectation to become true.
+Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `expect` | `object` | no | - | - |
+| `predicate` | `object` | yes | - | - |
 | `timeout` | `number` | no | - | - |
 

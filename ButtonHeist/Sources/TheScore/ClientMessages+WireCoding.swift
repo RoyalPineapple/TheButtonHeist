@@ -81,7 +81,7 @@ extension ClientMessage {
         case .elementSearch(let payload): return (.elementSearch, payload)
         case .scrollToEdge(let payload): return (.scrollToEdge, payload)
         case .wait(let payload): return (.wait, payload)
-        case .batchExecutionPlan(let payload): return (.batchExecutionPlan, payload)
+        case .heistPlan(let payload): return (.heistPlan, payload)
         }
     }
 
@@ -135,7 +135,7 @@ extension ClientMessage {
         case .elementSearch: return .elementSearch(try ElementSearchTarget(from: try payload()))
         case .scrollToEdge: return .scrollToEdge(try ScrollToEdgeTarget(from: try payload()))
         case .wait: return .wait(try WaitTarget(from: try payload()))
-        case .batchExecutionPlan: return .batchExecutionPlan(try TheScore.BatchPlan(from: try payload()))
+        case .heistPlan: return .heistPlan(try TheScore.HeistPlan(from: try payload()))
         }
     }
 

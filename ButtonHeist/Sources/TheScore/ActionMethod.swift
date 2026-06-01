@@ -14,7 +14,7 @@ public enum ActionMethod: String, Codable, Sendable {
     case setPasteboard
     case getPasteboard
     case rotor
-    case batchExecutionPlan
+    case heistPlan
     case scroll
     case scrollToVisible
     case elementSearch

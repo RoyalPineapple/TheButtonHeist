@@ -1,4 +1,4 @@
-public struct DragTarget: Codable, Sendable {
+public struct DragTarget: Codable, Sendable, Equatable {
     public static let defaultDuration = GestureDuration.dragDefault
 
     public let start: GesturePointSelection

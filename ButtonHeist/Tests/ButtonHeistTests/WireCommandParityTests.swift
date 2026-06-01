@@ -23,22 +23,20 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryBatchExecutableCommandLowersToTheSameClientMessageAsSingleCommand() async throws {
+    func testEveryHeistExecutableCommandLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in TheFence.Command.batchExecutableCases {
+        for command in TheFence.Command.heistExecutableCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
             let singleMessages = try fence.executableActionMessages(for: singleRequest)
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
-            let batchRequest = try fence.decodeRunBatchRequest(TheFence.CommandArgumentEnvelope(values: [
-                "steps": .array([batchStep(command, arguments)]),
-            ]))
-            let batchMessages = batchRequest.steps.map(\.typedStep.command)
+            let heistStep = try fence.heistStep(for: singleRequest)
+            let heistMessages = clientMessages(for: heistStep)
 
             XCTAssertEqual(
-                String(reflecting: batchMessages),
+                String(reflecting: heistMessages),
                 String(reflecting: singleMessages),
                 command.rawValue
             )
@@ -49,17 +47,15 @@ final class WireCommandParityTests: XCTestCase {
     func testEveryPlaybackStepLowersToTheSameClientMessageAsSingleCommand() async throws {
         let (fence, _) = makeConnectedFence()
 
-        for command in TheFence.Command.batchExecutableCases {
+        for command in TheFence.Command.heistExecutableCases {
             let arguments = sampleArguments(for: command)
             let singleRequest = try fence.parseRequest(command: command, values: arguments)
             let singleMessages = try fence.executableActionMessages(for: singleRequest)
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
-            let sourceStep = try heistStep(command: command, fields: arguments)
-            let playback = try fence.validateHeistPlayback(
-                HeistPlayback(app: "com.test.mock", steps: [sourceStep])
-            )
-            let playbackMessages = playback.batchRequest.steps.map(\.typedStep.command)
+            let sourceStep = try fence.heistStep(for: singleRequest)
+            let playback = try fence.validateHeistPlayback(HeistPlan(steps: [sourceStep]))
+            let playbackMessages = playback.plan.steps.flatMap(clientMessages(for:))
 
             XCTAssertEqual(
                 String(reflecting: playbackMessages),
@@ -70,7 +66,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     func testEveryTypedClientMessageOwnsItsWireIdentity() throws {
-        let samples = sampleClientMessages()
+        let samples = try sampleClientMessages()
         XCTAssertEqual(Set(samples.map(\.wireType)), Set(ClientWireMessageType.allCases))
 
         for message in samples {
@@ -98,7 +94,10 @@ final class WireCommandParityTests: XCTestCase {
         case .scrollToVisible, .elementSearch, .activate:
             return ["target": target]
         case .wait:
-            return ["predicate": .object(["type": .string("elements_changed")])]
+            return [
+                "predicate": .object(["type": .string("elements_changed")]),
+                "timeout": .double(10),
+            ]
         case .scrollToEdge:
             return ["edge": .string(ScrollEdge.bottom.rawValue)]
         case .rotor:
@@ -109,8 +108,19 @@ final class WireCommandParityTests: XCTestCase {
             return ["action": .string(EditAction.paste.rawValue)]
         case .setPasteboard:
             return ["text": .string("clipboard")]
-        case .runBatch:
-            return ["steps": .array([batchStep(.activate, ["target": target])])]
+        case .runHeist:
+            return [
+                "version": .int(HeistPlan.currentVersion),
+                "steps": .array([heistStepValue(
+                    type: "action",
+                    payload: [
+                        "command": .object([
+                            "type": .string(ClientWireMessageType.activate.rawValue),
+                            "payload": target,
+                        ]),
+                    ]
+                )]),
+            ]
         case .connect:
             return ["target": .string("default")]
         case .stopHeist:
@@ -120,7 +130,7 @@ final class WireCommandParityTests: XCTestCase {
         }
     }
 
-    private func sampleClientMessages() -> [ClientMessage] {
+    private func sampleClientMessages() throws -> [ClientMessage] {
         let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         return [
@@ -149,8 +159,8 @@ final class WireCommandParityTests: XCTestCase {
             .elementSearch(ElementSearchTarget(elementTarget: target)),
             .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
-            .batchExecutionPlan(BatchPlan(steps: [
-                BatchStep(command: .activate(target), predicate: nil, deadline: Deadline()),
+            .heistPlan(HeistPlan(steps: [
+                .action(try ActionStep(command: .activate(target))),
             ])),
         ]
     }
@@ -160,30 +170,22 @@ final class WireCommandParityTests: XCTestCase {
         return try JSONDecoder().decode(EncodedClientType.self, from: data).type
     }
 
-    private func batchStep(
-        _ command: TheFence.Command,
-        _ fields: [String: HeistValue] = [:]
-    ) -> HeistValue {
-        var object = fields
-        object["command"] = .string(command.rawValue)
-        return .object(object)
+    private func heistStepValue(type: String, payload: [String: HeistValue]) -> HeistValue {
+        .object([
+            "type": .string(type),
+            type: .object(payload),
+        ])
     }
 
-    @ButtonHeistActor
-    private func heistStep(
-        command: TheFence.Command,
-        fields: [String: HeistValue]
-    ) throws -> HeistStep {
-        var arguments = fields
-        let target = try playbackTarget(from: &arguments)
-        return try HeistStep(command: command.rawValue, target: target, arguments: arguments)
-    }
-
-    @ButtonHeistActor
-    private func playbackTarget(from fields: inout [String: HeistValue]) throws -> ElementTarget? {
-        guard let targetValue = fields.removeValue(forKey: "target") else { return nil }
-        return try TheFence.CommandArgumentEnvelope(values: ["target": targetValue])
-            .decodedElementTarget()
+    private func clientMessages(for step: HeistStep) -> [ClientMessage] {
+        switch step {
+        case .action(let action):
+            return [action.command]
+        case .wait(let wait):
+            return [.wait(WaitTarget(predicate: wait.predicate, timeout: wait.timeout))]
+        case .warn, .fail:
+            return []
+        }
     }
 }
 

@@ -38,10 +38,9 @@ extension FenceResponse {
             return "screenshot: \(path) (\(Int(payload.width))x\(Int(payload.height)))"
         case .screenshotData(let payload, _):
             return "screenshot: \(Int(payload.width))x\(Int(payload.height))"
-        case .batch(let commands, let steps, let result, let accessibilityTrace):
-            return compactBatchFormatted(
-                commands: commands,
-                steps: steps,
+        case .heistExecution(let plan, let result, let accessibilityTrace):
+            return compactHeistFormatted(
+                plan: plan,
                 result: result,
                 netDelta: accessibilityTrace?.meaningfulEndpointDeltaProjection
             )

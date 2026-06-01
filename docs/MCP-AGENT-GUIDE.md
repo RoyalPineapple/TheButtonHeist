@@ -22,7 +22,7 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 For `wait_for_change`, `element_disappeared` means the element is absent from the current settled hierarchy. It does not require Button Heist to prove the element existed and then vanished.
 
-**Composing**: `run_batch` for multi-step sequences in a single call. Attach `expect` to each step for inline verification.
+**Composing**: `run_heist` for typed multi-step plans in a single call. Attach an action `expectation` step for inline verification.
 
 ## Trace Semantics
 

@@ -24,8 +24,8 @@ extension FenceResponse {
             text = Self.compactScrollSearchFound(search, commandName: commandName)
         case .rotor(let search):
             text = Self.compactRotor(search)
-        case .batchExecution(let batch):
-            text = "\(TheFence.Command.runBatch.rawValue): \(batch.steps.count) step(s)"
+        case .heistExecution(let heist):
+            text = "\(TheFence.Command.runHeist.rawValue): \(heist.steps.count) step(s)"
         case .value, .none:
             if let delta = result.accessibilityTrace?.endpointDeltaProjection {
                 text = Self.compactDelta(delta, method: commandName)

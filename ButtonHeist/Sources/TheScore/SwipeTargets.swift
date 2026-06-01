@@ -113,7 +113,7 @@ private func swipeDestinationSelection(
     return nil
 }
 
-public struct SwipeTarget: Codable, Sendable {
+public struct SwipeTarget: Codable, Sendable, Equatable {
     public static let defaultDuration = GestureDuration.swipeDefault
 
     public let selection: SwipeGestureSelection

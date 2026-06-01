@@ -11,7 +11,7 @@ extension TheFence {
         private let pongTracker = PendingRequestTracker<PongPayload>()
         private let interfaceTracker = PendingRequestTracker<Interface>()
         private let screenTracker = PendingRequestTracker<ScreenPayload>()
-        private let batchExecutionTracker = PendingRequestTracker<BatchExecutionResult>()
+        private let heistExecutionTracker = PendingRequestTracker<HeistExecutionResult>()
 
         @ButtonHeistActor
         func waitForAction(
@@ -66,12 +66,12 @@ extension TheFence {
         }
 
         @ButtonHeistActor
-        func waitForBatchExecution(
+        func waitForHeistExecution(
             requestId: String,
             timeout: TimeInterval,
             afterRegister: (() -> Void)? = nil
-        ) async throws -> BatchExecutionResult {
-            try await batchExecutionTracker.wait(
+        ) async throws -> HeistExecutionResult {
+            try await heistExecutionTracker.wait(
                 requestId: requestId,
                 timeout: timeout,
                 afterRegister: afterRegister
@@ -99,8 +99,8 @@ extension TheFence {
         }
 
         @ButtonHeistActor
-        func resolveBatchExecution(requestId: String, result: Result<BatchExecutionResult, Error>) {
-            batchExecutionTracker.resolve(requestId: requestId, result: result)
+        func resolveHeistExecution(requestId: String, result: Result<HeistExecutionResult, Error>) {
+            heistExecutionTracker.resolve(requestId: requestId, result: result)
         }
 
         @ButtonHeistActor
@@ -111,8 +111,8 @@ extension TheFence {
             case .interface(let payload):
                 resolveInterface(requestId: requestId, result: .success(payload))
             case .actionResult(let result):
-                if case .batchExecution(let batchResult) = result.payload {
-                    resolveBatchExecution(requestId: requestId, result: .success(batchResult))
+                if case .heistExecution(let heistResult) = result.payload {
+                    resolveHeistExecution(requestId: requestId, result: .success(heistResult))
                 } else {
                     resolveAction(requestId: requestId, result: .success(result))
                 }
@@ -132,7 +132,7 @@ extension TheFence {
             resolvePong(requestId: requestId, result: .failure(error))
             resolveInterface(requestId: requestId, result: .failure(error))
             resolveScreen(requestId: requestId, result: .failure(error))
-            resolveBatchExecution(requestId: requestId, result: .failure(error))
+            resolveHeistExecution(requestId: requestId, result: .failure(error))
         }
 
         @ButtonHeistActor
@@ -141,7 +141,7 @@ extension TheFence {
             pongTracker.cancelAll(error: error)
             interfaceTracker.cancelAll(error: error)
             screenTracker.cancelAll(error: error)
-            batchExecutionTracker.cancelAll(error: error)
+            heistExecutionTracker.cancelAll(error: error)
         }
     }
 }

@@ -24,10 +24,10 @@ public struct FenceParameterSpec: Sendable, Equatable {
 extension TheFence {
 
     enum DecodeLimits {
-        static let maxRunBatchSteps = 100
-        static let maxRunBatchRequestBytes = 1_000_000
-        static let maxRunBatchNestingDepth = 32
-        static let maxBatchResultRows = maxRunBatchSteps
+        static let maxRunHeistSteps = 100
+        static let maxRunHeistRequestBytes = 1_000_000
+        static let maxRunHeistNestingDepth = 32
+        static let maxHeistResultRows = maxRunHeistSteps
         static let maxInlineScreenshotBase64Bytes = 1_000_000
     }
 }
@@ -65,7 +65,7 @@ public extension FenceParameterKey {
     static let startX = Self("startX"), startY = Self("startY"), stableId = Self("stableId")
     static let states = Self("states"), steps = Self("steps")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
-    static let timeout = Self("timeout")
+    static let timeout = Self("timeout"), version = Self("version")
     static let to = Self("to"), token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")
     static let `where` = Self("where")
     static let x = Self("x"), y = Self("y")

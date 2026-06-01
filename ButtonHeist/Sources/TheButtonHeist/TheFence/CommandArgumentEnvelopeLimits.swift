@@ -4,12 +4,12 @@ import TheScore
 
 enum CommandArgumentEnvelopeLimits {
 
-    static func validateRunBatch(_ arguments: TheFence.CommandArgumentEnvelope) throws {
+    static func validateRunHeist(_ arguments: TheFence.CommandArgumentEnvelope) throws {
         try validate(
             arguments,
-            field: "run_batch",
-            maxBytes: TheFence.DecodeLimits.maxRunBatchRequestBytes,
-            maxDepth: TheFence.DecodeLimits.maxRunBatchNestingDepth
+            field: "run_heist",
+            maxBytes: TheFence.DecodeLimits.maxRunHeistRequestBytes,
+            maxDepth: TheFence.DecodeLimits.maxRunHeistNestingDepth
         )
     }
 

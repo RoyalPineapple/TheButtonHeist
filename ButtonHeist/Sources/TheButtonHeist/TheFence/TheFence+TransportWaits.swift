@@ -62,18 +62,18 @@ extension TheFence {
         }
     }
 
-    func sendAndAwaitBatchExecution(
-        _ plan: TheScore.BatchPlan,
+    func sendAndAwaitHeistExecution(
+        _ plan: TheScore.HeistPlan,
         timeout: TimeInterval
-    ) async throws -> BatchExecutionResult {
+    ) async throws -> HeistExecutionResult {
         guard handoff.isConnected else { throw FenceError.notConnected }
         let requestId = UUID().uuidString
-        return try await pendingRequests.waitForBatchExecution(requestId: requestId, timeout: timeout) {
-            let outcome = self.handoff.send(.batchExecutionPlan(plan), requestId: requestId)
+        return try await pendingRequests.waitForHeistExecution(requestId: requestId, timeout: timeout) {
+            let outcome = self.handoff.send(.heistPlan(plan), requestId: requestId)
             if case .failed(let failure) = outcome {
-                self.pendingRequests.resolveBatchExecution(
+                self.pendingRequests.resolveHeistExecution(
                     requestId: requestId,
-                    result: Result<BatchExecutionResult, Error>.failure(FenceError(failure))
+                    result: Result<HeistExecutionResult, Error>.failure(FenceError(failure))
                 )
             }
         }

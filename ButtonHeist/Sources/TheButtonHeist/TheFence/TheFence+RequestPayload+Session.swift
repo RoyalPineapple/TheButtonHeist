@@ -57,14 +57,14 @@ extension TheFence {
         DecodedRequestDispatch { fence, _ in fence.handleListTargets() }
     }
 
-    static func decodeRunBatchCommandRequest(
+    static func decodeRunHeistCommandRequest(
         _ fence: TheFence,
         _ arguments: CommandArgumentEnvelope,
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let request = try fence.decodeRunBatchRequest(arguments)
-        return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handleRunBatch(request) }
+        let request = try fence.decodeRunHeistRequest(arguments)
+        return DecodedRequestDispatch { dispatchFence, _ in try await dispatchFence.handleRunHeist(request) }
     }
 
     static func decodeConnectCommandRequest(

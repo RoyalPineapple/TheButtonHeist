@@ -426,62 +426,52 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    // MARK: - BatchPlan
+    // MARK: - HeistPlan
 
-    func testBatchPlanRoundTripPreservesCommandStepWireShape() throws {
-        let plan = BatchPlan(
+    func testHeistPlanRoundTripPreservesCommandStepWireShape() throws {
+        let plan = HeistPlan(
             steps: [
-                BatchStep(
+                .action(try ActionStep(
                     command: .activate(.predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1)),
-                    predicate: .changed(.screen()),
-                    deadline: Deadline(timeout: 2.5)
-                ),
-                BatchStep(
-                    command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                    predicate: nil,
-                    deadline: Deadline()
-                ),
-            ],
-            policy: .continueOnError
+                    expectation: WaitStep(predicate: .changed(.screen()), timeout: 2.5)
+                )),
+                .action(try ActionStep(
+                    command: .setPasteboard(SetPasteboardTarget(text: "ready"))
+                )),
+                .warn(WarnStep(message: "optional step skipped")),
+                .fail(FailStep(message: "unexpected state"))
+            ]
         )
 
         let data = try encoder.encode(plan)
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-        XCTAssertEqual(payload["policy"] as? String, "continue_on_error")
+        XCTAssertEqual(payload["version"] as? Int, HeistPlan.currentVersion)
         let steps = try XCTUnwrap(payload["steps"] as? [[String: Any]])
-        XCTAssertEqual(steps.count, 2)
-        let activate = try XCTUnwrap(steps[0]["command"] as? [String: Any])
-        XCTAssertEqual(activate["type"] as? String, "activate")
-        let target = try XCTUnwrap(activate["payload"] as? [String: Any])
+        XCTAssertEqual(steps.count, 4)
+        XCTAssertEqual(steps[0]["type"] as? String, "action")
+        let action = try XCTUnwrap(steps[0]["action"] as? [String: Any])
+        let command = try XCTUnwrap(action["command"] as? [String: Any])
+        XCTAssertEqual(command["type"] as? String, "activate")
+        let target = try XCTUnwrap(command["payload"] as? [String: Any])
         XCTAssertEqual(target["ordinal"] as? Int, 1)
         XCTAssertEqual(target["label"] as? String, "Settings")
         XCTAssertEqual(target["traits"] as? [String], ["button"])
-        XCTAssertEqual((steps[0]["expect"] as? [String: Any])?["type"] as? String, "screen_changed")
-        XCTAssertEqual((steps[0]["deadline"] as? [String: Any])?["timeout"] as? Double, 2.5)
+        XCTAssertEqual(((action["expectation"] as? [String: Any])?["predicate"] as? [String: Any])?["type"] as? String, "screen_changed")
+        XCTAssertEqual((action["expectation"] as? [String: Any])?["timeout"] as? Double, 2.5)
+        XCTAssertEqual((steps[2]["warn"] as? [String: Any])?["message"] as? String, "optional step skipped")
+        XCTAssertEqual((steps[3]["fail"] as? [String: Any])?["message"] as? String, "unexpected state")
 
-        let decoded = try decoder.decode(BatchPlan.self, from: data)
-        XCTAssertEqual(decoded.policy, .continueOnError)
-        XCTAssertEqual(decoded.steps.count, 2)
-        guard case .activate(let decodedTarget) = decoded.steps[0].command else {
-            return XCTFail("Expected activate command")
-        }
-        XCTAssertEqual(decodedTarget, .predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1))
-        XCTAssertEqual(decoded.steps[0].predicate, .changed(.screen()))
-        XCTAssertEqual(decoded.steps[0].deadline, Deadline(timeout: 2.5))
-        guard case .setPasteboard(let pasteboardTarget) = decoded.steps[1].command else {
-            return XCTFail("Expected set_pasteboard command")
-        }
-        XCTAssertEqual(pasteboardTarget.text, "ready")
-        XCTAssertNil(decoded.steps[1].predicate)
+        let decoded = try decoder.decode(HeistPlan.self, from: data)
+        XCTAssertEqual(decoded, plan)
     }
 
-    func testBatchExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
-        let result = BatchExecutionResult(
-            policy: .stopOnError,
+    func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
+        let result = HeistExecutionResult(
             steps: [
-                BatchExecutionStepResult(
+                HeistExecutionStepResult(
                     index: 0,
+                    kind: .action,
                     actionResult: ActionResult(
                         success: false,
                         method: .activate,
@@ -489,14 +479,15 @@ final class WireTypeRoundTripTests: XCTestCase {
                         errorKind: .elementNotFound
                     ),
                     durationMs: 0,
-                    stopsBatch: true
+                    stopsHeist: true
                 ),
-                BatchExecutionStepResult(
+                HeistExecutionStepResult(
                     index: 1,
+                    kind: .skipped,
                     durationMs: 0,
-                    skipped: BatchExecutionSkippedStepResult(
+                    skipped: HeistExecutionSkippedStepResult(
                         index: 1,
-                        reason: "skipped: stop_on_error stopped batch after step 0",
+                        reason: "skipped: heist stopped after step 0",
                         afterFailedIndex: 0
                     )
                 ),
@@ -506,12 +497,11 @@ final class WireTypeRoundTripTests: XCTestCase {
         )
 
         let data = try encoder.encode(result)
-        let decoded = try decoder.decode(BatchExecutionResult.self, from: data)
+        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
 
-        XCTAssertEqual(decoded.policy, .stopOnError)
         XCTAssertEqual(decoded.failedIndex, 0)
         XCTAssertEqual(decoded.steps.count, 2)
-        XCTAssertTrue(decoded.steps[0].stopsBatch)
+        XCTAssertTrue(decoded.steps[0].stopsHeist)
         XCTAssertEqual(decoded.steps[0].actionResult?.method, .activate)
         XCTAssertEqual(decoded.steps[0].actionResult?.errorKind, .elementNotFound)
         XCTAssertEqual(
@@ -519,7 +509,7 @@ final class WireTypeRoundTripTests: XCTestCase {
             "No element matching label \"Save\""
         )
         XCTAssertTrue(decoded.steps[1].isSkipped)
-        XCTAssertEqual(decoded.steps[1].skipped?.reason, "skipped: stop_on_error stopped batch after step 0")
+        XCTAssertEqual(decoded.steps[1].skipped?.reason, "skipped: heist stopped after step 0")
         XCTAssertEqual(decoded.steps[1].skipped?.afterFailedIndex, 0)
     }
 

@@ -99,7 +99,7 @@ Add the MCP server to your project's `.mcp.json`:
 The MCP adapter projects its tools from the Fence command contract; the
 generated [MCP Tool Reference](docs/reference/mcp-tools.md) is the current tool
 surface. Agents typically start with `get_interface`, then act with semantic
-commands such as `activate`, `type_text`, and `run_batch`. Default connections
+commands such as `activate`, `type_text`, and `run_heist`. Default connections
 use loopback, USB, named targets, or direct `host:port` targets; Bonjour
 discovery is available only when the app opts into network scope:
 
@@ -109,7 +109,7 @@ Agent: "I need to log the user in"
 → get_interface
   textfield_email, textfield_password, button_login (12 elements)
 
-→ run_batch([type_text into textfield_email, activate button_login])
+→ run_heist([type_text into textfield_email, activate button_login])
   step 1: value → "user@example.com" ✓
   step 2: screen changed: login gone, dashboard appeared ✓
 ```
@@ -174,26 +174,49 @@ Expectations can check for `screen_changed`, `elements_changed`, or a specific `
 
 The agent says what it expects. Button Heist says whether it happened.
 
-### 3. Batching: fewer round trips
+### 3. Heists: typed multi-step plans
 
-`run_batch` sends ordered steps in one round trip. Each step gets its own delta and expectation check. If a step fails, the batch stops at that point:
+`run_heist` sends a typed `HeistPlan` in one round trip. Each step gets its own result and optional expectation. If a step fails, the heist stops at that point:
 
 ```json
 {
-  "command": "run_batch",
+  "command": "run_heist",
+  "version": 1,
   "steps": [
     {
-      "command": "type_text",
-      "target": {"heistId": "textfield_email"},
-      "text": "user@example.com",
-      "expect": {
-        "type": "element_updated",
-        "heistId": "textfield_email",
-        "property": "value",
-        "newValue": "user@example.com"
+      "type": "action",
+      "action": {
+        "command": {
+          "type": "type_text",
+          "payload": {
+            "text": "user@example.com",
+            "elementTarget": {"identifier": "textfield_email"}
+          }
+        },
+        "expectation": {
+          "predicate": {
+            "type": "element_updated",
+            "element": {"identifier": "textfield_email"},
+            "property": "value",
+            "to": "user@example.com"
+          },
+          "timeout": 2
+        }
       }
     },
-    {"command": "activate", "target": {"heistId": "button_submit"}, "expect": {"type": "screen_changed"}}
+    {
+      "type": "action",
+      "action": {
+        "command": {
+          "type": "activate",
+          "payload": {"identifier": "button_submit"}
+        },
+        "expectation": {
+          "predicate": {"type": "screen_changed"},
+          "timeout": 2
+        }
+      }
+    }
   ]
 }
 ```

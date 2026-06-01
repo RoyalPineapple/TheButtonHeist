@@ -88,7 +88,7 @@ Both agents need to change three settings: Color Scheme to Dark, Accent Color to
 > *"I need to activate 'Dark' button, 'Purple' button, 'Large' button, then read the current values."*
 
 ```
-→ run_batch([
+→ run_heist([
     activate(heistId: "dark_button"),
     activate(heistId: "purple_button"),
     activate(heistId: "large_button")
@@ -111,10 +111,10 @@ Both agents need to press 13 buttons in sequence.
 
 **Button Heist agent** plans the sequence and sends it:
 
-> *"Clear the display, enter 344, press multiply, enter 289, press equals, press divide, enter 99, press equals. Let me batch all these steps together."*
+> *"Clear the display, enter 344, press multiply, enter 289, press equals, press divide, enter 99, press equals. Let me send these as one typed heist."*
 
 ```
-→ run_batch (13 steps)
+→ run_heist (13 steps)
     activate(all_clear_button)
     activate(3_button), activate(4_button), activate(4_button)
     activate(multiply_button)

@@ -119,25 +119,25 @@ final class SemanticActionabilityProductTests: XCTestCase {
         XCTAssertFalse(result.message?.contains("element_search") ?? false)
     }
 
-    func testBatchSemanticActivateMatchesSingleActionResultSemantics() async throws {
+    func testHeistSemanticActivateMatchesSingleActionResultSemantics() async throws {
         let single = try await runSemanticActivateThroughCommand(
-            identifier: "single_semantic_batch_parity",
-            label: "Batch Parity Single",
-            batch: false
+            identifier: "single_semantic_heist_parity",
+            label: "Heist Parity Single",
+            heist: false
         )
-        let batch = try await runSemanticActivateThroughCommand(
-            identifier: "batch_semantic_batch_parity",
-            label: "Batch Parity Batch",
-            batch: true
+        let heist = try await runSemanticActivateThroughCommand(
+            identifier: "heist_semantic_heist_parity",
+            label: "Heist Parity Heist",
+            heist: true
         )
-        let batchPayload = try XCTUnwrap(batch.result.batchExecutionPayload)
-        let stepResult = try XCTUnwrap(batchPayload.steps.first?.actionResult)
+        let heistPayload = try XCTUnwrap(heist.result.heistExecutionPayload)
+        let stepResult = try XCTUnwrap(heistPayload.steps.first?.actionResult)
 
         XCTAssertTrue(single.result.success, single.result.message ?? "single activate failed")
-        XCTAssertTrue(batch.result.success, batch.result.message ?? "batch activate failed")
-        guard single.result.success, batch.result.success else { return }
+        XCTAssertTrue(heist.result.success, heist.result.message ?? "heist activate failed")
+        guard single.result.success, heist.result.success else { return }
         XCTAssertEqual(single.activationCount, 1)
-        XCTAssertEqual(batch.activationCount, 1)
+        XCTAssertEqual(heist.activationCount, 1)
         XCTAssertEqual(stepResult.success, single.result.success)
         XCTAssertEqual(stepResult.method, single.result.method)
         XCTAssertEqual(stepResult.errorKind, single.result.errorKind)
@@ -168,7 +168,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
     private func runSemanticActivateThroughCommand(
         identifier: String,
         label: String,
-        batch: Bool
+        heist: Bool
     ) async throws -> (result: ActionResult, activationCount: Int) {
         let localBrains = TheBrains(tripwire: TheTripwire())
         let fixture = try installOffscreenActivationFixture(
@@ -178,15 +178,11 @@ final class SemanticActionabilityProductTests: XCTestCase {
         defer { fixture.cleanup() }
         try seedKnownOffscreenTarget(fixture, in: localBrains)
 
-        if batch {
-            let plan = BatchPlan(steps: [
-                BatchStep(
-                    command: .activate(.predicate(ElementPredicate(identifier: identifier, traits: [.button]))),
-                    predicate: nil,
-                    deadline: Deadline()
-                ),
+        if heist {
+            let plan = HeistPlan(steps: [
+                .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier, traits: [.button]))))),
             ])
-            let result = await localBrains.executeBatchExecutionPlan(plan)
+            let result = await localBrains.executeHeistPlan(plan)
             return (result, fixture.target.activationCount)
         }
 
@@ -451,8 +447,8 @@ private final class RevealingScrollView: UIScrollView {
 }
 
 private extension ActionResult {
-    var batchExecutionPayload: BatchExecutionResult? {
-        guard case .batchExecution(let payload) = payload else { return nil }
+    var heistExecutionPayload: HeistExecutionResult? {
+        guard case .heistExecution(let payload) = payload else { return nil }
         return payload
     }
 }
