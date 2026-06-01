@@ -22,7 +22,6 @@ extension Actions {
         ) { context in
             let outcome = self.stash.performRotor(
                 selection: target.selection,
-                continuation: target.continuation,
                 direction: direction,
                 on: context.liveTarget
             )
@@ -131,10 +130,10 @@ extension Actions {
         _ hit: TheStash.RotorHit,
         direction: RotorDirection
     ) -> TheSafecracker.InteractionResult {
-        let foundHeistId = hit.screenElement?.heistId
+        let foundElement = hit.screenElement.map { HeistElement(accessibilityElement: $0.element) }
         var message = "Rotor '\(hit.rotor)' found"
-        if let foundHeistId {
-            message += " \(foundHeistId)"
+        if let describedElement = foundElement?.label ?? foundElement?.description {
+            message += " \(describedElement)"
         }
         if let textRange = hit.textRange {
             message += " text range \(textRange.rangeDescription)"
@@ -145,7 +144,7 @@ extension Actions {
             payload: .rotor(RotorResult(
                 rotor: hit.rotor,
                 direction: direction,
-                foundHeistId: foundHeistId,
+                foundElement: foundElement,
                 textRange: hit.textRange
             ))
         )

@@ -27,13 +27,6 @@ extension TheBrains {
         }
 
         let baseline = sentBaseline ?? initial
-        let preWaitElements = Dictionary(
-            baseline.snapshot.map {
-                let wire = TheStash.WireConversion.convert($0.element, heistId: $0.heistId)
-                return (wire.heistId, wire)
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
 
         // Fast path: semantic state already changed since the last response.
         if let sentBaseline {
@@ -53,7 +46,6 @@ extension TheBrains {
                         accessibilityTrace: accessibilityTrace,
                         afterSnapshot: initial.snapshot,
                         expectation: predicate.expectation,
-                        preWaitElements: preWaitElements,
                         start: start,
                         round: 0,
                         message: "already changed (0.0s)"
@@ -68,7 +60,6 @@ extension TheBrains {
             baseline: baseline,
             initial: initial,
             predicate: predicate,
-            preWaitElements: preWaitElements,
             start: start
         ) {
             return result
@@ -97,7 +88,6 @@ extension TheBrains {
         baseline: PostActionObservation.BeforeState,
         initial: PostActionObservation.BeforeState,
         predicate: WaitForChangeState.Predicate,
-        preWaitElements: [String: HeistElement],
         start: CFAbsoluteTime
     ) async -> ActionResult? {
         // Wait for stable AX-tree observations until a change lands or we time
@@ -142,7 +132,6 @@ extension TheBrains {
                 accessibilityTrace: accessibilityTrace,
                 afterSnapshot: current.snapshot,
                 expectation: predicate.expectation,
-                preWaitElements: preWaitElements,
                 start: start,
                 round: round,
                 message: "changed after \(elapsed)s (\(round) rounds)"
@@ -193,7 +182,6 @@ extension TheBrains {
         accessibilityTrace: AccessibilityTrace?,
         afterSnapshot: [Screen.ScreenElement],
         expectation: AccessibilityPredicate?,
-        preWaitElements: [String: HeistElement],
         start: CFAbsoluteTime,
         round: Int,
         message: String
@@ -207,8 +195,7 @@ extension TheBrains {
         }
 
         guard expectation.validate(
-            against: builder.success(),
-            preActionElements: preWaitElements
+            against: builder.success()
         ).met else { return nil }
 
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)

@@ -8,14 +8,14 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
         discussion: """
             Moves one step through one of an element's accessibility rotors. Defaults to next. \
             Use get_interface to inspect an element's rotors first, then pass --rotor or \
-            --rotor-index. Pass --continuation as a JSON object from the previous result when \
-            another rotor step is available.
+            --rotor-index. The server holds the rotor cursor while in rotor mode: the first call \
+            enters at the first item, and repeating the command on the same element cycles from \
+            there. Any other interaction exits rotor mode and drops the cursor.
 
             Examples:
               buttonheist rotor form --rotor Errors
               buttonheist rotor -l "Validation Results" --rotor-index 0
-              buttonheist rotor form --rotor Errors --direction previous --continuation '{"heistId":"field_email"}'
-              buttonheist rotor notes --rotor Mentions --continuation '{"heistId":"notes","textRange":{"startOffset":10,"endOffset":16}}'
+              buttonheist rotor form --rotor Errors --direction previous
             """
     )
 
@@ -36,12 +36,6 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
     )
     var direction: String = Self.catalogDefaultString(for: .direction)
 
-    @Option(name: .long, help: "Rotor continuation JSON object from a previous rotor result")
-    var continuation: String?
-
-    @Option(name: .customLong("continuation-from-file"), help: "Path to a rotor continuation JSON object")
-    var continuationFile: String?
-
     @ButtonHeistActor
     mutating func run() async throws {
         let target = try element.requireTarget()
@@ -55,13 +49,6 @@ struct RotorCommand: AsyncParsableCommand, CLICommandContract {
         var request: CLIRequestParameters = [.direction: .string(rotorDirection)]
         if let rotor { request.set(.rotor, rotor) }
         if let rotorIndex { request.set(.rotorIndex, rotorIndex) }
-        if let continuationObject = try loadJSONObject(
-            inline: continuation,
-            fromFile: continuationFile,
-            optionName: "continuation"
-        ) {
-            request.set(.continuation, .object(continuationObject))
-        }
 
         request.set(.timeout, timeoutOption.timeout)
 

@@ -20,6 +20,31 @@ final class TheStash {
     private var semanticState: SemanticScreen = .empty
     private var liveCapture: LiveCapture = .empty
 
+    /// Held rotor cursor — the single current selection while in rotor mode.
+    /// Entering rotor mode on a host starts at index 0; subsequent steps cycle
+    /// this held selection. Any non-rotor action clears it (rotor mode exit).
+    var rotorCursor: RotorCursor?
+
+    /// The in-memory rotor cursor. `currentSelection` is held **weakly** — rotor
+    /// items are live UIKit objects we must not retain across the session; if it
+    /// deallocates between steps the cursor is treated as lost and we re-enter at 0.
+    final class RotorCursor {
+        let hostHeistId: HeistId
+        let rotorName: String
+        weak var currentSelection: NSObject?
+
+        init(hostHeistId: HeistId, rotorName: String, currentSelection: NSObject?) {
+            self.hostHeistId = hostHeistId
+            self.rotorName = rotorName
+            self.currentSelection = currentSelection
+        }
+    }
+
+    /// Drop rotor mode. Called when any non-rotor interaction runs.
+    func clearRotorCursor() {
+        rotorCursor = nil
+    }
+
     /// Projected screen value for read paths. Runtime writers must use the
     /// event-named commit methods below.
     var currentScreen: Screen {

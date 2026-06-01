@@ -78,8 +78,6 @@ struct InterfaceSelector {
                 )
                 guard case .element(let target) = subtree else { return nil }
                 switch target {
-                case .heistId(let heistId):
-                    guard projected.heistId == heistId else { return nil }
                 case .predicate(let predicate, _):
                     guard projected.matches(predicate) else { return nil }
                 }
@@ -150,7 +148,6 @@ struct InterfaceSelector {
             guard let annotation = candidate.annotation else { return nil }
             return InterfaceElementAnnotation(
                 path: TreePath([index]),
-                heistId: annotation.heistId,
                 actions: annotation.actions
             )
         }
@@ -210,7 +207,7 @@ private extension HeistElement {
     var subtreeCandidateSummary: String {
         [
             "element",
-            subtreeSummaryRequiredField("heistId", heistId),
+            subtreeSummaryRequiredField("element", description),
             subtreeSummaryField("identifier", identifier),
             subtreeSummaryField("label", label),
             subtreeSummaryField("value", value),

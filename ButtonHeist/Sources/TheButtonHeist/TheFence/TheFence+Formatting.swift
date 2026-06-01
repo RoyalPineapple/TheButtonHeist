@@ -202,8 +202,8 @@ extension FenceResponse {
             }
             if case .rotor(let search) = result.payload {
                 output += "  rotor: \"\(search.rotor)\" \(search.direction.rawValue)"
-                if let foundHeistId = search.foundHeistId {
-                    output += " → \(foundHeistId)"
+                if let foundElement = search.foundElement {
+                    output += " → \(foundElement.label ?? foundElement.description)"
                 }
                 if let textRange = search.textRange {
                     output += "  range: \(textRange.rangeDescription)"

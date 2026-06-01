@@ -56,7 +56,7 @@ extension TheFence {
                 throw FenceError.invalidRequest("Invalid heist step \(index): \(error.message)")
             } catch let error as MissingElementTarget {
                 throw FenceError.invalidRequest(
-                    "Invalid heist step \(index): command \"\(error.command)\" requires target object with heistId or matcher fields"
+                    "Invalid heist step \(index): command \"\(error.command)\" requires target object with matcher fields"
                 )
             } catch let error as BatchStepPlanBuildError {
                 throw FenceError.invalidRequest("Invalid heist step \(index): \(error.message)")

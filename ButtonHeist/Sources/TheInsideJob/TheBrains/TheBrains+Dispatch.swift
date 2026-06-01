@@ -11,6 +11,12 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → explore semantic state → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
+        // Rotor mode holds a single cursor only while consecutive rotor steps
+        // run on the same host. Any other interaction exits rotor mode and drops
+        // the held cursor.
+        if case .rotor = message {} else {
+            stash.clearRotorCursor()
+        }
         switch message {
         case .activate(let target):
             return await performInteraction(method: .activate) { await self.actions.executeActivate(target) }
@@ -301,8 +307,6 @@ extension TheBrains {
 
     private func waitForTargetDescription(_ target: ElementTarget) -> String {
         switch target {
-        case .heistId(let heistId):
-            return "heistId=\"\(heistId)\""
         case .predicate(let predicate, let ordinal):
             var description = TheStash.Diagnostics.formatMatcher(predicate)
             if let ordinal {

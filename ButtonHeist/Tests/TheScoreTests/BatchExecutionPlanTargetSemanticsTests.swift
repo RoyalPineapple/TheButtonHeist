@@ -33,7 +33,7 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         let plan = BatchPlan(
             steps: [
                 BatchStep(
-                    command: .activate(.heistId("settings_button_current")),
+                    command: .activate(.predicate(ElementPredicate(label: "Settings"))),
                     predicate: .changed(.screen()),
                     deadline: Deadline(timeout: 2.5)
                 ),
@@ -66,7 +66,8 @@ final class BatchPlanTargetSemanticsTests: XCTestCase {
         let command = try XCTUnwrap(commandStep["command"] as? [String: Any])
         XCTAssertEqual(command["type"] as? String, "activate")
         let target = try XCTUnwrap(command["payload"] as? [String: Any])
-        XCTAssertEqual(target["heistId"] as? String, "settings_button_current")
+        XCTAssertEqual(target["label"] as? String, "Settings")
+        XCTAssertNil(target["heistId"])
         XCTAssertEqual((commandStep["expect"] as? [String: Any])?["type"] as? String, "screen_changed")
         XCTAssertEqual((commandStep["deadline"] as? [String: Any])?["timeout"] as? Double, 2.5)
 

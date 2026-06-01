@@ -34,8 +34,8 @@ private extension AccessibilityTrace.Delta {
 final class AccessibilityTraceDiffTests: XCTestCase {
 
     func testElementDiffIsSingleElementHierarchyDiff() {
-        let before = makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])
-        let after = makeElement(heistId: "total", label: "Total", value: "$7.00", traits: [.staticText])
+        let before = makeElement(label: "Total", value: "$5.00", traits: [.staticText])
+        let after = makeElement(label: "Total", value: "$7.00", traits: [.staticText])
         let beforeInterface = makeTestInterface(elements: [before])
         let afterInterface = makeTestInterface(elements: [after])
 
@@ -50,12 +50,12 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     func testNodeDiffIsTreeDiff() {
         let before = makeTestInterface(nodes: [
             testContainer(makeContainer(), stableId: "section", children: [
-                testElement(makeElement(heistId: "title", label: "Menu", traits: [.header])),
+                testElement(makeElement(label: "Menu", traits: [.header])),
             ]),
         ])
         let after = makeTestInterface(nodes: [
             testContainer(makeContainer(), stableId: "section", children: [
-                testElement(makeElement(heistId: "title", label: "Checkout", traits: [.header])),
+                testElement(makeElement(label: "Checkout", traits: [.header])),
             ]),
         ])
 
@@ -67,14 +67,14 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     func testFunctionalElementMoveDoesNotReportRemoveInsertChurn() {
         let before = makeTestInterface(nodes: [
             testContainer(makeContainer(), stableId: "list", children: [
-                testElement(makeElement(heistId: "generated-a", label: "Pasta", traits: [.button])),
-                testElement(makeElement(heistId: "stable-item", label: "Sauce", traits: [.button])),
+                testElement(makeElement(label: "Pasta", traits: [.button])),
+                testElement(makeElement(label: "Sauce", traits: [.button])),
             ]),
         ])
         let after = makeTestInterface(nodes: [
             testContainer(makeContainer(), stableId: "list", children: [
-                testElement(makeElement(heistId: "stable-item", label: "Sauce", traits: [.button])),
-                testElement(makeElement(heistId: "generated-b", label: "Pasta", traits: [.button])),
+                testElement(makeElement(label: "Sauce", traits: [.button])),
+                testElement(makeElement(label: "Pasta", traits: [.button])),
             ]),
         ])
 
@@ -88,8 +88,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let beforeInterface = makeTestInterface(
             nodes: [
                 testContainer(makeContainer(), stableId: "main", children: [
-                    testElement(makeElement(heistId: "title", label: "Menu", traits: [.header])),
-                    testElement(makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText])),
+                    testElement(makeElement(label: "Menu", traits: [.header])),
+                    testElement(makeElement(label: "Total", value: "$5.00", traits: [.staticText])),
                 ]),
             ],
             timestamp: Date(timeIntervalSince1970: 1)
@@ -97,8 +97,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let afterInterface = makeTestInterface(
             nodes: [
                 testContainer(makeContainer(), stableId: "main", children: [
-                    testElement(makeElement(heistId: "title", label: "Menu", traits: [.header])),
-                    testElement(makeElement(heistId: "total", label: "Total", value: "$7.00", traits: [.staticText])),
+                    testElement(makeElement(label: "Menu", traits: [.header])),
+                    testElement(makeElement(label: "Total", value: "$7.00", traits: [.staticText])),
                 ]),
             ],
             timestamp: Date(timeIntervalSince1970: 2)
@@ -164,7 +164,7 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testTransitionTransientLivesOnCaptureEdgeAndProjectsToCompactDeltaField() throws {
-        let transient = makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])
+        let transient = makeElement(label: "Loading", traits: [.staticText])
         let before = AccessibilityTrace.Capture(sequence: 1, interface: makeInterface())
         let after = AccessibilityTrace.Capture(
             sequence: 2,
@@ -186,13 +186,13 @@ final class AccessibilityTraceDiffTests: XCTestCase {
         let before = AccessibilityTrace.Capture(
             sequence: 1,
             interface: interface,
-            context: AccessibilityTrace.Context(focusedElementId: "search", keyboardVisible: true)
+            context: AccessibilityTrace.Context(keyboardVisible: true)
         )
         let after = AccessibilityTrace.Capture(
             sequence: 2,
             interface: interface,
             parentHash: before.hash,
-            context: AccessibilityTrace.Context(focusedElementId: "total", keyboardVisible: false)
+            context: AccessibilityTrace.Context(keyboardVisible: false)
         )
 
         guard case .elementsChanged(let payload) = AccessibilityTrace.Delta.between(before, after) else {
@@ -237,8 +237,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     func testElementDiffTreatsIndistinguishableElementsAsNoChangeWithoutHierarchyContext() {
-        let before = makeElement(heistId: "first", label: "Item", traits: [.staticText])
-        let after = makeElement(heistId: "second", label: "Item", traits: [.staticText])
+        let before = makeElement(label: "Item", traits: [.staticText])
+        let after = makeElement(label: "Item", traits: [.staticText])
 
         let edits = ElementEdits.between(before, after)
 
@@ -251,8 +251,8 @@ final class AccessibilityTraceDiffTests: XCTestCase {
 
     private func makeInterface(label: String) -> Interface {
         makeTestInterface(elements: [
-            makeElement(heistId: "title", label: label, traits: [.header]),
-            makeElement(heistId: "total", label: "Total", value: "$5.00", traits: [.staticText]),
+            makeElement(label: label, traits: [.header]),
+            makeElement(label: "Total", value: "$5.00", traits: [.staticText]),
         ])
     }
 
@@ -261,13 +261,11 @@ final class AccessibilityTraceDiffTests: XCTestCase {
     }
 
     private func makeElement(
-        heistId: HeistId,
         label: String,
         value: String? = nil,
         traits: [HeistTrait]
     ) -> HeistElement {
         HeistElement(
-            heistId: heistId,
             description: label,
             label: label,
             value: value,

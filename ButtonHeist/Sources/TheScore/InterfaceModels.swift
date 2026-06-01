@@ -38,12 +38,10 @@ extension TreePath: Comparable {
 /// itself stays full-fidelity and unmodified.
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
-    public let heistId: HeistId
     public let actions: [ElementAction]
 
-    public init(path: TreePath, heistId: HeistId, actions: [ElementAction]) {
+    public init(path: TreePath, actions: [ElementAction]) {
         self.path = path
-        self.heistId = heistId
         self.actions = actions
     }
 }
@@ -131,7 +129,6 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = elementsByPath[oldPath] else { return nil }
             return InterfaceElementAnnotation(
                 path: newPath,
-                heistId: annotation.heistId,
                 actions: annotation.actions
             )
         }

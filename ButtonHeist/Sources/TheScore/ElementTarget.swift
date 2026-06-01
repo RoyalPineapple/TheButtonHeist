@@ -3,18 +3,13 @@ import Foundation
 // MARK: - Action Targets
 
 /// Target for element actions.
-/// Two resolution strategies: heistId (current-hierarchy token from
-/// get_interface) or predicate (describe the element by accessibility
-/// properties). HeistId is a standalone capture-local handle; ordinal only
-/// applies to predicate targets.
-/// Use heistId for immediate follow-up actions in the current capture; use
-/// minimum predicates for durable replay. Predicate fields use case-insensitive
-/// equality with typography folding — exact-or-miss.
+///
+/// An element is described by a predicate (label, identifier, value, traits,
+/// excludeTraits); `ordinal` disambiguates among matches. Predicate fields use
+/// case-insensitive equality with typography folding — exact-or-miss.
 /// On miss, the resolver returns structured suggestions; there is no
 /// substring fallback.
-public enum ElementTarget: Sendable, Equatable {
-    /// Current-hierarchy handle assigned by get_interface — fast O(1) lookup.
-    case heistId(HeistId)
+public enum ElementTarget: Sendable, Equatable, Hashable {
     /// Element predicate: label, identifier, value, traits, excludeTraits.
     /// `ordinal` is a 0-based selection index into the list of matches
     /// after semantic narrowing. When nil, requires a unique match and reports
@@ -25,16 +20,12 @@ public enum ElementTarget: Sendable, Equatable {
 }
 
 public extension ElementTarget {
-    static var heistIdFieldName: String {
-        CodingKeys.heistId.stringValue
-    }
-
     static var predicateFieldNames: [String] {
         CodingKeys.predicateKeys.map(\.stringValue)
     }
 
     static var selectorFieldNames: [String] {
-        [heistIdFieldName] + predicateFieldNames
+        predicateFieldNames
     }
 
     static var disambiguatorFieldNames: [String] {
@@ -49,10 +40,6 @@ public extension ElementTarget {
 extension ElementTarget: CustomStringConvertible {
     public var description: String {
         switch self {
-        case .heistId(let heistId):
-            return ScoreDescription.call("target", [
-                ScoreDescription.stringField("heistId", heistId),
-            ].compactMap { $0 })
         case .predicate(let predicate, let ordinal):
             return ScoreDescription.call("target", [
                 predicate.description,
@@ -66,20 +53,19 @@ extension ElementTarget: CustomStringConvertible {
 
 extension ElementTarget: Codable {
     enum CodingKeys: String, CodingKey {
-        case heistId
         case label, identifier, value, traits, excludeTraits
         case ordinal
 
-        /// The predicate / heistId keys whose presence in a parent container
-        /// indicates an `ElementTarget` is flattened at that level.
+        /// The predicate keys whose presence in a parent container indicates an
+        /// `ElementTarget` is flattened at that level.
         static let predicateKeys: [CodingKeys] = [.label, .identifier, .value, .traits, .excludeTraits]
-        static let allInlineKeys: [CodingKeys] = [.heistId] + predicateKeys + [.ordinal]
+        static let allInlineKeys: [CodingKeys] = predicateKeys + [.ordinal]
     }
 
     /// Decode an optional `ElementTarget` flattened into the same JSON object
     /// the decoder is currently reading. Returns `nil` when none of the
-    /// predicate / heistId keys are present; throws if at least one key is
-    /// present but the resulting target fails ElementTarget's own validation.
+    /// predicate keys are present; throws if at least one key is present but the
+    /// resulting target fails ElementTarget's own validation.
     public static func decodeInlineIfPresent(from decoder: Decoder) throws -> ElementTarget? {
         let probe = try decoder.container(keyedBy: CodingKeys.self)
         let hasTargetFields = CodingKeys.allInlineKeys.contains { probe.contains($0) }
@@ -127,15 +113,6 @@ extension ElementTarget: Codable {
                 debugDescription: ElementTargetGrammarError.negativeOrdinal(ordinal).diagnosticDescription
             )
         }
-        if let heistId = try container.decodeIfPresent(HeistId.self, forKey: .heistId) {
-            return try targetOrDecodingError(
-                heistId: heistId,
-                predicate: nil,
-                predicateWasProvided: hasPredicateFields(in: container),
-                ordinal: ordinal,
-                codingPath: container.codingPath
-            )
-        }
         let predicate = ElementPredicate(
             label: try container.decodeIfPresent(String.self, forKey: .label),
             identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
@@ -144,7 +121,6 @@ extension ElementTarget: Codable {
             excludeTraits: try container.decodeIfPresent([HeistTrait].self, forKey: .excludeTraits) ?? []
         )
         return try targetOrDecodingError(
-            heistId: nil,
             predicate: predicate,
             predicateWasProvided: hasPredicateFields(in: container),
             ordinal: ordinal,
@@ -164,15 +140,13 @@ extension ElementTarget: Codable {
     }
 
     private static func targetOrDecodingError(
-        heistId: HeistId?,
-        predicate: ElementPredicate?,
+        predicate: ElementPredicate,
         predicateWasProvided: Bool,
         ordinal: Int?,
         codingPath: [CodingKey]
     ) throws -> ElementTarget {
         do {
             return try ElementTargetGrammar.validatedTarget(
-                heistId: heistId,
                 predicate: predicate,
                 predicateWasProvided: predicateWasProvided,
                 ordinal: ordinal
@@ -188,8 +162,6 @@ extension ElementTarget: Codable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
-        case .heistId(let id):
-            try container.encode(id, forKey: .heistId)
         case .predicate(let predicate, let ordinal):
             try container.encodeIfPresent(predicate.label, forKey: .label)
             try container.encodeIfPresent(predicate.identifier, forKey: .identifier)

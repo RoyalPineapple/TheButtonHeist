@@ -8,15 +8,15 @@ enum AccessibilityTraceMoveInference {
         beforeElements: [HeistElement],
         afterElements: [HeistElement]
     ) -> ElementEdits {
-        let beforeIds = Set(beforeElements.map(\.heistId))
-        let afterIds = Set(afterElements.map(\.heistId))
+        let beforeIds = Set(beforeElements.map(\.diffPairingKey))
+        let afterIds = Set(afterElements.map(\.diffPairingKey))
         let removedIds = beforeIds.subtracting(afterIds)
         let addedIds = afterIds.subtracting(beforeIds)
         guard !removedIds.isEmpty, !addedIds.isEmpty else { return edits }
 
-        let removedById = Dictionary(grouping: beforeElements.filter { removedIds.contains($0.heistId) }, by: \.heistId)
+        let removedById = Dictionary(grouping: beforeElements.filter { removedIds.contains($0.diffPairingKey) }, by: \.diffPairingKey)
             .compactMapValues { $0.count == 1 ? $0[0] : nil }
-        let addedById = Dictionary(grouping: afterElements.filter { addedIds.contains($0.heistId) }, by: \.heistId)
+        let addedById = Dictionary(grouping: afterElements.filter { addedIds.contains($0.diffPairingKey) }, by: \.diffPairingKey)
             .compactMapValues { $0.count == 1 ? $0[0] : nil }
 
         let pairs = inferFunctionalHeistElementPairs(removedById: removedById, addedById: addedById)
@@ -24,12 +24,12 @@ enum AccessibilityTraceMoveInference {
 
         let pairedRemoved = Set(pairs.map(\.removedId))
         let pairedAdded = Set(pairs.map(\.insertedId))
-        let added = edits.added.filter { !pairedAdded.contains($0.heistId) }
-        let removed = edits.removed.filter { !pairedRemoved.contains($0) }
+        let added = edits.added.filter { !pairedAdded.contains($0.diffPairingKey) }
+        let removed = edits.removed.filter { !pairedRemoved.contains($0.diffPairingKey) }
         let inferredUpdates = pairs.compactMap { pair -> ElementUpdate? in
             guard let old = removedById[pair.removedId],
                   let new = addedById[pair.insertedId] else { return nil }
-            return projectElementStateChange(old: old, new: new, heistId: pair.removedId, includeGeometry: false)
+            return projectElementStateChange(old: old, new: new, element: old, includeGeometry: false)
         }
 
         return ElementEdits(
@@ -40,9 +40,9 @@ enum AccessibilityTraceMoveInference {
     }
 
     private static func inferFunctionalHeistElementPairs(
-        removedById: [HeistId: HeistElement],
-        addedById: [HeistId: HeistElement]
-    ) -> [(removedId: HeistId, insertedId: HeistId)] {
+        removedById: [String: HeistElement],
+        addedById: [String: HeistElement]
+    ) -> [(removedId: String, insertedId: String)] {
         let removed = removedById.map { identifier, element in
             (identifier, pairingSignature(for: element))
         }

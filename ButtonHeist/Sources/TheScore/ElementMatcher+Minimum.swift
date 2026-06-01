@@ -215,7 +215,7 @@ public struct MinimumMatcher: Sendable, Equatable {
         var found: Int?
         var totalMatches = 0
         for candidate in allElements where candidate.matches(predicate) {
-            if candidate.heistId == element.heistId {
+            if candidate == element {
                 found = index
             }
             index += 1
@@ -229,7 +229,7 @@ public struct MinimumMatcher: Sendable, Equatable {
 extension MinimumMatcher: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("minimumMatcher", [
-            ScoreDescription.stringField("element", element.heistId),
+            ScoreDescription.stringField("element", element.description),
             predicate.description,
             ScoreDescription.valueField("ordinal", ordinal),
         ].compactMap { $0 })

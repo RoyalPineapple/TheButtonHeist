@@ -119,40 +119,6 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRecordHeistStepDerivesMatcherFromCaptureLocalHeistId() async throws {
-        let heistStore = makeHeistStore()
-        try heistStore.startRecording(identifier: "semantic", app: "com.example.app")
-
-        let element = HeistElement(
-            heistId: "button_submit",
-            description: "Submit",
-            label: "Submit",
-            value: nil,
-            identifier: "checkout.submit",
-            traits: [.button],
-            frameX: 0,
-            frameY: 0,
-            frameWidth: 100,
-            frameHeight: 44,
-            actions: []
-        )
-        let capture = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: makeReceiptTestInterface([element], timestamp: Date(timeIntervalSince1970: 0))
-        )
-
-        try recordHeistStep(
-            heistStore,
-            command: .activate,
-            args: ["target": targetArgumentValue(heistId: "button_submit")],
-            targetCapture: capture
-        )
-        let heist = try heistStore.finishRecording()
-
-        XCTAssertEqual(heist.steps[0].target, semanticTarget(identifier: "checkout.submit"))
-    }
-
-    @ButtonHeistActor
     func testRecordHeistStepSkipsFailedActions() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "failed-actions", app: "com.example.app")
@@ -161,14 +127,12 @@ final class HeistStoreTests: XCTestCase {
             heistStore,
             command: .activate,
             args: ["target": targetArgumentValue(label: "Missing")],
-            actionResult: ActionResult(success: false, method: .activate, errorKind: .elementNotFound),
-            targetCapture: nil
+            actionResult: ActionResult(success: false, method: .activate, errorKind: .elementNotFound)
         )
         try recordHeistStep(
             heistStore,
             command: .activate,
-            args: ["target": targetArgumentValue(label: "Go")],
-            targetCapture: nil
+            args: ["target": targetArgumentValue(label: "Go")]
         )
 
         let heist = try heistStore.finishRecording()
@@ -187,8 +151,7 @@ final class HeistStoreTests: XCTestCase {
                 "target": targetArgumentValue(label: "Save"),
                 "expect": .object(["type": .string("screen_changed")]),
                 "timeout": .double(2.5),
-            ],
-            targetCapture: nil
+            ]
         )
 
         let heist = try heistStore.finishRecording()
@@ -213,8 +176,7 @@ final class HeistStoreTests: XCTestCase {
             args: [
                 "target": targetArgumentValue(label: "Save"),
                 "timeout": .int(3),
-            ],
-            targetCapture: nil
+            ]
         )
 
         let heist = try heistStore.finishRecording()
@@ -252,8 +214,7 @@ private func recordHeistStep(
     command: TheFence.Command,
     args: [String: HeistValue],
     actionResult: ActionResult? = nil,
-    expectation: ExpectationResult? = nil,
-    targetCapture: AccessibilityTrace.Capture?
+    expectation: ExpectationResult? = nil
 ) throws {
     var request = args
     request["requestId"] = .string("test")
@@ -264,7 +225,6 @@ private func recordHeistStep(
     heistStore.recordHeistStep(
         parsed,
         actionResult: actionResult,
-        expectation: expectation,
-        targetCapture: targetCapture
+        expectation: expectation
     )
 }

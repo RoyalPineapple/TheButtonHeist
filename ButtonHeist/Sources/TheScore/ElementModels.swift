@@ -7,10 +7,6 @@ import AccessibilitySnapshotModel
 /// A UI element captured from the accessibility hierarchy.
 /// Wraps the parser's AccessibilityElement with all its rich data in a wire-friendly form.
 public struct HeistElement: Codable, Equatable, Hashable, Sendable {
-    /// Stable, deterministic identifier for targeting this element.
-    /// Developer-provided `accessibilityIdentifier` if present, otherwise synthesized
-    /// from traits + label (or value as fallback). Unique within a snapshot.
-    public let heistId: HeistId
     public let description: String
     public let label: String?
     public let value: String?
@@ -31,7 +27,6 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
     public let actions: [ElementAction]
 
     public init(
-        heistId: HeistId = "",
         description: String,
         label: String?,
         value: String?,
@@ -49,7 +44,6 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
         rotors: [HeistRotor]? = nil,
         actions: [ElementAction]
     ) {
-        self.heistId = heistId
         self.description = description
         self.label = label
         self.value = value
@@ -71,6 +65,60 @@ public struct HeistElement: Codable, Equatable, Hashable, Sendable {
 
 }
 
+// MARK: - HeistElement Codable
+
+extension HeistElement {
+    private enum CodingKeys: String, CodingKey {
+        case description
+        case label, value, identifier, hint
+        case traits
+        case frameX, frameY, frameWidth, frameHeight
+        case activationPointX, activationPointY
+        case respondsToUserInteraction
+        case customContent, rotors, actions
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.description = try container.decode(String.self, forKey: .description)
+        self.label = try container.decodeIfPresent(String.self, forKey: .label)
+        self.value = try container.decodeIfPresent(String.self, forKey: .value)
+        self.identifier = try container.decodeIfPresent(String.self, forKey: .identifier)
+        self.hint = try container.decodeIfPresent(String.self, forKey: .hint)
+        self.traits = try container.decode([HeistTrait].self, forKey: .traits)
+        self.frameX = try container.decode(Double.self, forKey: .frameX)
+        self.frameY = try container.decode(Double.self, forKey: .frameY)
+        self.frameWidth = try container.decode(Double.self, forKey: .frameWidth)
+        self.frameHeight = try container.decode(Double.self, forKey: .frameHeight)
+        self.activationPointX = try container.decode(Double.self, forKey: .activationPointX)
+        self.activationPointY = try container.decode(Double.self, forKey: .activationPointY)
+        self.respondsToUserInteraction = try container.decode(Bool.self, forKey: .respondsToUserInteraction)
+        self.customContent = try container.decodeIfPresent([HeistCustomContent].self, forKey: .customContent)
+        self.rotors = try container.decodeIfPresent([HeistRotor].self, forKey: .rotors)
+        self.actions = try container.decode([ElementAction].self, forKey: .actions)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(description, forKey: .description)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encodeIfPresent(identifier, forKey: .identifier)
+        try container.encodeIfPresent(hint, forKey: .hint)
+        try container.encode(traits, forKey: .traits)
+        try container.encode(frameX, forKey: .frameX)
+        try container.encode(frameY, forKey: .frameY)
+        try container.encode(frameWidth, forKey: .frameWidth)
+        try container.encode(frameHeight, forKey: .frameHeight)
+        try container.encode(activationPointX, forKey: .activationPointX)
+        try container.encode(activationPointY, forKey: .activationPointY)
+        try container.encode(respondsToUserInteraction, forKey: .respondsToUserInteraction)
+        try container.encodeIfPresent(customContent, forKey: .customContent)
+        try container.encodeIfPresent(rotors, forKey: .rotors)
+        try container.encode(actions, forKey: .actions)
+    }
+}
+
 public extension HeistElement {
     init(
         accessibilityElement element: AccessibilityElement,
@@ -81,7 +129,6 @@ public extension HeistElement {
         let validCustomContent = element.customContent.filter { !$0.label.isEmpty || !$0.value.isEmpty }
         let validRotors = element.customRotors.filter { !$0.name.isEmpty }
         self.init(
-            heistId: annotation?.heistId ?? "",
             description: element.description,
             label: element.label,
             value: element.value,

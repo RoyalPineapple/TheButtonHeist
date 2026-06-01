@@ -18,18 +18,6 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertEqual(matcher.traits, [.button])
     }
 
-    func testScrollToVisibleTargetHeistIdEncodeDecode() throws {
-        let target = ScrollToVisibleTarget(
-            elementTarget: .heistId("buttonheist.longList.last")
-        )
-        let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)
-        guard case .heistId(let id) = decoded.elementTarget else {
-            return XCTFail("Expected .heistId")
-        }
-        XCTAssertEqual(id, "buttonheist.longList.last")
-    }
-
     func testScrollToVisibleTargetMinimal() throws {
         let target = ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save")))
         let data = try JSONEncoder().encode(target)
@@ -70,20 +58,6 @@ final class ScrollToVisibleTests: XCTestCase {
         XCTAssertEqual(matcher.label, "Color Picker")
         XCTAssertEqual(matcher.traits, [.button])
         XCTAssertEqual(decoded.direction, .up)
-    }
-
-    func testElementSearchTargetHeistIdEncodeDecode() throws {
-        let target = ElementSearchTarget(
-            elementTarget: .heistId("buttonheist.longList.last"),
-            direction: .down
-        )
-        let data = try JSONEncoder().encode(target)
-        let decoded = try JSONDecoder().decode(ElementSearchTarget.self, from: data)
-        guard case .heistId(let id) = decoded.elementTarget else {
-            return XCTFail("Expected .heistId")
-        }
-        XCTAssertEqual(id, "buttonheist.longList.last")
-        XCTAssertEqual(decoded.direction, .down)
     }
 
     func testElementSearchTargetDefaults() {
@@ -130,14 +104,14 @@ final class ScrollToVisibleTests: XCTestCase {
     func testScrollSearchResultEncodeDecode() throws {
         let result = ScrollSearchResult(
             scrollCount: 6, uniqueElementsSeen: 47,
-            exhaustive: false, foundHeistId: "button_color_picker"
+            exhaustive: false, found: true
         )
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ScrollSearchResult.self, from: data)
         XCTAssertEqual(decoded.scrollCount, 6)
         XCTAssertEqual(decoded.uniqueElementsSeen, 47)
         XCTAssertFalse(decoded.exhaustive)
-        XCTAssertEqual(decoded.foundHeistId, "button_color_picker")
+        XCTAssertTrue(decoded.found)
     }
 
     func testScrollSearchResultNotFound() throws {
@@ -148,7 +122,7 @@ final class ScrollToVisibleTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ScrollSearchResult.self, from: data)
         XCTAssertEqual(decoded.scrollCount, 20)
         XCTAssertTrue(decoded.exhaustive)
-        XCTAssertNil(decoded.foundHeistId)
+        XCTAssertFalse(decoded.found)
     }
 
     func testScrollSearchResultRejectsObsoleteFoundElementSnapshot() throws {

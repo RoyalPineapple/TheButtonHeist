@@ -37,7 +37,6 @@ final class ScreenshotPayloadTests: XCTestCase {
 
     func testEncodingRoundTripWithInterfaceEvidence() throws {
         let element = HeistElement(
-            heistId: "checkout_total",
             description: "Total $12.34",
             label: "Total",
             value: "$12.34",

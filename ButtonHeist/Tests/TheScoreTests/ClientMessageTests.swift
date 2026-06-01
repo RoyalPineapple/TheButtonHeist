@@ -95,7 +95,7 @@ final class ClientMessageTests: XCTestCase {
                 actionName: "Open"
             )),
             .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))),
-            .scrollToVisible(ScrollToVisibleTarget(elementTarget: .heistId("button_save"))),
+            .scrollToVisible(ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save")))),
             .wait(WaitTarget(predicate: .changed(.elements), timeout: 1.0)),
         ]
 
@@ -205,7 +205,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testBatchExecutionDescriptionsUseNormalCommandIdentity() {
         let step = BatchStep(
-            command: .activate(.heistId("button_save")),
+            command: .activate(.predicate(ElementPredicate(label: "Save"))),
             predicate: .changed(.screen()),
             deadline: Deadline()
         )
@@ -216,14 +216,15 @@ final class ClientMessageTests: XCTestCase {
         )
     }
 
-    func testExistingActivateWireShapeIsUnchanged() throws {
-        let message = ClientMessage.activate(.heistId("button_login"))
+    func testActivatePredicateWireShape() throws {
+        let message = ClientMessage.activate(.predicate(ElementPredicate(label: "Log In")))
         let data = try JSONEncoder().encode(message)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         XCTAssertEqual(object["type"] as? String, "activate")
         let payload = try XCTUnwrap(object["payload"] as? [String: Any])
-        XCTAssertEqual(payload["heistId"] as? String, "button_login")
+        XCTAssertEqual(payload["label"] as? String, "Log In")
+        XCTAssertNil(payload["heistId"])
     }
 
     func testRequestScreenshotEncodeDecode() throws {
@@ -482,12 +483,13 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testElementTargetRejectsHeistIdWithMatcherFieldsAtCodableBoundary() {
+        // heistId is no longer a targeting field — it is rejected as unknown.
         let json = #"{"heistId":"button_save","label":"Save"}"#
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("cannot be combined"))
+            XCTAssertTrue(context.debugDescription.contains("heistId"))
         }
     }
 
@@ -497,7 +499,7 @@ final class ClientMessageTests: XCTestCase {
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("cannot be combined"))
+            XCTAssertTrue(context.debugDescription.contains("heistId"))
         }
     }
 
@@ -526,7 +528,7 @@ final class ClientMessageTests: XCTestCase {
     func testUnitPointRoundTrip() throws {
         let swipe = SwipeTarget(
             selection: .unitElement(
-                .heistId("scrollable"),
+                .predicate(ElementPredicate(identifier: "scrollable")),
                 start: UnitPoint(x: 0.8, y: 0.5),
                 end: UnitPoint(x: 0.2, y: 0.5)
             )
@@ -552,13 +554,11 @@ private struct EncodedClientMessageType: Decodable {
 
 extension HeistElement {
     static func stub(
-        heistId: HeistId = "test",
         label: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {
         HeistElement(
-            heistId: heistId,
-            description: label ?? heistId,
+            description: label ?? "stub",
             label: label,
             value: nil,
             identifier: nil,

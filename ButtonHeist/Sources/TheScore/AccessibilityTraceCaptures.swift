@@ -165,9 +165,10 @@ public extension AccessibilityTrace {
     struct Context: Codable, Sendable, Equatable, Hashable {
         public static let empty = Context()
 
-        /// Focused accessibility element, when the parser can map first
-        /// responder state back to a heist id.
-        public let focusedElementId: HeistId?
+        /// The focused (first responder) element, as a durable target
+        /// (predicate + ordinal) built server-side via the minimum matcher.
+        /// No internal id crosses the wire.
+        public let firstResponder: ElementTarget?
         /// Software keyboard state affects text-entry affordances even when
         /// the hierarchy is otherwise unchanged.
         public let keyboardVisible: Bool?
@@ -178,12 +179,12 @@ public extension AccessibilityTrace {
         public let windowStack: [WindowContext]
 
         public init(
-            focusedElementId: HeistId? = nil,
+            firstResponder: ElementTarget? = nil,
             keyboardVisible: Bool? = nil,
             screenId: String? = nil,
             windowStack: [WindowContext] = []
         ) {
-            self.focusedElementId = focusedElementId
+            self.firstResponder = firstResponder
             self.keyboardVisible = keyboardVisible
             self.screenId = screenId
             self.windowStack = windowStack

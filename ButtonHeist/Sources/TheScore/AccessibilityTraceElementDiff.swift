@@ -7,21 +7,21 @@ enum AccessibilityTraceElementDiff {
         beforeElements: [HeistElement],
         afterElements: [HeistElement]
     ) -> ElementEdits {
-        let oldByHeistId = Dictionary(grouping: beforeElements, by: \.heistId)
-        let newByHeistId = Dictionary(grouping: afterElements, by: \.heistId)
-        let allHeistIds = Set(oldByHeistId.keys).union(newByHeistId.keys)
+        let oldByKey = Dictionary(grouping: beforeElements, by: \.diffPairingKey)
+        let newByKey = Dictionary(grouping: afterElements, by: \.diffPairingKey)
+        let allKeys = Set(oldByKey.keys).union(newByKey.keys)
 
         var updated: [ElementUpdate] = []
         var added: [HeistElement] = []
-        var removed: [HeistId] = []
+        var removed: [HeistElement] = []
 
-        for heistId in allHeistIds {
-            let oldEls = oldByHeistId[heistId] ?? []
-            let newEls = newByHeistId[heistId] ?? []
+        for key in allKeys {
+            let oldEls = oldByKey[key] ?? []
+            let newEls = newByKey[key] ?? []
             let pairCount = min(oldEls.count, newEls.count)
             updated += zip(oldEls.prefix(pairCount), newEls.prefix(pairCount))
                 .compactMap { projectElementStateChange(old: $0, new: $1) }
-            removed += oldEls.suffix(from: pairCount).map(\.heistId)
+            removed += Array(oldEls.suffix(from: pairCount))
             added += newEls.suffix(from: pairCount)
         }
 
@@ -36,7 +36,7 @@ enum AccessibilityTraceElementDiff {
 func projectElementStateChange(
     old: HeistElement,
     new: HeistElement,
-    heistId: HeistId? = nil,
+    element: HeistElement? = nil,
     includeGeometry: Bool = true
 ) -> ElementUpdate? {
     var changes: [PropertyChange] = []
@@ -92,7 +92,7 @@ func projectElementStateChange(
     }
 
     guard !changes.isEmpty else { return nil }
-    return ElementUpdate(heistId: heistId ?? new.heistId, changes: changes)
+    return ElementUpdate(element: element ?? new, changes: changes)
 }
 
 private func formatCustomContent(_ content: [HeistCustomContent]?) -> String? {
@@ -111,4 +111,26 @@ private func formatCustomContent(_ content: [HeistCustomContent]?) -> String? {
 private func formatRotors(_ rotors: [HeistRotor]?) -> String? {
     guard let rotors, !rotors.isEmpty else { return nil }
     return rotors.map { $0.name }.joined(separator: ", ")
+}
+
+// MARK: - Diff Pairing Key
+
+extension HeistElement {
+    /// Content-derived key used to pair before/after elements across a
+    /// transition. Replaces the removed internal element id: the diff has no
+    /// notion of element identity beyond what the wire-visible content implies.
+    /// Mirrors the old identity synthesis — the first non-empty of
+    /// `identifier`/`label`/`description`, plus non-transient (identity) traits —
+    /// so transient state changes (selected, focused) don't break pairing.
+    var diffPairingKey: String {
+        let base = [identifier, label].compactMap { value in
+            (value?.isEmpty == false) ? value : nil
+        }.first ?? description
+        let identityTraits = traits
+            .filter { !AccessibilityPolicy.transientTraits.contains($0) }
+            .map(\.rawValue)
+            .sorted()
+            .joined(separator: ",")
+        return base + "\u{1F}" + identityTraits
+    }
 }

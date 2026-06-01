@@ -12,7 +12,7 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
     private let decoder = JSONDecoder()
 
     func testElementLeafCarriesParserElementAndTraversalIndex() throws {
-        let element = sampleElement(heistId: "btn", label: "OK")
+        let element = sampleElement(label: "OK")
         let interface = makeTestInterface(nodes: [testElement(element)])
 
         let payload = try encodeInterfacePayload(interface)
@@ -48,8 +48,8 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
     }
 
     func testInterfaceCarriesTreePlusAnnotations() throws {
-        let header = sampleElement(heistId: "header", label: "Header")
-        let row = sampleElement(heistId: "row_0", label: "Row 0")
+        let header = sampleElement(label: "Header")
+        let row = sampleElement(label: "Row 0")
         let interface = makeTestInterface(nodes: [
             testElement(header),
             testContainer(
@@ -69,15 +69,14 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
 
         let annotations = try XCTUnwrap(payload["annotations"] as? [String: Any])
         let elements = try XCTUnwrap(annotations["elements"] as? [[String: Any]])
-        XCTAssertEqual(elements.map { $0["heistId"] as? String }, ["header", "row_0"])
+        XCTAssertEqual(elements.count, 2)
+        XCTAssertNil(elements.first?["heistId"], "heistId must never appear on the wire")
         let containers = try XCTUnwrap(annotations["containers"] as? [[String: Any]])
         XCTAssertEqual(containers.first?["stableId"] as? String, "list_0")
-
-        XCTAssertEqual(interface.projectedElements.map(\.heistId), ["header", "row_0"])
     }
 
     func testNestedInterfaceRoundTripsThroughCanonicalHierarchy() throws {
-        let element = sampleElement(heistId: "row", label: "Row")
+        let element = sampleElement(label: "Row")
         let original = makeTestInterface(nodes: [
             testContainer(
                 makeTestAccessibilityContainer(
@@ -116,7 +115,6 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
     }
 
     private func sampleElement(
-        heistId: HeistId = "btn",
         label: String? = "OK"
     ) -> HeistElement {
         let frameX = 0.0
@@ -130,7 +128,6 @@ final class AccessibilityHierarchyWireShapeTests: XCTestCase {
             frameHeight: frameHeight
         )
         return HeistElement(
-            heistId: heistId,
             description: "Button",
             label: label,
             value: nil,

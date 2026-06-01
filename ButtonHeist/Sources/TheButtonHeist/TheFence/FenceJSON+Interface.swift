@@ -57,25 +57,21 @@ struct PublicNavigation: Encodable {
 }
 
 struct PublicNavigationItem: Encodable {
-    let heistId: String
     let label: String?
     let value: String?
 
     init(element: HeistElement) {
-        self.heistId = element.heistId
         self.label = element.label
         self.value = element.value
     }
 }
 
 struct PublicTabBarItem: Encodable {
-    let heistId: String
     let label: String?
     let value: String?
     let selected: Bool?
 
     init(element: HeistElement) {
-        self.heistId = element.heistId
         self.label = element.label
         self.value = element.value
         self.selected = element.traits.contains(.selected) ? true : nil

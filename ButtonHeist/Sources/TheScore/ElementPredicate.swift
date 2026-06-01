@@ -10,7 +10,7 @@ import Foundation
 /// resolution. Trait fields use exact bitmask comparison. Specificity is
 /// expressed entirely by which fields are set — there is no separate scope or
 /// query system.
-public struct ElementPredicate: Sendable, Equatable {
+public struct ElementPredicate: Sendable, Equatable, Hashable {
     /// Case-insensitive equality match against element label.
     public var label: String?
     /// Case-insensitive equality match against accessibility identifier.
@@ -49,6 +49,42 @@ public struct ElementPredicate: Sendable, Equatable {
 
     /// Returns `self` when at least one predicate field is set, else `nil`.
     public var nonEmpty: Self? { hasPredicates ? self : nil }
+}
+
+// MARK: - Convenience Constructors
+
+public extension ElementPredicate {
+    /// Match by label alone.
+    static func label(_ label: String) -> ElementPredicate {
+        ElementPredicate(label: label)
+    }
+
+    /// Match by accessibility identifier alone.
+    static func identifier(_ identifier: String) -> ElementPredicate {
+        ElementPredicate(identifier: identifier)
+    }
+
+    /// Match by value alone.
+    static func value(_ value: String) -> ElementPredicate {
+        ElementPredicate(value: value)
+    }
+
+    /// Match by any combination of fields — the canonical multi-field form.
+    static func element(
+        label: String? = nil,
+        identifier: String? = nil,
+        value: String? = nil,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = []
+    ) -> ElementPredicate {
+        ElementPredicate(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: traits,
+            excludeTraits: excludeTraits
+        )
+    }
 }
 
 // MARK: - String Match Mode

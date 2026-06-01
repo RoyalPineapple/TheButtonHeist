@@ -135,12 +135,6 @@ public struct HeistStep: Codable, Sendable, Equatable {
         do {
             try validateDurableTarget(target)
             return target
-        } catch HeistStepError.captureHandleTarget {
-            throw DecodingError.dataCorruptedError(
-                forKey: key,
-                in: container,
-                debugDescription: "HeistStep target requires predicate fields; heistId is a capture-local handle"
-            )
         } catch HeistStepError.emptyPredicateTarget {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
@@ -158,8 +152,6 @@ public struct HeistStep: Codable, Sendable, Equatable {
             return
         case .predicate:
             throw HeistStepError.emptyPredicateTarget
-        case .heistId:
-            throw HeistStepError.captureHandleTarget
         }
     }
 
@@ -173,18 +165,12 @@ public struct HeistStep: Codable, Sendable, Equatable {
                 codingPath: container.codingPath + [CodingKeys.target],
                 debugDescription: "HeistStep target requires at least one predicate field"
             ))
-        case .heistId:
-            throw EncodingError.invalidValue(target, .init(
-                codingPath: container.codingPath + [CodingKeys.target],
-                debugDescription: "HeistStep target requires predicate fields; heistId is a capture-local handle"
-            ))
         }
     }
 
 }
 
 public enum HeistStepError: Error, Sendable, Equatable {
-    case captureHandleTarget
     case emptyPredicateTarget
 }
 

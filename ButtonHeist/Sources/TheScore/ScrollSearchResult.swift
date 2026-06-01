@@ -8,26 +8,26 @@ public struct ScrollSearchResult: Codable, Sendable {
     public let uniqueElementsSeen: Int
     /// Whether every item in the data source was checked
     public let exhaustive: Bool
-    /// The matched element id, if found. The action trace owns the element snapshot.
-    public let foundHeistId: HeistId?
+    /// Whether the target element was found. The action trace owns the element snapshot.
+    public let found: Bool
 
     public init(
         scrollCount: Int,
         uniqueElementsSeen: Int,
         exhaustive: Bool,
-        foundHeistId: HeistId? = nil
+        found: Bool = false
     ) {
         self.scrollCount = scrollCount
         self.uniqueElementsSeen = uniqueElementsSeen
         self.exhaustive = exhaustive
-        self.foundHeistId = foundHeistId
+        self.found = found
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case scrollCount
         case uniqueElementsSeen
         case exhaustive
-        case foundHeistId
+        case found
     }
 
     public init(from decoder: Decoder) throws {
@@ -37,7 +37,7 @@ public struct ScrollSearchResult: Codable, Sendable {
             scrollCount: try container.decode(Int.self, forKey: .scrollCount),
             uniqueElementsSeen: try container.decode(Int.self, forKey: .uniqueElementsSeen),
             exhaustive: try container.decode(Bool.self, forKey: .exhaustive),
-            foundHeistId: try container.decodeIfPresent(HeistId.self, forKey: .foundHeistId)
+            found: try container.decodeIfPresent(Bool.self, forKey: .found) ?? false
         )
     }
 }

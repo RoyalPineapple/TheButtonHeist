@@ -25,32 +25,6 @@ extension TheStash {
 
     enum Diagnostics {
 
-    /// Diagnostic for an heistId that isn't in the committed semantic screen.
-    /// By the time we land here, semantic actionability has already tried to reveal
-    /// it, so the id is either stale (the hierarchy changed since the agent's
-    /// last semantic observation) or it never existed.
-    static func heistIdNotFound(
-        _ heistId: HeistId,
-        knownIds: some Collection<String>,
-        knownCount: Int
-    ) -> String {
-        let similar = knownIds.sorted()
-            .filter { $0.contains(heistId) || heistId.contains($0) }
-        if similar.isEmpty {
-            return """
-                Element not found: "\(heistId)" — likely stale or the hierarchy \
-                changed since the handle was captured (\(knownCount) known \
-                elements now); target by exact label/identifier with a matcher, \
-                or wait for the target to appear.
-                """
-        }
-        return """
-            Element not found: "\(heistId)" — did you mean: \
-            \(similar.joined(separator: ", "))? If not, retarget by exact \
-            label or identifier.
-            """
-    }
-
     static func matcherNotFound(
         _ predicate: ElementPredicate,
         screenElements: [Screen.ScreenElement],
@@ -203,7 +177,7 @@ extension TheStash {
         if screenElements.isEmpty {
             return """
                 \(resolutionScope) hierarchy is empty (0 elements)
-                Next: wait for the target to appear, then retry with an exact label, identifier, heistId.
+                Next: wait for the target to appear, then retry with an exact label, identifier, or value.
                 """
         }
         let noun = screenElements.count == 1 ? "element" : "elements"
@@ -225,7 +199,7 @@ extension TheStash {
             lines.append("  ... and \(screenElements.count - cap) more")
         }
         lines.append(
-            "Next: target one listed element by exact label, identifier, heistId; "
+            "Next: target one listed element by exact label, identifier, or value; "
                 + "if the target is absent, wait for it to appear."
         )
         return lines.joined(separator: "\n")
@@ -261,10 +235,10 @@ extension TheStash {
         visibleHeistIds: Set<HeistId>
     ) -> String {
         if visibleHeistIds.contains(candidate.heistId) {
-            return "(heistId: \(candidate.heistId), visible)"
+            return "(visible)"
         }
 
-        var details = ["heistId: \(candidate.heistId)", "offscreen"]
+        var details = ["offscreen"]
         if candidate.contentSpaceOrigin == nil {
             details.append("unreachable")
         }

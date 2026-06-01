@@ -195,7 +195,6 @@ final class InterfaceComputedTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeElement(
-        heistId: HeistId = "",
         label: String?,
         value: String? = nil,
         traits: [HeistTrait],
@@ -203,7 +202,6 @@ final class InterfaceComputedTests: XCTestCase {
         frameY: Double = 0
     ) -> HeistElement {
         HeistElement(
-            heistId: heistId,
             description: label ?? "",
             label: label, value: value, identifier: nil,
             traits: traits,

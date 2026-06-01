@@ -13,7 +13,6 @@ extension FenceResponse {
     ) -> String {
         var parts: [String] = []
         if let displayIndex { parts.append("[\(displayIndex)]") }
-        parts.append(element.heistId)
 
         var labelValue = quotedString(nonEmpty(element.label) ?? "")
         if let value = nonEmpty(element.value) {

@@ -30,7 +30,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     }
 
     func testNoChangeWithTransientsRoundTrip() throws {
-        let spinner = makeElement(heistId: "spin", label: "Loading")
+        let spinner = makeElement(label: "Loading")
         let delta = AccessibilityTrace.Delta.noChange(.init(elementCount: 4, transient: [spinner]))
         let data = try encoder.encode(delta)
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
@@ -38,7 +38,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             return XCTFail("Expected .noChange, got \(decoded)")
         }
         XCTAssertEqual(payload.elementCount, 4)
-        XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
+        XCTAssertEqual(payload.transient.map(\.label), ["Loading"])
     }
 
     func testCaptureEdgeRoundTrips() throws {
@@ -67,7 +67,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     // MARK: - elementsChanged
 
     func testElementsChangedSparseRoundTrip() throws {
-        let added = makeElement(heistId: "save", label: "Save")
+        let added = makeElement(label: "Save")
         let edits = ElementEdits(added: [added])
         let delta = AccessibilityTrace.Delta.elementsChanged(.init(elementCount: 14, edits: edits))
         let data = try encoder.encode(delta)
@@ -90,7 +90,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             return XCTFail("Expected .elementsChanged, got \(decoded)")
         }
         XCTAssertEqual(payload.elementCount, 14)
-        XCTAssertEqual(payload.edits.added.map(\.heistId), ["save"])
+        XCTAssertEqual(payload.edits.added.map(\.label), ["Save"])
         XCTAssertTrue(payload.edits.removed.isEmpty)
         XCTAssertTrue(payload.transient.isEmpty)
     }
@@ -110,13 +110,14 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     }
 
     func testElementsChangedFullRoundTrip() throws {
-        let added = makeElement(heistId: "new", label: "New")
-        let transient = makeElement(heistId: "spin", label: "Loading")
+        let added = makeElement(label: "New")
+        let removed = makeElement(label: "Old")
+        let transient = makeElement(label: "Loading")
         let edits = ElementEdits(
             added: [added],
-            removed: ["old"],
+            removed: [removed],
             updated: [ElementUpdate(
-                heistId: "counter",
+                element: makeElement(label: "Counter"),
                 changes: [PropertyChange(property: .value, old: "1", new: "2")]
             )]
         )
@@ -124,15 +125,25 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
             elementCount: 14, edits: edits, transient: [transient]
         ))
         let data = try encoder.encode(delta)
+
+        // heistId is excluded from the wire — the delta is self-describing by label.
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let editsJSON = try XCTUnwrap((json["edits"] as? [String: Any]))
+        let removedJSON = try XCTUnwrap(editsJSON["removed"] as? [[String: Any]])
+        XCTAssertEqual(removedJSON.first?["label"] as? String, "Old")
+        XCTAssertNil(removedJSON.first?["heistId"])
+        let updatedJSON = try XCTUnwrap(editsJSON["updated"] as? [[String: Any]])
+        XCTAssertNil((updatedJSON.first?["element"] as? [String: Any])?["heistId"])
+
         let decoded = try decoder.decode(AccessibilityTrace.Delta.self, from: data)
         guard case .elementsChanged(let payload) = decoded else {
             return XCTFail("Expected .elementsChanged, got \(decoded)")
         }
         XCTAssertEqual(payload.elementCount, 14)
-        XCTAssertEqual(payload.edits.added.map(\.heistId), ["new"])
-        XCTAssertEqual(payload.edits.removed, ["old"])
-        XCTAssertEqual(payload.edits.updated.first?.heistId, "counter")
-        XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
+        XCTAssertEqual(payload.edits.added.map(\.label), ["New"])
+        XCTAssertEqual(payload.edits.removed.map(\.label), ["Old"])
+        XCTAssertEqual(payload.edits.updated.first?.element.label, "Counter")
+        XCTAssertEqual(payload.transient.map(\.label), ["Loading"])
     }
 
     func testElementEditsRejectsObsoleteTreeProjectionFields() throws {
@@ -167,7 +178,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     }
 
     func testScreenChangedWithTransientRoundTrip() throws {
-        let transient = makeElement(heistId: "spin", label: "Loading")
+        let transient = makeElement(label: "Loading")
         let interface = Interface(timestamp: Date(timeIntervalSince1970: 1_000_000), tree: [])
         let delta = AccessibilityTrace.Delta.screenChanged(.init(
             elementCount: 9,
@@ -182,7 +193,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         guard case .screenChanged(let payload) = decoded else {
             return XCTFail("Expected .screenChanged, got \(decoded)")
         }
-        XCTAssertEqual(payload.transient.map(\.heistId), ["spin"])
+        XCTAssertEqual(payload.transient.map(\.label), ["Loading"])
     }
 
     // MARK: - Malformed Input Rejection
@@ -224,7 +235,7 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
     }
 
     func testElementEditsRoundTripDropsEmptyArrays() throws {
-        let edits = ElementEdits(added: [makeElement(heistId: "x", label: "X")])
+        let edits = ElementEdits(added: [makeElement(label: "X")])
         let data = try encoder.encode(edits)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertNotNil(json["added"])
@@ -232,15 +243,14 @@ final class AccessibilityTraceDeltaRoundTripTests: XCTestCase {
         XCTAssertNil(json["updated"])
 
         let decoded = try decoder.decode(ElementEdits.self, from: data)
-        XCTAssertEqual(decoded.added.map(\.heistId), ["x"])
+        XCTAssertEqual(decoded.added.map(\.label), ["X"])
         XCTAssertTrue(decoded.removed.isEmpty)
     }
 
     // MARK: - Helpers
 
-    private func makeElement(heistId: HeistId, label: String) -> HeistElement {
+    private func makeElement(label: String) -> HeistElement {
         HeistElement(
-            heistId: heistId,
             description: label,
             label: label,
             value: nil,

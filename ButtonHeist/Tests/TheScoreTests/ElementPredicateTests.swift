@@ -61,7 +61,7 @@ final class ElementPredicateTests: XCTestCase {
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("requires heistId or predicate"))
+            XCTAssertTrue(context.debugDescription.contains("requires a predicate"))
         }
     }
 
@@ -76,34 +76,35 @@ final class ElementPredicateTests: XCTestCase {
         }
     }
 
-    func testElementTargetRejectsHeistIdWithOrdinal() {
-        let json = #"{"heistId":"save_button","ordinal":1}"#
+    func testElementTargetRejectsHeistIdKey() {
+        // heistId is no longer a targeting field — it is an unknown key.
+        let json = #"{"heistId":"save_button"}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("heistId cannot be combined"))
+            XCTAssertTrue(context.debugDescription.contains("heistId"))
         }
     }
 
-    func testElementTargetRejectsHeistIdWithPredicateFields() {
+    func testElementTargetRejectsHeistIdAlongsidePredicate() {
         let json = #"{"heistId":"save_button","label":"Save"}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))) { error in
             guard case DecodingError.dataCorrupted(let context) = error else {
                 return XCTFail("Expected dataCorrupted, got \(error)")
             }
-            XCTAssertTrue(context.debugDescription.contains("heistId cannot be combined"))
+            XCTAssertTrue(context.debugDescription.contains("heistId"))
         }
     }
 
     func testScrollToVisibleTargetWithElementTarget() {
-        let withId = ScrollToVisibleTarget(elementTarget: .heistId("save_button"))
-        guard case .heistId(let id) = withId.elementTarget else {
-            return XCTFail("Expected .heistId")
+        let target = ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save")))
+        guard case .predicate(let predicate, _) = target.elementTarget else {
+            return XCTFail("Expected .predicate")
         }
-        XCTAssertEqual(id, "save_button")
+        XCTAssertEqual(predicate.label, "Save")
     }
 
     // MARK: - Codable Round-Trip
@@ -218,7 +219,7 @@ final class ElementPredicateTests: XCTestCase {
 
     func testIdentifierExactMatch() {
         let element = HeistElement(
-            heistId: "x", description: "x", label: nil, value: nil,
+            description: "x", label: nil, value: nil,
             identifier: "save_btn", traits: [],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )
@@ -229,7 +230,7 @@ final class ElementPredicateTests: XCTestCase {
 
     func testValueExactMatch() {
         let element = HeistElement(
-            heistId: "x", description: "x", label: nil, value: "50%",
+            description: "x", label: nil, value: "50%",
             identifier: nil, traits: [],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )
@@ -253,7 +254,7 @@ final class ElementPredicateTests: XCTestCase {
 
     func testCompoundPredicateAllFieldsExact() {
         let element = HeistElement(
-            heistId: "x", description: "Dark Mode", label: "Dark Mode", value: "ON",
+            description: "Dark Mode", label: "Dark Mode", value: "ON",
             identifier: "darkModeToggle", traits: [.button, .selected],
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
         )

@@ -10,12 +10,9 @@ public extension AccessibilityPredicate {
     /// Evaluate against an observed interface and (for change predicates) a diff.
     /// - Parameters:
     ///   - currentElements: latest observed interface elements (used by `state`).
-    ///   - baselineElements: pre-transition elements keyed by id (used to resolve
-    ///     `disappeared`/`updated` identity against the change diff).
     ///   - delta: the baseline→current diff (used by `changed`).
     func evaluate(
         currentElements: [HeistElement],
-        baselineElements: [HeistId: HeistElement] = [:],
         delta: AccessibilityTrace.Delta? = nil
     ) -> ExpectationResult {
         switch self {
@@ -23,7 +20,7 @@ public extension AccessibilityPredicate {
             let outcome = stateClause.evaluate(in: currentElements)
             return ExpectationResult(met: outcome.met, predicate: self, actual: outcome.actual)
         case .changed(let change):
-            return change.evaluate(delta: delta, baselineElements: baselineElements)
+            return change.evaluate(delta: delta)
         }
     }
 }
@@ -34,17 +31,13 @@ public extension AccessibilityPredicate {
     /// Check this predicate against an `ActionResult`.
     ///
     /// `state` evaluates against the result's final-capture interface;
-    /// `changed` evaluates against the result's endpoint delta.
-    /// - Parameter preActionElements: Elements from the pre-action capture,
-    ///   keyed by id. Required for `changed(.disappeared)` / `changed(.updated)`
-    ///   identity resolution. Pass an empty dictionary if unavailable.
-    func validate(
-        against result: ActionResult,
-        preActionElements: [HeistId: HeistElement] = [:]
-    ) -> ExpectationResult {
+    /// `changed` evaluates against the result's endpoint delta. Change
+    /// predicates read self-describing deltas — `disappeared`/`updated` carry
+    /// the affected element directly, so no pre-action element resolution is
+    /// needed.
+    func validate(against result: ActionResult) -> ExpectationResult {
         evaluate(
             currentElements: result.accessibilityTrace?.endpointCurrentElements ?? [],
-            baselineElements: preActionElements,
             delta: result.accessibilityTrace?.endpointDeltaProjection
         )
     }
@@ -92,8 +85,7 @@ public extension AccessibilityPredicate.State {
 
 public extension AccessibilityPredicate.Change {
     func evaluate(
-        delta: AccessibilityTrace.Delta?,
-        baselineElements: [HeistId: HeistElement] = [:]
+        delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
         let result: ExpectationResult
         switch self {
@@ -108,9 +100,9 @@ public extension AccessibilityPredicate.Change {
         case .appeared(let predicate):
             result = Self.evaluateAppeared(predicate: predicate, delta: delta)
         case .disappeared(let predicate):
-            result = Self.evaluateDisappeared(predicate: predicate, delta: delta, baselineElements: baselineElements)
+            result = Self.evaluateDisappeared(predicate: predicate, delta: delta)
         case .updated(let update):
-            result = Self.evaluateUpdated(update: update, delta: delta, baselineElements: baselineElements)
+            result = Self.evaluateUpdated(update: update, delta: delta)
         }
         return ExpectationResult(met: result.met, predicate: .changed(self), actual: result.actual)
     }
@@ -156,33 +148,25 @@ public extension AccessibilityPredicate.Change {
 
     private static func evaluateDisappeared(
         predicate: ElementPredicate,
-        delta: AccessibilityTrace.Delta?,
-        baselineElements: [HeistId: HeistElement]
+        delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
         let removed = delta?.elementEditsProjection.removed ?? []
         if !removed.isEmpty {
-            let matched = removed.contains { heistId in
-                guard let element = baselineElements[heistId] else { return false }
-                return predicate.matches(element)
-            }
-            if matched {
+            if removed.contains(where: { predicate.matches($0) }) {
                 return ExpectationResult(met: true, predicate: nil)
             }
-            let removedIds = removed.prefix(5).joined(separator: ", ")
-            return ExpectationResult(met: false, predicate: nil, actual: "removed: [\(removedIds)]")
+            let labels = removed.compactMap(\.label).prefix(5).joined(separator: ", ")
+            return ExpectationResult(met: false, predicate: nil, actual: "removed: [\(labels)]")
         }
         if case .screenChanged(let payload)? = delta {
-            let matchedBefore = baselineElements.values.contains { predicate.matches($0) }
             let stillPresent = payload.newInterface.projectedElements.contains { predicate.matches($0) }
-            if matchedBefore, !stillPresent {
+            if !stillPresent {
                 return ExpectationResult(met: true, predicate: nil)
             }
             return ExpectationResult(
                 met: false,
                 predicate: nil,
-                actual: matchedBefore
-                    ? "screen changed but element still present in new interface"
-                    : "screen changed but element was not in pre-action state"
+                actual: "screen changed but element still present in new interface"
             )
         }
         return ExpectationResult(met: false, predicate: nil, actual: "no elements removed")
@@ -190,8 +174,7 @@ public extension AccessibilityPredicate.Change {
 
     private static func evaluateUpdated(
         update: ElementUpdatePredicate,
-        delta: AccessibilityTrace.Delta?,
-        baselineElements: [HeistId: HeistElement]
+        delta: AccessibilityTrace.Delta?
     ) -> ExpectationResult {
         let updates = delta?.elementEditsProjection.updated ?? []
         guard !updates.isEmpty else {
@@ -199,7 +182,7 @@ public extension AccessibilityPredicate.Change {
         }
         let match = updates.contains { edit in
             if let elementPredicate = update.element {
-                guard let element = baselineElements[edit.heistId], elementPredicate.matches(element) else { return false }
+                guard elementPredicate.matches(edit.element) else { return false }
             }
             let targetChanges: [PropertyChange]
             if let property = update.property {
@@ -222,7 +205,8 @@ public extension AccessibilityPredicate.Change {
         }
         let observed = updates.map { edit in
             let properties = edit.changes.map { "\($0.property.rawValue): \($0.old ?? "nil") → \($0.new ?? "nil")" }
-            return "\(edit.heistId): \(properties.joined(separator: ", "))"
+            let name = edit.element.label ?? edit.element.description
+            return "\(name): \(properties.joined(separator: ", "))"
         }.joined(separator: "; ")
         return ExpectationResult(met: false, predicate: nil, actual: observed)
     }

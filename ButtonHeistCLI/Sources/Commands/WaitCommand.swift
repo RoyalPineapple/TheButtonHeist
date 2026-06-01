@@ -85,14 +85,14 @@ struct WaitCommand: AsyncParsableCommand, CLICommandContract {
             guard let elementPredicate = try element.parsedMatcher() else {
                 throw ValidationError("--present/--absent require element fields (e.g. -l, --identifier)")
             }
-            return present ? .present(elementPredicate) : .absent(elementPredicate)
+            return present ? .state(.present(elementPredicate)) : .state(.absent(elementPredicate))
         }
         guard let changed else {
             throw ValidationError("Specify exactly one of --present, --absent, --changed, or --predicate")
         }
         switch changed {
         case "screen_changed":
-            return .changed(.screen)
+            return .changed(.screen())
         case "elements_changed":
             return .changed(.elements)
         case "element_appeared":

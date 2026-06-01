@@ -7,11 +7,11 @@ struct ScrollToVisibleCommand: AsyncParsableCommand, CLICommandContract {
         abstract: "Scroll a resolved element into view",
         discussion: """
             Resolves a semantic element target and brings it into view. \
-            Target with a heistId or matcher fields such as label, identifier, value, \
+            Target with matcher fields such as label, identifier, value, \
             traits, or excludeTraits. Ordinal only disambiguates a matcher.
 
             Examples:
-              buttonheist scroll_to_visible btn_last
+              buttonheist scroll_to_visible -l "Last Item"
               buttonheist scroll_to_visible -l "Color Picker"
             """
     )

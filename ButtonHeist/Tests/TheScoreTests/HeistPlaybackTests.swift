@@ -108,7 +108,7 @@ final class HeistPlaybackTests: XCTestCase {
     func testPlaybackTargetRejectsEmptyMatcherOnDecode() {
         let json = #"{"command":"activate","target":{}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("requires heistId or predicate"), "\(error)")
+            XCTAssertTrue("\(error)".contains("requires a predicate"), "\(error)")
         }
     }
 
@@ -207,12 +207,6 @@ final class HeistPlaybackTests: XCTestCase {
         let expected = #"step(command="activate" target(predicate(label="Save" traits=[button])) "#
             + #"args=arguments("count"=2 "text"="hello"))"#
         XCTAssertEqual(step.description, expected)
-    }
-
-    func testProgrammaticStepRejectsCaptureHandleTargetWithoutCrashing() {
-        XCTAssertThrowsError(try HeistStep(command: "activate", target: .heistId("button_save"))) { error in
-            XCTAssertEqual(error as? HeistStepError, .captureHandleTarget)
-        }
     }
 
     func testProgrammaticStepRejectsEmptyPredicateTargetWithoutCrashing() {

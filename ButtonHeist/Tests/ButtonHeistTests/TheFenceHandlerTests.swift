@@ -629,12 +629,9 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementTargetWithHeistId() async throws {
-        guard let target = try decodedElementTarget(target: heistTargetValue("button_save")),
-              case .heistId(let id) = target else {
-            return XCTFail("Expected .heistId")
-        }
-        XCTAssertEqual(id, "button_save")
+    func testElementTargetRejectsHeistIdField() async throws {
+        // heistId is no longer a targeting field — it is rejected as unknown.
+        XCTAssertThrowsError(try decodedElementTarget(target: heistTargetValue("button_save")))
     }
 
     @ButtonHeistActor
@@ -645,40 +642,6 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(matcher.label, "Save")
         XCTAssertEqual(matcher.traits, [.button])
-    }
-
-    @ButtonHeistActor
-    func testElementTargetRejectsHeistIdAndMatcher() async throws {
-        XCTAssertThrowsError(
-            try decodedElementTarget(
-                target: elementTargetValue([
-                    "heistId": .string("button_save"),
-                    "label": .string("Save"),
-                ])
-            )
-        ) { error in
-            XCTAssertTrue(
-                "\(error)".contains("ElementTarget heistId cannot be combined with predicate fields or ordinal"),
-                "Expected mixed selector rejection, got \(error)"
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    func testElementTargetRejectsHeistIdAndOrdinal() async throws {
-        XCTAssertThrowsError(
-            try decodedElementTarget(
-                target: elementTargetValue([
-                    "heistId": .string("button_save"),
-                    "ordinal": .int(1),
-                ])
-            )
-        ) { error in
-            XCTAssertTrue(
-                "\(error)".contains("ElementTarget heistId cannot be combined with predicate fields or ordinal"),
-                "Expected heistId+ordinal rejection, got \(error)"
-            )
-        }
     }
 
     @ButtonHeistActor
@@ -814,7 +777,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "label": .string("Save"),
                 ]),
             ],
-            contains: "ElementTarget heistId cannot be combined with predicate fields or ordinal"
+            contains: "Unknown element target field \"heistId\""
         )
     }
 
@@ -889,7 +852,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationPassesValidation(
             command: .swipe,
             arguments: [
-                "target": heistTargetValue("row_5"),
+                "target": targetValue(identifier: "row_5"),
                 "start": .object(["x": .double(0.8), "y": .double(0.5)]),
                 "end": .object(["x": .double(0.2), "y": .double(0.5)]),
             ]
@@ -901,7 +864,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .swipe,
             arguments: [
-                "target": heistTargetValue("row_5"),
+                "target": targetValue(identifier: "row_5"),
                 "start": .object(["x": .double(1.2), "y": .double(0.5)]),
                 "end": .object(["x": .double(0.2), "y": .double(0.5)]),
             ],
@@ -913,7 +876,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSwipeDirectionWithElementPassesValidation() async {
         await assertOperationPassesValidation(
             command: .swipe,
-            arguments: ["target": heistTargetValue("row_5"), "direction": .string("left")]
+            arguments: ["target": targetValue(identifier: "row_5"), "direction": .string("left")]
         )
     }
 
@@ -921,7 +884,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSwipeDirectionWithElementDispatchesElementDirectionPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .swipe, values: [
-            "target": heistTargetValue("row_5"),
+            "target": targetValue(identifier: "row_5"),
             "direction": .string("left"),
         ])
         guard let (message, _ ) = mockConn.sent.last,
@@ -930,7 +893,7 @@ final class TheFenceHandlerTests: XCTestCase {
             XCTFail("Expected element direction swipe to lower to element direction swipe")
             return
         }
-        XCTAssertEqual(elementTarget, .heistId("row_5"))
+        XCTAssertEqual(elementTarget, .predicate(ElementPredicate(identifier: "row_5")))
         XCTAssertEqual(direction, .left)
     }
 
@@ -957,7 +920,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationPassesValidation(
             command: .drag,
             arguments: [
-                "target": heistTargetValue("source"),
+                "target": targetValue(identifier: "source"),
                 "endX": .double(100.0),
                 "endY": .double(200.0),
             ]
@@ -1059,7 +1022,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testScrollToVisibleHeistIdPassesValidation() async {
         await assertPassesValidation(
             command: .scrollToVisible,
-            arguments: ["target": heistTargetValue("targetElement")]
+            arguments: ["target": targetValue(identifier: "targetElement")]
         )
     }
 
@@ -1538,7 +1501,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .typeText, values: [
             "text": .string("hello"),
-            "target": heistTargetValue("search_field"),
+            "target": targetValue(identifier: "search_field"),
         ])
 
         guard case .action = response else {
@@ -1549,7 +1512,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.last))")
         }
         XCTAssertEqual(target.text, "hello")
-        XCTAssertEqual(target.elementTarget, .heistId("search_field"))
+        XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "search_field")))
     }
 
     @ButtonHeistActor
@@ -2295,25 +2258,25 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testBatchPreparationRecognizesHeistIdTargetsWithoutLookup() async throws {
+    func testBatchPreparationRecognizesPredicateTargetsWithoutLookup() async throws {
         let (fence, mockConn) = makeConnectedFence()
 
         let batch = try decodedRunBatch(
             fence,
             steps: [
-                batchStepValue(.activate, ["target": heistTargetValue("leaf-123")]),
+                batchStepValue(.activate, ["target": targetValue(identifier: "leaf-123")]),
                 batchStepValue(.wait, ["predicate": .object(["type": .string("elements_changed")])]),
             ]
         )
 
-        XCTAssertTrue(mockConn.sent.isEmpty, "Batch normalization must not perform raw heistId lookup")
+        XCTAssertTrue(mockConn.sent.isEmpty, "Batch normalization must not perform a live lookup")
         let steps = plannedBatchSteps(from: batch)
         XCTAssertEqual(steps.map(\.command), [.activate, .wait])
 
         guard case .activate(let actionTarget) = steps[0].typedStep.command else {
-            return XCTFail("Expected activate command with heistId target")
+            return XCTFail("Expected activate command with predicate target")
         }
-        XCTAssertEqual(actionTarget, .heistId("leaf-123"))
+        XCTAssertEqual(actionTarget, .predicate(ElementPredicate(identifier: "leaf-123")))
 
         XCTAssertEqual(steps[1].typedStep.predicate, .changed(.elements))
     }
@@ -2561,7 +2524,9 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(netDelta["kind"] as? String, "elementsChanged")
         let edits = try XCTUnwrap(netDelta["edits"] as? [String: Any])
         let updated = try XCTUnwrap(edits["updated"] as? [[String: Any]])
-        XCTAssertEqual(updated.first?["heistId"] as? String, "counter")
+        let updatedElement = try XCTUnwrap(updated.first?["element"] as? [String: Any])
+        XCTAssertEqual(updatedElement["label"] as? String, "Counter")
+        XCTAssertNil(updatedElement["heistId"])
         let changes = try XCTUnwrap(updated.first?["changes"] as? [[String: Any]])
         XCTAssertEqual(changes.first?["old"] as? String, "0")
         XCTAssertEqual(changes.first?["new"] as? String, "2")
@@ -2829,7 +2794,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
 
         let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.swipe, ["target": heistTargetValue("row_1"), "direction": .string("left")]),
+            batchStepValue(.swipe, ["target": targetValue(identifier: "row_1"), "direction": .string("left")]),
             batchStepValue(.scrollToVisible, ["target": targetValue(label: "Done")]),
             batchStepValue(.dismissKeyboard),
         ])
@@ -2925,7 +2890,7 @@ final class TheFenceHandlerTests: XCTestCase {
             command: .getScreen,
             arguments: TheFence.CommandArgumentEnvelope(
                 values: [:],
-                elementTarget: ElementTarget.heistId("button_save")
+                elementTarget: ElementTarget.predicate(ElementPredicate(label: "Save"))
             )
         )
 
@@ -2934,7 +2899,7 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(
             message,
-            #"schema validation failed for target: observed target(heistId="button_save"); expected get_screen command without element target"#
+            #"schema validation failed for target: observed target(predicate(label="Save")); expected get_screen command without element target"#
         )
     }
 
@@ -3021,8 +2986,9 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
         let children = container["children"] as! [[String: Any]]
         XCTAssertEqual(children.count, 2)
-        XCTAssertEqual((children[0]["element"] as? [String: Any])?["heistId"] as? String, "submit")
-        XCTAssertEqual((children[1]["element"] as? [String: Any])?["heistId"] as? String, "cancel")
+        XCTAssertEqual((children[0]["element"] as? [String: Any])?["label"] as? String, "Submit")
+        XCTAssertNil((children[0]["element"] as? [String: Any])?["heistId"])
+        XCTAssertEqual((children[1]["element"] as? [String: Any])?["label"] as? String, "Cancel")
     }
 
     @ButtonHeistActor
@@ -3035,7 +3001,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     "ordinal": .int(1),
                 ]),
             ],
-            contains: "ElementTarget heistId cannot be combined with predicate fields or ordinal"
+            contains: "Unknown element target field \"heistId\""
         )
     }
 
@@ -3099,7 +3065,8 @@ final class TheFenceHandlerTests: XCTestCase {
         let tree = responseInterface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
         let element = tree[0]["element"] as! [String: Any]
-        XCTAssertEqual(element["heistId"] as? String, "submit")
+        XCTAssertEqual(element["label"] as? String, "Submit")
+        XCTAssertNil(element["heistId"])
     }
     @ButtonHeistActor
     func testGetInterfaceDetailDoesNotChangeObservationDispatch() async {
@@ -3493,12 +3460,13 @@ final class TheFenceHandlerTests: XCTestCase {
                 "heist step must match descriptor-owned recording projection"
             ),
             (
-                "capture handle target inside arguments",
+                "heistId target field inside arguments",
                 try HeistStep(
                     command: "activate",
                     arguments: ["target": .object(["heistId": .string("button_save")])]
                 ),
-                "heist step must match descriptor-owned recording projection"
+                "schema validation failed for target.heistId: observed string \"button_save\"; "
+                    + "expected Unknown element target field \"heistId\""
             ),
         ]
 

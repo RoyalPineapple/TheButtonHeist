@@ -28,22 +28,17 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testClientMessageRotorPreviousEncoding() throws {
         let message = ClientMessage.rotor(RotorTarget(
-            elementTarget: .heistId("form"),
+            elementTarget: .predicate(ElementPredicate(label: "Form")),
             selection: .named("Errors"),
-            direction: .previous,
-            continuation: .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
+            direction: .previous
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .rotor(let target) = decoded {
-            XCTAssertEqual(target.elementTarget, ElementTarget.heistId("form"))
+            XCTAssertEqual(target.elementTarget, ElementTarget.predicate(ElementPredicate(label: "Form")))
             XCTAssertEqual(target.selection, .named("Errors"))
             XCTAssertEqual(target.direction, RotorDirection.previous)
-            XCTAssertEqual(
-                target.continuation,
-                .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
-            )
         } else {
             XCTFail("Expected rotor message")
         }

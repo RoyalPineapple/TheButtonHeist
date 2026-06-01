@@ -20,16 +20,14 @@ extension TheFence {
     func recordHeistStep(
         _ request: ParsedRequest,
         dispatchedResponse: FenceResponse,
-        validatedResponse: FenceResponse,
-        targetCapture: AccessibilityTrace.Capture?
+        validatedResponse: FenceResponse
     ) {
         guard playback.isIdle else { return }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
         heistStore.recordHeistStep(
             request,
             actionResult: finalReceipt.actionResult,
-            expectation: finalReceipt.expectation,
-            targetCapture: targetCapture
+            expectation: finalReceipt.expectation
         )
     }
 }

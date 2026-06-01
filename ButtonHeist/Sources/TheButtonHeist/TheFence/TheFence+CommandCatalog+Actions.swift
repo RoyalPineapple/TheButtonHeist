@@ -77,18 +77,8 @@ extension TheFence.Command {
                     param(.rotor, .string),
                     param(.rotorIndex, .integer, minimum: 0),
                     param(.direction, .string, enumValues: fenceEnumValues(RotorDirection.self), defaultValue: .string(RotorDirection.next.rawValue)),
-                    param(
-                        .continuation, .object,
-                        objectProperties: [
-                            param(.heistId, .string, required: true),
-                            param(.textRange, .object, objectProperties: [
-                                param(.startOffset, .integer, required: true, minimum: 0),
-                                param(.endOffset, .integer, required: true, minimum: 0),
-                            ]),
-                        ]
-                    ),
                 ] + FenceParameterBlocks.expectation,
-                description: "Move through an element rotor using direction and continuation metadata."
+                description: "Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor."
             ),
             commandDescriptor(
                 .typeText, requestDecoder: TheFence.decodeTypeTextRequest,

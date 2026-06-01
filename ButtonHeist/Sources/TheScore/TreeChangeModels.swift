@@ -32,13 +32,14 @@ public struct PropertyChange: Codable, Sendable, Equatable {
     }
 }
 
-/// An element whose state changed — carries the heistId and which properties differ.
+/// An element whose state changed — carries the element itself (so the change
+/// is self-describing on the wire) and which properties differ.
 public struct ElementUpdate: Codable, Sendable, Equatable {
-    public let heistId: HeistId
+    public let element: HeistElement
     public let changes: [PropertyChange]
 
-    public init(heistId: HeistId, changes: [PropertyChange]) {
-        self.heistId = heistId
+    public init(element: HeistElement, changes: [PropertyChange]) {
+        self.element = element
         self.changes = changes
     }
 }

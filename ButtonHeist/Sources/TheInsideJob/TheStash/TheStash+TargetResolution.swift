@@ -148,8 +148,6 @@ extension TheStash {
     func resolveFirstVisibleMatch(_ target: ElementTarget) -> ScreenElement? {
         let effectiveTarget: ElementTarget
         switch target {
-        case .heistId:
-            effectiveTarget = target
         case .predicate(let predicate, _):
             effectiveTarget = .predicate(predicate, ordinal: 0)
         }
@@ -192,15 +190,6 @@ private extension TheStash {
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
         switch target {
-        case .heistId(let heistId):
-            guard let entry = screen.findElement(heistId: heistId) else {
-                return .notFound(diagnostics: Diagnostics.heistIdNotFound(
-                    heistId,
-                    knownIds: screen.knownIds,
-                    knownCount: screen.knownElementCount
-                ))
-            }
-            return .resolved(entry)
         case .predicate(let predicate, let ordinal):
             return resolveMatcher(predicate, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
         }
@@ -224,10 +213,10 @@ private extension TheStash {
                 let total = matches.count
                 let nextMove: String
                 if total == 0 {
-                    nextMove = "Next: retry with an exact label, identifier, or current heistId."
+                    nextMove = "Next: retry with an exact label, identifier, or value."
                 } else {
                     nextMove = "Next: use ordinal 0...\(total - 1), omit ordinal to inspect ambiguity, "
-                        + "or target a listed element by exact label, identifier, or heistId."
+                        + "or target a listed element by exact label, identifier, or value."
                 }
                 return .notFound(diagnostics: """
                     ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found

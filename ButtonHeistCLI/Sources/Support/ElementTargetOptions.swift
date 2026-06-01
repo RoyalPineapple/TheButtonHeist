@@ -1,11 +1,8 @@
 import ArgumentParser
 import ButtonHeist
 
-/// Shared options for commands that target a UI element by heistId or accessibility properties.
+/// Shared options for commands that target a UI element by accessibility properties.
 struct ElementTargetOptions: ParsableArguments {
-    @Option(name: .long, help: "Element heistId (from get_interface)")
-    var heistId: String?
-
     @Option(name: .long, help: "Accessibility identifier")
     var identifier: String?
 
@@ -24,12 +21,6 @@ struct ElementTargetOptions: ParsableArguments {
     @Option(name: .long, help: "0-based index to select among multiple matches (in tree traversal order)")
     var ordinal: Int?
 
-    var resolvedHeistId: String? {
-        get throws {
-            heistId
-        }
-    }
-
     func parsedMatcher() throws -> ElementPredicate? {
         let hasFields = identifier != nil || label != nil || value != nil
             || !traits.isEmpty || !excludeTraits.isEmpty
@@ -45,20 +36,18 @@ struct ElementTargetOptions: ParsableArguments {
 
     func requireTarget() throws -> ElementTarget {
         guard let elementTarget = try parsedTarget() else {
-            throw ValidationError("Must specify a heistId, --identifier, or -l")
+            throw ValidationError("Must specify --identifier, -l, -v, or --traits")
         }
         return elementTarget
     }
 
     func parsedTarget() throws -> ElementTarget? {
-        let heistId = try resolvedHeistId
         let predicate = try parsedMatcher()
-        guard heistId != nil || predicate != nil || ordinal != nil else {
+        guard predicate != nil || ordinal != nil else {
             return nil
         }
         do {
             return try ElementTargetGrammar.validatedTarget(
-                heistId: heistId,
                 predicate: predicate,
                 predicateWasProvided: predicate != nil,
                 ordinal: ordinal

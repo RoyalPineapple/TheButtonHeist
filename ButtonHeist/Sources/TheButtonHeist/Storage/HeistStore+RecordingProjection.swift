@@ -13,8 +13,7 @@ extension HeistStore {
     func recordHeistStep(
         _ request: TheFence.ParsedRequest,
         actionResult: ActionResult? = nil,
-        expectation: ExpectationResult? = nil,
-        targetCapture: AccessibilityTrace.Capture?
+        expectation: ExpectationResult? = nil
     ) {
         guard isRecordingHeist else { return }
         guard request.command.descriptor.isBatchExecutable else { return }
@@ -25,7 +24,6 @@ extension HeistStore {
         do {
             step = try buildStep(
                 request: request,
-                targetCapture: targetCapture,
                 actionResult: actionResult,
                 expectation: expectation
             )
@@ -118,7 +116,6 @@ extension HeistStore {
 
     private func buildStep(
         request: TheFence.ParsedRequest,
-        targetCapture: AccessibilityTrace.Capture?,
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) throws -> HeistStep? {
@@ -126,13 +123,7 @@ extension HeistStore {
         let elementTarget = projection.elementTarget
         var target: ElementTarget?
 
-        if case .heistId(let heistId)? = elementTarget {
-            guard let targetCapture,
-                  let element = targetCapture.interface.projectedElements.last(where: { $0.heistId == heistId }),
-                  let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
-            else { return nil }
-            target = .predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
-        } else if case .predicate(let predicate, let matchedOrdinal)? = elementTarget {
+        if case .predicate(let predicate, let matchedOrdinal)? = elementTarget {
             guard predicate.hasPredicates else { return nil }
             target = .predicate(predicate, ordinal: matchedOrdinal)
         }

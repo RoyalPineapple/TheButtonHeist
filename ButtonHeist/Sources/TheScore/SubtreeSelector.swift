@@ -4,9 +4,9 @@ import Foundation
 
 /// Selector for projecting an `Interface` to one matched node.
 ///
-/// `.element` searches leaf `HeistElement` nodes by current-capture handle or
-/// `ElementPredicate`. `.container` searches parser container nodes with
-/// `ContainerMatcher`. `ordinal` is applied only after semantic narrowing.
+/// `.element` searches leaf `HeistElement` nodes by `ElementPredicate`.
+/// `.container` searches parser container nodes with `ContainerMatcher`.
+/// `ordinal` is applied only after semantic narrowing.
 public enum SubtreeSelector: Codable, Sendable, Equatable {
     case element(ElementTarget)
     case container(ContainerMatcher, ordinal: Int? = nil)
@@ -53,8 +53,6 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         case .element(let target):
             var element = container.nestedContainer(keyedBy: ElementTarget.CodingKeys.self, forKey: .element)
             switch target {
-            case .heistId(let heistId):
-                try element.encode(heistId, forKey: .heistId)
             case .predicate(let predicate, let ordinal):
                 try element.encodeIfPresent(predicate.label, forKey: .label)
                 try element.encodeIfPresent(predicate.identifier, forKey: .identifier)
@@ -73,15 +71,11 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         switch self {
         case .element(.predicate(_, let ordinal)), .container(_, let ordinal):
             return ordinal
-        case .element(.heistId):
-            return nil
         }
     }
 
     public var hasPredicates: Bool {
         switch self {
-        case .element(.heistId(let heistId)):
-            return !heistId.isEmpty
         case .element(.predicate(let predicate, _)):
             return predicate.hasPredicates
         case .container(let matcher, _):

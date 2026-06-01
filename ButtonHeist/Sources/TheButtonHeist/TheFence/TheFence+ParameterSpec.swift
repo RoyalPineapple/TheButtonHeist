@@ -208,9 +208,7 @@ enum FenceParameterBlocks: Sendable {
     private static let matcherFields = ElementTarget.predicateFieldNames.map(matcherFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
-        param(.target, .object, objectProperties: [
-            param(.heistId, .string),
-        ] + matcherFields + [
+        param(.target, .object, objectProperties: matcherFields + [
             param(.ordinal, .integer, minimum: 0),
         ]),
     ]
@@ -225,7 +223,7 @@ enum FenceParameterBlocks: Sendable {
         param(.container, .object, objectProperties: scrollContainerFields),
     ]
 
-    private static let subtreeElementProperties = [param(.heistId, .string)] + matcherFields
+    private static let subtreeElementProperties = matcherFields
 
     private static let subtreeContainerProperties: [FenceParameterSpec] = [
         param(.stableId, .string),
