@@ -25,3 +25,9 @@ authoring convenience that produces a plan; JSON is a durable representation of
 that plan. Keep Swift DSL files when the heist needs to remain editable as
 source, and keep `.heist` JSON when the heist needs to move across the wire or
 be stored for deterministic playback.
+
+`ForEach` has two authoring forms. `ForEach(collection)` is static Swift
+expansion and emits only the linear child steps. `ForEach(.matching(predicate),
+limit:)` emits one runtime `for_each` step; the closure receives
+`ElementTarget.predicate(predicate, ordinal: 0)`, so each iteration repeats the
+same semantic promise and command execution re-resolves it normally.

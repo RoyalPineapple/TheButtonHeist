@@ -1,3 +1,4 @@
+import Foundation
 import TheScore
 
 public protocol HeistContent {
@@ -9,8 +10,16 @@ public struct Heist: HeistContent {
 
     public var heistSteps: [HeistStep] { plan.steps }
 
-    public init(@HeistBuilder _ content: () throws -> some HeistContent) rethrows {
-        self.plan = HeistPlan(steps: try content().heistSteps)
+    public init(@HeistBuilder _ content: () throws -> some HeistContent) throws {
+        let steps = try content().heistSteps
+        self.plan = try HeistPlan.validatedDSLPlan(steps: steps)
+    }
+}
+
+private extension HeistPlan {
+    static func validatedDSLPlan(steps: [HeistStep]) throws -> HeistPlan {
+        let data = try JSONEncoder().encode(HeistPlan(steps: steps))
+        return try JSONDecoder().decode(HeistPlan.self, from: data)
     }
 }
 
@@ -87,12 +96,38 @@ private struct HeistStepList: HeistContent {
     }
 }
 
-public struct ForEach<Data: Sequence, Content: HeistContent>: HeistContent {
+public struct ElementMatches: Sendable, Equatable {
+    public let predicate: ElementPredicate
+
+    public init(predicate: ElementPredicate) {
+        self.predicate = predicate
+    }
+
+    public static func matching(_ predicate: ElementPredicate) -> ElementMatches {
+        ElementMatches(predicate: predicate)
+    }
+}
+
+public struct ForEach<Content: HeistContent>: HeistContent {
     public let heistSteps: [HeistStep]
 
-    public init(_ data: Data, @HeistBuilder content: (Data.Element) throws -> Content) rethrows {
+    public init<Data: Sequence>(_ data: Data, @HeistBuilder content: (Data.Element) throws -> Content) rethrows {
         self.heistSteps = try data.flatMap { element in
             try content(element).heistSteps
         }
+    }
+
+    public init(
+        _ matches: ElementMatches,
+        limit: Int = 20,
+        @HeistBuilder _ content: (ElementTarget) throws -> Content
+    ) throws {
+        self.heistSteps = [
+            .forEach(try ForEachStep(
+                matching: matches.predicate,
+                limit: limit,
+                steps: try content(.predicate(matches.predicate, ordinal: 0)).heistSteps
+            )),
+        ]
     }
 }

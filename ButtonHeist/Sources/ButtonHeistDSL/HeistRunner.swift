@@ -20,8 +20,8 @@ public func runHeist<Result: Sendable>(
 }
 
 public func runHeist<Result: Sendable>(
-    @HeistBuilder _ content: () -> some HeistContent,
+    @HeistBuilder _ content: () throws -> some HeistContent,
     using execute: @Sendable (HeistPlan) async throws -> Result
 ) async throws -> Result {
-    try await runHeist(Heist(content), using: execute)
+    try await runHeist(try Heist(content), using: execute)
 }

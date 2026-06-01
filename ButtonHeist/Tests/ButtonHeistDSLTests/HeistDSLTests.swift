@@ -5,7 +5,7 @@ import TheScore
 
 @Test
 func actionConstructorBuildsOneActionStep() throws {
-    let heist = Heist {
+    let heist = try Heist {
         Activate(.label("Save"))
     }
 
@@ -16,7 +16,7 @@ func actionConstructorBuildsOneActionStep() throws {
 
 @Test
 func actionExpectationAttachesWaitStep() throws {
-    let heist = Heist {
+    let heist = try Heist {
         Activate(.label("Sign In"))
             .expect(.present(.label("Home")), timeout: .seconds(5))
     }
@@ -30,8 +30,8 @@ func actionExpectationAttachesWaitStep() throws {
 }
 
 @Test
-func waitForBuildsWaitStep() {
-    let heist = Heist {
+func waitForBuildsWaitStep() throws {
+    let heist = try Heist {
         WaitFor(.present(.label("Home")), timeout: .seconds(5))
     }
 
@@ -42,7 +42,7 @@ func waitForBuildsWaitStep() {
 
 @Test
 func singleIfBuildsConditionalStep() throws {
-    let heist = Heist {
+    let heist = try Heist {
         If(.present(.label("Allow"))) {
             Activate(.label("Allow"))
         }
@@ -60,7 +60,7 @@ func singleIfBuildsConditionalStep() throws {
 
 @Test
 func multiCaseIfBuildsConditionalStep() throws {
-    let heist = Heist {
+    let heist = try Heist {
         If {
             Case(.present(.label("Home"))) {
                 Warn("home")
@@ -89,7 +89,7 @@ func multiCaseIfBuildsConditionalStep() throws {
 
 @Test
 func multiCaseWaitForBuildsWaitForCasesStep() throws {
-    let heist = Heist {
+    let heist = try Heist {
         WaitFor(timeout: .seconds(8)) {
             Case(.present(.label("Home"))) {
                 Warn("logged in")
@@ -118,8 +118,8 @@ func multiCaseWaitForBuildsWaitForCasesStep() throws {
 }
 
 @Test
-func warnAndFailBuildTheirStepTypes() {
-    let heist = Heist {
+func warnAndFailBuildTheirStepTypes() throws {
+    let heist = try Heist {
         Warn("Optional onboarding was skipped")
         Fail("Unexpected login state")
     }
@@ -132,8 +132,8 @@ func warnAndFailBuildTheirStepTypes() {
 
 @Test
 func helperFunctionsFlattenIntoParentPlan() throws {
-    let heist = Heist {
-        loginFlow(email: "alex@example.com", password: "secret")
+    let heist = try Heist {
+        try loginFlow(email: "alex@example.com", password: "secret")
         Activate(.label("Checkout"))
     }
 
@@ -150,7 +150,7 @@ func helperFunctionsFlattenIntoParentPlan() throws {
 
 @Test
 func staticForEachFlattensIntoLinearSteps() throws {
-    let heist = Heist {
+    let heist = try Heist {
         ForEach(["Cart", "Checkout"]) { label in
             Activate(.label(label))
         }
@@ -163,9 +163,36 @@ func staticForEachFlattensIntoLinearSteps() throws {
 }
 
 @Test
+func semanticForEachBuildsRuntimeForEachStep() throws {
+    let matching = ElementPredicate.label("Delete")
+    let heist = try Heist {
+        try ForEach(.matching(matching), limit: 20) { element in
+            Activate(element)
+                .expect(.absent(element), timeout: .seconds(2))
+        }
+    }
+
+    #expect(heist.plan.steps == [
+        .forEach(try ForEachStep(
+            matching: matching,
+            limit: 20,
+            steps: [
+                .action(try ActionStep(
+                    command: .activate(.predicate(matching, ordinal: 0)),
+                    expectation: WaitStep(
+                        predicate: .state(.absentTarget(.predicate(matching, ordinal: 0))),
+                        timeout: 2
+                    )
+                )),
+            ]
+        )),
+    ])
+}
+
+@Test
 func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
-    let heist = Heist {
-        loginFlow(email: "alex@example.com", password: "secret")
+    let heist = try Heist {
+        try loginFlow(email: "alex@example.com", password: "secret")
 
         ForEach(["Cart", "Checkout"]) { label in
             Activate(.label(label))
@@ -189,8 +216,29 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
 }
 
 @Test
+func semanticForEachRendererOutputMatchesConstructibleDSLShape() throws {
+    let heist = try Heist {
+        try ForEach(.matching(.label("Delete")), limit: 20) { element in
+            Activate(element)
+                .expect(.absent(element), timeout: .seconds(2))
+        }
+    }
+
+    let rendered = try HeistSwiftRenderer().render(heist.plan)
+
+    #expect(rendered == """
+    Heist {
+        ForEach(.matching(.label("Delete")), limit: 20) { element in
+            Activate(element)
+                .expect(.absent(element), timeout: .seconds(2))
+        }
+    }
+    """)
+}
+
+@Test
 func rendererProducesCanonicalExpandedDSL() throws {
-    let heist = Heist {
+    let heist = try Heist {
         Activate(.label("Sign In"))
             .expect(.changed(.screen(where: .present(.label("Home")))), timeout: .seconds(5))
 
@@ -245,7 +293,7 @@ func rendererProducesCanonicalExpandedDSL() throws {
 
 @Test
 func runHeistHelperPassesPlanToExecutor() async throws {
-    let heist = Heist {
+    let heist = try Heist {
         Activate(.label("Save"))
     }
 
@@ -256,8 +304,21 @@ func runHeistHelperPassesPlanToExecutor() async throws {
     #expect(executedPlan == heist.plan)
 }
 
-private func loginFlow(email: String, password: String) -> some HeistContent {
-    Heist {
+@Test
+func emptyHeistRejectsPlanUsingDecodedHeistPlanContract() {
+    do {
+        _ = try Heist {}
+        Issue.record("Expected empty Heist construction to throw")
+    } catch DecodingError.dataCorrupted(let context) {
+        #expect(context.codingPath.map(\.stringValue) == ["steps"])
+        #expect(context.debugDescription == "HeistPlan requires at least one step")
+    } catch {
+        Issue.record("Expected DecodingError.dataCorrupted, got \(error)")
+    }
+}
+
+private func loginFlow(email: String, password: String) throws -> some HeistContent {
+    try Heist {
         TypeText(email, into: .identifier("email"))
         TypeText(password, into: .identifier("password"))
 

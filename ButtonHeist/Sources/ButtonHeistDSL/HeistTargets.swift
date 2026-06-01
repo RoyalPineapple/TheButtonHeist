@@ -39,8 +39,18 @@ public extension AccessibilityPredicate {
         .state(.present(predicate))
     }
 
+    @_disfavoredOverload
+    static func present(_ target: ElementTarget) -> AccessibilityPredicate {
+        .state(.presentTarget(target))
+    }
+
     static func absent(_ predicate: ElementPredicate) -> AccessibilityPredicate {
         .state(.absent(predicate))
+    }
+
+    @_disfavoredOverload
+    static func absent(_ target: ElementTarget) -> AccessibilityPredicate {
+        .state(.absentTarget(target))
     }
 
     static func all(_ states: [AccessibilityPredicate.State]) -> AccessibilityPredicate {
@@ -63,6 +73,3 @@ public extension AccessibilityPredicate.Change {
         ))
     }
 }
-
-public typealias Predicate = AccessibilityPredicate
-public typealias State = AccessibilityPredicate.State
