@@ -41,7 +41,6 @@ final class ElementActionRequestContractTests: XCTestCase {
             contains: "schema validation failed for count: observed integer 0; expected integer in 1...100"
         )
     }
-
     @ButtonHeistActor
     func testScrollRejectsMixedElementAndContainerTargetsAtTypedBoundary() async {
         await assertExecutionError(

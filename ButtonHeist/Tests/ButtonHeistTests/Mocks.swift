@@ -148,7 +148,7 @@ final class MockConnection: TransportReachabilityConnecting {
     var connectEventsOverride: [ConnectionEvent]?
     var sendOutcome: DeviceSendOutcome = .enqueued
     var asyncSendFailure: DeviceSendFailure?
-    var batchStepDurationMs: Int = 0
+    var heistStepDurationMs: Int = 0
 
     var serverInfo: ServerInfo?
 
@@ -185,7 +185,7 @@ final class MockConnection: TransportReachabilityConnecting {
             }
         }
         if let handler = autoResponse {
-            let response = batchExecutionResponse(for: message, handler: handler) ?? handler(message)
+            let response = heistExecutionResponse(for: message, handler: handler) ?? handler(message)
             Task { @ButtonHeistActor [self] in
                 self.onEvent?(.message(response, requestId: requestId))
             }
@@ -195,59 +195,94 @@ final class MockConnection: TransportReachabilityConnecting {
 
     var autoResponse: ((ClientMessage) -> ServerMessage)?
 
-    private func batchExecutionResponse(
+    private func heistExecutionResponse(
         for message: ClientMessage,
         handler: (ClientMessage) -> ServerMessage
     ) -> ServerMessage? {
-        guard case .batchExecutionPlan(let plan) = message else { return nil }
+        guard case .heistPlan(let plan) = message else { return nil }
 
-        var stepResults: [BatchExecutionStepResult] = []
+        var stepResults: [HeistExecutionStepResult] = []
         var failedIndex: Int?
         for (index, step) in plan.steps.enumerated() {
             if let failedIndex {
-                let skipped = BatchExecutionSkippedStepResult(
+                let skipped = HeistExecutionSkippedStepResult(
                     index: index,
-                    reason: "skipped: stop_on_error stopped batch after step \(failedIndex)",
+                    reason: "skipped: heist stopped after step \(failedIndex)",
                     afterFailedIndex: failedIndex
                 )
-                stepResults.append(BatchExecutionStepResult(
+                stepResults.append(HeistExecutionStepResult(
                     index: index,
-                    durationMs: batchStepDurationMs,
+                    kind: .skipped,
+                    durationMs: heistStepDurationMs,
                     skipped: skipped
                 ))
                 continue
             }
 
-            let actionResult = actionResult(for: step.command, handler: handler)
-            let expectation = actionResult.success
-                ? step.predicate?.validate(against: actionResult)
-                : nil
-            let shouldStop = plan.policy == .stopOnError
-                && (actionResult.success == false || expectation?.met == false)
-            stepResults.append(BatchExecutionStepResult(
-                index: index,
-                actionResult: actionResult,
-                expectation: expectation,
-                durationMs: batchStepDurationMs,
-                stopsBatch: shouldStop
-            ))
+            let stepResult = heistStepResult(for: step, index: index, handler: handler)
+            let shouldStop = stepResult.isFailure
+            stepResults.append(stepResult.markingStop(shouldStop))
             if shouldStop {
                 failedIndex = index
             }
         }
 
-        let result = BatchExecutionResult(
-            policy: plan.policy,
+        let result = HeistExecutionResult(
             steps: stepResults,
             totalTimingMs: 0,
             failedIndex: failedIndex
         )
         return .actionResult(ActionResult(
             success: failedIndex == nil,
-            method: .batchExecutionPlan,
+            method: .heistPlan,
             errorKind: failedIndex == nil ? nil : .actionFailed,
-            payload: .batchExecution(result)
+            payload: .heistExecution(result)
         ))
+    }
+
+    private func heistStepResult(
+        for step: HeistStep,
+        index: Int,
+        handler: (ClientMessage) -> ServerMessage
+    ) -> HeistExecutionStepResult {
+        switch step {
+        case .action(let action):
+            let actionResult = actionResult(for: action.command, handler: handler)
+            let expectation = actionResult.success
+                ? action.expectation?.predicate.validate(against: actionResult)
+                : nil
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .action,
+                actionResult: actionResult,
+                expectation: expectation,
+                durationMs: heistStepDurationMs
+            )
+        case .wait(let wait):
+            let result = actionResult(for: .wait(WaitTarget(predicate: wait.predicate, timeout: wait.timeout)), handler: handler)
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .wait,
+                actionResult: result,
+                expectation: wait.predicate.validate(against: result),
+                durationMs: heistStepDurationMs
+            )
+        case .warn(let warn):
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .warn,
+                message: warn.message,
+                durationMs: heistStepDurationMs
+            )
+        case .fail(let fail):
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .fail,
+                message: fail.message,
+                durationMs: heistStepDurationMs,
+                stopsHeist: true
+            )
+        }
     }
 
     private func actionResult(
@@ -290,11 +325,28 @@ final class MockConnection: TransportReachabilityConnecting {
         case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
         case .wait: return .wait
-        case .batchExecutionPlan: return .batchExecutionPlan
+        case .heistPlan: return .heistPlan
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen:
-            return .batchExecutionPlan
+            return .heistPlan
         }
+    }
+}
+
+private extension HeistExecutionStepResult {
+    func markingStop(_ stop: Bool) -> HeistExecutionStepResult {
+        guard stop != stopsHeist else { return self }
+        return HeistExecutionStepResult(
+            index: index,
+            kind: kind,
+            actionResult: actionResult,
+            expectationActionResult: expectationActionResult,
+            expectation: expectation,
+            message: message,
+            durationMs: durationMs,
+            stopsHeist: stop,
+            skipped: skipped
+        )
     }
 }
 

@@ -54,8 +54,8 @@ extension TheBrains {
             return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
         case .wait(let target):
             return await performWait(target: target)
-        case .batchExecutionPlan(let plan):
-            return await executeBatchExecutionPlan(plan)
+        case .heistPlan(let plan):
+            return await executeHeistPlan(plan)
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen, .getPasteboard:
             preconditionFailure("Non-executable client message reached action execution: \(message.wireType.rawValue)")

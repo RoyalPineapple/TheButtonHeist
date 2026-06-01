@@ -38,12 +38,12 @@ extension FenceResponse {
             return "✓ Screenshot saved: \(path)  (\(Int(payload.width)) × \(Int(payload.height)))"
         case .screenshotData(let payload, _):
             return "✓ Screenshot captured (\(Int(payload.width)) × \(Int(payload.height))) — base64 PNG follows\n\(payload.pngData)"
-        case .batch(_, let steps, let result, _):
+        case .heistExecution(let plan, let result, _):
             let completedSteps = result.completedStepCount
             let failedIndex = result.stoppedFailedIndex
-            let checked = result.expectationsChecked(steps: steps)
-            let met = result.expectationsMet(steps: steps)
-            var text = "Batch: \(completedSteps) step(s) completed in \(result.totalTimingMs)ms"
+            let checked = result.expectationsChecked(steps: plan.steps)
+            let met = result.expectationsMet(steps: plan.steps)
+            var text = "Heist: \(completedSteps) step(s) completed in \(result.totalTimingMs)ms"
             if let idx = failedIndex { text += " (failed at step \(idx))" }
             if checked > 0 { text += " [expectations: \(met)/\(checked) met]" }
             return text

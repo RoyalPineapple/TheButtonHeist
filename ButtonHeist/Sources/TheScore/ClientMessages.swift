@@ -32,7 +32,7 @@ public struct RequestEnvelope: Codable, Sendable {
 // MARK: - Client -> Server Messages
 
 /// Messages sent from a connected client to the Inside Job server.
-public enum ClientMessage: Codable, Sendable {
+public enum ClientMessage: Codable, Sendable, Equatable {
     /// Version-negotiation hello sent immediately after receiving serverHello.
     case clientHello
 
@@ -113,10 +113,8 @@ public enum ClientMessage: Codable, Sendable {
     /// intermediate states until the change predicate is met.
     case wait(WaitTarget)
 
-    /// Execute a typed batch plan using semantic targets. Source heistIds in
-    /// the plan are current-capture handles only; executable element identity
-    /// is carried by predicate fields.
-    case batchExecutionPlan(BatchPlan)
+    /// Execute a typed heist plan.
+    case heistPlan(HeistPlan)
 
     /// Request a capture of the current screen
     case requestScreen

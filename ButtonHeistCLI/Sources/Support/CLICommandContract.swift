@@ -56,7 +56,7 @@ enum CLICommandAdapterCatalog {
         .setPasteboard: SetPasteboardCommand.self,
         .getPasteboard: GetPasteboardCommand.self,
         .dismissKeyboard: DismissKeyboardCommand.self,
-        .runBatch: RunBatchCommand.self,
+        .runHeist: RunHeistCommand.self,
         .getSessionState: GetSessionStateCommand.self,
         .connect: ConnectCommand.self,
         .listTargets: ListTargetsCommand.self,

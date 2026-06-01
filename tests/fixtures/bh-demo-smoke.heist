@@ -1,42 +1,65 @@
 {
-  "version": 6,
-  "app": "com.buttonheist.testapp",
+  "version": 1,
   "steps": [
     {
-      "command": "activate",
-      "target": {
-        "label": "Controls Demo",
-        "traits": [
-          "button"
-        ]
-      },
-      "expectation": {
-        "type": "screen_changed"
+      "type": "action",
+      "action": {
+        "command": {
+          "type": "activate",
+          "payload": {
+            "label": "Controls Demo",
+            "traits": [
+              "button"
+            ]
+          }
+        },
+        "expectation": {
+          "predicate": {
+            "type": "screen_changed"
+          },
+          "timeout": 0
+        }
       }
     },
     {
-      "command": "activate",
-      "target": {
-        "label": "Display",
-        "traits": [
-          "button"
-        ]
-      },
-      "expectation": {
-        "type": "screen_changed"
+      "type": "action",
+      "action": {
+        "command": {
+          "type": "activate",
+          "payload": {
+            "label": "Display",
+            "traits": [
+              "button"
+            ]
+          }
+        },
+        "expectation": {
+          "predicate": {
+            "type": "screen_changed"
+          },
+          "timeout": 0
+        }
       }
     },
     {
-      "command": "activate",
-      "target": {
-        "label": "Controls Demo",
-        "traits": [
-          "button",
-          "backButton"
-        ]
-      },
-      "expectation": {
-        "type": "screen_changed"
+      "type": "action",
+      "action": {
+        "command": {
+          "type": "activate",
+          "payload": {
+            "label": "Controls Demo",
+            "traits": [
+              "button",
+              "backButton"
+            ]
+          }
+        },
+        "expectation": {
+          "predicate": {
+            "type": "screen_changed"
+          },
+          "timeout": 0
+        }
       }
     }
   ]

@@ -16,7 +16,7 @@ extension HeistStore {
         expectation: ExpectationResult? = nil
     ) {
         guard isRecordingHeist else { return }
-        guard request.command.descriptor.isBatchExecutable else { return }
+        guard request.command.descriptor.isHeistExecutable else { return }
         guard actionResult?.success != false else { return }
         guard expectation?.met != false else { return }
 
@@ -52,7 +52,7 @@ extension HeistStore {
 
     // MARK: - Heist File I/O
 
-    static func writeHeist(_ heist: HeistPlayback, to path: URL) throws {
+    static func writeHeist(_ heist: HeistPlan, to path: URL) throws {
         do {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -67,12 +67,12 @@ extension HeistStore {
         }
     }
 
-    static func readHeist(from path: URL) throws -> HeistPlayback {
+    static func readHeist(from path: URL) throws -> HeistPlan {
         do {
             let data = try Data(contentsOf: path)
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode(HeistPlayback.self, from: data)
+            return try decoder.decode(HeistPlan.self, from: data)
         } catch DecodingError.dataCorrupted(let context) {
             throw StorageError.heistRecording(.heistReadFailed(
                 path: path.path,
@@ -119,19 +119,28 @@ extension HeistStore {
         actionResult: ActionResult?,
         expectation: ExpectationResult?
     ) throws -> HeistStep? {
-        let projection = try request.heistStepProjection()
-        let elementTarget = projection.elementTarget
-        var target: ElementTarget?
-
-        if case .predicate(let predicate, let matchedOrdinal)? = elementTarget {
-            guard predicate.hasPredicates else { return nil }
-            target = .predicate(predicate, ordinal: matchedOrdinal)
+        guard let messages = request.executableMessages,
+              let message = messages.first,
+              messages.count == 1
+        else {
+            throw TheFence.HeistStepPlanBuildError(
+                message: """
+                heist action command "\(request.command.rawValue)" expands to \
+                \(request.executableMessages?.count ?? 0) actions; express repeats as separate ordered steps
+                """
+            )
         }
-
-        return try HeistStepProjection(
-            elementTarget: target,
-            arguments: projection.arguments,
-            expectation: projection.expectation
-        ).heistStep(command: request.command)
+        if case .wait(let target) = message {
+            return .wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))
+        }
+        return .action(try ActionStep(
+            command: message,
+            expectation: request.expectationPayload.expectation.map {
+                WaitStep(
+                    predicate: $0,
+                    timeout: request.expectationPayload.postActionValidationTimeout ?? 10
+                )
+            }
+        ))
     }
 }

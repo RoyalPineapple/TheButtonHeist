@@ -16,16 +16,16 @@ public struct ScreenshotResponseOptions: Sendable, Equatable {
     }
 }
 
-extension BatchExecutionStepResult {
-    func actionResponse(command: TheFence.Command, step: TheScore.BatchStep) -> FenceResponse? {
+extension HeistExecutionStepResult {
+    func actionResponse(command: TheFence.Command, step: HeistStep) -> FenceResponse? {
         guard skipped == nil else { return nil }
         guard let finalResult = expectationActionResult ?? actionResult else {
-            return .error("typed batch step produced no action result")
+            return .error("typed heist step produced no action result")
         }
         return .action(
             command: command,
             result: finalResult,
-            expectation: expectation ?? step.predicate?.validate(against: finalResult)
+            expectation: expectation ?? step.expectedPredicate?.validate(against: finalResult)
         )
     }
 
@@ -33,39 +33,52 @@ extension BatchExecutionStepResult {
         expectationActionResult ?? actionResult
     }
 
-    func expectationResult(for step: TheScore.BatchStep) -> ExpectationResult? {
+    func expectationResult(for step: HeistStep) -> ExpectationResult? {
         if let expectation { return expectation }
-        guard let plannedExpectation = step.predicate else { return nil }
+        guard let plannedExpectation = step.expectedPredicate else { return nil }
         return finalActionResult().map { plannedExpectation.validate(against: $0) }
     }
 
-    func expectationCounted(for step: TheScore.BatchStep) -> Bool {
+    func expectationCounted(for step: HeistStep) -> Bool {
         expectationResult(for: step)?.predicate != nil
     }
 
-    func expectationMet(for step: TheScore.BatchStep) -> Bool? {
+    func expectationMet(for step: HeistStep) -> Bool? {
         guard expectationCounted(for: step) else { return nil }
         return expectationResult(for: step)?.met
     }
 }
 
-extension BatchExecutionResult {
+private extension HeistStep {
+    var expectedPredicate: AccessibilityPredicate? {
+        switch self {
+        case .action(let step):
+            return step.expectation?.predicate
+        case .wait(let step):
+            return step.predicate
+        case .warn, .fail:
+            return nil
+        }
+    }
+}
+
+extension HeistExecutionResult {
     var completedStepCount: Int {
         steps.count { !$0.isSkipped }
     }
 
     var stoppedFailedIndex: Int? {
-        failedIndex ?? steps.first(where: \.stopsBatch)?.index
+        failedIndex ?? steps.first { $0.stopsHeist }?.index
     }
 
-    func expectationsChecked(steps plannedSteps: [TheScore.BatchStep]) -> Int {
+    func expectationsChecked(steps plannedSteps: [HeistStep]) -> Int {
         steps.count { step in
             guard plannedSteps.indices.contains(step.index) else { return false }
             return step.expectationCounted(for: plannedSteps[step.index])
         }
     }
 
-    func expectationsMet(steps plannedSteps: [TheScore.BatchStep]) -> Int {
+    func expectationsMet(steps plannedSteps: [HeistStep]) -> Int {
         steps.count { step in
             guard plannedSteps.indices.contains(step.index) else { return false }
             return step.expectationMet(for: plannedSteps[step.index]) == true
@@ -169,10 +182,9 @@ public enum FenceResponse {
     /// Screenshot held in memory as base64 PNG. Returned only when inline data
     /// is explicitly requested.
     case screenshotData(payload: ScreenPayload, options: ScreenshotResponseOptions = ScreenshotResponseOptions())
-    case batch(
-        commands: [TheFence.Command],
-        steps: [TheScore.BatchStep],
-        result: BatchExecutionResult,
+    case heistExecution(
+        plan: HeistPlan,
+        result: HeistExecutionResult,
         accessibilityTrace: AccessibilityTrace? = nil
     )
     case sessionState(payload: SessionStatePayload)
@@ -202,7 +214,7 @@ public enum FenceResponse {
             return true
         case .action(_, let result, let expectation):
             return !result.success || expectation?.met == false
-        case .batch(_, _, let result, _):
+        case .heistExecution(_, let result, _):
             return result.stoppedFailedIndex != nil
         case .heistPlayback(_, let failedIndex, _, _, _):
             return failedIndex != nil

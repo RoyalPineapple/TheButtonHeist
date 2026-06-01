@@ -1,7 +1,7 @@
 import Foundation
 
 /// Direction for scroll actions
-public enum ScrollDirection: String, Codable, Sendable, CaseIterable {
+public enum ScrollDirection: String, Codable, Sendable, CaseIterable, Equatable {
     case up, down, left, right
 }
 
@@ -51,7 +51,7 @@ public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertib
 }
 
 /// Target for one-page scroll command.
-public struct ScrollTarget: Sendable {
+public struct ScrollTarget: Sendable, Equatable {
     /// Scroll subject to move.
     public let selection: ScrollContainerSelection
     /// Scroll direction
@@ -138,7 +138,7 @@ extension ScrollTarget: Codable {
 /// Target for one-shot scroll-to-visible.
 /// The element must be known (in the registry with a content-space position).
 /// Jumps directly to the element's position — no iterative search.
-public struct ScrollToVisibleTarget: Sendable {
+public struct ScrollToVisibleTarget: Sendable, Equatable {
     /// Element to scroll into view. Must be a known element with a recorded position.
     public let elementTarget: ElementTarget
     public init(elementTarget: ElementTarget) {
@@ -156,7 +156,7 @@ extension ScrollToVisibleTarget: CustomStringConvertible {
 
 /// Target for iterative element search.
 /// Pages through scroll content looking for an element that may not be in the registry.
-public struct ElementSearchTarget: Sendable {
+public struct ElementSearchTarget: Sendable, Equatable {
     /// Element to search for while scrolling.
     public let elementTarget: ElementTarget
     /// Starting scroll direction.
@@ -224,12 +224,12 @@ extension ElementSearchTarget: Codable {
 }
 
 /// Edge for scroll-to-edge commands
-public enum ScrollEdge: String, Codable, Sendable, CaseIterable {
+public enum ScrollEdge: String, Codable, Sendable, CaseIterable, Equatable {
     case top, bottom, left, right
 }
 
 /// Target for scroll-to-edge command
-public struct ScrollToEdgeTarget: Sendable {
+public struct ScrollToEdgeTarget: Sendable, Equatable {
     /// Scroll subject to move.
     public let selection: ScrollContainerSelection
     /// Which edge to scroll to

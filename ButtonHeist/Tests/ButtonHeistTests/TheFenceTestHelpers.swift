@@ -365,10 +365,10 @@ func publicJSONObject(
     }
 }
 
-struct BatchInspection {
+struct HeistInspection {
     let commands: [TheFence.Command]
-    let steps: [TheScore.BatchStep]
-    let executionResult: BatchExecutionResult
+    let steps: [HeistStep]
+    let executionResult: HeistExecutionResult
     let results: [[String: Any]]
     let completedSteps: Int
     let failedIndex: Int?
@@ -378,17 +378,19 @@ struct BatchInspection {
     let accessibilityTrace: AccessibilityTrace?
 }
 
-func inspectBatch(_ response: FenceResponse) -> BatchInspection? {
-    guard case .batch(let commands, let steps, let result, let accessibilityTrace) = response else {
+func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
+    guard case .heistExecution(let plan, let result, let accessibilityTrace) = response else {
         return nil
     }
-    return BatchInspection(
+    let commands = plan.steps.map(\.commandForInspection)
+    let plannedSteps = plan.steps
+    return HeistInspection(
         commands: commands,
-        steps: steps,
+        steps: plannedSteps,
         executionResult: result,
         results: result.steps.compactMap { stepResult in
             guard let command = commands[safe: stepResult.index],
-                  let step = steps[safe: stepResult.index],
+                  let step = plannedSteps[safe: stepResult.index],
                   let response = stepResult.actionResponse(command: command, step: step)
             else { return nil }
             return publicJSONObject(response)
@@ -396,10 +398,53 @@ func inspectBatch(_ response: FenceResponse) -> BatchInspection? {
         completedSteps: result.completedStepCount,
         failedIndex: result.stoppedFailedIndex,
         totalTimingMs: result.totalTimingMs,
-        expectationsChecked: result.expectationsChecked(steps: steps),
-        expectationsMet: result.expectationsMet(steps: steps),
+        expectationsChecked: result.expectationsChecked(steps: plan.steps),
+        expectationsMet: result.expectationsMet(steps: plan.steps),
         accessibilityTrace: accessibilityTrace
     )
+}
+
+private extension HeistStep {
+    var commandForInspection: TheFence.Command {
+        switch self {
+        case .action(let action):
+            return action.command.fenceCommandForInspection
+        case .wait:
+            return .wait
+        case .warn:
+            return .runHeist
+        case .fail:
+            return .runHeist
+        }
+    }
+}
+
+private extension ClientMessage {
+    var fenceCommandForInspection: TheFence.Command {
+        switch self {
+        case .activate: return .activate
+        case .increment: return .activate
+        case .decrement: return .activate
+        case .performCustomAction: return .activate
+        case .rotor: return .rotor
+        case .oneFingerTap: return .oneFingerTap
+        case .longPress: return .longPress
+        case .swipe: return .swipe
+        case .drag: return .drag
+        case .typeText: return .typeText
+        case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .elementSearch: return .elementSearch
+        case .scrollToEdge: return .scrollToEdge
+        case .resignFirstResponder: return .dismissKeyboard
+        case .getPasteboard: return .getPasteboard
+        case .wait: return .wait
+        case .clientHello, .authenticate, .requestInterface, .ping, .status, .heistPlan, .requestScreen:
+            return .runHeist
+        }
+    }
 }
 
 private extension Array {

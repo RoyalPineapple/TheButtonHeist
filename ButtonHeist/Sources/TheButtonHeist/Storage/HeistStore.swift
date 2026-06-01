@@ -78,7 +78,7 @@ final class HeistStore {
         ))
     }
 
-    func finishRecording() throws -> HeistPlayback {
+    func finishRecording() throws -> HeistPlan {
         let recording = try currentRecording()
         heistRecording = .idle
 
@@ -88,7 +88,7 @@ final class HeistStore {
             throw StorageError.heistRecording(.noValidSteps(path: recording.filePath.path))
         }
 
-        return HeistPlayback(app: recording.app, steps: steps)
+        return HeistPlan(steps: steps)
     }
 
     func abandonRecording() {

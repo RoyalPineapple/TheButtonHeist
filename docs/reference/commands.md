@@ -4,7 +4,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 ## Summary
 
-| Command | CLI | MCP | Batch | Description |
+| Command | CLI | MCP | Heist | Description |
 |---------|-----|-----|-------|-------------|
 | `activate` | `activate` | direct | yes | Activate a semantic UI element or one of its named accessibility actions. |
 | `connect` | `connect` | direct | no | Establish or switch the active connection to a Button Heist app. |
@@ -22,8 +22,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `one_finger_tap` | `one_finger_tap` | direct | yes | Tap a coordinate or semantic target after actionability resolution. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
-| `rotor` | `rotor` | direct | yes | Move through an element rotor using direction and continuation metadata. |
-| `run_batch` | `run_batch` | direct | no | Execute ordered command steps with batch policy and per-step expectations. |
+| `rotor` | `rotor` | direct | yes | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
+| `run_heist` | `run_heist` | direct | no | Execute an inline typed heist plan. |
 | `scroll` | `scroll` | direct | yes | Scroll one page in a selected container or semantic target's owning scroll ancestor. |
 | `scroll_to_edge` | `scroll_to_edge` | direct | yes | Scroll the selected container, or the target's owning scroll ancestor, to a requested edge. |
 | `scroll_to_visible` | `scroll_to_visible` | direct | yes | Make a semantic target actionable and report its fresh geometry. |
@@ -32,8 +32,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic heist fixture. |
 | `swipe` | `swipe` | direct | yes | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
-| `wait_for` | `wait_for` | direct | yes | Wait for a semantic element to appear or disappear. |
-| `wait_for_change` | `wait_for_change` | direct | yes | Wait for any UI change or for an expectation to become true. |
+| `wait` | `wait` | direct | yes | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
 
 ## Details
 
@@ -43,7 +42,7 @@ Activate a semantic UI element or one of its named accessibility actions.
 
 - CLI: direct command `activate`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -62,7 +61,7 @@ Establish or switch the active connection to a Button Heist app.
 
 - CLI: direct command `connect`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: no
 
 Parameters:
@@ -79,7 +78,7 @@ Dismiss the on-screen keyboard through the current first responder or keyboard a
 
 - CLI: direct command `dismiss_keyboard`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -95,7 +94,7 @@ Drag from one point to another using explicit coordinates or a semantic target.
 
 - CLI: direct command `drag`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -117,7 +116,7 @@ Perform an edit action on the current first responder.
 
 - CLI: direct command `edit_action`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -134,7 +133,7 @@ Search scrollable content for a semantic element match without performing an act
 
 - CLI: direct command `element_search`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -152,7 +151,7 @@ Read the app accessibility hierarchy, optionally scoped to a subtree.
 
 - CLI: direct command `get_interface`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -173,7 +172,7 @@ Read text from the general pasteboard.
 
 - CLI: direct command `get_pasteboard`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -186,7 +185,7 @@ Capture a PNG screenshot with optional inline data and interface state.
 
 - CLI: direct command `get_screen`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -203,7 +202,7 @@ Inspect connection, device, and last-action session state.
 
 - CLI: direct command `get_session_state`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: no
 
 Parameters:
@@ -216,7 +215,7 @@ List discovered iOS devices and configured connection targets.
 
 - CLI: direct command `list_devices`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: no
 
 Parameters:
@@ -229,7 +228,7 @@ List configured connection targets and the default target.
 
 - CLI: direct command `list_targets`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: no
 
 Parameters:
@@ -242,7 +241,7 @@ Long-press a coordinate or semantic target for a resolved duration.
 
 - CLI: direct command `long_press`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -262,7 +261,7 @@ Tap a coordinate or semantic target after actionability resolution.
 
 - CLI: direct command `one_finger_tap`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -281,7 +280,7 @@ Check connection health without reading accessibility state.
 
 - CLI: direct command `ping`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: no
 
 Parameters:
@@ -294,7 +293,7 @@ Play back a heist file and return step diagnostics on failure.
 
 - CLI: direct command `play_heist`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: yes
 
 Parameters:
@@ -305,11 +304,11 @@ Parameters:
 
 ### `rotor`
 
-Move through an element rotor using direction and continuation metadata.
+Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor.
 
 - CLI: direct command `rotor`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -320,25 +319,24 @@ Parameters:
 | `rotor` | `string` | no | - | - |
 | `rotorIndex` | `integer` | no | - | - |
 | `direction` | `string` | no | `"next"` | `next`, `previous` |
-| `continuation` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `run_batch`
+### `run_heist`
 
-Execute ordered command steps with batch policy and per-step expectations.
+Execute an inline typed heist plan.
 
-- CLI: direct command `run_batch`
+- CLI: direct command `run_heist`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: yes
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
+| `version` | `integer` | yes | - | - |
 | `steps` | `array` | yes | - | - |
-| `policy` | `string` | no | - | `stop_on_error`, `continue_on_error` |
 
 ### `scroll`
 
@@ -346,7 +344,7 @@ Scroll one page in a selected container or semantic target's owning scroll ances
 
 - CLI: direct command `scroll`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -366,7 +364,7 @@ Scroll the selected container, or the target's owning scroll ancestor, to a requ
 
 - CLI: direct command `scroll_to_edge`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -386,7 +384,7 @@ Make a semantic target actionable and report its fresh geometry.
 
 - CLI: direct command `scroll_to_visible`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -403,7 +401,7 @@ Write text to the general pasteboard from within the app.
 
 - CLI: direct command `set_pasteboard`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -420,7 +418,7 @@ Start recording replayable heist steps from successful commands.
 
 - CLI: direct command `start_heist`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: no
 
 Parameters:
@@ -436,7 +434,7 @@ Stop heist recording and save a deterministic heist fixture.
 
 - CLI: direct command `stop_heist`
 - MCP: direct tool
-- Batch: no
+- Heist: no
 - Connection before dispatch: no
 
 Parameters:
@@ -451,7 +449,7 @@ Swipe in a direction or between explicit points; semantic targets are made actio
 
 - CLI: direct command `swipe`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -476,7 +474,7 @@ Type non-empty text, optionally after making a semantic target actionable.
 
 - CLI: direct command `type_text`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
@@ -488,37 +486,19 @@ Parameters:
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
-### `wait_for`
+### `wait`
 
-Wait for a semantic element to appear or disappear.
+Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions.
 
-- CLI: direct command `wait_for`
+- CLI: direct command `wait`
 - MCP: direct tool
-- Batch: yes
+- Heist: yes
 - Connection before dispatch: yes
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `absent` | `boolean` | no | - | - |
-| `timeout` | `number` | no | - | - |
-| `expect` | `object` | no | - | - |
-
-### `wait_for_change`
-
-Wait for any UI change or for an expectation to become true.
-
-- CLI: direct command `wait_for_change`
-- MCP: direct tool
-- Batch: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `expect` | `object` | no | - | - |
+| `predicate` | `object` | yes | - | - |
 | `timeout` | `number` | no | - | - |
 

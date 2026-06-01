@@ -1,7 +1,7 @@
 import Foundation
 
 /// Target for typing non-empty text character-by-character via keyboard key taps.
-public struct TypeTextTarget: Codable, Sendable {
+public struct TypeTextTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case text
         case elementTarget
@@ -47,12 +47,12 @@ extension TypeTextTarget: CustomStringConvertible {
 }
 
 /// Standard edit actions that can be dispatched via the responder chain.
-public enum EditAction: String, Codable, Sendable, CaseIterable {
+public enum EditAction: String, Codable, Sendable, CaseIterable, Equatable {
     case copy, paste, cut, select, selectAll, delete
 }
 
 /// Target for writing text to the general pasteboard.
-public struct SetPasteboardTarget: Codable, Sendable {
+public struct SetPasteboardTarget: Codable, Sendable, Equatable {
     /// Text to write to the pasteboard
     public let text: String
 
@@ -70,7 +70,7 @@ extension SetPasteboardTarget: CustomStringConvertible {
 }
 
 /// Target for edit actions dispatched via the responder chain
-public struct EditActionTarget: Codable, Sendable {
+public struct EditActionTarget: Codable, Sendable, Equatable {
     /// The edit action to perform
     public let action: EditAction
 

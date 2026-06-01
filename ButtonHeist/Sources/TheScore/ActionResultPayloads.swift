@@ -75,13 +75,13 @@ public enum ResultPayload: Codable, Sendable {
     case value(String)
     case scrollSearch(ScrollSearchResult)
     case rotor(RotorResult)
-    case batchExecution(BatchExecutionResult)
+    case heistExecution(HeistExecutionResult)
 
     private enum Kind: String, Codable {
         case value
         case scrollSearch
         case rotor
-        case batchExecution
+        case heistExecution
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -99,8 +99,8 @@ public enum ResultPayload: Codable, Sendable {
             self = .scrollSearch(try container.decode(ScrollSearchResult.self, forKey: .data))
         case .rotor:
             self = .rotor(try container.decode(RotorResult.self, forKey: .data))
-        case .batchExecution:
-            self = .batchExecution(try container.decode(BatchExecutionResult.self, forKey: .data))
+        case .heistExecution:
+            self = .heistExecution(try container.decode(HeistExecutionResult.self, forKey: .data))
         }
     }
 
@@ -116,8 +116,8 @@ public enum ResultPayload: Codable, Sendable {
         case .rotor(let rotor):
             try container.encode(Kind.rotor, forKey: .kind)
             try container.encode(rotor, forKey: .data)
-        case .batchExecution(let result):
-            try container.encode(Kind.batchExecution, forKey: .kind)
+        case .heistExecution(let result):
+            try container.encode(Kind.heistExecution, forKey: .kind)
             try container.encode(result, forKey: .data)
         }
     }

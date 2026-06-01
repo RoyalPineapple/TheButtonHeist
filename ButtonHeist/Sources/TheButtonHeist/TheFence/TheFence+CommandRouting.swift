@@ -21,23 +21,6 @@ public extension TheFence.Command {
         return .success(command)
     }
 
-    static func routeBatchStep(
-        _ step: TheFence.CommandArgumentEnvelope
-    ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
-        routeBatchStep(step, context: "run_batch step")
-    }
-
-    static func routeBatchStep(
-        _ step: TheFence.CommandArgumentEnvelope,
-        context: String
-    ) -> Result<(command: Self, arguments: TheFence.CommandArgumentEnvelope), FenceOperationRoutingError> {
-        routeCanonicalStep(
-            step,
-            context: context,
-            isExecutable: { $0.descriptor.isBatchExecutable }
-        )
-    }
-
     static func routeCommandEnvelope(
         _ arguments: TheFence.CommandArgumentEnvelope,
         context: String

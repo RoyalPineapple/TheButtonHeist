@@ -20,11 +20,11 @@ func writeOutput(_ message: String) {
 /// Parse a JSON array from either an inline string or a file path.
 /// Exactly one of `inline` or `fromFile` must be supplied.
 ///
-/// Used by commands that take a structured array payload (`run_batch`'s
-/// steps) to keep the file-vs-inline decision uniform across the CLI surface. Throws
-/// `ValidationError` on missing, ambiguous, unreadable, or malformed
-/// input so the error surfaces through ArgumentParser rather than as a
-/// generic crash.
+/// Used by commands that take a structured array payload to keep the
+/// file-vs-inline decision uniform across the CLI surface. Throws
+/// `ValidationError` on missing, ambiguous, unreadable, or malformed input
+/// so the error surfaces through ArgumentParser rather than as a generic
+/// crash.
 func loadJSONArray(
     inline: String?,
     fromFile path: String?,
@@ -64,10 +64,10 @@ func loadJSONObject(
     inline: String?,
     fromFile path: String?,
     optionName: String
-) throws -> [String: HeistValue]? {
+) throws -> [String: HeistValue] {
     switch (inline, path) {
     case (nil, nil):
-        return nil
+        throw ValidationError("Must supply either --\(optionName) or --\(optionName)-from-file")
     case (.some, .some):
         throw ValidationError("--\(optionName) and --\(optionName)-from-file are mutually exclusive")
     case (.some(let literal), nil):

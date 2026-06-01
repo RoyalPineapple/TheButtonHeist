@@ -1,4 +1,4 @@
-public struct TapTarget: Codable, Sendable {
+public struct TapTarget: Codable, Sendable, Equatable {
     public let selection: GesturePointSelection
 
     public init(selection: GesturePointSelection) {
@@ -30,7 +30,7 @@ extension TapTarget: CustomStringConvertible {
     }
 }
 
-public struct LongPressTarget: Codable, Sendable {
+public struct LongPressTarget: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case duration
     }

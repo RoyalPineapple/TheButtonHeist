@@ -45,56 +45,6 @@ struct ToolRoutingTests {
         #expect(operation.arguments.argumentValues["action"] == .string("copy"))
     }
 
-    @Test("run_batch still accepts canonical Fence command shapes")
-    func runBatchAcceptsCanonicalFenceCommandShapes() throws {
-        let steps = try normalizeBatchSteps([
-            [
-                "command": .string(TheFence.Command.swipe.rawValue),
-                "target": .object(["heistId": .string("element-1")]),
-                "direction": .string("right"),
-            ],
-            [
-                "command": .string(TheFence.Command.scrollToVisible.rawValue),
-                "target": .object(["heistId": .string("element-1")]),
-            ],
-            ["command": .string(TheFence.Command.dismissKeyboard.rawValue)],
-        ])
-
-        #expect(steps[0].command == .swipe)
-        #expect(steps[0].arguments.argumentValues["heistId"] == nil)
-        #expect(steps[0].arguments.argumentValues["direction"] == .string("right"))
-        #expect(steps[1].command == .scrollToVisible)
-        #expect(steps[1].arguments.argumentValues["heistId"] == nil)
-        #expect(steps[2].command == .dismissKeyboard)
-    }
-
-    @Test("run_batch rejects non-canonical command objects")
-    func runBatchRejectsNonCanonicalCommandObjects() {
-        let cases: [(step: [String: Argument], message: String)] = [
-            (["command": .string("not_a_command")],
-             "run_batch step command must be a canonical TheFence.Command; unknown command \"not_a_command\""),
-        ]
-
-        for testCase in cases {
-            let result = normalizeBatchStepResult(testCase.step)
-            guard case .failure(let error) = result else {
-                Issue.record("Expected routing failure")
-                continue
-            }
-            #expect(error.message == testCase.message)
-        }
-    }
-
-    @Test("run_batch rejects explicit non-batch commands")
-    func runBatchRejectsExplicitNonBatchCommands() {
-        let result = normalizeBatchStepResult(["command": .string(TheFence.Command.getScreen.rawValue)])
-        guard case .failure(let error) = result else {
-            Issue.record("Expected routing failure")
-            return
-        }
-        #expect(error.message.contains("run_batch step command \"get_screen\" is not supported"))
-    }
-
     @Test("unknown tool returns routing error")
     func unknownToolReturnsRoutingError() {
         let result = routeToolRequest(name: "not_a_tool")
@@ -122,25 +72,6 @@ struct ToolRoutingTests {
         case .failure(let error):
             throw error
         }
-    }
-
-    private func normalizeBatchSteps(_ steps: [[String: Argument]]) throws -> [RoutedCommand] {
-        try steps.map(normalizedBatchStep)
-    }
-
-    private func normalizedBatchStep(_ step: [String: Argument]) throws -> RoutedCommand {
-        switch normalizeBatchStepResult(step) {
-        case .success(let routed):
-            return routed
-        case .failure(let error):
-            throw error
-        }
-    }
-
-    private func normalizeBatchStepResult(
-        _ step: [String: Argument]
-    ) -> Result<RoutedCommand, FenceOperationRoutingError> {
-        TheFence.Command.routeBatchStep(TheFence.CommandArgumentEnvelope(values: step, fieldPrefix: nil))
     }
 
     private func envelope(_ arguments: [String: Argument] = [:]) -> TheFence.CommandArgumentEnvelope {

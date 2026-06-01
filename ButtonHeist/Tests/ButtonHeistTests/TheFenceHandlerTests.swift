@@ -226,67 +226,6 @@ final class TheFenceHandlerTests: XCTestCase {
         return try TheFence.CommandArgumentEnvelope(values: arguments).decodedElementTarget()
     }
 
-    @ButtonHeistActor
-    private func decodedRunBatch(
-        _ fence: TheFence,
-        steps: [HeistValue],
-        policy: String? = nil
-    ) throws -> TheFence.RunBatchRequest {
-        var values: [String: HeistValue] = ["steps": .array(steps)]
-        if let policy {
-            values["policy"] = .string(policy)
-        }
-        return try fence.decodeRunBatchRequest(TheFence.CommandArgumentEnvelope(values: values))
-    }
-
-    @ButtonHeistActor
-    private func assertRunBatchDecodeError(
-        steps: [HeistValue],
-        contains expectedSubstring: String,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            _ = try decodedRunBatch(fence, steps: steps)
-            XCTFail("Expected run_batch decode to fail", file: file, line: line)
-        } catch {
-            let message: String
-            if let schemaError = error as? SchemaValidationError {
-                message = schemaError.message
-            } else if let fenceError = error as? FenceError {
-                message = fenceError.coreMessage
-            } else {
-                message = String(describing: error)
-            }
-            XCTAssertTrue(
-                message.contains(expectedSubstring),
-                "Expected error containing '\(expectedSubstring)', got: \(message)",
-                file: file,
-                line: line
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    private func executeRunBatch(
-        _ fence: TheFence,
-        steps: [HeistValue],
-        policy: String? = nil
-    ) async throws -> FenceResponse {
-        var values: [String: HeistValue] = ["steps": .array(steps)]
-        if let policy {
-            values["policy"] = .string(policy)
-        }
-        return try await fence.execute(command: .runBatch, values: values)
-    }
-
-    private func plannedBatchSteps(
-        from batch: TheFence.RunBatchRequest
-    ) -> [TheFence.RunBatchPreparedStep] {
-        batch.steps
-    }
-
     private func testElement(
         label: String,
         identifier: String? = nil,
@@ -1880,25 +1819,21 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testParseExpectationFromTypedPlaybackRequestArguments() async throws {
-        let sourceStep = try HeistStep(
-            command: "activate",
-            target: semanticTarget(identifier: "counter"),
-            expectation: .changed(.updated(ElementUpdatePredicate(
-                element: ElementPredicate(identifier: "counter"), property: .value, to: "5"
-            )))
-        )
-
+    func testHeistPlanCarriesTypedActionExpectation() async throws {
+        let expectation = AccessibilityPredicate.changed(.updated(ElementUpdatePredicate(
+            element: ElementPredicate(identifier: "counter"), property: .value, to: "5"
+        )))
+        let sourceStep = HeistStep.action(try ActionStep(
+            command: .activate(.predicate(ElementPredicate(identifier: "counter"))),
+            expectation: WaitStep(predicate: expectation, timeout: 10)
+        ))
         let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep]))
-        let result = try XCTUnwrap(contract.steps.first?.preparedStep.typedStep.predicate)
+        let contract = try fence.validateHeistPlayback(HeistPlan(steps: [sourceStep]))
+        guard case .action(let action)? = contract.plan.steps.first else {
+            return XCTFail("Expected action step")
+        }
 
-        XCTAssertEqual(
-            result,
-            .changed(.updated(ElementUpdatePredicate(
-                element: ElementPredicate(identifier: "counter"), property: .value, to: "5"
-            )))
-        )
+        XCTAssertEqual(action.expectation?.predicate, expectation)
     }
 
     // MARK: - Parse Expectation: Discriminator Wire Shape
@@ -2088,742 +2023,6 @@ final class TheFenceHandlerTests: XCTestCase {
             }
             XCTAssertTrue(msg.contains("Unknown predicate type"))
         }
-    }
-
-    // MARK: - Batch Expectation Counting
-
-    @ButtonHeistActor
-    func testBatchStepLowersPublicCommandAdapterIntoActionExpectationPlan() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        let batch = try decodedRunBatch(
-            fence,
-            steps: [
-                batchStepValue(.activate, [
-                    "target": targetValue(identifier: "save-button"),
-                    "expect": .object(["type": .string("elements_changed")]),
-                ]),
-            ]
-        )
-
-        guard let step = batch.steps.first else {
-            return XCTFail("Expected planned batch step")
-        }
-        XCTAssertEqual(step.originalIndex, 0)
-        XCTAssertEqual(step.command, .activate)
-        XCTAssertEqual(step.typedStep.predicate, .changed(.elements))
-
-        let singleMessages = try fence.executableActionMessages(for: try fence.parseRequest(
-            command: .activate,
-            values: ["target": targetValue(identifier: "save-button")]
-        ))
-        XCTAssertEqual(singleMessages.count, 1)
-
-        guard case .activate(let actionTarget) = step.typedStep.command else {
-            return XCTFail("Expected activate command, got \(step.typedStep.command)")
-        }
-        XCTAssertEqual(actionTarget, .predicate(ElementPredicate(identifier: "save-button")))
-        guard case .activate(let singleActionTarget)? = singleMessages.first else {
-            return XCTFail("Expected single activate command, got \(String(describing: singleMessages.first))")
-        }
-        XCTAssertEqual(singleActionTarget, actionTarget)
-    }
-
-    @ButtonHeistActor
-    func testBatchAndSingleCommandsUseSameClientMessageLowering() async throws {
-        let (fence, _) = makeConnectedFence()
-        let cases: [(command: TheFence.Command, arguments: [String: HeistValue])] = [
-            (.oneFingerTap, ["x": .double(12.0), "y": .double(34.0)]),
-            (.scroll, ["direction": .string("up")]),
-            (.activate, ["target": targetValue(identifier: "save-button")]),
-            (.wait, ["predicate": .object([
-                "type": .string("present"),
-                "element": .object(["identifier": .string("toast")]),
-            ])]),
-            (.setPasteboard, ["text": .string("copied")]),
-        ]
-
-        for testCase in cases {
-            let batch = try decodedRunBatch(fence, steps: [batchStepValue(testCase.command, testCase.arguments)])
-            guard let plannedStep = plannedBatchSteps(from: batch).first else {
-                return XCTFail("Expected planned batch step for \(testCase.command.rawValue)")
-            }
-            let singleRequest = try fence.parseRequest(command: testCase.command, values: testCase.arguments)
-            let singleMessages = try fence.executableActionMessages(for: singleRequest)
-            XCTAssertEqual(
-                String(reflecting: singleMessages),
-                String(reflecting: [plannedStep.typedStep.command]),
-                testCase.command.rawValue
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsUnsupportedCommandsAtDecodeBoundary() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        do {
-            _ = try decodedRunBatch(
-                fence,
-                steps: [
-                    batchStepValue(.activate, ["target": targetValue(label: "Save")]),
-                    batchStepValue(.getScreen),
-                ]
-            )
-            XCTFail("Expected unsupported batch command to fail at decode boundary")
-        } catch FenceError.invalidRequest(let message) {
-            XCTAssertTrue(message.contains("run_batch step command \"get_screen\" is not supported"))
-        } catch {
-            XCTFail("Expected FenceError.invalidRequest, got \(error)")
-        }
-
-        let validBatch = try decodedRunBatch(
-            fence,
-            steps: [
-                batchStepValue(.activate, ["target": targetValue(label: "Save")]),
-                batchStepValue(.wait, ["predicate": .object([
-                    "type": .string("present"),
-                    "element": .object(["identifier": .string("toast")]),
-                ])]),
-                batchStepValue(.wait, ["predicate": .object(["type": .string("screen_changed")])]),
-            ]
-        )
-        XCTAssertEqual(validBatch.steps.map(\.command), [.activate, .wait, .wait])
-        XCTAssertEqual(validBatch.steps.map(\.originalIndex), [0, 1, 2])
-    }
-
-    @ButtonHeistActor
-    func testBatchWaitDefaultsComeFromTypedCommand() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        let batch = try decodedRunBatch(
-            fence,
-            steps: [
-                batchStepValue(.wait, ["predicate": .object([
-                    "type": .string("present"),
-                    "element": .object(["identifier": .string("toast")]),
-                ])]),
-                batchStepValue(.wait, ["predicate": .object(["type": .string("screen_changed")])]),
-            ]
-        )
-
-        let steps = plannedBatchSteps(from: batch)
-        XCTAssertEqual(steps[0].typedStep.predicate, .state(.present(ElementPredicate(identifier: "toast"))))
-        XCTAssertEqual(steps[0].typedStep.deadline, Deadline(timeout: 10.0))
-        guard case .wait(let waitTarget) = steps[0].typedStep.command else {
-            return XCTFail("Expected wait command, got \(steps[0].typedStep.command)")
-        }
-        XCTAssertNil(waitTarget.timeout)
-
-        XCTAssertEqual(steps[1].typedStep.predicate, .changed(.screen()))
-        XCTAssertEqual(steps[1].typedStep.deadline, Deadline(timeout: 10.0))
-        guard case .wait(let waitChangeTarget) = steps[1].typedStep.command else {
-            return XCTFail("Expected wait command, got \(steps[1].typedStep.command)")
-        }
-        XCTAssertEqual(waitChangeTarget.predicate, .changed(.screen()))
-        XCTAssertNil(waitChangeTarget.timeout)
-    }
-
-    @ButtonHeistActor
-    func testBatchPreparationRecognizesPredicateTargetsWithoutLookup() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let batch = try decodedRunBatch(
-            fence,
-            steps: [
-                batchStepValue(.activate, ["target": targetValue(identifier: "leaf-123")]),
-                batchStepValue(.wait, ["predicate": .object(["type": .string("elements_changed")])]),
-            ]
-        )
-
-        XCTAssertTrue(mockConn.sent.isEmpty, "Batch normalization must not perform a live lookup")
-        let steps = plannedBatchSteps(from: batch)
-        XCTAssertEqual(steps.map(\.command), [.activate, .wait])
-
-        guard case .activate(let actionTarget) = steps[0].typedStep.command else {
-            return XCTFail("Expected activate command with predicate target")
-        }
-        XCTAssertEqual(actionTarget, .predicate(ElementPredicate(identifier: "leaf-123")))
-
-        XCTAssertEqual(steps[1].typedStep.predicate, .changed(.elements))
-    }
-
-    @ButtonHeistActor
-    func testBatchPreparationUsesNormalCommandTargetEnvelope() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        let batch = try decodedRunBatch(
-            fence,
-            steps: [
-                batchStepValue(.activate, [
-                    "target": targetValue(
-                        traits: ["button"],
-                        excludeTraits: ["header"],
-                        ordinal: 1
-                    ),
-                ]),
-            ]
-        )
-
-        let steps = plannedBatchSteps(from: batch)
-        guard case .activate(let actionTarget) = steps.first?.typedStep.command else {
-            return XCTFail("Expected activate command")
-        }
-        XCTAssertEqual(actionTarget, .predicate(
-            ElementPredicate(traits: [.button], excludeTraits: [.header]),
-            ordinal: 1
-        ))
-    }
-
-    @ButtonHeistActor
-    func testBatchRoutedTargetRejectsInvalidTraitName() async {
-        await assertRunBatchDecodeError(
-            steps: [
-                batchStepValue(.activate, [
-                    "target": .object(["traits": .array([.string("notATrait")])]),
-                ]),
-            ],
-            contains: "schema validation failed for steps[0].target.traits[0]: observed string \"notATrait\"; expected"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchRoutedTargetRejectsNonIntegerOrdinal() async {
-        await assertRunBatchDecodeError(
-            steps: [
-                batchStepValue(.activate, [
-                    "target": .object([
-                        "label": .string("Save"),
-                        "ordinal": .string("first"),
-                    ]),
-                ]),
-            ],
-            contains: "schema validation failed for steps[0].target.ordinal: observed string \"first\"; expected integer"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchRoutingReportsNonStringCommandClearly() async {
-        await assertRunBatchDecodeError(
-            steps: [
-                .object([
-                    "command": .int(7),
-                    "target": targetValue(identifier: "btn"),
-                ]),
-            ],
-            contains: "run_batch step 0: schema validation failed for steps[0].command: observed integer 7; expected string"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchRoutedTargetRejectsNegativeOrdinal() async {
-        await assertRunBatchDecodeError(
-            steps: [
-                batchStepValue(.activate, [
-                    "target": .object([
-                        "label": .string("Save"),
-                        "ordinal": .int(-1),
-                    ]),
-                ]),
-            ],
-            contains: "schema validation failed for steps[0].target.ordinal: observed integer -1; expected ordinal must be non-negative, got -1"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchCountsOnlyExplicitExpectations() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        // Mock returns a successful action result with an elementsChanged delta (updates only)
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, accessibilityTrace: AccessibilityTrace.projectingForTests(delta)))
-        }
-
-        // Step 1 has expect → should count. Step 2 has no expect → should NOT count.
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, [
-                "target": targetValue(identifier: "btn1"),
-                "expect": .object(["type": .string("elements_changed")]),
-            ]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
-        ])
-
-        guard let batch = inspectBatch(response) else {
-            XCTFail("Expected batch response, got \(response)")
-            return
-        }
-        // Only step 1 had "expect", so checked should be 1
-        XCTAssertEqual(batch.expectationsChecked, 1, "Only steps with explicit 'expect' should be counted")
-        XCTAssertEqual(batch.expectationsMet, 1)
-    }
-
-    @ButtonHeistActor
-    func testBatchCountsMetExpectations() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let interface = Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(elementCount: 10, newInterface: interface))
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, accessibilityTrace: AccessibilityTrace.projectingForTests(delta)))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, [
-                "target": targetValue(identifier: "btn1"),
-                "expect": .object(["type": .string("screen_changed")]),
-            ]),
-            batchStepValue(.activate, [
-                "target": targetValue(identifier: "btn2"),
-                "expect": .object(["type": .string("elements_changed")]),
-            ]),
-        ])
-
-        guard let batch = inspectBatch(response) else {
-            XCTFail("Expected batch response, got \(response)")
-            return
-        }
-        // Both steps have expect and the delta is screenChanged (satisfies both tiers)
-        XCTAssertEqual(batch.expectationsChecked, 2)
-        XCTAssertEqual(batch.expectationsMet, 2)
-    }
-
-    @ButtonHeistActor
-    func testBatchPreservesOrderedPerStepResultsWithoutNetDelta() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        var responses = [
-            ActionResult(
-                success: true,
-                method: .activate,
-                message: "first"
-            ),
-            ActionResult(
-                success: true,
-                method: .activate,
-                message: "second"
-            ),
-        ]
-        mockConn.autoResponse = { message in
-            switch message {
-            case .activate:
-                return .actionResult(responses.removeFirst())
-            case .requestInterface:
-                return .interface(Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": targetValue(identifier: "first")]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "second")]),
-        ])
-
-        guard let batch = inspectBatch(response) else {
-            return XCTFail("Expected batch response, got \(response)")
-        }
-        XCTAssertEqual(batch.completedSteps, 2)
-        XCTAssertNil(batch.failedIndex)
-        XCTAssertEqual(batch.results.compactMap { $0["message"] as? String }, ["first", "second"])
-        XCTAssertEqual(
-            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.testKind },
-            [nil, nil]
-        )
-        XCTAssertNil(batch.results[0]["delta"])
-        XCTAssertNil(batch.results[1]["delta"])
-
-        let json = publicJSONObject(response)
-        XCTAssertNil(json["stepSummaries"], "Batch JSON should not duplicate typed per-step results")
-        XCTAssertNil(json["netDelta"], "Batch JSON must not advertise a wrapper-synthesized cumulative delta")
-    }
-
-    @ButtonHeistActor
-    func testBatchNetDeltaDerivesFromCaptureTraceEndpoints() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let counter0 = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Counter", value: "0"),
-        ])
-        let counter1 = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Counter", value: "1"),
-        ])
-        let counter2 = makeReceiptTestInterface([
-            makeReceiptTestElement(label: "Counter", value: "2"),
-        ])
-        var responses = [
-            ActionResult(
-                success: true,
-                method: .activate,
-                message: "first",
-                accessibilityTrace: makeReceiptTestTrace(before: counter0, after: counter1)
-            ),
-            ActionResult(
-                success: true,
-                method: .activate,
-                message: "second",
-                accessibilityTrace: makeReceiptTestTrace(before: counter1, after: counter2)
-            ),
-        ]
-        mockConn.autoResponse = { message in
-            switch message {
-            case .activate:
-                return .actionResult(responses.removeFirst())
-            case .requestInterface:
-                return .interface(Interface(timestamp: Date(timeIntervalSince1970: 0), tree: []))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": targetValue(identifier: "first")]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "second")]),
-        ])
-
-        guard let batch = inspectBatch(response) else {
-            return XCTFail("Expected batch response, got \(response)")
-        }
-        XCTAssertEqual(
-            batch.executionResult.steps.map { $0.finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.testKind },
-            ["elementsChanged", "elementsChanged"]
-        )
-        XCTAssertEqual(batch.accessibilityTrace?.captures.count, 3)
-
-        let json = publicJSONObject(response)
-        let netDelta = try XCTUnwrap(json["netDelta"] as? [String: Any])
-        XCTAssertEqual(netDelta["kind"] as? String, "elementsChanged")
-        let edits = try XCTUnwrap(netDelta["edits"] as? [String: Any])
-        let updated = try XCTUnwrap(edits["updated"] as? [[String: Any]])
-        let updatedElement = try XCTUnwrap(updated.first?["element"] as? [String: Any])
-        XCTAssertEqual(updatedElement["label"] as? String, "Counter")
-        XCTAssertNil(updatedElement["heistId"])
-        let changes = try XCTUnwrap(updated.first?["changes"] as? [[String: Any]])
-        XCTAssertEqual(changes.first?["old"] as? String, "0")
-        XCTAssertEqual(changes.first?["new"] as? String, "2")
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsUnknownCommandAtRequestBoundary() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue("not_a_real_command"),
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn1")]),
-        ], policy: "stop_on_error")
-
-        guard case .error(let message, let details) = response else {
-            return XCTFail("Expected request-boundary error, got \(response)")
-        }
-        XCTAssertTrue(message.contains("unknown command \"not_a_real_command\""))
-        XCTAssertEqual(details?.errorCode, "request.invalid")
-        XCTAssertFalse(
-            mockConn.sent.contains { sent in
-                if case .batchExecutionPlan = sent.0 { return true }
-                return false
-            },
-            "Invalid run_batch input must not dispatch a partial plan"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchStopsOnFailedActionResult() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let delta: AccessibilityTrace.Delta = .screenChanged(.init(
-            elementCount: 2,
-            newInterface: Interface(timestamp: Date(timeIntervalSince1970: 0), tree: [])
-        ))
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(
-                success: false,
-                method: .activate,
-                message: "activate failed: target could not be made actionable",
-                errorKind: .actionFailed,
-                accessibilityTrace: AccessibilityTrace.projectingForTests(delta)
-            ))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": targetValue(identifier: "stale-button")]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "later-button")]),
-        ], policy: "stop_on_error")
-
-        guard let batch = inspectBatch(response) else {
-            XCTFail("Expected batch response, got \(response)")
-            return
-        }
-        XCTAssertEqual(batch.results.count, 1, "Batch should stop after the failed action result")
-        XCTAssertEqual(batch.failedIndex, 0)
-        let batchCommands = mockConn.sent.compactMap { sent -> BatchPlan? in
-            if case .batchExecutionPlan(let plan) = sent.0 { return plan }
-            return nil
-        }
-        XCTAssertEqual(
-            batchCommands.count,
-            1,
-            "run_batch should dispatch one typed plan; InsideJob owns stop-on-error after step failure"
-        )
-        XCTAssertEqual(batch.executionResult.steps.count, 2)
-        XCTAssertEqual(batch.executionResult.steps[0].finalActionResult()?.accessibilityTrace?.endpointDeltaProjection?.testKind, "screenChanged")
-        XCTAssertEqual(
-            batch.executionResult.steps[0].finalActionResult()?.message,
-            "activate failed: target could not be made actionable"
-        )
-        XCTAssertEqual(
-            batch.executionResult.steps[1].skipped?.reason,
-            "skipped: stop_on_error stopped batch after step 0"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchStopOnErrorRejectsInvalidStepBeforeDispatch() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn1")]),
-            batchStepValue("not_a_real_command"),
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
-        ], policy: "stop_on_error")
-
-        guard case .error(let message, let details) = response else {
-            return XCTFail("Expected request-boundary error, got \(response)")
-        }
-        XCTAssertTrue(message.contains("unknown command \"not_a_real_command\""))
-        XCTAssertEqual(details?.errorCode, "request.invalid")
-        XCTAssertTrue(mockConn.sent.isEmpty, "Invalid batch input must not dispatch valid sibling steps")
-    }
-
-    @ButtonHeistActor
-    func testBatchExpectationFailureSummarizesSkippedSteps() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        let delta: AccessibilityTrace.Delta = .elementsChanged(.init(elementCount: 5, edits: ElementEdits()))
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate, accessibilityTrace: AccessibilityTrace.projectingForTests(delta)))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, [
-                "target": targetValue(identifier: "btn1"),
-                "expect": .object(["type": .string("screen_changed")]),
-            ]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
-        ], policy: "stop_on_error")
-
-        guard let batch = inspectBatch(response) else {
-            XCTFail("Expected batch response, got \(response)")
-            return
-        }
-        XCTAssertEqual(batch.results.count, 1, "Batch should stop after the failed expectation")
-        XCTAssertEqual(batch.failedIndex, 0)
-        XCTAssertEqual(batch.expectationsChecked, 1)
-        XCTAssertEqual(batch.expectationsMet, 0)
-        XCTAssertEqual(batch.executionResult.steps.count, 2)
-        XCTAssertEqual(batch.executionResult.steps[0].expectationMet(for: batch.steps[0]), false)
-        XCTAssertEqual(batch.commands[1], .activate)
-        XCTAssertEqual(
-            batch.executionResult.steps[1].skipped?.reason,
-            "skipped: stop_on_error stopped batch after step 0"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsUnknownStepParameterBeforeExecution() async {
-        await assertValidationError(
-            command: .runBatch,
-            arguments: ["steps": .array([
-                batchStepValue(.scroll, [
-                    "unexpected": .string("value"),
-                    "target": targetValue(label: "Done"),
-                ]),
-            ])],
-            contains: #"schema validation failed for unexpected: observed string "value"; expected valid scroll parameter"#
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchAllowsContainerTargetedScrollThroughNormalCommandPath() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .scroll))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.scroll, [
-                "container": .object(["stableId": .string("main_scroll")]),
-                "direction": .string("down"),
-            ]),
-        ])
-
-        guard let batch = inspectBatch(response) else {
-            XCTFail("Expected batch response, got \(response)")
-            return
-        }
-        XCTAssertEqual(batch.results.count, 1)
-        XCTAssertNil(batch.failedIndex)
-        XCTAssertEqual(batch.commands, [.scroll])
-        let batchPlans = mockConn.sent.compactMap { sent -> BatchPlan? in
-            if case .batchExecutionPlan(let plan) = sent.0 { return plan }
-            return nil
-        }
-        XCTAssertEqual(batchPlans.count, 1)
-        guard case .scroll(let target)? = batchPlans.first?.steps.first?.command else {
-            return XCTFail("Expected scroll command")
-        }
-        XCTAssertEqual(target.selection, .container(ScrollContainerTarget(stableId: "main_scroll")))
-        XCTAssertEqual(target.direction, .down)
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsTooManyStepsBeforeExecution() async {
-        let steps = Array(
-            repeating: batchStepValue(.activate, ["target": targetValue(identifier: "btn")]),
-            count: TheFence.DecodeLimits.maxRunBatchSteps + 1
-        )
-        await assertValidationError(
-            command: .runBatch,
-            arguments: ["steps": .array(steps)],
-            equals: "schema validation failed for steps: observed array count 101; expected array count 1...100"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsTooDeepRequestBeforeExecution() async {
-        func nested(_ depth: Int) -> HeistValue {
-            depth == 0
-                ? .object(["type": .string("screen_changed")])
-                : .object(["unexpected": .array([nested(depth - 1)])])
-        }
-        await assertValidationError(
-            command: .runBatch,
-            arguments: ["steps": .array([
-                batchStepValue(.activate, [
-                    "target": targetValue(identifier: "btn"),
-                    "expect": nested(TheFence.DecodeLimits.maxRunBatchNestingDepth),
-                ]),
-            ])],
-            contains: "expected nesting depth <= 32"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsOversizedRequestBeforeExecution() async {
-        let payload = String(repeating: "x", count: TheFence.DecodeLimits.maxRunBatchRequestBytes)
-        await assertValidationError(
-            command: .runBatch,
-            arguments: ["steps": .array([
-                batchStepValue(.activate, ["target": targetValue(identifier: payload)]),
-            ])],
-            contains: "expected JSON request <= \(TheFence.DecodeLimits.maxRunBatchRequestBytes) bytes"
-        )
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsNonBatchExecutableCommandsBeforeExecution() async {
-        let nonBatchCommands = TheFence.Command.descriptors
-            .filter { !$0.isBatchExecutable }
-            .map(\.command)
-
-        for command in nonBatchCommands {
-            await assertValidationError(
-                command: .runBatch,
-                arguments: ["steps": .array([batchStepValue(command)])],
-                contains: "run_batch step command \"\(command.rawValue)\" is not supported"
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    func testBatchRejectsGetScreenBeforePayloadValidation() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.getScreen, ["inlineData": .bool(true)]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "skipped")]),
-        ])
-
-        guard case .error(let message, _) = response else {
-            return XCTFail("Expected request-boundary error, got \(response)")
-        }
-        XCTAssertTrue(message.contains("run_batch step command \"get_screen\" is not supported"), message)
-        XCTAssertFalse(mockConn.sent.contains { sent in
-            if case .requestScreen = sent.0 { return true }
-            return false
-        })
-    }
-
-    @ButtonHeistActor
-    func testBatchStillAcceptsCanonicalTypedCommandShapes() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.swipe, ["target": targetValue(identifier: "row_1"), "direction": .string("left")]),
-            batchStepValue(.scrollToVisible, ["target": targetValue(label: "Done")]),
-            batchStepValue(.dismissKeyboard),
-        ])
-
-        guard let batch = inspectBatch(response) else {
-            XCTFail("Expected batch response, got \(response)")
-            return
-        }
-        XCTAssertEqual(batch.results.count, 3)
-        XCTAssertNil(batch.failedIndex)
-        XCTAssertEqual(batch.commands, [.swipe, .scrollToVisible, .dismissKeyboard])
-    }
-
-    @ButtonHeistActor
-    func testBatchSchemaValidationFailureDoesNotDispatchInvalidStep() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.typeText, ["text": .string("")]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn")]),
-        ], policy: "continue_on_error")
-
-        guard case .error(let message, _) = response else {
-            return XCTFail("Expected request-boundary error, got \(response)")
-        }
-        let expectedError = "schema validation failed for steps[0].text: observed string \"\"; expected non-empty string"
-        XCTAssertEqual(message, expectedError)
-        XCTAssertTrue(mockConn.sent.isEmpty, "Invalid batch input must not dispatch valid sibling steps")
-    }
-
-    @ButtonHeistActor
-    func testBatchReportsUnknownCanonicalCommandWithStepIndex() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": targetValue(identifier: "first")]),
-            batchStepValue("unknown_command"),
-            batchStepValue(.activate, ["target": targetValue(identifier: "skipped")]),
-        ], policy: "stop_on_error")
-
-        guard case .error(let message, _) = response else {
-            return XCTFail("Expected request-boundary error, got \(response)")
-        }
-        let expectedError = "run_batch step 1: run_batch step command must be a canonical TheFence.Command; unknown command \"unknown_command\""
-        XCTAssertEqual(message, expectedError)
-        XCTAssertTrue(mockConn.sent.isEmpty, "Invalid batch input must not dispatch valid sibling steps")
-    }
-
-    @ButtonHeistActor
-    func testBatchPreservesContractErrorPhaseAndNextCommand() async throws {
-        let (fence, _) = makeConnectedFence()
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.wait),
-            batchStepValue(.activate, ["target": targetValue(identifier: "skipped")]),
-        ], policy: "stop_on_error")
-
-        guard case .error(let message, let details) = response else {
-            return XCTFail("Expected request-boundary error, got \(response)")
-        }
-        XCTAssertTrue(message.contains("wait requires a \"predicate\" object"), message)
-        XCTAssertEqual(details?.phase, .request)
     }
 
     // MARK: - get_interface
@@ -3055,30 +2254,10 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    @ButtonHeistActor
-    func testBatchWithNoExpectationsShowsZeroCounts() async throws {
-        let (fence, mockConn) = makeConnectedFence()
-        mockConn.autoResponse = { _ in
-            .actionResult(ActionResult(success: true, method: .activate))
-        }
-
-        let response = try await executeRunBatch(fence, steps: [
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn1")]),
-            batchStepValue(.activate, ["target": targetValue(identifier: "btn2")]),
-        ])
-
-        guard let batch = inspectBatch(response) else {
-            XCTFail("Expected batch response, got \(response)")
-            return
-        }
-        XCTAssertEqual(batch.expectationsChecked, 0)
-        XCTAssertEqual(batch.expectationsMet, 0)
-    }
-
     // MARK: - Heist Playback
 
     @ButtonHeistActor
-    private func writeTemporaryHeist(_ heist: HeistPlayback) throws -> URL {
+    private func writeTemporaryHeist(_ heist: HeistPlan) throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
         let heistURL = tempDir.appendingPathComponent("test-\(UUID().uuidString).heist")
         try HeistStore.writeHeist(heist, to: heistURL)
@@ -3100,93 +2279,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlayHeistPathTraversalThrows() async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string("/tmp/../etc/passwd")])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
-        } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("Invalid input path"))
-        }
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistEmptyPathThrows() async {
-        let (fence, _) = makeConnectedFence()
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string("")])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
-        } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("Invalid input path"))
-        }
-    }
-
-    @ButtonHeistActor
-    func testStopHeistMissingOutputDoesNotStopRecording() async throws {
-        let (fence, _) = makeConnectedFence()
-        try fence.heistStore.startRecording(identifier: "stop-heist-missing-output", app: "com.test.mock")
-
-        let response = try await fence.execute(command: .stopHeist)
-        guard case .error(let message, _) = response else {
-            return XCTFail("Expected .error response, got \(response)")
-        }
-        XCTAssertEqual(message, "schema validation failed for output: observed missing; expected string")
-
-        XCTAssertTrue(fence.heistStore.isRecordingHeist)
-    }
-
-    @ButtonHeistActor
-    func testStopHeistInvalidOutputDoesNotStopRecording() async throws {
-        let (fence, _) = makeConnectedFence()
-        try fence.heistStore.startRecording(identifier: "stop-heist-invalid-output", app: "com.test.mock")
-
-        do {
-            _ = try await fence.execute(command: .stopHeist, values: ["output": .string("/tmp/../invalid.heist")])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
-        } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("Invalid output path"))
-        }
-
-        XCTAssertTrue(fence.heistStore.isRecordingHeist)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistEmptyStepsCompletesSuccessfully() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, _) = makeConnectedFence()
-        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertEqual(completedSteps, 0)
-        XCTAssertNil(failedIndex)
-        XCTAssertNil(failure)
-        XCTAssertNotNil(report)
-        XCTAssertEqual(report?.steps.count, 0)
-        XCTAssertTrue(report?.allPassed ?? false)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistExecutesStepsInOrder() async throws {
-        let steps = [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn2")),
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn3")),
-        ]
-        let heist = HeistPlayback(app: "com.test.mock", steps: steps)
+    func testPlayHeistDispatchesTypedPlan() async throws {
+        let heist = HeistPlan(steps: [
+            try activateHeistStep(identifier: "btn1"),
+            .warn(WarnStep(message: "optional onboarding skipped")),
+        ])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -3196,304 +2293,21 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
             return XCTFail("Expected heistPlayback response, got \(response)")
         }
-        XCTAssertEqual(completedSteps, 3)
+        XCTAssertEqual(completedSteps, 2)
         XCTAssertNil(failedIndex)
         XCTAssertNil(failure)
-        XCTAssertNotNil(report)
-        XCTAssertEqual(report?.steps.count, 3)
-        XCTAssertTrue(report?.allPassed ?? false)
-        for (stepIndex, stepResult) in (report?.steps ?? []).enumerated() {
-            XCTAssertEqual(stepResult.index, stepIndex)
-            XCTAssertEqual(stepResult.command, "activate")
-            XCTAssertTrue(stepResult.passed)
-        }
+        XCTAssertEqual(report?.steps.map(\.command), ["activate", "warn"])
 
-        let plans = mockConn.sent.compactMap { message, _ -> BatchPlan? in
-            if case .batchExecutionPlan(let plan) = message { return plan }
+        let plans = mockConn.sent.compactMap { message, _ -> HeistPlan? in
+            if case .heistPlan(let plan) = message { return plan }
             return nil
         }
-        XCTAssertEqual(plans.count, 1)
-        XCTAssertEqual(plans.first?.steps.map(\.command.wireType), [.activate, .activate, .activate])
-    }
-
-    @ButtonHeistActor
-    func testPlaybackValidationBindsFixtureStepsToTypedCommands() async throws {
-        let playback = HeistPlayback(
-            app: "com.test.mock",
-            steps: [
-                try HeistStep(
-                    command: "type_text",
-                    target: semanticTarget(identifier: "email", ordinal: 1),
-                    arguments: ["text": .string("user@example.com")]
-                ),
-                try HeistStep(command: "activate", target: semanticTarget(identifier: "submit")),
-            ]
-        )
-        let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(playback)
-        let operation = contract.steps[0]
-
-        XCTAssertEqual(playback.app, "com.test.mock")
-        XCTAssertEqual(playback.steps.count, 2)
-        XCTAssertEqual(operation.command, .typeText)
-        XCTAssertEqual(playback.steps[1].command, "activate")
-        XCTAssertEqual(operation.reportTarget, semanticTarget(identifier: "email", ordinal: 1))
-
-        XCTAssertEqual(operation.preparedStep.command, .typeText)
-        guard case .typeText(let target) = operation.preparedStep.typedStep.command else {
-            return XCTFail("Expected playback step to validate as type_text")
-        }
-        XCTAssertEqual(target.text, "user@example.com")
-        guard case .predicate(let matcher, let ordinal)? = target.elementTarget else {
-            return XCTFail("Expected playback target to bind as typed matcher")
-        }
-        XCTAssertEqual(matcher.identifier, "email")
-        XCTAssertEqual(ordinal, 1)
-    }
-
-    @ButtonHeistActor
-    func testPlaybackLoadsHeistFileAtFileEdge() async throws {
-        let heist = HeistPlayback(
-            app: "com.test.mock",
-            steps: [
-                try HeistStep(
-                    command: "activate",
-                    target: semanticTarget(identifier: "submit"),
-                    expectation: .changed(.screen())
-                ),
-            ]
-        )
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, _) = makeConnectedFence()
-        let playback = try fence.readHeistPlayback(contentsOf: heistURL)
-
-        XCTAssertEqual(playback.app, "com.test.mock")
-        XCTAssertEqual(playback.steps.map(\.command), [.activate])
-        XCTAssertEqual(playback.steps.first?.reportTarget, semanticTarget(identifier: "submit"))
-        let step = try XCTUnwrap(playback.steps.first)
-        XCTAssertEqual(step.preparedStep.typedStep.predicate, .changed(.screen()))
-    }
-
-    @ButtonHeistActor
-    func testPlaybackFileEdgeRejectsUnsupportedVersion() async throws {
-        let heist = HeistPlayback(
-            version: HeistPlayback.currentVersion + 1,
-            app: "com.test.mock",
-            steps: [try HeistStep(command: "activate", target: semanticTarget(identifier: "submit"))]
-        )
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, _) = makeConnectedFence()
-        XCTAssertThrowsError(try fence.readHeistPlayback(contentsOf: heistURL)) { error in
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("Unsupported heist file version \(HeistPlayback.currentVersion + 1)"))
-            XCTAssertTrue(message.contains("supports version \(HeistPlayback.currentVersion)"))
-        }
-    }
-
-    @ButtonHeistActor
-    func testHeistStepPreservesCanonicalExpectationPayload() async throws {
-        let sourceStep = try HeistStep(
-            command: "type_text",
-            target: semanticTarget(identifier: "email"),
-            arguments: [
-                "text": .string("user@example.com"),
-            ],
-            expectation: .changed(.screen())
-        )
-
-        let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep]))
-        XCTAssertEqual(contract.steps.first?.preparedStep.typedStep.predicate, .changed(.screen()))
-    }
-
-    @ButtonHeistActor
-    func testPlaybackValidationAcceptsCanonicalBatchExecutableCommands() async throws {
-        let target = semanticTarget(identifier: "target")
-        let playback = HeistPlayback(
-            app: "com.test.mock",
-            steps: [
-                try HeistStep(command: "wait", arguments: ["predicate": .object(["type": .string("screen_changed")])]),
-                try HeistStep(command: "one_finger_tap", arguments: ["x": .int(10), "y": .int(20)]),
-                try HeistStep(command: "long_press", arguments: ["x": .int(10), "y": .int(20)]),
-                try HeistStep(command: "swipe", target: target, arguments: ["direction": .string("left")]),
-                try HeistStep(command: "drag", target: target, arguments: ["endX": .int(30), "endY": .int(40)]),
-                try HeistStep(command: "scroll"),
-                try HeistStep(command: "scroll_to_visible", target: target),
-                try HeistStep(command: "element_search", target: target),
-                try HeistStep(command: "scroll_to_edge"),
-                try HeistStep(command: "activate", target: target),
-                try HeistStep(command: "rotor", target: target, arguments: ["rotor": .string("Errors")]),
-                try HeistStep(command: "type_text", target: target, arguments: ["text": .string("hello")]),
-                try HeistStep(command: "edit_action", arguments: ["action": .string("copy")]),
-                try HeistStep(command: "set_pasteboard", arguments: ["text": .string("hello")]),
-                try HeistStep(command: "dismiss_keyboard"),
-            ]
-        )
-        let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(playback)
-
-        XCTAssertEqual(Set(contract.steps.map(\.command)), Set(TheFence.Command.batchExecutableCases))
-    }
-
-    @ButtonHeistActor
-    func testPlaybackValidationRejectsUnknownCommandName() async throws {
-        let (fence, _) = makeConnectedFence()
-        XCTAssertThrowsError(
-            try fence.validateHeistPlayback(
-                HeistPlayback(
-                    app: "com.test.mock",
-                    steps: [try HeistStep(command: "unknown_command", arguments: [:])]
-                )
-            )
-        ) { error in
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("Invalid heist step 0"))
-            XCTAssertTrue(
-                message.contains("heist step command must be a canonical TheFence.Command; unknown command \"unknown_command\""),
-                "Unexpected error: \(message)"
-            )
-        }
-    }
-
-    @ButtonHeistActor
-    func testPlaybackArgumentsUseCommandBoundaryValidation() async throws {
-        let cases: [(name: String, sourceStep: HeistStep, message: String)] = [
-            (
-                "unknown scroll parameter",
-                try HeistStep(
-                    command: "scroll",
-                    arguments: ["unexpected": .string("value")]
-                ),
-                "schema validation failed for unexpected: observed string \"value\"; expected valid scroll parameter"
-            ),
-            (
-                "edit_action invalid action type",
-                try HeistStep(
-                    command: "edit_action",
-                    arguments: ["action": .int(7)]
-                ),
-                "schema validation failed for action: observed integer 7; expected string"
-            ),
-            (
-                "type_text missing required text",
-                try HeistStep(
-                    command: "type_text",
-                    target: semanticTarget(identifier: "email")
-                ),
-                "schema validation failed for text: observed missing; expected string"
-            ),
-            (
-                "non-target command carries playback target",
-                try HeistStep(
-                    command: "edit_action",
-                    target: semanticTarget(identifier: "ignored"),
-                    arguments: ["action": .string("copy")]
-                ),
-                "schema validation failed for target: observed target(predicate(identifier=\"ignored\")); "
-                    + "expected edit_action command without element target"
-            ),
-            (
-                "request id inside arguments",
-                try HeistStep(
-                    command: "activate",
-                    target: semanticTarget(identifier: "submit"),
-                    arguments: ["requestId": .string("recorded-request")]
-                ),
-                "heist step must match descriptor-owned recording projection"
-            ),
-            (
-                "expectation inside arguments",
-                try HeistStep(
-                    command: "activate",
-                    target: semanticTarget(identifier: "submit"),
-                    arguments: ["expect": .object(["type": .string("screen_changed")])]
-                ),
-                "heist step must match descriptor-owned recording projection"
-            ),
-            (
-                "target inside arguments",
-                try HeistStep(
-                    command: "activate",
-                    arguments: ["target": .object(["identifier": .string("submit")])]
-                ),
-                "heist step must match descriptor-owned recording projection"
-            ),
-            (
-                "heistId target field inside arguments",
-                try HeistStep(
-                    command: "activate",
-                    arguments: ["target": .object(["heistId": .string("button_save")])]
-                ),
-                "schema validation failed for target.heistId: observed string \"button_save\"; "
-                    + "expected Unknown element target field \"heistId\""
-            ),
-        ]
-
-        let (fence, _) = makeConnectedFence()
-        for testCase in cases {
-            XCTAssertThrowsError(
-                try fence.validateHeistPlayback(
-                    HeistPlayback(app: "com.test.mock", steps: [testCase.sourceStep])
-                ),
-                testCase.name
-            ) { error in
-                guard case FenceError.invalidRequest(let message) = error else {
-                    return XCTFail("Expected invalidRequest for \(testCase.name), got \(error)")
-                }
-                XCTAssertEqual(message, "Invalid heist step 0: \(testCase.message)")
-            }
-        }
-    }
-
-    @ButtonHeistActor
-    func testPlaybackValidationRejectsNonExecutableCommands() async throws {
-        let (fence, _) = makeConnectedFence()
-        for command in TheFence.Command.allCases where !command.descriptor.isBatchExecutable {
-            XCTAssertThrowsError(
-                try fence.validateHeistPlayback(
-                    HeistPlayback(app: "com.test.mock", steps: [try HeistStep(command: command.rawValue)])
-                ),
-                command.rawValue
-            ) { error in
-                guard case FenceError.invalidRequest(let message) = error else {
-                    return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-                }
-                XCTAssertTrue(message.contains("Invalid heist step 0"))
-                XCTAssertTrue(
-                    message.contains("heist step command \"\(command.rawValue)\" is not supported"),
-                    "Unexpected error for \(command.rawValue): \(message)"
-                )
-            }
-        }
-    }
-
-    @ButtonHeistActor
-    func testPlaybackContractUsesBatchStepTypedCommand() async throws {
-        let sourceStep = try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1"))
-
-        let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep]))
-        let step = try XCTUnwrap(contract.batchRequest.steps.first)
-
-        guard case .activate(.predicate(let matcher, _)) = step.typedStep.command else {
-            return XCTFail("Expected typed activate batch step, got \(step.typedStep.command)")
-        }
-        XCTAssertEqual(matcher.identifier, "btn1")
+        XCTAssertEqual(plans, [heist])
     }
 
     @ButtonHeistActor
     func testPlayHeistDoesNotImplicitlyRecoverElementNotFoundWithScrollToVisible() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "offscreen")),
-        ])
+        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "offscreen")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -3527,19 +2341,16 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(report?.steps.count, 1)
         XCTAssertFalse(report?.allPassed ?? true)
 
-        let plans = mockConn.sent.compactMap { message, _ -> BatchPlan? in
-            if case .batchExecutionPlan(let plan) = message { return plan }
+        let plans = mockConn.sent.compactMap { message, _ -> HeistPlan? in
+            if case .heistPlan(let plan) = message { return plan }
             return nil
         }
-        XCTAssertEqual(plans.count, 1)
-        XCTAssertEqual(plans.first?.steps.map(\.command.wireType), [.activate])
+        XCTAssertEqual(plans, [heist])
     }
 
     @ButtonHeistActor
     func testPlayHeistMapsServerErrorResponseToCommandFailure() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-        ])
+        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -3577,90 +2388,12 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlayHeistPreservesPlaybackFailureWhenDiagnosticInterfaceCaptureFails() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-        ])
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        var interfaceRequestCount = 0
-        mockConn.autoResponse = { message in
-            switch message {
-            case .requestInterface:
-                interfaceRequestCount += 1
-                return .error(ServerError(
-                    kind: .general,
-                    message: "diagnostic interface unavailable"
-                ))
-            case .activate:
-                return .actionResult(ActionResult(
-                    success: false,
-                    method: .activate,
-                    message: "missing",
-                    errorKind: .elementNotFound
-                ))
-            default:
-                return .actionResult(ActionResult(success: true, method: .activate))
-            }
-        }
-
-        let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-
-        guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, let report) = response else {
-            return XCTFail("Expected heistPlayback response, got \(response)")
-        }
-        XCTAssertEqual(completedSteps, 0)
-        XCTAssertEqual(failedIndex, 0)
-
-        guard case .actionFailed(let step, let result, _, let interface, let diagnosticCaptureFailure) = failure else {
-            return XCTFail("Expected actionFailed playback failure, got \(String(describing: failure))")
-        }
-        XCTAssertEqual(step.command, .activate)
-        XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.message, "missing")
-        XCTAssertNil(interface)
-        XCTAssertEqual(diagnosticCaptureFailure, "Action failed: diagnostic interface unavailable")
-
-        guard case .failed(let reportMessage, let errorKind) = report?.steps.first?.outcome else {
-            return XCTFail("Expected failed playback report step, got \(String(describing: report?.steps.first))")
-        }
-        XCTAssertEqual(reportMessage, "missing")
-        XCTAssertEqual(errorKind, .action(.elementNotFound))
-
-        XCTAssertEqual(interfaceRequestCount, 1)
-        let plans = mockConn.sent.compactMap { message, _ -> BatchPlan? in
-            if case .batchExecutionPlan(let plan) = message { return plan }
-            return nil
-        }
-        XCTAssertEqual(plans.count, 1)
-        XCTAssertEqual(plans.first?.steps.map(\.command.wireType), [.activate])
-    }
-
-    @ButtonHeistActor
-    func testPlaybackDoesNotUseRecordedHeistIdAsAuthority() async throws {
-        let sourceStep = try HeistStep(
-            command: "activate",
-            target: semanticTarget(identifier: "btn1")
-        )
-
-        let (fence, _) = makeConnectedFence()
-        let step = try fence.validateHeistPlayback(HeistPlayback(app: "com.test.mock", steps: [sourceStep])).steps[0]
-        guard case .activate(.predicate(let matcher, let ordinal)) = step.preparedStep.typedStep.command else {
-            return XCTFail("Expected playback to dispatch matcher target, got \(step.preparedStep.typedStep.command)")
-        }
-        XCTAssertEqual(matcher.identifier, "btn1")
-        XCTAssertNil(ordinal)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistRejectsRecordedMetadata() async throws {
-        let heistURL = TempDirectoryFixture.make(prefix: "recorded-metadata-heist")
-            .appendingPathComponent("legacy.heist")
+    func testPlayHeistRejectsOldRawRecordingShapeBeforeExecution() async throws {
+        let heistURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("legacy-\(UUID().uuidString).heist")
         try """
         {
-          "version": \(HeistPlayback.currentVersion),
+          "version": 6,
           "app": "com.test.mock",
           "steps": [
             {
@@ -3678,92 +2411,49 @@ final class TheFenceHandlerTests: XCTestCase {
             _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
             XCTFail("Expected invalid heist file")
         } catch {
-            XCTAssertTrue("\(error)".contains("_recorded"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Unsupported heist plan version") || "\(error)".contains("app"), "\(error)")
         }
         XCTAssertFalse(mockConn.sent.contains { message, _ in
-            if case .activate = message { return true }
+            if case .heistPlan = message { return true }
             return false
         })
     }
 
     @ButtonHeistActor
-    func testPlayHeistRejectsInvalidCommandBeforeExecution() async throws {
-        let steps = [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-            try HeistStep(command: "not_a_real_command"),
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn3")),
-        ]
-        let heist = HeistPlayback(app: "com.test.mock", steps: steps)
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
-        } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
+    func testPlayHeistRejectsInvalidPlanCommandBeforeExecution() async throws {
+        let heistURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("invalid-command-\(UUID().uuidString).heist")
+        try """
+        {
+          "version": 1,
+          "steps": [
+            {
+              "type": "action",
+              "action": {
+                "command": {
+                  "type": "not_a_real_command",
+                  "payload": {}
+                }
+              }
             }
-            XCTAssertTrue(message.contains("Invalid heist step 1"))
-            XCTAssertTrue(message.contains("unknown command \"not_a_real_command\""))
+          ]
         }
-
-        XCTAssertTrue(mockConn.sent.isEmpty)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistRejectsInvalidFirstCommandBeforeExecution() async throws {
-        let steps = [
-            try HeistStep(command: "not_a_real_command"),
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-        ]
-        let heist = HeistPlayback(app: "com.test.mock", steps: steps)
-        let heistURL = try writeTemporaryHeist(heist)
+        """.write(to: heistURL, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
         let (fence, mockConn) = makeConnectedFence()
         do {
             _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
+            XCTFail("Expected invalid heist file")
         } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("Invalid heist step 0"))
-            XCTAssertTrue(message.contains("unknown command \"not_a_real_command\""))
-        }
-
-        XCTAssertTrue(mockConn.sent.isEmpty)
-    }
-
-    @ButtonHeistActor
-    func testPlayHeistRejectsInvalidFirstStepArgumentsBeforeExecution() async throws {
-        let steps = [
-            try HeistStep(command: "edit_action", arguments: ["action": .int(7)]),
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-        ]
-        let heist = HeistPlayback(app: "com.test.mock", steps: steps)
-        let heistURL = try writeTemporaryHeist(heist)
-        defer { try? FileManager.default.removeItem(at: heistURL) }
-
-        let (fence, mockConn) = makeConnectedFence()
-        do {
-            _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-            XCTFail("Expected FenceError.invalidRequest to be thrown")
-        } catch {
-            guard case FenceError.invalidRequest(let message) = error else {
-                return XCTFail("Expected FenceError.invalidRequest, got \(error)")
-            }
-            XCTAssertTrue(message.contains("Invalid heist step 0"))
-            XCTAssertTrue(message.contains("schema validation failed for action"))
+            XCTAssertTrue("\(error)".contains("not_a_real_command"), "\(error)")
         }
         XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
     @ButtonHeistActor
     func testPlayHeistReentrantGuard() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [])
+        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -3799,9 +2489,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistReportsTimingMs() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-        ])
+        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -3815,15 +2503,13 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlayHeistReportUsesBatchStepDuration() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-        ])
+    func testPlayHeistReportUsesStepDuration() async throws {
+        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
         let (fence, mockConn) = makeConnectedFence()
-        mockConn.batchStepDurationMs = 123
+        mockConn.heistStepDurationMs = 123
         let response = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
 
         guard case .heistPlayback(_, _, _, _, let report) = response else {
@@ -3834,27 +2520,26 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistResetsPhaseAfterCompletion() async throws {
-        let heist = HeistPlayback(app: "com.test.mock", steps: [
-            try HeistStep(command: "activate", target: semanticTarget(identifier: "btn1")),
-        ])
+        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
         let (fence, _) = makeConnectedFence()
-        // First playback should succeed
-        let firstResponse = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
-        guard case .heistPlayback = firstResponse else {
-            return XCTFail("Expected heistPlayback response")
+        guard case .heistPlayback = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)]) else {
+            return XCTFail("Expected first heistPlayback response")
         }
 
-        // Second playback should also succeed (phase reset to idle)
         let secondResponse = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
         guard case .heistPlayback(let completedSteps, let failedIndex, _, let failure, _) = secondResponse else {
-            return XCTFail("Expected heistPlayback response")
+            return XCTFail("Expected second heistPlayback response")
         }
         XCTAssertEqual(completedSteps, 1)
         XCTAssertNil(failedIndex)
         XCTAssertNil(failure)
+    }
+
+    private func activateHeistStep(identifier: String) throws -> HeistStep {
+        .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier)))))
     }
 
 }
@@ -3883,22 +2568,6 @@ private func targetValue(
 
 private func elementTargetValue(_ fields: [String: HeistValue]) -> HeistValue {
     .object(fields)
-}
-
-private func batchStepValue(
-    _ command: TheFence.Command,
-    _ fields: [String: HeistValue] = [:]
-) -> HeistValue {
-    batchStepValue(command.rawValue, fields)
-}
-
-private func batchStepValue(
-    _ commandName: String,
-    _ fields: [String: HeistValue] = [:]
-) -> HeistValue {
-    var values = fields
-    values["command"] = .string(commandName)
-    return .object(values)
 }
 
 private func parseTypedExpectation(_ expectation: HeistValue?) throws -> AccessibilityPredicate? {

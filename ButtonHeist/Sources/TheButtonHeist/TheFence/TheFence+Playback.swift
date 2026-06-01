@@ -1,9 +1,6 @@
 import Foundation
-import os.log
 
 import TheScore
-
-private let playbackLogger = Logger(subsystem: "com.buttonheist.fence", category: "playback")
 
 @ButtonHeistActor
 extension TheFence {
@@ -20,17 +17,13 @@ extension TheFence {
 
         let playbackContract = try readHeistPlayback(contentsOf: resolvedURL)
 
-        if let connectedBundle = handoff.serverInfo?.bundleIdentifier,
-           connectedBundle != playbackContract.app {
-            playbackLogger.warning(
-                "Heist was recorded against \(playbackContract.app) but connected app is \(connectedBundle)"
-            )
-        }
-
         let heistName = resolvedURL.deletingPathExtension().lastPathComponent
         let playbackStart = CFAbsoluteTimeGetCurrent()
-        let batchResponse = try await handleRunBatch(playbackContract.batchRequest)
-        let projection = try playbackProjection(contract: playbackContract, batchResponse: batchResponse)
+        let executionResult = try await sendAndAwaitHeistExecution(
+            playbackContract.plan,
+            timeout: Timeouts.longActionSeconds
+        )
+        let projection = playbackProjection(contract: playbackContract, result: executionResult)
         var failure = projection.failure
 
         if let currentFailure = failure {
@@ -40,8 +33,8 @@ extension TheFence {
         let totalTimeSeconds = CFAbsoluteTimeGetCurrent() - playbackStart
         let report = HeistPlaybackReport(
             heistName: heistName,
-            app: playbackContract.app,
-            totalStepCount: playbackContract.steps.count,
+            app: handoff.serverInfo?.bundleIdentifier ?? "unknown",
+            totalStepCount: playbackContract.plan.steps.count,
             totalTimeSeconds: totalTimeSeconds,
             steps: projection.stepResults
         )

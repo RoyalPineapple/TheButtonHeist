@@ -404,7 +404,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.incrementCount, 1)
     }
 
-    func testBatchCommandsMatchSingleCommandMatcherFailures() async {
+    func testHeistCommandsMatchSingleCommandMatcherFailures() async {
         let matcher = ElementPredicate(identifier: "missing_target")
         let target = ElementTarget.predicate(matcher)
         let commands: [(String, ClientMessage, Bool)] = [
@@ -423,11 +423,11 @@ final class TheBrainsActionTests: XCTestCase {
 
         for (label, command, normalizingTimeoutDuration) in commands {
             let single = await brains.executeCommand(command)
-            let batch = await batchStepResult(for: command)
+            let heist = await heistStepResult(for: command)
             assertSameActionResult(
                 label,
                 single: single,
-                batch: batch,
+                heist: heist,
                 normalizingTimeoutDuration: normalizingTimeoutDuration
             )
         }
@@ -1058,29 +1058,29 @@ final class TheBrainsActionTests: XCTestCase {
     private func assertSameInteraction(
         _ name: String,
         single singleResult: TheSafecracker.InteractionResult,
-        batch batchResult: TheSafecracker.InteractionResult,
+        heist heistResult: TheSafecracker.InteractionResult,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        XCTAssertEqual(batchResult.success, singleResult.success, name, file: file, line: line)
-        XCTAssertEqual(batchResult.method, singleResult.method, name, file: file, line: line)
-        XCTAssertEqual(batchResult.message, singleResult.message, name, file: file, line: line)
-        XCTAssertEqual(batchResult.failureKind, singleResult.failureKind, name, file: file, line: line)
+        XCTAssertEqual(heistResult.success, singleResult.success, name, file: file, line: line)
+        XCTAssertEqual(heistResult.method, singleResult.method, name, file: file, line: line)
+        XCTAssertEqual(heistResult.message, singleResult.message, name, file: file, line: line)
+        XCTAssertEqual(heistResult.failureKind, singleResult.failureKind, name, file: file, line: line)
     }
 
     private func assertSameActionResult(
         _ name: String,
         single: ActionResult,
-        batch: ActionResult,
+        heist: ActionResult,
         normalizingTimeoutDuration: Bool = false,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
-        XCTAssertEqual(batch.success, single.success, name, file: file, line: line)
-        XCTAssertEqual(batch.method, single.method, name, file: file, line: line)
-        XCTAssertEqual(batch.errorKind, single.errorKind, name, file: file, line: line)
+        XCTAssertEqual(heist.success, single.success, name, file: file, line: line)
+        XCTAssertEqual(heist.method, single.method, name, file: file, line: line)
+        XCTAssertEqual(heist.errorKind, single.errorKind, name, file: file, line: line)
         XCTAssertEqual(
-            normalizedActionMessage(batch.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
+            normalizedActionMessage(heist.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
             normalizedActionMessage(single.message, normalizingTimeoutDuration: normalizingTimeoutDuration),
             name,
             file: file,
@@ -1088,14 +1088,24 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
-    private func batchStepResult(for command: ClientMessage) async -> ActionResult {
-        let result = await brains.executeBatchExecutionPlan(BatchPlan(steps: [
-            BatchStep(command: command, predicate: nil, deadline: Deadline()),
-        ], policy: .continueOnError))
-        guard case .batchExecution(let batch) = result.payload,
-              let stepResult = batch.steps.first,
+    private func heistStepResult(for command: ClientMessage) async -> ActionResult {
+        let step: HeistStep
+        if case .wait(let target) = command {
+            step = .wait(WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout))
+        } else {
+            do {
+                step = .action(try ActionStep(command: command))
+            } catch {
+                XCTFail("Expected heist executable command for \(command.wireType.rawValue): \(error)")
+                return ActionResultBuilder(method: .heistPlan).failure(errorKind: .validationError)
+            }
+        }
+
+        let result = await brains.executeHeistPlan(HeistPlan(steps: [step]))
+        guard case .heistExecution(let heist) = result.payload,
+              let stepResult = heist.steps.first,
               let actionResult = stepResult.actionResult else {
-            XCTFail("Expected batch execution step result for \(command.wireType.rawValue)")
+            XCTFail("Expected heist execution step result for \(command.wireType.rawValue)")
             return result
         }
         return actionResult

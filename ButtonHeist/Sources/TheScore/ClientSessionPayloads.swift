@@ -1,7 +1,7 @@
 import Foundation
 
 /// Payload for authenticate message
-public struct AuthenticatePayload: Codable, Sendable {
+public struct AuthenticatePayload: Codable, Sendable, Equatable {
     public let token: String
     /// Unique driver identity for session locking. When set, the server uses this
     /// (instead of the auth token) to distinguish drivers. Set via BUTTONHEIST_DRIVER_ID.

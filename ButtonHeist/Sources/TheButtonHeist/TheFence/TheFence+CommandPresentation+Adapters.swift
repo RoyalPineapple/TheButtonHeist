@@ -17,7 +17,7 @@ public extension TheFence.Command {
             attached. When an action produces a transient state (spinner, \
             loading overlay), call \(inlineCode(wait.rawValue)) with a \
             predicate to ride through intermediate states. Use \
-            \(inlineCode(runBatch.rawValue)) for multi-step sequences with per-step \
+            \(inlineCode(runHeist.rawValue)) for multi-step sequences with per-step \
             expectations. Use \(inlineCode(startHeist.rawValue))/\
             \(inlineCode(stopHeist.rawValue)) to record replayable .heist files. \
             Full guide: docs/MCP-AGENT-GUIDE.md.

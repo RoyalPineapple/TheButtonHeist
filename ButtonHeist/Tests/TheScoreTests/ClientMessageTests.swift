@@ -129,90 +129,81 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    // MARK: - Batch Execution Plan Tests
+    // MARK: - Heist Plan Tests
 
-    func testBatchPlanClientMessageRoundTrip() throws {
+    func testHeistPlanClientMessageRoundTrip() throws {
         let saveTarget = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]))
-        let plan = BatchPlan(
+        let plan = HeistPlan(
             steps: [
-                BatchStep(
+                .action(try ActionStep(
                     command: .activate(saveTarget),
-                    predicate: .changed(.screen()),
-                    deadline: Deadline()
-                ),
-                BatchStep(
-                    command: .wait(WaitTarget(predicate: .state(.present(ElementPredicate(label: "Save", traits: [.button]))), timeout: 2.5)),
-                    predicate: .changed(.appeared(ElementPredicate(label: "Save", traits: [.button]))),
-                    deadline: Deadline(timeout: 2.5)
-                ),
-                BatchStep(
-                    command: .wait(WaitTarget(
-                        predicate: .changed(.appeared(ElementPredicate(label: "Done"))),
-                        timeout: 1.0
-                    )),
+                    expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
+                )),
+                .wait(WaitStep(
+                    predicate: .state(.present(ElementPredicate(label: "Save", traits: [.button]))),
+                    timeout: 2.5
+                )),
+                .wait(WaitStep(
                     predicate: .changed(.appeared(ElementPredicate(label: "Done"))),
-                    deadline: Deadline(timeout: 1.0)
-                ),
-            ],
-            policy: .continueOnError
+                    timeout: 1.0
+                )),
+            ]
         )
-        let message = ClientMessage.batchExecutionPlan(plan)
+        let message = ClientMessage.heistPlan(plan)
 
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        guard case .batchExecutionPlan(let decodedPlan) = decoded else {
-            return XCTFail("Expected batchExecutionPlan, got \(decoded)")
+        guard case .heistPlan(let decodedPlan) = decoded else {
+            return XCTFail("Expected heistPlan, got \(decoded)")
         }
-        XCTAssertEqual(decodedPlan.policy, .continueOnError)
         XCTAssertEqual(decodedPlan.steps.count, 3)
-        guard case .activate(let decodedTarget) = decodedPlan.steps[0].command,
-              decodedPlan.steps[0].predicate == .changed(.screen()) else {
+        guard case .action(let decodedAction) = decodedPlan.steps[0],
+              case .activate(let decodedTarget) = decodedAction.command,
+              decodedAction.expectation?.predicate == .changed(.screen()) else {
             return XCTFail("Expected activate command with screen change predicate")
         }
         XCTAssertEqual(decodedTarget, saveTarget)
     }
 
-    func testBatchPlanEnvelopeRoundTrip() throws {
-        let plan = BatchPlan(steps: [
-            BatchStep(
+    func testHeistPlanEnvelopeRoundTrip() throws {
+        let plan = HeistPlan(steps: [
+            .action(try ActionStep(
                 command: .typeText(TypeTextTarget(
                     text: "hello",
                     elementTarget: .predicate(ElementPredicate(identifier: "nameField"))
-                )),
-                predicate: nil,
-                deadline: Deadline()
-            ),
+                ))
+            )),
         ])
         let envelope = RequestEnvelope(
-            requestId: "batch-1",
-            message: .batchExecutionPlan(plan)
+            requestId: "heist-1",
+            message: .heistPlan(plan)
         )
 
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
-        XCTAssertEqual(decoded.requestId, "batch-1")
-        guard case .batchExecutionPlan(let decodedPlan) = decoded.message,
+        XCTAssertEqual(decoded.requestId, "heist-1")
+        guard case .heistPlan(let decodedPlan) = decoded.message,
               let step = decodedPlan.steps.first,
-              case .typeText(let target) = step.command,
-              step.predicate == nil else {
-            return XCTFail("Expected batchExecutionPlan envelope, got \(decoded.message)")
+              case .action(let action) = step,
+              case .typeText(let target) = action.command,
+              action.expectation == nil else {
+            return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(target.text, "hello")
         XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "nameField")))
     }
 
-    func testBatchExecutionDescriptionsUseNormalCommandIdentity() {
-        let step = BatchStep(
+    func testHeistActionDescriptionUsesNormalCommandIdentity() throws {
+        let step = try ActionStep(
             command: .activate(.predicate(ElementPredicate(label: "Save"))),
-            predicate: .changed(.screen()),
-            deadline: Deadline()
+            expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
         )
 
         XCTAssertEqual(
             step.description,
-            #"step(command=activate expect=changed(screen_changed) deadline=deadline(*))"#
+            #"action(command=activate expect=wait(changed(screen_changed) timeout=10))"#
         )
     }
 

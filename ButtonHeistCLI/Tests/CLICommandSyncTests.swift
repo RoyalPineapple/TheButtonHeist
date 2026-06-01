@@ -18,7 +18,7 @@ final class CLICommandSyncTests: XCTestCase {
 
         XCTAssertTrue(help.contains("activate"))
         XCTAssertTrue(help.contains("get_interface"))
-        XCTAssertTrue(help.contains("run_batch"))
+        XCTAssertTrue(help.contains("run_heist"))
     }
 
     func testJSONLinesDefaultOutputIsCanonicalJSON() {
@@ -97,18 +97,31 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try TheFence.parseExpectationArgument("layout_changed"))
     }
 
-    func testRunBatchSerializesStepsBeforeSending() throws {
-        let steps = try RunBatchCommand.serializedBatchSteps(
-            inline: #"[{"command":"activate","target":{"heistId":"button-login"}}]"#,
+    func testRunHeistSerializesPlanFieldsBeforeSending() throws {
+        let arguments = try RunHeistCommand.planArguments(
+            inline: #"{"version":1,"steps":[{"type":"warn","warn":{"message":"Check login state"}}]}"#,
             fromFile: nil
         )
 
-        XCTAssertEqual(steps.count, 1)
-        guard case .object(let object) = steps[0] else {
-            return XCTFail("expected serialized batch step object")
+        XCTAssertEqual(arguments[.version], .int(1))
+        guard case .array(let steps)? = arguments[.steps] else {
+            return XCTFail("expected serialized heist plan steps")
         }
-        XCTAssertEqual(object["command"], .string(TheFence.Command.activate.rawValue))
-        XCTAssertEqual(object["target"], .object(["heistId": .string("button-login")]))
+        XCTAssertEqual(steps, [
+            .object([
+                "type": .string("warn"),
+                "warn": .object(["message": .string("Check login state")]),
+            ]),
+        ])
+    }
+
+    func testRunHeistRequiresExactlyOnePlanSource() {
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: nil, fromFile: nil)) { error in
+            XCTAssertTrue(String(describing: error).contains("Must supply either --plan or --plan-from-file"))
+        }
+        XCTAssertThrowsError(try RunHeistCommand.planArguments(inline: "{}", fromFile: "plan.json")) { error in
+            XCTAssertTrue(String(describing: error).contains("--plan and --plan-from-file are mutually exclusive"))
+        }
     }
 
     func testSharedRequestBuilderParsesCanonicalMachineJSON() throws {
@@ -223,14 +236,14 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testSharedRequestBuilderAcceptsCanonicalMachineJSONInJSONLinesMode() throws {
         let parsed = try CLIRequestBuilder.parsedRequest(
-            from: #"{"command":"activate","target":{"heistId":"button_save"}}"#
+            from: #"{"command":"activate","target":{"identifier":"button_save"}}"#
         )
 
         XCTAssertEqual(parsed.command, .activate)
         guard case .object(let target)? = parsed.argument(.target) else {
             return XCTFail("expected typed target object")
         }
-        XCTAssertEqual(target["heistId"], .string("button_save"))
+        XCTAssertEqual(target["identifier"], .string("button_save"))
     }
 
     func testSharedRequestBuilderAttachesDescriptorForCanonicalMachineJSON() throws {

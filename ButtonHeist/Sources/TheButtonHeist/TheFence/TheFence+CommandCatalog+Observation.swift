@@ -20,7 +20,7 @@ extension TheFence.Command {
             ),
             commandDescriptor(
                 .wait, requestDecoder: TheFence.decodeWaitRequest,
-                isBatchExecutable: true,
+                isHeistExecutable: true,
                 parameters: FenceParameterBlocks.wait,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
                 description: "Wait until an accessibility predicate is satisfied: present/absent poll the "
