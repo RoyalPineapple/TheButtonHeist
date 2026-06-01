@@ -52,7 +52,7 @@ struct InterfaceSelector {
         return interface
     }
 
-    private func selectLeafSubtrees(matching matcher: ElementMatcher) -> Interface {
+    private func selectLeafSubtrees(matching predicate: ElementPredicate) -> Interface {
         let annotations = interface.annotations.elementByPath
         let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceLeafCandidate? in
             guard case .element(let element, let traversalIndex) = node else { return nil }
@@ -60,7 +60,7 @@ struct InterfaceSelector {
             guard HeistElement(
                 accessibilityElement: element,
                 annotation: annotation
-            ).matches(matcher) else { return nil }
+            ).matches(predicate) else { return nil }
             return InterfaceLeafCandidate(node: node, path: path, traversalIndex: traversalIndex, annotation: annotation)
         }
         return selectedInterface(forLeafCandidates: candidates)
@@ -78,10 +78,8 @@ struct InterfaceSelector {
                 )
                 guard case .element(let target) = subtree else { return nil }
                 switch target {
-                case .heistId(let heistId):
-                    guard projected.heistId == heistId else { return nil }
-                case .matcher(let matcher, _):
-                    guard projected.matches(matcher) else { return nil }
+                case .predicate(let predicate, _):
+                    guard projected.matches(predicate) else { return nil }
                 }
                 return InterfaceSubtreeCandidate(
                     node: node,
@@ -150,7 +148,6 @@ struct InterfaceSelector {
             guard let annotation = candidate.annotation else { return nil }
             return InterfaceElementAnnotation(
                 path: TreePath([index]),
-                heistId: annotation.heistId,
                 actions: annotation.actions
             )
         }
@@ -210,7 +207,7 @@ private extension HeistElement {
     var subtreeCandidateSummary: String {
         [
             "element",
-            subtreeSummaryRequiredField("heistId", heistId),
+            subtreeSummaryRequiredField("element", description),
             subtreeSummaryField("identifier", identifier),
             subtreeSummaryField("label", label),
             subtreeSummaryField("value", value),

@@ -95,8 +95,10 @@ final class WireCommandParityTests: XCTestCase {
             return ["target": target, "endX": .double(120), "endY": .double(240)]
         case .scroll:
             return ["direction": .string(ScrollDirection.down.rawValue)]
-        case .scrollToVisible, .elementSearch, .activate, .waitFor:
+        case .scrollToVisible, .elementSearch, .activate:
             return ["target": target]
+        case .wait:
+            return ["predicate": .object(["type": .string("elements_changed")])]
         case .scrollToEdge:
             return ["edge": .string(ScrollEdge.bottom.rawValue)]
         case .rotor:
@@ -107,8 +109,6 @@ final class WireCommandParityTests: XCTestCase {
             return ["action": .string(EditAction.paste.rawValue)]
         case .setPasteboard:
             return ["text": .string("clipboard")]
-        case .waitForChange:
-            return [:]
         case .runBatch:
             return ["steps": .array([batchStep(.activate, ["target": target])])]
         case .connect:
@@ -121,7 +121,7 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     private func sampleClientMessages() -> [ClientMessage] {
-        let target = ElementTarget.matcher(ElementMatcher(identifier: "target"))
+        let target = ElementTarget.predicate(ElementPredicate(identifier: "target"))
         let point = GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20))
         return [
             .clientHello,
@@ -148,10 +148,9 @@ final class WireCommandParityTests: XCTestCase {
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),
             .elementSearch(ElementSearchTarget(elementTarget: target)),
             .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
-            .waitFor(WaitForTarget(elementTarget: target)),
-            .waitForChange(WaitForChangeTarget(timeout: 1)),
+            .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
             .batchExecutionPlan(BatchPlan(steps: [
-                BatchStep(command: .activate(target), expectation: nil, deadline: Deadline()),
+                BatchStep(command: .activate(target), predicate: nil, deadline: Deadline()),
             ])),
         ]
     }

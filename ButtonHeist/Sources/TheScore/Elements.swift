@@ -1,8 +1,5 @@
 import Foundation
 
-/// Button Heist element handle carried over the wire as a string.
-public typealias HeistId = String
-
 /// Button Heist container handle carried over the wire as a string.
 public typealias HeistContainer = String
 

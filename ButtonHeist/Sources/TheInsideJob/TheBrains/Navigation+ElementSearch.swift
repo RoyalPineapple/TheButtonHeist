@@ -121,7 +121,7 @@ extension Navigation {
                 scrollCount: scrollCount,
                 uniqueElementsSeen: uniqueElementsSeen,
                 exhaustive: false,
-                foundHeistId: found.heistId
+                found: true
             ))
         )
     }

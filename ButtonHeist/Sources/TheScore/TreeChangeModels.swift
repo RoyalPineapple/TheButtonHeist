@@ -3,7 +3,8 @@ import AccessibilitySnapshotModel
 
 /// Which accessibility property changed on an element.
 public enum ElementProperty: String, Codable, Sendable, CaseIterable {
-    case label
+    // No `label`/`identifier`: those are element identity (diff pairing key), so a
+    // change to them is a remove+add, never a property update.
     case value
     case traits
     case hint
@@ -32,13 +33,14 @@ public struct PropertyChange: Codable, Sendable, Equatable {
     }
 }
 
-/// An element whose state changed — carries the heistId and which properties differ.
+/// An element whose state changed — carries the element itself (so the change
+/// is self-describing on the wire) and which properties differ.
 public struct ElementUpdate: Codable, Sendable, Equatable {
-    public let heistId: HeistId
+    public let element: HeistElement
     public let changes: [PropertyChange]
 
-    public init(heistId: HeistId, changes: [PropertyChange]) {
-        self.heistId = heistId
+    public init(element: HeistElement, changes: [PropertyChange]) {
+        self.element = element
         self.changes = changes
     }
 }

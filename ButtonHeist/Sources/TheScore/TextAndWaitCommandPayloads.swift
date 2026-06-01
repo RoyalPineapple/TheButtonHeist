@@ -87,78 +87,45 @@ extension EditActionTarget: CustomStringConvertible {
     }
 }
 
-/// Target for wait_for_change command — wait for the UI to change in a way
-/// that matches an expectation. With no expectation, returns on any tree change.
-public struct WaitForChangeTarget: Codable, Sendable {
-    /// The change to wait for. When nil, any tree change satisfies the wait.
-    public let expect: ActionExpectation?
-    /// Maximum time to wait in seconds (default: 30, max: 30)
-    public let timeout: Double?
-
-    public init(expect: ActionExpectation? = nil, timeout: Double? = nil) {
-        self.expect = expect
-        self.timeout = timeout
-    }
-
-    public var resolvedTimeout: Double { min(timeout ?? 30, 30) }
-}
-
-extension WaitForChangeTarget: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("waitForChange", [
-            expect?.description,
-            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
-        ].compactMap { $0 })
-    }
-}
-
-/// Target for wait_for command — wait for an element to appear or disappear.
-/// Uses ElementTarget so both heistId and matcher predicates work.
-public struct WaitForTarget: Sendable {
-    /// Element to wait for — by heistId or matcher predicate.
-    public let elementTarget: ElementTarget
-    /// When true, wait for the element to NOT exist
-    public let absent: Bool?
+/// Target for the `wait` command — wait until an accessibility predicate is
+/// satisfied. `present`/`absent` poll the current interface; `changed` rides
+/// through intermediate states until the change predicate is met.
+public struct WaitTarget: Codable, Sendable, Equatable {
+    /// The predicate to wait on.
+    public let predicate: AccessibilityPredicate
     /// Maximum time to wait in seconds (default: 10, max: 30)
     public let timeout: Double?
 
-    public init(elementTarget: ElementTarget, absent: Bool? = nil, timeout: Double? = nil) {
-        self.elementTarget = elementTarget
-        self.absent = absent
+    public init(predicate: AccessibilityPredicate, timeout: Double? = nil) {
+        self.predicate = predicate
         self.timeout = timeout
     }
 
-    public var resolvedAbsent: Bool { absent ?? false }
     public var resolvedTimeout: Double { min(timeout ?? 10, 30) }
-}
 
-extension WaitForTarget: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("waitFor", [
-            elementTarget.description,
-            ScoreDescription.valueField("absent", absent),
-            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
-        ].compactMap { $0 })
-    }
-}
-
-extension WaitForTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case absent, timeout
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case predicate, timeout
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "wait target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // WaitForTarget requires an inline ElementTarget alongside wait policy fields.
-        self.elementTarget = try ElementTarget.decodeInline(from: decoder)
-        self.absent = try container.decodeIfPresent(Bool.self, forKey: .absent)
+        self.predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
         self.timeout = try container.decodeIfPresent(Double.self, forKey: .timeout)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try elementTarget.encode(to: encoder)
-        try container.encodeIfPresent(absent, forKey: .absent)
+        try container.encode(predicate, forKey: .predicate)
         try container.encodeIfPresent(timeout, forKey: .timeout)
+    }
+}
+
+extension WaitTarget: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("wait", [
+            predicate.description,
+            timeout.map { "timeout=\(ScoreDescription.decimal($0))" },
+        ].compactMap { $0 })
     }
 }

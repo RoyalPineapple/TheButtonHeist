@@ -31,7 +31,6 @@ extension TheStash {
 
     func performRotor(
         selection rotorSelection: RotorSelection,
-        continuation: RotorContinuation,
         direction: RotorDirection,
         on liveTarget: LiveActionTarget
     ) -> RotorOutcome {
@@ -67,28 +66,21 @@ extension TheStash {
             }
         }
 
+        let rotorName = selection.bhInvocableName(locale: object.accessibilityLanguage)
+        let hostHeistId = liveTarget.screenElement.heistId
+
         let predicate = UIAccessibilityCustomRotorSearchPredicate()
         predicate.searchDirection = direction.uiAccessibilityDirection
-        switch continuation {
-        case .none:
-            break
-        case .item(let continuationHeistId):
-            guard let currentObject = rotorCurrentObject(heistId: continuationHeistId) else {
-                return .currentItemUnavailable(continuationHeistId)
-            }
+        // Cycle from the held cursor when we are continuing rotor mode on the
+        // same host + rotor and the selection object is still alive; otherwise
+        // leave `currentItem` nil so the search enters at index 0.
+        if let cursor = rotorCursor,
+           cursor.hostHeistId == hostHeistId,
+           cursor.rotorName == rotorName,
+           let currentObject = cursor.currentSelection {
             predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: nil)
-        case .textRange(let continuationHeistId, let continuationTextRange):
-            guard let currentObject = rotorCurrentObject(heistId: continuationHeistId) else {
-                return .currentItemUnavailable(continuationHeistId)
-            }
-            guard let input = currentObject as? UITextInput,
-                  let range = textRange(from: continuationTextRange, in: input) else {
-                return .continuationTextRangeUnavailable
-            }
-            predicate.currentItem = UIAccessibilityCustomRotorItemResult(targetElement: currentObject, targetRange: range)
         }
 
-        let rotorName = selection.bhInvocableName(locale: object.accessibilityLanguage)
         guard let result = selection.itemSearchBlock(predicate) else {
             return .noResult(rotorName)
         }
@@ -101,15 +93,9 @@ extension TheStash {
         guard parsed != nil || textRange != nil else {
             return .resultTargetNotParsed(rotorName)
         }
+        // Hold the new selection as the rotor cursor for the next step.
+        rotorCursor = RotorCursor(hostHeistId: hostHeistId, rotorName: rotorName, currentSelection: resultObject)
         return .succeeded(RotorHit(rotor: rotorName, screenElement: parsed, textRange: textRange))
-    }
-
-    func rotorCurrentObject(heistId: HeistId) -> NSObject? {
-        guard let current = resolveVisibleTarget(.heistId(heistId)).resolved,
-              let currentObject = liveObject(for: current) else {
-            return nil
-        }
-        return currentObject
     }
 }
 

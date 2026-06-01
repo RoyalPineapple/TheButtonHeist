@@ -11,6 +11,12 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → explore semantic state → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
+        // Rotor mode holds a single cursor only while consecutive rotor steps
+        // run on the same host. Any other interaction exits rotor mode and drops
+        // the held cursor.
+        if case .rotor = message {} else {
+            stash.clearRotorCursor()
+        }
         switch message {
         case .activate(let target):
             return await performInteraction(method: .activate) { await self.actions.executeActivate(target) }
@@ -46,13 +52,8 @@ extension TheBrains {
             return await performElementSearch(target: target, method: .elementSearch)
         case .scrollToEdge(let target):
             return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
-        case .waitFor(let target):
-            return await performWaitFor(target: target)
-        case .waitForChange(let target):
-            return await executeWaitForChange(
-                timeout: target.resolvedTimeout,
-                expectation: target.expect
-            )
+        case .wait(let target):
+            return await performWait(target: target)
         case .batchExecutionPlan(let plan):
             return await executeBatchExecutionPlan(plan)
         case .clientHello, .authenticate, .requestInterface,
@@ -131,25 +132,74 @@ extension TheBrains {
         )
     }
 
-    /// Wait for an element to appear or disappear.
-    func performWaitFor(target: WaitForTarget) async -> ActionResult {
-        await performWaitFor(
-            elementTarget: target.elementTarget,
-            absent: target.absent,
-            timeout: target.timeout
+    /// Wait until an accessibility predicate is satisfied.
+    ///
+    /// `present`/`absent` poll the current interface for an element matching the
+    /// predicate; `changed` rides the settle loop until the change predicate is
+    /// met (or any tree change, for `screen`/`elements`).
+    func performWait(target: WaitTarget) async -> ActionResult {
+        switch target.predicate {
+        case .state(.present(let predicate)):
+            return await performPresenceWait(predicate: predicate, absent: false, timeout: target.timeout)
+        case .state(.absent(let predicate)):
+            return await performPresenceWait(predicate: predicate, absent: true, timeout: target.timeout)
+        case .state(let stateClause):
+            return await performStateWait(state: stateClause, timeout: target.timeout)
+        case .changed:
+            return await executeWaitForChange(
+                timeout: target.resolvedTimeout,
+                expectation: target.predicate
+            )
+        }
+    }
+
+    /// Poll the current interface until a composite state predicate (e.g. `.all`)
+    /// holds, or the timeout expires. Single `present`/`absent` states use
+    /// `performPresenceWait` so they keep ambiguity diagnostics; this path
+    /// evaluates the whole `State` against each fresh observation.
+    func performStateWait(state: AccessibilityPredicate.State, timeout: Double?) async -> ActionResult {
+        guard refresh() != nil else {
+            return treeUnavailableResult(method: .wait)
+        }
+        let before = postActionObservation.captureSemanticState()
+        let deadline = ContinuousClock.now + .seconds(min(timeout ?? 10, 30))
+        let start = CFAbsoluteTimeGetCurrent()
+
+        var met = state.evaluatePresence(in: before.interface.projectedElements)
+        while !met, ContinuousClock.now < deadline {
+            _ = await tripwire.waitForAllClear(timeout: 1.0)
+            guard stash.refresh() != nil else {
+                return treeUnavailableResult(method: .wait)
+            }
+            _ = await navigation.exploreAndPrune()
+            met = state.evaluatePresence(in: stash.semanticInterfaceWithHash().interface.projectedElements)
+        }
+
+        let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        return await postActionObservation.actionResultWithDelta(
+            success: met,
+            method: .wait,
+            message: met ? "conditions met after \(elapsed)s" : "timed out after \(elapsed)s waiting for: \(state)",
+            payload: nil,
+            errorKind: met ? nil : .timeout,
+            before: before
         )
     }
 
-    func performWaitFor(
-        elementTarget: ElementTarget,
-        absent: Bool?,
+    func performPresenceWait(
+        predicate: ElementPredicate,
+        absent: Bool,
         timeout: Double?
     ) async -> ActionResult {
         guard refresh() != nil else {
-            return treeUnavailableResult(method: .waitFor)
+            return treeUnavailableResult(method: .wait)
         }
         let before = postActionObservation.captureSemanticState()
-        let result = await executeWaitFor(elementTarget: elementTarget, absent: absent ?? false, timeout: min(timeout ?? 10, 30))
+        let result = await executeWaitFor(
+            elementTarget: .predicate(predicate, ordinal: 0),
+            absent: absent,
+            timeout: min(timeout ?? 10, 30)
+        )
         let errorKind: ErrorKind? = {
             guard !result.success else { return nil }
             return Self.waitForErrorKind(for: result.failureKind)
@@ -157,7 +207,7 @@ extension TheBrains {
 
         return await postActionObservation.actionResultWithDelta(
             success: result.success,
-            method: .waitFor,
+            method: .wait,
             message: result.message,
             payload: result.payload,
             errorKind: errorKind,
@@ -165,7 +215,7 @@ extension TheBrains {
         )
     }
 
-    /// Execute the wait_for polling loop.
+    /// Execute the presence polling loop.
     private func executeWaitFor(
         elementTarget: ElementTarget,
         absent: Bool,
@@ -175,7 +225,7 @@ extension TheBrains {
         let start = CFAbsoluteTimeGetCurrent()
 
         guard await refreshSemanticStateForWait(target: elementTarget) else {
-            return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
+            return .failure(.wait, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
         }
         var resolution = stash.resolveTarget(elementTarget)
         if let result = waitForResult(resolution: resolution, absent: absent, elapsed: nil) {
@@ -185,7 +235,7 @@ extension TheBrains {
         while ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
             guard await refreshSemanticStateForWait(target: elementTarget) else {
-                return .failure(.waitFor, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
+                return .failure(.wait, message: TheBrains.treeUnavailableMessage, failureKind: .treeUnavailable)
             }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             resolution = stash.resolveTarget(elementTarget)
@@ -201,7 +251,7 @@ extension TheBrains {
             target: elementTarget,
             resolution: resolution
         )
-        return .failure(.waitFor, message: message, failureKind: .timeout)
+        return .failure(.wait, message: message, failureKind: .timeout)
     }
 
     private func waitForResult(
@@ -211,16 +261,16 @@ extension TheBrains {
     ) -> TheSafecracker.InteractionResult? {
         switch (absent, resolution) {
         case (true, .notFound):
-            return .success(method: .waitFor, message: "absent confirmed after \(elapsed ?? "0.0")s")
+            return .success(method: .wait, message: "absent confirmed after \(elapsed ?? "0.0")s")
         case (true, .ambiguous(_, let diagnostics)):
-            return .failure(.waitFor, message: diagnostics)
+            return .failure(.wait, message: diagnostics)
         case (true, .resolved):
             return nil
         case (false, .resolved):
             let message = elapsed.map { "matched after \($0)s" } ?? "matched immediately"
-            return .success(method: .waitFor, message: message)
+            return .success(method: .wait, message: message)
         case (false, .ambiguous(_, let diagnostics)):
-            return .failure(.waitFor, message: diagnostics)
+            return .failure(.wait, message: diagnostics)
         case (false, .notFound):
             return nil
         }
@@ -250,17 +300,15 @@ extension TheBrains {
         }
         parts.append(
             "Next: get_interface() to inspect current elements, " +
-                "then retry wait_for with a heistId or exact matcher."
+                "then retry wait with an exact predicate."
         )
         return parts.joined(separator: "; ")
     }
 
     private func waitForTargetDescription(_ target: ElementTarget) -> String {
         switch target {
-        case .heistId(let heistId):
-            return "heistId=\"\(heistId)\""
-        case .matcher(let matcher, let ordinal):
-            var description = TheStash.Diagnostics.formatMatcher(matcher)
+        case .predicate(let predicate, let ordinal):
+            var description = TheStash.Diagnostics.formatMatcher(predicate)
             if let ordinal {
                 description += " ordinal=\(ordinal)"
             }

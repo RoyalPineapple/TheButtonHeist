@@ -68,12 +68,12 @@ final class AccessibilityTraceTests: XCTestCase {
         let unfocused = AccessibilityTrace.Capture(
             sequence: 1,
             interface: interface,
-            context: AccessibilityTrace.Context(focusedElementId: nil, keyboardVisible: false)
+            context: AccessibilityTrace.Context(keyboardVisible: false)
         )
         let focused = AccessibilityTrace.Capture(
             sequence: 1,
             interface: interface,
-            context: AccessibilityTrace.Context(focusedElementId: "save", keyboardVisible: true)
+            context: AccessibilityTrace.Context(keyboardVisible: true)
         )
 
         XCTAssertNotEqual(unfocused.hash, focused.hash)
@@ -87,7 +87,7 @@ final class AccessibilityTraceTests: XCTestCase {
             interface: interface,
             transition: AccessibilityTrace.Transition(
                 screenChangeReason: "primaryHeaderChanged",
-                transient: [makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])]
+                transient: [makeElement(label: "Loading", traits: [.staticText])]
             )
         )
 
@@ -97,7 +97,6 @@ final class AccessibilityTraceTests: XCTestCase {
 
     func testCaptureHashHandlesNonFiniteParserGeometry() throws {
         let element = HeistElement(
-            heistId: "picker-row",
             description: "Picker Row",
             label: "Picker Row",
             value: nil,
@@ -144,7 +143,7 @@ final class AccessibilityTraceTests: XCTestCase {
     func testAppendingCarriesTransitionOnCaptureEdge() throws {
         let first = makeInterface(label: "Home")
         let second = makeInterface(label: "Settings")
-        let transient = makeElement(heistId: "spinner", label: "Loading", traits: [.staticText])
+        let transient = makeElement(label: "Loading", traits: [.staticText])
 
         let trace = AccessibilityTrace(first: first).appending(
             second,
@@ -160,8 +159,8 @@ final class AccessibilityTraceTests: XCTestCase {
     }
 
     func testInterfaceProjectsDuplicateTraversalIndexesByPath() throws {
-        let first = makeElement(heistId: "first", label: "First", actions: [.activate])
-        let second = makeElement(heistId: "second", label: "Second", actions: [.increment])
+        let first = makeElement(label: "First", actions: [.activate])
+        let second = makeElement(label: "Second", actions: [.increment])
         let interface = Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [
@@ -171,18 +170,16 @@ final class AccessibilityTraceTests: XCTestCase {
             annotations: InterfaceAnnotations(elements: [
                 InterfaceElementAnnotation(
                     path: TreePath([0]),
-                    heistId: first.heistId,
                     actions: first.actions
                 ),
                 InterfaceElementAnnotation(
                     path: TreePath([1]),
-                    heistId: second.heistId,
                     actions: second.actions
                 ),
             ])
         )
 
-        XCTAssertEqual(interface.projectedElements.map(\.heistId), ["first", "second"])
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["First", "Second"])
         XCTAssertEqual(interface.projectedElements.map(\.actions), [[.activate], [.increment]])
     }
 
@@ -238,13 +235,13 @@ final class AccessibilityTraceTests: XCTestCase {
         let before = AccessibilityTrace.Capture(
             sequence: 1,
             interface: interface,
-            context: AccessibilityTrace.Context(focusedElementId: "search", keyboardVisible: true)
+            context: AccessibilityTrace.Context(keyboardVisible: true)
         )
         let after = AccessibilityTrace.Capture(
             sequence: 2,
             interface: interface,
             parentHash: before.hash,
-            context: AccessibilityTrace.Context(focusedElementId: "total", keyboardVisible: false)
+            context: AccessibilityTrace.Context(keyboardVisible: false)
         )
 
         guard case .elementsChanged = AccessibilityTrace.Delta.between(before, after) else {
@@ -267,7 +264,7 @@ final class AccessibilityTraceTests: XCTestCase {
             sequence: 99,
             interface: makeInterface(label: "Home"),
             parentHash: "sha256:bad",
-            context: AccessibilityTrace.Context(focusedElementId: "title")
+            context: AccessibilityTrace.Context(keyboardVisible: true)
         )
         let second = AccessibilityTrace.Capture(sequence: 42, interface: makeInterface(label: "Settings"), parentHash: "sha256:fork")
 
@@ -276,7 +273,7 @@ final class AccessibilityTraceTests: XCTestCase {
         XCTAssertEqual(trace.captures.map(\.sequence), [1, 2])
         XCTAssertNil(trace.captures[0].parentHash)
         XCTAssertEqual(trace.captures[1].parentHash, trace.captures[0].hash)
-        XCTAssertEqual(trace.captures[0].context.focusedElementId, "title")
+        XCTAssertEqual(trace.captures[0].context.keyboardVisible, true)
         XCTAssertTrue(trace.isLinearChain)
     }
 
@@ -287,8 +284,8 @@ final class AccessibilityTraceTests: XCTestCase {
     ) -> Interface {
         makeTestInterface(
             elements: [
-                makeElement(heistId: "title", label: label, traits: [.header]),
-                makeElement(heistId: "save", label: "Save", value: saveValue),
+                makeElement(label: label, traits: [.header]),
+                makeElement(label: "Save", value: saveValue),
             ],
             timestamp: timestamp
         )
@@ -298,7 +295,6 @@ final class AccessibilityTraceTests: XCTestCase {
         makeTestInterface(nodes: [
             testContainer(makeTestAccessibilityContainer(), stableId: "category-grid", children: labels.map { label in
                 testElement(makeElement(
-                    heistId: "tile-\(label.lowercased())",
                     label: label,
                     traits: [.button]
                 ))
@@ -307,8 +303,8 @@ final class AccessibilityTraceTests: XCTestCase {
     }
 
     private func makeDuplicateTraversalIndexInterface(secondLabel: String) -> Interface {
-        let first = makeElement(heistId: "first", label: "First")
-        let second = makeElement(heistId: "second", label: secondLabel)
+        let first = makeElement(label: "First")
+        let second = makeElement(label: secondLabel)
         return Interface(
             timestamp: Date(timeIntervalSince1970: 0),
             tree: [
@@ -318,12 +314,10 @@ final class AccessibilityTraceTests: XCTestCase {
             annotations: InterfaceAnnotations(elements: [
                 InterfaceElementAnnotation(
                     path: TreePath([0]),
-                    heistId: first.heistId,
                     actions: first.actions
                 ),
                 InterfaceElementAnnotation(
                     path: TreePath([1]),
-                    heistId: second.heistId,
                     actions: second.actions
                 ),
             ])
@@ -331,14 +325,12 @@ final class AccessibilityTraceTests: XCTestCase {
     }
 
     private func makeElement(
-        heistId: HeistId,
         label: String,
         value: String? = nil,
         traits: [HeistTrait] = [.button],
         actions: [ElementAction] = [.activate]
     ) -> HeistElement {
         HeistElement(
-            heistId: heistId,
             description: label,
             label: label,
             value: value,

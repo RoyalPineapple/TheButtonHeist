@@ -31,20 +31,21 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
                 )
             },
             waitForExpectation: { expectation, _ in
-                events.append("expectation:\(expectation)")
                 let trace: AccessibilityTrace.Delta
                 switch expectation {
-                case .screenChanged:
+                case .changed(.screen):
+                    events.append("expectation:screen_changed")
                     trace = .screenChanged(.init(
                         elementCount: 1,
                         newInterface: Interface(timestamp: Date(), tree: [])
                     ))
                 default:
+                    events.append("expectation:elements_changed")
                     trace = .elementsChanged(.init(elementCount: 1, edits: ElementEdits()))
                 }
                 return ActionResult(
                     success: true,
-                    method: .waitForChange,
+                    method: .wait,
                     message: expectation.description,
                     accessibilityTrace: AccessibilityTrace.projectingForTests(trace)
                 )
@@ -57,12 +58,12 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             steps: [
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                    expectation: .elementsChanged,
+                    predicate: .changed(.elements),
                     deadline: Deadline()
                 ),
                 BatchStep(
-                    command: .waitForChange(WaitForChangeTarget(expect: .screenChanged, timeout: 0.1)),
-                    expectation: .screenChanged,
+                    command: .wait(WaitTarget(predicate: .changed(.screen()), timeout: 0.1)),
+                    predicate: .changed(.screen()),
                     deadline: Deadline(timeout: 0.1)
                 ),
             ],
@@ -77,7 +78,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             "action:setPasteboard",
             "expectation:elements_changed",
             "baseline",
-            "action:waitForChange",
+            "action:wait",
             "expectation:screen_changed",
             "baseline",
         ])
@@ -87,7 +88,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         XCTAssertEqual(batch.steps.count, 2)
         let first = batch.steps[0]
         XCTAssertEqual(first.expectation?.met, true)
-        XCTAssertEqual(first.expectationActionResult?.method, .waitForChange)
+        XCTAssertEqual(first.expectationActionResult?.method, .wait)
         let second = batch.steps[1]
         XCTAssertNotNil(second.actionResult)
         XCTAssertEqual(second.expectation?.met, true)
@@ -107,7 +108,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             },
             waitForExpectation: { _, _ in
                 XCTFail("Stop-on-error should not wait after a failed action")
-                return ActionResult(success: true, method: .waitForChange)
+                return ActionResult(success: true, method: .wait)
             },
             settleRefreshRecordBaseline: {
                 events.append("baseline")
@@ -117,17 +118,17 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             steps: [
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "first")),
-                    expectation: nil,
+                    predicate: nil,
                     deadline: Deadline()
                 ),
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "next")),
-                    expectation: nil,
+                    predicate: nil,
                     deadline: Deadline()
                 ),
                 BatchStep(
-                    command: .waitForChange(WaitForChangeTarget(timeout: 0.1)),
-                    expectation: nil,
+                    command: .wait(WaitTarget(predicate: .changed(.elements), timeout: 0.1)),
+                    predicate: nil,
                     deadline: Deadline(timeout: 0.1)
                 ),
             ],
@@ -164,7 +165,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             },
             waitForExpectation: { _, _ in
                 XCTFail("Steps without explicit expectations should not wait")
-                return ActionResult(success: true, method: .waitForChange)
+                return ActionResult(success: true, method: .wait)
             },
             settleRefreshRecordBaseline: {
                 events.append("baseline")
@@ -174,12 +175,12 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             steps: [
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "first")),
-                    expectation: nil,
+                    predicate: nil,
                     deadline: Deadline()
                 ),
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "second")),
-                    expectation: nil,
+                    predicate: nil,
                     deadline: Deadline()
                 ),
             ],
@@ -220,7 +221,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             },
             waitForExpectation: { _, _ in
                 XCTFail("Steps without explicit expectations should not wait")
-                return ActionResult(success: true, method: .waitForChange)
+                return ActionResult(success: true, method: .wait)
             },
             settleRefreshRecordBaseline: {
                 events.append("baseline")
@@ -228,8 +229,8 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         )
         let plan = TheScore.BatchPlan(
             steps: [
-                BatchStep(command: .getPasteboard, expectation: nil, deadline: Deadline()),
-                BatchStep(command: .resignFirstResponder, expectation: nil, deadline: Deadline()),
+                BatchStep(command: .getPasteboard, predicate: nil, deadline: Deadline()),
+                BatchStep(command: .resignFirstResponder, predicate: nil, deadline: Deadline()),
             ],
             policy: .continueOnError
         )
@@ -263,7 +264,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             },
             waitForExpectation: { expectation, _ in
                 XCTFail("Action delta already satisfies \(expectation)")
-                return ActionResult(success: false, method: .waitForChange)
+                return ActionResult(success: false, method: .wait)
             },
             settleRefreshRecordBaseline: {
                 events.append("baseline")
@@ -273,7 +274,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
             steps: [
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                    expectation: .screenChanged,
+                    predicate: .changed(.screen()),
                     deadline: Deadline()
                 ),
             ],
@@ -292,7 +293,7 @@ final class TheBrainsBatchExecutionTests: XCTestCase {
         let plan = TheScore.BatchPlan(steps: [
             BatchStep(
                 command: .setPasteboard(SetPasteboardTarget(text: "batch")),
-                expectation: nil,
+                predicate: nil,
                 deadline: Deadline(timeout: 0.01)
             ),
         ])

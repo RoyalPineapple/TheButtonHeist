@@ -50,16 +50,24 @@ extension FenceResponse {
         for element in edits.added {
             lines.append("  + \(compactElementLine(element))")
         }
-        for id in edits.removed {
-            lines.append("  - \(id)")
+        for element in edits.removed {
+            lines.append("  - \(compactElementLine(element))")
         }
         // Omit geometry changes (frame/activationPoint) — layout shifts are structural noise.
         for update in edits.updated {
+            let name = nonEmptyDescription(update.element)
             for change in update.changes where !change.property.isGeometry {
-                lines.append("  ~ \(update.heistId): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
+                lines.append("  ~ \(name): \(change.property.rawValue) \"\(change.old ?? "nil")\" → \"\(change.new ?? "nil")\"")
             }
         }
         return lines
+    }
+
+    private static func nonEmptyDescription(_ element: HeistElement) -> String {
+        if let label = element.label, !label.isEmpty { return label }
+        if let value = element.value, !value.isEmpty { return value }
+        if let identifier = element.identifier, !identifier.isEmpty { return identifier }
+        return element.description
     }
 
 }

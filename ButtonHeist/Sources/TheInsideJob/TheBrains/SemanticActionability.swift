@@ -312,9 +312,10 @@ final class SemanticActionability {
     }
 
     func makeFirstResponderActionable(method: ActionMethod) async -> SemanticActionabilityFailure? {
-        guard let heistId = stash.firstResponderHeistId else { return nil }
+        guard let screenElement = stash.firstResponderScreenElement(),
+              let target = firstResponderTarget(for: screenElement) else { return nil }
         switch await makeActionable(
-            for: .heistId(heistId),
+            for: target,
             method: method,
             deallocatedBoundary: "first responder actionability"
         ) {
@@ -323,6 +324,22 @@ final class SemanticActionability {
         case .failed(let failure):
             return failure
         }
+    }
+
+    /// Build a predicate target for the first responder from its stable
+    /// accessibility identity. The first responder is unique, so ordinal 0
+    /// selects it among any predicate matches.
+    private func firstResponderTarget(for screenElement: TheStash.ScreenElement) -> ElementTarget? {
+        let element = screenElement.element
+        let predicate = ElementPredicate(
+            label: element.label,
+            identifier: element.identifier,
+            value: element.value,
+            traits: element.traits.heistTraits.filter { !AccessibilityPolicy.transientTraits.contains($0) },
+            excludeTraits: []
+        )
+        guard predicate.hasPredicates else { return nil }
+        return .predicate(predicate, ordinal: 0)
     }
 
 }

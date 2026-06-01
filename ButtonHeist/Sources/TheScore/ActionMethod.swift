@@ -14,11 +14,10 @@ public enum ActionMethod: String, Codable, Sendable {
     case setPasteboard
     case getPasteboard
     case rotor
-    case waitForChange
     case batchExecutionPlan
     case scroll
     case scrollToVisible
     case elementSearch
     case scrollToEdge
-    case waitFor
+    case wait
 }

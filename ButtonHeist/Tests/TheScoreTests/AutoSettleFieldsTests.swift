@@ -25,7 +25,6 @@ final class AutoSettleFieldsTests: XCTestCase {
 
     func testAccessibilityTraceDeltaRoundTripsWithTransient() throws {
         let element = HeistElement(
-            heistId: "loading",
             description: "Loading",
             label: "Processing",
             value: nil,

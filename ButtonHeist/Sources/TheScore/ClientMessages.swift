@@ -108,17 +108,14 @@ public enum ClientMessage: Codable, Sendable {
     /// Read text from the general pasteboard
     case getPasteboard
 
-    /// Wait for an element matching a predicate to appear (or disappear)
-    case waitFor(WaitForTarget)
-
-    /// Wait for the UI to change in a way that matches an expectation.
-    /// With no expectation: returns on any tree change.
-    /// With expect: rides through intermediate states until the expectation is met.
-    case waitForChange(WaitForChangeTarget)
+    /// Wait until an accessibility predicate is satisfied.
+    /// `present`/`absent` poll the current interface; `changed` rides through
+    /// intermediate states until the change predicate is met.
+    case wait(WaitTarget)
 
     /// Execute a typed batch plan using semantic targets. Source heistIds in
     /// the plan are current-capture handles only; executable element identity
-    /// is carried by matcher fields.
+    /// is carried by predicate fields.
     case batchExecutionPlan(BatchPlan)
 
     /// Request a capture of the current screen

@@ -62,13 +62,13 @@ struct PublicActionResponse: FencePublicJSONResponse {
 struct PublicRotorResult: Encodable {
     let name: String
     let direction: String
-    let foundHeistId: HeistId?
+    let found: HeistElement?
     let textRange: PublicRotorTextRange?
 
     init(result: RotorResult) {
         self.name = result.rotor
         self.direction = result.direction.rawValue
-        self.foundHeistId = result.foundHeistId
+        self.found = result.foundElement
         self.textRange = result.textRange.map { PublicRotorTextRange(range: $0) }
     }
 }
@@ -90,12 +90,12 @@ struct PublicRotorTextRange: Encodable {
 struct PublicExpectationResult: Encodable {
     let met: Bool
     let actual: String?
-    let expected: ActionExpectation?
+    let expected: AccessibilityPredicate?
 
     init(result: ExpectationResult) {
         self.met = result.met
         self.actual = result.actual
-        self.expected = result.expectation
+        self.expected = result.predicate
     }
 }
 
@@ -143,7 +143,7 @@ struct PublicDelta: Encodable {
 
 struct PublicElementEdits: Encodable {
     let added: [PublicElement]?
-    let removed: [String]?
+    let removed: [PublicElement]?
     let updated: [PublicElementUpdate]?
 
     var isEmpty: Bool {
@@ -152,20 +152,20 @@ struct PublicElementEdits: Encodable {
 
     init(edits: ElementEdits) {
         self.added = edits.added.isEmpty ? nil : edits.added.map { PublicElement(element: $0, detail: .summary) }
-        self.removed = edits.removed.isEmpty ? nil : edits.removed
+        self.removed = edits.removed.isEmpty ? nil : edits.removed.map { PublicElement(element: $0, detail: .summary) }
         let filteredUpdates = edits.updated.compactMap { PublicElementUpdate(update: $0) }
         self.updated = filteredUpdates.isEmpty ? nil : filteredUpdates
     }
 }
 
 struct PublicElementUpdate: Encodable {
-    let heistId: String
+    let element: PublicElement
     let changes: [PropertyChange]
 
     init?(update: ElementUpdate) {
         let meaningfulChanges = update.changes.filter { !$0.property.isGeometry }
         guard !meaningfulChanges.isEmpty else { return nil }
-        self.heistId = update.heistId
+        self.element = PublicElement(element: update.element, detail: .summary)
         self.changes = meaningfulChanges
     }
 }

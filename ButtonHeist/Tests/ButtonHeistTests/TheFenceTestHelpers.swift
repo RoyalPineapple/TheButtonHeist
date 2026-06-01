@@ -52,13 +52,13 @@ func semanticTarget(
     excludeTraits: [HeistTrait]? = nil,
     ordinal: Int? = nil
 ) -> ElementTarget {
-    .matcher(
-        ElementMatcher(
+    .predicate(
+        ElementPredicate(
             label: label,
             identifier: identifier,
             value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
+            traits: traits ?? [],
+            excludeTraits: excludeTraits ?? []
         ),
         ordinal: ordinal
     )
@@ -141,14 +141,12 @@ func makeConnectedFence(configuration: TheFence.Configuration = .init()) -> (The
 }
 
 func makeReceiptTestElement(
-    heistId: HeistId,
     label: String,
     value: String? = nil,
     identifier: String? = nil,
     traits: [HeistTrait] = [.staticText]
 ) -> HeistElement {
     HeistElement(
-        heistId: heistId,
         description: label,
         label: label,
         value: value,
@@ -189,7 +187,6 @@ func makeReceiptTestInterface(
             traversalIndex += 1
             elementAnnotations.append(InterfaceElementAnnotation(
                 path: path,
-                heistId: element.heistId,
                 actions: element.actions
             ))
             return .element(makeReceiptTestAccessibilityElement(element), traversalIndex: index)
@@ -304,7 +301,7 @@ func makeReceiptTestInterface(
     timestamp: Date = Date(timeIntervalSince1970: 0)
 ) -> Interface {
     makeReceiptTestInterface(
-        (0..<elementCount).map { makeReceiptTestElement(heistId: "\(prefix)-\($0)", label: "\(prefix) \($0)") },
+        (0..<elementCount).map { makeReceiptTestElement(label: "\(prefix) \($0)") },
         timestamp: timestamp
     )
 }
@@ -336,7 +333,7 @@ func makeBackgroundElementsChangedTrace(elementCount: Int) -> AccessibilityTrace
         sequence: 2,
         interface: interface,
         parentHash: beforeCapture.hash,
-        context: AccessibilityTrace.Context(focusedElementId: "background-change")
+        context: AccessibilityTrace.Context(screenId: "background-change")
     )
     return AccessibilityTrace(captures: [beforeCapture, afterCapture])
 }

@@ -148,22 +148,20 @@ extension TheStash {
     func resolveFirstVisibleMatch(_ target: ElementTarget) -> ScreenElement? {
         let effectiveTarget: ElementTarget
         switch target {
-        case .heistId:
-            effectiveTarget = target
-        case .matcher(let matcher, _):
-            effectiveTarget = .matcher(matcher, ordinal: 0)
+        case .predicate(let predicate, _):
+            effectiveTarget = .predicate(predicate, ordinal: 0)
         }
         return resolveVisibleTarget(effectiveTarget).resolved
     }
 
     func matcherNotFoundMessage(
-        _ matcher: ElementMatcher,
+        _ predicate: ElementPredicate,
         in screen: Screen? = nil,
         resolutionScope: ResolutionScope = .known
     ) -> String {
         let screen = screen ?? currentScreen
         return Diagnostics.matcherNotFound(
-            matcher,
+            predicate,
             screenElements: selectElements(in: screen),
             visibleHeistIds: screen.visibleIds,
             resolutionScope: resolutionScope
@@ -192,22 +190,13 @@ private extension TheStash {
         resolutionScope: ResolutionScope
     ) -> TargetResolution {
         switch target {
-        case .heistId(let heistId):
-            guard let entry = screen.findElement(heistId: heistId) else {
-                return .notFound(diagnostics: Diagnostics.heistIdNotFound(
-                    heistId,
-                    knownIds: screen.knownIds,
-                    knownCount: screen.knownElementCount
-                ))
-            }
-            return .resolved(entry)
-        case .matcher(let matcher, let ordinal):
-            return resolveMatcher(matcher, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
+        case .predicate(let predicate, let ordinal):
+            return resolveMatcher(predicate, ordinal: ordinal, in: screen, resolutionScope: resolutionScope)
         }
     }
 
     func resolveMatcher(
-        _ matcher: ElementMatcher,
+        _ predicate: ElementPredicate,
         ordinal: Int?,
         in screen: Screen,
         resolutionScope: ResolutionScope
@@ -219,15 +208,15 @@ private extension TheStash {
                     Next: remove ordinal, or use ordinal 0 after the target query resolves candidates.
                     """)
             }
-            let matches = matchScreenElements(matcher, limit: ordinal + 1, in: screen)
+            let matches = matchScreenElements(predicate, limit: ordinal + 1, in: screen)
             guard ordinal < matches.count else {
                 let total = matches.count
                 let nextMove: String
                 if total == 0 {
-                    nextMove = "Next: retry with an exact label, identifier, or current heistId."
+                    nextMove = "Next: retry with an exact label, identifier, or value."
                 } else {
                     nextMove = "Next: use ordinal 0...\(total - 1), omit ordinal to inspect ambiguity, "
-                        + "or target a listed element by exact label, identifier, or heistId."
+                        + "or target a listed element by exact label, identifier, or value."
                 }
                 return .notFound(diagnostics: """
                     ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found
@@ -236,20 +225,20 @@ private extension TheStash {
             }
             return .resolved(matches[ordinal])
         }
-        let matches = matchScreenElements(matcher, limit: 2, in: screen)
+        let matches = matchScreenElements(predicate, limit: 2, in: screen)
         switch matches.count {
         case 0:
             return .notFound(diagnostics: matcherNotFoundMessage(
-                matcher,
+                predicate,
                 in: screen,
                 resolutionScope: resolutionScope
             ))
         case 1:
             return .resolved(matches[0])
         default:
-            let capped = matchScreenElements(matcher, limit: 11, in: screen)
+            let capped = matchScreenElements(predicate, limit: 11, in: screen)
             return ambiguousResolution(
-                matcher,
+                predicate,
                 screenElements: capped,
                 visibleHeistIds: screen.visibleIds,
                 resolutionScope: resolutionScope
@@ -258,7 +247,7 @@ private extension TheStash {
     }
 
     func ambiguousResolution(
-        _ matcher: ElementMatcher,
+        _ predicate: ElementPredicate,
         screenElements: [ScreenElement],
         visibleHeistIds: Set<HeistId>,
         resolutionScope: ResolutionScope
@@ -272,7 +261,7 @@ private extension TheStash {
             parts.append(Diagnostics.availabilityDescription(for: screenElement, visibleHeistIds: visibleHeistIds))
             return parts.joined(separator: " ")
         }
-        let query = Diagnostics.formatMatcher(matcher)
+        let query = Diagnostics.formatMatcher(predicate)
         let countLabel = screenElements.count > 10 ? "10+" : "\(screenElements.count)"
         let rangeLabel = screenElements.count > 10 ? "0, 1, 2, ..." : "0–\(screenElements.count - 1)"
         var lines = [

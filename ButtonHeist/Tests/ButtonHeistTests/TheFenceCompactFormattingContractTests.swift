@@ -7,7 +7,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     func testCompactActionRenderingUsesParsedCommandNames() {
         let cases: [(command: TheFence.Command, method: ActionMethod, expected: String)] = [
             (.typeText, .typeText, "type_text: ok"),
-            (.waitFor, .waitFor, "wait_for: ok"),
+            (.wait, .wait, "wait: ok"),
             (.activate, .customAction, "activate: ok"),
             (.dismissKeyboard, .resignFirstResponder, "dismiss_keyboard: ok"),
             (.oneFingerTap, .syntheticTap, "one_finger_tap: ok"),

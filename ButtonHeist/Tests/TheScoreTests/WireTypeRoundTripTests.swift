@@ -42,24 +42,24 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testCustomActionTargetRoundTrip() throws {
         let target = CustomActionTarget(
-            elementTarget: .heistId("btn_save"),
+            elementTarget: .predicate(ElementPredicate(label: "btn_save")),
             actionName: "Delete Item"
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
-        XCTAssertEqual(decoded, CustomActionTarget(elementTarget: .heistId("btn_save"), actionName: "Delete Item"))
+        XCTAssertEqual(decoded, CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "btn_save")), actionName: "Delete Item"))
         XCTAssertEqual(decoded.actionName, "Delete Item")
     }
 
     func testCustomActionTargetWithMatcher() throws {
         let target = CustomActionTarget(
-            elementTarget: .matcher(ElementMatcher(label: "Menu")),
+            elementTarget: .predicate(ElementPredicate(label: "Menu")),
             actionName: "Open Submenu"
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
         XCTAssertEqual(decoded, CustomActionTarget(
-            elementTarget: .matcher(ElementMatcher(label: "Menu")),
+            elementTarget: .predicate(ElementPredicate(label: "Menu")),
             actionName: "Open Submenu"
         ))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
@@ -83,12 +83,12 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testLongPressTargetRoundTrip() throws {
         let target = LongPressTarget(
-            selection: .element(.heistId("cell_1")),
+            selection: .element(.predicate(ElementPredicate(label: "cell_1"))),
             duration: try GestureDuration(seconds: 1.5)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(LongPressTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.heistId("cell_1")))
+        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "cell_1"))))
         XCTAssertEqual(decoded.duration.seconds, 1.5)
     }
 
@@ -131,13 +131,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testDragTargetRoundTrip() throws {
         let target = DragTarget(
-            start: .element(.heistId("handle")),
+            start: .element(.predicate(ElementPredicate(label: "handle"))),
             end: ScreenPoint(x: 200, y: 300),
             duration: try GestureDuration(seconds: 0.8)
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(DragTarget.self, from: data)
-        XCTAssertEqual(decoded.start, .element(.heistId("handle")))
+        XCTAssertEqual(decoded.start, .element(.predicate(ElementPredicate(label: "handle"))))
         XCTAssertEqual(decoded.end, ScreenPoint(x: 200, y: 300))
         XCTAssertEqual(decoded.duration?.seconds, 0.8)
     }
@@ -162,7 +162,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testSwipeTargetRejectsUnknownField() {
-        let json = #"{"heistId":"list","direction":"down","unexpected":true}"#
+        let json = #"{"label":"list","direction":"down","unexpected":true}"#
         XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("Unknown swipe target field"), "\(error)")
             XCTAssertTrue("\(error)".contains("unexpected"), "\(error)")
@@ -171,7 +171,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testGestureResolvedDefaultsAreContractOwned() {
         XCTAssertEqual(
-            SwipeTarget(selection: .point(start: .element(.heistId("list")), destination: .direction(.down))).resolvedDuration,
+            SwipeTarget(selection: .point(start: .element(.predicate(ElementPredicate(label: "list"))), destination: .direction(.down))).resolvedDuration,
             .swipeDefault
         )
         XCTAssertEqual(
@@ -184,12 +184,12 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testScrollTargetRoundTrip() throws {
         let target = ScrollTarget(
-            selection: .element(.heistId("list")),
+            selection: .element(.predicate(ElementPredicate(label: "list"))),
             direction: .down
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(ScrollTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .element(.heistId("list")))
+        XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "list"))))
         XCTAssertEqual(decoded.direction, .down)
     }
 
@@ -224,13 +224,13 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testScrollToEdgeTargetAllEdges() throws {
         for edge in ScrollEdge.allCases {
             let target = ScrollToEdgeTarget(
-                selection: .element(.heistId("scroll_view")),
+                selection: .element(.predicate(ElementPredicate(label: "scroll_view"))),
                 edge: edge
             )
             let data = try encoder.encode(target)
             let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
             XCTAssertEqual(decoded.edge, edge)
-            XCTAssertEqual(decoded.selection, .element(.heistId("scroll_view")))
+            XCTAssertEqual(decoded.selection, .element(.predicate(ElementPredicate(label: "scroll_view"))))
         }
     }
 
@@ -299,7 +299,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testSubtreeSelectorElementUsesToolSchemaShape() throws {
         let selector = SubtreeSelector.element(
-            .matcher(ElementMatcher(label: "Save", traits: [.button]), ordinal: 2)
+            .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 2)
         )
 
         let data = try encoder.encode(selector)
@@ -313,14 +313,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
-    func testSubtreeSelectorElementUsesCurrentCaptureHandleShape() throws {
-        let selector = SubtreeSelector.element(.heistId("button_save"))
+    func testSubtreeSelectorElementPredicateShape() throws {
+        let selector = SubtreeSelector.element(.predicate(ElementPredicate(label: "Save")))
 
         let data = try encoder.encode(selector)
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertNil(payload["ordinal"])
         let element = try XCTUnwrap(payload["element"] as? [String: Any])
-        XCTAssertEqual(element["heistId"] as? String, "button_save")
+        XCTAssertNil(element["heistId"])
+        XCTAssertEqual(element["label"] as? String, "Save")
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
@@ -341,17 +342,18 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(try decoder.decode(SubtreeSelector.self, from: data), selector)
     }
 
-    func testSubtreeSelectorElementRejectsHeistIdWithMatcherFields() {
+    func testSubtreeSelectorElementRejectsHeistIdField() {
+        // heistId is no longer a targeting field — it is an unknown element key.
         let json = #"{"element":{"heistId":"button_save","label":"Save"}}"#
         XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("cannot be combined"), "\(error)")
+            XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
         }
     }
 
-    func testSubtreeSelectorElementRejectsHeistIdWithOrdinal() {
+    func testSubtreeSelectorElementRejectsHeistIdOnlyField() {
         let json = #"{"element":{"heistId":"button_save"},"ordinal":1}"#
         XCTAssertThrowsError(try decoder.decode(SubtreeSelector.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("cannot be combined"), "\(error)")
+            XCTAssertTrue("\(error)".contains("heistId"), "\(error)")
         }
     }
 
@@ -366,7 +368,6 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testAccessibilityHierarchyLeafRoundTrip() throws {
         let element = HeistElement(
-            heistId: "btn",
             description: "Button", label: "OK", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: [.activate]
         )
@@ -378,11 +379,11 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testAccessibilityHierarchyContainerRoundTrip() throws {
         let elementA = HeistElement(
-            heistId: "a", description: "A", label: "A", value: nil, identifier: nil,
+            description: "A", label: "A", value: nil, identifier: nil,
             frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44, actions: []
         )
         let elementB = HeistElement(
-            heistId: "b", description: "B", label: "B", value: nil, identifier: nil,
+            description: "B", label: "B", value: nil, identifier: nil,
             frameX: 0, frameY: 50, frameWidth: 100, frameHeight: 44, actions: []
         )
         let outer = makeTestAccessibilityContainer(
@@ -431,13 +432,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         let plan = BatchPlan(
             steps: [
                 BatchStep(
-                    command: .activate(.matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1)),
-                    expectation: .screenChanged,
+                    command: .activate(.predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1)),
+                    predicate: .changed(.screen()),
                     deadline: Deadline(timeout: 2.5)
                 ),
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                    expectation: nil,
+                    predicate: nil,
                     deadline: Deadline()
                 ),
             ],
@@ -465,14 +466,14 @@ final class WireTypeRoundTripTests: XCTestCase {
         guard case .activate(let decodedTarget) = decoded.steps[0].command else {
             return XCTFail("Expected activate command")
         }
-        XCTAssertEqual(decodedTarget, .matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1))
-        XCTAssertEqual(decoded.steps[0].expectation, .screenChanged)
+        XCTAssertEqual(decodedTarget, .predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1))
+        XCTAssertEqual(decoded.steps[0].predicate, .changed(.screen()))
         XCTAssertEqual(decoded.steps[0].deadline, Deadline(timeout: 2.5))
         guard case .setPasteboard(let pasteboardTarget) = decoded.steps[1].command else {
             return XCTFail("Expected set_pasteboard command")
         }
         XCTAssertEqual(pasteboardTarget.text, "ready")
-        XCTAssertNil(decoded.steps[1].expectation)
+        XCTAssertNil(decoded.steps[1].predicate)
     }
 
     func testBatchExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
@@ -541,7 +542,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - PropertyChange / ElementUpdate
 
     func testPropertyChangeRoundTrip() throws {
-        let change = PropertyChange(property: .label, old: "OK", new: "Cancel")
+        let change = PropertyChange(property: .value, old: "OK", new: "Cancel")
         let data = try encoder.encode(change)
         let decoded = try decoder.decode(PropertyChange.self, from: data)
         XCTAssertEqual(decoded, change)
@@ -550,7 +551,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testElementPropertyIsGeometry() {
         XCTAssertTrue(ElementProperty.frame.isGeometry)
         XCTAssertTrue(ElementProperty.activationPoint.isGeometry)
-        XCTAssertFalse(ElementProperty.label.isGeometry)
+        XCTAssertFalse(ElementProperty.value.isGeometry)
         XCTAssertFalse(ElementProperty.value.isGeometry)
         XCTAssertFalse(ElementProperty.traits.isGeometry)
         XCTAssertFalse(ElementProperty.hint.isGeometry)
@@ -567,10 +568,19 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testElementUpdateRoundTrip() throws {
+        // The carried element's heistId is excluded from the wire (decodes to ""),
+        // so build the expectation with an empty heistId for round-trip equality.
         let update = ElementUpdate(
-            heistId: "btn_1",
+            element: HeistElement(
+                description: "Button",
+                label: "Button",
+                value: nil,
+                identifier: nil,
+                frameX: 0, frameY: 0, frameWidth: 100, frameHeight: 44,
+                actions: []
+            ),
             changes: [
-                PropertyChange(property: .label, old: "A", new: "B"),
+                PropertyChange(property: .value, old: "A", new: "B"),
                 PropertyChange(property: .value, old: nil, new: "active"),
             ]
         )
@@ -631,51 +641,48 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testElementSearchTargetRoundTrip() throws {
         let target = ElementSearchTarget(
-            elementTarget: .heistId("item_42"),
+            elementTarget: .predicate(ElementPredicate(label: "item_42")),
             direction: .up
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(ElementSearchTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("item_42"))
+        XCTAssertEqual(decoded.elementTarget, .predicate(ElementPredicate(label: "item_42")))
         XCTAssertEqual(decoded.direction, .up)
     }
 
     func testElementSearchTargetDirectionDefaults() {
-        let withDirection = ElementSearchTarget(elementTarget: .heistId("item"), direction: .left)
+        let withDirection = ElementSearchTarget(elementTarget: .predicate(ElementPredicate(label: "item")), direction: .left)
         XCTAssertEqual(withDirection.direction, .left)
 
-        let defaultDirection = ElementSearchTarget(elementTarget: .heistId("item"))
+        let defaultDirection = ElementSearchTarget(elementTarget: .predicate(ElementPredicate(label: "item")))
         XCTAssertEqual(defaultDirection.direction, .down)
     }
 
-    // MARK: - WaitForTarget
+    // MARK: - WaitTarget
 
-    func testWaitForTargetRoundTrip() throws {
-        let target = WaitForTarget(
-            elementTarget: .heistId("loading"),
-            absent: true,
+    func testWaitTargetRoundTrip() throws {
+        let target = WaitTarget(
+            predicate: .state(.absent(ElementPredicate(label: "loading"))),
             timeout: 15
         )
         let data = try encoder.encode(target)
-        let decoded = try decoder.decode(WaitForTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("loading"))
-        XCTAssertEqual(decoded.absent, true)
+        let decoded = try decoder.decode(WaitTarget.self, from: data)
+        XCTAssertEqual(decoded.predicate, .state(.absent(ElementPredicate(label: "loading"))))
         XCTAssertEqual(decoded.timeout, 15)
     }
 
-    func testWaitForTargetResolvedDefaults() {
-        let target = WaitForTarget(elementTarget: .heistId("x"))
-        XCTAssertFalse(target.resolvedAbsent)
+    func testWaitTargetResolvedDefaults() {
+        let target = WaitTarget(predicate: .state(.present(ElementPredicate(label: "x"))))
         XCTAssertEqual(target.resolvedTimeout, 10)
     }
 
-    func testWaitForTargetTimeoutCapsAt30() {
-        let target = WaitForTarget(elementTarget: .heistId("x"), timeout: 60)
+    func testWaitTargetTimeoutCapsAt30() {
+        let target = WaitTarget(predicate: .state(.present(ElementPredicate(label: "x"))), timeout: 60)
         XCTAssertEqual(target.resolvedTimeout, 30)
     }
 
-    func testWaitForChangeTargetResolvedDefaults() {
-        let target = WaitForChangeTarget()
-        XCTAssertEqual(target.resolvedTimeout, 30)
+    func testWaitTargetChangedResolvedDefaults() {
+        let target = WaitTarget(predicate: .changed(.elements))
+        XCTAssertEqual(target.resolvedTimeout, 10)
     }
 }

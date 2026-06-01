@@ -123,16 +123,16 @@ extension TheFence {
         return "\(arguments.field("subtree")).\(suffix)"
     }
 
-    private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementMatcher {
-        ElementMatcher(
+    private func interfaceElementMatcher(_ arguments: CommandArgumentEnvelope) throws -> ElementPredicate {
+        ElementPredicate(
             label: try arguments.schemaString("label"),
             identifier: try arguments.schemaString("identifier"),
             value: try arguments.schemaString("value"),
-            traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")),
+            traits: try TheFence.parseTraitNames(try arguments.schemaStringArray("traits"), field: arguments.field("traits")) ?? [],
             excludeTraits: try TheFence.parseTraitNames(
                 try arguments.schemaStringArray("excludeTraits"),
                 field: arguments.field("excludeTraits")
-            )
+            ) ?? []
         )
     }
 }

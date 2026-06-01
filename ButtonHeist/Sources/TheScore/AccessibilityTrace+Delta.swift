@@ -100,12 +100,12 @@ public extension AccessibilityTrace {
 /// "no changes of that flavour"; on the wire, empty collections are omitted.
 public struct ElementEdits: Sendable, Equatable {
     public let added: [HeistElement]
-    public let removed: [HeistId]
+    public let removed: [HeistElement]
     public let updated: [ElementUpdate]
 
     public init(
         added: [HeistElement] = [],
-        removed: [HeistId] = [],
+        removed: [HeistElement] = [],
         updated: [ElementUpdate] = []
     ) {
         self.added = added
@@ -129,7 +129,7 @@ extension ElementEdits: Codable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ElementEdits")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.added = try container.decodeIfPresent([HeistElement].self, forKey: .added) ?? []
-        self.removed = try container.decodeIfPresent([HeistId].self, forKey: .removed) ?? []
+        self.removed = try container.decodeIfPresent([HeistElement].self, forKey: .removed) ?? []
         self.updated = try container.decodeIfPresent([ElementUpdate].self, forKey: .updated) ?? []
     }
 

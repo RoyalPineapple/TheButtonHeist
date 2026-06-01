@@ -59,10 +59,10 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertThrowsError(try ConnectCommand.parse(["127.0.0.1:1455"]))
     }
 
-    func testWaitForChangeCommandDefaultTimeoutIsThirtySeconds() throws {
-        let command = try WaitForChangeCommand.parse([])
+    func testWaitCommandDefaultTimeoutIsTenSeconds() throws {
+        let command = try WaitCommand.parse(["--changed", "screen_changed"])
 
-        XCTAssertEqual(command.timeout, 30)
+        XCTAssertEqual(command.timeout, 10)
     }
 
     func testTypeTextRequiresText() {
@@ -240,9 +240,9 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(parsed.argument(.text), .string("hello"))
     }
 
-    func testCLIBuilderCarriesMatcherTargetAsTypedTarget() throws {
-        let expectedTarget = ElementTarget.matcher(
-            ElementMatcher(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
+    func testCLIBuilderCarriesPredicateTargetAsTypedTarget() throws {
+        let expectedTarget = ElementTarget.predicate(
+            ElementPredicate(label: "Rotor Host", identifier: "rotor.host", traits: [.button]),
             ordinal: 1
         )
         let arguments = CLIRequestBuilder.arguments(

@@ -19,21 +19,12 @@ extension TheFence.Command {
                 description: "Capture a PNG screenshot with optional inline data and interface state."
             ),
             commandDescriptor(
-                .waitForChange, requestDecoder: TheFence.decodeWaitForChangeRequest,
+                .wait, requestDecoder: TheFence.decodeWaitRequest,
                 isBatchExecutable: true,
-                parameters: FenceParameterBlocks.expectation,
+                parameters: FenceParameterBlocks.wait,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-                description: "Wait for any UI change or for an expectation to become true."
-            ),
-            commandDescriptor(
-                .waitFor, requestDecoder: TheFence.decodeWaitForRequest,
-                isBatchExecutable: true,
-                parameters: FenceParameterBlocks.elementTarget + [
-                    param(.absent, .boolean),
-                    FenceParameterBlocks.expectationTimeout,
-                    FenceParameterBlocks.expect,
-                ],
-                description: "Wait for a semantic element to appear or disappear."
+                description: "Wait until an accessibility predicate is satisfied: present/absent poll the "
+                    + "current interface; changed rides settled UI transitions."
             ),
         ]
     }

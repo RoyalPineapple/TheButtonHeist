@@ -11,12 +11,12 @@ final class CommandProjectionTests: XCTestCase {
 
     func testSwipeProjectionPreservesElementDirectionIntent() {
         let target = SwipeTarget(
-            selection: .elementDirection(.heistId("carousel"), .left)
+            selection: .elementDirection(.predicate(ElementPredicate(label: "carousel")), .left)
         )
 
         XCTAssertEqual(
             target.gestureSelection(),
-            .elementDirection(.heistId("carousel"), .left)
+            .elementDirection(.predicate(ElementPredicate(label: "carousel")), .left)
         )
     }
 
@@ -43,8 +43,8 @@ final class CommandProjectionTests: XCTestCase {
             .container(ScrollContainerTarget(stableId: "main"))
         )
         XCTAssertEqual(
-            ScrollTarget(selection: .element(.heistId("row"))).selection,
-            .element(.heistId("row"))
+            ScrollTarget(selection: .element(.predicate(ElementPredicate(label: "row")))).selection,
+            .element(.predicate(ElementPredicate(label: "row")))
         )
         XCTAssertEqual(ScrollTarget().selection, .visibleContainer)
         XCTAssertEqual(
@@ -55,8 +55,8 @@ final class CommandProjectionTests: XCTestCase {
 
     func testCustomActionTargetOwnsElementSelection() {
         XCTAssertEqual(
-            CustomActionTarget(elementTarget: .heistId("button"), actionName: "Archive"),
-            CustomActionTarget(elementTarget: .heistId("button"), actionName: "Archive")
+            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "button")), actionName: "Archive"),
+            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "button")), actionName: "Archive")
         )
     }
 

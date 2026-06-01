@@ -2,28 +2,16 @@ import TheScore
 
 extension TheFence {
 
-    static func decodeWaitForChangeRequest(
+    static func decodeWaitRequest(
         _ fence: TheFence,
         _ input: CommandArgumentEnvelope,
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        decodedExecutablePayload(.waitForChange(WaitForChangeTarget(
-            expect: expectationPayload.expectation,
-            timeout: expectationPayload.timeout
-        )))
-    }
-
-    static func decodeWaitForRequest(
-        _ fence: TheFence,
-        _ input: CommandArgumentEnvelope,
-        _ requestId: String,
-        _ expectationPayload: ExpectationPayload
-    ) throws -> DecodedRequestDispatch {
-        try decodedExecutablePayload(.waitFor(WaitForTarget(
-            elementTarget: input.requiredElementTarget(command: .waitFor),
-            absent: input.schemaBoolean("absent"),
-            timeout: input.schemaNumber("timeout")
+        let predicate = try ExpectationPayload.parseRequiredPredicate(input.argumentValues["predicate"])
+        return decodedExecutablePayload(.wait(WaitTarget(
+            predicate: predicate,
+            timeout: try input.schemaNumber("timeout")
         )))
     }
 }

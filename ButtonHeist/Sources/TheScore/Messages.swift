@@ -50,7 +50,7 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
     case typeText, editAction, setPasteboard, getPasteboard
     case scroll, scrollToVisible, elementSearch, scrollToEdge, resignFirstResponder
     case requestScreen
-    case waitFor, waitForChange, batchExecutionPlan
+    case wait, batchExecutionPlan
 }
 
 /// Explicit server-to-client wire message discriminator used at JSON boundaries.

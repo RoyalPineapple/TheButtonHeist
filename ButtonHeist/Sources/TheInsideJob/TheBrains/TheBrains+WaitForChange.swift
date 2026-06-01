@@ -6,7 +6,7 @@ import TheScore
 
 extension TheBrains {
     /// Install one wait predicate, then watch settled changes until a trace-derived expectation matches.
-    func executeWaitForChange(timeout: TimeInterval, expectation: ActionExpectation?) async -> ActionResult {
+    func executeWaitForChange(timeout: TimeInterval, expectation: AccessibilityPredicate?) async -> ActionResult {
         let start = CFAbsoluteTimeGetCurrent()
 
         guard let predicate = waitForChangeState.install(
@@ -14,8 +14,8 @@ extension TheBrains {
             timeout: timeout,
             start: start
         ) else {
-            var builder = ActionResultBuilder(method: .waitForChange)
-            builder.message = "wait_for_change already in progress"
+            var builder = ActionResultBuilder(method: .wait)
+            builder.message = "wait already in progress"
             return builder.failure(errorKind: .actionFailed)
         }
         defer { waitForChangeState.finish() }
@@ -23,17 +23,10 @@ extension TheBrains {
         let sentBaseline = waitForChangeState.lastDeliveredBaseline
 
         guard let initial = await refreshSemanticSnapshot(baseline: sentBaseline) else {
-            return treeUnavailableResult(method: .waitForChange)
+            return treeUnavailableResult(method: .wait)
         }
 
         let baseline = sentBaseline ?? initial
-        let preWaitElements = Dictionary(
-            baseline.snapshot.map {
-                let wire = TheStash.WireConversion.convert($0.element, heistId: $0.heistId)
-                return (wire.heistId, wire)
-            },
-            uniquingKeysWith: { _, newest in newest }
-        )
 
         // Fast path: semantic state already changed since the last response.
         if let sentBaseline {
@@ -53,7 +46,6 @@ extension TheBrains {
                         accessibilityTrace: accessibilityTrace,
                         afterSnapshot: initial.snapshot,
                         expectation: predicate.expectation,
-                        preWaitElements: preWaitElements,
                         start: start,
                         round: 0,
                         message: "already changed (0.0s)"
@@ -68,7 +60,6 @@ extension TheBrains {
             baseline: baseline,
             initial: initial,
             predicate: predicate,
-            preWaitElements: preWaitElements,
             start: start
         ) {
             return result
@@ -82,7 +73,7 @@ extension TheBrains {
             postActionObservation.makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
         }
         let delta = timeoutAccessibilityTrace?.endpointDeltaProjection
-        var builder = ActionResultBuilder(method: .waitForChange)
+        var builder = ActionResultBuilder(method: .wait)
         builder.message = waitForChangeTimeoutMessage(
             elapsed: elapsed,
             expectation: predicate.expectation,
@@ -97,7 +88,6 @@ extension TheBrains {
         baseline: PostActionObservation.BeforeState,
         initial: PostActionObservation.BeforeState,
         predicate: WaitForChangeState.Predicate,
-        preWaitElements: [String: HeistElement],
         start: CFAbsoluteTime
     ) async -> ActionResult? {
         // Wait for stable AX-tree observations until a change lands or we time
@@ -142,7 +132,6 @@ extension TheBrains {
                 accessibilityTrace: accessibilityTrace,
                 afterSnapshot: current.snapshot,
                 expectation: predicate.expectation,
-                preWaitElements: preWaitElements,
                 start: start,
                 round: round,
                 message: "changed after \(elapsed)s (\(round) rounds)"
@@ -159,7 +148,7 @@ extension TheBrains {
 
     private func waitForChangeTimeoutMessage(
         elapsed: String,
-        expectation: ActionExpectation?,
+        expectation: AccessibilityPredicate?,
         delta: AccessibilityTrace.Delta?,
         elementCount: Int
     ) -> String {
@@ -173,16 +162,16 @@ extension TheBrains {
         if let screenId = stash.lastScreenId {
             parts.append("screen: \(screenId)")
         }
-        if expectation == .screenChanged {
+        if expectation == .changed(.screen()) {
             parts.append(
-                "Next: retry wait_for_change with expect: {\"type\": \"elements_changed\"} " +
+                "Next: retry wait with predicate: {\"type\": \"elements_changed\"} " +
                     "if element-level updates are acceptable, or call get_interface() " +
                     "to inspect the current screen."
             )
         } else {
             parts.append(
                 "Next: get_interface() to inspect the current screen, " +
-                    "then retry wait_for_change with the expected state."
+                    "then retry wait with the expected state."
             )
         }
         return parts.joined(separator: "; ")
@@ -192,13 +181,12 @@ extension TheBrains {
         delta: AccessibilityTrace.Delta,
         accessibilityTrace: AccessibilityTrace?,
         afterSnapshot: [Screen.ScreenElement],
-        expectation: ActionExpectation?,
-        preWaitElements: [String: HeistElement],
+        expectation: AccessibilityPredicate?,
         start: CFAbsoluteTime,
         round: Int,
         message: String
     ) -> ActionResult? {
-        var builder = ActionResultBuilder(method: .waitForChange)
+        var builder = ActionResultBuilder(method: .wait)
         builder.accessibilityTrace = accessibilityTrace
 
         guard let expectation else {
@@ -207,8 +195,7 @@ extension TheBrains {
         }
 
         guard expectation.validate(
-            against: builder.success(),
-            preActionElements: preWaitElements
+            against: builder.success()
         ).met else { return nil }
 
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)

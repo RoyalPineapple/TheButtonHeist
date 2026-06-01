@@ -14,12 +14,12 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     // MARK: - Gesture Targets via ClientMessage
 
     func testClientMessageActivateEncoding() throws {
-        let activateMessage = ClientMessage.activate(.matcher(ElementMatcher(identifier: "btn")))
+        let activateMessage = ClientMessage.activate(.predicate(ElementPredicate(identifier: "btn")))
         let data = try JSONEncoder().encode(activateMessage)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .activate(let target) = decoded {
-            guard case .matcher(let matcher, _) = target else { return XCTFail("Expected .matcher") }
+            guard case .predicate(let matcher, _) = target else { return XCTFail("Expected .matcher") }
             XCTAssertEqual(matcher.identifier, "btn")
         } else {
             XCTFail("Expected activate message")
@@ -28,22 +28,17 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
 
     func testClientMessageRotorPreviousEncoding() throws {
         let message = ClientMessage.rotor(RotorTarget(
-            elementTarget: .heistId("form"),
+            elementTarget: .predicate(ElementPredicate(label: "Form")),
             selection: .named("Errors"),
-            direction: .previous,
-            continuation: .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
+            direction: .previous
         ))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .rotor(let target) = decoded {
-            XCTAssertEqual(target.elementTarget, ElementTarget.heistId("form"))
+            XCTAssertEqual(target.elementTarget, ElementTarget.predicate(ElementPredicate(label: "Form")))
             XCTAssertEqual(target.selection, .named("Errors"))
             XCTAssertEqual(target.direction, RotorDirection.previous)
-            XCTAssertEqual(
-                target.continuation,
-                .textRange("email", TextRangeReference(startOffset: 10, endOffset: 15))
-            )
         } else {
             XCTFail("Expected rotor message")
         }
@@ -207,13 +202,13 @@ final class ClientMessageActionRoundTripTests: XCTestCase {
     // MARK: - Activate with ordinal
 
     func testActivateMessageWithOrdinalEncoding() throws {
-        let target = ElementTarget.matcher(ElementMatcher(label: "Add", traits: [.button]), ordinal: 1)
+        let target = ElementTarget.predicate(ElementPredicate(label: "Add", traits: [.button]), ordinal: 1)
         let message = ClientMessage.activate(target)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .activate(let decodedTarget) = decoded {
-            guard case .matcher(let matcher, let ordinal) = decodedTarget else { return XCTFail("Expected .matcher") }
+            guard case .predicate(let matcher, let ordinal) = decodedTarget else { return XCTFail("Expected .matcher") }
             XCTAssertEqual(matcher.label, "Add")
             XCTAssertEqual(matcher.traits, [.button])
             XCTAssertEqual(ordinal, 1)

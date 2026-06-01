@@ -4,26 +4,29 @@ import Foundation
 public struct RotorResult: Codable, Sendable {
     public let rotor: String
     public let direction: RotorDirection
-    /// The selected element id, if the rotor resolved to an element. The action trace owns the element snapshot.
-    public let foundHeistId: HeistId?
+    /// Description of the element the rotor cursor currently holds, if it
+    /// resolved to one. This is a read-only snapshot (no id, not a durable
+    /// target): the rotor cursor is an ephemeral in-memory pointer, dropped when
+    /// rotor mode exits, so the agent reads it rather than re-targeting it.
+    public let foundElement: HeistElement?
     public let textRange: RotorTextRange?
 
     public init(
         rotor: String,
         direction: RotorDirection,
-        foundHeistId: HeistId? = nil,
+        foundElement: HeistElement? = nil,
         textRange: RotorTextRange? = nil
     ) {
         self.rotor = rotor
         self.direction = direction
-        self.foundHeistId = foundHeistId
+        self.foundElement = foundElement
         self.textRange = textRange
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case rotor
         case direction
-        case foundHeistId
+        case foundElement
         case textRange
     }
 
@@ -33,7 +36,7 @@ public struct RotorResult: Codable, Sendable {
         self.init(
             rotor: try container.decode(String.self, forKey: .rotor),
             direction: try container.decode(RotorDirection.self, forKey: .direction),
-            foundHeistId: try container.decodeIfPresent(HeistId.self, forKey: .foundHeistId),
+            foundElement: try container.decodeIfPresent(HeistElement.self, forKey: .foundElement),
             textRange: try container.decodeIfPresent(RotorTextRange.self, forKey: .textRange)
         )
     }

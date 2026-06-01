@@ -8,7 +8,7 @@ extension TheBrains {
 
     struct BatchExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
-        let waitForExpectation: @MainActor (ActionExpectation, TheScore.Deadline) async -> ActionResult
+        let waitForExpectation: @MainActor (AccessibilityPredicate, TheScore.Deadline) async -> ActionResult
         let settleRefreshRecordBaseline: @MainActor () async -> Void
 
         static func live(_ brains: TheBrains) -> BatchExecutionRuntime {
@@ -17,10 +17,10 @@ extension TheBrains {
                     await brains.executeCommand(command)
                 },
                 waitForExpectation: { expectation, deadline in
-                    await brains.executeWaitForChange(
-                        timeout: deadline.timeout ?? WaitForChangeTarget(expect: expectation).resolvedTimeout,
-                        expectation: expectation
-                    )
+                    await brains.performWait(target: WaitTarget(
+                        predicate: expectation,
+                        timeout: deadline.timeout
+                    ))
                 },
                 settleRefreshRecordBaseline: {
                     _ = await brains.tripwire.waitForAllClear(timeout: 0.5)
@@ -119,7 +119,7 @@ extension TheBrains {
         runtime: BatchExecutionRuntime
     ) async -> BatchExpectationReceipt? {
         guard actionResult.success else { return nil }
-        guard let expectation = step.expectation else { return nil }
+        guard let expectation = step.predicate else { return nil }
         let immediateExpectation = expectation.validate(against: actionResult)
         if immediateExpectation.met {
             return BatchExpectationReceipt(

@@ -8,13 +8,13 @@ final class ActionContractTests: XCTestCase {
         let plan = BatchPlan(steps: [
             BatchStep(
                 command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                expectation: nil,
+                predicate: nil,
                 deadline: Deadline()
             ),
         ])
         let step = BatchStep(
             command: .batchExecutionPlan(plan),
-            expectation: nil,
+            predicate: nil,
             deadline: Deadline()
         )
 
@@ -27,8 +27,8 @@ final class ActionContractTests: XCTestCase {
     }
 
     func testBatchStepRejectsMissingDeadline() throws {
-        let command = ClientMessage.waitForChange(WaitForChangeTarget(
-            expect: .elementsChanged,
+        let command = ClientMessage.wait(WaitTarget(
+            predicate: .changed(.elements),
             timeout: 0.25
         ))
 

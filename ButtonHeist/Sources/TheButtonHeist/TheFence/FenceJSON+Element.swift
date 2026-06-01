@@ -3,7 +3,6 @@ import Foundation
 import TheScore
 
 struct PublicElement: Encodable {
-    let heistId: String
     let traits: [String]
     let actions: [String]?
     let rotors: [String]?
@@ -21,7 +20,6 @@ struct PublicElement: Encodable {
     let order: Int?
 
     init(element: HeistElement, detail: InterfaceDetail, order: Int? = nil) {
-        self.heistId = element.heistId
         self.traits = element.traits.map(\.rawValue)
         let meaningfulActions = FenceResponse.meaningfulActions(element)
         self.actions = meaningfulActions.isEmpty ? nil : meaningfulActions.map(\.description)

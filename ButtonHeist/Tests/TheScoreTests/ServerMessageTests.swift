@@ -275,7 +275,10 @@ final class ServerMessageTests: XCTestCase {
         let rotor = RotorResult(
             rotor: "Errors",
             direction: .next,
-            foundHeistId: "email",
+            foundElement: HeistElement(
+                description: "Email", label: "Email", value: nil, identifier: nil,
+                frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0, actions: []
+            ),
             textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
         )
         let result = ActionResult(success: true, method: .rotor, payload: .rotor(rotor))
@@ -286,8 +289,9 @@ final class ServerMessageTests: XCTestCase {
         let inner = try XCTUnwrap(payload["data"] as? [String: Any])
         XCTAssertEqual(inner["rotor"] as? String, "Errors")
         XCTAssertEqual(inner["direction"] as? String, "next")
-        XCTAssertEqual(inner["foundHeistId"] as? String, "email")
-        XCTAssertNil(inner["foundElement"])
+        let foundElement = try XCTUnwrap(inner["foundElement"] as? [String: Any])
+        XCTAssertEqual(foundElement["label"] as? String, "Email")
+        XCTAssertNil(foundElement["heistId"], "heistId must never appear on the wire")
         let textRange = try XCTUnwrap(inner["textRange"] as? [String: Any])
         XCTAssertEqual(textRange["text"] as? String, "@maria")
         XCTAssertEqual(textRange["startOffset"] as? Int, 10)
@@ -307,7 +311,6 @@ final class ServerMessageTests: XCTestCase {
         let interface = makeTestInterface(
             elements: [
                 HeistElement(
-                    heistId: "submit",
                     description: "Submit",
                     label: "Submit",
                     value: nil,
@@ -347,8 +350,8 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultScreenContextProjectsFromTrace() throws {
-        let before = interfaceWithHeader("Before", heistId: "before-title")
-        let after = interfaceWithHeader("Trace Screen", heistId: "trace-title", timestamp: 1)
+        let before = interfaceWithHeader("Before")
+        let after = interfaceWithHeader("Trace Screen", timestamp: 1)
         let trace = AccessibilityTrace(first: before).appending(
             after,
             context: AccessibilityTrace.Context(screenId: "trace_screen")
@@ -365,8 +368,8 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultScreenContextRoundTripsTraceProjection() throws {
-        let before = interfaceWithHeader("Before", heistId: "before-title")
-        let after = interfaceWithHeader("Trace Screen", heistId: "trace-title", timestamp: 1)
+        let before = interfaceWithHeader("Before")
+        let after = interfaceWithHeader("Trace Screen", timestamp: 1)
         let trace = AccessibilityTrace(first: before).appending(
             after,
             context: AccessibilityTrace.Context(screenId: "trace_screen")
@@ -388,7 +391,7 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultScreenContextDoesNotFallbackWhenTraceProjectsNil() throws {
-        let before = interfaceWithHeader("Before", heistId: "before-title")
+        let before = interfaceWithHeader("Before")
         let trace = AccessibilityTrace(first: before).appending(interfaceWithoutHeader(timestamp: 1))
         let result = ActionResult(
             success: true,
@@ -401,8 +404,8 @@ final class ServerMessageTests: XCTestCase {
     }
 
     func testActionResultDecodedScreenContextProjectsFromTrace() throws {
-        let before = interfaceWithHeader("Before", heistId: "before-title")
-        let after = interfaceWithHeader("Trace Screen", heistId: "trace-title", timestamp: 1)
+        let before = interfaceWithHeader("Before")
+        let after = interfaceWithHeader("Trace Screen", timestamp: 1)
         let trace = AccessibilityTrace(first: before).appending(
             after,
             context: AccessibilityTrace.Context(screenId: "trace_screen")
@@ -499,7 +502,6 @@ final class ServerMessageTests: XCTestCase {
 
     func testScreenEncodeDecode() throws {
         let element = HeistElement(
-            heistId: "visible_button",
             description: "Pay",
             label: "Pay",
             value: nil,
@@ -549,13 +551,11 @@ final class ServerMessageTests: XCTestCase {
 
     private func interfaceWithHeader(
         _ label: String,
-        heistId: HeistId,
         timestamp: TimeInterval = 0
     ) -> Interface {
         makeTestInterface(
             elements: [
                 HeistElement(
-                    heistId: heistId,
                     description: label,
                     label: label,
                     value: nil,
@@ -576,7 +576,6 @@ final class ServerMessageTests: XCTestCase {
         makeTestInterface(
             elements: [
                 HeistElement(
-                    heistId: "button-only",
                     description: "Continue",
                     label: "Continue",
                     value: nil,

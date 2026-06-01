@@ -9,26 +9,26 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testMatcherSelectsMatchingLeaves() throws {
         let interface = try select(InterfaceQuery(
-            matcher: ElementMatcher(label: "Submit")
+            matcher: ElementPredicate(label: "Submit")
         ))
-        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit"])
-        XCTAssertEqual(interface.annotations.elements.map { $0.heistId }, ["submit"])
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit"])
+        XCTAssertEqual(interface.annotations.elements.count, 1)
         XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
 
     func testElementSubtreeSelectsMatchingLeaf() throws {
         let interface = try select(InterfaceQuery(
-            subtree: .element(.matcher(ElementMatcher(identifier: "submit_button")))
+            subtree: .element(.predicate(ElementPredicate(identifier: "submit_button")))
         ))
-        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit"])
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit"])
     }
 
-    func testElementSubtreeSelectsHeistIdLeaf() throws {
+    func testElementSubtreeSelectsPredicateLeaf() throws {
         let interface = try select(InterfaceQuery(
-            subtree: .element(.heistId("cancel"))
+            subtree: .element(.predicate(ElementPredicate(identifier: "cancel_button")))
         ))
-        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["cancel"])
-        XCTAssertEqual(interface.annotations.elements.map { $0.heistId }, ["cancel"])
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Cancel"])
+        XCTAssertEqual(interface.annotations.elements.count, 1)
         XCTAssertTrue(interface.annotations.containers.isEmpty)
     }
 
@@ -36,7 +36,7 @@ final class InterfaceSelectorTests: XCTestCase {
         let interface = try select(InterfaceQuery(
             subtree: .container(ContainerMatcher(stableId: "semantic_actions__actions"))
         ))
-        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit", "cancel"])
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Submit", "Cancel"])
     }
 
     func testAmbiguousSubtreeReportsTypedCandidates() {
@@ -60,7 +60,7 @@ final class InterfaceSelectorTests: XCTestCase {
             InterfaceQuery(subtree: .container(ContainerMatcher(label: "Actions"), ordinal: 1)),
             in: Self.makeInterface(includeDuplicateGroup: true)
         )
-        XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["archive"])
+        XCTAssertEqual(interface.projectedElements.map(\.label), ["Archive"])
     }
 
     func testMissingSubtreeReportsTypedError() {
@@ -79,10 +79,10 @@ final class InterfaceSelectorTests: XCTestCase {
     }
 
     private static func makeInterface(includeDuplicateGroup: Bool = false) -> Interface {
-        let header = makeElement("title", label: "Menu", traits: [.header])
-        let submit = makeElement("submit", label: "Submit", identifier: "submit_button", traits: [.button])
-        let cancel = makeElement("cancel", label: "Cancel", identifier: "cancel_button", traits: [.button])
-        let footer = makeElement("footer", label: "Footer")
+        let header = makeElement(label: "Menu", traits: [.header])
+        let submit = makeElement(label: "Submit", identifier: "submit_button", traits: [.button])
+        let cancel = makeElement(label: "Cancel", identifier: "cancel_button", traits: [.button])
+        let footer = makeElement(label: "Footer")
         let primaryGroup = makeActionsContainer(stableId: "semantic_actions__actions")
 
         var nodes: [TestInterfaceNode] = [
@@ -92,7 +92,7 @@ final class InterfaceSelectorTests: XCTestCase {
         ]
 
         if includeDuplicateGroup {
-            let archive = makeElement("archive", label: "Archive", identifier: "archive_button", traits: [.button])
+            let archive = makeElement(label: "Archive", identifier: "archive_button", traits: [.button])
             let secondaryGroup = makeActionsContainer(stableId: "semantic_actions__secondary_actions", y: 160)
             nodes.insert(.container(secondaryGroup, stableId: "semantic_actions__secondary_actions", children: [.element(archive)]), at: 2)
         }
@@ -124,7 +124,6 @@ final class InterfaceSelectorTests: XCTestCase {
                 traversalIndex += 1
                 elementAnnotations.append(InterfaceElementAnnotation(
                     path: path,
-                    heistId: element.heistId,
                     actions: element.actions
                 ))
                 return .element(makeAccessibilityElement(element), traversalIndex: index)
@@ -175,13 +174,11 @@ final class InterfaceSelectorTests: XCTestCase {
     }
 
     private static func makeElement(
-        _ heistId: HeistId,
         label: String,
         identifier: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {
         HeistElement(
-            heistId: heistId,
             description: label,
             label: label,
             value: nil,

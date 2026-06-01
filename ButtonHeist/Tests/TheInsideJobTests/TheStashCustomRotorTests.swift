@@ -5,15 +5,6 @@ import XCTest
 @testable import TheInsideJob
 @testable import TheScore
 
-private final class RotorActivationResultView: UIView {
-    private(set) var activationCount = 0
-
-    override func accessibilityActivate() -> Bool {
-        activationCount += 1
-        return true
-    }
-}
-
 private final class RotorActivationAccessibilityElement: UIAccessibilityElement {
     private(set) var activationCount = 0
 
@@ -96,7 +87,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.installScreenForTesting(screen)
 
-        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "rotor_host"))).resolved
+        let resolvedHost = stash.resolveTarget(.predicate(ElementPredicate(identifier: "rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -105,7 +96,6 @@ final class TheStashRotorTests: XCTestCase {
 
         let outcome = stash.performRotor(
             selection: .named("Errors"),
-            continuation: .none,
             direction: .next,
             on: liveHost
         )
@@ -160,7 +150,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.installScreenForTesting(screen)
 
-        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "system_rotor_host"))).resolved
+        let resolvedHost = stash.resolveTarget(.predicate(ElementPredicate(identifier: "system_rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -172,7 +162,6 @@ final class TheStashRotorTests: XCTestCase {
 
         let outcome = stash.performRotor(
             selection: .named("Links"),
-            continuation: .none,
             direction: .next,
             on: liveHost
         )
@@ -183,66 +172,6 @@ final class TheStashRotorTests: XCTestCase {
         }
         XCTAssertEqual(hit.rotor, "Links")
         XCTAssertEqual(hit.screenElement?.element.identifier, "open_docs")
-    }
-
-    func testRotorResultElementCanBeActivatedByReturnedHeistId() async throws {
-        let windowScene = try requireForegroundWindowScene()
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
-
-        let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
-        rotorHost.isAccessibilityElement = true
-        rotorHost.accessibilityLabel = "Activation Results"
-        rotorHost.accessibilityIdentifier = "activation_rotor_host"
-
-        let resultView = RotorActivationResultView(frame: CGRect(x: 20, y: 120, width: 280, height: 44))
-        resultView.isAccessibilityElement = true
-        resultView.accessibilityLabel = "Open returned action"
-        resultView.accessibilityIdentifier = "rotor_activation_target"
-        resultView.accessibilityTraits = .button
-
-        rotorHost.accessibilityCustomRotors = [
-            UIAccessibilityCustomRotor(name: "Primary Action") { _ in
-                UIAccessibilityCustomRotorItemResult(targetElement: resultView, targetRange: nil)
-            }
-        ]
-
-        viewController.view.addSubview(rotorHost)
-        viewController.view.addSubview(resultView)
-
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 32
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
-
-        let brains = TheBrains(tripwire: TheTripwire())
-        let searchResult = await brains.executeCommand(.rotor(
-            RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "activation_rotor_host")),
-                selection: .named("Primary Action")
-            )
-        ))
-
-        XCTAssertTrue(searchResult.success, searchResult.message ?? "rotor failed")
-        guard case .rotor(let rotorResult)? = searchResult.payload,
-              let foundHeistId = rotorResult.foundHeistId else {
-            XCTFail("Expected rotor to return a found heist id")
-            return
-        }
-
-        let foundElement = try XCTUnwrap(searchResult.accessibilityTrace?.captures.last?.interface.projectedElements.first {
-            $0.heistId == foundHeistId
-        })
-        XCTAssertEqual(foundElement.identifier, "rotor_activation_target")
-
-        let activateResult = await brains.executeCommand(.activate(.heistId(foundHeistId)))
-
-        XCTAssertTrue(activateResult.success, activateResult.message ?? "activate failed")
-        XCTAssertEqual(resultView.activationCount, 1)
     }
 
     func testOutOfTreeRotorResultFailsInsteadOfCreatingHiddenContinuationState() async throws {
@@ -288,7 +217,7 @@ final class TheStashRotorTests: XCTestCase {
         let brains = TheBrains(tripwire: TheTripwire())
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "virtual_activation_rotor_host")),
+                elementTarget: .predicate(ElementPredicate(identifier: "virtual_activation_rotor_host")),
                 selection: .named("Primary Action")
             )
         ))
@@ -361,7 +290,7 @@ final class TheStashRotorTests: XCTestCase {
 
         let search = await brains.actions.executeRotor(
             RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "cached_rotor_host")),
+                elementTarget: .predicate(ElementPredicate(identifier: "cached_rotor_host")),
                 selection: .named("Cached Items")
             )
         )
@@ -373,120 +302,6 @@ final class TheStashRotorTests: XCTestCase {
         )
         XCTAssertNil(search.payload)
         XCTAssertEqual(cachedResult.activationCount, 0)
-    }
-
-    func testRotorContinuationRequiresVisibleCurrentItem() async throws {
-        let windowScene = try requireForegroundWindowScene()
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
-
-        let rotorHost = UIView(frame: CGRect(x: 20, y: 40, width: 280, height: 44))
-        rotorHost.isAccessibilityElement = true
-        rotorHost.accessibilityLabel = "Continuation Results"
-        rotorHost.accessibilityIdentifier = "continuation_rotor_host"
-
-        let resultView = UIView(frame: CGRect(x: 20, y: 120, width: 280, height: 44))
-        resultView.isAccessibilityElement = true
-        resultView.accessibilityLabel = "Visible rotor result"
-
-        rotorHost.accessibilityCustomRotors = [
-            UIAccessibilityCustomRotor(name: "Primary Action") { predicate in
-                XCTAssertNil(predicate.currentItem.targetElement)
-                return UIAccessibilityCustomRotorItemResult(targetElement: resultView, targetRange: nil)
-            }
-        ]
-
-        viewController.view.addSubview(rotorHost)
-        viewController.view.addSubview(resultView)
-
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 35
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
-
-        let brains = TheBrains(tripwire: TheTripwire())
-        let searchResult = await brains.executeCommand(.rotor(
-            RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "continuation_rotor_host")),
-                selection: .named("Primary Action"),
-                continuation: .item("missing_current_item")
-            )
-        ))
-
-        XCTAssertFalse(searchResult.success)
-        XCTAssertEqual(searchResult.errorKind, .elementNotFound)
-        XCTAssertTrue(searchResult.message?.contains("continuation.heistId=\"missing_current_item\" is not available") == true)
-    }
-
-    func testRotorReturnsTextRangeResult() throws {
-        let windowScene = try requireForegroundWindowScene()
-        let viewController = UIViewController()
-        viewController.view.backgroundColor = .white
-
-        let textView = makeTextRangeRotorTextView()
-        viewController.view.addSubview(textView)
-
-        let window = UIWindow(windowScene: windowScene)
-        window.windowLevel = .alert + 31
-        window.rootViewController = viewController
-        window.frame = UIScreen.main.bounds
-        window.isHidden = false
-        defer {
-            window.isHidden = true
-        }
-
-        guard let screen = stash.parse() else {
-            XCTFail("Expected live parse result")
-            return
-        }
-        stash.installScreenForTesting(screen)
-
-        let resolvedTextView = stash.resolveTarget(.matcher(ElementMatcher(identifier: "mentions_text"))).resolved
-        guard let resolvedTextView else {
-            XCTFail("Expected text view to resolve")
-            return
-        }
-        let liveTextView = try XCTUnwrap(liveTarget(for: resolvedTextView))
-
-        let firstOutcome = stash.performRotor(
-            selection: .named("Mentions"),
-            continuation: .none,
-            direction: .next,
-            on: liveTextView
-        )
-
-        guard case .succeeded(let firstHit) = firstOutcome,
-              let firstRange = firstHit.textRange,
-              let firstStart = firstRange.startOffset,
-              let firstEnd = firstRange.endOffset else {
-            XCTFail("Expected first text-range rotor result, got \(firstOutcome)")
-            return
-        }
-        XCTAssertEqual(firstHit.screenElement?.element.identifier, "mentions_text")
-        XCTAssertEqual(firstRange.text, "@maria")
-        XCTAssertEqual(firstRange.rangeDescription, "[7..<13]")
-
-        let secondOutcome = stash.performRotor(
-            selection: .named("Mentions"),
-            continuation: .textRange(
-                try XCTUnwrap(firstHit.screenElement?.heistId),
-                TextRangeReference(startOffset: firstStart, endOffset: firstEnd)
-            ),
-            direction: .next,
-            on: liveTextView
-        )
-
-        guard case .succeeded(let secondHit) = secondOutcome,
-              let secondRange = secondHit.textRange else {
-            XCTFail("Expected second text-range rotor result, got \(secondOutcome)")
-            return
-        }
-        XCTAssertEqual(secondRange.text, "@jules")
-        XCTAssertEqual(secondRange.rangeDescription, "[22..<28]")
     }
 
     func testRotorReportsMissingRotorName() throws {
@@ -522,7 +337,6 @@ final class TheStashRotorTests: XCTestCase {
 
         let outcome = stash.performRotor(
             selection: .named("Errors"),
-            continuation: .none,
             direction: .next,
             on: try XCTUnwrap(liveTarget(for: screenElement))
         )
@@ -541,46 +355,6 @@ final class TheStashRotorTests: XCTestCase {
             throw XCTSkip("No foreground-active UIWindowScene available in test host")
         }
         return scene
-    }
-
-    private func makeTextRangeRotorTextView() -> UITextView {
-        let textView = UITextView(frame: CGRect(x: 20, y: 40, width: 320, height: 120))
-        textView.text = "Review @maria and ask @jules."
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.isScrollEnabled = false
-        textView.isAccessibilityElement = true
-        textView.accessibilityLabel = "Mentions Text"
-        textView.accessibilityIdentifier = "mentions_text"
-        textView.accessibilityCustomRotors = [
-            UIAccessibilityCustomRotor(name: "Mentions") { [weak textView] predicate in
-                guard let textView else { return nil }
-                let ranges = Self.mentionRanges(in: textView)
-                guard !ranges.isEmpty else { return nil }
-                let ordered = predicate.searchDirection == .next ? ranges : Array(ranges.reversed())
-                if let currentRange = predicate.currentItem.targetRange,
-                   let index = ordered.firstIndex(of: currentRange) {
-                    let nextIndex = ordered.index(after: index)
-                    guard nextIndex < ordered.endIndex else { return nil }
-                    return UIAccessibilityCustomRotorItemResult(targetElement: textView, targetRange: ordered[nextIndex])
-                }
-                return UIAccessibilityCustomRotorItemResult(targetElement: textView, targetRange: ordered.first)
-            }
-        ]
-        return textView
-    }
-
-    private static func mentionRanges(in textView: UITextView) -> [UITextRange] {
-        let pattern = "@[A-Za-z]+"
-        let fullRange = NSRange(textView.text.startIndex..., in: textView.text)
-        guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
-        return expression.matches(in: textView.text, range: fullRange).compactMap { match in
-            guard let start = textView.position(from: textView.beginningOfDocument, offset: match.range.location),
-                  let end = textView.position(from: start, offset: match.range.length) else {
-                return nil
-            }
-            return textView.textRange(from: start, to: end)
-        }
     }
 }
 

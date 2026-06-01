@@ -280,7 +280,6 @@ final class PostActionObservation {
             )
         }
         return AccessibilityTrace.Context(
-            focusedElementId: stash.firstResponderHeistId,
             keyboardVisible: safecracker.isKeyboardVisible(),
             screenId: stash.lastScreenId,
             windowStack: windows

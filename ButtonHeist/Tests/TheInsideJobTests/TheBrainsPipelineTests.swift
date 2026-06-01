@@ -300,8 +300,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             ["button_visible", "button_below_fold"]
         )
         XCTAssertEqual(
-            Set(state.interface.projectedElements.map(\.heistId)),
-            ["button_visible", "button_below_fold"]
+            Set(state.interface.projectedElements.compactMap(\.label)),
+            ["Visible", "Below fold"]
         )
         XCTAssertEqual(
             state.interfaceHash,
@@ -402,11 +402,15 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
         guard let screen = brains.refresh(),
-              let heistId = screen.visibleIds.first else {
-            throw XCTSkip("No live hierarchy available for target short-circuit test")
+              let label = screen.visibleIds
+                  .compactMap({ screen.findElement(heistId: $0)?.element.label })
+                  .first(where: { !$0.isEmpty }) else {
+            throw XCTSkip("No live labeled element available for target short-circuit test")
         }
 
-        let exploration = await brains.navigation.exploreScreen(target: .heistId(heistId))
+        let exploration = await brains.navigation.exploreScreen(
+            target: .predicate(ElementPredicate(label: label))
+        )
 
         XCTAssertEqual(exploration.manifest.scrollCount, 0)
         XCTAssertTrue(exploration.manifest.pendingContainers.isEmpty)

@@ -4,17 +4,11 @@ import ButtonHeist
 
 final class ElementTargetOptionsTests: XCTestCase {
 
-    func testHeistIdOptionParsesToTypedTarget() throws {
-        let command = try TapSubcommand.parse(["--heist-id", "button_save"])
-
-        XCTAssertEqual(try command.element.parsedTarget(), .heistId("button_save"))
-    }
-
     func testPositionalTargetIsRejected() {
         XCTAssertThrowsError(try TapSubcommand.parse(["button_save"]))
     }
 
-    func testMatcherOptionsParseToTypedMatcherTarget() throws {
+    func testMatcherOptionsParseToTypedPredicateTarget() throws {
         let command = try TapSubcommand.parse([
             "--identifier", "saveButton",
             "--label", "Save",
@@ -25,8 +19,8 @@ final class ElementTargetOptionsTests: XCTestCase {
 
         XCTAssertEqual(
             try command.element.parsedTarget(),
-            .matcher(
-                ElementMatcher(
+            .predicate(
+                ElementPredicate(
                     label: "Save",
                     identifier: "saveButton",
                     traits: [.button],
@@ -42,7 +36,7 @@ final class ElementTargetOptionsTests: XCTestCase {
 
         XCTAssertThrowsError(try command.element.parsedTarget()) { error in
             XCTAssertTrue(
-                String(describing: error).contains("ElementTarget requires heistId or matcher"),
+                String(describing: error).contains("ElementTarget requires a predicate"),
                 "Unexpected error: \(error)"
             )
         }
@@ -58,7 +52,7 @@ final class ElementTargetOptionsTests: XCTestCase {
             XCTFail("Expected missing target validation to fail before connecting")
         } catch {
             XCTAssertTrue(
-                String(describing: error).contains("Must specify a heistId, --identifier, or --x/--y coordinates"),
+                String(describing: error).contains("Must specify --identifier, -l, or --x/--y coordinates"),
                 "Unexpected error: \(error)"
             )
         }

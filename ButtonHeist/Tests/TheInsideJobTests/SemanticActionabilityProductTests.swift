@@ -44,7 +44,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
 
         let result = await brains.executeCommand(.activate(
-            .matcher(ElementMatcher(identifier: "semantic_checkout_submit", traits: [.button]))
+            .predicate(ElementPredicate(identifier: "semantic_checkout_submit", traits: [.button]))
         ))
 
         XCTAssertTrue(result.success, result.message ?? "semantic activate failed")
@@ -64,7 +64,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         try seedKnownOffscreenTarget(fixture)
 
         let result = await brains.executeCommand(.activate(
-            .matcher(ElementMatcher(identifier: "nested_semantic_checkout_submit", traits: [.button]))
+            .predicate(ElementPredicate(identifier: "nested_semantic_checkout_submit", traits: [.button]))
         ))
 
         XCTAssertTrue(result.success, result.message ?? "nested semantic activate failed")
@@ -79,7 +79,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         defer { fixture.cleanup() }
 
         let result = await brains.executeCommand(.activate(
-            .matcher(ElementMatcher(label: "Duplicate", traits: [.button]))
+            .predicate(ElementPredicate(label: "Duplicate", traits: [.button]))
         ))
 
         XCTAssertFalse(result.success)
@@ -105,7 +105,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         )
 
         let result = await brains.executeCommand(.activate(
-            .matcher(ElementMatcher(identifier: "unrevealable_submit", traits: [.button]))
+            .predicate(ElementPredicate(identifier: "unrevealable_submit", traits: [.button]))
         ))
 
         XCTAssertFalse(result.success)
@@ -181,8 +181,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
         if batch {
             let plan = BatchPlan(steps: [
                 BatchStep(
-                    command: .activate(.matcher(ElementMatcher(identifier: identifier, traits: [.button]))),
-                    expectation: nil,
+                    command: .activate(.predicate(ElementPredicate(identifier: identifier, traits: [.button]))),
+                    predicate: nil,
                     deadline: Deadline()
                 ),
             ])
@@ -191,7 +191,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         }
 
         let result = await localBrains.executeCommand(.activate(
-            .matcher(ElementMatcher(identifier: identifier, traits: [.button]))
+            .predicate(ElementPredicate(identifier: identifier, traits: [.button]))
         ))
         return (result, fixture.target.activationCount)
     }

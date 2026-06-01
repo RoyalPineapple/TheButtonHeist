@@ -50,8 +50,8 @@ extension FenceResponse {
 
     private static func compactRotor(_ search: RotorResult) -> String {
         var text = "rotor \(search.direction.rawValue): \(search.rotor)"
-        if let foundHeistId = search.foundHeistId {
-            text += "\n  heistId=\(foundHeistId)"
+        if let foundElement = search.foundElement {
+            text += "\n  found=\(foundElement.label ?? foundElement.description)"
         }
         if let range = search.textRange {
             text += "\n  textRange=\(range.rangeDescription)"
@@ -63,12 +63,12 @@ extension FenceResponse {
     }
 
     private static func compactExpectationFailureHint(_ expectation: ExpectationResult) -> String? {
-        guard expectation.expectation == .screenChanged, expectation.actual == "elementsChanged" else {
+        guard expectation.predicate == .changed(.screen()), expectation.actual == "elementsChanged" else {
             return nil
         }
         return "screen_changed requires a screen-level transition; " +
             "use elements_changed for same-screen element updates " +
-            "or wait_for_change when the UI may settle asynchronously"
+            "or wait when the UI may settle asynchronously"
     }
 
     private static func compactActionFailure(_ result: ActionResult, commandName: String) -> String {
@@ -101,9 +101,6 @@ extension FenceResponse {
         } else {
             let itemInfo = scrollSearchItemInfo(search)
             header = "\(commandName): found after \(search.scrollCount) scrolls\(itemInfo)"
-        }
-        if let foundHeistId = search.foundHeistId {
-            header += "\n  heistId=\(foundHeistId)"
         }
         return header
     }

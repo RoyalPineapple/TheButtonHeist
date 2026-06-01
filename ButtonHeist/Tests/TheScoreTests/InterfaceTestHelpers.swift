@@ -41,7 +41,6 @@ func makeTestInterface(
             traversalIndex += 1
             elementAnnotations.append(InterfaceElementAnnotation(
                 path: path,
-                heistId: element.heistId,
                 actions: element.actions
             ))
             return .element(makeTestAccessibilityElement(element), traversalIndex: index)

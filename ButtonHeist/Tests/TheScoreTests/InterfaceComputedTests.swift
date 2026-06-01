@@ -170,32 +170,31 @@ final class InterfaceComputedTests: XCTestCase {
         XCTAssertNil(InterfaceSummary.screenId(for: interface))
     }
 
-    func testActionExpectationDescriptionComposesMatcher() {
-        let expectation = ActionExpectation.elementAppeared(ElementMatcher(label: "Done", traits: [.button]))
+    func testAccessibilityPredicateDescriptionComposesPredicate() {
+        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "Done", traits: [.button])))
 
         XCTAssertEqual(
-            expectation.description,
-            #"element_appeared(matcher(label="Done" traits=[button]))"#
+            predicate.description,
+            #"changed(element_appeared(predicate(label="Done" traits=[button])))"#
         )
     }
 
-    func testExpectationResultDescriptionComposesExpectationAndActual() {
+    func testExpectationResultDescriptionComposesPredicateAndActual() {
         let result = ExpectationResult(
             met: false,
-            expectation: .elementDisappeared(ElementMatcher(identifier: "spinner")),
+            predicate: .changed(.disappeared(ElementPredicate(identifier: "spinner"))),
             actual: "still visible"
         )
 
         XCTAssertEqual(
             result.description,
-            #"expectation(met=false expected=element_disappeared(matcher(identifier="spinner")) actual="still visible")"#
+            #"expectation(met=false expected=changed(element_disappeared(predicate(identifier="spinner"))) actual="still visible")"#
         )
     }
 
     // MARK: - Helpers
 
     private func makeElement(
-        heistId: HeistId = "",
         label: String?,
         value: String? = nil,
         traits: [HeistTrait],
@@ -203,7 +202,6 @@ final class InterfaceComputedTests: XCTestCase {
         frameY: Double = 0
     ) -> HeistElement {
         HeistElement(
-            heistId: heistId,
             description: label ?? "",
             label: label, value: value, identifier: nil,
             traits: traits,

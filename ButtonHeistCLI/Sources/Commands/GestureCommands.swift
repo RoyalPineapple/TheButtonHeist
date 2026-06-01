@@ -76,7 +76,7 @@ struct TapSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (x != nil && y != nil) else {
-            throw ValidationError("Must specify a heistId, --identifier, or --x/--y coordinates")
+            throw ValidationError("Must specify --identifier, -l, or --x/--y coordinates")
         }
 
         let request = try Self.gestureRequest(element: element, numbers: [(.x, x), (.y, y)])
@@ -106,7 +106,7 @@ struct LongPressSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (x != nil && y != nil) else {
-            throw ValidationError("Must specify a heistId, --identifier, or --x/--y coordinates")
+            throw ValidationError("Must specify --identifier, -l, or --x/--y coordinates")
         }
 
         let request = try Self.gestureRequest(
@@ -169,11 +169,11 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
 
         if hasUnitStart {
             guard try element.hasTarget else {
-                throw ValidationError("Unit-point swipe requires a semantic target (heistId, --identifier, or -l)")
+                throw ValidationError("Unit-point swipe requires a semantic target (--identifier or -l)")
             }
         } else {
             guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {
-                throw ValidationError("Must specify a heistId, --identifier, --from-x/--from-y, or --start-x/--start-y unit points")
+                throw ValidationError("Must specify --identifier, -l, --from-x/--from-y, or --start-x/--start-y unit points")
             }
             guard (toX != nil && toY != nil) || direction != nil else {
                 throw ValidationError("Must specify --to-x/--to-y, --direction, or --end-x/--end-y unit points")
@@ -246,7 +246,7 @@ struct DragSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @ButtonHeistActor
     mutating func run() async throws {
         guard (try element.hasTarget) || (fromX != nil && fromY != nil) else {
-            throw ValidationError("Must specify a heistId, --identifier, or --from-x/--from-y coordinates")
+            throw ValidationError("Must specify --identifier, -l, or --from-x/--from-y coordinates")
         }
 
         let request = try Self.gestureRequest(

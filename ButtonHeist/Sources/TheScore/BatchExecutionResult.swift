@@ -24,7 +24,7 @@ public struct BatchExecutionResult: Codable, Sendable {
 
 /// One typed step result from a batch execution plan.
 ///
-/// A step is normalized by InsideJob as `Action + ActionExpectation? +
+/// A step is normalized by InsideJob as `Action + AccessibilityPredicate? +
 /// Deadline?`. Optional fields model the current result contract: skipped rows
 /// do not have action output, and action-only rows do not have expectation data.
 public struct BatchExecutionStepResult: Codable, Sendable {

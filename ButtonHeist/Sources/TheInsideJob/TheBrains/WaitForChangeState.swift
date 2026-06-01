@@ -9,7 +9,7 @@ import TheScore
 @MainActor
 final class WaitForChangeState {
     struct Predicate {
-        let expectation: ActionExpectation?
+        let expectation: AccessibilityPredicate?
         let deadline: CFAbsoluteTime
     }
 
@@ -29,7 +29,7 @@ final class WaitForChangeState {
     }
 
     func install(
-        expectation: ActionExpectation?,
+        expectation: AccessibilityPredicate?,
         timeout: TimeInterval,
         start: CFAbsoluteTime
     ) -> Predicate? {

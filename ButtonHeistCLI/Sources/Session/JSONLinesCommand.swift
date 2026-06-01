@@ -21,7 +21,6 @@ struct JSONLinesCommand: AsyncParsableCommand {
               buttonheist json_lines
               buttonheist json_lines --device a1b2
               echo '{"command":"get_interface"}' | buttonheist json_lines
-              echo '{"command":"activate","target":{"heistId":"myButton"}}' | buttonheist json_lines
               echo '{"command":"activate","target":{"label":"Sign In","traits":["button"]}}' | buttonheist json_lines
             """
     )

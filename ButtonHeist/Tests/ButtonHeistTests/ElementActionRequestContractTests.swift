@@ -43,25 +43,6 @@ final class ElementActionRequestContractTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRotorInvalidTextRangeDiagnosticKeepsObservedRange() async {
-        await assertExecutionError(
-            command: .rotor,
-            arguments: [
-                "target": targetValue(identifier: "body"),
-                "continuation": .object([
-                    "heistId": .string("body-current"),
-                    "textRange": .object([
-                        "startOffset": .int(10),
-                        "endOffset": .int(4),
-                    ]),
-                ]),
-            ],
-            contains: "schema validation failed for continuation.textRange.startOffset/continuation.textRange.endOffset: " +
-                "observed 10..<4; expected integer range with start >= 0 and end >= start"
-        )
-    }
-
-    @ButtonHeistActor
     func testScrollRejectsMixedElementAndContainerTargetsAtTypedBoundary() async {
         await assertExecutionError(
             command: .scroll,

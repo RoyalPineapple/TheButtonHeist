@@ -39,11 +39,10 @@ extension TheStash {
 
     // MARK: - Element Conversion
 
-    static func convert(_ element: AccessibilityElement, heistId: HeistId = "") -> HeistElement {
+    static func convert(_ element: AccessibilityElement) -> HeistElement {
         let frame = element.bhFrame
         let activationPoint = element.bhResolvedActivationPoint
         return HeistElement(
-            heistId: heistId,
             description: element.description,
             label: element.label,
             value: element.value,
@@ -115,7 +114,6 @@ extension TheStash {
         let annotations = entries.enumerated().map { index, entry in
             InterfaceElementAnnotation(
                 path: TreePath([index]),
-                heistId: entry.heistId,
                 actions: buildActions(for: entry.element)
             )
         }
@@ -131,19 +129,8 @@ extension TheStash {
     private static func elementAnnotations(from screen: Screen) -> [InterfaceElementAnnotation] {
         screen.liveCapture.hierarchy.compactMapSubtrees { node, path in
             guard case .element(let element, _) = node else { return nil }
-            guard let heistId = screen.liveCapture.heistId(forPath: path)
-                ?? screen.liveCapture.heistIdByElement[element] else {
-                wireConversionLogger.error("Hierarchy leaf with no heistId in screen; annotating without id")
-                return InterfaceElementAnnotation(
-                    path: path,
-                    heistId: "",
-                    actions: buildActions(for: element)
-                )
-            }
-
             return InterfaceElementAnnotation(
                 path: path,
-                heistId: heistId,
                 actions: buildActions(for: element)
             )
         }
