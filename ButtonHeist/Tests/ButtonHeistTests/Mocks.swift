@@ -268,41 +268,13 @@ final class MockConnection: TransportReachabilityConnecting {
                 durationMs: heistStepDurationMs
             )
         case .conditional(let conditional):
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .conditional,
-                message: "mock conditionals do not execute nested steps",
-                durationMs: heistStepDurationMs,
-                caseSelection: HeistCaseSelectionResult(
-                    cases: conditional.cases.map {
-                        HeistCaseMatchResult(
-                            predicate: $0.predicate,
-                            result: ExpectationResult(met: false, predicate: $0.predicate)
-                        )
-                    },
-                    selectedCaseIndex: nil,
-                    elapsedMs: heistStepDurationMs
-                )
-            )
+            return mockConditionalResult(conditional, index: index)
         case .waitForCases(let waitForCases):
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .waitForCases,
-                message: "mock wait_for_cases timed out",
-                durationMs: heistStepDurationMs,
-                caseSelection: HeistCaseSelectionResult(
-                    cases: waitForCases.cases.map {
-                        HeistCaseMatchResult(
-                            predicate: $0.predicate,
-                            result: ExpectationResult(met: false, predicate: $0.predicate)
-                        )
-                    },
-                    selectedCaseIndex: nil,
-                    elapsedMs: heistStepDurationMs,
-                    timeout: waitForCases.timeout,
-                    timedOut: true
-                )
-            )
+            return mockWaitForCasesResult(waitForCases, index: index)
+        case .repeatCount(let repeatCount):
+            return mockRepeatCountResult(repeatCount, index: index)
+        case .repeatUntil(let repeatUntil):
+            return mockRepeatUntilResult(repeatUntil, index: index)
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,
@@ -317,6 +289,76 @@ final class MockConnection: TransportReachabilityConnecting {
                 message: fail.message,
                 durationMs: heistStepDurationMs,
                 stopsHeist: true
+            )
+        }
+    }
+
+    private func mockConditionalResult(_ step: ConditionalStep, index: Int) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .conditional,
+            message: "mock conditionals do not execute nested steps",
+            durationMs: heistStepDurationMs,
+            caseSelection: HeistCaseSelectionResult(
+                cases: mockCaseResults(for: step.cases),
+                selectedCaseIndex: nil,
+                elapsedMs: heistStepDurationMs
+            )
+        )
+    }
+
+    private func mockWaitForCasesResult(_ step: WaitForCasesStep, index: Int) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .waitForCases,
+            message: "mock wait_for_cases timed out",
+            durationMs: heistStepDurationMs,
+            caseSelection: HeistCaseSelectionResult(
+                cases: mockCaseResults(for: step.cases),
+                selectedCaseIndex: nil,
+                elapsedMs: heistStepDurationMs,
+                timeout: step.timeout,
+                timedOut: true
+            )
+        )
+    }
+
+    private func mockRepeatCountResult(_ step: RepeatCountStep, index: Int) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .repeatCount,
+            message: "mock repeat_count does not execute nested steps",
+            durationMs: heistStepDurationMs,
+            repeatResult: HeistRepeatResult(
+                iterationCount: step.count,
+                elapsedMs: heistStepDurationMs
+            )
+        )
+    }
+
+    private func mockRepeatUntilResult(_ step: RepeatUntilStep, index: Int) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .repeatUntil,
+            message: "mock repeat_until reached maxIterations",
+            durationMs: heistStepDurationMs,
+            repeatResult: HeistRepeatResult(
+                iterationCount: step.maxIterations,
+                elapsedMs: heistStepDurationMs,
+                timeout: step.timeout,
+                maxIterations: step.maxIterations,
+                finalPredicate: step.predicate,
+                finalPredicateResult: ExpectationResult(met: false, predicate: step.predicate),
+                failureReason: "mock repeat_until reached maxIterations"
+            )
+        )
+    }
+
+    private func mockCaseResults(for cases: [PredicateCase]) -> [HeistCaseMatchResult] {
+        cases.map {
+            HeistCaseMatchResult(
+                predicate: $0.predicate,
+                result: ExpectationResult(met: false, predicate: $0.predicate)
             )
         }
     }

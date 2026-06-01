@@ -253,6 +253,40 @@ final class HeistSwiftRendererTests: XCTestCase {
         """)
     }
 
+    func testRendersRepeatCount() throws {
+        let step = try RepeatCountStep(
+            count: 3,
+            steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+        )
+        let output = try render(plan([.repeatCount(step)]))
+
+        XCTAssertEqual(output, """
+        Heist {
+            Repeat(3) {
+                Scroll(.down)
+            }
+        }
+        """)
+    }
+
+    func testRendersRepeatUntil() throws {
+        let step = try RepeatUntilStep(
+            predicate: .state(.present(ElementPredicate(label: "Done"))),
+            timeout: 20,
+            maxIterations: 30,
+            steps: [.action(try ActionStep(command: .scroll(ScrollTarget(direction: .down))))]
+        )
+        let output = try render(plan([.repeatUntil(step)]))
+
+        XCTAssertEqual(output, """
+        Heist {
+            Repeat(until: .present(.label("Done")), timeout: .seconds(20), maxIterations: 30) {
+                Scroll(.down)
+            }
+        }
+        """)
+    }
+
     func testEscapesSwiftStringLiterals() throws {
         let step = try ActionStep(command: .typeText(TypeTextTarget(
             text: "say \"hi\"\\there\nnext\tend\0",
