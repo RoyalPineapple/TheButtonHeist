@@ -186,12 +186,11 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     ) {
         let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
-        self.results = result.steps.compactMap { step in
-            guard plan.steps.indices.contains(step.index),
-                  let response = step.actionResponse(
-                    command: plan.steps[step.index].fenceCommand ?? .runHeist,
-                    step: plan.steps[step.index]
-                  )
+        self.results = result.executedStepPairs(plannedSteps: plan.steps).compactMap { pair in
+            guard let response = pair.result.actionResponse(
+                command: pair.plannedStep.fenceCommand ?? .runHeist,
+                step: pair.plannedStep
+            )
             else { return nil }
             return PublicResponseModel(response: response)
         }

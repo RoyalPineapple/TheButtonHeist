@@ -31,6 +31,12 @@ extension FenceResponse {
                     let kind = Self.compactDeltaKind(delta)
                     line += " -> \(kind)"
                 }
+            } else if let repeatResult = step.repeatResult {
+                if let failureReason = repeatResult.failureReason {
+                    line += " -> error: \(failureReason)"
+                } else {
+                    line += " -> iterations: \(repeatResult.iterationCount)"
+                }
             } else if let plannedStep = plan.steps[safe: step.index],
                       let response = step.actionResponse(
                         command: plannedStep.fenceCommand ?? .runHeist,
@@ -61,6 +67,8 @@ private extension HeistStep {
         case .wait: return "wait"
         case .conditional: return "if"
         case .waitForCases: return "wait_for_cases"
+        case .repeatCount: return "repeat_count"
+        case .repeatUntil: return "repeat_until"
         case .warn: return "warn"
         case .fail: return "fail"
         }

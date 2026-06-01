@@ -2587,6 +2587,55 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPlayHeistReportFlattensRepeatIterations() async throws {
+        let repeatedAction = try activateHeistStep(identifier: "row")
+        let heist = HeistPlan(steps: [
+            .repeatCount(try RepeatCountStep(count: 2, steps: [repeatedAction])),
+        ])
+        let executionResult = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .repeatCount,
+                    message: "completed 2 repeat iteration(s)",
+                    durationMs: 10,
+                    repeatResult: HeistRepeatResult(
+                        iterationCount: 2,
+                        elapsedMs: 10
+                    ),
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 3
+                        ),
+                        HeistExecutionStepResult(
+                            index: 1,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 4
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 10
+        )
+        let (fence, _) = makeConnectedFence()
+        let contract = try fence.validateHeistPlayback(heist)
+
+        let projection = fence.playbackProjection(contract: contract, result: executionResult)
+
+        XCTAssertEqual(projection.stepResults.map(\.command), ["repeat_count", "activate", "activate"])
+        XCTAssertEqual(projection.stepResults.map(\.index), [0, 1, 2])
+        XCTAssertEqual(projection.stepResults.map(\.passed), [true, true, true])
+        XCTAssertNil(projection.failedIndex)
+        XCTAssertNil(projection.failure)
+        XCTAssertEqual(projection.stepResults[1].timeSeconds, 0.003, accuracy: 0.000_001)
+        XCTAssertEqual(projection.stepResults[2].timeSeconds, 0.004, accuracy: 0.000_001)
+    }
+
+    @ButtonHeistActor
     func testPlayHeistResetsPhaseAfterCompletion() async throws {
         let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
