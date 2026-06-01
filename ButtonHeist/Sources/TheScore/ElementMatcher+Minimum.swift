@@ -30,20 +30,23 @@ public struct MinimumMatcher: Sendable, Equatable {
         in capture: AccessibilityTrace.Capture
     ) -> MinimumMatcher? {
         let elements = capture.interface.projectedElements
-        if let captureElement = elements.first(where: { $0 == element }) {
-            return build(element: captureElement, allElements: elements)
+        if let index = elements.firstIndex(where: { $0 == element }) {
+            return build(element: elements[index], elementIndex: index, allElements: elements)
         }
-        return build(element: element, allElements: elements + [element])
+        return build(element: element, elementIndex: elements.count, allElements: elements + [element])
     }
 
     /// Build predicates for every element in a capture, preserving traversal order.
     public static func buildAll(in capture: AccessibilityTrace.Capture) -> [MinimumMatcher] {
         let elements = capture.interface.projectedElements
-        return elements.compactMap { build(element: $0, allElements: elements) }
+        return elements.enumerated().compactMap { index, element in
+            build(element: element, elementIndex: index, allElements: elements)
+        }
     }
 
     private static func build(
         element: HeistElement,
+        elementIndex: Int,
         allElements: [HeistElement]
     ) -> MinimumMatcher? {
         let candidates = candidatePredicates(for: element, allElements: allElements)
@@ -55,7 +58,7 @@ public struct MinimumMatcher: Sendable, Equatable {
         return MinimumMatcher(
             element: element,
             predicate: bestPredicate,
-            ordinal: ordinalOf(element, matching: bestPredicate, in: allElements)
+            ordinal: ordinalOf(elementIndex: elementIndex, matching: bestPredicate, in: allElements)
         )
     }
 
@@ -204,25 +207,18 @@ public struct MinimumMatcher: Sendable, Equatable {
         return matchCount == 1
     }
 
-    /// Find the 0-based index of `element` among all elements matching `predicate`.
-    /// Returns nil if the element is the only match.
+    /// The 0-based position of the element at `elementIndex` among all elements
+    /// matching `predicate`, by traversal order. Returns nil when the predicate
+    /// already matches uniquely (no ordinal needed). Position is used rather than
+    /// content equality because identical elements are otherwise indistinguishable.
     private static func ordinalOf(
-        _ element: HeistElement,
+        elementIndex: Int,
         matching predicate: ElementPredicate,
         in allElements: [HeistElement]
     ) -> Int? {
-        var index = 0
-        var found: Int?
-        var totalMatches = 0
-        for candidate in allElements where candidate.matches(predicate) {
-            if candidate == element {
-                found = index
-            }
-            index += 1
-            totalMatches += 1
-        }
+        let totalMatches = allElements.filter { $0.matches(predicate) }.count
         guard totalMatches > 1 else { return nil }
-        return found
+        return allElements.prefix(elementIndex).filter { $0.matches(predicate) }.count
     }
 }
 

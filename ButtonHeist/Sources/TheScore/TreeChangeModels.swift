@@ -3,7 +3,8 @@ import AccessibilitySnapshotModel
 
 /// Which accessibility property changed on an element.
 public enum ElementProperty: String, Codable, Sendable, CaseIterable {
-    case label
+    // No `label`/`identifier`: those are element identity (diff pairing key), so a
+    // change to them is a remove+add, never a property update.
     case value
     case traits
     case hint

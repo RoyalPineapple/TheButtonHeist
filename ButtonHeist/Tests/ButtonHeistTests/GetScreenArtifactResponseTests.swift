@@ -11,7 +11,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
 
         let pngBytes = Data([0x89, 0x50, 0x4E, 0x47])
         let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(heistId: "visible_button", label: "Pay", traits: [.button]),
+            makeReceiptTestElement(label: "Pay", traits: [.button]),
         ])
         let fence = Self.makeFence(
             tempDirectory: tempDirectory,
@@ -46,7 +46,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
 
         let pngData = Data([0x89, 0x50, 0x4E, 0x47]).base64EncodedString()
         let interface = makeReceiptTestInterface([
-            makeReceiptTestElement(heistId: "visible_button", label: "Pay", traits: [.button]),
+            makeReceiptTestElement(label: "Pay", traits: [.button]),
         ])
         let fence = Self.makeFence(tempDirectory: tempDirectory, pngData: pngData, interface: interface)
 
@@ -75,7 +75,7 @@ final class GetScreenArtifactResponseTests: XCTestCase {
             return XCTFail("Expected inline screenshot response with interface, got \(includedInterfaceResponse)")
         }
         XCTAssertEqual(includedInterfacePayload.pngData, pngData)
-        XCTAssertEqual(includedInterfacePayload.interface?.projectedElements.map(\.heistId), ["visible_button"])
+        XCTAssertEqual(includedInterfacePayload.interface?.projectedElements.count, 1)
         XCTAssertTrue(includedInterfaceOptions.includeInterface)
         XCTAssertNotNil(publicJSONObject(includedInterfaceResponse)["interface"])
     }

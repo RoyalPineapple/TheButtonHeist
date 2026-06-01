@@ -542,7 +542,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - PropertyChange / ElementUpdate
 
     func testPropertyChangeRoundTrip() throws {
-        let change = PropertyChange(property: .label, old: "OK", new: "Cancel")
+        let change = PropertyChange(property: .value, old: "OK", new: "Cancel")
         let data = try encoder.encode(change)
         let decoded = try decoder.decode(PropertyChange.self, from: data)
         XCTAssertEqual(decoded, change)
@@ -551,7 +551,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testElementPropertyIsGeometry() {
         XCTAssertTrue(ElementProperty.frame.isGeometry)
         XCTAssertTrue(ElementProperty.activationPoint.isGeometry)
-        XCTAssertFalse(ElementProperty.label.isGeometry)
+        XCTAssertFalse(ElementProperty.value.isGeometry)
         XCTAssertFalse(ElementProperty.value.isGeometry)
         XCTAssertFalse(ElementProperty.traits.isGeometry)
         XCTAssertFalse(ElementProperty.hint.isGeometry)
@@ -580,7 +580,7 @@ final class WireTypeRoundTripTests: XCTestCase {
                 actions: []
             ),
             changes: [
-                PropertyChange(property: .label, old: "A", new: "B"),
+                PropertyChange(property: .value, old: "A", new: "B"),
                 PropertyChange(property: .value, old: nil, new: "active"),
             ]
         )

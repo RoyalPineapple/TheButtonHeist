@@ -288,13 +288,11 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     private func testElement(
-        _ heistId: HeistId,
         label: String,
         identifier: String? = nil,
         traits: [HeistTrait] = []
     ) -> HeistElement {
         HeistElement(
-            heistId: heistId,
             description: label,
             label: label,
             value: nil,
@@ -309,10 +307,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     private func selectionTestInterface(includeDuplicateGroup: Bool = false) -> Interface {
-        let header = testElement("title", label: "Menu", traits: [.header])
-        let submit = testElement("submit", label: "Submit", traits: [.button])
-        let cancel = testElement("cancel", label: "Cancel", traits: [.button])
-        let footer = testElement("footer", label: "Footer")
+        let header = testElement(label: "Menu", traits: [.header])
+        let submit = testElement(label: "Submit", traits: [.button])
+        let cancel = testElement(label: "Cancel", traits: [.button])
+        let footer = testElement(label: "Footer")
         var nodes: [ReceiptTestInterfaceNode] = [
             .element(header),
             .container(
@@ -330,7 +328,7 @@ final class TheFenceHandlerTests: XCTestCase {
             .element(footer),
         ]
         if includeDuplicateGroup {
-            let archive = testElement("archive", label: "Archive", traits: [.button])
+            let archive = testElement(label: "Archive", traits: [.button])
             nodes.insert(
                 .container(
                     makeReceiptTestSemanticContainer(
@@ -1153,66 +1151,10 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testRotorContinuationRequiresHeistId() async {
-        await assertValidationError(
-            command: .rotor,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "continuation": .object([
-                    "textRange": .object([
-                        "startOffset": .int(4),
-                        "endOffset": .int(8),
-                    ]),
-                ]),
-            ],
-            equals: "schema validation failed for continuation.heistId: observed missing; expected string"
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotorRejectsInvalidTextRangeOffsets() async {
-        let expectedError = "schema validation failed for continuation.textRange.startOffset/continuation.textRange.endOffset: " +
-            "observed 8..<4; expected integer range with start >= 0 and end >= start"
-        await assertValidationError(
-            command: .rotor,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "continuation": .object([
-                    "heistId": .string("notes"),
-                    "textRange": .object([
-                        "startOffset": .int(8),
-                        "endOffset": .int(4),
-                    ]),
-                ]),
-            ],
-            equals: expectedError
-        )
-    }
-
-    @ButtonHeistActor
     func testRotorValidPassesValidation() async {
         await assertPassesValidation(
             command: .rotor,
             arguments: ["target": targetValue(identifier: "myElement"), "rotor": .string("Errors")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testRotorPreviousValidTextRangeCursorPassesValidation() async {
-        await assertPassesValidation(
-            command: .rotor,
-            arguments: [
-                "target": targetValue(identifier: "myElement"),
-                "rotor": .string("Mentions"),
-                "direction": .string("previous"),
-                "continuation": .object([
-                    "heistId": .string("notes"),
-                    "textRange": .object([
-                        "startOffset": .int(4),
-                        "endOffset": .int(10),
-                    ]),
-                ]),
-            ]
         )
     }
 
@@ -2472,13 +2414,13 @@ final class TheFenceHandlerTests: XCTestCase {
     func testBatchNetDeltaDerivesFromCaptureTraceEndpoints() async throws {
         let (fence, mockConn) = makeConnectedFence()
         let counter0 = makeReceiptTestInterface([
-            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "0"),
+            makeReceiptTestElement(label: "Counter", value: "0"),
         ])
         let counter1 = makeReceiptTestInterface([
-            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "1"),
+            makeReceiptTestElement(label: "Counter", value: "1"),
         ])
         let counter2 = makeReceiptTestInterface([
-            makeReceiptTestElement(heistId: "counter", label: "Counter", value: "2"),
+            makeReceiptTestElement(label: "Counter", value: "2"),
         ])
         var responses = [
             ActionResult(
@@ -3041,7 +2983,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testGetInterfaceSendsMatcherInObservationQuery() async throws {
         let (fence, mockConn) = makeConnectedFence()
-        let submit = testElement("submit", label: "Submit", traits: [.button])
+        let submit = testElement(label: "Submit", traits: [.button])
         mockConn.autoResponse = { message in
             switch message {
             case .requestInterface:

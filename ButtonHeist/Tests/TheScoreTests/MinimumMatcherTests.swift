@@ -112,16 +112,16 @@ final class MinimumMatcherTests: XCTestCase {
         let secondAmbiguous = makeElement(label: "Item", traits: [.staticText])
         let capture = makeCapture([stableTarget, sameLabel, firstAmbiguous, secondAmbiguous])
 
-        let stableMatcher = try XCTUnwrap(MinimumMatcher.build(element: stableTarget, in: capture))
-        let firstOrdinalMatcher = try XCTUnwrap(MinimumMatcher.build(element: firstAmbiguous, in: capture))
-        let secondOrdinalMatcher = try XCTUnwrap(MinimumMatcher.build(element: secondAmbiguous, in: capture))
+        // Identical-by-predicate elements can only be distinguished by their
+        // position among the matches, so build the whole capture in traversal order.
+        let matchers = MinimumMatcher.buildAll(in: capture)
 
-        XCTAssertEqual(stableMatcher.predicate, ElementPredicate(identifier: "primary.save"))
-        XCTAssertNil(stableMatcher.ordinal, "Identifier should disambiguate before ordinal selection.")
-        XCTAssertEqual(firstOrdinalMatcher.predicate, ElementPredicate(label: "Item", traits: [.staticText]))
-        XCTAssertEqual(firstOrdinalMatcher.ordinal, 0)
-        XCTAssertEqual(secondOrdinalMatcher.predicate, ElementPredicate(label: "Item", traits: [.staticText]))
-        XCTAssertEqual(secondOrdinalMatcher.ordinal, 1)
+        XCTAssertEqual(matchers[0].predicate, ElementPredicate(identifier: "primary.save"))
+        XCTAssertNil(matchers[0].ordinal, "Identifier should disambiguate before ordinal selection.")
+        XCTAssertEqual(matchers[2].predicate, ElementPredicate(label: "Item", traits: [.staticText]))
+        XCTAssertEqual(matchers[2].ordinal, 0)
+        XCTAssertEqual(matchers[3].predicate, ElementPredicate(label: "Item", traits: [.staticText]))
+        XCTAssertEqual(matchers[3].ordinal, 1)
     }
 
     func testBuildSkipsUUIDIdentifiers() throws {
@@ -207,7 +207,7 @@ final class MinimumMatcherTests: XCTestCase {
 
         XCTAssertEqual(
             minimumMatcher.description,
-            #"minimumMatcher(element="item_2" predicate(label="Item" traits=[staticText]) ordinal=1)"#
+            #"minimumMatcher(element="Item" predicate(label="Item" traits=[staticText]) ordinal=1)"#
         )
     }
 

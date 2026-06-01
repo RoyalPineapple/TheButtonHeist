@@ -41,9 +41,8 @@ func projectElementStateChange(
 ) -> ElementUpdate? {
     var changes: [PropertyChange] = []
 
-    if old.label != new.label {
-        changes.append(PropertyChange(property: .label, old: old.label, new: new.label))
-    }
+    // label is identity (pairing key), not an update property — paired elements
+    // share it by construction, so no label PropertyChange is emitted.
     if old.value != new.value {
         changes.append(PropertyChange(property: .value, old: old.value, new: new.value))
     }

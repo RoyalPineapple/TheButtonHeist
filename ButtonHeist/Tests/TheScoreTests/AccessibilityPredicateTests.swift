@@ -336,7 +336,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let result = ActionResult(
             success: true, method: .activate,
             accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
-                ElementUpdate(element: makeElement(label: "any"), changes: [PropertyChange(property: .label, old: "A", new: "B")]),
+                ElementUpdate(element: makeElement(label: "any"), changes: [PropertyChange(property: .value, old: "A", new: "B")]),
             ]))))
         )
         XCTAssertTrue(AccessibilityPredicate.changed(.updated(.any)).validate(against: result).met)
@@ -356,7 +356,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let result = ActionResult(
             success: true, method: .activate,
             accessibilityTrace: .projectingForTests(.elementsChanged(.init(elementCount: 5, edits: ElementEdits(updated: [
-                ElementUpdate(element: makeElement(label: "btn_1"), changes: [PropertyChange(property: .label, old: "A", new: "B")]),
+                ElementUpdate(element: makeElement(label: "btn_1"), changes: [PropertyChange(property: .hint, old: "A", new: "B")]),
             ]))))
         )
         let predicate = AccessibilityPredicate.changed(.updated(ElementUpdatePredicate(property: .value)))
