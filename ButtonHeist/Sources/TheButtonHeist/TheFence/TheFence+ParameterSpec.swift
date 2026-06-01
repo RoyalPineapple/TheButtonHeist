@@ -62,10 +62,12 @@ public extension FenceParameterKey {
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex")
     static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")
-    static let startX = Self("startX"), startY = Self("startY"), stableId = Self("stableId"), steps = Self("steps")
+    static let startX = Self("startX"), startY = Self("startY"), stableId = Self("stableId")
+    static let states = Self("states"), steps = Self("steps")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
     static let timeout = Self("timeout")
     static let to = Self("to"), token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")
+    static let `where` = Self("where")
     static let x = Self("x"), y = Self("y")
 }
 
@@ -246,15 +248,33 @@ enum FenceParameterBlocks: Sendable {
         enumValues: AccessibilityPredicate.wireTypeValues
     )
 
+    /// Documented fields of an `AccessibilityPredicate.State` object (`present`,
+    /// `absent`, `all`). A `State` is recursive — `all` nests further states —
+    /// so item objects allow additional keys and the decoder enforces the
+    /// per-type required-field rules.
+    private static let stateProperties: [FenceParameterSpec] = [
+        param(.type, .string, enumValues: ["present", "absent", "all"]),
+        param(.element, .object, objectProperties: matcherFields),
+    ]
+
     /// Object properties for an `AccessibilityPredicate` (the `expect` slot and
     /// the `wait` `predicate` field). Element fields nest under `element`;
-    /// `property`/`from`/`to` filter `element_updated`.
+    /// `property`/`from`/`to` filter `element_updated`; `states` carries the
+    /// child conditions of `all`; `where` carries the post-transition state of
+    /// `screen_changed`.
     private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
         predicateType,
         param(.element, .object, objectProperties: matcherFields),
         param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
         param(.from, .string),
         param(.to, .string),
+        param(
+            .states, .array,
+            arrayItemType: .object,
+            arrayItemProperties: stateProperties,
+            arrayItemAdditionalProperties: true
+        ),
+        param(.where, .object, objectProperties: stateProperties, objectAdditionalProperties: true),
     ]
 
     static let expect: FenceParameterSpec = param(

@@ -1652,6 +1652,31 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testWaitAllStatesPassesValidation() async {
+        await assertPassesValidation(
+            command: .wait,
+            arguments: ["predicate": .object([
+                "type": .string("all"),
+                "states": .array([
+                    .object(["type": .string("present"), "element": .object(["label": .string("Done")])]),
+                    .object(["type": .string("absent"), "element": .object(["label": .string("Loading")])]),
+                ]),
+            ])]
+        )
+    }
+
+    @ButtonHeistActor
+    func testWaitScreenChangedWhereClausePassesValidation() async {
+        await assertPassesValidation(
+            command: .wait,
+            arguments: ["predicate": .object([
+                "type": .string("screen_changed"),
+                "where": .object(["type": .string("present"), "element": .object(["label": .string("Home")])]),
+            ])]
+        )
+    }
+
+    @ButtonHeistActor
     func testWaitSendsCorrectMessage() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .wait, values: [
