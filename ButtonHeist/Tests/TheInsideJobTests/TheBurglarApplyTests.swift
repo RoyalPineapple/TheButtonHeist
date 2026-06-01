@@ -77,7 +77,7 @@ final class TheBurglarApplyTests: XCTestCase {
         XCTAssertEqual(screen.semantic.elements.count, 2)
         XCTAssertEqual(screen.liveCapture.heistIdByElementPath[TreePath([0])], "item_button_1")
         XCTAssertEqual(screen.liveCapture.heistIdByElementPath[TreePath([1])], "item_button_2")
-        XCTAssertEqual(interface.annotations.elements.map(\.heistId), ["item_button_1", "item_button_2"])
+        XCTAssertEqual(interface.annotations.elements.map(\.path), [TreePath([0]), TreePath([1])])
     }
 
     func testBuildScreenSetsHierarchy() {

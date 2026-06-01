@@ -476,14 +476,14 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("missing_button"))
+            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Missing Button")))
         )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .scrollToVisible)
         XCTAssertTrue(result.message?.contains("semantic actionability failed [notFound]") == true)
-        XCTAssertTrue(result.message?.contains("Element not found") == true)
-        XCTAssertTrue(result.message?.contains("missing_button") == true)
+        XCTAssertTrue(result.message?.contains("No match for") == true)
+        XCTAssertTrue(result.message?.contains("Missing Button") == true)
         XCTAssertFalse(result.message?.contains("get_interface") == true)
     }
 
@@ -496,7 +496,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .heistId("offscreen_button"),
+            for: .predicate(ElementPredicate(label: "Offscreen")),
             method: .activate,
             deallocatedBoundary: "test actionability"
         )
@@ -565,7 +565,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .heistId("escaped_button"),
+            for: .predicate(ElementPredicate(label: "Escaped")),
             method: .scrollToVisible,
             deallocatedBoundary: "test actionability"
         )
@@ -605,7 +605,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .heistId("escaped_button"),
+            for: .predicate(ElementPredicate(label: "Escaped")),
             method: .scrollToVisible,
             deallocatedBoundary: "test actionability"
         )
@@ -627,7 +627,7 @@ final class TheBrainsScrollTests: XCTestCase {
         var didDispatch = false
 
         let result = await brains.actions.performElementAction(
-            target: .heistId("offscreen_button"),
+            target: .predicate(ElementPredicate(label: "Offscreen")),
             method: .activate,
             requireInteractive: false
         ) { _ in
@@ -661,7 +661,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         await brains.tripwire.yieldFrames(3)
 
-        let result = await brains.executeCommand(.activate(.heistId("old_offscreen")))
+        let result = await brains.executeCommand(.activate(.predicate(ElementPredicate(label: "Old Offscreen"))))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -682,7 +682,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .heistId("offscreen_button"))
+            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Offscreen")))
         )
 
         XCTAssertFalse(result.success)
@@ -706,7 +706,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .heistId("offscreen_button"), direction: .down)
+            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Offscreen")), direction: .down)
         )
 
         XCTAssertFalse(result.success)
@@ -730,7 +730,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeScrollToEdge(
-            ScrollToEdgeTarget(elementTarget: .heistId("offscreen_button"), edge: .bottom)
+            ScrollToEdgeTarget(elementTarget: .predicate(ElementPredicate(label: "Offscreen")), edge: .bottom)
         )
 
         XCTAssertFalse(result.success)
@@ -854,7 +854,7 @@ final class TheBrainsScrollTests: XCTestCase {
         )
 
         let result = await brains.navigation.executeElementSearch(
-            elementTarget: .heistId("settings_button"),
+            elementTarget: .predicate(ElementPredicate(label: "Settings")),
             direction: .down
         )
 
@@ -887,7 +887,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeElementSearch(
-            elementTarget: .heistId("visible_button"),
+            elementTarget: .predicate(ElementPredicate(label: "Visible")),
             direction: .down
         )
 
@@ -1039,7 +1039,7 @@ final class TheBrainsScrollTests: XCTestCase {
         ))
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .heistId("item"), direction: .down)
+            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
         )
 
         XCTAssertFalse(result.success)
@@ -1057,18 +1057,18 @@ final class TheBrainsScrollTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            element: makeElement()
+            element: makeElement(label: "Item")
         )
         installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "axis_scroll")
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .heistId("item"), direction: .down)
+            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
         )
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(
             result.message,
-            "scroll target failed: observed heistId item inside a scroll view that supports no scrolling; "
+            "scroll target failed: observed \"Item\" (heistId: item) inside a scroll view that supports no scrolling; "
                 + "expected vertical scrolling; try a matching scroll direction or target an element "
                 + "inside a matching scroll container"
         )
@@ -1081,12 +1081,12 @@ final class TheBrainsScrollTests: XCTestCase {
         let screenElement = TheStash.ScreenElement(
             heistId: "item",
             contentSpaceOrigin: nil,
-            element: makeElement()
+            element: makeElement(label: "Item")
         )
         installLiveScrollTarget(screenElement, scrollView: scrollView, stableId: "vertical_scroll")
 
         let result = await brains.navigation.executeScroll(
-            ScrollTarget(elementTarget: .heistId("item"), direction: .down)
+            ScrollTarget(elementTarget: .predicate(ElementPredicate(label: "Item")), direction: .down)
         )
 
         XCTAssertTrue(result.success, "Expected element scroll to succeed: \(String(describing: result.message))")

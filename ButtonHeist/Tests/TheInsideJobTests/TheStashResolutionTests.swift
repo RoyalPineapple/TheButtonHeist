@@ -124,60 +124,7 @@ final class TheStashResolutionTests: XCTestCase {
         }
     }
 
-    // MARK: - heistId Resolution
-
-    func testHeistIdResolvesPresented() {
-        let element = element(label: "OK", traits: .button)
-        register(element, heistId: "button_ok", index: 0)
-
-        let result = bagman.resolveTarget(.heistId("button_ok"))
-        guard let resolved = result.resolved else {
-            XCTFail("Expected .resolved, got \(result)")
-            return
-        }
-        XCTAssertEqual(resolved.element.label, "OK")
-    }
-
-    func testHeistIdNotFoundReturnsNotFound() {
-        let element = element(label: "OK", traits: .button)
-        register(element, heistId: "button_ok", index: 0)
-
-        let result = bagman.resolveTarget(.heistId("button_nope"))
-        guard case .notFound(let diagnostics) = result else {
-            XCTFail("Expected .notFound, got \(result)")
-            return
-        }
-        XCTAssertTrue(diagnostics.contains("Element not found"))
-    }
-
-    func testHeistIdNotFoundShowsSimilar() {
-        let element = element(label: "OK", traits: .button)
-        register(element, heistId: "button_ok", index: 0)
-
-        let result = bagman.resolveTarget(.heistId("button"))
-        guard case .notFound(let diagnostics) = result else {
-            XCTFail("Expected .notFound, got \(result)")
-            return
-        }
-        XCTAssertTrue(diagnostics.contains("button_ok"), "Should suggest similar heistId")
-    }
-
-    func testCurrentCaptureHeistIdKeepsCurrentCaptureHandle() throws {
-        let currentElement = element(
-            label: "Quantity",
-            value: "1",
-            identifier: "quantity_stepper",
-            traits: .adjustable
-        )
-        bagman.installScreenForTesting(Screen.makeForTests(elements: [(currentElement, "quantity_1")]))
-
-        let target = ElementTarget.heistId("quantity_0")
-
-        XCTAssertNil(
-            bagman.resolveTarget(target).resolved,
-            "Runtime heistIds are current-capture handles and must not replay through source-screen matchers"
-        )
-    }
+    // MARK: - Live Geometry Replay
 
     func testMatcherTargetAcquiresFreshLiveGeometry() throws {
         let sourceFrame = CGRect(x: 10, y: 20, width: 80, height: 44)
@@ -214,7 +161,7 @@ final class TheStashResolutionTests: XCTestCase {
             sequence: 1,
             interface: TheStash.WireConversion.toInterface(from: sourceScreen)
         )
-        let sourceWireElement = try XCTUnwrap(capture.interface.projectedElements.first { $0.heistId == "quantity_0" })
+        let sourceWireElement = try XCTUnwrap(capture.interface.projectedElements.first { $0.identifier == "quantity_stepper" })
         let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(
             element: sourceWireElement,
             in: capture
@@ -260,13 +207,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(resolved.element.label, "Save")
     }
 
-    func testHeistIdTargetResolvesExactScreenElement() {
+    func testPredicateTargetResolvesExactScreenElement() {
         let save = element(label: "Save", traits: .button)
         let cancel = element(label: "Cancel", traits: .button)
         register(save, heistId: "button_save", index: 0)
         register(cancel, heistId: "button_cancel", index: 1)
 
-        let result = bagman.resolveTarget(.heistId("button_cancel"))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Cancel")))
         guard let resolved = result.resolved else {
             XCTFail("Expected .resolved, got \(result)")
             return
@@ -365,7 +312,7 @@ final class TheStashResolutionTests: XCTestCase {
     // MARK: - TargetResolution Convenience Properties
 
     func testResolvedPropertyReturnsNilForNotFound() {
-        let result = bagman.resolveTarget(.heistId("nope"))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "nope")))
         XCTAssertNil(result.resolved)
     }
 
@@ -383,7 +330,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
 
-        let result = bagman.resolveTarget(.heistId("button_ok"))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "OK")))
         XCTAssertEqual(result.diagnostics, "")
     }
 
@@ -635,7 +582,6 @@ final class TheStashResolutionTests: XCTestCase {
         register(visible, heistId: "button_visible", index: 0)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        XCTAssertNil(bagman.resolveFirstVisibleMatch(.heistId("below_fold_button")))
         XCTAssertNil(bagman.resolveFirstVisibleMatch(.predicate(ElementPredicate(label: "Below Fold"))))
         XCTAssertEqual(
             bagman.resolveFirstVisibleMatch(.predicate(ElementPredicate(label: "Visible")))?.heistId,
@@ -665,8 +611,8 @@ final class TheStashResolutionTests: XCTestCase {
             scrollableContainerViews: [:]
         ))
 
-        guard let resolved = bagman.resolveTarget(.heistId("below_fold_button")).resolved else {
-            XCTFail("Known-only heistId should still resolve")
+        guard let resolved = bagman.resolveTarget(.predicate(ElementPredicate(label: "Below Fold"))).resolved else {
+            XCTFail("Known-only entry should still resolve")
             return
         }
         XCTAssertEqual(resolved.heistId, "below_fold_button")
@@ -688,7 +634,7 @@ final class TheStashResolutionTests: XCTestCase {
             scrollableContainerViews: [:]
         ))
 
-        let refreshed = bagman.resolveTarget(.heistId("below_fold_button")).resolved
+        let refreshed = bagman.resolveTarget(.predicate(ElementPredicate(label: "Below Fold"))).resolved
         XCTAssertNotNil(bagman.screenElement(heistId: "below_fold_button", in: .visible))
         guard let refreshed,
               case .resolved(let liveTarget) = bagman.resolveLiveActionTarget(for: refreshed) else {
@@ -726,7 +672,7 @@ final class TheStashResolutionTests: XCTestCase {
             scrollableContainerViews: [:]
         ))
 
-        guard let resolved = bagman.resolveTarget(.heistId("button_visible")).resolved else {
+        guard let resolved = bagman.resolveTarget(.predicate(ElementPredicate(label: "Visible"))).resolved else {
             XCTFail("Expected visible target to resolve")
             return
         }
@@ -743,11 +689,11 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Below Fold"))).resolved)
     }
 
-    func testResolveTargetFindsLiveHeistIdInViewport() {
+    func testResolveTargetFindsLivePredicateInViewport() {
         let element = element(label: "Visible", traits: .button)
         register(element, heistId: "visible_button", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(.heistId("visible_button")).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Visible"))).resolved)
     }
 
     func testResolveTargetHonorsExplicitOrdinal() {
@@ -768,7 +714,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(element, heistId: "button_combobox", index: 0)
 
         // Element resolves immediately — no markPresented gate
-        let result = bagman.resolveTarget(.heistId("button_combobox"))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Combobox")))
         XCTAssertNotNil(result.resolved)
     }
 
@@ -854,7 +800,6 @@ final class TheStashResolutionTests: XCTestCase {
 
         // Client-side: HeistElement.matches (no mode — exact-or-miss is the only mode).
         let heistElement = HeistElement(
-            heistId: "button_save_draft",
             description: "Save Draft",
             label: "Save Draft",
             value: "x",
@@ -879,7 +824,6 @@ final class TheStashResolutionTests: XCTestCase {
     func testServerAndClientAgreeOnSmartQuoteLabel() {
         let smart = element(label: "Don\u{2019}t skip")
         let heist = HeistElement(
-            heistId: "btn",
             description: "x",
             label: "Don\u{2019}t skip",
             value: nil,

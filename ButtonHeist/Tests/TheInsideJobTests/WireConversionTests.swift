@@ -45,7 +45,9 @@ private func XCTAssertDeltaElementCount(
 
 private extension ElementEdits {
     var addedOptional: [HeistElement]? { added.isEmpty ? nil : added }
-    var removedOptional: [String]? { removed.isEmpty ? nil : removed }
+    /// Removed elements are wire `HeistElement`s (no heistId). Project their
+    /// labels for assertion convenience.
+    var removedOptional: [String]? { removed.isEmpty ? nil : removed.map { $0.label ?? "" } }
     var updatedOptional: [ElementUpdate]? { updated.isEmpty ? nil : updated }
 }
 
@@ -173,8 +175,7 @@ final class WireConverterTests: XCTestCase {
                 traversalIndex += 1
                 elementAnnotations.append(InterfaceElementAnnotation(
                     path: path,
-                    heistId: element.heistId,
-                    actions: WireConversion.convert(element.element, heistId: element.heistId).actions
+                    actions: WireConversion.convert(element.element).actions
                 ))
                 return .element(element.element, traversalIndex: index)
             case .container(let stableId, let container, let children):
@@ -342,7 +343,7 @@ final class WireConverterTests: XCTestCase {
             respondsToUserInteraction: true
         )
 
-        let wire = WireConversion.convert(element.element, heistId: element.heistId)
+        let wire = WireConversion.convert(element.element)
 
         XCTAssertEqual(wire.actions, [.activate])
     }
@@ -409,7 +410,7 @@ final class WireConverterTests: XCTestCase {
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertEqual(delta.testEdits.addedOptional?.count, 1)
-        XCTAssertEqual(delta.testEdits.addedOptional?.first?.heistId, "button_cancel")
+        XCTAssertEqual(delta.testEdits.addedOptional?.first?.label, "Cancel")
         XCTAssertNil(delta.testEdits.removedOptional)
     }
 
@@ -427,7 +428,7 @@ final class WireConverterTests: XCTestCase {
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        XCTAssertEqual(delta.testEdits.removedOptional, ["button_cancel"])
+        XCTAssertEqual(delta.testEdits.removedOptional, ["Cancel"])
         XCTAssertNil(delta.testEdits.addedOptional)
     }
 
@@ -534,24 +535,6 @@ final class WireConverterTests: XCTestCase {
         XCTAssertTrue(properties?.contains(.hint) == true)
     }
 
-    // MARK: - Delta: Label Change Tracking
-
-    func testLabelChangeOnIdentifierMatchedElementProducesUpdate() {
-        let before = [makeScreenElement(heistId: "loginButton", label: "Show More", identifier: "loginButton")]
-        let after = [makeScreenElement(heistId: "loginButton", label: "Show Less", identifier: "loginButton")]
-
-        let delta = computeDelta(
-            before: before, after: after, afterTree: [], isScreenChange: false
-        )
-        XCTAssertNotScreenChanged(delta)
-        if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        XCTAssertEqual(delta.testEdits.updatedOptional?.count, 1)
-        let change = delta.testEdits.updatedOptional?.first?.changes.first
-        XCTAssertEqual(change?.property, .label)
-        XCTAssertEqual(change?.old, "Show More")
-        XCTAssertEqual(change?.new, "Show Less")
-    }
-
     // MARK: - Delta: Label Change = Add + Remove
 
     func testLabelChangeProducesAddAndRemove() {
@@ -563,8 +546,8 @@ final class WireConverterTests: XCTestCase {
         )
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        XCTAssertEqual(delta.testEdits.removedOptional, ["button_ok"])
-        XCTAssertEqual(delta.testEdits.addedOptional?.first?.heistId, "button_done")
+        XCTAssertEqual(delta.testEdits.removedOptional, ["OK"])
+        XCTAssertEqual(delta.testEdits.addedOptional?.first?.label, "Done")
         XCTAssertNil(delta.testEdits.updatedOptional)
     }
 
@@ -718,7 +701,7 @@ final class WireConverterTests: XCTestCase {
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
         XCTAssertNil(delta.testEdits.addedOptional)
         XCTAssertNil(delta.testEdits.removedOptional)
-        let update = delta.testEdits.updatedOptional?.first { $0.heistId == "favorite_button" }
+        let update = delta.testEdits.updatedOptional?.first { $0.element.label == "Favorite" }
         XCTAssertNotNil(update)
         XCTAssertTrue(update?.changes.contains { $0.property == .value && $0.old == "0" && $0.new == "1" } == true)
         XCTAssertTrue(update?.changes.contains { $0.property == .traits } == true)
@@ -775,7 +758,7 @@ final class WireConverterTests: XCTestCase {
 
         XCTAssertNotScreenChanged(delta)
         if case .noChange = delta { XCTFail("Expected .elementsChanged, got .noChange") }
-        XCTAssertEqual(delta.testEdits.removedOptional, ["second"])
+        XCTAssertEqual(delta.testEdits.removedOptional, ["Second"])
     }
 
     // MARK: - Delta: Duplicate heistId Pairing

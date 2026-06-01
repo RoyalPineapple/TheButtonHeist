@@ -106,46 +106,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(before.elements.count, 1)
     }
 
-    // MARK: - Stale Current-Capture Handle Fail-Closed
-
-    func testExecuteIncrementFailsWhenCurrentCaptureHandleIsStale() async {
-        let heistId = "volume_slider"
-        registerScreenElement(
-            heistId: heistId,
-            element: makeElement(label: "Volume", traits: .adjustable),
-            object: nil
-        )
-
-        let result = await brains.actions.executeIncrement(.heistId(heistId))
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .increment)
-        XCTAssertDiagnostic(result.message, contains: [
-            "semantic actionability failed [staleRefresh]",
-            "target was not found in fresh live geometry",
-            "volume_slider",
-        ])
-    }
-
-    func testExecuteDecrementFailsWhenCurrentCaptureHandleIsStale() async {
-        let heistId = "brightness_slider"
-        registerScreenElement(
-            heistId: heistId,
-            element: makeElement(label: "Brightness", traits: .adjustable),
-            object: nil
-        )
-
-        let result = await brains.actions.executeDecrement(.heistId(heistId))
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .decrement)
-        XCTAssertDiagnostic(result.message, contains: [
-            "semantic actionability failed [staleRefresh]",
-            "target was not found in fresh live geometry",
-            "brightness_slider",
-        ])
-    }
-
     func testExecuteIncrementFailsWhenElementIsNotAdjustable() async {
         let heistId = "live_button"
         let liveObject = UIButton(type: .system)
@@ -155,7 +115,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeIncrement(.heistId(heistId))
+        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Live")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -178,7 +138,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeDecrement(.heistId(heistId))
+        let result = await brains.actions.executeDecrement(.predicate(ElementPredicate(label: "Live")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .decrement)
@@ -189,27 +149,6 @@ final class TheBrainsActionTests: XCTestCase {
             "traits=[button]",
             "actions=[activate]",
             "try target an element with trait adjustable",
-        ])
-    }
-
-    func testExecuteCustomActionFailsWhenCurrentCaptureHandleIsStale() async {
-        let heistId = "options_button"
-        registerScreenElement(
-            heistId: heistId,
-            element: makeElement(label: "Options", traits: .button),
-            object: nil
-        )
-
-        let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Delete")
-        )
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .customAction)
-        XCTAssertDiagnostic(result.message, contains: [
-            "semantic actionability failed [staleRefresh]",
-            "target was not found in fresh live geometry",
-            "options_button",
         ])
     }
 
@@ -227,7 +166,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Share")
+            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Share")
         )
 
         XCTAssertFalse(result.success)
@@ -260,7 +199,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Delete")
+            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Delete")
         )
 
         XCTAssertFalse(result.success)
@@ -293,7 +232,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeCustomAction(
-            CustomActionTarget(elementTarget: .heistId(heistId), actionName: "Archive")
+            CustomActionTarget(elementTarget: .predicate(ElementPredicate(label: "Options")), actionName: "Archive")
         )
 
         XCTAssertTrue(result.success)
@@ -310,7 +249,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeActivate(.heistId(heistId))
+        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(label: "Plain action")))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -326,7 +265,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeActivate(.heistId(heistId))
+        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(label: "Plain label")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -348,7 +287,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeActivate(.heistId(heistId))
+        let result = await brains.actions.executeActivate(.predicate(ElementPredicate(label: "Disabled action")))
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -365,7 +304,7 @@ final class TheBrainsActionTests: XCTestCase {
             object: liveObject
         )
 
-        let result = await brains.actions.executeIncrement(.heistId(heistId))
+        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Live")))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -386,7 +325,7 @@ final class TheBrainsActionTests: XCTestCase {
         let liveObject = AdjustableGeometryView(frame: staleObjectFrame, activationPoint: staleObjectPoint)
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
-        let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
+        let resolved = brains.stash.resolveTarget(.predicate(ElementPredicate(label: "Moving"))).resolved
         let liveTarget: TheStash.LiveActionTarget?
         if let resolved,
            case .resolved(let target) = brains.stash.resolveLiveActionTarget(for: resolved) {
@@ -399,7 +338,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveTarget?.activationPoint, capturePoint)
         XCTAssertNotEqual(liveTarget?.activationPoint, staleObjectPoint)
 
-        let result = await brains.actions.executeIncrement(.heistId(heistId))
+        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Moving")))
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .increment)
@@ -428,36 +367,13 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
         ))
-        let target = try matcherTarget(heistId: "quantity_0", in: sourceScreen)
+        let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(target)
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
         XCTAssertEqual(result.method, .increment)
         XCTAssertEqual(liveObject.incrementCount, 1)
-    }
-
-    func testElementActionCurrentHeistIdDoesNotReplayAsSemanticIdentity() async {
-        let currentElement = makeElement(label: "Checkout", traits: .button)
-        let currentObject = AdjustableGeometryView(
-            frame: CGRect(x: 80, y: 180, width: 180, height: 44),
-            activationPoint: CGPoint(x: 170, y: 202)
-        )
-        brains.stash.installScreenForTesting(.makeForTests(
-            elements: [(currentElement, "checkout_button")],
-            objects: ["checkout_button": currentObject]
-        ))
-
-        let result = await brains.actions.executeIncrement(.heistId("quantity_0"))
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .increment)
-        XCTAssertEqual(result.failureKind, .targetUnavailable)
-        XCTAssertEqual(currentObject.incrementCount, 0)
-        XCTAssertDiagnostic(result.message, contains: [
-            "Element not found",
-            "quantity_0",
-        ])
     }
 
     func testElementActionSemanticTargetUsesAccessibilityGeometryWhenObjectFrameIsMissing() async throws {
@@ -479,7 +395,7 @@ final class TheBrainsActionTests: XCTestCase {
             elements: [(currentElement, "quantity_1")],
             objects: ["quantity_1": liveObject]
         ))
-        let target = try matcherTarget(heistId: "quantity_0", in: sourceScreen)
+        let target = try matcherTarget(label: "Quantity", in: sourceScreen)
 
         let result = await brains.actions.executeIncrement(target)
 
@@ -530,7 +446,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
-        let resolved = brains.stash.resolveTarget(.heistId(heistId)).resolved
+        let resolved = brains.stash.resolveTarget(.predicate(ElementPredicate(label: "Geometry Missing"))).resolved
         let liveTarget: TheStash.LiveActionTarget?
         if let resolved,
            case .resolved(let target) = brains.stash.resolveLiveActionTarget(for: resolved) {
@@ -538,7 +454,7 @@ final class TheBrainsActionTests: XCTestCase {
         } else {
             liveTarget = nil
         }
-        let result = await brains.actions.executeIncrement(.heistId(heistId))
+        let result = await brains.actions.executeIncrement(.predicate(ElementPredicate(label: "Geometry Missing")))
 
         XCTAssertNotNil(resolved)
         XCTAssertNil(liveTarget)
@@ -759,7 +675,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            selection: .element(.heistId("below_fold_button")),
+            selection: .element(.predicate(ElementPredicate(label: "Below Fold"))),
             method: .syntheticTap
         ) { point in
             dispatchedPoint = point
@@ -793,7 +709,7 @@ final class TheBrainsActionTests: XCTestCase {
 
         var dispatchedPoint: CGPoint?
         let result = await brains.actions.performPointAction(
-            selection: .element(.heistId(heistId)),
+            selection: .element(.predicate(ElementPredicate(label: "Live"))),
             method: .syntheticTap
         ) { point in
             dispatchedPoint = point
@@ -846,7 +762,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
+            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Plain rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -876,7 +792,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Live Rotor"))
+            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Live Rotor"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -905,7 +821,7 @@ final class TheBrainsActionTests: XCTestCase {
         installScreen(elements: [(element, heistId)], objects: [heistId: liveObject])
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Live Rotor"))
+            RotorTarget(elementTarget: .predicate(ElementPredicate(identifier: "edge_rotor_host")), selection: .named("Live Rotor"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "rotor failed")
@@ -930,7 +846,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
+            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -957,7 +873,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
+            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -980,7 +896,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeRotor(
-            RotorTarget(elementTarget: .heistId(heistId), selection: .named("Errors"))
+            RotorTarget(elementTarget: .predicate(ElementPredicate(label: "Rotor host")), selection: .named("Errors"))
         )
 
         XCTAssertFalse(result.success)
@@ -1105,14 +1021,14 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     private func matcherTarget(
-        heistId: HeistId,
+        label: String,
         in screen: Screen
     ) throws -> ElementTarget {
         let capture = AccessibilityTrace.Capture(
             sequence: 1,
             interface: TheStash.WireConversion.toInterface(from: screen)
         )
-        let element = try XCTUnwrap(capture.interface.projectedElements.first { $0.heistId == heistId })
+        let element = try XCTUnwrap(capture.interface.projectedElements.first { $0.label == label })
         let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: element, in: capture))
         return .predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
     }
