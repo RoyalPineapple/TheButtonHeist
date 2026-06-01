@@ -5,8 +5,8 @@ import Foundation
 /// Canonical ordered automation contract.
 ///
 /// Swift DSL source, dynamic agent JSON, recordings, and playback all converge
-/// on this value. The Swift DSL itself is future work; `HeistPlan` is the
-/// product contract.
+/// on this value. DSL syntax is source authoring; `HeistPlan` is the product
+/// contract executed by the runtime.
 public struct HeistPlan: Codable, Sendable, Equatable {
     public static let currentVersion = 1
 

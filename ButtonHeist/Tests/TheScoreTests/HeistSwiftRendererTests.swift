@@ -183,7 +183,7 @@ final class HeistSwiftRendererTests: XCTestCase {
         Heist {
             If(.present(.label("Allow"))) {
                 Activate(.label("Allow"))
-            } else: {
+            } otherwise: {
                 Warn("Allow prompt was not present")
             }
         }
