@@ -11,30 +11,30 @@ final class TLSIdentityTests: XCTestCase {
     // MARK: - Certificate Generation (pure, no Keychain)
 
     func testGenerateCertificateProducesValidDER() throws {
-        let (_, derBytes) = try TLSIdentity.generateCertificate()
-        XCTAssertGreaterThan(derBytes.count, 0)
-        let secCert = SecCertificateCreateWithData(nil, Data(derBytes) as CFData)
+        let material = try TLSCertificateMaterial.generate()
+        XCTAssertGreaterThan(material.derBytes.count, 0)
+        let secCert = SecCertificateCreateWithData(nil, Data(material.derBytes) as CFData)
         XCTAssertNotNil(secCert, "DER bytes must be accepted by SecCertificateCreateWithData")
     }
 
     func testMakeSecCertificateRoundTrips() throws {
-        let (_, derBytes) = try TLSIdentity.generateCertificate()
-        let secCert = try TLSIdentity.makeSecCertificate(derBytes: derBytes)
+        let material = try TLSCertificateMaterial.generate()
+        let secCert = try TLSCertificateMaterial.makeSecCertificate(derBytes: material.derBytes)
         let roundTripped = SecCertificateCopyData(secCert) as Data
-        XCTAssertEqual(Array(roundTripped), derBytes)
+        XCTAssertEqual(Array(roundTripped), material.derBytes)
     }
 
     func testDifferentKeysProduceDifferentCerts() throws {
-        let (_, der1) = try TLSIdentity.generateCertificate()
-        let (_, der2) = try TLSIdentity.generateCertificate()
-        XCTAssertNotEqual(der1, der2)
+        let first = try TLSCertificateMaterial.generate()
+        let second = try TLSCertificateMaterial.generate()
+        XCTAssertNotEqual(first.derBytes, second.derBytes)
     }
 
     // MARK: - Fingerprint (pure, no Keychain)
 
     func testFingerprintFormat() throws {
-        let (_, derBytes) = try TLSIdentity.generateCertificate()
-        let fp = TLSIdentity.computeFingerprint(derBytes: derBytes)
+        let material = try TLSCertificateMaterial.generate()
+        let fp = TLSCertificateFacts.fingerprint(derBytes: material.derBytes)
         XCTAssertTrue(fp.hasPrefix("sha256:"), "Fingerprint must start with 'sha256:'")
         let hex = String(fp.dropFirst("sha256:".count))
         XCTAssertEqual(hex.count, 64, "SHA-256 hex should be 64 characters")
@@ -43,33 +43,33 @@ final class TLSIdentityTests: XCTestCase {
     }
 
     func testFingerprintDeterministic() throws {
-        let (_, derBytes) = try TLSIdentity.generateCertificate()
-        let fp1 = TLSIdentity.computeFingerprint(derBytes: derBytes)
-        let fp2 = TLSIdentity.computeFingerprint(derBytes: derBytes)
+        let material = try TLSCertificateMaterial.generate()
+        let fp1 = TLSCertificateFacts.fingerprint(derBytes: material.derBytes)
+        let fp2 = TLSCertificateFacts.fingerprint(derBytes: material.derBytes)
         XCTAssertEqual(fp1, fp2)
     }
 
     func testDifferentCertsProduceDifferentFingerprints() throws {
-        let (_, der1) = try TLSIdentity.generateCertificate()
-        let (_, der2) = try TLSIdentity.generateCertificate()
-        let fp1 = TLSIdentity.computeFingerprint(derBytes: der1)
-        let fp2 = TLSIdentity.computeFingerprint(derBytes: der2)
+        let first = try TLSCertificateMaterial.generate()
+        let second = try TLSCertificateMaterial.generate()
+        let fp1 = TLSCertificateFacts.fingerprint(derBytes: first.derBytes)
+        let fp2 = TLSCertificateFacts.fingerprint(derBytes: second.derBytes)
         XCTAssertNotEqual(fp1, fp2)
     }
 
     func testFingerprintMatchesCryptoKitDirectly() throws {
-        let (_, derBytes) = try TLSIdentity.generateCertificate()
-        let hash = SHA256.hash(data: derBytes)
+        let material = try TLSCertificateMaterial.generate()
+        let hash = SHA256.hash(data: material.derBytes)
         let expected = "sha256:" + hash.map { String(format: "%02x", $0) }.joined()
-        let actual = TLSIdentity.computeFingerprint(derBytes: derBytes)
+        let actual = TLSCertificateFacts.fingerprint(derBytes: material.derBytes)
         XCTAssertEqual(actual, expected)
     }
 
     // MARK: - SecKey Bridging (no Keychain persistence needed)
 
     func testPrivateKeyBridgesToSecKey() throws {
-        let (privateKey, _) = try TLSIdentity.generateCertificate()
-        let keyData = privateKey.x963Representation
+        let material = try TLSCertificateMaterial.generate()
+        let keyData = material.privateKey.x963Representation
         let attributes: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
