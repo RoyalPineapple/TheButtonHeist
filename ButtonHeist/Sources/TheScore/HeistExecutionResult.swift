@@ -24,6 +24,7 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
     case wait
     case conditional
     case waitForCases
+    case forEach = "for_each"
     case warn
     case fail
     case skipped
@@ -42,6 +43,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
     public let stopsHeist: Bool
     public let skipped: HeistExecutionSkippedStepResult?
     public let caseSelection: HeistCaseSelectionResult?
+    public let forEachResult: HeistForEachResult?
     public let childResults: [HeistExecutionStepResult]?
 
     public init(
@@ -55,6 +57,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         stopsHeist: Bool = false,
         skipped: HeistExecutionSkippedStepResult? = nil,
         caseSelection: HeistCaseSelectionResult? = nil,
+        forEachResult: HeistForEachResult? = nil,
         childResults: [HeistExecutionStepResult]? = nil
     ) {
         self.index = index
@@ -67,6 +70,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         self.stopsHeist = stopsHeist
         self.skipped = skipped
         self.caseSelection = caseSelection
+        self.forEachResult = forEachResult
         self.childResults = childResults
     }
 
@@ -84,6 +88,7 @@ public struct HeistExecutionStepResult: Codable, Sendable {
         if kind == .action, actionResult == nil { return true }
         if kind == .wait, actionResult?.success != true { return true }
         if kind == .waitForCases, caseSelection?.timedOut == true, caseSelection?.elseRan != true { return true }
+        if kind == .forEach, forEachResult?.failureReason != nil { return true }
         if childResults?.contains(where: \.isFailure) == true { return true }
         return false
     }
@@ -127,6 +132,25 @@ public struct HeistCaseMatchResult: Codable, Sendable {
     ) {
         self.predicate = predicate
         self.result = result
+    }
+}
+
+public struct HeistForEachResult: Codable, Sendable {
+    public let matchedCount: Int
+    public let limit: Int
+    public let iterationCount: Int
+    public let failureReason: String?
+
+    public init(
+        matchedCount: Int,
+        limit: Int,
+        iterationCount: Int,
+        failureReason: String? = nil
+    ) {
+        self.matchedCount = matchedCount
+        self.limit = limit
+        self.iterationCount = iterationCount
+        self.failureReason = failureReason
     }
 }
 

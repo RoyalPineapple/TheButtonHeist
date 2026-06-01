@@ -20,52 +20,25 @@ private struct PlaybackReportProjection {
     let result: HeistExecutionResult
 
     func project() -> TheFence.PlaybackProjection {
-        var stepResults: [HeistPlaybackReport.StepResult] = []
+        let projections = result.projectedOutcomes(for: contract.plan)
         var failures: [PlaybackFailure] = []
-        appendStepResults(
-            steps: contract.plan.steps,
-            outcomes: result.steps,
-            into: &stepResults,
-            failures: &failures
-        )
+        let stepResults = projections.enumerated().map { reportIndex, projection in
+            let failure = playbackFailure(step: projection.step, outcome: projection.outcome)
+            if let failure {
+                failures.append(failure)
+            }
+            return stepResult(
+                reportIndex: reportIndex,
+                step: projection.step,
+                outcome: projection.outcome,
+                failure: failure
+            )
+        }
         return TheFence.PlaybackProjection(
             stepResults: stepResults,
             failure: failures.first,
             failedIndex: stepResults.first { !$0.passed }?.index
         )
-    }
-
-    private func appendStepResults(
-        steps: [HeistStep],
-        outcomes: [HeistExecutionStepResult],
-        into stepResults: inout [HeistPlaybackReport.StepResult],
-        failures: inout [PlaybackFailure]
-    ) {
-        for (siblingIndex, step) in steps.enumerated() {
-            let outcome = outcomes.first { $0.index == siblingIndex }
-            let reportIndex = stepResults.count
-            let failure = outcome.flatMap { playbackFailure(step: step, outcome: $0) }
-            stepResults.append(stepResult(
-                reportIndex: reportIndex,
-                step: step,
-                outcome: outcome,
-                failure: failure
-            ))
-            if let failure {
-                failures.append(failure)
-            }
-            guard
-                let outcome,
-                let childResults = outcome.childResults,
-                let childSteps = childSteps(for: step, outcome: outcome)
-            else { continue }
-            appendStepResults(
-                steps: childSteps,
-                outcomes: childResults,
-                into: &stepResults,
-                failures: &failures
-            )
-        }
     }
 
     private func stepResult(
@@ -90,32 +63,6 @@ private struct PlaybackReportProjection {
             timeSeconds: Double(outcome?.durationMs ?? 0) / 1000,
             outcome: reportOutcome
         )
-    }
-
-    private func childSteps(
-        for step: HeistStep,
-        outcome: HeistExecutionStepResult
-    ) -> [HeistStep]? {
-        switch step {
-        case .conditional(let conditional):
-            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
-                return conditional.cases[safe: selectedCaseIndex]?.steps
-            }
-            if outcome.caseSelection?.elseRan == true {
-                return conditional.elseSteps
-            }
-            return nil
-        case .waitForCases(let waitForCases):
-            if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex {
-                return waitForCases.cases[safe: selectedCaseIndex]?.steps
-            }
-            if outcome.caseSelection?.elseRan == true {
-                return waitForCases.elseSteps
-            }
-            return nil
-        case .action, .wait, .warn, .fail:
-            return nil
-        }
     }
 
     private func failureErrorKind(_ failure: PlaybackFailure) -> HeistPlaybackReport.PlaybackErrorKind? {
@@ -181,6 +128,9 @@ private extension HeistExecutionStepResult {
            caseSelection?.elseRan != true {
             return true
         }
+        if kind == .forEach, forEachResult?.failureReason != nil {
+            return true
+        }
         if stopsHeist, childResults?.contains(where: \.isFailure) != true {
             return true
         }
@@ -195,6 +145,7 @@ private extension HeistStep {
         case .wait: return "wait"
         case .conditional: return "if"
         case .waitForCases: return "wait_for_cases"
+        case .forEach: return "for_each"
         case .warn: return "warn"
         case .fail: return "fail"
         }
@@ -277,11 +228,5 @@ private extension ClientWireMessageType {
         case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
         default: return rawValue
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

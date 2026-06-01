@@ -65,11 +65,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
     case wait(WaitStep)
     case conditional(ConditionalStep)
     case waitForCases(WaitForCasesStep)
+    case forEach(ForEachStep)
     case warn(WarnStep)
     case fail(FailStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, conditional, waitForCases = "wait_for_cases", warn, fail
+        case type, action, wait, conditional, waitForCases = "wait_for_cases", forEach = "for_each", warn, fail
     }
 
     private enum StepType: String, Codable {
@@ -77,6 +78,7 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case wait
         case conditional
         case waitForCases = "wait_for_cases"
+        case forEach = "for_each"
         case warn
         case fail
     }
@@ -100,6 +102,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
                 typeName: "wait_for_cases heist step"
             )
             self = .waitForCases(try container.decode(WaitForCasesStep.self, forKey: .waitForCases))
+        case .forEach:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.forEach.stringValue],
+                typeName: "for_each heist step"
+            )
+            self = .forEach(try container.decode(ForEachStep.self, forKey: .forEach))
         case .warn:
             try decoder.rejectUnknownKeys(allowed: ["type", "warn"], typeName: "warn heist step")
             self = .warn(try container.decode(WarnStep.self, forKey: .warn))
@@ -124,6 +132,9 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .waitForCases(let step):
             try container.encode(StepType.waitForCases, forKey: .type)
             try container.encode(step, forKey: .waitForCases)
+        case .forEach(let step):
+            try container.encode(StepType.forEach, forKey: .type)
+            try container.encode(step, forKey: .forEach)
         case .warn(let step):
             try container.encode(StepType.warn, forKey: .type)
             try container.encode(step, forKey: .warn)
@@ -141,6 +152,7 @@ extension HeistStep: CustomStringConvertible {
         case .wait(let step): return step.description
         case .conditional(let step): return step.description
         case .waitForCases(let step): return step.description
+        case .forEach(let step): return step.description
         case .warn(let step): return step.description
         case .fail(let step): return step.description
         }
@@ -360,6 +372,55 @@ extension PredicateCase: CustomStringConvertible {
     }
 }
 
+public struct ForEachStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case matching, limit, steps
+    }
+
+    public let matching: ElementPredicate
+    public let limit: Int
+    public let steps: [HeistStep]
+
+    public init(
+        matching: ElementPredicate,
+        limit: Int,
+        steps: [HeistStep]
+    ) throws {
+        guard matching.hasPredicates else {
+            throw HeistPlanError.emptyForEachPredicate
+        }
+        guard limit > 0 else {
+            throw HeistPlanError.invalidForEachLimit(limit)
+        }
+        guard !steps.isEmpty else {
+            throw HeistPlanError.emptyForEachSteps
+        }
+        self.matching = matching
+        self.limit = limit
+        self.steps = steps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            matching: try container.decode(ElementPredicate.self, forKey: .matching),
+            limit: try container.decode(Int.self, forKey: .limit),
+            steps: try container.decode([HeistStep].self, forKey: .steps)
+        )
+    }
+}
+
+extension ForEachStep: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("forEach", [
+            matching.description,
+            "limit=\(limit)",
+            "steps=\(steps.count)",
+        ])
+    }
+}
+
 public struct WarnStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case message
@@ -406,6 +467,9 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case unsupportedActionCommand(String)
     case emptyPredicateCases(String)
     case negativeTimeout(Double)
+    case emptyForEachPredicate
+    case invalidForEachLimit(Int)
+    case emptyForEachSteps
 }
 
 public extension ClientMessage {

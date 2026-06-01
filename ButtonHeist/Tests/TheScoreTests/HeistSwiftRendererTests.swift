@@ -253,6 +253,33 @@ final class HeistSwiftRendererTests: XCTestCase {
         """)
     }
 
+    func testRendersForEachWithSemanticElementTarget() throws {
+        let matching = ElementPredicate(label: "Delete")
+        let step = try ForEachStep(
+            matching: matching,
+            limit: 20,
+            steps: [
+                .action(try ActionStep(
+                    command: .activate(.predicate(matching, ordinal: 0)),
+                    expectation: WaitStep(
+                        predicate: .state(.absentTarget(.predicate(matching, ordinal: 0))),
+                        timeout: 2
+                    )
+                )),
+            ]
+        )
+        let output = try render(plan([.forEach(step)]))
+
+        XCTAssertEqual(output, """
+        Heist {
+            ForEach(.matching(.label("Delete")), limit: 20) { element in
+                Activate(element)
+                    .expect(.absent(element), timeout: .seconds(2))
+            }
+        }
+        """)
+    }
+
     func testEscapesSwiftStringLiterals() throws {
         let step = try ActionStep(command: .typeText(TypeTextTarget(
             text: "say \"hi\"\\there\nnext\tend\0",

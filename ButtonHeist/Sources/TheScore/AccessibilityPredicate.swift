@@ -16,6 +16,8 @@ import Foundation
 /// ```
 /// {"type": "present",            "element": { ...ElementPredicate... }}
 /// {"type": "absent",             "element": { ...ElementPredicate... }}
+/// {"type": "present",            "target": { ...ElementTarget... }}
+/// {"type": "absent",             "target": { ...ElementTarget... }}
 /// {"type": "all",                "states": [ <State object>, ... ]}
 /// {"type": "screen_changed"}
 /// {"type": "screen_changed",     "where": { <State object> }}
@@ -40,6 +42,10 @@ public enum AccessibilityPredicate: Sendable, Equatable {
         case present(ElementPredicate)
         /// No element matching the predicate exists in the observed interface.
         case absent(ElementPredicate)
+        /// A selected element target exists in the observed interface.
+        case presentTarget(ElementTarget)
+        /// A selected element target does not exist in the observed interface.
+        case absentTarget(ElementTarget)
         /// Every child state holds against the same observed interface.
         /// `all([])` is invalid — it carries no condition.
         case all([State])
@@ -79,7 +85,7 @@ extension AccessibilityPredicate: Codable {
     public static let wireTypeValues: [String] = WireType.allCases.map(\.rawValue)
 
     private enum CodingKeys: String, CodingKey {
-        case type, element, states, `where`, property, from, to
+        case type, element, target, states, `where`, property, from, to
     }
 
     public init(from decoder: Decoder) throws {
@@ -178,7 +184,7 @@ extension AccessibilityPredicate.State: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case type, element, states
+        case type, element, target, states
     }
 
     public init(from decoder: Decoder) throws {
@@ -192,11 +198,21 @@ extension AccessibilityPredicate.State: Codable {
         }
         switch wireType {
         case .present:
-            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "present predicate")
-            self = .present(try container.decode(ElementPredicate.self, forKey: .element))
+            self = try Self.decodeElementState(
+                decoder,
+                container,
+                typeName: "present predicate",
+                predicateState: Self.present,
+                targetState: Self.presentTarget
+            )
         case .absent:
-            try decoder.rejectUnknownKeys(allowed: ["type", "element"], typeName: "absent predicate")
-            self = .absent(try container.decode(ElementPredicate.self, forKey: .element))
+            self = try Self.decodeElementState(
+                decoder,
+                container,
+                typeName: "absent predicate",
+                predicateState: Self.absent,
+                targetState: Self.absentTarget
+            )
         case .all:
             try decoder.rejectUnknownKeys(allowed: ["type", "states"], typeName: "all predicate")
             let states = try container.decode([AccessibilityPredicate.State].self, forKey: .states)
@@ -219,9 +235,45 @@ extension AccessibilityPredicate.State: Codable {
         case .absent(let predicate):
             try container.encode(WireType.absent.rawValue, forKey: .type)
             try container.encode(predicate, forKey: .element)
+        case .presentTarget(let target):
+            try container.encode(WireType.present.rawValue, forKey: .type)
+            try container.encode(target, forKey: .target)
+        case .absentTarget(let target):
+            try container.encode(WireType.absent.rawValue, forKey: .type)
+            try container.encode(target, forKey: .target)
         case .all(let states):
             try container.encode(WireType.all.rawValue, forKey: .type)
             try container.encode(states, forKey: .states)
+        }
+    }
+
+    private static func decodeElementState(
+        _ decoder: Decoder,
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        typeName: String,
+        predicateState: (ElementPredicate) -> Self,
+        targetState: (ElementTarget) -> Self
+    ) throws -> Self {
+        try decoder.rejectUnknownKeys(allowed: ["type", "element", "target"], typeName: typeName)
+        let hasElement = container.contains(.element)
+        let hasTarget = container.contains(.target)
+        switch (hasElement, hasTarget) {
+        case (true, false):
+            return predicateState(try container.decode(ElementPredicate.self, forKey: .element))
+        case (false, true):
+            return targetState(try container.decode(ElementTarget.self, forKey: .target))
+        case (true, true):
+            throw DecodingError.dataCorruptedError(
+                forKey: .target,
+                in: container,
+                debugDescription: "\(typeName) accepts either element or target, not both"
+            )
+        case (false, false):
+            throw DecodingError.dataCorruptedError(
+                forKey: .element,
+                in: container,
+                debugDescription: "\(typeName) requires element or target"
+            )
         }
     }
 }
@@ -242,6 +294,8 @@ extension AccessibilityPredicate.State: CustomStringConvertible {
         switch self {
         case .present(let predicate): return ScoreDescription.call("present", [predicate.description])
         case .absent(let predicate): return ScoreDescription.call("absent", [predicate.description])
+        case .presentTarget(let target): return ScoreDescription.call("present", [target.description])
+        case .absentTarget(let target): return ScoreDescription.call("absent", [target.description])
         case .all(let states): return ScoreDescription.call("all", states.map(\.description))
         }
     }

@@ -12,16 +12,22 @@ public struct HeistSwiftRenderer {
         return lines.joined(separator: "\n")
     }
 
-    private func renderStep(_ step: HeistStep, level: Int) throws -> [String] {
+    private func renderStep(
+        _ step: HeistStep,
+        level: Int,
+        forEachBinding: ElementPredicate? = nil
+    ) throws -> [String] {
         switch step {
         case .action(let step):
-            return try renderActionStep(step, level: level)
+            return try renderActionStep(step, level: level, forEachBinding: forEachBinding)
         case .wait(let step):
-            return [indent(renderWait(step), level: level)]
+            return [indent(renderWait(step, forEachBinding: forEachBinding), level: level)]
         case .conditional(let step):
-            return try renderConditional(step, level: level)
+            return try renderConditional(step, level: level, forEachBinding: forEachBinding)
         case .waitForCases(let step):
-            return try renderWaitForCases(step, level: level)
+            return try renderWaitForCases(step, level: level, forEachBinding: forEachBinding)
+        case .forEach(let step):
+            return try renderForEach(step, level: level)
         case .warn(let step):
             return [indent("Warn(\(SwiftString.literal(step.message)))", level: level)]
         case .fail(let step):
@@ -29,34 +35,38 @@ public struct HeistSwiftRenderer {
         }
     }
 
-    private func renderActionStep(_ step: ActionStep, level: Int) throws -> [String] {
-        var lines = [indent(try renderAction(step.command), level: level)]
+    private func renderActionStep(
+        _ step: ActionStep,
+        level: Int,
+        forEachBinding: ElementPredicate?
+    ) throws -> [String] {
+        var lines = [indent(try renderAction(step.command, forEachBinding: forEachBinding), level: level)]
         if let expectation = step.expectation {
             lines.append(indent(
-                ".expect(\(renderPredicate(expectation.predicate)), timeout: \(renderTimeout(expectation.timeout)))",
+                ".expect(\(renderPredicate(expectation.predicate, forEachBinding: forEachBinding)), timeout: \(renderTimeout(expectation.timeout)))",
                 level: level + 1
             ))
         }
         return lines
     }
 
-    private func renderWait(_ step: WaitStep) -> String {
-        "WaitFor(\(renderPredicate(step.predicate)), timeout: \(renderTimeout(step.timeout)))"
+    private func renderWait(_ step: WaitStep, forEachBinding: ElementPredicate?) -> String {
+        "WaitFor(\(renderPredicate(step.predicate, forEachBinding: forEachBinding)), timeout: \(renderTimeout(step.timeout)))"
     }
 
-    private func renderAction(_ command: ClientMessage) throws -> String {
+    private func renderAction(_ command: ClientMessage, forEachBinding: ElementPredicate?) throws -> String {
         switch command {
         case .activate(let target):
-            return "Activate(\(renderTarget(target)))"
+            return "Activate(\(renderTarget(target, forEachBinding: forEachBinding)))"
         case .oneFingerTap(let target):
-            return "Tap(\(renderGesturePoint(target.selection)))"
+            return "Tap(\(renderGesturePoint(target.selection, forEachBinding: forEachBinding)))"
         case .typeText(let target):
             if let elementTarget = target.elementTarget {
-                return "TypeText(\(SwiftString.literal(target.text)), into: \(renderTarget(elementTarget)))"
+                return "TypeText(\(SwiftString.literal(target.text)), into: \(renderTarget(elementTarget, forEachBinding: forEachBinding)))"
             }
             return "TypeText(\(SwiftString.literal(target.text)))"
         case .scroll(let target):
-            return renderScroll(target)
+            return renderScroll(target, forEachBinding: forEachBinding)
         case .clientHello, .authenticate, .requestInterface, .ping, .status,
              .increment, .decrement, .performCustomAction, .rotor,
              .longPress, .swipe, .drag, .editAction, .setPasteboard,
@@ -67,21 +77,26 @@ public struct HeistSwiftRenderer {
         }
     }
 
-    private func renderConditional(_ step: ConditionalStep, level: Int) throws -> [String] {
+    private func renderConditional(
+        _ step: ConditionalStep,
+        level: Int,
+        forEachBinding: ElementPredicate?
+    ) throws -> [String] {
         if step.cases.count == 1, let onlyCase = step.cases.first {
             return try renderSingleConditional(
                 predicate: onlyCase.predicate,
                 steps: onlyCase.steps,
                 elseSteps: step.elseSteps,
-                level: level
+                level: level,
+                forEachBinding: forEachBinding
             )
         }
 
         var lines = [indent("If {", level: level)]
-        lines.append(contentsOf: try renderPredicateCases(step.cases, level: level + 1))
+        lines.append(contentsOf: try renderPredicateCases(step.cases, level: level + 1, forEachBinding: forEachBinding))
         if let elseSteps = step.elseSteps {
             if !step.cases.isEmpty { lines.append("") }
-            lines.append(contentsOf: try renderElse(elseSteps, level: level + 1))
+            lines.append(contentsOf: try renderElse(elseSteps, level: level + 1, forEachBinding: forEachBinding))
         }
         lines.append(indent("}", level: level))
         return lines
@@ -91,62 +106,88 @@ public struct HeistSwiftRenderer {
         predicate: AccessibilityPredicate,
         steps: [HeistStep],
         elseSteps: [HeistStep]?,
-        level: Int
+        level: Int,
+        forEachBinding: ElementPredicate?
     ) throws -> [String] {
-        var lines = [indent("If(\(renderPredicate(predicate))) {", level: level)]
-        lines.append(contentsOf: try renderBody(steps, level: level + 1))
+        var lines = [indent("If(\(renderPredicate(predicate, forEachBinding: forEachBinding))) {", level: level)]
+        lines.append(contentsOf: try renderBody(steps, level: level + 1, forEachBinding: forEachBinding))
         if let elseSteps {
             lines.append(indent("} else: {", level: level))
-            lines.append(contentsOf: try renderBody(elseSteps, level: level + 1))
+            lines.append(contentsOf: try renderBody(elseSteps, level: level + 1, forEachBinding: forEachBinding))
         }
         lines.append(indent("}", level: level))
         return lines
     }
 
-    private func renderWaitForCases(_ step: WaitForCasesStep, level: Int) throws -> [String] {
+    private func renderWaitForCases(
+        _ step: WaitForCasesStep,
+        level: Int,
+        forEachBinding: ElementPredicate?
+    ) throws -> [String] {
         var lines = [indent("WaitFor(timeout: \(renderTimeout(step.timeout))) {", level: level)]
-        lines.append(contentsOf: try renderPredicateCases(step.cases, level: level + 1))
+        lines.append(contentsOf: try renderPredicateCases(step.cases, level: level + 1, forEachBinding: forEachBinding))
         if let elseSteps = step.elseSteps {
             if !step.cases.isEmpty { lines.append("") }
-            lines.append(contentsOf: try renderElse(elseSteps, level: level + 1))
+            lines.append(contentsOf: try renderElse(elseSteps, level: level + 1, forEachBinding: forEachBinding))
         }
         lines.append(indent("}", level: level))
         return lines
     }
 
-    private func renderPredicateCases(_ cases: [PredicateCase], level: Int) throws -> [String] {
+    private func renderForEach(_ step: ForEachStep, level: Int) throws -> [String] {
+        var lines = [
+            indent("ForEach(.matching(\(renderElementPredicate(step.matching))), limit: \(step.limit)) { element in", level: level),
+        ]
+        lines.append(contentsOf: try renderBody(step.steps, level: level + 1, forEachBinding: step.matching))
+        lines.append(indent("}", level: level))
+        return lines
+    }
+
+    private func renderPredicateCases(
+        _ cases: [PredicateCase],
+        level: Int,
+        forEachBinding: ElementPredicate?
+    ) throws -> [String] {
         var lines: [String] = []
         for (index, predicateCase) in cases.enumerated() {
             if index > 0 { lines.append("") }
-            lines.append(indent("Case(\(renderPredicate(predicateCase.predicate))) {", level: level))
-            lines.append(contentsOf: try renderBody(predicateCase.steps, level: level + 1))
+            lines.append(indent("Case(\(renderPredicate(predicateCase.predicate, forEachBinding: forEachBinding))) {", level: level))
+            lines.append(contentsOf: try renderBody(predicateCase.steps, level: level + 1, forEachBinding: forEachBinding))
             lines.append(indent("}", level: level))
         }
         return lines
     }
 
-    private func renderElse(_ steps: [HeistStep], level: Int) throws -> [String] {
+    private func renderElse(
+        _ steps: [HeistStep],
+        level: Int,
+        forEachBinding: ElementPredicate?
+    ) throws -> [String] {
         var lines = [indent("Else {", level: level)]
-        lines.append(contentsOf: try renderBody(steps, level: level + 1))
+        lines.append(contentsOf: try renderBody(steps, level: level + 1, forEachBinding: forEachBinding))
         lines.append(indent("}", level: level))
         return lines
     }
 
-    private func renderBody(_ steps: [HeistStep], level: Int) throws -> [String] {
+    private func renderBody(
+        _ steps: [HeistStep],
+        level: Int,
+        forEachBinding: ElementPredicate?
+    ) throws -> [String] {
         var lines: [String] = []
         for step in steps {
-            lines.append(contentsOf: try renderStep(step, level: level))
+            lines.append(contentsOf: try renderStep(step, level: level, forEachBinding: forEachBinding))
         }
         return lines
     }
 
-    private func renderScroll(_ target: ScrollTarget) -> String {
+    private func renderScroll(_ target: ScrollTarget, forEachBinding: ElementPredicate?) -> String {
         let direction = ".\(target.direction.rawValue)"
         switch target.selection {
         case .visibleContainer:
             return "Scroll(\(direction))"
         case .element(let elementTarget):
-            return "Scroll(\(direction), in: \(renderTarget(elementTarget)))"
+            return "Scroll(\(direction), in: \(renderTarget(elementTarget, forEachBinding: forEachBinding)))"
         case .container(let containerTarget):
             if let stableId = containerTarget.stableId {
                 return "Scroll(\(direction), in: .container(\(SwiftString.literal(stableId))))"
@@ -155,18 +196,21 @@ public struct HeistSwiftRenderer {
         }
     }
 
-    private func renderGesturePoint(_ selection: GesturePointSelection) -> String {
+    private func renderGesturePoint(_ selection: GesturePointSelection, forEachBinding: ElementPredicate?) -> String {
         switch selection {
         case .element(let target):
-            return renderTarget(target)
+            return renderTarget(target, forEachBinding: forEachBinding)
         case .coordinate(let point):
             return ".point(x: \(renderDecimal(point.x)), y: \(renderDecimal(point.y)))"
         }
     }
 
-    private func renderTarget(_ target: ElementTarget) -> String {
+    private func renderTarget(_ target: ElementTarget, forEachBinding: ElementPredicate? = nil) -> String {
         switch target {
         case .predicate(let predicate, let ordinal):
+            if ordinal == 0, predicate == forEachBinding {
+                return "element"
+            }
             guard let ordinal else {
                 return renderElementPredicate(predicate)
             }
@@ -174,31 +218,35 @@ public struct HeistSwiftRenderer {
         }
     }
 
-    private func renderPredicate(_ predicate: AccessibilityPredicate) -> String {
+    private func renderPredicate(_ predicate: AccessibilityPredicate, forEachBinding: ElementPredicate? = nil) -> String {
         switch predicate {
         case .state(let state):
-            return renderState(state)
+            return renderState(state, forEachBinding: forEachBinding)
         case .changed(let change):
-            return ".changed(\(renderChange(change)))"
+            return ".changed(\(renderChange(change, forEachBinding: forEachBinding)))"
         }
     }
 
-    private func renderState(_ state: AccessibilityPredicate.State) -> String {
+    private func renderState(_ state: AccessibilityPredicate.State, forEachBinding: ElementPredicate? = nil) -> String {
         switch state {
         case .present(let predicate):
             return ".present(\(renderElementPredicate(predicate)))"
         case .absent(let predicate):
             return ".absent(\(renderElementPredicate(predicate)))"
+        case .presentTarget(let target):
+            return ".present(\(renderTarget(target, forEachBinding: forEachBinding)))"
+        case .absentTarget(let target):
+            return ".absent(\(renderTarget(target, forEachBinding: forEachBinding)))"
         case .all(let states):
-            return ".all([\(states.map(renderState).joined(separator: ", "))])"
+            return ".all([\(states.map { renderState($0, forEachBinding: forEachBinding) }.joined(separator: ", "))])"
         }
     }
 
-    private func renderChange(_ change: AccessibilityPredicate.Change) -> String {
+    private func renderChange(_ change: AccessibilityPredicate.Change, forEachBinding: ElementPredicate? = nil) -> String {
         switch change {
         case .screen(let state):
             if let state {
-                return ".screen(where: \(renderState(state)))"
+                return ".screen(where: \(renderState(state, forEachBinding: forEachBinding)))"
             }
             return ".screen()"
         case .elements:
