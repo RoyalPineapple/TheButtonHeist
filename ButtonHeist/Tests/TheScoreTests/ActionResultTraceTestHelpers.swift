@@ -78,7 +78,7 @@ private enum TestActionResultTrace {
                 // Keep the base (identity) traits and layer on the changed trait,
                 // so a transient toggle (e.g. selected) reads as an update rather
                 // than a remove+add caused by losing the non-transient trait.
-                traits = traits + (traitsFromDescription(selected) ?? []).filter { !traits.contains($0) }
+                traits += (traitsFromDescription(selected) ?? []).filter { !traits.contains($0) }
             default:
                 value = selected ?? value
             }

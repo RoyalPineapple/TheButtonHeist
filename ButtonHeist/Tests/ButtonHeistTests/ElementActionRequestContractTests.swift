@@ -42,7 +42,6 @@ final class ElementActionRequestContractTests: XCTestCase {
         )
     }
 
-
     @ButtonHeistActor
     func testScrollRejectsMixedElementAndContainerTargetsAtTypedBoundary() async {
         await assertExecutionError(

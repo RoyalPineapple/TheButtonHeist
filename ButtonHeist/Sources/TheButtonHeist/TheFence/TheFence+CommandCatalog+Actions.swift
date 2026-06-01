@@ -78,7 +78,9 @@ extension TheFence.Command {
                     param(.rotorIndex, .integer, minimum: 0),
                     param(.direction, .string, enumValues: fenceEnumValues(RotorDirection.self), defaultValue: .string(RotorDirection.next.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor."
+                description: "Move through an element rotor by direction. The server holds the rotor cursor "
+                    + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
+                    + "and drops the cursor."
             ),
             commandDescriptor(
                 .typeText, requestDecoder: TheFence.decodeTypeTextRequest,
