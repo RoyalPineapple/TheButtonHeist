@@ -249,13 +249,14 @@ final class MockConnection: TransportReachabilityConnecting {
         case .action(let action):
             let actionResult = actionResult(for: action.command, handler: handler)
             let expectation = actionResult.success
-                ? action.expectation?.predicate.validate(against: actionResult)
+                ? heistExpectation(for: action.expectation, handler: handler)
                 : nil
             return HeistExecutionStepResult(
                 index: index,
                 kind: .action,
                 actionResult: actionResult,
-                expectation: expectation,
+                expectationActionResult: expectation?.actionResult,
+                expectation: expectation?.result,
                 durationMs: heistStepDurationMs
             )
         case .wait(let wait):
@@ -332,6 +333,18 @@ final class MockConnection: TransportReachabilityConnecting {
                 stopsHeist: true
             )
         }
+    }
+
+    private func heistExpectation(
+        for expectation: WaitStep?,
+        handler: (ClientMessage) -> ServerMessage
+    ) -> (actionResult: ActionResult, result: ExpectationResult)? {
+        guard let expectation else { return nil }
+        let waitResult = actionResult(
+            for: .wait(WaitTarget(predicate: expectation.predicate, timeout: expectation.timeout)),
+            handler: handler
+        )
+        return (waitResult, expectation.predicate.validate(against: waitResult))
     }
 
     private func actionResult(

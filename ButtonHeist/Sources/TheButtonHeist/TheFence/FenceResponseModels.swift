@@ -26,7 +26,7 @@ extension HeistExecutionStepResult {
         return .action(
             command: command,
             result: finalResult,
-            expectation: expectation ?? step.expectedPredicate?.validate(against: finalResult)
+            expectation: expectation
         )
     }
 
@@ -34,10 +34,8 @@ extension HeistExecutionStepResult {
         expectationActionResult ?? actionResult
     }
 
-    func expectationResult(for step: HeistStep) -> ExpectationResult? {
-        if let expectation { return expectation }
-        guard let plannedExpectation = step.expectedPredicate else { return nil }
-        return finalActionResult().map { plannedExpectation.validate(against: $0) }
+    func expectationResult(for _: HeistStep) -> ExpectationResult? {
+        expectation
     }
 
     func expectationCounted(for step: HeistStep) -> Bool {
@@ -60,18 +58,6 @@ private extension HeistStep {
         }
     }
 
-    var expectedPredicate: AccessibilityPredicate? {
-        switch self {
-        case .action(let step):
-            return step.expectation?.predicate
-        case .wait(let step):
-            return step.predicate
-        case .conditional, .waitForCases, .forEach:
-            return nil
-        case .warn, .fail:
-            return nil
-        }
-    }
 }
 
 extension HeistExecutionResult {
