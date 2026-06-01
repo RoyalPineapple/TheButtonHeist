@@ -18,9 +18,6 @@ enum DeviceConnectionEvent: Sendable {
 @ButtonHeistActor
 final class DeviceConnection: TransportReachabilityConnecting {
 
-    private static let maxBufferSize = 64 * 1024 * 1024
-    nonisolated static let eventStreamBufferLimit = 512
-
     struct ActiveConnection {
         let connection: NWConnection
         var receiveBuffer: Data = Data()
@@ -57,7 +54,7 @@ final class DeviceConnection: TransportReachabilityConnecting {
 
     /// Continuation tied to the current connection attempt. Yielded to from
     /// NWConnection's `.global()` callbacks; finished when we tear down.
-    private var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
+    var eventContinuation: AsyncStream<DeviceConnectionEvent>.Continuation?
     private var tlsFailureTracker: TLSFailureTracker?
 
     init(device: DiscoveredDevice) {
@@ -93,11 +90,11 @@ final class DeviceConnection: TransportReachabilityConnecting {
         eventConsumerTask?.cancel()
         eventContinuation?.finish()
 
-        let (stream, continuation) = Self.makeEventStream()
+        let (stream, continuation) = DeviceConnectionEventStream.makeStream()
         eventContinuation = continuation
 
         conn.stateUpdateHandler = { state in
-            Self.yieldEvent(.state(state, connection: conn), to: continuation) { [weak self, weak conn] in
+            DeviceConnectionEventStream.yield(.state(state, connection: conn), to: continuation) { [weak self, weak conn] in
                 guard let conn else { return }
                 Task { @ButtonHeistActor [weak self] in
                     self?.handleEventStreamOverflow(connection: conn)
@@ -140,51 +137,16 @@ final class DeviceConnection: TransportReachabilityConnecting {
         tlsFailureTracker = nil
     }
 
-    @discardableResult
-    func send(_ message: ClientMessage, requestId: String? = nil) -> DeviceSendOutcome {
-        guard case .connected(let active) = connectionState else {
-            return .failed(.notConnected)
-        }
-        let envelope = RequestEnvelope(requestId: requestId, message: message)
-        let data: Data
-        do {
-            var encoded = try JSONEncoder().encode(envelope)
-            encoded.append(0x0A)
-            data = encoded
-        } catch {
-            deviceConnectionLogger.error("Failed to encode message: \(error)")
-            return .failed(.encodingFailed(error.localizedDescription))
-        }
-
-        let connection = active.connection
-        sendContent(connection, data, .contentProcessed { [weak self] error in
-            if let error {
-                deviceConnectionLogger.error("Send error: \(error)")
-                Task { @ButtonHeistActor [weak self] in
-                    self?.handleSendFailure(error, requestId: requestId, connection: connection)
-                }
-            }
-        })
-        return .enqueued
-    }
-
     // MARK: - Private
 
     /// The NWConnection currently owned by this state machine, regardless of
     /// phase. Used to filter stale callbacks from prior connect attempts.
-    private var currentConnection: NWConnection? {
+    var currentConnection: NWConnection? {
         switch connectionState {
         case .connecting(let connection): return connection
         case .connected(let active): return active.connection
         case .disconnected: return nil
         }
-    }
-
-    private func handleSendFailure(_ error: NWError, requestId: String?, connection: NWConnection) {
-        if let current = currentConnection, current !== connection {
-            return
-        }
-        onEvent?(.sendFailed(.transportFailed(error.localizedDescription), requestId: requestId))
     }
 
     /// Internal for testing: state updates are normally dispatched by the
@@ -231,127 +193,6 @@ final class DeviceConnection: TransportReachabilityConnecting {
             }
         default:
             break
-        }
-    }
-
-    private func startReceiving() {
-        guard case .connected(let active) = connectionState else { return }
-        receiveNext(connection: active.connection)
-    }
-
-    private func receiveNext(connection: NWConnection) {
-        // Yield receive callbacks onto the same ordered stream as state
-        // changes; the consumer Task in `connect()` dispatches them back into
-        // the actor in arrival order.
-        let continuation = eventContinuation
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { content, _, isComplete, error in
-            guard let continuation else { return }
-            Self.yieldEvent(
-                .received(content: content, isComplete: isComplete, error: error, connection: connection),
-                to: continuation
-            ) { [weak self, weak connection] in
-                guard let connection else { return }
-                Task { @ButtonHeistActor [weak self] in
-                    self?.handleEventStreamOverflow(connection: connection)
-                }
-            }
-        }
-    }
-
-    nonisolated static func makeEventStream() -> (
-        AsyncStream<DeviceConnectionEvent>,
-        AsyncStream<DeviceConnectionEvent>.Continuation
-    ) {
-        AsyncStream<DeviceConnectionEvent>.makeStream(
-            bufferingPolicy: .bufferingOldest(eventStreamBufferLimit)
-        )
-    }
-
-    nonisolated static func yieldEvent(
-        _ event: DeviceConnectionEvent,
-        to continuation: AsyncStream<DeviceConnectionEvent>.Continuation,
-        onOverflow: @escaping @Sendable () -> Void
-    ) {
-        switch continuation.yield(event) {
-        case .enqueued, .terminated:
-            return
-        case .dropped:
-            continuation.finish()
-            onOverflow()
-        @unknown default:
-            continuation.finish()
-            onOverflow()
-        }
-    }
-
-    /// Internal for testing and overflow handling from NW callbacks.
-    func handleEventStreamOverflow(connection: NWConnection) {
-        guard let current = currentConnection, current === connection else { return }
-        deviceConnectionLogger.error("Connection event backlog exceeded \(Self.eventStreamBufferLimit), disconnecting")
-        disconnect()
-        onEvent?(.disconnected(.eventBacklogOverflow(maxEvents: Self.eventStreamBufferLimit)))
-    }
-
-    // Internal for testing stale-callback handling.
-    func handleReceive(
-        content: Data?,
-        isComplete: Bool,
-        error: NWError?,
-        connection: NWConnection
-    ) {
-        guard case .connected(var active) = connectionState,
-              active.connection === connection else {
-            // Ignore callbacks from stale/cancelled sockets after reconnect.
-            return
-        }
-
-        if let error {
-            deviceConnectionLogger.error("Receive error: \(error)")
-            connectionState = .disconnected
-            onEvent?(.disconnected(.networkError(error)))
-            return
-        }
-
-        if let content {
-            active.receiveBuffer.append(content)
-
-            if active.receiveBuffer.count > Self.maxBufferSize {
-                deviceConnectionLogger.error("Server exceeded max buffer size, disconnecting")
-                disconnect()
-                onEvent?(.disconnected(.bufferOverflow))
-                return
-            }
-
-            connectionState = .connected(active)
-            processBuffer()
-            guard case .connected(let latest) = connectionState,
-                  latest.connection === connection else {
-                return
-            }
-        }
-
-        if isComplete {
-            deviceConnectionLogger.info("Connection closed by server")
-            connectionState = .disconnected
-            onEvent?(.disconnected(.serverClosed))
-        } else {
-            guard case .connected(let latest) = connectionState,
-                  latest.connection === connection else { return }
-            receiveNext(connection: connection)
-        }
-    }
-
-    private func processBuffer() {
-        while true {
-            guard case .connected(var active) = connectionState else { return }
-            guard let newlineIndex = active.receiveBuffer.firstIndex(of: 0x0A) else { return }
-            let messageData = active.receiveBuffer.prefix(upTo: newlineIndex)
-            active.receiveBuffer = Data(active.receiveBuffer.suffix(from: active.receiveBuffer.index(after: newlineIndex)))
-            connectionState = .connected(active)
-
-            if !messageData.isEmpty {
-                handleMessage(Data(messageData))
-            }
         }
     }
 
