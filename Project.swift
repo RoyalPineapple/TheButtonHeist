@@ -42,6 +42,24 @@ let project = Project(
             ])
         ),
 
+        // MARK: - Swift Heist Authoring DSL (client-side)
+        .target(
+            name: "ButtonHeistDSL",
+            destinations: [.iPhone, .iPad, .mac],
+            product: .framework,
+            bundleId: "com.buttonheist.dsl",
+            deploymentTargets: .multiplatform(iOS: "17.0", macOS: "14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Sources/ButtonHeistDSL/**"],
+            dependencies: [
+                .target(name: "TheScore"),
+            ],
+            settings: .settings(base: [
+                "SWIFT_VERSION": "6",
+                "LastSwiftMigration": "2620",
+            ])
+        ),
+
         // MARK: - iOS Server Framework (embeds in iOS apps)
         // Includes ThePlant for automatic initialization via ObjC +load
         .target(
@@ -95,6 +113,21 @@ let project = Project(
             ]
         ),
 
+        // MARK: - ButtonHeistDSL Tests
+        .target(
+            name: "ButtonHeistDSLTests",
+            destinations: .macOS,
+            product: .unitTests,
+            bundleId: "com.buttonheist.dsl.tests",
+            deploymentTargets: .macOS("14.0"),
+            infoPlist: .default,
+            sources: ["ButtonHeist/Tests/ButtonHeistDSLTests/**"],
+            dependencies: [
+                .target(name: "ButtonHeistDSL"),
+                .target(name: "TheScore"),
+            ]
+        ),
+
         // MARK: - ButtonHeist Tests
         .target(
             name: "ButtonHeistTests",
@@ -131,6 +164,7 @@ let project = Project(
     ],
     schemes: [
         frameworkScheme(name: "TheScore"),
+        frameworkScheme(name: "ButtonHeistDSL"),
         frameworkScheme(name: "ButtonHeist"),
         frameworkScheme(name: "TheInsideJob"),
         .scheme(
@@ -141,6 +175,17 @@ let project = Project(
             ]),
             testAction: .targets([
                 .testableTarget(target: .target("TheScoreTests")),
+            ])
+        ),
+        .scheme(
+            name: "ButtonHeistDSLTests",
+            buildAction: .buildAction(targets: [
+                .target("ButtonHeistDSLTests"),
+                .target("ButtonHeistDSL"),
+                .target("TheScore"),
+            ]),
+            testAction: .targets([
+                .testableTarget(target: .target("ButtonHeistDSLTests")),
             ])
         ),
         .scheme(

@@ -9,6 +9,7 @@ let package = Package(
     ],
     products: [
         .library(name: "TheScore", targets: ["TheScore"]),
+        .library(name: "ButtonHeistDSL", targets: ["ButtonHeistDSL"]),
         // TheInsideJob with auto-start: includes both Swift implementation and ObjC loader
         .library(name: "TheInsideJob", targets: ["TheInsideJob", "ThePlant"]),
         .library(name: "ButtonHeist", targets: ["ButtonHeist"])
@@ -25,6 +26,12 @@ let package = Package(
                 .product(name: "AccessibilitySnapshotModel", package: "AccessibilitySnapshotBH"),
             ],
             path: "Sources/TheScore",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .target(
+            name: "ButtonHeistDSL",
+            dependencies: ["TheScore"],
+            path: "Sources/ButtonHeistDSL",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         // Swift implementation of TheInsideJob
@@ -64,6 +71,12 @@ let package = Package(
             name: "TheScoreTests",
             dependencies: ["TheScore"],
             path: "Tests/TheScoreTests",
+            swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
+        ),
+        .testTarget(
+            name: "ButtonHeistDSLTests",
+            dependencies: ["ButtonHeistDSL", "TheScore"],
+            path: "Tests/ButtonHeistDSLTests",
             swiftSettings: [.swiftLanguageMode(.v6), .unsafeFlags(["-warnings-as-errors"])]
         ),
         .testTarget(

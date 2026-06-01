@@ -112,7 +112,7 @@ public struct HeistSwiftRenderer {
         var lines = [indent("If(\(renderPredicate(predicate, forEachBinding: forEachBinding))) {", level: level)]
         lines.append(contentsOf: try renderBody(steps, level: level + 1, forEachBinding: forEachBinding))
         if let elseSteps {
-            lines.append(indent("} else: {", level: level))
+            lines.append(indent("} otherwise: {", level: level))
             lines.append(contentsOf: try renderBody(elseSteps, level: level + 1, forEachBinding: forEachBinding))
         }
         lines.append(indent("}", level: level))
