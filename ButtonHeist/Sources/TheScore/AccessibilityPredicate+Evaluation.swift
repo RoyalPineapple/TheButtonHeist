@@ -68,6 +68,12 @@ public extension AccessibilityPredicate.State {
         case .absent(let predicate):
             let met = !predicate.anyMatch(in: elements)
             return (met, met ? nil : "still present: \(predicate)")
+        case .presentTarget(let target):
+            let met = target.isPresent(in: elements)
+            return (met, met ? nil : "target not present: \(target)")
+        case .absentTarget(let target):
+            let met = !target.isPresent(in: elements)
+            return (met, met ? nil : "target still present: \(target)")
         case .all(let states):
             guard !states.isEmpty else {
                 return (false, "all predicate has no child states")
@@ -77,6 +83,17 @@ public extension AccessibilityPredicate.State {
                 return outcome.met ? nil : (outcome.actual ?? state.description)
             }
             return (failures.isEmpty, failures.isEmpty ? nil : failures.joined(separator: "; "))
+        }
+    }
+}
+
+private extension ElementTarget {
+    func isPresent(in elements: [HeistElement]) -> Bool {
+        switch self {
+        case .predicate(let predicate, let ordinal):
+            let matches = elements.filter { predicate.matches($0) }
+            guard let ordinal else { return !matches.isEmpty }
+            return matches.indices.contains(ordinal)
         }
     }
 }

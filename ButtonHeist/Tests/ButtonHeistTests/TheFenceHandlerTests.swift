@@ -2587,6 +2587,62 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testPlayHeistReportFlattensForEachIterationActions() async throws {
+        let deleteAction = try activateHeistStep(identifier: "delete")
+        let heist = HeistPlan(steps: [
+            .forEach(try ForEachStep(
+                matching: ElementPredicate(label: "Delete"),
+                limit: 20,
+                steps: [deleteAction]
+            )),
+        ])
+        let executionResult = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .forEach,
+                    message: "for_each completed 2 iteration(s) from 2 matched element(s)",
+                    durationMs: 20,
+                    forEachResult: HeistForEachResult(
+                        matchedCount: 2,
+                        limit: 20,
+                        iterationCount: 2,
+                        failureReason: nil
+                    ),
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 5
+                        ),
+                        HeistExecutionStepResult(
+                            index: 1,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 6
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 20,
+            failedIndex: nil
+        )
+        let (fence, _) = makeConnectedFence()
+        let contract = try fence.validateHeistPlayback(heist)
+
+        let projection = fence.playbackProjection(contract: contract, result: executionResult)
+
+        XCTAssertEqual(projection.stepResults.map(\.command), ["for_each", "activate", "activate"])
+        XCTAssertTrue(projection.stepResults.allSatisfy(\.passed))
+        XCTAssertNil(projection.failedIndex)
+        XCTAssertNil(projection.failure)
+        XCTAssertEqual(projection.stepResults[0].timeSeconds, 0.020, accuracy: 0.000_001)
+        XCTAssertEqual(projection.stepResults[1].timeSeconds, 0.005, accuracy: 0.000_001)
+        XCTAssertEqual(projection.stepResults[2].timeSeconds, 0.006, accuracy: 0.000_001)
+    }
+
+    @ButtonHeistActor
     func testPlayHeistResetsPhaseAfterCompletion() async throws {
         let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)

@@ -382,24 +382,24 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
     guard case .heistExecution(let plan, let result, let accessibilityTrace) = response else {
         return nil
     }
-    let commands = plan.steps.map(\.commandForInspection)
     let plannedSteps = plan.steps
     return HeistInspection(
-        commands: commands,
+        commands: plannedSteps.map(\.commandForInspection),
         steps: plannedSteps,
         executionResult: result,
-        results: result.steps.compactMap { stepResult in
-            guard let command = commands[safe: stepResult.index],
-                  let step = plannedSteps[safe: stepResult.index],
-                  let response = stepResult.actionResponse(command: command, step: step)
+        results: result.projectedOutcomes(for: plan).compactMap { projection in
+            guard let response = projection.outcome.actionResponse(
+                command: projection.step.commandForInspection,
+                step: projection.step
+            )
             else { return nil }
             return publicJSONObject(response)
         },
         completedSteps: result.completedStepCount,
         failedIndex: result.stoppedFailedIndex,
         totalTimingMs: result.totalTimingMs,
-        expectationsChecked: result.expectationsChecked(steps: plan.steps),
-        expectationsMet: result.expectationsMet(steps: plan.steps),
+        expectationsChecked: result.projectedExpectationsChecked(for: plan),
+        expectationsMet: result.projectedExpectationsMet(for: plan),
         accessibilityTrace: accessibilityTrace
     )
 }
@@ -411,11 +411,7 @@ private extension HeistStep {
             return action.command.fenceCommandForInspection
         case .wait:
             return .wait
-        case .conditional, .waitForCases:
-            return .runHeist
-        case .warn:
-            return .runHeist
-        case .fail:
+        case .conditional, .waitForCases, .forEach, .warn, .fail:
             return .runHeist
         }
     }

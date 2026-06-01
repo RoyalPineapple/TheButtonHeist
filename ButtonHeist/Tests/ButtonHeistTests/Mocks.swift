@@ -303,6 +303,19 @@ final class MockConnection: TransportReachabilityConnecting {
                     timedOut: true
                 )
             )
+        case .forEach(let forEach):
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .forEach,
+                message: "mock for_each did not match elements",
+                durationMs: heistStepDurationMs,
+                forEachResult: HeistForEachResult(
+                    matchedCount: 0,
+                    limit: forEach.limit,
+                    iterationCount: 0,
+                    failureReason: nil
+                )
+            )
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,

@@ -9,33 +9,34 @@ extension FenceResponse {
         result: HeistExecutionResult,
         netDelta: AccessibilityTrace.Delta?
     ) -> String {
-        let checked = result.expectationsChecked(steps: plan.steps)
-        let met = result.expectationsMet(steps: plan.steps)
+        let checked = result.projectedExpectationsChecked(for: plan)
+        let met = result.projectedExpectationsMet(for: plan)
         var text = "heist: \(result.completedStepCount) steps in \(result.totalTimingMs)ms"
         let failedIndex = result.stoppedFailedIndex
         if let failedIndex { text += " (failed at \(failedIndex))" }
         if checked > 0 { text += " [expectations: \(met)/\(checked)]" }
         if let netDelta { text += " [net: \(Self.compactDeltaKind(netDelta))]" }
-        if let lastScreenId = result.steps.compactMap({ $0.finalActionResult()?.accessibilityTrace?.endpointScreenIdProjection }).last {
+        if let lastScreenId = result.flattenedOutcomes.compactMap({
+            $0.finalActionResult()?.accessibilityTrace?.endpointScreenIdProjection
+        }).last {
             text = "\(lastScreenId) | \(text)"
         }
-        for step in result.steps {
-            let commandName = plan.steps[safe: step.index]?.commandName ?? "step \(step.index)"
-            var line = "  [\(step.index)] \(commandName)"
-            if let skipped = step.skipped {
+        for (projectedIndex, projection) in result.projectedOutcomes(for: plan).enumerated() {
+            let commandName = projection.step.commandName
+            var line = "  [\(projectedIndex)] \(commandName)"
+            if let skipped = projection.outcome.skipped {
                 line += " -> error: \(skipped.reason)"
-            } else if let actionResult = step.finalActionResult() {
+            } else if let actionResult = projection.outcome.finalActionResult() {
                 if !actionResult.success, let error = actionResult.message {
                     line += " -> error: \(error)"
                 } else if let delta = actionResult.accessibilityTrace?.endpointDeltaProjection {
                     let kind = Self.compactDeltaKind(delta)
                     line += " -> \(kind)"
                 }
-            } else if let plannedStep = plan.steps[safe: step.index],
-                      let response = step.actionResponse(
-                        command: plannedStep.fenceCommand ?? .runHeist,
-                        step: plannedStep
-                      ),
+            } else if let response = projection.outcome.actionResponse(
+                command: projection.step.fenceCommand ?? .runHeist,
+                step: projection.step
+            ),
                       case .error(let message, let details) = response {
                 if let details {
                     line += " -> error[\(details.errorCode) \(details.phase.rawValue)]: \(message)"
@@ -43,8 +44,7 @@ extension FenceResponse {
                     line += " -> error: \(message)"
                 }
             }
-            if let plannedStep = plan.steps[safe: step.index],
-               let met = step.expectationMet(for: plannedStep) {
+            if let met = projection.outcome.expectationMet(for: projection.step) {
                 line += met ? " ✓" : " ✗"
             }
             text += "\n\(line)"
@@ -61,6 +61,7 @@ private extension HeistStep {
         case .wait: return "wait"
         case .conditional: return "if"
         case .waitForCases: return "wait_for_cases"
+        case .forEach: return "for_each"
         case .warn: return "warn"
         case .fail: return "fail"
         }
@@ -92,11 +93,5 @@ private extension ClientWireMessageType {
         case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
         default: return rawValue
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

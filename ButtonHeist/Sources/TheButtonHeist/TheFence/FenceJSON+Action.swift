@@ -186,21 +186,20 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
     ) {
         let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
-        self.results = result.steps.compactMap { step in
-            guard plan.steps.indices.contains(step.index),
-                  let response = step.actionResponse(
-                    command: plan.steps[step.index].fenceCommand ?? .runHeist,
-                    step: plan.steps[step.index]
-                  )
+        self.results = result.projectedOutcomes(for: plan).compactMap { projection in
+            guard let response = projection.outcome.actionResponse(
+                command: projection.step.fenceCommand ?? .runHeist,
+                step: projection.step
+            )
             else { return nil }
             return PublicResponseModel(response: response)
         }
         self.completedSteps = result.completedStepCount
         self.totalTimingMs = result.totalTimingMs
         self.failedIndex = failedIndex
-        let checked = result.expectationsChecked(steps: plan.steps)
+        let checked = result.projectedExpectationsChecked(for: plan)
         self.expectations = checked > 0
-            ? PublicHeistExpectations(checked: checked, met: result.expectationsMet(steps: plan.steps))
+            ? PublicHeistExpectations(checked: checked, met: result.projectedExpectationsMet(for: plan))
             : nil
         self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
     }

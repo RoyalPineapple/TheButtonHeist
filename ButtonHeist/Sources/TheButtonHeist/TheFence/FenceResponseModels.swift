@@ -20,6 +20,7 @@ extension HeistExecutionStepResult {
     func actionResponse(command: TheFence.Command, step: HeistStep) -> FenceResponse? {
         guard skipped == nil else { return nil }
         guard let finalResult = expectationActionResult ?? actionResult else {
+            guard step.requiresActionResult else { return nil }
             return .error("typed heist step produced no action result")
         }
         return .action(
@@ -50,13 +51,22 @@ extension HeistExecutionStepResult {
 }
 
 private extension HeistStep {
+    var requiresActionResult: Bool {
+        switch self {
+        case .action, .wait:
+            return true
+        case .conditional, .waitForCases, .forEach, .warn, .fail:
+            return false
+        }
+    }
+
     var expectedPredicate: AccessibilityPredicate? {
         switch self {
         case .action(let step):
             return step.expectation?.predicate
         case .wait(let step):
             return step.predicate
-        case .conditional, .waitForCases:
+        case .conditional, .waitForCases, .forEach:
             return nil
         case .warn, .fail:
             return nil

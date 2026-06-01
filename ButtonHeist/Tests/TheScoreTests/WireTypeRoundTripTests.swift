@@ -513,6 +513,91 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(decoded.steps[1].skipped?.afterFailedIndex, 0)
     }
 
+    func testHeistExecutionResultRoundTripPreservesForEachResult() throws {
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .forEach,
+                    message: "matched 3 of 10",
+                    durationMs: 500,
+                    forEachResult: HeistForEachResult(
+                        matchedCount: 3,
+                        limit: 10,
+                        iterationCount: 3
+                    ),
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate, message: "activated"),
+                            durationMs: 50
+                        ),
+                        HeistExecutionStepResult(
+                            index: 1,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate, message: "activated"),
+                            durationMs: 45
+                        ),
+                        HeistExecutionStepResult(
+                            index: 2,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate, message: "activated"),
+                            durationMs: 40
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 500
+        )
+
+        let data = try encoder.encode(result)
+        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
+
+        XCTAssertNil(decoded.failedIndex)
+        let step = try XCTUnwrap(decoded.steps.first)
+        XCTAssertEqual(step.kind, .forEach)
+        XCTAssertEqual(step.forEachResult?.matchedCount, 3)
+        XCTAssertEqual(step.forEachResult?.limit, 10)
+        XCTAssertEqual(step.forEachResult?.iterationCount, 3)
+        XCTAssertNil(step.forEachResult?.failureReason)
+        XCTAssertEqual(step.childResults?.count, 3)
+        XCTAssertFalse(step.isFailure)
+
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let steps = try XCTUnwrap(payload["steps"] as? [[String: Any]])
+        XCTAssertEqual(steps.first?["kind"] as? String, "for_each")
+    }
+
+    func testHeistExecutionResultRoundTripPreservesForEachFailure() throws {
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .forEach,
+                    durationMs: 200,
+                    stopsHeist: true,
+                    forEachResult: HeistForEachResult(
+                        matchedCount: 5,
+                        limit: 10,
+                        iterationCount: 2,
+                        failureReason: "child step failed at iteration 2"
+                    )
+                ),
+            ],
+            totalTimingMs: 200,
+            failedIndex: 0
+        )
+
+        let data = try encoder.encode(result)
+        let decoded = try decoder.decode(HeistExecutionResult.self, from: data)
+
+        XCTAssertEqual(decoded.failedIndex, 0)
+        let step = try XCTUnwrap(decoded.steps.first)
+        XCTAssertEqual(step.forEachResult?.failureReason, "child step failed at iteration 2")
+        XCTAssertTrue(step.isFailure)
+    }
+
     func testHeistExecutionResultRoundTripPreservesCaseSelectionAndChildResults() throws {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
         let result = HeistExecutionResult(

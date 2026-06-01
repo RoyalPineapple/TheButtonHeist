@@ -305,6 +305,164 @@ final class HeistPlanTests: XCTestCase {
         )
     }
 
+    // MARK: - ForEach
+
+    func testForEachRoundTrip() throws {
+        let matching = ElementPredicate(label: "Cell", traits: [.button])
+        let plan = HeistPlan(steps: [
+            .forEach(try ForEachStep(
+                matching: matching,
+                limit: 5,
+                steps: [
+                    .action(try ActionStep(
+                        command: .activate(.predicate(matching, ordinal: 0)),
+                        expectation: WaitStep(
+                            predicate: .state(.absentTarget(.predicate(matching, ordinal: 0))),
+                            timeout: 2
+                        )
+                    )),
+                    .warn(WarnStep(message: "activated one")),
+                ]
+            )),
+        ])
+
+        let data = try JSONEncoder().encode(plan)
+        let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
+
+        XCTAssertEqual(decoded, plan)
+    }
+
+    func testForEachDecodeRejectsEmptyMatchingPredicate() {
+        let json = """
+        {
+          "type": "for_each",
+          "for_each": {
+            "matching": {},
+            "limit": 10,
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("emptyForEachPredicate"), "\(error)")
+        }
+    }
+
+    func testForEachDecodeRejectsNonPositiveLimit() {
+        let zeroJSON = """
+        {
+          "type": "for_each",
+          "for_each": {
+            "matching": {"label": "Cell"},
+            "limit": 0,
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(zeroJSON.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("invalidForEachLimit"), "\(error)")
+        }
+
+        let negativeJSON = """
+        {
+          "type": "for_each",
+          "for_each": {
+            "matching": {"label": "Cell"},
+            "limit": -1,
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(negativeJSON.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("invalidForEachLimit"), "\(error)")
+        }
+    }
+
+    func testForEachDecodeRejectsEmptySteps() {
+        let json = """
+        {
+          "type": "for_each",
+          "for_each": {
+            "matching": {"label": "Cell"},
+            "limit": 5,
+            "steps": []
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("emptyForEachSteps"), "\(error)")
+        }
+    }
+
+    func testForEachDecodeRejectsUnknownFields() {
+        let outerJSON = """
+        {
+          "type": "for_each",
+          "for_each": {
+            "matching": {"label": "Cell"},
+            "limit": 5,
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+          },
+          "unexpected": true
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(outerJSON.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("unexpected"), "\(error)")
+        }
+
+        let innerJSON = """
+        {
+          "type": "for_each",
+          "for_each": {
+            "matching": {"label": "Cell"},
+            "limit": 5,
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}],
+            "bogus": 42
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(innerJSON.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("bogus"), "\(error)")
+        }
+    }
+
+    func testForEachExecutionResultWithFailureIsFailure() {
+        let result = HeistExecutionStepResult(
+            index: 0,
+            kind: .forEach,
+            durationMs: 100,
+            forEachResult: HeistForEachResult(
+                matchedCount: 3,
+                limit: 10,
+                iterationCount: 2,
+                failureReason: "child step failed at iteration 2"
+            )
+        )
+
+        XCTAssertTrue(result.isFailure)
+    }
+
+    func testForEachExecutionResultWithoutFailureIsNotFailure() {
+        let result = HeistExecutionStepResult(
+            index: 0,
+            kind: .forEach,
+            durationMs: 100,
+            forEachResult: HeistForEachResult(
+                matchedCount: 3,
+                limit: 10,
+                iterationCount: 3
+            )
+        )
+
+        XCTAssertFalse(result.isFailure)
+    }
+
     func testCurrentVersionIsOne() {
         XCTAssertEqual(HeistPlan.currentVersion, 1)
     }
