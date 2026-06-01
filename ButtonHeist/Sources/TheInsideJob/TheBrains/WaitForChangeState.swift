@@ -19,9 +19,9 @@ final class WaitForChangeState {
     }
 
     private var phase: Phase = .idle
-    private var deliveredBaseline: TheBrains.BeforeState?
+    private var deliveredBaseline: PostActionObservation.BeforeState?
 
-    var lastDeliveredBaseline: TheBrains.BeforeState? {
+    var lastDeliveredBaseline: PostActionObservation.BeforeState? {
         guard let deliveredBaseline, !deliveredBaseline.capture.hash.isEmpty else {
             return nil
         }
@@ -46,7 +46,7 @@ final class WaitForChangeState {
         phase = .idle
     }
 
-    func recordDeliveredBaseline(_ beforeState: TheBrains.BeforeState) {
+    func recordDeliveredBaseline(_ beforeState: PostActionObservation.BeforeState) {
         deliveredBaseline = beforeState
     }
 

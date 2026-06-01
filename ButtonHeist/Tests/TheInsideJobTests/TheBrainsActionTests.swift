@@ -85,22 +85,22 @@ final class TheBrainsActionTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - BeforeState Capture
+    // MARK: - Post-Action Observation Capture
 
-    func testCaptureBeforeStateReturnsEmptySnapshotWhenRegistryEmpty() {
-        let before = brains.captureSemanticState()
+    func testPostActionObservationCaptureReturnsEmptySnapshotWhenRegistryEmpty() {
+        let before = brains.postActionObservation.captureSemanticState()
         XCTAssertTrue(before.snapshot.isEmpty,
                       "Snapshot should be empty when no elements in registry")
         XCTAssertTrue(before.elements.isEmpty,
                       "Elements should be empty when no hierarchy set")
     }
 
-    func testCaptureBeforeStateIncludesRegisteredElements() {
+    func testPostActionObservationCaptureIncludesRegisteredElements() {
         let element = makeElement(label: "Title", traits: .header)
         let heistId = "header_title"
         installScreen(elements: [(element, heistId)])
 
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
         XCTAssertEqual(before.snapshot.count, 1)
         XCTAssertEqual(before.snapshot.first?.heistId, heistId)
         XCTAssertEqual(before.elements.count, 1)

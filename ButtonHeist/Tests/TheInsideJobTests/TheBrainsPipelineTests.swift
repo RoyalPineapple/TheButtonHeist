@@ -5,12 +5,12 @@ import UIKit
 @testable import TheInsideJob
 @testable import TheScore
 
-/// Deterministic tests for the pipelines on TheBrains that operate purely against
-/// the current `Screen` snapshot: the failure branch of `actionResultWithDelta`,
-/// classified trace projections, wait-change guards, and `exploreAndPrune`
-/// pruning.
+/// Deterministic tests for post-action observation and exploration behavior
+/// that operate purely against the current `Screen` snapshot: failure result
+/// assembly, classified trace projections, wait-change guards, and
+/// `exploreAndPrune` pruning.
 ///
-/// Success-path `actionResultWithDelta` and `exploreScreen` container iteration
+/// Success-path post-action observation and `exploreScreen` container iteration
 /// require a live window and are covered by integration/benchmark runs.
 @MainActor
 final class TheBrainsPipelineTests: XCTestCase {
@@ -27,13 +27,13 @@ final class TheBrainsPipelineTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // MARK: - actionResultWithDelta Failure Path
+    // MARK: - Post-Action Failure Path
 
-    func testActionResultWithDeltaFailureReturnsBeforeSnapshot() async {
+    func testPostActionObservationFailureReturnsBeforeSnapshot() async {
         seedScreen(elements: [("Sign In", .button, "button_sign_in")])
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: false,
             method: .activate,
             message: "target disappeared",
@@ -58,10 +58,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
     }
 
-    func testActionResultWithDeltaFailureDoesNotInferNotFoundFromActionIdentity() async {
-        let before = brains.captureSemanticState()
+    func testPostActionObservationFailureDoesNotInferNotFoundFromActionIdentity() async {
+        let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: false,
             method: .activate,
             before: before
@@ -70,10 +70,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.errorKind, .actionFailed)
     }
 
-    func testActionResultWithDeltaFailureRespectsExplicitErrorKind() async {
-        let before = brains.captureSemanticState()
+    func testPostActionObservationFailureRespectsExplicitErrorKind() async {
+        let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: false,
             method: .activate,
             errorKind: .timeout,
@@ -84,10 +84,10 @@ final class TheBrainsPipelineTests: XCTestCase {
                        "An explicit errorKind must override the method-based inference")
     }
 
-    func testActionResultWithDeltaFailureCarriesValueAndMessage() async {
-        let before = brains.captureSemanticState()
+    func testPostActionObservationFailureCarriesValueAndMessage() async {
+        let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: false,
             method: .getPasteboard,
             message: "pasteboard empty",
@@ -103,7 +103,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(value, "")
     }
 
-    // MARK: - actionResultWithDelta Success Path
+    // MARK: - Post-Action Success Path
 
     func testActionResultWithDeltaSuccessAllowsNoSemanticDelta() async throws {
         guard brains.refresh() != nil else {
@@ -111,9 +111,9 @@ final class TheBrainsPipelineTests: XCTestCase {
         }
         _ = await brains.navigation.exploreAndPrune()
         let screen = brains.stash.currentScreen
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: true,
             method: .activate,
             before: before,
@@ -133,10 +133,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaSuccessReturnsTraceAfterElementChange() async {
         let beforeScreen = makeScreen(elements: [("Total", .staticText, "total")])
         brains.stash.installScreenForTesting(beforeScreen)
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Total $12.00", .staticText, "total")])
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: true,
             method: .activate,
             before: before,
@@ -151,10 +151,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaSuccessReportsScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Checkout", .header, "checkout_header")])
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: true,
             method: .activate,
             before: before,
@@ -170,10 +170,10 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaSettleTimeoutStillReturnsSuccessfulAction() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(beforeScreen)
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: true,
             method: .activate,
             before: before,
@@ -188,9 +188,9 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testActionResultWithDeltaCancelledSettleFailsActionResult() async {
         let beforeScreen = makeScreen(elements: [("Save", .button, "save")])
         brains.stash.installScreenForTesting(beforeScreen)
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: true,
             method: .activate,
             before: before,
@@ -206,10 +206,10 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testActionResultWithDeltaParseFailureFailsActionResult() async {
         seedScreen(elements: [("Save", .button, "save")])
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
         brains.stash.installScreenForTesting(.empty)
 
-        let result = await brains.actionResultWithDelta(
+        let result = await brains.postActionObservation.actionResultWithDelta(
             success: true,
             method: .activate,
             before: before,
@@ -225,15 +225,15 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testClassifiedTraceKeepsSameScreenStructuralDiscoveryAsElementChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
 
         seedScreen(elements: [
             ("Menu", .header, "menu_header"),
             ("Chicken Tikka", .button, "button_chicken_tikka"),
         ])
-        let after = brains.captureSemanticState()
+        let after = brains.postActionObservation.captureSemanticState()
 
-        let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
+        let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
         XCTAssertNil(trace.captures.last?.transition.screenChangeReason)
         guard case .elementsChanged(let payload)? = trace.endpointDeltaProjection else {
@@ -245,12 +245,12 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testClassifiedTraceStartsSegmentForRealScreenChange() throws {
         seedScreen(elements: [("Menu", .header, "menu_header")])
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
 
         seedScreen(elements: [("Checkout", .header, "checkout_header")])
-        let after = brains.captureSemanticState()
+        let after = brains.postActionObservation.captureSemanticState()
 
-        let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
+        let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
 
         XCTAssertEqual(trace.captures.last?.transition.screenChangeReason, "primaryHeaderChanged")
         guard case .screenChanged(let payload)? = trace.endpointDeltaProjection else {
@@ -262,12 +262,12 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     func testClassifiedTraceDeltaIsDerivedFromCaptureEndpoints() throws {
         seedScreen(elements: [("Cart", .header, "cart_header"), ("Total", .staticText, "total_label")])
-        let before = brains.captureSemanticState()
+        let before = brains.postActionObservation.captureSemanticState()
 
         seedScreen(elements: [("Cart", .header, "cart_header"), ("Total $12.00", .staticText, "total_label")])
-        let after = brains.captureSemanticState()
+        let after = brains.postActionObservation.captureSemanticState()
 
-        let trace = brains.makeClassifiedAccessibilityTrace(after: after, parent: before)
+        let trace = brains.postActionObservation.makeClassifiedAccessibilityTrace(after: after, parent: before)
         let endpointDelta = try XCTUnwrap(trace.endpointDeltaProjection)
 
         XCTAssertEqual(trace.meaningfulEndpointDeltaProjection, endpointDelta)
@@ -293,7 +293,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             elements: [(visible, "button_visible")],
             offViewport: [.init(offViewport, heistId: "button_below_fold")]
         ))
-        let state = brains.captureSemanticState()
+        let state = brains.postActionObservation.captureSemanticState()
 
         XCTAssertEqual(
             Set(state.snapshot.map(\.heistId)),
@@ -319,7 +319,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         brains.stash.installScreenForTesting(.makeForTests(elements: [(beforeElement, "chicken_tikka_button")]))
-        let baseline = brains.captureSemanticState()
+        let baseline = brains.postActionObservation.captureSemanticState()
 
         let afterElement = AccessibilityElement.make(
             label: "Chicken Tikka",
@@ -329,14 +329,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         brains.stash.installScreenForTesting(.makeForTests(elements: [(afterElement, "chicken_tikka_button")]))
-        let current = brains.captureSemanticState()
+        let current = brains.postActionObservation.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
             after: current.screenSnapshot
         )
 
         XCTAssertFalse(
-            TheBrains.shouldRecordAccessibilityTrace(
+            PostActionObservation.shouldRecordAccessibilityTrace(
                 baseline: baseline,
                 current: current,
                 classification: classification
@@ -353,7 +353,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         brains.stash.installScreenForTesting(.makeForTests(elements: [(beforeElement, "total_staticText")]))
-        let baseline = brains.captureSemanticState()
+        let baseline = brains.postActionObservation.captureSemanticState()
 
         let afterElement = AccessibilityElement.make(
             label: "Total",
@@ -362,14 +362,14 @@ final class TheBrainsPipelineTests: XCTestCase {
             respondsToUserInteraction: false
         )
         brains.stash.installScreenForTesting(.makeForTests(elements: [(afterElement, "total_staticText")]))
-        let current = brains.captureSemanticState()
+        let current = brains.postActionObservation.captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
             after: current.screenSnapshot
         )
 
         XCTAssertTrue(
-            TheBrains.shouldRecordAccessibilityTrace(
+            PostActionObservation.shouldRecordAccessibilityTrace(
                 baseline: baseline,
                 current: current,
                 classification: classification

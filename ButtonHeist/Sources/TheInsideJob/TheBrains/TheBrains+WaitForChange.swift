@@ -41,12 +41,12 @@ extension TheBrains {
                 before: sentBaseline.screenSnapshot,
                 after: initial.screenSnapshot
             )
-            if Self.shouldRecordAccessibilityTrace(
+            if PostActionObservation.shouldRecordAccessibilityTrace(
                 baseline: sentBaseline,
                 current: initial,
                 classification: classification
             ) {
-                let accessibilityTrace = makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
+                let accessibilityTrace = postActionObservation.makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
                 if let delta = accessibilityTrace.endpointDeltaProjection {
                     if let result = evaluateWaitForChange(
                         delta: delta,
@@ -79,7 +79,7 @@ extension TheBrains {
         let current = await refreshSemanticSnapshot(baseline: baseline)
         let afterSnapshot = current?.snapshot ?? []
         let timeoutAccessibilityTrace = current.map {
-            makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
+            postActionObservation.makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
         }
         let delta = timeoutAccessibilityTrace?.endpointDeltaProjection
         var builder = ActionResultBuilder(method: .waitForChange)
@@ -94,8 +94,8 @@ extension TheBrains {
     }
 
     private func waitForChangeThroughSettledSnapshots(
-        baseline: BeforeState,
-        initial: BeforeState,
+        baseline: PostActionObservation.BeforeState,
+        initial: PostActionObservation.BeforeState,
         predicate: WaitForChangeState.Predicate,
         preWaitElements: [String: HeistElement],
         start: CFAbsoluteTime
@@ -121,7 +121,7 @@ extension TheBrains {
                 before: settleBaseline.screenSnapshot,
                 after: current.screenSnapshot
             )
-            guard Self.shouldRecordAccessibilityTrace(
+            guard PostActionObservation.shouldRecordAccessibilityTrace(
                 baseline: settleBaseline,
                 current: current,
                 classification: classification
@@ -130,7 +130,7 @@ extension TheBrains {
                 continue
             }
 
-            let accessibilityTrace = makeClassifiedAccessibilityTrace(after: current, parent: baseline)
+            let accessibilityTrace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: baseline)
             guard let delta = accessibilityTrace.endpointDeltaProjection else {
                 settleBaseline = current
                 continue
@@ -216,18 +216,20 @@ extension TheBrains {
         return builder.success()
     }
 
-    private func refreshSemanticSnapshot(baseline: BeforeState? = nil) async -> BeforeState? {
+    private func refreshSemanticSnapshot(
+        baseline: PostActionObservation.BeforeState? = nil
+    ) async -> PostActionObservation.BeforeState? {
         guard refresh() != nil else { return nil }
         if let baseline {
-            return await semanticStateAfterVisibleRefresh(baseline: baseline)
+            return await postActionObservation.semanticStateAfterVisibleRefresh(baseline: baseline)
         }
-        return captureSemanticState()
+        return postActionObservation.captureSemanticState()
     }
 
     private func waitForSettledSemanticSnapshot(
-        baseline: BeforeState,
+        baseline: PostActionObservation.BeforeState,
         timeout: TimeInterval
-    ) async -> BeforeState? {
+    ) async -> PostActionObservation.BeforeState? {
         let timeoutMs = max(1, Int(timeout * 1000))
         let settleSession = SettleSession.live(
             stash: stash,
@@ -240,7 +242,7 @@ extension TheBrains {
         )
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
         stash.commitVisibleRefresh(screen)
-        return await semanticStateAfterVisibleRefresh(baseline: baseline)
+        return await postActionObservation.semanticStateAfterVisibleRefresh(baseline: baseline)
     }
 
     private static func deltaKindDescription(_ delta: AccessibilityTrace.Delta) -> String {
