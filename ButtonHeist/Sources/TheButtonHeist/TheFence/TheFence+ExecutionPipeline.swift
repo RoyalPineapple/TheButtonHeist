@@ -29,13 +29,26 @@ extension TheFence {
         let dispatched = try await dispatchCommand(parsed)
 
         let postDispatch = capturePostDispatchEffects(response: dispatched.response)
-        let validatedResponse = try await validateActionResponse(
-            dispatched.response,
-            command: parsed.command,
-            expectation: parsed.expectationPayload.expectation,
-            expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
-            preActionElements: postDispatch.preActionElements
-        )
+        let validatedResponse: ValidatedResponse
+        if let waitPredicate = Self.waitCommandPredicate(in: parsed) {
+            // The wait command carries its predicate in the payload (not the
+            // `expect` slot). Validate it against the returned trace and attach
+            // the result — the wait result is already the outcome, so there is
+            // no post-action re-wait.
+            validatedResponse = validateWaitResponse(
+                dispatched.response,
+                predicate: waitPredicate,
+                preActionElements: postDispatch.preActionElements
+            )
+        } else {
+            validatedResponse = try await validateActionResponse(
+                dispatched.response,
+                command: parsed.command,
+                expectation: parsed.expectationPayload.expectation,
+                expectationTimeout: parsed.expectationPayload.postActionValidationTimeout,
+                preActionElements: postDispatch.preActionElements
+            )
+        }
         recordHeistStep(
             parsed,
             dispatchedResponse: dispatched.response,
@@ -85,7 +98,7 @@ extension TheFence {
     private func validateActionResponse(
         _ response: FenceResponse,
         command: Command,
-        expectation: ActionExpectation?,
+        expectation: AccessibilityPredicate?,
         expectationTimeout: Double?,
         preActionElements: [HeistId: HeistElement]
     ) async throws -> ValidatedResponse {
@@ -119,32 +132,64 @@ extension TheFence {
         return ValidatedResponse(response: response)
     }
 
+    /// The predicate carried by a `wait` command's payload, if this is one.
+    private static func waitCommandPredicate(in parsed: ParsedRequest) -> AccessibilityPredicate? {
+        guard parsed.command == .wait,
+              case .wait(let target)? = parsed.executableMessages?.first else {
+            return nil
+        }
+        return target.predicate
+    }
+
+    /// Validate a `wait` command's own predicate against its returned trace and
+    /// attach the result. On a non-delivered result the delivery failure is
+    /// reported as-is; there is no post-action re-wait (the result is final).
+    private func validateWaitResponse(
+        _ response: FenceResponse,
+        predicate: AccessibilityPredicate,
+        preActionElements: [HeistId: HeistElement]
+    ) -> ValidatedResponse {
+        guard let actionResult = response.actionResult else {
+            return ValidatedResponse(response: response)
+        }
+        let delivery = deliveryExpectationResult(for: actionResult)
+        guard delivery.met else {
+            return ValidatedResponse(
+                response: .action(command: .wait, result: actionResult, expectation: delivery)
+            )
+        }
+        let validation = predicate.validate(against: actionResult, preActionElements: preActionElements)
+        return ValidatedResponse(
+            response: .action(command: .wait, result: actionResult, expectation: validation)
+        )
+    }
+
     private func deliveryExpectationResult(for result: ActionResult) -> ExpectationResult {
         ExpectationResult(
             met: result.success,
-            expectation: nil,
+            predicate: nil,
             actual: result.success ? "delivered" : (result.message ?? "failed")
         )
     }
 
     private func waitForPostActionExpectation(
-        _ expectation: ActionExpectation,
+        _ expectation: AccessibilityPredicate,
         command: Command,
         initialResult: ActionResult,
         initialValidation: ExpectationResult,
         preActionElements: [HeistId: HeistElement],
         timeout: Double?
     ) async throws -> ValidatedResponse {
-        let target = WaitForChangeTarget(expect: expectation, timeout: timeout)
+        let target = WaitTarget(predicate: expectation, timeout: timeout)
         do {
             let waitResult = try await sendAndAwaitAction(
-                .waitForChange(target),
+                .wait(target),
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
             let waitValidation = expectation.validate(against: waitResult, preActionElements: preActionElements)
             return ValidatedResponse(
                 response: .action(
-                    command: .waitForChange,
+                    command: .wait,
                     result: waitResult,
                     expectation: waitValidation
                 )

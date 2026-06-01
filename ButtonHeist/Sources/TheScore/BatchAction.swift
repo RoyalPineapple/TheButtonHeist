@@ -21,16 +21,16 @@ extension Deadline: CustomStringConvertible {
 /// One command in an ordered batch plan.
 public struct BatchStep: Sendable {
     public let command: ClientMessage
-    public let expectation: ActionExpectation?
+    public let predicate: AccessibilityPredicate?
     public let deadline: Deadline
 
     public init(
         command: ClientMessage,
-        expectation: ActionExpectation?,
+        predicate: AccessibilityPredicate?,
         deadline: Deadline
     ) {
         self.command = command
-        self.expectation = expectation
+        self.predicate = predicate
         self.deadline = deadline
     }
 }
@@ -39,7 +39,7 @@ extension BatchStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("step", [
             "command=\(command.wireType.rawValue)",
-            expectation.map { "expect=\($0)" },
+            predicate.map { "expect=\($0)" },
             "deadline=\(deadline)",
         ].compactMap { $0 })
     }
@@ -75,7 +75,7 @@ extension BatchStep: Codable {
         }
         self.init(
             command: command,
-            expectation: try container.decodeIfPresent(ActionExpectation.self, forKey: .expect),
+            predicate: try container.decodeIfPresent(AccessibilityPredicate.self, forKey: .expect),
             deadline: try container.decode(Deadline.self, forKey: .deadline)
         )
     }
@@ -89,7 +89,7 @@ extension BatchStep: Codable {
         }
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
-        try container.encodeIfPresent(expectation, forKey: .expect)
+        try container.encodeIfPresent(predicate, forKey: .expect)
         try container.encode(deadline, forKey: .deadline)
     }
 }

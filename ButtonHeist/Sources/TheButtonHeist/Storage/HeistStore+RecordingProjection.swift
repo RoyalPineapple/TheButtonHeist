@@ -131,10 +131,10 @@ extension HeistStore {
                   let element = targetCapture.interface.projectedElements.last(where: { $0.heistId == heistId }),
                   let minimumMatcher = MinimumMatcher.build(element: element, in: targetCapture)
             else { return nil }
-            target = .matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
-        } else if case .matcher(let matcher, let matchedOrdinal)? = elementTarget {
-            guard matcher.hasPredicates else { return nil }
-            target = .matcher(matcher, ordinal: matchedOrdinal)
+            target = .predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
+        } else if case .predicate(let predicate, let matchedOrdinal)? = elementTarget {
+            guard predicate.hasPredicates else { return nil }
+            target = .predicate(predicate, ordinal: matchedOrdinal)
         }
 
         return try HeistStepProjection(

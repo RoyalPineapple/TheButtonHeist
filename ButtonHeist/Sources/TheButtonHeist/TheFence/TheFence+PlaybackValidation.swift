@@ -103,7 +103,7 @@ extension TheFence {
         return parsedRequest
     }
 
-    private func heistValue(_ expectation: ActionExpectation) throws -> HeistValue {
+    private func heistValue(_ expectation: AccessibilityPredicate) throws -> HeistValue {
         let data = try JSONEncoder().encode(expectation)
         return try JSONDecoder().decode(HeistValue.self, from: data)
     }

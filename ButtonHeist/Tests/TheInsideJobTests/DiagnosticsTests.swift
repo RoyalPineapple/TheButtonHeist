@@ -57,13 +57,13 @@ final class DiagnosticsTests: XCTestCase {
     // MARK: - formatMatcher
 
     func testFormatMatcherLabelOnly() {
-        let matcher = ElementMatcher(label: "Submit")
+        let matcher = ElementPredicate(label: "Submit")
         let formatted = Diagnostics.formatMatcher(matcher)
         XCTAssertEqual(formatted, "label=\"Submit\"")
     }
 
     func testFormatMatcherMultipleFields() {
-        let matcher = ElementMatcher(
+        let matcher = ElementPredicate(
             label: "Save",
             identifier: "save-btn",
             value: "enabled",
@@ -77,7 +77,7 @@ final class DiagnosticsTests: XCTestCase {
     }
 
     func testFormatMatcherEmpty() {
-        let matcher = ElementMatcher()
+        let matcher = ElementPredicate()
         let formatted = Diagnostics.formatMatcher(matcher)
         XCTAssertTrue(formatted.isEmpty)
     }

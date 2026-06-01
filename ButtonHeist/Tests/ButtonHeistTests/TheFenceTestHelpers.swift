@@ -52,13 +52,13 @@ func semanticTarget(
     excludeTraits: [HeistTrait]? = nil,
     ordinal: Int? = nil
 ) -> ElementTarget {
-    .matcher(
-        ElementMatcher(
+    .predicate(
+        ElementPredicate(
             label: label,
             identifier: identifier,
             value: value,
-            traits: traits,
-            excludeTraits: excludeTraits
+            traits: traits ?? [],
+            excludeTraits: excludeTraits ?? []
         ),
         ordinal: ordinal
     )

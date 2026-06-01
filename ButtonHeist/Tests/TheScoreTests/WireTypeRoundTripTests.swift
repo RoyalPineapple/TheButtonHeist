@@ -53,13 +53,13 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testCustomActionTargetWithMatcher() throws {
         let target = CustomActionTarget(
-            elementTarget: .matcher(ElementMatcher(label: "Menu")),
+            elementTarget: .predicate(ElementPredicate(label: "Menu")),
             actionName: "Open Submenu"
         )
         let data = try encoder.encode(target)
         let decoded = try decoder.decode(CustomActionTarget.self, from: data)
         XCTAssertEqual(decoded, CustomActionTarget(
-            elementTarget: .matcher(ElementMatcher(label: "Menu")),
+            elementTarget: .predicate(ElementPredicate(label: "Menu")),
             actionName: "Open Submenu"
         ))
         XCTAssertEqual(decoded.actionName, "Open Submenu")
@@ -299,7 +299,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
     func testSubtreeSelectorElementUsesToolSchemaShape() throws {
         let selector = SubtreeSelector.element(
-            .matcher(ElementMatcher(label: "Save", traits: [.button]), ordinal: 2)
+            .predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 2)
         )
 
         let data = try encoder.encode(selector)
@@ -431,13 +431,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         let plan = BatchPlan(
             steps: [
                 BatchStep(
-                    command: .activate(.matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1)),
-                    expectation: .screenChanged,
+                    command: .activate(.predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1)),
+                    predicate: .changed(.screen()),
                     deadline: Deadline(timeout: 2.5)
                 ),
                 BatchStep(
                     command: .setPasteboard(SetPasteboardTarget(text: "ready")),
-                    expectation: nil,
+                    predicate: nil,
                     deadline: Deadline()
                 ),
             ],
@@ -465,14 +465,14 @@ final class WireTypeRoundTripTests: XCTestCase {
         guard case .activate(let decodedTarget) = decoded.steps[0].command else {
             return XCTFail("Expected activate command")
         }
-        XCTAssertEqual(decodedTarget, .matcher(ElementMatcher(label: "Settings", traits: [.button]), ordinal: 1))
-        XCTAssertEqual(decoded.steps[0].expectation, .screenChanged)
+        XCTAssertEqual(decodedTarget, .predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1))
+        XCTAssertEqual(decoded.steps[0].predicate, .changed(.screen()))
         XCTAssertEqual(decoded.steps[0].deadline, Deadline(timeout: 2.5))
         guard case .setPasteboard(let pasteboardTarget) = decoded.steps[1].command else {
             return XCTFail("Expected set_pasteboard command")
         }
         XCTAssertEqual(pasteboardTarget.text, "ready")
-        XCTAssertNil(decoded.steps[1].expectation)
+        XCTAssertNil(decoded.steps[1].predicate)
     }
 
     func testBatchExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
@@ -648,34 +648,31 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(defaultDirection.direction, .down)
     }
 
-    // MARK: - WaitForTarget
+    // MARK: - WaitTarget
 
-    func testWaitForTargetRoundTrip() throws {
-        let target = WaitForTarget(
-            elementTarget: .heistId("loading"),
-            absent: true,
+    func testWaitTargetRoundTrip() throws {
+        let target = WaitTarget(
+            predicate: .state(.absent(ElementPredicate(label: "loading"))),
             timeout: 15
         )
         let data = try encoder.encode(target)
-        let decoded = try decoder.decode(WaitForTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .heistId("loading"))
-        XCTAssertEqual(decoded.absent, true)
+        let decoded = try decoder.decode(WaitTarget.self, from: data)
+        XCTAssertEqual(decoded.predicate, .state(.absent(ElementPredicate(label: "loading"))))
         XCTAssertEqual(decoded.timeout, 15)
     }
 
-    func testWaitForTargetResolvedDefaults() {
-        let target = WaitForTarget(elementTarget: .heistId("x"))
-        XCTAssertFalse(target.resolvedAbsent)
+    func testWaitTargetResolvedDefaults() {
+        let target = WaitTarget(predicate: .state(.present(ElementPredicate(label: "x"))))
         XCTAssertEqual(target.resolvedTimeout, 10)
     }
 
-    func testWaitForTargetTimeoutCapsAt30() {
-        let target = WaitForTarget(elementTarget: .heistId("x"), timeout: 60)
+    func testWaitTargetTimeoutCapsAt30() {
+        let target = WaitTarget(predicate: .state(.present(ElementPredicate(label: "x"))), timeout: 60)
         XCTAssertEqual(target.resolvedTimeout, 30)
     }
 
-    func testWaitForChangeTargetResolvedDefaults() {
-        let target = WaitForChangeTarget()
-        XCTAssertEqual(target.resolvedTimeout, 30)
+    func testWaitTargetChangedResolvedDefaults() {
+        let target = WaitTarget(predicate: .changed(.elements))
+        XCTAssertEqual(target.resolvedTimeout, 10)
     }
 }

@@ -45,15 +45,15 @@ extension AccessibilityContainer {
         }
         if let label = matcher.label {
             if label.isEmpty { return false }
-            guard ElementMatcher.stringEquals(containerLabel ?? "", label) else { return false }
+            guard ElementPredicate.stringEquals(containerLabel ?? "", label) else { return false }
         }
         if let value = matcher.value {
             if value.isEmpty { return false }
-            guard ElementMatcher.stringEquals(containerValue ?? "", value) else { return false }
+            guard ElementPredicate.stringEquals(containerValue ?? "", value) else { return false }
         }
         if let identifier = matcher.identifier {
             if identifier.isEmpty { return false }
-            guard ElementMatcher.stringEquals(containerIdentifier ?? "", identifier) else { return false }
+            guard ElementPredicate.stringEquals(containerIdentifier ?? "", identifier) else { return false }
         }
         if let isModalBoundary = matcher.isModalBoundary {
             guard self.isModalBoundary == isModalBoundary else { return false }

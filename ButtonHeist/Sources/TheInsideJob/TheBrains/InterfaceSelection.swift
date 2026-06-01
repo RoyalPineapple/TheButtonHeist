@@ -52,7 +52,7 @@ struct InterfaceSelector {
         return interface
     }
 
-    private func selectLeafSubtrees(matching matcher: ElementMatcher) -> Interface {
+    private func selectLeafSubtrees(matching predicate: ElementPredicate) -> Interface {
         let annotations = interface.annotations.elementByPath
         let candidates = interface.tree.compactMapSubtrees { node, path -> InterfaceLeafCandidate? in
             guard case .element(let element, let traversalIndex) = node else { return nil }
@@ -60,7 +60,7 @@ struct InterfaceSelector {
             guard HeistElement(
                 accessibilityElement: element,
                 annotation: annotation
-            ).matches(matcher) else { return nil }
+            ).matches(predicate) else { return nil }
             return InterfaceLeafCandidate(node: node, path: path, traversalIndex: traversalIndex, annotation: annotation)
         }
         return selectedInterface(forLeafCandidates: candidates)
@@ -80,8 +80,8 @@ struct InterfaceSelector {
                 switch target {
                 case .heistId(let heistId):
                     guard projected.heistId == heistId else { return nil }
-                case .matcher(let matcher, _):
-                    guard projected.matches(matcher) else { return nil }
+                case .predicate(let predicate, _):
+                    guard projected.matches(predicate) else { return nil }
                 }
                 return InterfaceSubtreeCandidate(
                     node: node,

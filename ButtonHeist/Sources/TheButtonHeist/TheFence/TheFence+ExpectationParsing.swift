@@ -4,10 +4,10 @@ import TheScore
 extension TheFence {
 
     struct ExpectationPayload {
-        let expectation: ActionExpectation?
+        let expectation: AccessibilityPredicate?
         let timeout: Double?
 
-        init(expectation: ActionExpectation?, timeout: Double?) {
+        init(expectation: AccessibilityPredicate?, timeout: Double?) {
             self.expectation = expectation
             self.timeout = timeout
         }
@@ -23,30 +23,43 @@ extension TheFence {
             expectation == nil ? nil : timeout
         }
 
-        static func parseExpectation(_ value: HeistValue?) throws -> ActionExpectation? {
+        static func parseExpectation(_ value: HeistValue?) throws -> AccessibilityPredicate? {
             guard let value else { return nil }
+            return try parsePredicate(value)
+        }
+
+        /// Parse a required `AccessibilityPredicate` object (the `wait`
+        /// `predicate` field). Throws if missing or malformed.
+        static func parseRequiredPredicate(_ value: HeistValue?) throws -> AccessibilityPredicate {
+            guard let value else {
+                throw FenceError.invalidRequest("wait requires a \"predicate\" object")
+            }
+            return try parsePredicate(value)
+        }
+
+        static func parsePredicate(_ value: HeistValue) throws -> AccessibilityPredicate {
             guard case .object(let object) = value else {
                 throw FenceError.invalidRequest(
-                    "Invalid expectation type: expected object with a \"type\" discriminator"
+                    "Invalid predicate type: expected object with a \"type\" discriminator"
                 )
             }
             guard let type = object["type"] else {
                 throw FenceError.invalidRequest(
-                    "Expectation object requires a \"type\" discriminator " +
-                        "(e.g. {\"type\": \"element_updated\", …}). " +
+                    "Predicate object requires a \"type\" discriminator " +
+                        "(e.g. {\"type\": \"present\", …}). " +
                         "Got keys: \(object.keys.sorted())"
                 )
             }
             guard case .string = type else {
                 throw FenceError.invalidRequest(
-                    "Expectation object requires a string \"type\" discriminator " +
-                        "(e.g. {\"type\": \"element_updated\", …}). " +
+                    "Predicate object requires a string \"type\" discriminator " +
+                        "(e.g. {\"type\": \"present\", …}). " +
                         "Got type: \(type.schemaObservedDescription)"
                 )
             }
             do {
                 let data = try JSONEncoder().encode(value)
-                return try JSONDecoder().decode(ActionExpectation.self, from: data)
+                return try JSONDecoder().decode(AccessibilityPredicate.self, from: data)
             } catch let error as DecodingError {
                 throw Self.expectationDecodingFailure(error, value: value)
             }
@@ -116,9 +129,9 @@ extension TheFence {
                 return "integer"
             case is Double.Type:
                 return "number"
-            case is [ActionExpectation].Type:
-                return "array of expectation objects"
-            case is ElementMatcher.Type, is ActionExpectation.Type:
+            case is [AccessibilityPredicate].Type:
+                return "array of predicate objects"
+            case is ElementPredicate.Type, is AccessibilityPredicate.Type:
                 return "object"
             default:
                 if String(describing: type) == "Dictionary<String, Any>" {

@@ -197,7 +197,7 @@ final class HeistStoreTests: XCTestCase {
                 command: "activate",
                 target: semanticTarget(label: "Save"),
                 arguments: ["timeout": .double(2.5)],
-                expectation: .screenChanged
+                expectation: .changed(.screen())
             ),
         ])
     }

@@ -3,7 +3,7 @@ import TheScore
 struct HeistStepProjection: Sendable, Equatable {
     let elementTarget: ElementTarget?
     let arguments: [String: HeistValue]
-    let expectation: ActionExpectation?
+    let expectation: AccessibilityPredicate?
 
     func heistStep(command: TheFence.Command) throws -> HeistStep {
         try HeistStep(
@@ -54,6 +54,6 @@ private extension TheFence.Command {
     }
 
     var recordsTimeoutAsHeistArgument: Bool {
-        self == .waitFor || self == .waitForChange
+        self == .wait
     }
 }

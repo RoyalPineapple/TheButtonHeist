@@ -220,7 +220,7 @@ final class MockConnection: TransportReachabilityConnecting {
 
             let actionResult = actionResult(for: step.command, handler: handler)
             let expectation = actionResult.success
-                ? step.expectation?.validate(against: actionResult)
+                ? step.predicate?.validate(against: actionResult)
                 : nil
             let shouldStop = plan.policy == .stopOnError
                 && (actionResult.success == false || expectation?.met == false)
@@ -289,8 +289,7 @@ final class MockConnection: TransportReachabilityConnecting {
         case .scrollToVisible: return .scrollToVisible
         case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
-        case .waitFor: return .waitFor
-        case .waitForChange: return .waitForChange
+        case .wait: return .wait
         case .batchExecutionPlan: return .batchExecutionPlan
         case .clientHello, .authenticate, .requestInterface,
              .ping, .status, .requestScreen:

@@ -96,7 +96,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.installScreenForTesting(screen)
 
-        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "rotor_host"))).resolved
+        let resolvedHost = stash.resolveTarget(.predicate(ElementPredicate(identifier: "rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -160,7 +160,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.installScreenForTesting(screen)
 
-        let resolvedHost = stash.resolveTarget(.matcher(ElementMatcher(identifier: "system_rotor_host"))).resolved
+        let resolvedHost = stash.resolveTarget(.predicate(ElementPredicate(identifier: "system_rotor_host"))).resolved
         guard let resolvedHost else {
             XCTFail("Expected rotor host to resolve")
             return
@@ -222,7 +222,7 @@ final class TheStashRotorTests: XCTestCase {
         let brains = TheBrains(tripwire: TheTripwire())
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "activation_rotor_host")),
+                elementTarget: .predicate(ElementPredicate(identifier: "activation_rotor_host")),
                 selection: .named("Primary Action")
             )
         ))
@@ -288,7 +288,7 @@ final class TheStashRotorTests: XCTestCase {
         let brains = TheBrains(tripwire: TheTripwire())
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "virtual_activation_rotor_host")),
+                elementTarget: .predicate(ElementPredicate(identifier: "virtual_activation_rotor_host")),
                 selection: .named("Primary Action")
             )
         ))
@@ -361,7 +361,7 @@ final class TheStashRotorTests: XCTestCase {
 
         let search = await brains.actions.executeRotor(
             RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "cached_rotor_host")),
+                elementTarget: .predicate(ElementPredicate(identifier: "cached_rotor_host")),
                 selection: .named("Cached Items")
             )
         )
@@ -411,7 +411,7 @@ final class TheStashRotorTests: XCTestCase {
         let brains = TheBrains(tripwire: TheTripwire())
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "continuation_rotor_host")),
+                elementTarget: .predicate(ElementPredicate(identifier: "continuation_rotor_host")),
                 selection: .named("Primary Action"),
                 continuation: .item("missing_current_item")
             )
@@ -445,7 +445,7 @@ final class TheStashRotorTests: XCTestCase {
         }
         stash.installScreenForTesting(screen)
 
-        let resolvedTextView = stash.resolveTarget(.matcher(ElementMatcher(identifier: "mentions_text"))).resolved
+        let resolvedTextView = stash.resolveTarget(.predicate(ElementPredicate(identifier: "mentions_text"))).resolved
         guard let resolvedTextView else {
             XCTFail("Expected text view to resolve")
             return

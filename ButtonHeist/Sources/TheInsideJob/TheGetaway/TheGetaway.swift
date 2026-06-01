@@ -80,10 +80,8 @@ final class TheGetaway {
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
             handleScreen(requestId: requestId, respond: respond)
-        case .waitForChange(let target):
-            let result = await brains.executeWaitForChange(
-                timeout: target.resolvedTimeout, expectation: target.expect
-            )
+        case .wait(let target):
+            let result = await brains.performWait(target: target)
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
             brains.recordSentState()
 

@@ -63,12 +63,12 @@ extension FenceResponse {
     }
 
     private static func compactExpectationFailureHint(_ expectation: ExpectationResult) -> String? {
-        guard expectation.expectation == .screenChanged, expectation.actual == "elementsChanged" else {
+        guard expectation.predicate == .changed(.screen()), expectation.actual == "elementsChanged" else {
             return nil
         }
         return "screen_changed requires a screen-level transition; " +
             "use elements_changed for same-screen element updates " +
-            "or wait_for_change when the UI may settle asynchronously"
+            "or wait when the UI may settle asynchronously"
     }
 
     private static func compactActionFailure(_ result: ActionResult, commandName: String) -> String {

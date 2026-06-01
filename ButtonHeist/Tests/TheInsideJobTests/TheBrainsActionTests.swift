@@ -489,8 +489,8 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testBatchCommandsMatchSingleCommandMatcherFailures() async {
-        let matcher = ElementMatcher(identifier: "missing_target")
-        let target = ElementTarget.matcher(matcher)
+        let matcher = ElementPredicate(identifier: "missing_target")
+        let target = ElementTarget.predicate(matcher)
         let commands: [(String, ClientMessage, Bool)] = [
             ("activate", .activate(target), false),
             ("custom action", .performCustomAction(CustomActionTarget(
@@ -502,7 +502,7 @@ final class TheBrainsActionTests: XCTestCase {
             ("swipe", .swipe(SwipeTarget(selection: .elementDirection(target, .left))), false),
             ("type text", .typeText(TypeTextTarget(text: "hello", elementTarget: target)), false),
             ("scroll", .scroll(ScrollTarget(elementTarget: target, direction: .down)), false),
-            ("wait", .waitFor(WaitForTarget(elementTarget: target, timeout: 0.01)), true),
+            ("wait", .wait(WaitTarget(predicate: .state(.present(matcher)), timeout: 0.01)), true),
         ]
 
         for (label, command, normalizingTimeoutDuration) in commands {
@@ -586,7 +586,7 @@ final class TheBrainsActionTests: XCTestCase {
             objects: ["stale_refreshed_slider": nil]
         ))
         guard let staleResolved = brains.stash.resolveTarget(
-            .matcher(ElementMatcher(identifier: "refreshed_slider"))
+            .predicate(ElementPredicate(identifier: "refreshed_slider"))
         ).resolved else {
             XCTFail("Expected stale semantic target to resolve")
             return
@@ -597,7 +597,7 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         let result = await brains.actions.executeIncrement(
-            .matcher(ElementMatcher(identifier: "refreshed_slider"))
+            .predicate(ElementPredicate(identifier: "refreshed_slider"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "increment failed")
@@ -635,7 +635,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
 
         let result = await brains.actions.executeActivate(
-            .matcher(ElementMatcher(identifier: "refresh_activate"))
+            .predicate(ElementPredicate(identifier: "refresh_activate"))
         )
 
         XCTAssertTrue(result.success, result.message ?? "activate failed")
@@ -1004,15 +1004,15 @@ final class TheBrainsActionTests: XCTestCase {
     // MARK: - Accessibility Tree Availability
 
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
-        let target = WaitForTarget(
-            elementTarget: .matcher(ElementMatcher(label: "never"))
+        let target = WaitTarget(
+            predicate: .state(.present(ElementPredicate(label: "never")))
         )
         let result = await withNoTraversableWindows {
-            await brains.executeCommand(.waitFor(target))
+            await brains.executeCommand(.wait(target))
         }
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .waitFor)
+        XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .actionFailed)
     }
 
@@ -1114,7 +1114,7 @@ final class TheBrainsActionTests: XCTestCase {
         )
         let element = try XCTUnwrap(capture.interface.projectedElements.first { $0.heistId == heistId })
         let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: element, in: capture))
-        return .matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
+        return .predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
     }
 
     private func XCTAssertDiagnostic(
@@ -1172,7 +1172,7 @@ final class TheBrainsActionTests: XCTestCase {
 
     private func batchStepResult(for command: ClientMessage) async -> ActionResult {
         let result = await brains.executeBatchExecutionPlan(BatchPlan(steps: [
-            BatchStep(command: command, expectation: nil, deadline: Deadline()),
+            BatchStep(command: command, predicate: nil, deadline: Deadline()),
         ], policy: .continueOnError))
         guard case .batchExecution(let batch) = result.payload,
               let stepResult = batch.steps.first,

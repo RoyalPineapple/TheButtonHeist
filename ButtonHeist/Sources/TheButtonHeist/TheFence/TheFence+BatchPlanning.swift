@@ -67,7 +67,7 @@ extension TheFence {
         }
         let typedStep = TheScore.BatchStep(
             command: message,
-            expectation: batchExpectation(for: message, request: request),
+            predicate: batchExpectation(for: message, request: request),
             deadline: batchDeadline(for: message, request: request)
         )
         return RunBatchPreparedStep(
@@ -107,21 +107,14 @@ private extension TheFence {
         }
     }
 
-    func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> ActionExpectation? {
+    func batchExpectation(for message: ClientMessage, request: ParsedRequest) -> AccessibilityPredicate? {
         if let explicit = request.expectationPayload.expectation {
             return explicit
         }
 
         switch message {
-        case .waitFor(let target):
-            guard let matcher = target.elementTarget.batchExpectationMatcher else {
-                return nil
-            }
-            return target.resolvedAbsent
-                ? .elementDisappeared(matcher)
-                : .elementAppeared(matcher)
-        case .waitForChange(let target):
-            return target.expect ?? .screenChanged
+        case .wait(let target):
+            return target.predicate
         default:
             return nil
         }
@@ -133,23 +126,10 @@ private extension TheFence {
         }
 
         switch message {
-        case .waitFor(let target):
-            return Deadline(timeout: target.resolvedTimeout)
-        case .waitForChange(let target):
+        case .wait(let target):
             return Deadline(timeout: target.resolvedTimeout)
         default:
             return Deadline()
-        }
-    }
-}
-
-private extension ElementTarget {
-    var batchExpectationMatcher: ElementMatcher? {
-        switch self {
-        case .heistId:
-            return nil
-        case .matcher(let matcher, _):
-            return matcher
         }
     }
 }

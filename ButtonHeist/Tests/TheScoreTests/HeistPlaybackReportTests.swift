@@ -294,8 +294,8 @@ final class HeistPlaybackReportTests: XCTestCase {
     }
 
     private func semanticTarget(label: String? = nil, identifier: String? = nil) -> ElementTarget {
-        .matcher(
-            ElementMatcher(label: label, identifier: identifier)
+        .predicate(
+            ElementPredicate(label: label, identifier: identifier)
         )
     }
 }

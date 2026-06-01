@@ -520,7 +520,7 @@ final class TheBrainsScrollTests: XCTestCase {
             includeLiveScrollAncestor: false
         )
         let result = await brains.navigation.actionability.makeActionable(
-            for: .matcher(ElementMatcher(label: "Offscreen")),
+            for: .predicate(ElementPredicate(label: "Offscreen")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )
@@ -911,7 +911,7 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Duplicate")))
+            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Duplicate")))
         )
 
         XCTAssertFalse(result.success)
@@ -939,7 +939,7 @@ final class TheBrainsScrollTests: XCTestCase {
         await brains.tripwire.yieldFrames(3)
 
         let result = await brains.navigation.executeScrollToVisible(
-            ScrollToVisibleTarget(elementTarget: .matcher(ElementMatcher(label: "Save"), ordinal: 3))
+            ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Save"), ordinal: 3))
         )
 
         XCTAssertFalse(result.success)
@@ -972,7 +972,7 @@ final class TheBrainsScrollTests: XCTestCase {
         guard brains.refresh() != nil else {
             throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
         }
-        if !brains.stash.matchScreenElements(ElementMatcher(label: "Jump Target"), limit: 1).isEmpty {
+        if !brains.stash.matchScreenElements(ElementPredicate(label: "Jump Target"), limit: 1).isEmpty {
             throw XCTSkip("Parser exposed offscreen scroll content before semantic reveal")
         }
 
@@ -1003,7 +1003,7 @@ final class TheBrainsScrollTests: XCTestCase {
         brains.stash.installScreenForTesting(knownScreen)
 
         let result = await brains.navigation.actionability.makeActionable(
-            for: .matcher(ElementMatcher(label: "Jump Target")),
+            for: .predicate(ElementPredicate(label: "Jump Target")),
             method: .scrollToVisible,
             deallocatedBoundary: "scroll_to_visible dispatch"
         )

@@ -90,12 +90,12 @@ struct PublicRotorTextRange: Encodable {
 struct PublicExpectationResult: Encodable {
     let met: Bool
     let actual: String?
-    let expected: ActionExpectation?
+    let expected: AccessibilityPredicate?
 
     init(result: ExpectationResult) {
         self.met = result.met
         self.actual = result.actual
-        self.expected = result.expectation
+        self.expected = result.predicate
     }
 }
 

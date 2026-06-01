@@ -8,7 +8,7 @@ extension TheFence {
         case listDevices = "list_devices"
         case getInterface = "get_interface"
         case getScreen = "get_screen"
-        case waitForChange = "wait_for_change"
+        case wait
         case oneFingerTap = "one_finger_tap"
         case longPress = "long_press"
         case swipe
@@ -23,7 +23,6 @@ extension TheFence {
         case editAction = "edit_action"
         case setPasteboard = "set_pasteboard"
         case getPasteboard = "get_pasteboard"
-        case waitFor = "wait_for"
         case dismissKeyboard = "dismiss_keyboard"
         case runBatch = "run_batch"
         case getSessionState = "get_session_state"

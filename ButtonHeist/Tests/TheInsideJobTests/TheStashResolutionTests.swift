@@ -219,9 +219,9 @@ final class TheStashResolutionTests: XCTestCase {
             element: sourceWireElement,
             in: capture
         ))
-        let executableTarget = ElementTarget.matcher(minimumMatcher.matcher, ordinal: minimumMatcher.ordinal)
+        let executableTarget = ElementTarget.predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
 
-        guard case .matcher(let matcher, let ordinal) = executableTarget else {
+        guard case .predicate(let matcher, let ordinal) = executableTarget else {
             XCTFail("Expected semantic replay target to carry matcher identity, got \(executableTarget)")
             return
         }
@@ -252,7 +252,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         guard let resolved = result.resolved else {
             XCTFail("Expected .resolved, got \(result)")
             return
@@ -281,7 +281,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         guard case .ambiguous(let candidates, let diagnostics) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
@@ -296,7 +296,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "save1", index: 0)
         register(save2, heistId: "save2", index: 1)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         guard case .ambiguous(let candidates, _) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
@@ -311,7 +311,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "OK", traits: .button)
         register(element, heistId: "button_ok", index: 0)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Cancel")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Cancel")))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -325,7 +325,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save", value: "draft")
         register(element, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save", value: "final")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save", value: "final")))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -340,7 +340,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(visible, heistId: "button_visible", index: 0)
         registerOffScreen(offscreen, heistId: "long_list_button")
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Long")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Long")))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -352,12 +352,12 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testEmptyMatcherMissIncludesNextTargetingMove() {
-        let result = bagman.resolveTarget(.matcher(ElementMatcher()))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate()))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
-        XCTAssertTrue(diagnostics.contains("<empty matcher>"))
+        XCTAssertTrue(diagnostics.contains("<empty predicate>"))
         XCTAssertTrue(diagnostics.contains("Next:"))
         XCTAssertTrue(diagnostics.contains("exact label"))
     }
@@ -375,7 +375,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         XCTAssertNil(result.resolved)
     }
 
@@ -395,12 +395,12 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         XCTAssertTrue(result.diagnostics.contains("2 elements match"), "Should return ambiguous message: \(result.diagnostics)")
     }
 
     func testEmptyScreenReturnsCompactSummary() {
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Anything")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Anything")))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -419,13 +419,13 @@ final class TheStashResolutionTests: XCTestCase {
         register(save2, heistId: "button_save_2", index: 1)
         register(save3, heistId: "button_save_3", index: 2)
 
-        let result0 = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 0))
+        let result0 = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 0))
         XCTAssertEqual(result0.resolved?.element.value, "draft")
 
-        let result1 = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 1))
+        let result1 = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 1))
         XCTAssertEqual(result1.resolved?.element.value, "final")
 
-        let result2 = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 2))
+        let result2 = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 2))
         XCTAssertEqual(result2.resolved?.element.value, "archive")
     }
 
@@ -435,7 +435,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 5))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 5))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -452,7 +452,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         guard case .ambiguous(_, let diagnostics) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
@@ -465,7 +465,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 0))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 0))
         XCTAssertNotNil(result.resolved)
         XCTAssertEqual(result.resolved?.element.label, "Save")
     }
@@ -474,7 +474,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: -1))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: -1))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -484,7 +484,7 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testOrdinalZeroOnNoMatchReturnsNotFound() {
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Nonexistent"), ordinal: 0))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Nonexistent"), ordinal: 0))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
@@ -504,7 +504,7 @@ final class TheStashResolutionTests: XCTestCase {
             register(element, heistId: "item_\(index)", index: index)
         }
 
-        let limit3 = bagman.currentHierarchy.matches(ElementMatcher(label: "Item"), mode: .substring, limit: 3)
+        let limit3 = bagman.currentHierarchy.matches(ElementPredicate(label: "Item"), mode: .substring, limit: 3)
         XCTAssertEqual(limit3.count, 3)
         XCTAssertEqual(limit3[0].value, "0")
         XCTAssertEqual(limit3[1].value, "1")
@@ -517,7 +517,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(element1, heistId: "save_1", index: 0)
         register(element2, heistId: "save_2", index: 1)
 
-        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), mode: .substring, limit: 10)
+        let results = bagman.currentHierarchy.matches(ElementPredicate(label: "Save"), mode: .substring, limit: 10)
         XCTAssertEqual(results.count, 2)
     }
 
@@ -525,7 +525,7 @@ final class TheStashResolutionTests: XCTestCase {
         let element = element(label: "Save", traits: .button)
         register(element, heistId: "button_save", index: 0)
 
-        let results = bagman.currentHierarchy.matches(ElementMatcher(label: "Save"), mode: .substring, limit: 0)
+        let results = bagman.currentHierarchy.matches(ElementPredicate(label: "Save"), mode: .substring, limit: 0)
         XCTAssertTrue(results.isEmpty)
     }
 
@@ -550,7 +550,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(onScreen, heistId: "button_visible", index: 0)
         registerOffScreen(offScreen, heistId: "long_list_button")
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Long List", traits: [.button])))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Long List", traits: [.button])))
         guard case .resolved(let target) = result else {
             XCTFail("Expected known semantic match, got \(result)")
             return
@@ -587,7 +587,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        let result = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveVisibleTarget(.predicate(ElementPredicate(label: "Save")))
 
         guard case .ambiguous(let candidates, let diagnostics) = result else {
             XCTFail("Expected visible ambiguity, got \(result)")
@@ -601,7 +601,7 @@ final class TheStashResolutionTests: XCTestCase {
         let save = element(label: "Save", traits: .button)
         register(save, heistId: "button_save", index: 0)
 
-        let result = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 4))
+        let result = bagman.resolveVisibleTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 4))
 
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Expected ordinal miss, got \(result)")
@@ -617,10 +617,10 @@ final class TheStashResolutionTests: XCTestCase {
         register(visible, heistId: "button_visible", index: 0)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        let knownResult = bagman.resolveTarget(.matcher(ElementMatcher(label: "Below Fold")))
+        let knownResult = bagman.resolveTarget(.predicate(ElementPredicate(label: "Below Fold")))
         XCTAssertEqual(knownResult.resolved?.heistId, "below_fold_button")
 
-        let visibleResult = bagman.resolveVisibleTarget(.matcher(ElementMatcher(label: "Below Fold")))
+        let visibleResult = bagman.resolveVisibleTarget(.predicate(ElementPredicate(label: "Below Fold")))
         guard case .notFound(let diagnostics) = visibleResult else {
             XCTFail("Expected visible miss, got \(visibleResult)")
             return
@@ -636,9 +636,9 @@ final class TheStashResolutionTests: XCTestCase {
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
         XCTAssertNil(bagman.resolveFirstVisibleMatch(.heistId("below_fold_button")))
-        XCTAssertNil(bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Below Fold"))))
+        XCTAssertNil(bagman.resolveFirstVisibleMatch(.predicate(ElementPredicate(label: "Below Fold"))))
         XCTAssertEqual(
-            bagman.resolveFirstVisibleMatch(.matcher(ElementMatcher(label: "Visible")))?.heistId,
+            bagman.resolveFirstVisibleMatch(.predicate(ElementPredicate(label: "Visible")))?.heistId,
             "button_visible"
         )
     }
@@ -740,7 +740,7 @@ final class TheStashResolutionTests: XCTestCase {
         let offScreen = element(label: "Below Fold", traits: .button)
         registerOffScreen(offScreen, heistId: "below_fold_button")
 
-        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Below Fold"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Below Fold"))).resolved)
     }
 
     func testResolveTargetFindsLiveHeistIdInViewport() {
@@ -756,8 +756,8 @@ final class TheStashResolutionTests: XCTestCase {
         register(save1, heistId: "button_save_1", index: 0)
         register(save2, heistId: "button_save_2", index: 1)
 
-        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 1)).resolved)
-        guard case .notFound = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"), ordinal: 2)) else {
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 1)).resolved)
+        guard case .notFound = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 2)) else {
             XCTFail("Expected out-of-range ordinal to fail closed")
             return
         }
@@ -781,7 +781,7 @@ final class TheStashResolutionTests: XCTestCase {
         let save = element(label: "Save Draft", traits: .button)
         register(save, heistId: "button_save_draft", index: 0)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         guard case .notFound(let diagnostics) = result else {
             XCTFail("Substring partial must not auto-resolve to exact-or-miss; got \(result)")
             return
@@ -797,9 +797,9 @@ final class TheStashResolutionTests: XCTestCase {
         let save = element(label: "Save", traits: .button)
         register(save, heistId: "button_save", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"))).resolved)
-        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "save"))).resolved)
-        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "SAVE"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "save"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "SAVE"))).resolved)
     }
 
     /// Typography folding still works under exact-or-miss: a label with a smart
@@ -808,7 +808,7 @@ final class TheStashResolutionTests: XCTestCase {
         let dontSkip = element(label: "Don\u{2019}t skip", traits: .button)
         register(dontSkip, heistId: "button_dont_skip", index: 0)
 
-        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Don't skip"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Don't skip"))).resolved)
     }
 
     /// When two labels share a partial substring, exact must win outright
@@ -819,7 +819,7 @@ final class TheStashResolutionTests: XCTestCase {
         register(save, heistId: "button_save", index: 0)
         register(saveDraft, heistId: "button_save_draft", index: 1)
 
-        let result = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save")))
+        let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
         guard let resolved = result.resolved else {
             XCTFail("Exact match should resolve uniquely, got \(result)")
             return
@@ -835,22 +835,22 @@ final class TheStashResolutionTests: XCTestCase {
 
         // "Save" is a substring of "Save Draft" but not equal, so semantic
         // resolution must not report it as present.
-        guard case .notFound = bagman.resolveTarget(.matcher(ElementMatcher(label: "Save"))) else {
+        guard case .notFound = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"))) else {
             XCTFail("Expected substring-only matcher to miss")
             return
         }
         // Exact label still resolves to present.
-        XCTAssertNotNil(bagman.resolveTarget(.matcher(ElementMatcher(label: "Save Draft"))).resolved)
+        XCTAssertNotNil(bagman.resolveTarget(.predicate(ElementPredicate(label: "Save Draft"))).resolved)
     }
 
     /// Server-side and client-side matchers must agree on the same input.
     /// Regression for Finding 4 (matcher contract drift).
     func testServerAndClientMatchersAgreeOnSameInput() {
         let element = element(label: "Save Draft", value: "x", identifier: "save_btn", traits: .button)
-        let matcher = ElementMatcher(label: "Save Draft", traits: [.button])
+        let matcher = ElementPredicate(label: "Save Draft", traits: [.button])
 
         // Server-side: AccessibilityElement.matches with mode .exact
-        let serverHit = element.matches(matcher, mode: .exact)
+        let serverHit = matcher.matches(element, mode: .exact)
 
         // Client-side: HeistElement.matches (no mode — exact-or-miss is the only mode).
         let heistElement = HeistElement(
@@ -869,8 +869,8 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertTrue(serverHit, "Both sides must hit on exact label+trait match")
 
         // Substring partial should miss on BOTH sides now.
-        let partial = ElementMatcher(label: "Save")
-        XCTAssertFalse(element.matches(partial, mode: .exact))
+        let partial = ElementPredicate(label: "Save")
+        XCTAssertFalse(partial.matches(element, mode: .exact))
         XCTAssertFalse(heistElement.matches(partial))
     }
 
@@ -888,9 +888,9 @@ final class TheStashResolutionTests: XCTestCase {
             frameX: 0, frameY: 0, frameWidth: 0, frameHeight: 0,
             actions: []
         )
-        let asciiMatcher = ElementMatcher(label: "Don't skip")
+        let asciiMatcher = ElementPredicate(label: "Don't skip")
 
-        XCTAssertTrue(smart.matches(asciiMatcher, mode: .exact))
+        XCTAssertTrue(asciiMatcher.matches(smart, mode: .exact))
         XCTAssertTrue(heist.matches(asciiMatcher),
                       "Client-side must fold typography just like server-side")
     }

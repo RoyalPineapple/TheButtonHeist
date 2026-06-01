@@ -30,11 +30,11 @@ struct ElementTargetOptions: ParsableArguments {
         }
     }
 
-    func parsedMatcher() throws -> ElementMatcher? {
+    func parsedMatcher() throws -> ElementPredicate? {
         let hasFields = identifier != nil || label != nil || value != nil
             || !traits.isEmpty || !excludeTraits.isEmpty
         guard hasFields else { return nil }
-        return ElementMatcher(
+        return ElementPredicate(
             label: label,
             identifier: identifier,
             value: value,
@@ -52,15 +52,15 @@ struct ElementTargetOptions: ParsableArguments {
 
     func parsedTarget() throws -> ElementTarget? {
         let heistId = try resolvedHeistId
-        let matcher = try parsedMatcher()
-        guard heistId != nil || matcher != nil || ordinal != nil else {
+        let predicate = try parsedMatcher()
+        guard heistId != nil || predicate != nil || ordinal != nil else {
             return nil
         }
         do {
             return try ElementTargetGrammar.validatedTarget(
                 heistId: heistId,
-                matcher: matcher,
-                matcherWasProvided: matcher != nil,
+                predicate: predicate,
+                predicateWasProvided: predicate != nil,
                 ordinal: ordinal
             )
         } catch let error as ElementTargetGrammarError {
@@ -68,8 +68,8 @@ struct ElementTargetOptions: ParsableArguments {
         }
     }
 
-    private func parseTraits(_ names: [String], label: String) throws -> [HeistTrait]? {
-        guard !names.isEmpty else { return nil }
+    private func parseTraits(_ names: [String], label: String) throws -> [HeistTrait] {
+        guard !names.isEmpty else { return [] }
         return try names.map { name in
             guard let trait = HeistTrait(rawValue: name) else {
                 throw ValidationError("Unknown \(label) '\(name)'. Valid: \(HeistTrait.allCases.map(\.rawValue).joined(separator: ", "))")

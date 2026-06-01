@@ -7,11 +7,11 @@ private enum InterfaceQueryCodingKeys: String, CodingKey, CaseIterable {
 
 public struct InterfaceQuery: Sendable, Equatable {
     public let subtree: SubtreeSelector?
-    public let matcher: ElementMatcher
+    public let matcher: ElementPredicate
 
     public init(
         subtree: SubtreeSelector? = nil,
-        matcher: ElementMatcher = ElementMatcher()
+        matcher: ElementPredicate = ElementPredicate()
     ) {
         self.subtree = subtree
         self.matcher = matcher
@@ -23,7 +23,7 @@ extension InterfaceQuery: Codable {
         try decoder.rejectUnknownKeys(allowed: InterfaceQueryCodingKeys.self, typeName: "interface query")
         let container = try decoder.container(keyedBy: InterfaceQueryCodingKeys.self)
         self.subtree = try container.decodeIfPresent(SubtreeSelector.self, forKey: .subtree)
-        self.matcher = try container.decodeIfPresent(ElementMatcher.self, forKey: .matcher) ?? ElementMatcher()
+        self.matcher = try container.decodeIfPresent(ElementPredicate.self, forKey: .matcher) ?? ElementPredicate()
     }
 
     public func encode(to encoder: Encoder) throws {

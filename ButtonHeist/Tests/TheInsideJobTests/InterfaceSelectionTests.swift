@@ -9,7 +9,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testMatcherSelectsMatchingLeaves() throws {
         let interface = try select(InterfaceQuery(
-            matcher: ElementMatcher(label: "Submit")
+            matcher: ElementPredicate(label: "Submit")
         ))
         XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit"])
         XCTAssertEqual(interface.annotations.elements.map { $0.heistId }, ["submit"])
@@ -18,7 +18,7 @@ final class InterfaceSelectorTests: XCTestCase {
 
     func testElementSubtreeSelectsMatchingLeaf() throws {
         let interface = try select(InterfaceQuery(
-            subtree: .element(.matcher(ElementMatcher(identifier: "submit_button")))
+            subtree: .element(.predicate(ElementPredicate(identifier: "submit_button")))
         ))
         XCTAssertEqual(interface.projectedElements.map { $0.heistId }, ["submit"])
     }

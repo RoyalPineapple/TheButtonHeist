@@ -45,118 +45,80 @@ extension AccessibilityElement {
 
 /// Matching operates on the canonical accessibility tree — AccessibilityElement
 /// and AccessibilityHierarchy — not on wire types. Trait name strings from
-/// ElementMatcher are resolved to parser trait bitmasks so comparisons
+/// ElementPredicate are resolved to parser trait bitmasks so comparisons
 /// happen at the source data level.
-
-/// String-comparison strategy for matcher fields (label/identifier/value).
-/// Trait predicates ignore this — they always compare bitmasks exactly.
 ///
-/// The product contract is "exact or miss": all matcher resolution paths
+/// The product contract is "exact or miss": all predicate resolution paths
 /// (`matchScreenElements`, `hasTarget`, `HeistElement.matches`) use `.exact`.
 /// `.substring` is reserved for the diagnostic / near-miss / suggestion path
 /// — `Diagnostics.findNearMiss` uses it to surface "did you mean X?" hints
 /// when an exact match fails. It must not leak back into the resolution path.
-enum MatchMode {
-    /// Case-insensitive equality with typography folding (smart quotes/dashes/
-    /// ellipsis fold to ASCII; emoji/accents/CJK pass through). The single
-    /// matcher-resolution semantics.
-    case exact
-    /// Case-insensitive substring with typography folding. Suggestion-only —
-    /// used by `Diagnostics.findNearMiss` to look up near-miss candidates that
-    /// failed exact matching, never by resolution.
-    case substring
-}
 
 extension AccessibilityHierarchy {
-    /// Match a single node against a matcher. For leaf elements, returns the match
+    /// Match a single node against a predicate. For leaf elements, returns the match
     /// if the element satisfies the predicate. For containers, returns the first
     /// matching leaf descendant.
-    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> AccessibilityElement? {
-        [self].firstMatch(matcher, mode: mode)
+    func matches(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> AccessibilityElement? {
+        [self].firstMatch(predicate, mode: mode)
     }
 }
 
 extension Array where Element == AccessibilityHierarchy {
 
     /// First leaf element in the tree that satisfies all property predicates.
-    func firstMatch(_ matcher: ElementMatcher, mode: MatchMode) -> AccessibilityElement? {
-        matches(matcher, mode: mode, limit: 1).first
+    func firstMatch(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> AccessibilityElement? {
+        matches(predicate, mode: mode, limit: 1).first
     }
 
     /// Leaf elements matching the predicate, stopping after `limit` results.
     /// Results are in tree traversal order. Use this for early-exit resolution:
     /// limit 1 for first-match, limit 2 for unique-match, limit N+1 for ordinal N.
     func matches(
-        _ matcher: ElementMatcher,
-        mode: MatchMode,
+        _ predicate: ElementPredicate,
+        mode: ElementPredicate.StringMatchMode,
         limit: Int
     ) -> [AccessibilityElement] {
-        guard limit > 0, matcher.hasPredicates else { return [] }
+        guard limit > 0, predicate.hasPredicates else { return [] }
         return compactMap(first: limit, context: (), container: { _, _ in () }, element: { element, _, _ in
-            element.matches(matcher, mode: mode) ? element : nil
+            predicate.matches(element, mode: mode) ? element : nil
         })
     }
 
     /// Whether any leaf element in the tree satisfies the property predicates.
-    func hasMatch(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
-        !matches(matcher, mode: mode, limit: 1).isEmpty
+    func hasMatch(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> Bool {
+        !matches(predicate, mode: mode, limit: 1).isEmpty
     }
 }
 
-// MARK: - AccessibilityElement Matching
+// MARK: - AccessibilityElement Predicate Conformance
 
-extension AccessibilityElement {
+extension AccessibilityElement: @retroactive ElementPredicateSubject {
 
     /// Known trait name strings — references the parser's authoritative set directly.
     private static let knownTraitNames = AccessibilityTraits.knownTraitNames
 
-    /// Does this element satisfy all property predicates in the matcher?
-    /// String fields (label, identifier, value) use case-insensitive comparison; whether
-    /// the comparison is exact equality or substring is controlled by `mode`. Trait name
-    /// strings are resolved to bitmasks via the parser's `fromNames` and always compare
-    /// exactly regardless of mode.
-    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
-        guard matcher.hasPredicates else { return false }
-        if let matchLabel = matcher.label {
-            if matchLabel.isEmpty { return false }
-            guard let label, Self.stringMatches(label, matchLabel, mode: mode) else { return false }
-        }
-        if let matchIdentifier = matcher.identifier {
-            if matchIdentifier.isEmpty { return false }
-            guard let identifier, Self.stringMatches(identifier, matchIdentifier, mode: mode) else { return false }
-        }
-        if let matchValue = matcher.value {
-            if matchValue.isEmpty { return false }
-            guard let value, Self.stringMatches(value, matchValue, mode: mode) else { return false }
-        }
-        if let requiredTraits = matcher.traits, !requiredTraits.isEmpty {
-            // Unknown trait names must cause a miss — fromNames drops them silently
-            // and .contains(.none) is always true, so validate every name resolved.
-            let requiredNames = requiredTraits.map(\.rawValue)
-            for name in requiredNames where !Self.knownTraitNames.contains(name) { return false }
-            let mask = AccessibilityTraits.fromNames(requiredNames)
-            if !traits.contains(mask) { return false }
-        }
-        if let excludedTraits = matcher.excludeTraits, !excludedTraits.isEmpty {
-            let excludedNames = excludedTraits.map(\.rawValue)
-            for name in excludedNames where !Self.knownTraitNames.contains(name) { return false }
-            let mask = AccessibilityTraits.fromNames(excludedNames)
-            if !traits.isDisjoint(with: mask) { return false }
-        }
-        return true
+    public var predicateLabel: String? { label }
+    public var predicateIdentifier: String? { identifier }
+    public var predicateValue: String? { value }
+
+    /// True when every required trait resolves to a known parser bitmask and is
+    /// present on this element. Unknown trait names must cause a miss —
+    /// `fromNames` drops them silently and `.contains(.none)` is always true, so
+    /// each name is validated against the known set first.
+    public func satisfiesRequiredTraits(_ required: [HeistTrait]) -> Bool {
+        let requiredNames = required.map(\.rawValue)
+        for name in requiredNames where !Self.knownTraitNames.contains(name) { return false }
+        let mask = AccessibilityTraits.fromNames(requiredNames)
+        return traits.contains(mask)
     }
 
-    /// Single source of truth for string comparison — delegates to the helpers
-    /// on `ElementMatcher` in TheScore so client-side `HeistElement.matches` and
-    /// server-side `AccessibilityElement.matches` agree about typography folding
-    /// and exact-vs-substring behaviour.
-    private static func stringMatches(_ candidate: String, _ pattern: String, mode: MatchMode) -> Bool {
-        switch mode {
-        case .exact:
-            return ElementMatcher.stringEquals(candidate, pattern)
-        case .substring:
-            return ElementMatcher.stringContains(candidate, pattern)
-        }
+    /// True when any excluded trait is present (or names an unknown trait — an
+    /// unknown exclusion can never be proven absent, so it rejects the subject).
+    public func violatesExcludedTraits(_ excluded: [HeistTrait]) -> Bool {
+        let excludedNames = excluded.map(\.rawValue)
+        for name in excludedNames where !Self.knownTraitNames.contains(name) { return true }
+        let mask = AccessibilityTraits.fromNames(excludedNames)
+        return !traits.isDisjoint(with: mask)
     }
 }
 
@@ -164,7 +126,7 @@ extension AccessibilityElement {
 
 extension TheStash {
 
-    /// Single entry point for matcher-based element lookup. Returns up to `limit`
+    /// Single entry point for predicate-based element lookup. Returns up to `limit`
     /// matching ScreenElements using exact-or-miss semantics: case-insensitive
     /// equality with typography folding on string fields, exact bitmask comparison
     /// on traits. There is no substring fallback — a miss is a miss, and the agent
@@ -172,19 +134,19 @@ extension TheStash {
     /// are returned in the committed screen's semantic order: live hierarchy
     /// entries first, then known entries retained from exploration. Viewport
     /// reachability is handled by action execution, not by target resolution.
-    func matchScreenElements(_ matcher: ElementMatcher, limit: Int) -> [ScreenElement] {
-        matchScreenElements(matcher, limit: limit, in: currentScreen)
+    func matchScreenElements(_ predicate: ElementPredicate, limit: Int) -> [ScreenElement] {
+        matchScreenElements(predicate, limit: limit, in: currentScreen)
     }
 
     func matchScreenElements(
-        _ matcher: ElementMatcher,
+        _ predicate: ElementPredicate,
         limit: Int,
         in screen: Screen
     ) -> [ScreenElement] {
-        guard limit > 0, matcher.hasPredicates else { return [] }
+        guard limit > 0, predicate.hasPredicates else { return [] }
         var matches: [ScreenElement] = []
         matches.reserveCapacity(limit)
-        for entry in selectElements(in: screen) where entry.matches(matcher, mode: .exact) {
+        for entry in selectElements(in: screen) where entry.matches(predicate, mode: .exact) {
             matches.append(entry)
             if matches.count == limit { break }
         }
@@ -194,8 +156,8 @@ extension TheStash {
 }
 
 private extension Screen.ScreenElement {
-    func matches(_ matcher: ElementMatcher, mode: MatchMode) -> Bool {
-        return element.matches(matcher, mode: mode)
+    func matches(_ predicate: ElementPredicate, mode: ElementPredicate.StringMatchMode) -> Bool {
+        predicate.matches(element, mode: mode)
     }
 }
 

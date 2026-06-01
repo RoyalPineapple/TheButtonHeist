@@ -108,7 +108,7 @@ final class HeistPlaybackTests: XCTestCase {
     func testPlaybackTargetRejectsEmptyMatcherOnDecode() {
         let json = #"{"command":"activate","target":{}}"#
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("requires heistId or matcher"), "\(error)")
+            XCTAssertTrue("\(error)".contains("requires heistId or predicate"), "\(error)")
         }
     }
 
@@ -204,7 +204,7 @@ final class HeistPlaybackTests: XCTestCase {
             ]
         )
 
-        let expected = #"step(command="activate" target(matcher(label="Save" traits=[button])) "#
+        let expected = #"step(command="activate" target(predicate(label="Save" traits=[button])) "#
             + #"args=arguments("count"=2 "text"="hello"))"#
         XCTAssertEqual(step.description, expected)
     }
@@ -215,9 +215,9 @@ final class HeistPlaybackTests: XCTestCase {
         }
     }
 
-    func testProgrammaticStepRejectsEmptyMatcherTargetWithoutCrashing() {
-        XCTAssertThrowsError(try HeistStep(command: "activate", target: .matcher(ElementMatcher()))) { error in
-            XCTAssertEqual(error as? HeistStepError, .emptyMatcherTarget)
+    func testProgrammaticStepRejectsEmptyPredicateTargetWithoutCrashing() {
+        XCTAssertThrowsError(try HeistStep(command: "activate", target: .predicate(ElementPredicate()))) { error in
+            XCTAssertEqual(error as? HeistStepError, .emptyPredicateTarget)
         }
     }
 
@@ -257,12 +257,12 @@ final class HeistPlaybackTests: XCTestCase {
         label: String? = nil,
         identifier: String? = nil,
         value: String? = nil,
-        traits: [HeistTrait]? = nil,
-        excludeTraits: [HeistTrait]? = nil,
+        traits: [HeistTrait] = [],
+        excludeTraits: [HeistTrait] = [],
         ordinal: Int? = nil
     ) -> ElementTarget {
-        .matcher(
-            ElementMatcher(
+        .predicate(
+            ElementPredicate(
                 label: label,
                 identifier: identifier,
                 value: value,

@@ -8,7 +8,7 @@ import XCTest
 ///
 /// The client side (`HeistElement.matches`) is exhaustively tested in
 /// `TheScoreTests/ElementMatcherTests.swift`. Both sides share
-/// `ElementMatcher.stringEquals`, so the cases below stay representative
+/// `ElementPredicate.stringEquals`, so the cases below stay representative
 /// (one per match dimension) and reverify the server-side call site
 /// plumbs through to the same helper.
 ///
@@ -33,9 +33,9 @@ final class ElementMatcherTests: XCTestCase {
 
     func testLabelExactMatch() {
         let element = element(label: "Save")
-        XCTAssertTrue(element.matches(ElementMatcher(label: "Save"), mode: .exact))
-        XCTAssertFalse(element.matches(ElementMatcher(label: "Sav"), mode: .exact))
-        XCTAssertFalse(element.matches(ElementMatcher(label: "Save Draft"), mode: .exact))
+        XCTAssertTrue(ElementPredicate(label: "Save").matches(element, mode: .exact))
+        XCTAssertFalse(ElementPredicate(label: "Sav").matches(element, mode: .exact))
+        XCTAssertFalse(ElementPredicate(label: "Save Draft").matches(element, mode: .exact))
     }
 
     func testLabelTypographyFolding() {
@@ -43,34 +43,34 @@ final class ElementMatcherTests: XCTestCase {
         // Shared helper coverage lives in TheScoreTests; this asserts the
         // server-side AccessibilityElement.matches plumbs through correctly.
         let element = element(label: "Don\u{2019}t skip")
-        XCTAssertTrue(element.matches(ElementMatcher(label: "Don't skip"), mode: .exact))
+        XCTAssertTrue(ElementPredicate(label: "Don't skip").matches(element, mode: .exact))
     }
 
     func testIdentifierExactMatch() {
         let element = element(identifier: "saveBtn")
-        XCTAssertTrue(element.matches(ElementMatcher(identifier: "saveBtn"), mode: .exact))
-        XCTAssertFalse(element.matches(ElementMatcher(identifier: "save"), mode: .exact))
+        XCTAssertTrue(ElementPredicate(identifier: "saveBtn").matches(element, mode: .exact))
+        XCTAssertFalse(ElementPredicate(identifier: "save").matches(element, mode: .exact))
     }
 
     func testValueExactMatch() {
         let element = element(value: "50%")
-        XCTAssertTrue(element.matches(ElementMatcher(value: "50%"), mode: .exact))
-        XCTAssertFalse(element.matches(ElementMatcher(value: "75%"), mode: .exact))
+        XCTAssertTrue(ElementPredicate(value: "50%").matches(element, mode: .exact))
+        XCTAssertFalse(ElementPredicate(value: "75%").matches(element, mode: .exact))
     }
 
     func testTraitsIncludeExactBitmask() {
         let element = element(traits: [.button, .selected])
-        XCTAssertTrue(element.matches(ElementMatcher(traits: [.button]), mode: .exact))
-        XCTAssertTrue(element.matches(ElementMatcher(traits: [.button, .selected]), mode: .exact))
-        XCTAssertFalse(element.matches(ElementMatcher(traits: [.button, .header]), mode: .exact))
+        XCTAssertTrue(ElementPredicate(traits: [.button]).matches(element, mode: .exact))
+        XCTAssertTrue(ElementPredicate(traits: [.button, .selected]).matches(element, mode: .exact))
+        XCTAssertFalse(ElementPredicate(traits: [.button, .header]).matches(element, mode: .exact))
     }
 
     func testTraitsExclude() {
         let enabled = element(label: "Submit", traits: .button)
         let disabled = element(label: "Submit", traits: [.button, .notEnabled])
-        let matcher = ElementMatcher(label: "Submit", excludeTraits: [.notEnabled])
-        XCTAssertTrue(enabled.matches(matcher, mode: .exact))
-        XCTAssertFalse(disabled.matches(matcher, mode: .exact))
+        let matcher = ElementPredicate(label: "Submit", excludeTraits: [.notEnabled])
+        XCTAssertTrue(matcher.matches(enabled, mode: .exact))
+        XCTAssertFalse(matcher.matches(disabled, mode: .exact))
     }
 
     func testCompoundAllFieldsMustMatch() {
@@ -78,22 +78,22 @@ final class ElementMatcherTests: XCTestCase {
             label: "Dark Mode", value: "ON",
             identifier: "darkModeToggle", traits: [.button, .selected]
         )
-        let matcher = ElementMatcher(
+        let matcher = ElementPredicate(
             label: "Dark Mode", identifier: "darkModeToggle",
             value: "ON", traits: [.button, .selected]
         )
-        XCTAssertTrue(element.matches(matcher, mode: .exact))
+        XCTAssertTrue(matcher.matches(element, mode: .exact))
         // Wrong value — must miss
-        let wrongValue = ElementMatcher(
+        let wrongValue = ElementPredicate(
             label: "Dark Mode", identifier: "darkModeToggle",
             value: "OFF", traits: [.button, .selected]
         )
-        XCTAssertFalse(element.matches(wrongValue, mode: .exact))
+        XCTAssertFalse(wrongValue.matches(element, mode: .exact))
     }
 
     func testEmptyMatcherMatchesNothing() {
-        XCTAssertFalse(element(label: "Save", traits: .button).matches(ElementMatcher(), mode: .exact))
-        XCTAssertFalse(element().matches(ElementMatcher(), mode: .exact))
+        XCTAssertFalse(ElementPredicate().matches(element(label: "Save", traits: .button), mode: .exact))
+        XCTAssertFalse(ElementPredicate().matches(element(), mode: .exact))
     }
 
     // MARK: - Substring-Mode Sanity
@@ -102,9 +102,9 @@ final class ElementMatcherTests: XCTestCase {
         // Production resolution uses `.exact`; substring matching is only
         // for explicit diagnostic search surfaces.
         let element = element(label: "Save Changes")
-        XCTAssertTrue(element.matches(ElementMatcher(label: "Save"), mode: .substring))
-        XCTAssertTrue(element.matches(ElementMatcher(label: "Changes"), mode: .substring))
-        XCTAssertFalse(element.matches(ElementMatcher(label: "Delete"), mode: .substring))
+        XCTAssertTrue(ElementPredicate(label: "Save").matches(element, mode: .substring))
+        XCTAssertTrue(ElementPredicate(label: "Changes").matches(element, mode: .substring))
+        XCTAssertFalse(ElementPredicate(label: "Delete").matches(element, mode: .substring))
     }
 
     // MARK: - Hierarchy Matching
@@ -135,7 +135,7 @@ final class ElementMatcherTests: XCTestCase {
                 .element(element(label: "Target", traits: .button), traversalIndex: 0)
             ])
         ]
-        let result = try XCTUnwrap(tree.firstMatch(ElementMatcher(label: "Target"), mode: .exact))
+        let result = try XCTUnwrap(tree.firstMatch(ElementPredicate(label: "Target"), mode: .exact))
         XCTAssertEqual(result.label, "Target")
     }
 
@@ -147,7 +147,7 @@ final class ElementMatcherTests: XCTestCase {
                 .element(element(label: "Volume"), traversalIndex: 0)
             ])
         ]
-        XCTAssertNil(tree.firstMatch(ElementMatcher(label: "Settings"), mode: .exact))
+        XCTAssertNil(tree.firstMatch(ElementPredicate(label: "Settings"), mode: .exact))
     }
 
     func testHierarchyMatchesReturnsMultipleHits() {
@@ -156,7 +156,7 @@ final class ElementMatcherTests: XCTestCase {
             .element(element(label: "B", traits: .header), traversalIndex: 1),
             .element(element(label: "C", traits: .button), traversalIndex: 2),
         ]
-        let results = tree.matches(ElementMatcher(traits: [.button]), mode: .exact, limit: 100)
+        let results = tree.matches(ElementPredicate(traits: [.button]), mode: .exact, limit: 100)
         XCTAssertEqual(results.map(\.label), ["A", "C"])
     }
 

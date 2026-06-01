@@ -46,9 +46,7 @@ extension TheFence {
             return Timeouts.healthSeconds
         case .elementSearch, .typeText:
             return Timeouts.longActionSeconds
-        case .waitFor(let target):
-            return target.resolvedTimeout + 5
-        case .waitForChange(let target):
+        case .wait(let target):
             return target.resolvedTimeout + 5
         default:
             return Timeouts.actionSeconds
@@ -56,9 +54,9 @@ extension TheFence {
     }
 
     func missingElementTargetResponse(command: String) -> FenceResponse {
-        let contract = "requires target object with heistId or matcher fields"
+        let contract = "requires target object with heistId or predicate fields"
         let next = "get_interface()"
-        let matcherFields = ElementTarget.matcherFieldNames.map { "target.\($0)" }
+        let matcherFields = ElementTarget.predicateFieldNames.map { "target.\($0)" }
         let matcherHint: String
         if let last = matcherFields.last {
             matcherHint = matcherFields.dropLast().joined(separator: ", ") + ", or \(last)"

@@ -91,12 +91,12 @@ final class ClientMessageTests: XCTestCase {
             .clientHello,
             .requestInterface(InterfaceQuery()),
             .performCustomAction(CustomActionTarget(
-                elementTarget: .matcher(ElementMatcher(identifier: "menu")),
+                elementTarget: .predicate(ElementPredicate(identifier: "menu")),
                 actionName: "Open"
             )),
             .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))),
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: .heistId("button_save"))),
-            .waitForChange(WaitForChangeTarget(timeout: 1.0)),
+            .wait(WaitTarget(predicate: .changed(.elements), timeout: 1.0)),
         ]
 
         for message in messages {
@@ -132,25 +132,25 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - Batch Execution Plan Tests
 
     func testBatchPlanClientMessageRoundTrip() throws {
-        let saveTarget = ElementTarget.matcher(ElementMatcher(label: "Save", traits: [.button]))
+        let saveTarget = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]))
         let plan = BatchPlan(
             steps: [
                 BatchStep(
                     command: .activate(saveTarget),
-                    expectation: .screenChanged,
+                    predicate: .changed(.screen()),
                     deadline: Deadline()
                 ),
                 BatchStep(
-                    command: .waitFor(WaitForTarget(elementTarget: saveTarget, absent: false, timeout: 2.5)),
-                    expectation: .elementAppeared(ElementMatcher(label: "Save", traits: [.button])),
+                    command: .wait(WaitTarget(predicate: .state(.present(ElementPredicate(label: "Save", traits: [.button]))), timeout: 2.5)),
+                    predicate: .changed(.appeared(ElementPredicate(label: "Save", traits: [.button]))),
                     deadline: Deadline(timeout: 2.5)
                 ),
                 BatchStep(
-                    command: .waitForChange(WaitForChangeTarget(
-                        expect: .elementAppeared(ElementMatcher(label: "Done")),
+                    command: .wait(WaitTarget(
+                        predicate: .changed(.appeared(ElementPredicate(label: "Done"))),
                         timeout: 1.0
                     )),
-                    expectation: .elementAppeared(ElementMatcher(label: "Done")),
+                    predicate: .changed(.appeared(ElementPredicate(label: "Done"))),
                     deadline: Deadline(timeout: 1.0)
                 ),
             ],
@@ -167,8 +167,8 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedPlan.policy, .continueOnError)
         XCTAssertEqual(decodedPlan.steps.count, 3)
         guard case .activate(let decodedTarget) = decodedPlan.steps[0].command,
-              decodedPlan.steps[0].expectation == .screenChanged else {
-            return XCTFail("Expected activate command with screenChanged expectation")
+              decodedPlan.steps[0].predicate == .changed(.screen()) else {
+            return XCTFail("Expected activate command with screen change predicate")
         }
         XCTAssertEqual(decodedTarget, saveTarget)
     }
@@ -178,9 +178,9 @@ final class ClientMessageTests: XCTestCase {
             BatchStep(
                 command: .typeText(TypeTextTarget(
                     text: "hello",
-                    elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
+                    elementTarget: .predicate(ElementPredicate(identifier: "nameField"))
                 )),
-                expectation: nil,
+                predicate: nil,
                 deadline: Deadline()
             ),
         ])
@@ -196,23 +196,23 @@ final class ClientMessageTests: XCTestCase {
         guard case .batchExecutionPlan(let decodedPlan) = decoded.message,
               let step = decodedPlan.steps.first,
               case .typeText(let target) = step.command,
-              step.expectation == nil else {
+              step.predicate == nil else {
             return XCTFail("Expected batchExecutionPlan envelope, got \(decoded.message)")
         }
         XCTAssertEqual(target.text, "hello")
-        XCTAssertEqual(target.elementTarget, .matcher(ElementMatcher(identifier: "nameField")))
+        XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "nameField")))
     }
 
     func testBatchExecutionDescriptionsUseNormalCommandIdentity() {
         let step = BatchStep(
             command: .activate(.heistId("button_save")),
-            expectation: .screenChanged,
+            predicate: .changed(.screen()),
             deadline: Deadline()
         )
 
         XCTAssertEqual(
             step.description,
-            #"step(command=activate expect=screen_changed deadline=deadline(*))"#
+            #"step(command=activate expect=changed(screen_changed) deadline=deadline(*))"#
         )
     }
 
@@ -261,7 +261,7 @@ final class ClientMessageTests: XCTestCase {
     func testTypeTextWithElementTarget() throws {
         let target = TypeTextTarget(
             text: "Hello",
-            elementTarget: .matcher(ElementMatcher(identifier: "nameField"))
+            elementTarget: .predicate(ElementPredicate(identifier: "nameField"))
         )
         let message = ClientMessage.typeText(target)
         let data = try JSONEncoder().encode(message)
@@ -271,7 +271,7 @@ final class ClientMessageTests: XCTestCase {
             return XCTFail("Expected typeText, got \(decoded)")
         }
         XCTAssertEqual(decodedTarget.text, "Hello")
-        if case .matcher(let matcher, _) = decodedTarget.elementTarget {
+        if case .predicate(let matcher, _) = decodedTarget.elementTarget {
             XCTAssertEqual(matcher.identifier, "nameField")
         } else {
             XCTFail("Expected .matcher elementTarget")
@@ -338,139 +338,81 @@ final class ClientMessageTests: XCTestCase {
         }
     }
 
-    // MARK: - WaitFor Tests
+    // MARK: - Wait Tests
 
-    func testWaitForMatcherRoundTrip() throws {
-        let target = ElementTarget.matcher(ElementMatcher(label: "Loading", traits: [.staticText]))
-        let message = ClientMessage.waitFor(WaitForTarget(elementTarget: target, absent: true, timeout: 5.0))
+    func testWaitAbsentRoundTrip() throws {
+        let target = WaitTarget(predicate: .state(.absent(ElementPredicate(label: "Loading", traits: [.staticText]))), timeout: 5.0)
+        let message = ClientMessage.wait(target)
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .waitFor(let wf) = decoded, case .matcher(let m, _) = wf.elementTarget {
-            XCTAssertEqual(m.label, "Loading")
-            XCTAssertEqual(m.traits, [.staticText])
-            XCTAssertEqual(wf.absent, true)
-            XCTAssertEqual(wf.timeout, 5.0)
+        if case .wait(let wait) = decoded, case .state(.absent(let predicate)) = wait.predicate {
+            XCTAssertEqual(predicate.label, "Loading")
+            XCTAssertEqual(predicate.traits, [.staticText])
+            XCTAssertEqual(wait.timeout, 5.0)
         } else {
-            XCTFail("Expected waitFor with matcher, got \(decoded)")
+            XCTFail("Expected wait(.absent), got \(decoded)")
         }
     }
 
-    func testWaitForHeistIdRoundTrip() throws {
-        let message = ClientMessage.waitFor(WaitForTarget(elementTarget: .heistId("button_login"), timeout: 3.0))
+    func testWaitPresentRoundTrip() throws {
+        let message = ClientMessage.wait(WaitTarget(predicate: .state(.present(ElementPredicate(identifier: "spinner")))))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        if case .waitFor(let wf) = decoded, case .heistId(let id) = wf.elementTarget {
-            XCTAssertEqual(id, "button_login")
-            XCTAssertEqual(wf.timeout, 3.0)
+        if case .wait(let wait) = decoded, case .state(.present(let predicate)) = wait.predicate {
+            XCTAssertEqual(predicate.identifier, "spinner")
+            XCTAssertNil(wait.timeout)
+            XCTAssertEqual(wait.resolvedTimeout, 10.0)
         } else {
-            XCTFail("Expected waitFor with heistId, got \(decoded)")
+            XCTFail("Expected wait(.present), got \(decoded)")
         }
     }
 
-    func testWaitForDefaultsRoundTrip() throws {
-        let message = ClientMessage.waitFor(WaitForTarget(elementTarget: .matcher(ElementMatcher(identifier: "spinner"))))
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        if case .waitFor(let wf) = decoded {
-            XCTAssertNil(wf.absent)
-            XCTAssertNil(wf.timeout)
-            XCTAssertEqual(wf.resolvedAbsent, false)
-            XCTAssertEqual(wf.resolvedTimeout, 10.0)
-        } else {
-            XCTFail("Expected waitFor, got \(decoded)")
-        }
-    }
-
-    func testWaitForTimeoutClamping() {
-        let target = WaitForTarget(elementTarget: .matcher(ElementMatcher(label: "x")), timeout: 999)
+    func testWaitTimeoutClamping() {
+        let target = WaitTarget(predicate: .state(.present(ElementPredicate(label: "x"))), timeout: 999)
         XCTAssertEqual(target.resolvedTimeout, 30.0)
     }
 
-    func testWaitForEnvelopeRoundTrip() throws {
-        let envelope = RequestEnvelope(
-            requestId: "wf-1",
-            message: .waitFor(WaitForTarget(elementTarget: .matcher(ElementMatcher(label: "Done")), absent: false, timeout: 15.0))
-        )
-        let data = try JSONEncoder().encode(envelope)
-        let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
-
-        XCTAssertEqual(decoded.requestId, "wf-1")
-        if case .waitFor(let wf) = decoded.message, case .matcher(let m, _) = wf.elementTarget {
-            XCTAssertEqual(m.label, "Done")
-            XCTAssertEqual(wf.absent, false)
-            XCTAssertEqual(wf.timeout, 15.0)
-        } else {
-            XCTFail("Expected waitFor, got \(decoded.message)")
-        }
-    }
-
-    // MARK: - WaitForChange Tests
-
-    func testWaitForChangeNoExpectationRoundTrip() throws {
-        let message = ClientMessage.waitForChange(WaitForChangeTarget())
+    func testWaitChangedScreenRoundTrip() throws {
+        let message = ClientMessage.wait(WaitTarget(predicate: .changed(.screen()), timeout: 15.0))
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        guard case .waitForChange(let target) = decoded else {
-            return XCTFail("Expected waitForChange, got \(decoded)")
+        guard case .wait(let target) = decoded else {
+            return XCTFail("Expected wait, got \(decoded)")
         }
-        XCTAssertNil(target.expect)
-        XCTAssertNil(target.timeout)
-        XCTAssertEqual(target.resolvedTimeout, 30.0)
-    }
-
-    func testWaitForChangeWithExpectationRoundTrip() throws {
-        let message = ClientMessage.waitForChange(
-            WaitForChangeTarget(expect: .screenChanged, timeout: 15.0)
-        )
-        let data = try JSONEncoder().encode(message)
-        let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
-
-        guard case .waitForChange(let target) = decoded else {
-            return XCTFail("Expected waitForChange, got \(decoded)")
-        }
-        XCTAssertEqual(target.expect, .screenChanged)
+        XCTAssertEqual(target.predicate, .changed(.screen()))
         XCTAssertEqual(target.timeout, 15.0)
     }
 
-    func testWaitForChangeElementExpectationRoundTrip() throws {
-        let message = ClientMessage.waitForChange(
-            WaitForChangeTarget(
-                expect: .elementDisappeared(ElementMatcher(label: "Loading")),
-                timeout: 5.0
-            )
+    func testWaitChangedDisappearedRoundTrip() throws {
+        let message = ClientMessage.wait(
+            WaitTarget(predicate: .changed(.disappeared(ElementPredicate(label: "Loading"))), timeout: 5.0)
         )
         let data = try JSONEncoder().encode(message)
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
-        guard case .waitForChange(let target) = decoded else {
-            return XCTFail("Expected waitForChange, got \(decoded)")
+        guard case .wait(let target) = decoded else {
+            return XCTFail("Expected wait, got \(decoded)")
         }
-        XCTAssertEqual(target.expect, .elementDisappeared(ElementMatcher(label: "Loading")))
+        XCTAssertEqual(target.predicate, .changed(.disappeared(ElementPredicate(label: "Loading"))))
         XCTAssertEqual(target.timeout, 5.0)
     }
 
-    func testWaitForChangeTimeoutClamping() {
-        let target = WaitForChangeTarget(timeout: 999)
-        XCTAssertEqual(target.resolvedTimeout, 30.0)
-    }
-
-    func testWaitForChangeEnvelopeRoundTrip() throws {
+    func testWaitEnvelopeRoundTrip() throws {
         let envelope = RequestEnvelope(
-            requestId: "wfc-1",
-            message: .waitForChange(WaitForChangeTarget(expect: .elementsChanged, timeout: 8.0))
+            requestId: "wait-1",
+            message: .wait(WaitTarget(predicate: .changed(.elements), timeout: 8.0))
         )
         let data = try JSONEncoder().encode(envelope)
         let decoded = try JSONDecoder().decode(RequestEnvelope.self, from: data)
 
-        XCTAssertEqual(decoded.requestId, "wfc-1")
-        guard case .waitForChange(let target) = decoded.message else {
-            return XCTFail("Expected waitForChange, got \(decoded.message)")
+        XCTAssertEqual(decoded.requestId, "wait-1")
+        guard case .wait(let target) = decoded.message else {
+            return XCTFail("Expected wait, got \(decoded.message)")
         }
-        XCTAssertEqual(target.expect, .elementsChanged)
+        XCTAssertEqual(target.predicate, .changed(.elements))
         XCTAssertEqual(target.timeout, 8.0)
     }
 
@@ -484,11 +426,11 @@ final class ClientMessageTests: XCTestCase {
     // MARK: - ElementTarget Ordinal Tests
 
     func testElementTargetMatcherWithoutOrdinalRoundTrip() throws {
-        let target = ElementTarget.matcher(ElementMatcher(label: "Save"))
+        let target = ElementTarget.predicate(ElementPredicate(label: "Save"))
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
 
-        guard case .matcher(let matcher, let ordinal) = decoded else {
+        guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
         }
         XCTAssertEqual(matcher.label, "Save")
@@ -496,11 +438,11 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testElementTargetMatcherWithOrdinalRoundTrip() throws {
-        let target = ElementTarget.matcher(ElementMatcher(label: "Save", traits: [.button]), ordinal: 2)
+        let target = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]), ordinal: 2)
         let data = try JSONEncoder().encode(target)
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: data)
 
-        guard case .matcher(let matcher, let ordinal) = decoded else {
+        guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
         }
         XCTAssertEqual(matcher.label, "Save")
@@ -512,7 +454,7 @@ final class ClientMessageTests: XCTestCase {
         let json = #"{"label":"Save","ordinal":2}"#
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
 
-        guard case .matcher(let matcher, let ordinal) = decoded else {
+        guard case .predicate(let matcher, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
         }
         XCTAssertEqual(matcher.label, "Save")
@@ -523,7 +465,7 @@ final class ClientMessageTests: XCTestCase {
         let json = #"{"label":"Save"}"#
         let decoded = try JSONDecoder().decode(ElementTarget.self, from: Data(json.utf8))
 
-        guard case .matcher(_, let ordinal) = decoded else {
+        guard case .predicate(_, let ordinal) = decoded else {
             return XCTFail("Expected .matcher, got \(decoded)")
         }
         XCTAssertNil(ordinal)
@@ -570,13 +512,13 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testElementTargetOrdinalEquality() {
-        let withOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 1)
-        let withoutOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"))
-        let differentOrdinal = ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 2)
+        let withOrdinal = ElementTarget.predicate(ElementPredicate(label: "Save"), ordinal: 1)
+        let withoutOrdinal = ElementTarget.predicate(ElementPredicate(label: "Save"))
+        let differentOrdinal = ElementTarget.predicate(ElementPredicate(label: "Save"), ordinal: 2)
 
         XCTAssertNotEqual(withOrdinal, withoutOrdinal)
         XCTAssertNotEqual(withOrdinal, differentOrdinal)
-        XCTAssertEqual(withOrdinal, ElementTarget.matcher(ElementMatcher(label: "Save"), ordinal: 1))
+        XCTAssertEqual(withOrdinal, ElementTarget.predicate(ElementPredicate(label: "Save"), ordinal: 1))
     }
 
     // MARK: - UnitPoint Tests

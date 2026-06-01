@@ -12,12 +12,12 @@ import AccessibilitySnapshotParser
 // similar heistId hints, and compact element summaries for total misses.
 // All methods take the data they need as parameters — no mutable state.
 
-/// One relaxation candidate: the field that was dropped, the relaxed matcher,
+/// One relaxation candidate: the field that was dropped, the relaxed predicate,
 /// and a closure that reads the actual value from a matched element so the
 /// diagnostic can show what the original predicate diverged from.
 private struct Relaxation {
     let field: String
-    let relaxed: ElementMatcher
+    let relaxed: ElementPredicate
     let actual: (AccessibilityElement) -> HeistId
 }
 
@@ -52,16 +52,16 @@ extension TheStash {
     }
 
     static func matcherNotFound(
-        _ matcher: ElementMatcher,
+        _ predicate: ElementPredicate,
         screenElements: [Screen.ScreenElement],
         visibleHeistIds: Set<HeistId>,
         resolutionScope: ResolutionScope
     ) -> String {
-        let query = formatMatcher(matcher)
-        let formattedQuery = query.isEmpty ? "<empty matcher>" : query
+        let query = formatMatcher(predicate)
+        let formattedQuery = query.isEmpty ? "<empty predicate>" : query
 
         // Tier 1: Near-miss — relax one predicate at a time to find what diverged.
-        if let nearMiss = findNearMiss(for: matcher, in: screenElements, visibleHeistIds: visibleHeistIds) {
+        if let nearMiss = findNearMiss(for: predicate, in: screenElements, visibleHeistIds: visibleHeistIds) {
             return "No match for: \(formattedQuery) (scope: \(resolutionScope.rawValue))\n\(nearMiss)"
         }
 
@@ -74,14 +74,16 @@ extension TheStash {
         return "No match for: \(formattedQuery) (scope: \(resolutionScope.rawValue))\n\(summary)"
     }
 
-    /// Format a matcher's predicates as a human-readable query string.
-    static func formatMatcher(_ matcher: ElementMatcher) -> String {
+    /// Format a predicate's fields as a human-readable query string.
+    static func formatMatcher(_ predicate: ElementPredicate) -> String {
         var fields: [String] = []
-        if let label = matcher.label { fields.append("label=\"\(label)\"") }
-        if let identifier = matcher.identifier { fields.append("identifier=\"\(identifier)\"") }
-        if let value = matcher.value { fields.append("value=\"\(value)\"") }
-        if let traits = matcher.traits { fields.append("traits=[\(traits.map(\.rawValue).joined(separator: ","))]") }
-        if let excludeTraits = matcher.excludeTraits { fields.append("excludeTraits=[\(excludeTraits.map(\.rawValue).joined(separator: ","))]") }
+        if let label = predicate.label { fields.append("label=\"\(label)\"") }
+        if let identifier = predicate.identifier { fields.append("identifier=\"\(identifier)\"") }
+        if let value = predicate.value { fields.append("value=\"\(value)\"") }
+        if !predicate.traits.isEmpty { fields.append("traits=[\(predicate.traits.map(\.rawValue).joined(separator: ","))]") }
+        if !predicate.excludeTraits.isEmpty {
+            fields.append("excludeTraits=[\(predicate.excludeTraits.map(\.rawValue).joined(separator: ","))]")
+        }
         return fields.joined(separator: " ")
     }
 
@@ -97,56 +99,55 @@ extension TheStash {
     /// the suggestion path is the only place where substring matching is allowed.
     /// Resolution itself is exact-or-miss.
     static func findNearMiss(
-        for matcher: ElementMatcher,
+        for predicate: ElementPredicate,
         in screenElements: [Screen.ScreenElement],
         visibleHeistIds: Set<HeistId>
     ) -> String? {
-        let relaxations: [Relaxation] = [
-            matcher.value.map { _ in
-                Relaxation(
-                    field: "value",
-                    relaxed: ElementMatcher(
-                        label: matcher.label, identifier: matcher.identifier,
-                        traits: matcher.traits, excludeTraits: matcher.excludeTraits
-                    ),
-                    actual: { $0.value ?? "(nil)" }
-                )
-            },
-            matcher.traits.map { _ in
-                Relaxation(
-                    field: "traits",
-                    relaxed: ElementMatcher(
-                        label: matcher.label, identifier: matcher.identifier,
-                        value: matcher.value, excludeTraits: matcher.excludeTraits
-                    ),
-                    actual: { element in
-                        AccessibilityTraits.knownTraits
-                            .filter { element.traits.contains($0.trait) }
-                            .map { $0.name }.joined(separator: ", ")
-                    }
-                )
-            },
-            matcher.label.map { _ in
-                Relaxation(
-                    field: "label",
-                    relaxed: ElementMatcher(
-                        identifier: matcher.identifier, value: matcher.value,
-                        traits: matcher.traits, excludeTraits: matcher.excludeTraits
-                    ),
-                    actual: { $0.label ?? "(nil)" }
-                )
-            },
-            matcher.identifier.map { _ in
-                Relaxation(
-                    field: "identifier",
-                    relaxed: ElementMatcher(
-                        label: matcher.label, value: matcher.value,
-                        traits: matcher.traits, excludeTraits: matcher.excludeTraits
-                    ),
-                    actual: { $0.identifier ?? "(nil)" }
-                )
-            },
-        ].compactMap { $0 }
+        var relaxations: [Relaxation] = []
+        if predicate.value != nil {
+            relaxations.append(Relaxation(
+                field: "value",
+                relaxed: ElementPredicate(
+                    label: predicate.label, identifier: predicate.identifier,
+                    traits: predicate.traits, excludeTraits: predicate.excludeTraits
+                ),
+                actual: { $0.value ?? "(nil)" }
+            ))
+        }
+        if !predicate.traits.isEmpty {
+            relaxations.append(Relaxation(
+                field: "traits",
+                relaxed: ElementPredicate(
+                    label: predicate.label, identifier: predicate.identifier,
+                    value: predicate.value, excludeTraits: predicate.excludeTraits
+                ),
+                actual: { element in
+                    AccessibilityTraits.knownTraits
+                        .filter { element.traits.contains($0.trait) }
+                        .map { $0.name }.joined(separator: ", ")
+                }
+            ))
+        }
+        if predicate.label != nil {
+            relaxations.append(Relaxation(
+                field: "label",
+                relaxed: ElementPredicate(
+                    identifier: predicate.identifier, value: predicate.value,
+                    traits: predicate.traits, excludeTraits: predicate.excludeTraits
+                ),
+                actual: { $0.label ?? "(nil)" }
+            ))
+        }
+        if predicate.identifier != nil {
+            relaxations.append(Relaxation(
+                field: "identifier",
+                relaxed: ElementPredicate(
+                    label: predicate.label, value: predicate.value,
+                    traits: predicate.traits, excludeTraits: predicate.excludeTraits
+                ),
+                actual: { $0.identifier ?? "(nil)" }
+            ))
+        }
 
         let suggestionCap = 3
         for relaxation in relaxations {
@@ -173,7 +174,7 @@ extension TheStash {
         // the only place where substring search reaches user-visible output;
         // resolution itself remains strictly exact-or-miss.
         for relaxation in relaxations where !relaxation.relaxed.hasPredicates {
-            let substringHits = matchCandidates(matcher, in: screenElements, mode: .substring, limit: suggestionCap + 1)
+            let substringHits = matchCandidates(predicate, in: screenElements, mode: .substring, limit: suggestionCap + 1)
             guard !substringHits.isEmpty else { continue }
             let deduped = dedupedPreservingOrder(substringHits.map {
                 suggestionValue(
@@ -231,15 +232,15 @@ extension TheStash {
     }
 
     private static func matchCandidates(
-        _ matcher: ElementMatcher,
+        _ predicate: ElementPredicate,
         in screenElements: [Screen.ScreenElement],
-        mode: MatchMode,
+        mode: ElementPredicate.StringMatchMode,
         limit: Int
     ) -> [Screen.ScreenElement] {
         guard limit > 0 else { return [] }
         var hits: [Screen.ScreenElement] = []
         hits.reserveCapacity(limit)
-        for entry in screenElements where entry.element.matches(matcher, mode: mode) {
+        for entry in screenElements where predicate.matches(entry.element, mode: mode) {
             hits.append(entry)
             if hits.count == limit { break }
         }

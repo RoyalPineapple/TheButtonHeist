@@ -80,8 +80,7 @@ extension ClientMessage {
         case .scrollToVisible(let payload): return (.scrollToVisible, payload)
         case .elementSearch(let payload): return (.elementSearch, payload)
         case .scrollToEdge(let payload): return (.scrollToEdge, payload)
-        case .waitFor(let payload): return (.waitFor, payload)
-        case .waitForChange(let payload): return (.waitForChange, payload)
+        case .wait(let payload): return (.wait, payload)
         case .batchExecutionPlan(let payload): return (.batchExecutionPlan, payload)
         }
     }
@@ -135,8 +134,7 @@ extension ClientMessage {
         case .scrollToVisible: return .scrollToVisible(try ScrollToVisibleTarget(from: try payload()))
         case .elementSearch: return .elementSearch(try ElementSearchTarget(from: try payload()))
         case .scrollToEdge: return .scrollToEdge(try ScrollToEdgeTarget(from: try payload()))
-        case .waitFor: return .waitFor(try WaitForTarget(from: try payload()))
-        case .waitForChange: return .waitForChange(try WaitForChangeTarget(from: try payload()))
+        case .wait: return .wait(try WaitTarget(from: try payload()))
         case .batchExecutionPlan: return .batchExecutionPlan(try TheScore.BatchPlan(from: try payload()))
         }
     }

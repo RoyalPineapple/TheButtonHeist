@@ -53,19 +53,19 @@ public extension FenceParameterKey {
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
     static let endOffset = Self("endOffset"), endX = Self("endX"), endY = Self("endY"), excludeTraits = Self("excludeTraits")
-    static let expect = Self("expect"), heistId = Self("heistId")
+    static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
     static let identifier = Self("identifier"), includeInterface = Self("includeInterface")
     static let inlineData = Self("inlineData"), input = Self("input"), isModalBoundary = Self("isModalBoundary")
     static let label = Self("label"), matcher = Self("matcher"), mode = Self("mode")
     static let newValue = Self("newValue"), oldValue = Self("oldValue"), ordinal = Self("ordinal"), output = Self("output")
-    static let policy = Self("policy"), property = Self("property"), radius = Self("radius")
+    static let policy = Self("policy"), predicate = Self("predicate"), property = Self("property"), radius = Self("radius")
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex")
     static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")
     static let startX = Self("startX"), startY = Self("startY"), stableId = Self("stableId"), steps = Self("steps")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
     static let timeout = Self("timeout")
-    static let token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")
+    static let to = Self("to"), token = Self("token"), traits = Self("traits"), type = Self("type"), value = Self("value")
     static let x = Self("x"), y = Self("y")
 }
 
@@ -205,7 +205,7 @@ public enum CLIExposure: Sendable, Equatable {
 }
 
 enum FenceParameterBlocks: Sendable {
-    private static let matcherFields = ElementTarget.matcherFieldNames.map(matcherFieldSpec)
+    private static let matcherFields = ElementTarget.predicateFieldNames.map(matcherFieldSpec)
 
     static let elementTarget: [FenceParameterSpec] = [
         param(.target, .object, objectProperties: [
@@ -243,25 +243,37 @@ enum FenceParameterBlocks: Sendable {
         ]
     )
 
-    private static let expectationType = param(
+    private static let predicateType = param(
         .type, .string, required: true,
-        enumValues: ActionExpectation.wireTypeValues
+        enumValues: AccessibilityPredicate.wireTypeValues
     )
+
+    /// Object properties for an `AccessibilityPredicate` (the `expect` slot and
+    /// the `wait` `predicate` field). Element fields nest under `element`;
+    /// `property`/`from`/`to` filter `element_updated`.
+    private static let accessibilityPredicateProperties: [FenceParameterSpec] = [
+        predicateType,
+        param(.element, .object, objectProperties: matcherFields),
+        param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
+        param(.from, .string),
+        param(.to, .string),
+    ]
 
     static let expect: FenceParameterSpec = param(
         .expect, .object,
-        objectProperties: [
-            expectationType,
-            param(.heistId, .string),
-            param(.property, .string, enumValues: fenceEnumValues(ElementProperty.self)),
-            param(.oldValue, .string),
-            param(.newValue, .string),
-            param(.matcher, .object, objectProperties: matcherFields),
-        ]
+        objectProperties: accessibilityPredicateProperties
+    )
+
+    static let predicate: FenceParameterSpec = param(
+        .predicate, .object, required: true,
+        objectProperties: accessibilityPredicateProperties
     )
 
     static let expectationTimeout = param(.timeout, .number, maximum: 30)
     static let expectation: [FenceParameterSpec] = [expect, expectationTimeout]
+
+    /// Parameters for the unified `wait` command: a predicate plus a timeout.
+    static let wait: [FenceParameterSpec] = [predicate, expectationTimeout]
 
     static let unitPoint: [FenceParameterSpec] = [
         param(.x, .number, required: true), param(.y, .number, required: true),

@@ -29,7 +29,7 @@ extension FenceResponse {
                 if expectation.met {
                     text += "  [expectation met]"
                 } else {
-                    let tier = expectation.expectation.map(String.init(describing:)) ?? "delivery"
+                    let tier = expectation.predicate.map(String.init(describing:)) ?? "delivery"
                     text += "  [expectation FAILED: expected \(tier), got \(expectation.actual ?? "nil")]"
                 }
             }

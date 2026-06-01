@@ -75,10 +75,10 @@ extension HeistPlaybackReport {
         /// Human-readable name for this step (used as testcase name in JUnit).
         public var displayName: String {
             var name = "[\(index)] \(command)"
-            if case .matcher(let matcher, _)? = target {
-                if let label = matcher.label {
+            if case .predicate(let predicate, _)? = target {
+                if let label = predicate.label {
                     name += " label=\"\(label)\""
-                } else if let identifier = matcher.identifier {
+                } else if let identifier = predicate.identifier {
                     name += " identifier=\"\(identifier)\""
                 }
             }
@@ -187,10 +187,10 @@ extension HeistPlaybackReport {
         body += "step: [\(failedStep.index)] \(failedStep.command)\n"
         if let target = failedStep.target {
             var parts: [String] = []
-            if case .matcher(let matcher, _) = target {
-                if let label = matcher.label { parts.append("label=\"\(label)\"") }
-                if let identifier = matcher.identifier { parts.append("identifier=\"\(identifier)\"") }
-                if let value = matcher.value { parts.append("value=\"\(value)\"") }
+            if case .predicate(let predicate, _) = target {
+                if let label = predicate.label { parts.append("label=\"\(label)\"") }
+                if let identifier = predicate.identifier { parts.append("identifier=\"\(identifier)\"") }
+                if let value = predicate.value { parts.append("value=\"\(value)\"") }
             }
             if !parts.isEmpty {
                 body += "target: \(parts.joined(separator: ", "))\n"

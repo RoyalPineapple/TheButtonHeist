@@ -65,7 +65,7 @@ extension HeistPlayback: CustomStringConvertible {
 // MARK: - Heist Step
 
 /// A single command in a heist playback. Contains the command name, durable
-/// matcher target, command-specific arguments, and optional semantic
+/// predicate target, command-specific arguments, and optional semantic
 /// expectation.
 ///
 /// Element identity lives under `target`; command arguments live under
@@ -78,20 +78,20 @@ public struct HeistStep: Codable, Sendable, Equatable {
     /// iOS + macOS.
     public let command: String
     /// Durable replay target — nil means the command doesn't target an element.
-    /// A persisted heist target must be a matcher; capture-local heistIds are
+    /// A persisted heist target must be a predicate; capture-local heistIds are
     /// resolved before the step is written.
     public let target: ElementTarget?
     /// Command-specific arguments (direction, text, duration, etc.).
     /// Excludes command name and element targeting fields.
     public let arguments: [String: HeistValue]
     /// Semantic outcome expected after the command executes.
-    public let expectation: ActionExpectation?
+    public let expectation: AccessibilityPredicate?
 
     public init(
         command: String,
         target: ElementTarget? = nil,
         arguments: [String: HeistValue] = [:],
-        expectation: ActionExpectation? = nil
+        expectation: AccessibilityPredicate? = nil
     ) throws {
         try Self.validateDurableTarget(target)
         self.command = command
@@ -112,7 +112,7 @@ public struct HeistStep: Codable, Sendable, Equatable {
         command = try container.decode(String.self, forKey: .command)
         target = try Self.decodeDurableTarget(from: container, forKey: .target)
         arguments = try container.decodeIfPresent([String: HeistValue].self, forKey: .arguments) ?? [:]
-        expectation = try container.decodeIfPresent(ActionExpectation.self, forKey: .expectation)
+        expectation = try container.decodeIfPresent(AccessibilityPredicate.self, forKey: .expectation)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -139,13 +139,13 @@ public struct HeistStep: Codable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
-                debugDescription: "HeistStep target requires matcher fields; heistId is a capture-local handle"
+                debugDescription: "HeistStep target requires predicate fields; heistId is a capture-local handle"
             )
-        } catch HeistStepError.emptyMatcherTarget {
+        } catch HeistStepError.emptyPredicateTarget {
             throw DecodingError.dataCorruptedError(
                 forKey: key,
                 in: container,
-                debugDescription: "HeistStep target requires at least one matcher field"
+                debugDescription: "HeistStep target requires at least one predicate field"
             )
         }
     }
@@ -154,10 +154,10 @@ public struct HeistStep: Codable, Sendable, Equatable {
         switch target {
         case nil:
             return
-        case .matcher(let matcher, _) where matcher.hasPredicates:
+        case .predicate(let predicate, _) where predicate.hasPredicates:
             return
-        case .matcher:
-            throw HeistStepError.emptyMatcherTarget
+        case .predicate:
+            throw HeistStepError.emptyPredicateTarget
         case .heistId:
             throw HeistStepError.captureHandleTarget
         }
@@ -166,17 +166,17 @@ public struct HeistStep: Codable, Sendable, Equatable {
     private func encodeDurableTarget(to container: inout KeyedEncodingContainer<CodingKeys>) throws {
         guard let target else { return }
         switch target {
-        case .matcher(let matcher, _) where matcher.hasPredicates:
+        case .predicate(let predicate, _) where predicate.hasPredicates:
             try container.encode(target, forKey: .target)
-        case .matcher:
+        case .predicate:
             throw EncodingError.invalidValue(target, .init(
                 codingPath: container.codingPath + [CodingKeys.target],
-                debugDescription: "HeistStep target requires at least one matcher field"
+                debugDescription: "HeistStep target requires at least one predicate field"
             ))
         case .heistId:
             throw EncodingError.invalidValue(target, .init(
                 codingPath: container.codingPath + [CodingKeys.target],
-                debugDescription: "HeistStep target requires matcher fields; heistId is a capture-local handle"
+                debugDescription: "HeistStep target requires predicate fields; heistId is a capture-local handle"
             ))
         }
     }
@@ -185,7 +185,7 @@ public struct HeistStep: Codable, Sendable, Equatable {
 
 public enum HeistStepError: Error, Sendable, Equatable {
     case captureHandleTarget
-    case emptyMatcherTarget
+    case emptyPredicateTarget
 }
 
 extension HeistStep: CustomStringConvertible {

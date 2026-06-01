@@ -5,7 +5,7 @@ import Foundation
 /// Selector for projecting an `Interface` to one matched node.
 ///
 /// `.element` searches leaf `HeistElement` nodes by current-capture handle or
-/// `ElementMatcher`. `.container` searches parser container nodes with
+/// `ElementPredicate`. `.container` searches parser container nodes with
 /// `ContainerMatcher`. `ordinal` is applied only after semantic narrowing.
 public enum SubtreeSelector: Codable, Sendable, Equatable {
     case element(ElementTarget)
@@ -55,12 +55,12 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
             switch target {
             case .heistId(let heistId):
                 try element.encode(heistId, forKey: .heistId)
-            case .matcher(let matcher, let ordinal):
-                try element.encodeIfPresent(matcher.label, forKey: .label)
-                try element.encodeIfPresent(matcher.identifier, forKey: .identifier)
-                try element.encodeIfPresent(matcher.value, forKey: .value)
-                try element.encodeIfPresent(matcher.traits, forKey: .traits)
-                try element.encodeIfPresent(matcher.excludeTraits, forKey: .excludeTraits)
+            case .predicate(let predicate, let ordinal):
+                try element.encodeIfPresent(predicate.label, forKey: .label)
+                try element.encodeIfPresent(predicate.identifier, forKey: .identifier)
+                try element.encodeIfPresent(predicate.value, forKey: .value)
+                if !predicate.traits.isEmpty { try element.encode(predicate.traits, forKey: .traits) }
+                if !predicate.excludeTraits.isEmpty { try element.encode(predicate.excludeTraits, forKey: .excludeTraits) }
                 try container.encodeIfPresent(ordinal, forKey: .ordinal)
             }
         case .container(let matcher, let ordinal):
@@ -71,7 +71,7 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
 
     public var ordinal: Int? {
         switch self {
-        case .element(.matcher(_, let ordinal)), .container(_, let ordinal):
+        case .element(.predicate(_, let ordinal)), .container(_, let ordinal):
             return ordinal
         case .element(.heistId):
             return nil
@@ -82,8 +82,8 @@ public enum SubtreeSelector: Codable, Sendable, Equatable {
         switch self {
         case .element(.heistId(let heistId)):
             return !heistId.isEmpty
-        case .element(.matcher(let matcher, _)):
-            return matcher.hasPredicates
+        case .element(.predicate(let predicate, _)):
+            return predicate.hasPredicates
         case .container(let matcher, _):
             return matcher.hasPredicates
         }
