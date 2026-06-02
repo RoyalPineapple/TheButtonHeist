@@ -299,6 +299,22 @@ final class TheStashResolutionTests: XCTestCase {
         }
     }
 
+    func testGeneratedConcreteTargetUsesMinimumPredicateSelector() throws {
+        let selected = element(label: "Mode", value: "A", traits: [.button, .selected])
+        let other = element(label: "Mode", value: "B", traits: [.button, .selected])
+        bagman.installScreenForTesting(Screen.makeForTests(elements: [
+            (selected, "mode_a"),
+            (other, "mode_b"),
+        ]))
+
+        let screenElement = try XCTUnwrap(bagman.knownElement(heistId: "mode_a"))
+
+        XCTAssertEqual(
+            bagman.minimumUniqueTarget(for: screenElement),
+            .predicate(ElementPredicate(label: "Mode", value: "A", traits: [.button]))
+        )
+    }
+
     // MARK: - Live Geometry Replay
 
     func testMatcherTargetAcquiresFreshLiveGeometry() throws {
@@ -332,16 +348,23 @@ final class TheStashResolutionTests: XCTestCase {
             objects: ["quantity_1": object]
         ))
 
-        let capture = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: TheStash.WireConversion.toInterface(from: sourceScreen)
+        let sourceScreenElement = try XCTUnwrap(sourceScreen.orderedElements.first {
+            $0.element.identifier == "quantity_stepper"
+        })
+        let sourceContext = PredicateSelectionContext(
+            elements: sourceScreen.orderedElements.map {
+                PredicateSelectionContext.Element(
+                    id: $0.heistId,
+                    element: TheStash.WireConversion.convert($0.element)
+                )
+            },
+            screenId: sourceScreen.id,
+            semanticHash: sourceScreen.semanticHash,
+            scope: .visible
         )
-        let sourceWireElement = try XCTUnwrap(capture.interface.projectedElements.first { $0.identifier == "quantity_stepper" })
-        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(
-            element: sourceWireElement,
-            in: capture
-        ))
-        let executableTarget = ElementTarget.predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
+        let executableTarget = try XCTUnwrap(
+            minimumUniquePredicate(for: sourceScreenElement.heistId, in: sourceContext)
+        ).target
 
         guard case .predicate(let matcher, let ordinal) = executableTarget else {
             XCTFail("Expected semantic replay target to carry matcher identity, got \(executableTarget)")
