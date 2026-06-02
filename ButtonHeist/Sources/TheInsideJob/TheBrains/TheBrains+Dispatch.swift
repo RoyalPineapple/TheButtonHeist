@@ -11,7 +11,6 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → semantic observation → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
-        startSemanticObservation()
         // Rotor mode holds a single cursor only while consecutive rotor steps
         // run on the same host. Any other interaction exits rotor mode and drops
         // the held cursor.
@@ -80,7 +79,9 @@ extension TheBrains {
         method: ActionMethod,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: method)
+        }
         guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
@@ -117,7 +118,9 @@ extension TheBrains {
         direction: ScrollDirection,
         method: ActionMethod
     ) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: method)
+        }
         guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
@@ -134,7 +137,9 @@ extension TheBrains {
     }
 
     func performWait(target: WaitTarget) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: .wait)
+        }
         let receipt = await interactionObservation.waitForPredicate(
             WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
         )

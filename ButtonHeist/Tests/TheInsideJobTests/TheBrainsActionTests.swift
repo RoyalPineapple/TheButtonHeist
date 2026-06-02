@@ -78,6 +78,7 @@ final class TheBrainsActionTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         brains = TheBrains(tripwire: TheTripwire())
+        brains.startSemanticObservation()
     }
 
     override func tearDown() async throws {
@@ -680,42 +681,38 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeouts, [])
     }
 
-    func testPerformWaitTimeoutZeroDoesNotReturnCachedSettledStateWithoutFreshObservation() async {
-        brains.stash.installScreenForTesting(.makeForTests(elements: [
+    func testPerformWaitTimeoutZeroDoesNotStartObservationWhenRuntimeInactive() async {
+        let inactiveBrains = TheBrains(tripwire: TheTripwire())
+        inactiveBrains.stash.installScreenForTesting(.makeForTests(elements: [
             (makeElement(label: "Home"), "home"),
         ]))
-        XCTAssertNil(brains.stash.passiveSemanticObservationTask)
+        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
 
-        let result = await brains.performWait(target: WaitTarget(
+        let result = await inactiveBrains.performWait(target: WaitTarget(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
             timeout: 0
         ))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
-        XCTAssertNotNil(
-            brains.stash.passiveSemanticObservationTask,
-            "wait should enter the Stash observation gateway before evaluating"
-        )
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
+        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
     }
 
-    func testPerformWaitTimeoutZeroStartsObservationWhenNoSettledStateExists() async {
-        XCTAssertNil(brains.stash.latestSettledSemanticObservation)
-        XCTAssertNil(brains.stash.passiveSemanticObservationTask)
+    func testExecuteCommandDoesNotStartObservationWhenRuntimeInactive() async {
+        let inactiveBrains = TheBrains(tripwire: TheTripwire())
+        XCTAssertNil(inactiveBrains.stash.latestSettledSemanticObservation)
+        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
 
-        let result = await brains.performWait(target: WaitTarget(
+        let result = await inactiveBrains.executeCommand(.wait(WaitTarget(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
             timeout: 0
-        ))
+        )))
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.errorKind, .timeout)
-        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
-        XCTAssertNotNil(
-            brains.stash.passiveSemanticObservationTask,
-            "wait should enter the Stash observation gateway before evaluating"
-        )
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
+        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
     }
 
     func testWaitReceiptUsesBeforeAndMatchedSettledObservations() async throws {

@@ -216,6 +216,7 @@ final class TheStashRotorTests: XCTestCase {
 
         let brains = TheBrains(tripwire: TheTripwire())
         brains.tripwire.startPulse()
+        brains.startSemanticObservation()
         defer {
             brains.stopSemanticObservation()
             brains.tripwire.stopPulse()

@@ -34,7 +34,9 @@ extension TheBrains {
     }
 
     func executeHeistPlan(_ plan: HeistPlan) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: .heistPlan)
+        }
         return await executeHeistPlan(plan, runtime: .live(self))
     }
 
