@@ -651,7 +651,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeouts, [])
     }
 
-    func testPerformWaitTimeoutZeroUsesLatestSettledStateWithoutPassiveObservation() async {
+    func testPerformWaitTimeoutZeroDoesNotReturnCachedSettledStateWithoutFreshObservation() async {
         brains.stash.installScreenForTesting(.makeForTests(elements: [
             (makeElement(label: "Home"), "home"),
         ]))
@@ -662,14 +662,16 @@ final class TheBrainsActionTests: XCTestCase {
             timeout: 0
         ))
 
-        XCTAssertTrue(result.success, result.message ?? "wait unexpectedly failed")
-        XCTAssertNil(
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
+        XCTAssertNotNil(
             brains.stash.passiveSemanticObservationTask,
-            "wait should consume settled Stash state, not start a private observation loop"
+            "wait should enter the Stash observation gateway before evaluating"
         )
     }
 
-    func testPerformWaitTimeoutZeroFailsWithoutSettledObservationWithoutPassiveObservation() async {
+    func testPerformWaitTimeoutZeroStartsObservationWhenNoSettledStateExists() async {
         XCTAssertNil(brains.stash.latestSettledSemanticObservation)
         XCTAssertNil(brains.stash.passiveSemanticObservationTask)
 
@@ -681,9 +683,9 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
-        XCTAssertNil(
+        XCTAssertNotNil(
             brains.stash.passiveSemanticObservationTask,
-            "wait should fail from missing settled state, not refresh to manufacture evidence"
+            "wait should enter the Stash observation gateway before evaluating"
         )
     }
 
