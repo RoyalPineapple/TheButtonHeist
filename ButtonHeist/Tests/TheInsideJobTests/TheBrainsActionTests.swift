@@ -1672,13 +1672,19 @@ final class TheBrainsActionTests: XCTestCase {
         label: String,
         in screen: Screen
     ) throws -> ElementTarget {
-        let capture = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: TheStash.WireConversion.toInterface(from: screen)
+        let screenElement = try XCTUnwrap(screen.orderedElements.first { $0.element.label == label })
+        let context = PredicateSelectionContext(
+            elements: screen.orderedElements.map {
+                PredicateSelectionContext.Element(
+                    id: $0.heistId,
+                    element: TheStash.WireConversion.convert($0.element)
+                )
+            },
+            screenId: screen.id,
+            semanticHash: screen.semanticHash,
+            scope: .visible
         )
-        let element = try XCTUnwrap(capture.interface.projectedElements.first { $0.label == label })
-        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: element, in: capture))
-        return .predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
+        return try XCTUnwrap(minimumUniquePredicate(for: screenElement.heistId, in: context)).target
     }
 
     private func XCTAssertDiagnostic(

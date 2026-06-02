@@ -1,233 +1,330 @@
 import Foundation
 
-// MARK: - Minimum Matcher
+// MARK: - Minimum Predicate Selection
 
-/// The smallest durable predicate that identifies one element within a capture.
-///
-/// Recording uses this rule to derive a replay target from the full
-/// accessibility state, never from viewport accidents. If a later capture
-/// introduces a conflict, run a fresh minimum-predicate pass for that capture.
-public struct MinimumMatcher: Sendable, Equatable {
-    public let element: HeistElement
+public enum CandidateTier: Int, Sendable, Equatable, Comparable {
+    case identityOnly
+    case identityWithState
+    case stateOnly
+    case ordinalFallback
+
+    public static func < (lhs: CandidateTier, rhs: CandidateTier) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+public struct MatcherAtom: Sendable, Equatable {
     public let predicate: ElementPredicate
-    public let ordinal: Int?
+    public let stability: AccessibilityFactStability
+    public let priority: Int
 
-    public init(element: HeistElement, predicate: ElementPredicate, ordinal: Int? = nil) {
-        self.element = element
+    public init(
+        predicate: ElementPredicate,
+        stability: AccessibilityFactStability,
+        priority: Int
+    ) {
         self.predicate = predicate
-        self.ordinal = ordinal
+        self.stability = stability
+        self.priority = priority
+    }
+}
+
+public struct PredicateCandidate: Sendable, Equatable {
+    public let predicate: ElementPredicate
+    public let atoms: [MatcherAtom]
+    public let tier: CandidateTier
+
+    public init(
+        predicate: ElementPredicate,
+        atoms: [MatcherAtom],
+        tier: CandidateTier
+    ) {
+        self.predicate = predicate
+        self.atoms = atoms
+        self.tier = tier
+    }
+}
+
+public struct PredicateSelectionContext: Sendable, Equatable {
+    public struct Element: Sendable, Equatable {
+        public let id: String
+        public let element: HeistElement
+
+        public init(id: String, element: HeistElement) {
+            self.id = id
+            self.element = element
+        }
     }
 
-    /// Build a predicate for an element using its containing capture as the
-    /// uniqueness universe.
-    ///
-    /// A predicate is valid only relative to the full accessibility state that
-    /// proves its uniqueness. If the supplied element is no longer present in
-    /// the capture, append it to the uniqueness universe so recording still
-    /// emits a deterministic target instead of terminating the host app.
-    public static func build(
-        element: HeistElement,
-        in capture: AccessibilityTrace.Capture
-    ) -> MinimumMatcher? {
-        let elements = capture.interface.projectedElements
-        if let index = elements.firstIndex(where: { $0 == element }) {
-            return build(element: elements[index], elementIndex: index, allElements: elements)
-        }
-        return build(element: element, elementIndex: elements.count, allElements: elements + [element])
+    public enum Scope: String, Sendable, Equatable {
+        case visible
+        case discovery
     }
 
-    /// Build predicates for every element in a capture, preserving traversal order.
-    public static func buildAll(in capture: AccessibilityTrace.Capture) -> [MinimumMatcher] {
-        let elements = capture.interface.projectedElements
-        return elements.enumerated().compactMap { index, element in
-            build(element: element, elementIndex: index, allElements: elements)
+    public let elements: [Element]
+    public let screenId: String?
+    public let semanticHash: String?
+    public let scope: Scope
+
+    public init(
+        elements: [Element],
+        screenId: String? = nil,
+        semanticHash: String? = nil,
+        scope: Scope = .visible
+    ) {
+        self.elements = elements
+        self.screenId = screenId
+        self.semanticHash = semanticHash
+        self.scope = scope
+    }
+}
+
+public struct MinimumPredicateSelection: Sendable, Equatable {
+    public let contextElementId: String
+    public let target: ElementTarget
+    public let candidate: PredicateCandidate
+
+    public init(
+        contextElementId: String,
+        target: ElementTarget,
+        candidate: PredicateCandidate
+    ) {
+        self.contextElementId = contextElementId
+        self.target = target
+        self.candidate = candidate
+    }
+}
+
+public func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
+    MinimumPredicateSelector.predicateCandidates(for: element)
+}
+
+public func minimumUniquePredicate(
+    for contextElementId: String,
+    in context: PredicateSelectionContext
+) -> MinimumPredicateSelection? {
+    MinimumPredicateSelector.minimumUniquePredicate(for: contextElementId, in: context)
+}
+
+public enum MinimumPredicateSelector {
+    public static func predicateCandidates(for element: HeistElement) -> [PredicateCandidate] {
+        let atoms = matcherAtoms(for: element)
+        guard !atoms.isEmpty else { return [] }
+
+        var candidates: [PredicateCandidate] = []
+        candidates.reserveCapacity(atoms.count)
+
+        var accumulated: [MatcherAtom] = []
+        var seen = Set<ElementPredicate>()
+        for atom in atoms {
+            accumulated.append(atom)
+            let predicate = combinedPredicate(from: accumulated)
+            guard predicate.hasPredicates, seen.insert(predicate).inserted else { continue }
+            candidates.append(PredicateCandidate(
+                predicate: predicate,
+                atoms: accumulated,
+                tier: tier(for: accumulated)
+            ))
         }
+
+        return candidates.sorted(by: candidatePrecedes)
     }
 
-    private static func build(
-        element: HeistElement,
-        elementIndex: Int,
-        allElements: [HeistElement]
-    ) -> MinimumMatcher? {
-        let candidates = candidatePredicates(for: element, allElements: allElements)
-        for candidate in candidates where uniquelyMatches(candidate, element: element, in: allElements) {
-            return MinimumMatcher(element: element, predicate: candidate)
+    public static func minimumUniquePredicate(
+        for contextElementId: String,
+        in context: PredicateSelectionContext
+    ) -> MinimumPredicateSelection? {
+        guard let targetElement = context.elements.first(where: { $0.id == contextElementId }) else {
+            return nil
         }
 
-        guard let bestPredicate = candidates.last else { return nil }
-        return MinimumMatcher(
-            element: element,
-            predicate: bestPredicate,
-            ordinal: ordinalOf(elementIndex: elementIndex, matching: bestPredicate, in: allElements)
-        )
-    }
+        let candidates = predicateCandidates(for: targetElement.element)
+        var bestAmbiguousCandidate: PredicateCandidate?
+        var bestAmbiguousMatchCount: Int?
 
-    private static func candidatePredicates(for element: HeistElement, allElements: [HeistElement]) -> [ElementPredicate] {
-        let label = nonEmpty(element.label)
-        let value = nonEmpty(element.value)
-        let identifier = element.identifier.flatMap { isStableIdentifier($0) ? nonEmpty($0) : nil }
-        let semanticTraits = predicateTraits(
-            element.traits.filter { !AccessibilityPolicy.transientTraits.contains($0) }
-        )
-        let stateTraits = predicateTraits(
-            element.traits.filter { AccessibilityPolicy.transientTraits.contains($0) }
-        )
-        var candidates: [ElementPredicate] = []
-
-        // Product contract: identifier > label > semantic traits > value >
-        // stateful traits > ordinal.
-        func append(
-            label: String? = nil,
-            traits: [HeistTrait] = [],
-            value: String? = nil,
-            identifier: String? = nil,
-            excludeTraits: [HeistTrait] = []
-        ) {
-            let predicate = ElementPredicate(
-                label: label,
-                identifier: identifier,
-                value: value,
-                traits: traits,
-                excludeTraits: excludeTraits
-            )
-            guard predicate.hasPredicates, !candidates.contains(predicate) else { return }
-            candidates.append(predicate)
-        }
-
-        func appendStateVariants(after base: ElementPredicate) {
-            guard base.hasPredicates || !stateTraits.isEmpty else { return }
-            append(
-                label: base.label,
-                traits: combine(base.traits, stateTraits),
-                value: base.value,
-                identifier: base.identifier
-            )
-            let excludeTraits = excludedStateTraits(for: element, basePredicate: base, in: allElements)
-            append(
-                label: base.label,
-                traits: base.traits,
-                value: base.value,
-                identifier: base.identifier,
-                excludeTraits: excludeTraits
-            )
-            append(
-                label: base.label,
-                traits: combine(base.traits, stateTraits),
-                value: base.value,
-                identifier: base.identifier,
-                excludeTraits: excludeTraits
-            )
-        }
-
-        func appendProgression(identifier: String? = nil) {
-            var base = ElementPredicate(identifier: identifier)
-
-            if let identifier {
-                append(identifier: identifier)
-            }
-
-            if let label {
-                base = ElementPredicate(label: label, identifier: identifier)
-                append(label: label, identifier: identifier)
-            }
-
-            if !semanticTraits.isEmpty {
-                base = ElementPredicate(label: base.label, identifier: base.identifier, traits: semanticTraits)
-                append(label: base.label, traits: semanticTraits, identifier: base.identifier)
-            }
-
-            if let value {
-                base = ElementPredicate(
-                    label: base.label,
-                    identifier: base.identifier,
-                    value: value,
-                    traits: base.traits
+        for candidate in candidates {
+            let matches = context.elements.filter { $0.element.matches(candidate.predicate) }
+            guard matches.contains(where: { $0.id == contextElementId }) else { continue }
+            if matches.count == 1 {
+                return MinimumPredicateSelection(
+                    contextElementId: contextElementId,
+                    target: .predicate(candidate.predicate),
+                    candidate: candidate
                 )
-                append(label: base.label, traits: base.traits, value: value, identifier: base.identifier)
             }
-
-            appendStateVariants(after: base)
+            if isBetterOrdinalBase(
+                candidate,
+                matchCount: matches.count,
+                than: bestAmbiguousCandidate,
+                matchCount: bestAmbiguousMatchCount
+            ) {
+                bestAmbiguousCandidate = candidate
+                bestAmbiguousMatchCount = matches.count
+            }
         }
 
-        if let identifier {
-            appendProgression(identifier: identifier)
-        } else {
-            appendProgression()
+        guard let strongestSemanticCandidate = bestAmbiguousCandidate else { return nil }
+        let matches = context.elements.filter { $0.element.matches(strongestSemanticCandidate.predicate) }
+        guard let ordinal = matches.firstIndex(where: { $0.id == contextElementId }) else { return nil }
+
+        let ordinalCandidate = PredicateCandidate(
+            predicate: strongestSemanticCandidate.predicate,
+            atoms: strongestSemanticCandidate.atoms,
+            tier: .ordinalFallback
+        )
+        return MinimumPredicateSelection(
+            contextElementId: contextElementId,
+            target: .predicate(strongestSemanticCandidate.predicate, ordinal: ordinal),
+            candidate: ordinalCandidate
+        )
+    }
+
+    private static func matcherAtoms(for element: HeistElement) -> [MatcherAtom] {
+        let facts = matcherFacts(for: element)
+        var atoms: [MatcherAtom] = []
+        atoms.reserveCapacity(facts.count)
+
+        for fact in facts {
+            guard let stability = AccessibilityPolicy.matcherFactStability(fact),
+                  let predicate = predicate(for: fact)
+            else { continue }
+            atoms.append(MatcherAtom(
+                predicate: predicate,
+                stability: stability,
+                priority: AccessibilityPolicy.matcherFactPriority(fact)
+            ))
         }
 
-        return candidates
+        return atoms.sorted(by: atomPrecedes)
     }
 
-    private static func combine(_ left: [HeistTrait], _ right: [HeistTrait]) -> [HeistTrait] {
-        predicateTraits(left + right)
+    private static func matcherFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
+        var facts: [AccessibilityMatcherFact] = []
+        if let identifier = nonEmpty(element.identifier) {
+            facts.append(.identifier(identifier))
+        }
+        if let label = nonEmpty(element.label) {
+            facts.append(.label(label))
+        }
+        for trait in AccessibilityPolicy.orderedMatcherTraits(element.traits) {
+            facts.append(.trait(trait))
+        }
+        if let value = nonEmpty(element.value) {
+            facts.append(.value(value))
+        }
+
+        if !facts.isEmpty {
+            let presentTraits = Set(element.traits)
+            for trait in AccessibilityPolicy.orderedMatcherStateTraits where !presentTraits.contains(trait) {
+                facts.append(.excludedTrait(trait))
+            }
+        }
+        return facts
     }
 
-    private static func excludedStateTraits(
-        for element: HeistElement,
-        basePredicate: ElementPredicate,
-        in allElements: [HeistElement]
-    ) -> [HeistTrait] {
-        guard basePredicate.hasPredicates else { return [] }
-        let elementTraits = Set(element.traits)
-        let excluded = allElements
-            .filter { $0 != element && $0.matches(basePredicate) }
-            .flatMap(\.traits)
-            .filter { AccessibilityPolicy.transientTraits.contains($0) && !elementTraits.contains($0) }
-        return predicateTraits(Array(Set(excluded)))
-    }
-
-    private static func predicateTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
-        traits.sorted { left, right in
-            traitSortKey(left) < traitSortKey(right)
+    private static func predicate(for fact: AccessibilityMatcherFact) -> ElementPredicate? {
+        switch fact {
+        case .identifier(let identifier):
+            return ElementPredicate(identifier: identifier)
+        case .label(let label):
+            return ElementPredicate(label: label)
+        case .value(let value):
+            return ElementPredicate(value: value)
+        case .trait(let trait):
+            return ElementPredicate(traits: [trait])
+        case .excludedTrait(let trait):
+            return ElementPredicate(excludeTraits: [trait])
         }
     }
 
-    private static func traitSortKey(_ trait: HeistTrait) -> (Int, String) {
-        if let index = AccessibilityPolicy.synthesisPriority.firstIndex(of: trait) {
-            return (index, trait.rawValue)
+    private static func combinedPredicate(from atoms: [MatcherAtom]) -> ElementPredicate {
+        var label: String?
+        var identifier: String?
+        var value: String?
+        var traits: [HeistTrait] = []
+        var excludeTraits: [HeistTrait] = []
+
+        for atom in atoms {
+            let predicate = atom.predicate
+            if label == nil { label = predicate.label }
+            if identifier == nil { identifier = predicate.identifier }
+            if value == nil { value = predicate.value }
+            traits.append(contentsOf: predicate.traits)
+            excludeTraits.append(contentsOf: predicate.excludeTraits)
         }
-        return (AccessibilityPolicy.synthesisPriority.count, trait.rawValue)
+
+        return ElementPredicate(
+            label: label,
+            identifier: identifier,
+            value: value,
+            traits: AccessibilityPolicy.orderedMatcherTraits(unique(traits)),
+            excludeTraits: AccessibilityPolicy.orderedMatcherTraits(unique(excludeTraits))
+        )
+    }
+
+    private static func tier(for atoms: [MatcherAtom]) -> CandidateTier {
+        let hasIdentity = atoms.contains { $0.stability == .identity }
+        let hasState = atoms.contains { $0.stability == .state }
+        switch (hasIdentity, hasState) {
+        case (true, false):
+            return .identityOnly
+        case (true, true):
+            return .identityWithState
+        case (false, true):
+            return .stateOnly
+        case (false, false):
+            return .ordinalFallback
+        }
+    }
+
+    private static func atomPrecedes(_ lhs: MatcherAtom, _ rhs: MatcherAtom) -> Bool {
+        if lhs.priority != rhs.priority {
+            return lhs.priority < rhs.priority
+        }
+        return lhs.predicate.description < rhs.predicate.description
+    }
+
+    private static func isBetterOrdinalBase(
+        _ candidate: PredicateCandidate,
+        matchCount: Int,
+        than existing: PredicateCandidate?,
+        matchCount existingMatchCount: Int?
+    ) -> Bool {
+        guard let existing, let existingMatchCount else { return true }
+        if matchCount != existingMatchCount {
+            return matchCount < existingMatchCount
+        }
+        if candidate.tier != existing.tier {
+            return candidate.tier < existing.tier
+        }
+        if candidate.atoms.count != existing.atoms.count {
+            return candidate.atoms.count > existing.atoms.count
+        }
+        return candidate.predicate.description < existing.predicate.description
+    }
+
+    private static func candidatePrecedes(_ lhs: PredicateCandidate, _ rhs: PredicateCandidate) -> Bool {
+        if lhs.tier != rhs.tier {
+            return lhs.tier < rhs.tier
+        }
+        if lhs.atoms.count != rhs.atoms.count {
+            return lhs.atoms.count < rhs.atoms.count
+        }
+        let leftPriority = lhs.atoms.map(\.priority)
+        let rightPriority = rhs.atoms.map(\.priority)
+        if leftPriority != rightPriority {
+            return leftPriority.lexicographicallyPrecedes(rightPriority)
+        }
+        return lhs.predicate.description < rhs.predicate.description
+    }
+
+    private static func unique(_ traits: [HeistTrait]) -> [HeistTrait] {
+        var seen = Set<HeistTrait>()
+        return traits.filter { seen.insert($0).inserted }
     }
 
     private static func nonEmpty(_ value: String?) -> String? {
         guard let value, !value.isEmpty else { return nil }
         return value
-    }
-
-    private static func uniquelyMatches(
-        _ predicate: ElementPredicate,
-        element: HeistElement,
-        in allElements: [HeistElement]
-    ) -> Bool {
-        var matchCount = 0
-        for candidate in allElements where candidate.matches(predicate) {
-            matchCount += 1
-            if matchCount > 1 { return false }
-        }
-        return matchCount == 1
-    }
-
-    /// The 0-based position of the element at `elementIndex` among all elements
-    /// matching `predicate`, by traversal order. Returns nil when the predicate
-    /// already matches uniquely (no ordinal needed). Position is used rather than
-    /// content equality because identical elements are otherwise indistinguishable.
-    private static func ordinalOf(
-        elementIndex: Int,
-        matching predicate: ElementPredicate,
-        in allElements: [HeistElement]
-    ) -> Int? {
-        let totalMatches = allElements.filter { $0.matches(predicate) }.count
-        guard totalMatches > 1 else { return nil }
-        return allElements.prefix(elementIndex).filter { $0.matches(predicate) }.count
-    }
-}
-
-extension MinimumMatcher: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("minimumMatcher", [
-            ScoreDescription.stringField("element", element.description),
-            predicate.description,
-            ScoreDescription.valueField("ordinal", ordinal),
-        ].compactMap { $0 })
     }
 }
