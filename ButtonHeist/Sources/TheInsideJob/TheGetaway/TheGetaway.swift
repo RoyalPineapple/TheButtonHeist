@@ -79,7 +79,7 @@ final class TheGetaway {
             let result = brains.executePasteboardRead()
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
         case .requestScreen:
-            handleScreen(requestId: requestId, respond: respond)
+            await handleScreen(requestId: requestId, respond: respond)
         case .wait(let target):
             let result = await brains.performWait(target: target)
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
@@ -132,33 +132,19 @@ final class TheGetaway {
 
     // MARK: - Screen Capture
 
-    func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) {
+    func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) async {
         insideJobLogger.debug("Screen requested")
 
-        guard brains.stash.recordVisibleSemanticObservation() != nil else {
-            sendMessage(.error(ServerError(kind: .general, message: "Could not access accessibility tree")), requestId: requestId, respond: respond)
+        let result = await brains.captureScreenPayload()
+        guard case .success(let payload) = result else {
+            if case .failure(let message) = result {
+                sendMessage(.error(ServerError(kind: .general, message: message)), requestId: requestId, respond: respond)
+            }
             return
         }
-
-        guard let (image, bounds) = brains.stash.captureScreen() else {
-            sendMessage(.error(ServerError(kind: .general, message: "Could not access app window")), requestId: requestId, respond: respond)
-            return
-        }
-
-        guard let pngData = image.pngData() else {
-            sendMessage(.error(ServerError(kind: .general, message: "Failed to encode screen as PNG")), requestId: requestId, respond: respond)
-            return
-        }
-
-        let payload = ScreenPayload(
-            pngData: pngData.base64EncodedString(),
-            width: bounds.width,
-            height: bounds.height,
-            interface: brains.stash.interface()
-        )
 
         sendMessage(.screen(payload), requestId: requestId, respond: respond)
-        insideJobLogger.debug("Screen sent: \(pngData.count) bytes")
+        insideJobLogger.debug("Screen sent: \(payload.pngData.count) base64 characters")
     }
 }
 

@@ -25,8 +25,8 @@ commands, removing the agent from the loop.
 | `steps` | `[HeistStep]` | Ordered list of durable interaction steps. |
 
 Version 6 is the current heist contract. Step targets use flat semantic
-matcher fields. Capture-local heist IDs are resolved before a step is written
-and are never stored as replay authority.
+matcher fields. Capture-local IDs may appear in live captures or diagnostics,
+but are never stored as replay authority.
 
 ## Capture Truth
 
@@ -47,8 +47,8 @@ Each step is a closed playback object. Top-level fields are limited to
 optional semantic `expectation`.
 
 Durable replay identity lives under the flat matcher fields in `target`.
-`heistId` is a live current-capture handle only; it is never durable playback
-authority and is not stored in the heist step.
+Capture-local IDs are never durable playback authority and are not stored in
+heist steps.
 
 ### Element-targeting step
 
@@ -112,15 +112,15 @@ authority and is not stored in the heist step.
 
 ## Recording Guidance
 
-Minimum matcher is the recording primitive. Given an element in an accessibility capture, Button Heist records the least-specific matcher that uniquely resolves that element in the same capture. Current-capture heistIds are useful live handles, but replay durability comes from the derived matcher fields and ordinal.
+Minimum matcher is the recording primitive. Given an element in an accessibility capture, Button Heist records the least-specific matcher that uniquely resolves that element in the same capture. Replay durability comes from the derived matcher fields and ordinal, not capture-local IDs.
 
-When recording a heist, it is fine to target a live action by heistId if that is the handle you were handed. The recorder resolves that heistId against the command capture, derives a minimum matcher, and stores only the matcher on the step.
+When recording a heist, public action steps should carry `ElementTarget` predicate fields such as label and traits. The recorder uses current element data to derive a minimum matcher and stores only that matcher on the step.
 
 Ordinal-only steps are the least durable replay target. They are reserved for anonymous elements that have no identifier, label, value, or useful traits; if element order changes, they can target a different element without producing a matcher miss.
 
 **Workflow**: Call `get_interface` before recording actions so the recorder has current element data. Durable heist steps should be the interactions and waits you want to replay; inspection calls help the recorder build good matchers but are not themselves replay steps.
 
-**Example**: You activate `button_sign_in` in the current interface. The `.heist` step stores fields like `{"command":"activate","target":{"label":"Sign In","traits":["button"]}}`. Playback targets the matcher, not the live heistId.
+**Example**: You activate the Sign In button with a semantic target. The `.heist` step stores fields like `{"command":"activate","target":{"label":"Sign In","traits":["button"]}}`. Playback targets the matcher, not a live capture ID.
 
 ### Async operations
 

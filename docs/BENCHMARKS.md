@@ -38,7 +38,7 @@ The difference is visible in a single action. Here's what it looks like to tap "
   ...
 ```
 
-The agent asked for "Settings" by name. The response tells it the screen changed and lists every element on the new screen with stable IDs, ready to target.
+The agent asked for "Settings" by name. The response tells it the screen changed and lists every element on the new screen with labels, traits, and values ready for semantic targeting.
 
 **ios-simulator-mcp** — read the full tree, compute coordinates, tap blind:
 
@@ -62,7 +62,7 @@ The agent gets a raw JSON tree with pixel coordinates for every element. It has 
 "Tapped successfully" — but what happened? Did the setting actually change? The agent doesn't know. Compare that to what Button Heist returns for the same kind of action — tapping "Large" in the text size picker:
 
 ```
-→ activate(heistId: "large_button")
+→ activate(label: "Large", traits: ["button"])
 
 ← appearance | activate: elements changed
   + text_size_large_staticText "Text Size, Large"
@@ -89,9 +89,9 @@ Both agents need to change three settings: Color Scheme to Dark, Accent Color to
 
 ```
 → run_heist([
-    activate(heistId: "dark_button"),
-    activate(heistId: "purple_button"),
-    activate(heistId: "large_button")
+    activate(label: "Dark", traits: ["button"]),
+    activate(label: "Purple", traits: ["button"]),
+    activate(label: "Large", traits: ["button"])
   ])
 ```
 
@@ -115,14 +115,14 @@ Both agents need to press 13 buttons in sequence.
 
 ```
 → run_heist (13 steps)
-    activate(all_clear_button)
-    activate(3_button), activate(4_button), activate(4_button)
-    activate(multiply_button)
-    activate(2_button), activate(8_button), activate(9_button)
-    activate(equals_button)
-    activate(divide_button)
-    activate(9_button), activate(9_button)
-    activate(equals_button)
+    activate(label: "All Clear", traits: ["button"])
+    activate(label: "3", traits: ["button"]), activate(label: "4", traits: ["button"]), activate(label: "4", traits: ["button"])
+    activate(label: "Multiply", traits: ["button"])
+    activate(label: "2", traits: ["button"]), activate(label: "8", traits: ["button"]), activate(label: "9", traits: ["button"])
+    activate(label: "Equals", traits: ["button"])
+    activate(label: "Divide", traits: ["button"])
+    activate(label: "9", traits: ["button"]), activate(label: "9", traits: ["button"])
+    activate(label: "Equals", traits: ["button"])
 ```
 
 **ios-simulator-mcp agent** maps out a coordinate grid first:

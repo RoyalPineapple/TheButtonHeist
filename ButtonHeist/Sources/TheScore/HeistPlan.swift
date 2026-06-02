@@ -49,15 +49,6 @@ public struct HeistPlan: Codable, Sendable, Equatable {
     }
 }
 
-extension HeistPlan: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("heistPlan", [
-            ScoreDescription.valueField("version", version),
-            "steps=\(steps.count)",
-        ].compactMap { $0 })
-    }
-}
-
 // MARK: - Heist Step
 
 public enum HeistStep: Codable, Sendable, Equatable {
@@ -145,20 +136,6 @@ public enum HeistStep: Codable, Sendable, Equatable {
     }
 }
 
-extension HeistStep: CustomStringConvertible {
-    public var description: String {
-        switch self {
-        case .action(let step): return step.description
-        case .wait(let step): return step.description
-        case .conditional(let step): return step.description
-        case .waitForCases(let step): return step.description
-        case .forEach(let step): return step.description
-        case .warn(let step): return step.description
-        case .fail(let step): return step.description
-        }
-    }
-}
-
 // MARK: - Step Payloads
 
 public struct ActionStep: Codable, Sendable, Equatable {
@@ -190,15 +167,6 @@ public struct ActionStep: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
         try container.encodeIfPresent(expectation, forKey: .expectation)
-    }
-}
-
-extension ActionStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("action", [
-            "command=\(command.wireType.rawValue)",
-            expectation.map { "expect=\($0)" },
-        ].compactMap { $0 })
     }
 }
 
@@ -240,15 +208,6 @@ public struct WaitStep: Codable, Sendable, Equatable {
     }
 }
 
-extension WaitStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("wait", [
-            predicate.description,
-            "timeout=\(ScoreDescription.decimal(timeout))",
-        ])
-    }
-}
-
 public struct ConditionalStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case cases
@@ -273,15 +232,6 @@ public struct ConditionalStep: Codable, Sendable, Equatable {
             cases: try container.decode([PredicateCase].self, forKey: .cases),
             elseSteps: try container.decodeIfPresent([HeistStep].self, forKey: .elseSteps)
         )
-    }
-}
-
-extension ConditionalStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("if", [
-            "cases=\(cases.count)",
-            elseSteps.map { "else=\($0.count)" },
-        ].compactMap { $0 })
     }
 }
 
@@ -330,16 +280,6 @@ public struct WaitForCasesStep: Codable, Sendable, Equatable {
     }
 }
 
-extension WaitForCasesStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("waitForCases", [
-            "timeout=\(ScoreDescription.decimal(timeout))",
-            "cases=\(cases.count)",
-            elseSteps.map { "else=\($0.count)" },
-        ].compactMap { $0 })
-    }
-}
-
 public struct PredicateCase: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case predicate, steps
@@ -360,15 +300,6 @@ public struct PredicateCase: Codable, Sendable, Equatable {
             predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
             steps: try container.decode([HeistStep].self, forKey: .steps)
         )
-    }
-}
-
-extension PredicateCase: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("case", [
-            predicate.description,
-            "steps=\(steps.count)",
-        ])
     }
 }
 
@@ -411,16 +342,6 @@ public struct ForEachStep: Codable, Sendable, Equatable {
     }
 }
 
-extension ForEachStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("forEach", [
-            matching.description,
-            "limit=\(limit)",
-            "steps=\(steps.count)",
-        ])
-    }
-}
-
 public struct WarnStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case message
@@ -436,12 +357,6 @@ public struct WarnStep: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "warn step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(message: try container.decode(String.self, forKey: .message))
-    }
-}
-
-extension WarnStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("warn", [ScoreDescription.quoted(message)])
     }
 }
 
@@ -470,25 +385,4 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case emptyForEachPredicate
     case invalidForEachLimit(Int)
     case emptyForEachSteps
-}
-
-public extension ClientMessage {
-    var isHeistActionCommand: Bool {
-        switch self {
-        case .activate, .increment, .decrement, .performCustomAction, .rotor,
-             .oneFingerTap, .longPress, .swipe, .drag, .typeText, .editAction,
-             .setPasteboard, .scroll, .scrollToVisible, .elementSearch,
-             .scrollToEdge, .resignFirstResponder:
-            return true
-        case .clientHello, .authenticate, .requestInterface, .ping, .status,
-             .getPasteboard, .requestScreen, .wait, .heistPlan:
-            return false
-        }
-    }
-}
-
-extension FailStep: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("fail", [ScoreDescription.quoted(message)])
-    }
 }

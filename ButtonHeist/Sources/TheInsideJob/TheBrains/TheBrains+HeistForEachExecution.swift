@@ -27,7 +27,11 @@ extension TheBrains {
             )
         }
 
-        let matchedCount = observation.state.interface.projectedElements.count { step.matching.matches($0) }
+        var matchSignature = ForEachMatchSignature(
+            matching: step.matching,
+            elements: observation.state.interface.projectedElements
+        )
+        let matchedCount = matchSignature.count
         if matchedCount > step.limit {
             let reason = "matched \(matchedCount) element(s), exceeding for_each limit \(step.limit)"
             return HeistExecutionStepResult(
@@ -48,13 +52,15 @@ extension TheBrains {
         var childResults: [HeistExecutionStepResult] = []
         var failureReason: String?
         var iterationCount = 0
+        var nextOrdinal = 0
+        var observedSequence = observation.event.sequence
 
-        for iterationIndex in 0..<matchedCount {
+        while iterationCount < matchedCount {
             let iterationSteps: [HeistStep]
             do {
-                iterationSteps = try step.boundSteps(forIteration: iterationIndex)
+                iterationSteps = try step.steps(forOrdinal: nextOrdinal)
             } catch {
-                failureReason = "iteration \(iterationIndex) binding failed: \(error)"
+                failureReason = "iteration \(iterationCount) ordinal expansion failed: \(error)"
                 break
             }
 
@@ -66,8 +72,29 @@ extension TheBrains {
             }
 
             if iterationResults.contains(where: \.isFailure) {
-                failureReason = "iteration \(iterationIndex) failed"
+                failureReason = "iteration \(iterationCount - 1) failed"
                 break
+            }
+
+            guard iterationCount < matchedCount else { break }
+            guard let afterObservation = await runtime.observeSemanticState(
+                .discovery,
+                observedSequence,
+                nil
+            ) else {
+                failureReason = "iteration \(iterationCount - 1) post-observation unavailable"
+                break
+            }
+            observedSequence = afterObservation.event.sequence
+            let nextSignature = ForEachMatchSignature(
+                matching: step.matching,
+                elements: afterObservation.state.interface.projectedElements
+            )
+            if nextSignature == matchSignature {
+                nextOrdinal += 1
+            } else {
+                matchSignature = nextSignature
+                nextOrdinal = 0
             }
         }
 
@@ -103,19 +130,52 @@ extension TheBrains {
     }
 }
 
+private struct ForEachMatchSignature: Equatable {
+    let keys: [String]
+
+    var count: Int { keys.count }
+
+    init(matching: ElementPredicate, elements: [HeistElement]) {
+        keys = elements
+            .filter { matching.matches($0) }
+            .map(Self.key)
+    }
+
+    private static func key(for element: HeistElement) -> String {
+        AccessibilityPolicy.matcherIdentityFacts(for: element)
+            .map(factKey)
+            .joined(separator: "\u{1F}")
+    }
+
+    private static func factKey(_ fact: AccessibilityMatcherFact) -> String {
+        switch fact {
+        case .identifier(let identifier):
+            return "identifier=\(identifier)"
+        case .label(let label):
+            return "label=\(label)"
+        case .value(let value):
+            return "value=\(value)"
+        case .trait(let trait):
+            return "trait=\(trait.rawValue)"
+        case .excludedTrait(let trait):
+            return "excludeTrait=\(trait.rawValue)"
+        }
+    }
+}
+
 private extension ForEachStep {
-    func boundSteps(forIteration index: Int) throws -> [HeistStep] {
+    func steps(forOrdinal index: Int) throws -> [HeistStep] {
         try steps.map {
-            try $0.replacingForEachTarget(matching: matching, iterationOrdinal: index)
+            try $0.replacingForEachTarget(matching: matching, ordinal: index)
         }
     }
 }
 
 private extension ElementTarget {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> ElementTarget {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> ElementTarget {
         switch self {
         case .predicate(let predicate, let ordinal?) where predicate == matching && ordinal == 0:
-            return .predicate(matching, ordinal: iterationOrdinal)
+            return .predicate(matching, ordinal: ordinal)
         case .predicate:
             return self
         }
@@ -123,18 +183,18 @@ private extension ElementTarget {
 }
 
 private extension HeistStep {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) throws -> HeistStep {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) throws -> HeistStep {
         switch self {
         case .action(let step):
-            return .action(try step.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .action(try step.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .wait(let step):
-            return .wait(step.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .wait(step.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .conditional(let step):
-            return .conditional(try step.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .conditional(try step.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .waitForCases(let step):
-            return .waitForCases(try step.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .waitForCases(try step.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .forEach(let step):
-            return .forEach(try step.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .forEach(try step.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .warn, .fail:
             return self
         }
@@ -142,32 +202,32 @@ private extension HeistStep {
 }
 
 private extension ActionStep {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) throws -> ActionStep {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) throws -> ActionStep {
         try ActionStep(
-            command: command.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal),
-            expectation: expectation?.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+            command: command.replacingForEachTarget(matching: matching, ordinal: ordinal),
+            expectation: expectation?.replacingForEachTarget(matching: matching, ordinal: ordinal)
         )
     }
 }
 
 private extension WaitStep {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> WaitStep {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> WaitStep {
         WaitStep(
-            predicate: predicate.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal),
+            predicate: predicate.replacingForEachTarget(matching: matching, ordinal: ordinal),
             timeout: timeout
         )
     }
 }
 
 private extension ConditionalStep {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) throws -> ConditionalStep {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) throws -> ConditionalStep {
         try ConditionalStep(
             cases: cases.map {
-                try $0.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+                try $0.replacingForEachTarget(matching: matching, ordinal: ordinal)
             },
             elseSteps: elseSteps.map { steps in
                 try steps.map {
-                    try $0.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+                    try $0.replacingForEachTarget(matching: matching, ordinal: ordinal)
                 }
             }
         )
@@ -175,15 +235,15 @@ private extension ConditionalStep {
 }
 
 private extension WaitForCasesStep {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) throws -> WaitForCasesStep {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) throws -> WaitForCasesStep {
         try WaitForCasesStep(
             timeout: timeout,
             cases: cases.map {
-                try $0.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+                try $0.replacingForEachTarget(matching: matching, ordinal: ordinal)
             },
             elseSteps: elseSteps.map { steps in
                 try steps.map {
-                    try $0.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+                    try $0.replacingForEachTarget(matching: matching, ordinal: ordinal)
                 }
             }
         )
@@ -191,42 +251,42 @@ private extension WaitForCasesStep {
 }
 
 private extension PredicateCase {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) throws -> PredicateCase {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) throws -> PredicateCase {
         PredicateCase(
-            predicate: predicate.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal),
+            predicate: predicate.replacingForEachTarget(matching: matching, ordinal: ordinal),
             steps: try steps.map {
-                try $0.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+                try $0.replacingForEachTarget(matching: matching, ordinal: ordinal)
             }
         )
     }
 }
 
 private extension ForEachStep {
-    func replacingForEachTarget(matching outerMatching: ElementPredicate, iterationOrdinal: Int) throws -> ForEachStep {
+    func replacingForEachTarget(matching outerMatching: ElementPredicate, ordinal: Int) throws -> ForEachStep {
         try ForEachStep(
             matching: matching,
             limit: limit,
             steps: try steps.map {
-                try $0.replacingForEachTarget(matching: outerMatching, iterationOrdinal: iterationOrdinal)
+                try $0.replacingForEachTarget(matching: outerMatching, ordinal: ordinal)
             }
         )
     }
 }
 
 private extension ClientMessage {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> ClientMessage {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> ClientMessage {
         switch self {
         case .activate(let target):
-            return .activate(target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .activate(target.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .increment(let target):
-            return .increment(target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .increment(target.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .decrement(let target):
-            return .decrement(target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .decrement(target.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .performCustomAction(let target):
             return .performCustomAction(CustomActionTarget(
                 elementTarget: target.elementTarget.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 ),
                 actionName: target.actionName
             ))
@@ -234,7 +294,7 @@ private extension ClientMessage {
             return .rotor(RotorTarget(
                 elementTarget: target.elementTarget.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 ),
                 selection: target.selection,
                 direction: target.direction
@@ -243,14 +303,14 @@ private extension ClientMessage {
             return .oneFingerTap(TapTarget(
                 selection: target.selection.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 )
             ))
         case .longPress(let target):
             return .longPress(LongPressTarget(
                 selection: target.selection.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 ),
                 duration: target.duration
             ))
@@ -258,13 +318,13 @@ private extension ClientMessage {
             return .swipe(SwipeTarget(
                 selection: target.selection.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 ),
                 duration: target.duration
             ))
         case .drag(let target):
             return .drag(DragTarget(
-                start: target.start.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal),
+                start: target.start.replacingForEachTarget(matching: matching, ordinal: ordinal),
                 end: target.end,
                 duration: target.duration
             ))
@@ -272,14 +332,14 @@ private extension ClientMessage {
             return .typeText(TypeTextTarget(
                 text: target.text,
                 elementTarget: target.elementTarget.map {
-                    $0.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+                    $0.replacingForEachTarget(matching: matching, ordinal: ordinal)
                 }
             ))
         case .scroll(let target):
             return .scroll(ScrollTarget(
                 selection: target.selection.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 ),
                 direction: target.direction
             ))
@@ -287,14 +347,14 @@ private extension ClientMessage {
             return .scrollToVisible(ScrollToVisibleTarget(
                 elementTarget: target.elementTarget.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 )
             ))
         case .elementSearch(let target):
             return .elementSearch(ElementSearchTarget(
                 elementTarget: target.elementTarget.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 ),
                 direction: target.direction
             ))
@@ -302,7 +362,7 @@ private extension ClientMessage {
             return .scrollToEdge(ScrollToEdgeTarget(
                 selection: target.selection.replacingForEachTarget(
                     matching: matching,
-                    iterationOrdinal: iterationOrdinal
+                    ordinal: ordinal
                 ),
                 edge: target.edge
             ))
@@ -315,10 +375,10 @@ private extension ClientMessage {
 }
 
 private extension GesturePointSelection {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> GesturePointSelection {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> GesturePointSelection {
         switch self {
         case .element(let target):
-            return .element(target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .element(target.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .coordinate:
             return self
         }
@@ -326,22 +386,22 @@ private extension GesturePointSelection {
 }
 
 private extension SwipeGestureSelection {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> SwipeGestureSelection {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> SwipeGestureSelection {
         switch self {
         case .unitElement(let target, let start, let end):
             return .unitElement(
-                target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal),
+                target.replacingForEachTarget(matching: matching, ordinal: ordinal),
                 start: start,
                 end: end
             )
         case .elementDirection(let target, let direction):
             return .elementDirection(
-                target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal),
+                target.replacingForEachTarget(matching: matching, ordinal: ordinal),
                 direction
             )
         case .point(let start, let destination):
             return .point(
-                start: start.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal),
+                start: start.replacingForEachTarget(matching: matching, ordinal: ordinal),
                 destination: destination
             )
         }
@@ -349,10 +409,10 @@ private extension SwipeGestureSelection {
 }
 
 private extension ScrollContainerSelection {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> ScrollContainerSelection {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> ScrollContainerSelection {
         switch self {
         case .element(let target):
-            return .element(target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .element(target.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .visibleContainer, .container:
             return self
         }
@@ -360,38 +420,38 @@ private extension ScrollContainerSelection {
 }
 
 private extension AccessibilityPredicate {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> AccessibilityPredicate {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> AccessibilityPredicate {
         switch self {
         case .state(let state):
-            return .state(state.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .state(state.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .changed(let change):
-            return .changed(change.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .changed(change.replacingForEachTarget(matching: matching, ordinal: ordinal))
         }
     }
 }
 
 private extension AccessibilityPredicate.State {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> AccessibilityPredicate.State {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> AccessibilityPredicate.State {
         switch self {
         case .present, .absent:
             return self
         case .presentTarget(let target):
-            return .presentTarget(target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .presentTarget(target.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .absentTarget(let target):
-            return .absentTarget(target.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .absentTarget(target.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .all(let states):
             return .all(states.map {
-                $0.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal)
+                $0.replacingForEachTarget(matching: matching, ordinal: ordinal)
             })
         }
     }
 }
 
 private extension AccessibilityPredicate.Change {
-    func replacingForEachTarget(matching: ElementPredicate, iterationOrdinal: Int) -> AccessibilityPredicate.Change {
+    func replacingForEachTarget(matching: ElementPredicate, ordinal: Int) -> AccessibilityPredicate.Change {
         switch self {
         case .screen(let state):
-            return .screen(where: state?.replacingForEachTarget(matching: matching, iterationOrdinal: iterationOrdinal))
+            return .screen(where: state?.replacingForEachTarget(matching: matching, ordinal: ordinal))
         case .elements, .appeared, .disappeared, .updated:
             return self
         }

@@ -153,6 +153,34 @@ public enum AccessibilityPolicy {
         }
     }
 
+    public static func matcherFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
+        var facts: [AccessibilityMatcherFact] = []
+        if let identifier = nonEmpty(element.identifier) {
+            facts.append(.identifier(identifier))
+        }
+        if let label = nonEmpty(element.label) {
+            facts.append(.label(label))
+        }
+        for trait in orderedMatcherTraits(element.traits) {
+            facts.append(.trait(trait))
+        }
+        if let value = nonEmpty(element.value) {
+            facts.append(.value(value))
+        }
+
+        if !facts.isEmpty {
+            let presentTraits = Set(element.traits)
+            for trait in orderedMatcherStateTraits where !presentTraits.contains(trait) {
+                facts.append(.excludedTrait(trait))
+            }
+        }
+        return facts
+    }
+
+    public static func matcherIdentityFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
+        matcherFacts(for: element).filter { matcherFactStability($0) == .identity }
+    }
+
     public static var orderedMatcherStateTraits: [HeistTrait] {
         orderedMatcherTraits(Array(transientTraits))
     }
@@ -163,6 +191,11 @@ public enum AccessibilityPolicy {
 
     private static func matcherTraitSortKey(_ trait: HeistTrait) -> (Int, String) {
         (matcherTraitPriority(trait), trait.rawValue)
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return value
     }
 
     // MARK: - Tab Switch Persistence Threshold

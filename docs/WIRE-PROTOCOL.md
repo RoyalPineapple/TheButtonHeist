@@ -227,9 +227,10 @@ contract.
 }
 ```
 
-`heistId` is a current-capture handle. It can target immediate follow-up
-actions while the capture is current, but durable replay uses semantic
-selectors and matchers.
+`heistId` is a current-capture annotation for correlation and diagnostics.
+Public action messages identify elements with `ElementTarget` predicate fields
+such as `label`, `identifier`, `value`, `traits`, `excludeTraits`, and optional
+`ordinal`. Durable replay uses the same semantic target shape.
 
 ### Semantic Action
 
@@ -283,6 +284,9 @@ for example:
 ```json
 {"kind":"scrollSearch","data":{"scrollCount":3,"uniqueElementsSeen":25,"exhaustive":false,"foundElement":{"heistId":"button_color","label":"Color","traits":["button"]}}}
 ```
+
+Returned elements may include capture-local annotations. Compose follow-up
+commands from their semantic fields, not from `heistId`.
 
 Errors use typed `errorKind` on action results when the error belongs to the
 action. Server-level failures use the `error` message with `kind` and

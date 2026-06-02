@@ -568,7 +568,7 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testElementTargetRejectsHeistIdField() async throws {
         // heistId is no longer a targeting field — it is rejected as unknown.
-        XCTAssertThrowsError(try decodedElementTarget(target: heistTargetValue("button_save")))
+        XCTAssertThrowsError(try decodedElementTarget(target: legacyHeistIdTargetValue("button_save")))
     }
 
     @ButtonHeistActor
@@ -956,7 +956,7 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testScrollToVisibleHeistIdPassesValidation() async {
+    func testScrollToVisibleIdentifierTargetPassesValidation() async {
         await assertPassesValidation(
             command: .scrollToVisible,
             arguments: ["target": targetValue(identifier: "targetElement")]
@@ -2721,8 +2721,8 @@ final class TheFenceHandlerTests: XCTestCase {
 
 }
 
-private func heistTargetValue(_ heistId: String) -> HeistValue {
-    elementTargetValue(["heistId": .string(heistId)])
+private func legacyHeistIdTargetValue(_ legacyHeistId: String) -> HeistValue {
+    elementTargetValue(["heistId": .string(legacyHeistId)])
 }
 
 private func targetValue(

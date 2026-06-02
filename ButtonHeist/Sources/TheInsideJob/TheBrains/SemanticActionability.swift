@@ -112,10 +112,10 @@ final class SemanticActionability {
                 stash.recordVisibleSemanticObservation()
                 didRevealTarget = true
             }
-        case .notFound(let diagnostics):
-            return .failed(.notFound(diagnostics))
-        case .ambiguous(_, let diagnostics):
-            return .failed(.ambiguous(diagnostics))
+        case .notFound(let facts):
+            return .failed(.notFound(TargetResolutionDiagnostics.message(for: .notFound(facts))))
+        case .ambiguous(let facts):
+            return .failed(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         }
 
         var freshTarget = resolveFreshElementTarget(
@@ -234,12 +234,12 @@ final class SemanticActionability {
         switch stash.resolveVisibleTarget(target) {
         case .resolved(let target):
             screenElement = target
-        case .notFound(let diagnostics):
+        case .notFound(let facts):
             return .failure(.staleRefresh(
-                "target was not found in fresh live geometry: \(diagnostics)"
+                "target was not found in fresh live geometry: \(TargetResolutionDiagnostics.message(for: .notFound(facts)))"
             ))
-        case .ambiguous(_, let diagnostics):
-            return .failure(.ambiguous(diagnostics))
+        case .ambiguous(let facts):
+            return .failure(.ambiguous(TargetResolutionDiagnostics.message(for: .ambiguous(facts))))
         }
 
         switch stash.resolveLiveActionTarget(for: screenElement) {

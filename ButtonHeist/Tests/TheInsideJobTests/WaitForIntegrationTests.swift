@@ -130,10 +130,12 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     @discardableResult
-    private func refreshAndRecordSentState() async -> Bool {
-        guard insideJob.brains.stash.recordVisibleSemanticObservation() != nil else { return false }
-        await insideJob.brains.recordSentState()
-        return true
+    private func waitForSettledVisibleObservation() async -> Bool {
+        await insideJob.brains.interactionObservation.observeSemanticState(
+            scope: .visible,
+            after: nil,
+            timeout: 1.0
+        ) != nil
     }
 
     // MARK: - 1. Element already present — returns immediately
@@ -352,11 +354,10 @@ final class WaitForIntegrationTests: XCTestCase {
         )
     }
 
-    func testWaitForChangeElementAppearedAfterBaselineReturnsThroughChangePath() async throws {
+    func testWaitForChangeElementAppearedOnNextEventReturnsThroughChangePath() async throws {
         let baseline = addLabel("WaitForChange-Baseline")
         defer { baseline.removeFromSuperview() }
-        let recordedBaseline = await refreshAndRecordSentState()
-        XCTAssertTrue(recordedBaseline)
+        XCTAssertTrue(await waitForSettledVisibleObservation())
 
         let addTask = Task { @MainActor in
             await self.insideJob.tripwire.yieldRealFrames(2)
@@ -380,26 +381,20 @@ final class WaitForIntegrationTests: XCTestCase {
         }
     }
 
-    func testWaitForChangeLateCallElementsChangedUsesAlreadyChangedCapture() async throws {
-        let baseline = addLabel("WaitForChange-ElementsBaseline")
-        defer { baseline.removeFromSuperview() }
-        let recordedBaseline = await refreshAndRecordSentState()
-        XCTAssertTrue(recordedBaseline)
-
+    func testWaitForChangeElementsChangedRequiresFutureSettledDelta() async throws {
         let changed = addLabel("WaitForChange-ElementsChanged")
         defer { changed.removeFromSuperview() }
+        XCTAssertTrue(await waitForSettledVisibleObservation())
 
         let result = await waitForChange(
             expectation: .changed(.elements),
-            timeout: 5.0
+            timeout: 0.2
         )
 
-        XCTAssertTrue(result.success)
+        XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertTrue(result.message?.contains("expectation met after") == true)
-        guard case .elementsChanged = result.accessibilityTrace?.endpointDeltaProjection else {
-            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
-        }
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("expected: changed(elements_changed)") == true)
     }
 
     func testWaitForChangeVisibleUpdatePreservesKnownOffViewportMemory() async throws {
@@ -426,7 +421,6 @@ final class WaitForIntegrationTests: XCTestCase {
         insideJob.brains.stash.installScreenForTesting(offViewportMemory.merging(
             insideJob.brains.stash.currentScreen
         ))
-        await insideJob.brains.recordSentState()
         XCTAssertNotNil(insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId))
 
         let updateTask = Task { @MainActor in
@@ -465,7 +459,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertTrue(
             result.message?.contains("expected: changed(element_disappeared(predicate(label=\"WaitForChange-StillPresent\")))") == true
         )
-        XCTAssertTrue(result.message?.contains("Next: get_interface()") == true)
+        XCTAssertTrue(result.message?.contains("last observed:") == true)
     }
 
     func testWaitForChangeScreenChangedTimeoutSuggestsElementsChanged() async throws {
@@ -482,7 +476,7 @@ final class WaitForIntegrationTests: XCTestCase {
         XCTAssertEqual(result.method, .wait)
         XCTAssertEqual(result.errorKind, .timeout)
         XCTAssertTrue(message.contains("expected: changed(screen_changed)"), "Unexpected message: \(message)")
-        XCTAssertTrue(message.contains("predicate: {\"type\": \"elements_changed\"}"), "Unexpected message: \(message)")
+        XCTAssertTrue(message.contains("last observed:"), "Unexpected message: \(message)")
     }
 
     func testWaitForChangeElementsChangedTimeoutDoesNotSuggestElementsChanged() async throws {

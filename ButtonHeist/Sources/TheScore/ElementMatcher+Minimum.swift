@@ -180,7 +180,7 @@ public enum MinimumPredicateSelector {
     }
 
     private static func matcherAtoms(for element: HeistElement) -> [MatcherAtom] {
-        let facts = matcherFacts(for: element)
+        let facts = AccessibilityPolicy.matcherFacts(for: element)
         var atoms: [MatcherAtom] = []
         atoms.reserveCapacity(facts.count)
 
@@ -196,30 +196,6 @@ public enum MinimumPredicateSelector {
         }
 
         return atoms.sorted(by: atomPrecedes)
-    }
-
-    private static func matcherFacts(for element: HeistElement) -> [AccessibilityMatcherFact] {
-        var facts: [AccessibilityMatcherFact] = []
-        if let identifier = nonEmpty(element.identifier) {
-            facts.append(.identifier(identifier))
-        }
-        if let label = nonEmpty(element.label) {
-            facts.append(.label(label))
-        }
-        for trait in AccessibilityPolicy.orderedMatcherTraits(element.traits) {
-            facts.append(.trait(trait))
-        }
-        if let value = nonEmpty(element.value) {
-            facts.append(.value(value))
-        }
-
-        if !facts.isEmpty {
-            let presentTraits = Set(element.traits)
-            for trait in AccessibilityPolicy.orderedMatcherStateTraits where !presentTraits.contains(trait) {
-                facts.append(.excludedTrait(trait))
-            }
-        }
-        return facts
     }
 
     private static func predicate(for fact: AccessibilityMatcherFact) -> ElementPredicate? {

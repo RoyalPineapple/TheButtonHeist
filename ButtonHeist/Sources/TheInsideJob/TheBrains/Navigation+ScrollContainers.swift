@@ -240,12 +240,12 @@ extension Navigation {
         case .resolved:
             return "\(commandName) failed: target is known but not currently visible; "
                 + "use scroll_to_visible to reveal it, then retry \(commandName)."
-        case .ambiguous(_, let diagnostics):
+        case .ambiguous(let facts):
             return "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
-                + "\(diagnostics)\nNext: use scroll_to_visible with a heistId for a known off-screen "
-                + "target, or retarget from get_screen's visible interface."
-        case .notFound(let diagnostics):
-            return diagnostics
+                + "\(TargetResolutionDiagnostics.message(for: .ambiguous(facts)))\nNext: refine the semantic target with "
+                + "an ordinal or exact label, identifier, value, or trait from get_screen's visible interface."
+        case .notFound(let facts):
+            return TargetResolutionDiagnostics.message(for: .notFound(facts))
         }
     }
 }

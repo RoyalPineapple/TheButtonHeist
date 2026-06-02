@@ -212,15 +212,15 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertEqual(
             Navigation.ScrollTargetDescription(labeled),
-            .label("Labeled", heistId: "labeled_item")
+            .label("Labeled")
         )
         XCTAssertEqual(
             Navigation.ScrollTargetDescription(identified),
-            .identifier("identified_id", heistId: "identified_item")
+            .identifier("identified_id")
         )
         XCTAssertEqual(
             Navigation.ScrollTargetDescription(anonymous),
-            .heistId("anonymous_item")
+            .element
         )
     }
 
@@ -1049,7 +1049,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(
             result.message,
-            "scroll target failed: observed \"Item\" (heistId: item) with no live scrollable ancestor; "
+            "scroll target failed: observed \"Item\" with no live scrollable ancestor; "
                 + "try element_search or target an element inside a scroll container"
         )
     }
@@ -1072,7 +1072,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(
             result.message,
-            "scroll target failed: observed \"Item\" (heistId: item) inside a scroll view that supports no scrolling; "
+            "scroll target failed: observed \"Item\" inside a scroll view that supports no scrolling; "
                 + "expected vertical scrolling; try a matching scroll direction or target an element "
                 + "inside a matching scroll container"
         )

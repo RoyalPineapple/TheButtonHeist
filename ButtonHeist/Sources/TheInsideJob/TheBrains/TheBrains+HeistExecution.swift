@@ -10,7 +10,6 @@ extension TheBrains {
         let execute: @MainActor (ClientMessage) async -> ActionResult
         let wait: @MainActor (WaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
         let observeSemanticState: @MainActor (SemanticObservationScope, UInt64?, Double?) async -> HeistSemanticObservation?
-        let recordDeliveredObservationAfterStep: @MainActor () async -> Void
 
         @MainActor
         static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
@@ -23,11 +22,6 @@ extension TheBrains {
                 },
                 observeSemanticState: { scope, sequence, timeout in
                     await brains.interactionObservation.observeSemanticState(scope: scope, after: sequence, timeout: timeout)
-                },
-                recordDeliveredObservationAfterStep: {
-                    if let state = await brains.interactionObservation.recordDeliveredBaselineAfterStep() {
-                        brains.waitForChangeState.recordDeliveredBaseline(state)
-                    }
                 }
             )
         }
@@ -88,8 +82,6 @@ extension TheBrains {
                 failedIndex = index
             }
             stepResults.append(stepResult)
-
-            await runtime.recordDeliveredObservationAfterStep()
 
             if failedIndex != nil {
                 appendSkippedHeistSteps(
