@@ -4,6 +4,8 @@ import Foundation
 
 import TheScore
 
+private let defaultSemanticObservationTimeout: Double = 1
+
 struct HeistSemanticObservation {
     let baseline: PostActionObservation.BeforeState
     let state: PostActionObservation.BeforeState
@@ -12,90 +14,46 @@ struct HeistSemanticObservation {
     let summary: String
 }
 
-enum HeistSemanticObservationScope: Equatable {
-    case visibleRefresh
-    case revealTargets([ElementTarget])
-    case fullSemanticExplore
-
-    func merged(with other: HeistSemanticObservationScope) -> HeistSemanticObservationScope {
-        switch (self, other) {
-        case (.fullSemanticExplore, _), (_, .fullSemanticExplore):
-            return .fullSemanticExplore
-        case (.revealTargets(let left), .revealTargets(let right)):
-            return .revealTargets(left + right)
-        case (.revealTargets, .visibleRefresh):
-            return self
-        case (.visibleRefresh, .revealTargets):
-            return other
-        case (.visibleRefresh, .visibleRefresh):
-            return .visibleRefresh
-        }
-    }
-}
-
 @MainActor
 final class HeistSemanticObservations {
     private let stash: TheStash
-    private let tripwire: TheTripwire
-    private let navigation: Navigation
     private let postActionObservation: PostActionObservation
 
     init(
         stash: TheStash,
-        tripwire: TheTripwire,
-        navigation: Navigation,
         postActionObservation: PostActionObservation
     ) {
         self.stash = stash
-        self.tripwire = tripwire
-        self.navigation = navigation
         self.postActionObservation = postActionObservation
     }
 
     func observe(
-        scope: HeistSemanticObservationScope,
+        scope: SemanticObservationScope,
         baseline: PostActionObservation.BeforeState?,
         timeout: Double?
     ) async -> HeistSemanticObservation? {
-        let observationBaseline: PostActionObservation.BeforeState
-        var current: PostActionObservation.BeforeState
-        if let observedBaseline = baseline {
-            observationBaseline = observedBaseline
-            guard let settled = await postActionObservation.settledSemanticState(after: observedBaseline, timeout: timeout) else {
-                return nil
-            }
-            current = settled
-        } else {
-            guard let observed = await postActionObservation.currentSemanticState() else {
-                return nil
-            }
-            observationBaseline = observed
-            current = observed
-        }
+        let observation = await stash.settledSemanticObservation(
+            scope: scope,
+            after: baseline?.settledObservationSequence,
+            timeout: timeout ?? defaultSemanticObservationTimeout
+        )
 
-        switch scope {
-        case .visibleRefresh:
-            break
-        case .fullSemanticExplore:
-            _ = await navigation.exploreAndPrune()
-            current = postActionObservation.captureSemanticState()
-        case .revealTargets(let targets):
-            let needsExplore = await revealHeistObservationTargets(targets)
-            if needsExplore {
-                _ = await navigation.exploreAndPrune()
-                current = postActionObservation.captureSemanticState()
-            } else if !targets.isEmpty,
-                      let refreshed = await postActionObservation.settledSemanticState(after: current, timeout: timeout) {
-                current = refreshed
-            }
-        }
+        guard let observation else { return nil }
+        return semanticObservation(from: observation, baseline: baseline)
+    }
 
-        let trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: observationBaseline)
+    private func semanticObservation(
+        from observation: TheStash.SettledSemanticObservation,
+        baseline: PostActionObservation.BeforeState?
+    ) -> HeistSemanticObservation {
+        let current = postActionObservation.captureSemanticState(from: observation)
+        let parent = baseline ?? current
+        let trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: parent)
         return HeistSemanticObservation(
-            baseline: observationBaseline,
+            baseline: parent,
             state: current,
             accessibilityTrace: trace,
-            delta: trace.endpointDeltaProjection,
+            delta: baseline == nil ? nil : trace.endpointDeltaProjection,
             summary: heistObservationSummary(current)
         )
     }
@@ -103,35 +61,60 @@ final class HeistSemanticObservations {
     func waitReceipt(for step: WaitStep) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = max(0, min(step.timeout, 30))
-        let deadline = start + timeout
-        var baseline: PostActionObservation.BeforeState?
         var lastObservation: HeistSemanticObservation?
         var lastEvaluation = ExpectationResult(
             met: false,
             predicate: step.predicate,
-            actual: "no settled accessibility state observed"
+            actual: "no settled semantic observation available"
         )
 
-        repeat {
+        if let initial = await observe(scope: step.predicate.observationScope, baseline: nil, timeout: 0) {
+            lastObservation = initial
+            lastEvaluation = evaluate(step.predicate, in: initial)
+            if lastEvaluation.met {
+                return waitReceipt(
+                    for: step,
+                    observation: initial,
+                    expectation: lastEvaluation,
+                    start: start,
+                    success: true
+                )
+            }
+        } else if timeout == 0 {
+            return waitReceipt(
+                for: step,
+                observation: nil,
+                expectation: lastEvaluation,
+                start: start,
+                success: false
+            )
+        }
+
+        guard timeout > 0 else {
+            return waitReceipt(
+                for: step,
+                observation: lastObservation,
+                expectation: lastEvaluation,
+                start: start,
+                success: false
+            )
+        }
+
+        let deadline = start + timeout
+        var baseline = lastObservation?.state
+        while CFAbsoluteTimeGetCurrent() < deadline {
             let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
-            let observation = await observe(
+            guard let observation = await observe(
                 scope: step.predicate.observationScope,
                 baseline: baseline,
-                timeout: min(remaining, 1.0)
-            )
-
-            guard let observation else {
-                if timeout == 0 { break }
+                timeout: min(remaining, defaultSemanticObservationTimeout)
+            ) else {
                 continue
             }
 
             baseline = observation.state
             lastObservation = observation
-            lastEvaluation = step.predicate.evaluate(
-                currentElements: observation.state.interface.projectedElements,
-                delta: observation.delta
-            )
-
+            lastEvaluation = evaluate(step.predicate, in: observation)
             if lastEvaluation.met {
                 return waitReceipt(
                     for: step,
@@ -141,9 +124,7 @@ final class HeistSemanticObservations {
                     success: true
                 )
             }
-
-            if timeout == 0 { break }
-        } while CFAbsoluteTimeGetCurrent() < deadline
+        }
 
         return waitReceipt(
             for: step,
@@ -155,23 +136,17 @@ final class HeistSemanticObservations {
     }
 
     func refreshDeliveredBaselineAfterStep() async -> Bool {
-        _ = await tripwire.waitForAllClear(timeout: 0.5)
-        return stash.recordVisibleSemanticObservation() != nil
+        await observe(scope: .visible, baseline: nil, timeout: 0) != nil
     }
 
-    private func revealHeistObservationTargets(_ targets: [ElementTarget]) async -> Bool {
-        var needsExplore = false
-        for target in targets {
-            switch stash.resolveTarget(target) {
-            case .resolved:
-                _ = await navigation.executeScrollToVisible(elementTarget: target)
-            case .ambiguous:
-                continue
-            case .notFound:
-                needsExplore = true
-            }
-        }
-        return needsExplore
+    private func evaluate(
+        _ predicate: AccessibilityPredicate,
+        in observation: HeistSemanticObservation
+    ) -> ExpectationResult {
+        predicate.evaluate(
+            currentElements: observation.state.interface.projectedElements,
+            delta: observation.delta
+        )
     }
 
     private func heistObservationSummary(_ state: PostActionObservation.BeforeState) -> String {
@@ -192,7 +167,7 @@ final class HeistSemanticObservations {
         var builder = ActionResultBuilder(method: .wait)
         builder.accessibilityTrace = observation?.accessibilityTrace
         builder.message = success
-            ? "predicate met after \(elapsedSeconds(since: start))s"
+            ? waitSuccessMessage(for: step.predicate, start: start)
             : waitTimeoutMessage(
                 for: step,
                 expectation: expectation,
@@ -206,18 +181,19 @@ final class HeistSemanticObservations {
         return HeistWaitReceipt(actionResult: actionResult, expectation: expectation)
     }
 
-    private func unavailableWaitReceipt(for step: WaitStep) -> HeistWaitReceipt {
-        var builder = ActionResultBuilder(method: .wait)
-        builder.message = "Could not observe settled accessibility state before evaluating wait predicate"
-        let actionResult = builder.failure(errorKind: .actionFailed)
-        return HeistWaitReceipt(
-            actionResult: actionResult,
-            expectation: ExpectationResult(
-                met: false,
-                predicate: step.predicate,
-                actual: builder.message
-            )
-        )
+    private func waitSuccessMessage(
+        for predicate: AccessibilityPredicate,
+        start: CFAbsoluteTime
+    ) -> String {
+        let elapsed = elapsedSeconds(since: start)
+        switch predicate {
+        case .state(.present):
+            return elapsed == "0.0" ? "matched immediately" : "matched after \(elapsed)s"
+        case .state(.absent):
+            return "absent confirmed after \(elapsed)s"
+        default:
+            return "predicate met after \(elapsed)s"
+        }
     }
 
     private func waitTimeoutMessage(
@@ -227,6 +203,15 @@ final class HeistSemanticObservations {
         start: CFAbsoluteTime
     ) -> String {
         let elapsed = elapsedSeconds(since: start)
+        guard observation != nil else {
+            return [
+                "timed out after \(elapsed)s waiting for heist predicate",
+                "expected: \(step.predicate.description)",
+                "last result: \(expectation.actual ?? "not met")",
+                "last observed: no settled semantic observation available",
+            ].joined(separator: "; ")
+        }
+
         if let presenceMessage = presenceWaitTimeoutMessage(for: step.predicate, elapsed: elapsed) {
             return presenceMessage
         }
@@ -235,7 +220,7 @@ final class HeistSemanticObservations {
             "timed out after \(elapsed)s waiting for heist predicate",
             "expected: \(step.predicate.description)",
             "last result: \(expectation.actual ?? "not met")",
-            "last observed: \(observation?.summary ?? "no settled accessibility state")",
+            "last observed: \(observation?.summary ?? "no settled semantic observation available")",
         ].joined(separator: "; ")
     }
 
@@ -297,23 +282,23 @@ final class HeistSemanticObservations {
 }
 
 extension ConditionalStep {
-    var observationScope: HeistSemanticObservationScope {
+    var observationScope: SemanticObservationScope {
         cases
             .map(\.predicate.observationScope)
-            .reduce(.visibleRefresh) { $0.merged(with: $1) }
+            .max() ?? .visible
     }
 }
 
 extension WaitForCasesStep {
-    var observationScope: HeistSemanticObservationScope {
+    var observationScope: SemanticObservationScope {
         cases
             .map(\.predicate.observationScope)
-            .reduce(.visibleRefresh) { $0.merged(with: $1) }
+            .max() ?? .visible
     }
 }
 
 extension AccessibilityPredicate {
-    var observationScope: HeistSemanticObservationScope {
+    var observationScope: SemanticObservationScope {
         switch self {
         case .state(let state):
             return state.observationScope
@@ -324,34 +309,29 @@ extension AccessibilityPredicate {
 }
 
 private extension AccessibilityPredicate.State {
-    var observationScope: HeistSemanticObservationScope {
+    var observationScope: SemanticObservationScope {
         switch self {
-        case .present(let predicate), .absent(let predicate):
-            return .revealTargets([.predicate(predicate)])
-        case .presentTarget(let target), .absentTarget(let target):
-            return .revealTargets([target])
+        case .present, .absent, .presentTarget, .absentTarget:
+            return .visible
         case .all(let states):
             return states
                 .map(\.observationScope)
-                .reduce(.visibleRefresh) { $0.merged(with: $1) }
+                .max() ?? .visible
         }
     }
 }
 
 private extension AccessibilityPredicate.Change {
-    var observationScope: HeistSemanticObservationScope {
+    var observationScope: SemanticObservationScope {
         switch self {
         case .screen(let state):
-            return state?.observationScope ?? .visibleRefresh
+            return state?.observationScope ?? .visible
         case .elements:
-            return .visibleRefresh
+            return .visible
         case .appeared:
-            return .fullSemanticExplore
-        case .disappeared(let predicate):
-            return .revealTargets([.predicate(predicate)])
-        case .updated(let update):
-            guard let predicate = update.element else { return .visibleRefresh }
-            return .revealTargets([.predicate(predicate)])
+            return .discovery
+        case .disappeared, .updated:
+            return .visible
         }
     }
 }

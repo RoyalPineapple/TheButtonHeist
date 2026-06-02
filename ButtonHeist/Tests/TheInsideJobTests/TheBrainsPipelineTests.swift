@@ -8,7 +8,7 @@ import UIKit
 /// Deterministic tests for post-action observation and exploration behavior
 /// that operate purely against the current `Screen` snapshot: failure result
 /// assembly, classified trace projections, wait-change guards, and
-/// `exploreAndPrune` pruning.
+/// semantic discovery observation.
 ///
 /// Success-path post-action observation and `exploreScreen` container iteration
 /// require a live window and are covered by integration/benchmark runs.
@@ -23,6 +23,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        brains.stopSemanticObservation()
         brains = nil
         try await super.tearDown()
     }
@@ -109,7 +110,10 @@ final class TheBrainsPipelineTests: XCTestCase {
         guard brains.stash.recordVisibleSemanticObservation() != nil else {
             throw XCTSkip("No live hierarchy available for post-action observation test")
         }
-        _ = await brains.navigation.exploreAndPrune()
+        brains.startSemanticObservation()
+        guard await brains.stash.settledSemanticObservation(scope: .discovery, after: nil, timeout: 2) != nil else {
+            throw XCTSkip("No settled discovery observation available")
+        }
         let screen = brains.stash.currentScreen
         let before = brains.postActionObservation.captureSemanticState()
 
@@ -378,26 +382,26 @@ final class TheBrainsPipelineTests: XCTestCase {
         )
     }
 
-    // MARK: - exploreAndPrune
+    // MARK: - Semantic Discovery Observation
 
-    func testExploreAndPruneCommitsUnion() async {
+    func testSemanticDiscoveryObservationCommitsUnion() async {
         // Post-0.2.25: exploration seeds the local union from currentScreen,
         // merges each parse into it, then commits the union back. There is no
         // pruning — the union is the canonical "all elements seen this cycle".
-        // With no scrollable containers in the host hierarchy, exploreAndPrune
+        // With no scrollable containers in the host hierarchy, semantic discovery
         // reduces to refresh-and-commit, and the seeded entry merges into the
         // live parse rather than being pruned.
         seedScreen(elements: [("Seed", .button, "button_seed")])
         XCTAssertEqual(brains.stash.currentScreen.semantic.elements.count, 1)
 
-        _ = await brains.navigation.exploreAndPrune()
+        await brains.navigation.observeSemanticDiscovery()
 
         // Either the seed survives (no live parse landed and the union still
         // holds it) or it merges with new live entries — either way, the
         // currentScreen reflects the committed union, not the pre-explore
         // value alone.
         XCTAssertNotNil(brains.stash.currentScreen,
-                        "exploreAndPrune always commits a screen value")
+                        "semantic discovery observation always commits a screen value")
     }
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {

@@ -85,18 +85,33 @@ final class TheBrains {
     // MARK: - Response State Tracking
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
-    func recordSentState() {
-        waitForChangeState.recordDeliveredBaseline(postActionObservation.captureSemanticState())
+    func recordSentState() async {
+        startSemanticObservation()
+        guard let state = await postActionObservation.currentSemanticState() else { return }
+        waitForChangeState.recordDeliveredBaseline(state)
+    }
+
+    func startSemanticObservation() {
+        stash.startPassiveSemanticObservation { [weak self] in
+            guard let self else { return }
+            await self.navigation.observeSemanticDiscovery()
+        }
+    }
+
+    func stopSemanticObservation() {
+        stash.stopPassiveSemanticObservation()
     }
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
-        _ = await tripwire.waitForAllClear(timeout: 0.5)
-
-        guard stash.recordVisibleSemanticObservation() != nil else {
+        startSemanticObservation()
+        guard await stash.settledSemanticObservation(
+            scope: .discovery,
+            after: nil,
+            timeout: 2.0
+        ) != nil else {
             return .failure(.rootViewUnavailable)
         }
 
-        _ = await navigation.exploreAndPrune()
         do {
             let interface = try InterfaceSelector(interface: stash.interface()).select(query)
             return .success(interface)

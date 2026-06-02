@@ -11,7 +11,7 @@ extension TheBrains {
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime
     ) async -> HeistExecutionStepResult {
-        guard let observation = await runtime.observeSemanticState(.fullSemanticExplore, nil, nil) else {
+        guard let observation = await runtime.observeSemanticState(.discovery, nil, nil) else {
             return HeistExecutionStepResult(
                 index: index,
                 kind: .forEach,

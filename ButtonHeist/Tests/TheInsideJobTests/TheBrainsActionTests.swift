@@ -81,6 +81,7 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        brains.stopSemanticObservation()
         brains = nil
         try await super.tearDown()
     }
@@ -610,7 +611,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeouts, [0])
     }
 
-    func testHeistWaitTimeoutZeroEvaluatesImmediately() async throws {
+    func testHeistWaitTimeoutZeroTurnsObservationCrankOnce() async throws {
         let plan = HeistPlan(steps: [
             .wait(WaitStep(
                 predicate: .state(.present(ElementPredicate(label: "Never Appears"))),
@@ -623,7 +624,31 @@ final class TheBrainsActionTests: XCTestCase {
         let elapsed = CFAbsoluteTimeGetCurrent() - start
 
         XCTAssertFalse(result.success)
-        XCTAssertLessThan(elapsed, 1)
+        XCTAssertLessThan(elapsed, 3)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        XCTAssertDiagnostic(step.actionResult?.message, contains: [
+            "no settled semantic observation available",
+        ])
+    }
+
+    func testHeistWaitTimeoutZeroSucceedsFromOneObservation() async throws {
+        var observedTimeouts: [Double?] = []
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Home"])],
+            observedTimeouts: { observedTimeouts.append($0) }
+        )
+        let plan = HeistPlan(steps: [
+            .wait(WaitStep(
+                predicate: .state(.present(ElementPredicate(label: "Home"))),
+                timeout: 0
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(observedTimeouts, [])
     }
 
     func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
@@ -743,8 +768,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.expectation?.actual, "timed out after 0.2s — expectation not met")
     }
 
-    func testHeistSemanticObservationScopeMergesRevealTargets() async throws {
-        var observedScopes: [HeistSemanticObservationScope] = []
+    func testHeistSemanticObservationScopeUsesVisibleForStateCases() async throws {
+        var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
             observedScopes: { observedScopes.append($0) }
@@ -764,16 +789,11 @@ final class TheBrainsActionTests: XCTestCase {
 
         _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
-        XCTAssertEqual(observedScopes, [
-            .revealTargets([
-                .predicate(ElementPredicate(label: "Home")),
-                .predicate(ElementPredicate(label: "Login")),
-            ]),
-        ])
+        XCTAssertEqual(observedScopes, [.visible])
     }
 
-    func testHeistSemanticObservationScopeUsesFullExploreForAppearanceCases() async throws {
-        var observedScopes: [HeistSemanticObservationScope] = []
+    func testHeistSemanticObservationScopeUsesDiscoveryForAppearanceCases() async throws {
+        var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
             observedScopes: { observedScopes.append($0) }
@@ -793,11 +813,11 @@ final class TheBrainsActionTests: XCTestCase {
 
         _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
-        XCTAssertEqual(observedScopes, [.fullSemanticExplore])
+        XCTAssertEqual(observedScopes, [.discovery])
     }
 
-    func testHeistSemanticObservationScopeFullExploreWinsOverReveal() async throws {
-        var observedScopes: [HeistSemanticObservationScope] = []
+    func testHeistSemanticObservationScopeDiscoveryWinsOverVisible() async throws {
+        var observedScopes: [SemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
             observedScopes: { observedScopes.append($0) }
@@ -821,14 +841,18 @@ final class TheBrainsActionTests: XCTestCase {
 
         _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
-        XCTAssertEqual(observedScopes, [.fullSemanticExplore])
+        XCTAssertEqual(observedScopes, [.discovery])
     }
 
     func testHeistForEachWithZeroMatchesSucceedsWithoutIterations() async throws {
         let matching = ElementPredicate(label: "Delete")
-        let runtime = heistRuntime(observations: [
-            observedState(labels: ["Keep"]),
-        ])
+        var observedScopes: [SemanticObservationScope] = []
+        let runtime = heistRuntime(
+            observations: [
+                observedState(labels: ["Keep"]),
+            ],
+            observedScopes: { observedScopes.append($0) }
+        )
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
@@ -849,6 +873,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.iterationCount, 0)
         XCTAssertNil(forEachResult.failureReason)
         XCTAssertNil(step.childResults)
+        XCTAssertEqual(observedScopes, [.discovery])
     }
 
     func testHeistForEachFailsBeforeMutationWhenMatchCountExceedsLimit() async throws {
@@ -1514,7 +1539,8 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
         let target = WaitTarget(
-            predicate: .state(.present(ElementPredicate(label: "never")))
+            predicate: .state(.present(ElementPredicate(label: "never"))),
+            timeout: 0
         )
         let result = await withNoTraversableWindows {
             await brains.executeCommand(.wait(target))
@@ -1522,17 +1548,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.errorKind, .actionFailed)
-    }
-
-    func testWaitForTreeUnavailableFailureKindMapsToActionFailed() {
-        XCTAssertEqual(
-            TheBrains.waitForErrorKind(for: .treeUnavailable),
-            .actionFailed
-        )
-        XCTAssertEqual(TheBrains.waitForErrorKind(for: .timeout), .timeout)
-        XCTAssertEqual(TheBrains.waitForErrorKind(for: .targetUnavailable), .elementNotFound)
-        XCTAssertEqual(TheBrains.waitForErrorKind(for: nil), .elementNotFound)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
     }
 
     // MARK: - Helpers
@@ -1719,7 +1736,7 @@ final class TheBrainsActionTests: XCTestCase {
         observations: [PostActionObservation.BeforeState],
         execute: (@MainActor (ClientMessage) async -> ActionResult)? = nil,
         wait: (@MainActor (WaitStep) async -> ActionResult)? = nil,
-        observedScopes: (@MainActor (HeistSemanticObservationScope) -> Void)? = nil,
+        observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,

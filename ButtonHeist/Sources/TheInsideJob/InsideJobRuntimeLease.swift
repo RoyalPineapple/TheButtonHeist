@@ -39,6 +39,7 @@ final class InsideJobRuntimeLease {
         job.startLifecycleObservation()
 
         job.tripwire.startPulse()
+        job.brains.startSemanticObservation()
         job.brains.safecracker.startKeyboardObservation()
     }
 
@@ -68,6 +69,7 @@ extension TheInsideJob {
             restoreIdleTimerProtection(clearBaseline: true)
         }
 
+        brains.stopSemanticObservation()
         tripwire.stopPulse()
         brains.safecracker.stopKeyboardObservation()
     }
