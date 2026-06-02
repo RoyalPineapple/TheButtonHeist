@@ -203,7 +203,9 @@ private extension HeistExecutionStepResult {
             childResults: childResults
         )
     }
+}
 
+extension HeistExecutionStepResult {
     func reindexed(_ newIndex: Int) -> HeistExecutionStepResult {
         HeistExecutionStepResult(
             index: newIndex,
