@@ -625,7 +625,11 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertLessThan(elapsed, 3)
-        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        XCTAssertDiagnostic(step.actionResult?.message, contains: [
+            "no settled semantic observation available",
+        ])
     }
 
     func testHeistWaitTimeoutZeroSucceedsFromOneObservation() async throws {
