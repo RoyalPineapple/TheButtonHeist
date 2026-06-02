@@ -33,11 +33,12 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        insideJob.tripwire.stopPulse()
+        insideJob?.brains.stopSemanticObservation()
+        insideJob?.tripwire.stopPulse()
         insideJob = nil
-        window.rootViewController?.view.accessibilityViewIsModal = false
-        window.isHidden = true
-        window.rootViewController = nil
+        window?.rootViewController?.view.accessibilityViewIsModal = false
+        window?.isHidden = true
+        window?.rootViewController = nil
         window = nil
         hostView = nil
     }
