@@ -53,6 +53,7 @@
 		1515553E1E30191FC8047F11 /* TheFence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B92FA5985EAF1A5C7360207 /* TheFence.swift */; };
 		15ACCDAABA1FB72018B87121 /* TheBurglar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B68F25EE20E871B3447D1A /* TheBurglar.swift */; };
 		15E21D8057F2471052C0CE95 /* ScreenManifestTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */; };
+		16F213C277658794D7E90DAC /* RuntimeLeaseObservationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B2E011E256A57C07E586E5 /* RuntimeLeaseObservationTests.swift */; };
 		182D08F34A032A4555C8B88C /* TheFence+RequestPayload+ElementActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C563F9006A5994C60474596B /* TheFence+RequestPayload+ElementActions.swift */; };
 		182FD49F6D08E0E35666283B /* MuscleAuthenticationRequestDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5E1D8EDA975537DDF7B526 /* MuscleAuthenticationRequestDecoder.swift */; };
 		18D6ACAF04F901686D4C4989 /* TheMuscleStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0025667198ECED19B078766B /* TheMuscleStateMachineTests.swift */; };
@@ -473,6 +474,7 @@
 		F81139AC422C7E1A6B45DAF0 /* HeistSwiftRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 337188D75EA86CEFA93ED0CF /* HeistSwiftRenderer.swift */; };
 		F8A47A10FCD3C55B5E93C294 /* TheMuscleSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 138BFB5955703B79EB9C2866 /* TheMuscleSession.swift */; };
 		F91016CE6FA3F300A6D7E308 /* InterfaceSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B8591D59CF21B4C3622406 /* InterfaceSelectionTests.swift */; };
+		F92FB4AC61436EE8E4989F0C /* InteractionObservationProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72644CB06AA78333E6AE0AE /* InteractionObservationProjection.swift */; };
 		F9821E9AFFD222BE89C6AD3A /* KeyboardWindowTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D60707DDB4D8CF78ED74748 /* KeyboardWindowTestHelpers.swift */; };
 		F9CBFB6E280623F44A062452 /* MuscleAuthenticationDeadlinePhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BFB21A95FAFE947CCFE253A /* MuscleAuthenticationDeadlinePhase.swift */; };
 		FA0E49C263EB96C1DC0CC6D1 /* ActionResultTraceTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D97ECB99E775784B0E4D54 /* ActionResultTraceTestHelpers.swift */; };
@@ -806,6 +808,7 @@
 		488C6A6344E12FA4844BFF97 /* CommandArgumentEnvelopeLimits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandArgumentEnvelopeLimits.swift; sourceTree = "<group>"; };
 		48953C73290D6EC49324660C /* ElementTargetGrammar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementTargetGrammar.swift; sourceTree = "<group>"; };
 		48C0A7E7B525AB54B71D0EC5 /* ButtonHeistActor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonHeistActor.swift; sourceTree = "<group>"; };
+		49B2E011E256A57C07E586E5 /* RuntimeLeaseObservationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeLeaseObservationTests.swift; sourceTree = "<group>"; };
 		49DC85F5FB0AB0E2A81C9B96 /* TheHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheHandoff.swift; sourceTree = "<group>"; };
 		49E4AF8938E348B619C62C6D /* AccessibilityArmingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityArmingTests.swift; sourceTree = "<group>"; };
 		4B0A2A0866EE7E1975FF7580 /* TheFence+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Playback.swift"; sourceTree = "<group>"; };
@@ -970,6 +973,7 @@
 		A59FAF63152C36D2F067C13A /* ContentOriginOrdering.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentOriginOrdering.swift; sourceTree = "<group>"; };
 		A63CE2190936B721E21C76CE /* TheBrainsPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheBrainsPipelineTests.swift; sourceTree = "<group>"; };
 		A6E66628C74C420C04912FC4 /* TheStashCustomRotorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TheStashCustomRotorTests.swift; sourceTree = "<group>"; };
+		A72644CB06AA78333E6AE0AE /* InteractionObservationProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionObservationProjection.swift; sourceTree = "<group>"; };
 		A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotPayloadTests.swift; sourceTree = "<group>"; };
 		A80FBE15B77A6320E4B9811F /* HeistTraitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistTraitTests.swift; sourceTree = "<group>"; };
 		A819517EB325518F2558C809 /* LiveCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCapture.swift; sourceTree = "<group>"; };
@@ -1659,6 +1663,7 @@
 				46F4FB6742D2C07DF3CAE0F6 /* Actions+TextInputActions.swift */,
 				4831BAF2630B422BC3BF544E /* ActivationPolicy.swift */,
 				641841F7DF4A876D3CB48A34 /* InteractionObservation.swift */,
+				A72644CB06AA78333E6AE0AE /* InteractionObservationProjection.swift */,
 				BEC9469301CCEFAA5EA43116 /* InterfaceSelection.swift */,
 				15073ADC2F0E9EB5DBE3AED6 /* Navigation.swift */,
 				04ED01D497D5E5B60EED28A6 /* Navigation+ElementSearch.swift */,
@@ -1818,6 +1823,7 @@
 				03B8591D59CF21B4C3622406 /* InterfaceSelectionTests.swift */,
 				3D60707DDB4D8CF78ED74748 /* KeyboardWindowTestHelpers.swift */,
 				C3471869CA78AB09EF66258C /* PresentationObscuringTests.swift */,
+				49B2E011E256A57C07E586E5 /* RuntimeLeaseObservationTests.swift */,
 				E61AED0209793344783FFCD7 /* ScreenClassifierTests.swift */,
 				EB3D029B36F545CDF36A7BE5 /* ScreenManifestTests.swift */,
 				CD60080E4BE14A994AC72411 /* ScreenTests.swift */,
@@ -2437,6 +2443,7 @@
 				B315615DC3E1B70B46B4BDC5 /* Actions.swift in Sources */,
 				264BB930E10263AA3FE6938A /* ActivationPolicy.swift in Sources */,
 				3409AEB564501EE71F998F8B /* InteractionObservation.swift in Sources */,
+				F92FB4AC61436EE8E4989F0C /* InteractionObservationProjection.swift in Sources */,
 				C74FED6893CD13E4826F1CC3 /* InterfaceSelection.swift in Sources */,
 				2CBEA6AE6EA4DF2AC306F579 /* Navigation+ElementSearch.swift in Sources */,
 				9C57AB5104586EBDC99BEC1A /* Navigation+ExplorationScanning.swift in Sources */,
@@ -2699,6 +2706,7 @@
 				F91016CE6FA3F300A6D7E308 /* InterfaceSelectionTests.swift in Sources */,
 				F9821E9AFFD222BE89C6AD3A /* KeyboardWindowTestHelpers.swift in Sources */,
 				F27EFB3BFD5F772ACEB4BAE6 /* PresentationObscuringTests.swift in Sources */,
+				16F213C277658794D7E90DAC /* RuntimeLeaseObservationTests.swift in Sources */,
 				06A24ABB3DDA92F7B9081BE6 /* ScreenClassifierTests.swift in Sources */,
 				15E21D8057F2471052C0CE95 /* ScreenManifestTests.swift in Sources */,
 				0DB249CA4805D5D002B7E9FF /* ScreenTests.swift in Sources */,

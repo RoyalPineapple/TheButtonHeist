@@ -13,8 +13,8 @@ final class TheBrains {
 
     // Keep this literal in sync with `FenceResponse.accessibilityTreeUnavailableMessage`;
     // TheFence uses it to enrich wire-shaped `actionFailed` results locally.
-    static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
-    static let runtimeInactiveMessage = "ButtonHeist runtime is not active; start TheInsideJob before executing commands"
+    nonisolated static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
+    nonisolated static let runtimeInactiveMessage = "ButtonHeist runtime is not active; start TheInsideJob before executing commands"
 
     let stash: TheStash
     let safecracker: TheSafecracker
@@ -24,7 +24,7 @@ final class TheBrains {
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
     let waitForChangeState = WaitForChangeState()
-    private(set) var semanticObservationIsActive = false
+    var semanticObservationIsActive = false
 
     enum InterfaceObservation {
         case success(Interface)

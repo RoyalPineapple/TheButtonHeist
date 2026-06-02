@@ -12,7 +12,7 @@ struct HeistSemanticObservation {
     let summary: String
 }
 
-enum InteractionObservationProjection {
+@MainActor enum InteractionObservationProjection { // swiftlint:disable:this agent_main_actor_value_type
     struct InitialTraceResult {
         let trace: AccessibilityTrace
         let summary: String?
