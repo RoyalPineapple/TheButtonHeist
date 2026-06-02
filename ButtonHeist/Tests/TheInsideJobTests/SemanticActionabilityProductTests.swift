@@ -120,7 +120,6 @@ final class SemanticActionabilityProductTests: XCTestCase {
         ])
         XCTAssertFalse(result.message?.localizedCaseInsensitiveContains("scroll first") ?? false)
         XCTAssertFalse(result.message?.contains("get_interface") ?? false)
-        XCTAssertFalse(result.message?.contains("element_search") ?? false)
     }
 
     func testHeistSemanticActivateMatchesSingleActionResultSemantics() async throws {
@@ -153,11 +152,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
             label: "Explicit Scroll Revealed"
         )
         defer { fixture.cleanup() }
-        let initialScreen = try XCTUnwrap(brains.stash.recordVisibleSemanticObservation())
-        let stableId = try XCTUnwrap(firstScrollableStableId(in: initialScreen))
 
         let result = await brains.executeCommand(.scroll(ScrollTarget(
-            containerTarget: ScrollContainerTarget(stableId: stableId),
             direction: .down
         )))
 

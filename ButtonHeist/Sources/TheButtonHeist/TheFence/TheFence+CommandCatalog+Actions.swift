@@ -49,15 +49,6 @@ extension TheFence.Command {
                 description: "Make a semantic target actionable and report its fresh geometry."
             ),
             commandDescriptor(
-                .elementSearch, requestDecoder: TheFence.decodeElementSearchRequest,
-                cliExposure: .notExposed,
-                mcpExposure: .notExposed,
-                isHeistExecutable: false,
-                parameters: FenceParameterBlocks.elementTarget
-                    + [param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self))] + FenceParameterBlocks.expectation,
-                description: "Search scrollable content for a semantic element match without performing an action."
-            ),
-            commandDescriptor(
                 .scrollToEdge, requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + [

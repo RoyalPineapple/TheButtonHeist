@@ -203,20 +203,8 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollTargetRejectsPublicContainerHandle() throws {
-        let target = ScrollTarget(
-            selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
-            direction: .up
-        )
-        XCTAssertThrowsError(try encoder.encode(target))
-
         let data = Data(#"{"container":{"stableId":"main_scroll"},"direction":"up"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data))
-    }
-
-    func testScrollContainerTargetRejectsCaptureLocalRefAlias() throws {
-        let data = Data(#"{"captureLocalRef":"main_scroll"}"#.utf8)
-
-        XCTAssertThrowsError(try decoder.decode(ScrollContainerTarget.self, from: data))
     }
 
     // MARK: - ScrollToEdgeTarget
@@ -235,12 +223,6 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testScrollToEdgeTargetRejectsPublicContainerHandle() throws {
-        let target = ScrollToEdgeTarget(
-            selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
-            edge: .bottom
-        )
-        XCTAssertThrowsError(try encoder.encode(target))
-
         let data = Data(#"{"container":{"stableId":"main_scroll"},"edge":"bottom"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data))
     }
@@ -762,27 +744,6 @@ final class WireTypeRoundTripTests: XCTestCase {
             let decoded = try decoder.decode(ErrorKind.self, from: data)
             XCTAssertEqual(decoded, kind)
         }
-    }
-
-    // MARK: - ElementSearchTarget
-
-    func testElementSearchTargetRoundTrip() throws {
-        let target = ElementSearchTarget(
-            elementTarget: .predicate(ElementPredicate(label: "item_42")),
-            direction: .up
-        )
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(ElementSearchTarget.self, from: data)
-        XCTAssertEqual(decoded.elementTarget, .predicate(ElementPredicate(label: "item_42")))
-        XCTAssertEqual(decoded.direction, .up)
-    }
-
-    func testElementSearchTargetDirectionDefaults() {
-        let withDirection = ElementSearchTarget(elementTarget: .predicate(ElementPredicate(label: "item")), direction: .left)
-        XCTAssertEqual(withDirection.direction, .left)
-
-        let defaultDirection = ElementSearchTarget(elementTarget: .predicate(ElementPredicate(label: "item")))
-        XCTAssertEqual(defaultDirection.direction, .down)
     }
 
     // MARK: - WaitTarget

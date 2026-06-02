@@ -70,7 +70,7 @@ public struct HeistSwiftRenderer {
         case .clientHello, .authenticate, .requestInterface, .ping, .status,
              .increment, .decrement, .performCustomAction, .rotor,
              .longPress, .swipe, .drag, .editAction, .setPasteboard,
-             .scrollToVisible, .elementSearch, .scrollToEdge,
+             .scrollToVisible, .scrollToEdge,
              .resignFirstResponder, .getPasteboard, .wait, .heistPlan,
              .requestScreen:
             throw HeistSwiftRendererError.unsupportedCommand(command.wireType.rawValue)
@@ -188,8 +188,6 @@ public struct HeistSwiftRenderer {
             return "Scroll(\(direction))"
         case .element(let elementTarget):
             return "Scroll(\(direction), in: \(renderTarget(elementTarget, forEachBinding: forEachBinding)))"
-        case .container:
-            throw HeistSwiftRendererError.unsupportedCommand("scroll container target")
         }
     }
 

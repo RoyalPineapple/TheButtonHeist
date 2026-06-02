@@ -384,7 +384,6 @@ final class MockConnection: TransportReachabilityConnecting {
         case .typeText: return .typeText
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
-        case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
         case .wait: return .wait
         case .heistPlan: return .heistPlan

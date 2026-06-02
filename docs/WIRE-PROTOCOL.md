@@ -243,8 +243,9 @@ target against current state, moves the viewport if needed, refreshes, acquires
 fresh live geometry, and then dispatches. Cached coordinates from a prior
 capture are not the authority.
 
-Explicit viewport messages such as `scrollToVisible` and `elementSearch`
-expose viewport state because moving the viewport is the requested behavior.
+Explicit viewport messages such as `scroll`, `scrollToEdge`, and
+`scrollToVisible` expose viewport state because moving the viewport is the
+requested behavior.
 
 ### Screen Capture
 
@@ -279,10 +280,6 @@ for example:
 
 ```json
 {"kind":"value","data":"Hello"}
-```
-
-```json
-{"kind":"scrollSearch","data":{"scrollCount":3,"uniqueElementsSeen":25,"exhaustive":false,"foundElement":{"heistId":"button_color","label":"Color","traits":["button"]}}}
 ```
 
 Returned elements may include capture-local annotations. Compose follow-up

@@ -13,15 +13,11 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
               buttonheist scroll
               buttonheist scroll btn_list
               buttonheist scroll btn_list -d up
-              buttonheist scroll --stable-id "main_scroll"
               buttonheist scroll --identifier "myElement" -d down
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
-
-    @Option(name: .customLong("stable-id"), help: "Scrollable container stableId from get_interface")
-    var stableId: String?
 
     @Option(
         name: .shortAndLong,
@@ -39,11 +35,10 @@ struct ScrollCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid direction '\(direction)'. Valid: \(Self.catalogAllowedValuesDescription(for: .direction))")
         }
 
-        var request: CLIRequestParameters = [
+        let request: CLIRequestParameters = [
             .direction: .string(scrollDirection),
             .timeout: .double(timeoutOption.timeout),
         ]
-        if let stableId { request.set(.stableId, stableId) }
         let target = try element.parsedTarget()
 
         try await CLIRunner.run(

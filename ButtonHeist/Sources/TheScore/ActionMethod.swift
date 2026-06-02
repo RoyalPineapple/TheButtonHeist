@@ -17,7 +17,6 @@ public enum ActionMethod: String, Codable, Sendable {
     case heistPlan
     case scroll
     case scrollToVisible
-    case elementSearch
     case scrollToEdge
     case wait
 }

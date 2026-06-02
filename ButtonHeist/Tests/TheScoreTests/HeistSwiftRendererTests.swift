@@ -312,23 +312,6 @@ final class HeistSwiftRendererTests: XCTestCase {
         }
     }
 
-    func testThrowsForInternalScrollContainerTarget() throws {
-        let step = try ActionStep(command: .scroll(ScrollTarget(
-            containerTarget: ScrollContainerTarget(stableId: "main_scroll"),
-            direction: .down
-        )))
-        let renderedPlan = plan([.action(step)])
-
-        do {
-            _ = try render(renderedPlan)
-            XCTFail("Expected unsupported command failure")
-        } catch let error as HeistSwiftRendererError {
-            XCTAssertEqual(error, .unsupportedCommand("scroll container target"))
-        } catch {
-            XCTFail("Expected HeistSwiftRendererError, got \(error)")
-        }
-    }
-
     private func render(_ plan: HeistPlan) throws -> String {
         try HeistSwiftRenderer().render(plan)
     }

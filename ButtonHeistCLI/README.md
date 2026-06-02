@@ -70,8 +70,8 @@ uses fresh live geometry before acting.
 ### Viewport and Screenshots
 
 ```bash
-buttonheist element_search --label "Submit"
 buttonheist scroll_to_visible --identifier submitButton
+buttonheist scroll --direction down
 buttonheist get_screen --output screen.png
 ```
 

@@ -224,9 +224,9 @@ final class TheBrainsScrollTests: XCTestCase {
         )
     }
 
-    // MARK: - Scroll Search Target Selection
+    // MARK: - Scroll Target Selection
 
-    func testScrollSearchCandidatesFilterToRequiredAxis() {
+    func testScrollCandidatesFilterToRequiredAxis() {
         let vertical = makeScrollableContainer(
             contentSize: CGSize(width: 320, height: 2000),
             frame: CGRect(x: 0, y: 0, width: 320, height: 400)
@@ -237,12 +237,12 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installScrollableContainers([vertical, horizontal])
 
-        let candidates = brains.navigation.scrollSearchCandidates(requiredAxis: .horizontal)
+        let candidates = brains.navigation.scrollCandidates(requiredAxis: .horizontal)
 
         XCTAssertEqual(candidates.map(\.container), [horizontal])
     }
 
-    func testScrollSearchCandidatesPreserveTreeOrderWithinRequiredAxis() {
+    func testScrollCandidatesPreserveTreeOrderWithinRequiredAxis() {
         let horizontal = makeScrollableContainer(
             contentSize: CGSize(width: 1200, height: 200),
             frame: CGRect(x: 0, y: 0, width: 320, height: 200)
@@ -257,81 +257,9 @@ final class TheBrainsScrollTests: XCTestCase {
         )
         installScrollableContainers([horizontal, verticalOne, verticalTwo])
 
-        let candidates = brains.navigation.scrollSearchCandidates(requiredAxis: .vertical)
+        let candidates = brains.navigation.scrollCandidates(requiredAxis: .vertical)
 
         XCTAssertEqual(candidates.map(\.container), [verticalOne, verticalTwo])
-    }
-
-    // MARK: - Scroll Search Progress
-
-    func testScrollSearchProgressReportsCapAsNonExhaustive() {
-        let container = makeScrollableContainer()
-        var progress = Navigation.ScrollSearchProgress(
-            initialVisibleHeistIds: ["initial"],
-            maxScrolls: 2
-        )
-
-        progress.markScrolledPage(in: container, visibleHeistIds: ["page_1"])
-        progress.markScrolledPage(in: container, visibleHeistIds: ["initial", "page_2"])
-
-        XCTAssertEqual(progress.scrollCount, 2)
-        XCTAssertEqual(progress.pagesSearched, 3)
-        XCTAssertEqual(progress.containersSearched, 1)
-        XCTAssertEqual(progress.uniqueElementsSeen, 3)
-        XCTAssertTrue(progress.didHitScrollCap)
-        XCTAssertFalse(progress.exhaustive)
-    }
-
-    func testScrollSearchProgressReportsExhaustiveWhenEdgesReachedBeforeCap() {
-        let container = makeScrollableContainer()
-        var progress = Navigation.ScrollSearchProgress(
-            initialVisibleHeistIds: ["initial"],
-            maxScrolls: 2
-        )
-
-        progress.markContainerExhausted(container)
-
-        XCTAssertEqual(progress.scrollCount, 0)
-        XCTAssertEqual(progress.pagesSearched, 1)
-        XCTAssertEqual(progress.containersSearched, 1)
-        XCTAssertEqual(progress.exhaustedContainers, Set([container]))
-        XCTAssertFalse(progress.didHitScrollCap)
-        XCTAssertTrue(progress.exhaustive)
-    }
-
-    func testScrollSearchProgressIsNotExhaustiveWhileKnownContainerRemains() {
-        let first = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 2000),
-            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
-        )
-        let sibling = makeScrollableContainer(
-            contentSize: CGSize(width: 320, height: 1600),
-            frame: CGRect(x: 0, y: 420, width: 320, height: 400)
-        )
-        var progress = Navigation.ScrollSearchProgress(
-            initialVisibleHeistIds: ["initial"],
-            knownContainers: [first, sibling],
-            maxScrolls: 5
-        )
-
-        progress.markContainerExhausted(first)
-
-        XCTAssertEqual(progress.containersSearched, 1)
-        XCTAssertEqual(progress.exhaustedContainers, Set([first]))
-        XCTAssertEqual(progress.knownContainers, Set([first, sibling]))
-        XCTAssertFalse(progress.didHitScrollCap)
-        XCTAssertFalse(progress.exhaustive)
-    }
-
-    func testScrollSearchProgressWithoutSearchedContainersIsNotExhaustive() {
-        let progress = Navigation.ScrollSearchProgress(
-            initialVisibleHeistIds: ["initial"],
-            maxScrolls: 2
-        )
-
-        XCTAssertEqual(progress.containersSearched, 0)
-        XCTAssertFalse(progress.didHitScrollCap)
-        XCTAssertFalse(progress.exhaustive)
     }
 
     // MARK: - Known Offscreen Entry
@@ -786,40 +714,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(scrollView.contentOffset.y, 0, accuracy: 0.01)
     }
 
-    func testScrollUsesExplicitContainerStableId() async {
-        let first = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        first.contentSize = CGSize(width: 320, height: 1_600)
-        let second = UIScrollView(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
-        second.contentSize = CGSize(width: 320, height: 1_600)
-        let firstContainer = makeScrollableContainer(contentSize: first.contentSize, frame: first.frame)
-        let secondContainer = makeScrollableContainer(contentSize: second.contentSize, frame: second.frame)
-        brains.stash.installScreenForTesting(Screen(
-            elements: [:],
-            hierarchy: [
-                .container(firstContainer, children: []),
-                .container(secondContainer, children: []),
-            ],
-            containerStableIds: [
-                firstContainer: "first_scroll",
-                secondContainer: "second_scroll",
-            ],
-            heistIdByElement: [:],
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [
-                firstContainer: .init(view: first),
-                secondContainer: .init(view: second),
-            ]
-        ))
-
-        let result = await brains.navigation.executeScroll(
-            ScrollTarget(containerTarget: ScrollContainerTarget(stableId: "second_scroll"))
-        )
-
-        XCTAssertTrue(result.success, "Expected explicit container scroll to succeed: \(String(describing: result.message))")
-        XCTAssertEqual(first.contentOffset.y, 0, accuracy: 0.01)
-        XCTAssertGreaterThan(second.contentOffset.y, 0)
-    }
-
     func testScrollWithoutElementReportsAmbiguousContainers() async {
         let firstContainer = makeScrollableContainer()
         let secondContainer = makeScrollableContainer(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
@@ -845,60 +739,6 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(result.message?.contains("ambiguous") == true)
         XCTAssertTrue(result.message?.contains("first_scroll") == true)
         XCTAssertTrue(result.message?.contains("second_scroll") == true)
-    }
-
-    func testElementSearchKnownTargetUsesPageSearchWithoutPositioning() async {
-        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let visible = makeElement(label: "Visible")
-        let offscreen = makeElement(label: "Settings")
-        installScreenWithKnownOffscreen(
-            visible: (visible, "visible_element"),
-            offscreen: (offscreen, "settings_button", CGPoint(x: 0, y: 1_200), scrollView)
-        )
-
-        let result = await brains.navigation.executeElementSearch(
-            elementTarget: .predicate(ElementPredicate(label: "Settings")),
-            direction: .down
-        )
-
-        XCTAssertTrue(result.success, "Expected known element_search target to be found by paging: \(String(describing: result.message))")
-        XCTAssertEqual(result.method, .elementSearch)
-        XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
-    }
-
-    func testElementSearchDoesNotRepositionVisibleMatch() async {
-        let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
-        scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let elementFrame = CGRect(x: 20, y: ScreenMetrics.current.bounds.maxY + 60, width: 200, height: 44)
-        let object = UIButton(type: .system)
-        object.accessibilityFrame = elementFrame
-        object.accessibilityActivationPoint = CGPoint(x: elementFrame.midX, y: elementFrame.midY)
-        let element = makeElement(label: "Visible", traits: .button, shape: .frame(AccessibilityRect(elementFrame)))
-        let entry = Screen.ScreenElement(
-            heistId: "visible_button",
-            contentSpaceOrigin: nil,
-            element: element
-        )
-        brains.stash.installScreenForTesting(Screen(
-            elements: [entry.heistId: entry],
-            hierarchy: [.element(element, traversalIndex: 0)],
-            containerStableIds: [:],
-            heistIdByElement: [element: entry.heistId],
-            elementRefs: [entry.heistId: .init(object: object, scrollView: scrollView)],
-            firstResponderHeistId: nil,
-            scrollableContainerViews: [:]
-        ))
-
-        let result = await brains.navigation.executeElementSearch(
-            elementTarget: .predicate(ElementPredicate(label: "Visible")),
-            direction: .down
-        )
-
-        XCTAssertTrue(result.success, "Expected element_search to report the visible match: \(String(describing: result.message))")
-        XCTAssertEqual(result.method, .elementSearch)
-        XCTAssertEqual(scrollView.contentOffset, .zero, "element_search should not perform semantic actionability scrolls")
-        XCTAssertTrue(scrollView.setContentOffsetAnimations.isEmpty)
     }
 
     func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async {
@@ -1063,7 +903,7 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertEqual(
             result.message,
             "scroll target failed: observed \"Item\" with no live scrollable ancestor; "
-                + "try element_search or target an element inside a scroll container"
+                + "target an element inside the intended scroll region"
         )
     }
 

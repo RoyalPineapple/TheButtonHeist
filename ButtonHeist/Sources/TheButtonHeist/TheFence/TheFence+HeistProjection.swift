@@ -192,7 +192,6 @@ extension ClientWireMessageType {
         case .typeText: return TheFence.Command.typeText.rawValue
         case .setPasteboard: return TheFence.Command.setPasteboard.rawValue
         case .scrollToVisible: return TheFence.Command.scrollToVisible.rawValue
-        case .elementSearch: return TheFence.Command.elementSearch.rawValue
         case .scrollToEdge: return TheFence.Command.scrollToEdge.rawValue
         case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
         default: return rawValue
@@ -234,8 +233,6 @@ extension ClientMessage {
             if case .element(let target) = target.selection { return target }
             return nil
         case .scrollToVisible(let target):
-            return target.elementTarget
-        case .elementSearch(let target):
             return target.elementTarget
         case .scrollToEdge(let target):
             if case .element(let target) = target.selection { return target }

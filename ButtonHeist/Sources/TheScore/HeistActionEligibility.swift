@@ -5,8 +5,8 @@ public extension ClientMessage {
         switch self {
         case .activate, .increment, .decrement, .performCustomAction, .rotor,
              .oneFingerTap, .longPress, .swipe, .drag, .typeText, .editAction,
-             .setPasteboard, .scroll, .scrollToVisible, .elementSearch,
-             .scrollToEdge, .resignFirstResponder:
+             .setPasteboard, .scroll, .scrollToVisible, .scrollToEdge,
+             .resignFirstResponder:
             return true
         case .clientHello, .authenticate, .requestInterface, .ping, .status,
              .getPasteboard, .requestScreen, .wait, .heistPlan:

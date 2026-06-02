@@ -1007,14 +1007,6 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testElementSearchIsNotPublicCommand() async {
-        await assertValidationError(
-            command: .elementSearch,
-            contains: "expected public Button Heist command"
-        )
-    }
-
-    @ButtonHeistActor
     func testScrollToEdgeValidPassesValidation() async {
         await assertPassesValidation(
             command: .scrollToEdge,

@@ -5,46 +5,14 @@ public enum ScrollDirection: String, Codable, Sendable, CaseIterable, Equatable 
     case up, down, left, right
 }
 
-/// Target for container-moving scroll commands.
-public struct ScrollContainerTarget: Codable, Sendable, Equatable {
-    /// Internal/debug stable container id. Public scroll commands do not accept
-    /// this as durable input.
-    public let stableId: HeistContainer?
-
-    public init(stableId: HeistContainer? = nil) {
-        self.stableId = stableId
-    }
-
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case stableId
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ScrollContainerTarget")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.init(stableId: try container.decodeIfPresent(HeistContainer.self, forKey: .stableId))
-    }
-}
-
-extension ScrollContainerTarget: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("container", [
-            ScoreDescription.stringField("stableId", stableId),
-        ].compactMap { $0 })
-    }
-}
-
 public enum ScrollContainerSelection: Sendable, Equatable, CustomStringConvertible {
     case visibleContainer
-    case container(ScrollContainerTarget)
     case element(ElementTarget)
 
     public var description: String {
         switch self {
         case .visibleContainer:
             return "visibleContainer"
-        case .container(let target):
-            return target.description
         case .element(let target):
             return target.description
         }
@@ -73,18 +41,6 @@ public struct ScrollTarget: Sendable, Equatable {
         self.init(selection: .element(elementTarget), direction: direction)
     }
 
-    public init(
-        containerTarget: ScrollContainerTarget,
-        direction: ScrollDirection = .down
-    ) {
-        self.init(selection: .container(containerTarget), direction: direction)
-    }
-
-    private var containerTarget: ScrollContainerTarget? {
-        guard case .container(let target) = selection else { return nil }
-        return target
-    }
-
     private var elementTarget: ElementTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
@@ -94,7 +50,6 @@ public struct ScrollTarget: Sendable, Equatable {
 extension ScrollTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("scroll", [
-            containerTarget?.description,
             elementTarget?.description,
             ScoreDescription.valueField("direction", direction),
         ].compactMap { $0 })
@@ -111,37 +66,23 @@ extension ScrollTarget: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let hasContainerTarget = container.contains(.container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        switch (hasContainerTarget, elementTarget) {
-        case (true, .some):
+        if hasContainerTarget {
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
                 debugDescription: "ScrollTarget does not accept public container handles; target an element inside the intended scroll region"
             )
-        case (true, nil):
-            throw DecodingError.dataCorruptedError(
-                forKey: .container,
-                in: container,
-                debugDescription: "ScrollTarget does not accept public container handles; target an element inside the intended scroll region"
-            )
-        case (false, .some(let elementTarget)):
+        }
+        switch elementTarget {
+        case .some(let elementTarget):
             self.selection = .element(elementTarget)
-        case (false, nil):
+        case nil:
             self.selection = .visibleContainer
         }
         self.direction = try container.decode(ScrollDirection.self, forKey: .direction)
     }
 
     public func encode(to encoder: Encoder) throws {
-        if containerTarget != nil {
-            throw EncodingError.invalidValue(
-                self,
-                EncodingError.Context(
-                    codingPath: encoder.codingPath,
-                    debugDescription: "ScrollTarget does not encode public container handles; target an element inside the intended scroll region"
-                )
-            )
-        }
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(direction, forKey: .direction)
@@ -167,31 +108,6 @@ extension ScrollToVisibleTarget: CustomStringConvertible {
     }
 }
 
-/// Target for iterative element search.
-/// Pages through scroll content looking for an element that may not be in the registry.
-public struct ElementSearchTarget: Sendable, Equatable {
-    /// Element to search for while scrolling.
-    public let elementTarget: ElementTarget
-    /// Starting scroll direction.
-    public let direction: ScrollDirection
-    public init(
-        elementTarget: ElementTarget,
-        direction: ScrollDirection = .down
-    ) {
-        self.elementTarget = elementTarget
-        self.direction = direction
-    }
-}
-
-extension ElementSearchTarget: CustomStringConvertible {
-    public var description: String {
-        ScoreDescription.call("elementSearch", [
-            elementTarget.description,
-            ScoreDescription.valueField("direction", direction),
-        ].compactMap { $0 })
-    }
-}
-
 extension ScrollToVisibleTarget: Codable {
     public init(from decoder: Decoder) throws {
         guard let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder) else {
@@ -207,32 +123,6 @@ extension ScrollToVisibleTarget: Codable {
 
     public func encode(to encoder: Encoder) throws {
         try elementTarget.encode(to: encoder)
-    }
-}
-
-extension ElementSearchTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
-        case direction
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        guard let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder) else {
-            throw DecodingError.dataCorrupted(
-                DecodingError.Context(
-                    codingPath: decoder.codingPath,
-                    debugDescription: "ElementSearchTarget requires an element target"
-                )
-            )
-        }
-        self.elementTarget = elementTarget
-        self.direction = try container.decode(ScrollDirection.self, forKey: .direction)
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        try elementTarget.encode(to: encoder)
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(direction, forKey: .direction)
     }
 }
 
@@ -263,18 +153,6 @@ public struct ScrollToEdgeTarget: Sendable, Equatable {
         self.init(selection: .element(elementTarget), edge: edge)
     }
 
-    public init(
-        containerTarget: ScrollContainerTarget,
-        edge: ScrollEdge = .top
-    ) {
-        self.init(selection: .container(containerTarget), edge: edge)
-    }
-
-    private var containerTarget: ScrollContainerTarget? {
-        guard case .container(let target) = selection else { return nil }
-        return target
-    }
-
     private var elementTarget: ElementTarget? {
         guard case .element(let target) = selection else { return nil }
         return target
@@ -284,7 +162,6 @@ public struct ScrollToEdgeTarget: Sendable, Equatable {
 extension ScrollToEdgeTarget: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("scrollToEdge", [
-            containerTarget?.description,
             elementTarget?.description,
             ScoreDescription.valueField("edge", edge),
         ].compactMap { $0 })
@@ -301,37 +178,23 @@ extension ScrollToEdgeTarget: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let hasContainerTarget = container.contains(.container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        switch (hasContainerTarget, elementTarget) {
-        case (true, .some):
+        if hasContainerTarget {
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
                 debugDescription: "ScrollToEdgeTarget does not accept public container handles; target an element inside the intended scroll region"
             )
-        case (true, nil):
-            throw DecodingError.dataCorruptedError(
-                forKey: .container,
-                in: container,
-                debugDescription: "ScrollToEdgeTarget does not accept public container handles; target an element inside the intended scroll region"
-            )
-        case (false, .some(let elementTarget)):
+        }
+        switch elementTarget {
+        case .some(let elementTarget):
             self.selection = .element(elementTarget)
-        case (false, nil):
+        case nil:
             self.selection = .visibleContainer
         }
         self.edge = try container.decode(ScrollEdge.self, forKey: .edge)
     }
 
     public func encode(to encoder: Encoder) throws {
-        if containerTarget != nil {
-            throw EncodingError.invalidValue(
-                self,
-                EncodingError.Context(
-                    codingPath: encoder.codingPath,
-                    debugDescription: "ScrollToEdgeTarget does not encode public container handles; target an element inside the intended scroll region"
-                )
-            )
-        }
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(edge, forKey: .edge)

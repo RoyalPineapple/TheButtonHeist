@@ -26,18 +26,6 @@ extension TheFence {
         )))
     }
 
-    static func decodeElementSearchRequest(
-        _ fence: TheFence,
-        _ input: CommandArgumentEnvelope,
-        _ requestId: String,
-        _ expectationPayload: ExpectationPayload
-    ) throws -> DecodedRequestDispatch {
-        try decodedExecutablePayload(.elementSearch(ElementSearchTarget(
-            elementTarget: input.requiredElementTarget(command: .elementSearch),
-            direction: input.schemaEnum("direction", as: ScrollDirection.self) ?? .down
-        )))
-    }
-
     static func decodeScrollToEdgeRequest(
         _ fence: TheFence,
         _ input: CommandArgumentEnvelope,

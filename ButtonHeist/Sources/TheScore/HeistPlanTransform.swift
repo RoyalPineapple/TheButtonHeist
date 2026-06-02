@@ -176,11 +176,6 @@ private extension ClientMessage {
             return .scrollToVisible(ScrollToVisibleTarget(
                 elementTarget: target.elementTarget.bindingForEachTarget(matching: matching, ordinal: ordinal)
             ))
-        case .elementSearch(let target):
-            return .elementSearch(ElementSearchTarget(
-                elementTarget: target.elementTarget.bindingForEachTarget(matching: matching, ordinal: ordinal),
-                direction: target.direction
-            ))
         case .scrollToEdge(let target):
             return .scrollToEdge(ScrollToEdgeTarget(
                 selection: target.selection.bindingForEachTarget(matching: matching, ordinal: ordinal),
@@ -227,7 +222,7 @@ private extension ScrollContainerSelection {
         switch self {
         case .element(let target):
             return .element(target.bindingForEachTarget(matching: matching, ordinal: ordinal))
-        case .visibleContainer, .container:
+        case .visibleContainer:
             return self
         }
     }

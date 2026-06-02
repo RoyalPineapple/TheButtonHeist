@@ -36,11 +36,6 @@ extension Navigation {
         commandName: String
     ) -> ContainerScrollResolution {
         switch selection {
-        case .container(let containerTarget):
-            guard let plan = scrollPlan(for: containerTarget, requiredAxis: axis) else {
-                return .failed("\(commandName) failed: no visible scroll container matched \(containerTarget.description)")
-            }
-            return .resolved(plan.target)
         case .element(let elementTarget):
             guard let resolved = stash.resolveVisibleTarget(elementTarget).resolved else {
                 return .failed(liveScrollElementFailureMessage(elementTarget, commandName: commandName))
@@ -68,29 +63,21 @@ extension Navigation {
             }
             return .resolved(.uiScrollView(scrollView))
         case .visibleContainer:
-            let candidates = scrollSearchCandidates(requiredAxis: axis)
+            let candidates = scrollCandidates(requiredAxis: axis)
             guard !candidates.isEmpty else {
                 return .failed("\(commandName) failed: no visible scroll container supports \(Self.axisDescription(axis))")
             }
             guard candidates.count == 1, let plan = candidates.first else {
                 return .failed(
                     "\(commandName) ambiguous: multiple visible scroll containers support \(Self.axisDescription(axis)); "
-                        + "target an element inside the intended scroll region. Candidates: \(candidateContainerRefs(candidates))"
+                        + "target an element inside the intended scroll region"
                 )
             }
             return .resolved(plan.target)
         }
     }
 
-    func scrollPlan(for target: ScrollContainerTarget, requiredAxis axis: ScrollAxis) -> ScrollPlan? {
-        guard let targetStableId = target.stableId else { return nil }
-        return scrollSearchCandidates(requiredAxis: axis).first { plan in
-            guard let stableId = stableId(for: plan.container) else { return false }
-            return targetStableId == stableId
-        }
-    }
-
-    func scrollSearchCandidates(
+    func scrollCandidates(
         requiredAxis axis: ScrollAxis?
     ) -> [ScrollPlan] {
         stash.currentHierarchy.scrollableContainers.compactMap { container -> ScrollPlan? in
@@ -112,7 +99,7 @@ extension Navigation {
         }
     }
 
-    func scrollSearchSeedCandidate(
+    func scrollSeedCandidate(
         for target: ElementTarget,
         requiredAxis axis: ScrollAxis
     ) -> ScrollPlan? {
@@ -124,7 +111,7 @@ extension Navigation {
         let availableAxis = Self.scrollableAxis(contentSize: scrollView.contentSize, frame: scrollView.frame)
         guard availableAxis.contains(axis) else { return nil }
 
-        let container = scrollSearchContainer(for: scrollView)
+        let container = scrollContainer(for: scrollView)
             ?? AccessibilityContainer(
                 type: .scrollable(contentSize: AccessibilitySize(scrollView.contentSize)),
                 frame: AccessibilityRect(scrollView.frame)
@@ -132,25 +119,8 @@ extension Navigation {
         return ScrollPlan(target: .uiScrollView(scrollView), container: container)
     }
 
-    private func scrollSearchContainer(for scrollView: UIScrollView) -> AccessibilityContainer? {
+    private func scrollContainer(for scrollView: UIScrollView) -> AccessibilityContainer? {
         stash.liveScrollContainer(matching: scrollView)
-    }
-
-    func stableId(for container: AccessibilityContainer) -> HeistContainer? {
-        if let stableId = stash.liveContainerStableId(for: container) {
-            return stableId
-        }
-        return stash.currentHierarchy.containerPaths.first { candidate, _ in
-            candidate == container
-        }.flatMap { _, path in
-            stash.liveContainerStableId(forPath: path)
-        }
-    }
-
-    func candidateContainerRefs(_ candidates: [ScrollPlan]) -> String {
-        candidates.enumerated().map { index, plan in
-            stableId(for: plan.container) ?? "#\(index)"
-        }.joined(separator: ", ")
     }
 
     /// Build a ScrollableTarget for a container. Geometry comes from the current

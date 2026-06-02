@@ -37,19 +37,15 @@ final class CommandProjectionTests: XCTestCase {
         )
     }
 
-    func testScrollTargetOwnsOneSelection() {
-        XCTAssertEqual(
-            ScrollTarget(selection: .container(ScrollContainerTarget(stableId: "main"))).selection,
-            .container(ScrollContainerTarget(stableId: "main"))
-        )
+    func testScrollTargetOwnsPublicSelection() {
         XCTAssertEqual(
             ScrollTarget(selection: .element(.predicate(ElementPredicate(label: "row")))).selection,
             .element(.predicate(ElementPredicate(label: "row")))
         )
         XCTAssertEqual(ScrollTarget().selection, .visibleContainer)
         XCTAssertEqual(
-            ScrollToEdgeTarget(selection: .container(ScrollContainerTarget(stableId: "main"))).selection,
-            .container(ScrollContainerTarget(stableId: "main"))
+            ScrollToEdgeTarget(selection: .element(.predicate(ElementPredicate(label: "row")))).selection,
+            .element(.predicate(ElementPredicate(label: "row")))
         )
     }
 

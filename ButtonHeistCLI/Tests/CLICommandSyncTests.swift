@@ -270,14 +270,16 @@ final class CLICommandSyncTests: XCTestCase {
         let command = try ScrollCommand.parse([])
 
         XCTAssertFalse(try command.element.hasTarget)
-        XCTAssertNil(command.stableId)
         XCTAssertEqual(command.direction, "down")
     }
 
-    func testScrollCLIParsesContainerStableId() throws {
-        let command = try ScrollCommand.parse(["--stable-id", "main_scroll", "--direction", "up"])
+    func testScrollCLIRejectsContainerStableId() {
+        XCTAssertThrowsError(try ScrollCommand.parse(["--stable-id", "main_scroll", "--direction", "up"]))
+    }
 
-        XCTAssertEqual(command.stableId, "main_scroll")
+    func testScrollCLIParsesDirection() throws {
+        let command = try ScrollCommand.parse(["--direction", "up"])
+
         XCTAssertEqual(command.direction, "up")
     }
 
@@ -285,7 +287,6 @@ final class CLICommandSyncTests: XCTestCase {
         let command = try ScrollToEdgeCommand.parse([])
 
         XCTAssertFalse(try command.element.hasTarget)
-        XCTAssertNil(command.stableId)
         XCTAssertEqual(command.edge, "top")
     }
 

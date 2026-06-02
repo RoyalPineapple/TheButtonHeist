@@ -23,24 +23,6 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         }
     }
 
-    func testCompactScrollSearchUsesDescriptorProjectedCommandName() {
-        let search = ScrollSearchResult(
-            scrollCount: 0,
-            uniqueElementsSeen: 0,
-            exhaustive: false
-        )
-        let output = FenceResponse.action(
-            command: .scrollToVisible,
-            result: ActionResult(
-                success: true,
-                method: .scrollToVisible,
-                payload: .scrollSearch(search)
-            )
-        ).compactFormatted()
-
-        XCTAssertEqual(output, "scroll_to_visible: already visible")
-    }
-
     func testCompactActionRenderingDoesNotInferCommandFromActionMethod() {
         let output = FenceResponse.action(
             command: .drag,
