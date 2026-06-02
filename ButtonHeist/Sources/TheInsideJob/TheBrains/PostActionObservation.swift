@@ -35,17 +35,6 @@ final class PostActionObservation {
         self.navigation = navigation
     }
 
-    /// Capture the known semantic state. Exploration updates the targetable
-    /// semantic set; this capture projects that state so deltas compare the
-    /// whole discovered interface rather than the latest viewport parse.
-    func captureSemanticState() -> BeforeState {
-        captureSemanticState(
-            from: stash.currentScreen,
-            tripwireSignal: tripwire.tripwireSignal(),
-            settledObservationSequence: stash.latestSettledSemanticObservationEvent?.sequence
-        )
-    }
-
     func captureSemanticState(from observation: TheStash.SettledSemanticObservation) -> BeforeState {
         captureSemanticState(
             from: observation.screen,

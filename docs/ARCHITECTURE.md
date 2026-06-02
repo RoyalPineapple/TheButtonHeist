@@ -29,8 +29,9 @@ contract evidence use that same capture/delta model instead of parallel
 before/after interfaces.
 
 Agents should start from `get_interface`, then prefer the action result's delta
-over another read. A screen-change delta invalidates prior `heistId` handles
-and supplies the new interface evidence.
+over another read. A screen-change delta invalidates prior capture-local
+handles and supplies the new interface evidence. Semantic matchers and
+predicate fields are the public currency for follow-up actions.
 
 ### Tripwire Triggers, Settle Decides Stable
 

@@ -23,8 +23,8 @@ final class TheBrains {
     let actions: Actions
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
-    let waitForChangeState = WaitForChangeState()
     var semanticObservationIsActive = false
+    private var waitForChangeInProgress = false
 
     enum InterfaceObservation {
         case success(Interface)
@@ -97,16 +97,16 @@ final class TheBrains {
     func clearCache() {
         stash.clearCache()
         navigation.clearCache()
-        waitForChangeState.resetDeliveredBaseline()
     }
 
     // MARK: - Response State Tracking
 
-    /// Snapshot current state as "last sent" — call after every response to the driver.
+    /// Response boundary hook retained for the wire lifecycle. Observation
+    /// state now lives in the settled event stream, not in command-local
+    /// baselines.
     func recordSentState() async {
-        guard semanticObservationIsActive else { return }
-        guard let state = await interactionObservation.prepareBeforeState() else { return }
-        waitForChangeState.recordDeliveredBaseline(state)
+        // Settled observation events carry their own previous observation and
+        // delta, so the runtime no longer records a command-local baseline.
     }
 
     func stopSemanticObservation() {
@@ -118,7 +118,7 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.runtimeInactive)
         }
-        guard await stash.settledSemanticObservationEvent(
+        guard await interactionObservation.observeSemanticState(
             scope: .discovery,
             after: nil,
             timeout: 2.0
@@ -132,6 +132,16 @@ final class TheBrains {
         } catch {
             return .failure(.selection(error))
         }
+    }
+
+    func beginWaitForChange() -> Bool {
+        guard !waitForChangeInProgress else { return false }
+        waitForChangeInProgress = true
+        return true
+    }
+
+    func finishWaitForChange() {
+        waitForChangeInProgress = false
     }
 }
 

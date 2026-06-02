@@ -135,7 +135,6 @@ import AccessibilitySnapshotParser
         let element = screenElement.element
         var parts = [
             "element",
-            "heistId=\(quote(screenElement.heistId))",
         ]
         if let label = element.label, !label.isEmpty {
             parts.append("label=\(quote(label))")
@@ -168,7 +167,7 @@ import AccessibilitySnapshotParser
     private static func formatFirstResponder(stash: TheStash) -> String {
         guard let heistId = stash.firstResponderHeistId else { return "none" }
         guard let element = stash.firstResponderScreenElement() else {
-            return "heistId=\(quote(heistId)) liveObject=unknown"
+            return "focused element \(quote(heistId)) liveObject=unknown"
         }
         return formatElement(element)
     }

@@ -167,8 +167,8 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed: accessibilityActivate returned false after semantic refresh",
             "synthetic tap at fresh activation point also failed",
-            "heistId=\"retry\"",
             "label=\"Retry Button\"",
+            "actions=[activate]",
         ])
     }
 

@@ -99,10 +99,11 @@ viewport is the caller's intent.
 
 ## Element Identity
 
-`heistId` is a current-capture handle. It is useful for immediate follow-up
-actions against the same current hierarchy, and diagnostics may report it as
-recording step context. It is not a durable replay selector and it is not geometry
-authority.
+`heistId` is a current-capture annotation. It can appear in interface captures
+and diagnostics to correlate current tree entries. Public action targets use
+`ElementTarget` predicate fields: label, identifier, value, traits,
+excluded traits, and optional ordinal. `heistId` is not a replay selector and it
+is not geometry authority.
 
 Durable flows use semantic selectors and matchers: accessibility identifier,
 label, value, traits, excluded traits, and ordinal as a last-resort
@@ -241,8 +242,8 @@ lists are projections for formatting and matching, not a second wire truth.
 
 ### HeistElement
 
-`HeistElement.heistId` is scoped to the current capture. Use it for immediate
-actions while the capture is current. Use semantic matcher fields for durable
+`HeistElement.heistId` is scoped to the current capture and may be reported for
+correlation or diagnostics. Use semantic matcher fields for actions, durable
 heist fixtures, scripts, and replay.
 
 ### ActionResult
@@ -255,9 +256,10 @@ expectation result when one was requested.
 
 Expectations use object form with a `type` discriminator, for example
 `{"type":"screen_changed"}` or
-`{"type":"element_appeared","matcher":{"label":"Success"}}`.
+`{"type":"element_appeared","element":{"label":"Success"}}`.
 
-Expectations use the current object grammar at every public boundary.
+Expectations use the current object grammar at every public boundary. Element
+expectations select subjects with predicate fields, not `heistId`.
 
 ## Minimal Integration
 

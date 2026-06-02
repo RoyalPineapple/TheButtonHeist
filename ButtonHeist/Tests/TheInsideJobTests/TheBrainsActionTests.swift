@@ -198,7 +198,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
         XCTAssertDiagnostic(result.message, contains: [
             "adjustable action failed",
-            "heistId=\"live_button\"",
             "label=\"Live\"",
             "traits=[button]",
             "actions=[activate]",
@@ -221,7 +220,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .decrement)
         XCTAssertDiagnostic(result.message, contains: [
             "adjustable action failed",
-            "heistId=\"live_button\"",
             "label=\"Live\"",
             "traits=[button]",
             "actions=[activate]",
@@ -251,7 +249,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "custom action failed",
             "requestedAction=\"Share\"",
-            "heistId=\"options_button\"",
             "label=\"Options\"",
             "actions=[activate, Delete, Archive]",
             "try use one of custom actions [\"Delete\", \"Archive\"]",
@@ -284,7 +281,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "custom action failed",
             "requestedAction=\"Delete\" declined by handler",
-            "heistId=\"options_button\"",
             "label=\"Options\"",
             "actions=[activate, Delete, Archive]",
             "try use another custom action [\"Archive\"]",
@@ -348,7 +344,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed",
-            "heistId=\"plain_label\"",
             "label=\"Plain label\"",
             "actions=[]",
             "try retarget an element whose actions include activate",
@@ -1150,7 +1145,7 @@ final class TheBrainsActionTests: XCTestCase {
             (makeElement(label: "Delete", identifier: "delete_third"), "delete_third"),
         ])
         let runtime = heistRuntime(
-            observations: [initialState],
+            observations: [initialState, initialState, initialState],
             execute: { command in
                 executedCommands.append(command)
                 return ActionResult(success: true, method: .activate)
@@ -1180,31 +1175,20 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.childResults?.map(\.kind), [.action, .action, .action])
     }
 
-    func testHeistForEachMutationFailureUsesNormalTargetResolution() async throws {
+    func testHeistForEachResetsOrdinalWhenMatchedCollectionIdentityChanges() async throws {
         let matching = ElementPredicate(label: "Delete")
         var executedCommands: [ClientMessage] = []
         let initialState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
+        let afterFirstMutation = observedState(elements: [
+            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
+        ])
         let runtime = heistRuntime(
-            observations: [initialState],
+            observations: [initialState, afterFirstMutation],
             execute: { command in
                 executedCommands.append(command)
-                guard case .activate(let target) = command else {
-                    return ActionResult(success: true, method: .activate)
-                }
-                guard self.brains.stash.resolveTarget(target).resolved != nil else {
-                    return ActionResult(
-                        success: false,
-                        method: .activate,
-                        message: self.brains.stash.resolveTarget(target).diagnostics,
-                        errorKind: .elementNotFound
-                    )
-                }
-                self.installScreen(elements: [
-                    (self.makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
-                ])
                 return ActionResult(success: true, method: .activate)
             }
         )
@@ -1221,16 +1205,52 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
         let forEachResult = try XCTUnwrap(step.forEachResult)
 
-        XCTAssertFalse(result.success)
+        XCTAssertTrue(result.success)
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 2)
-        XCTAssertEqual(forEachResult.failureReason, "iteration 1 failed")
+        XCTAssertNil(forEachResult.failureReason)
+        XCTAssertEqual(executedCommands, [
+            .activate(.predicate(matching, ordinal: 0)),
+            .activate(.predicate(matching, ordinal: 0)),
+        ])
+    }
+
+    func testHeistForEachDoesNotResetOrdinalForStateOnlyMatchMutation() async throws {
+        let matching = ElementPredicate(label: "Delete")
+        var executedCommands: [ClientMessage] = []
+        let initialState = observedState(elements: [
+            (makeElement(label: "Delete", identifier: "delete_first", traits: [.button]), "delete_first"),
+            (makeElement(label: "Delete", identifier: "delete_second", traits: [.button]), "delete_second"),
+        ])
+        let stateOnlyMutation = observedState(elements: [
+            (makeElement(label: "Delete", identifier: "delete_first", traits: [.button, .selected]), "delete_first"),
+            (makeElement(label: "Delete", identifier: "delete_second", traits: [.button]), "delete_second"),
+        ])
+        let runtime = heistRuntime(
+            observations: [initialState, stateOnlyMutation],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .forEach(try ForEachStep(
+                matching: matching,
+                limit: 10,
+                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachResult)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(forEachResult.matchedCount, 2)
+        XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands, [
             .activate(.predicate(matching, ordinal: 0)),
             .activate(.predicate(matching, ordinal: 1)),
         ])
-        XCTAssertEqual(step.childResults?.last?.actionResult?.errorKind, .elementNotFound)
-        XCTAssertTrue(step.childResults?.last?.actionResult?.message?.contains("ordinal 1 requested but only 1 match found") == true)
     }
 
     func testHeistForEachBodyFailureStopsHeistAndSkipsFollowingTopLevelSteps() async throws {
@@ -1286,7 +1306,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let waitObservedState = observedState(labels: ["Done"])
         let runtime = heistRuntime(
-            observations: [initialState],
+            observations: [initialState, stillPresentState],
             execute: { command in
                 executedCommands.append(command)
                 return ActionResult(
@@ -1328,8 +1348,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands.first, .activate(.predicate(matching, ordinal: 0)))
         XCTAssertEqual(waitedSteps.first?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 0))))
-        XCTAssertEqual(executedCommands.last, .activate(.predicate(matching, ordinal: 1)))
-        XCTAssertEqual(waitedSteps.last?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 1))))
+        XCTAssertEqual(executedCommands.last, .activate(.predicate(matching, ordinal: 0)))
+        XCTAssertEqual(waitedSteps.last?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 0))))
     }
 
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
@@ -1363,7 +1383,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "semantic actionability failed [geometryNotActionable]",
             "method=increment",
-            "heistId=\"geometry_missing_slider\"",
             "label=\"Geometry Missing\"",
             "fresh live geometry from semantic actionability",
         ])
@@ -1628,7 +1647,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "semantic actionability failed [noRevealPath]",
             "known target \"Below Fold\"",
-            "heistId: below_fold_button",
             "no content-space position",
         ])
     }
@@ -1711,7 +1729,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "rotor failed",
             "attempted rotor=\"Errors\" direction=next",
-            "heistId=\"plain_rotor_host\"",
             "availableRotors=[]",
             "observed customRotors=[]",
             "try target an element exposing custom rotors",
@@ -2172,8 +2189,7 @@ final class TheBrainsActionTests: XCTestCase {
                     delta: event.delta,
                     summary: "known: \(state.interface.projectedElements.count) elements"
                 )
-            },
-            recordDeliveredObservationAfterStep: {}
+            }
         )
     }
 

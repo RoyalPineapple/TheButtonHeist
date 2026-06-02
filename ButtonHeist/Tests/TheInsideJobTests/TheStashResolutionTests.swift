@@ -260,6 +260,39 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Discovery")
     }
 
+    func testPublicInterfaceProjectionStaysVisibleWhileSemanticProjectionIncludesKnownElements() throws {
+        let visible = element(label: "Visible", traits: .button)
+        let known = element(label: "Known", traits: .button)
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 800))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 400))
+        )
+        let screen = Screen(
+            elements: [
+                "visible": Screen.ScreenElement(heistId: "visible", contentSpaceOrigin: nil, element: visible),
+                "known": Screen.ScreenElement(heistId: "known", contentSpaceOrigin: nil, element: known),
+            ],
+            hierarchy: [.container(container, children: [.element(visible, traversalIndex: 0)])],
+            containerStableIds: [container: "main_scroll"],
+            heistIdByElement: [visible: "visible"],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        bagman.recordSettledSemanticObservation(screen, scope: .discovery)
+
+        let publicInterface = bagman.interface()
+        let semanticInterface = bagman.semanticInterface()
+
+        XCTAssertEqual(publicInterface.projectedElements.map(\.label), ["Visible"])
+        XCTAssertEqual(semanticInterface.projectedElements.compactMap(\.label).sorted(), ["Known", "Visible"])
+        guard case .container(_, let children) = publicInterface.tree.first else {
+            return XCTFail("Expected public interface to preserve visible container hierarchy")
+        }
+        XCTAssertEqual(children.count, 1)
+        XCTAssertEqual(publicInterface.annotations.containers.first?.stableId, "main_scroll")
+        XCTAssertEqual(semanticInterface.annotations.containers, [])
+    }
+
     func testTimeoutZeroTurnsObservationCycleBeforeReturningCleanLatest() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.recordSettledSemanticObservation(first, scope: .discovery)
@@ -480,10 +513,13 @@ final class TheStashResolutionTests: XCTestCase {
         register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
-        guard case .ambiguous(let candidates, let diagnostics) = result else {
+        guard case .ambiguous(let facts) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
         }
+        let candidates = result.candidates
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.matchedCount, 2)
         XCTAssertEqual(candidates.count, 2)
         XCTAssertTrue(diagnostics.contains("2 elements match"))
     }
@@ -495,10 +531,13 @@ final class TheStashResolutionTests: XCTestCase {
         register(save2, heistId: "save2", index: 1)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
-        guard case .ambiguous(let candidates, _) = result else {
+        guard case .ambiguous(let facts) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
         }
+        let candidates = result.candidates
+        XCTAssertEqual(facts.candidates[0].identifier, "save1")
+        XCTAssertEqual(facts.candidates[1].identifier, "save2")
         XCTAssertTrue(candidates[0].contains("id=save1"))
         XCTAssertTrue(candidates[1].contains("id=save2"))
         // Candidates are described by their predicate fields (label/identifier/value),
@@ -513,10 +552,12 @@ final class TheStashResolutionTests: XCTestCase {
         register(element, heistId: "button_ok", index: 0)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Cancel")))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .noMatches)
         XCTAssertTrue(diagnostics.contains("No match for"))
         XCTAssertTrue(diagnostics.contains("Next:"))
         XCTAssertTrue(diagnostics.contains("exact label"))
@@ -527,10 +568,12 @@ final class TheStashResolutionTests: XCTestCase {
         register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save", value: "final")))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .noMatches)
         XCTAssertTrue(diagnostics.contains("near miss"), "Should show near-miss: \(diagnostics)")
         XCTAssertTrue(diagnostics.contains("value"), "Should identify value as divergent field")
     }
@@ -542,10 +585,12 @@ final class TheStashResolutionTests: XCTestCase {
         registerOffScreen(offscreen, heistId: "long_list_button")
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Long")))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .noMatches)
         XCTAssertTrue(diagnostics.contains("Long List"), "Should suggest known offscreen candidate: \(diagnostics)")
         // The near-miss names the candidate by its label predicate, not by an
         // agent-facing heistId — that concept was removed.
@@ -556,10 +601,12 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testEmptyMatcherMissIncludesNextTargetingMove() {
         let result = bagman.resolveTarget(.predicate(ElementPredicate()))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .noMatches)
         XCTAssertTrue(diagnostics.contains("<empty predicate>"))
         XCTAssertTrue(diagnostics.contains("Next:"))
         XCTAssertTrue(diagnostics.contains("exact label"))
@@ -604,10 +651,12 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testEmptyScreenReturnsCompactSummary() {
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Anything")))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .noMatches)
         XCTAssertTrue(diagnostics.contains("known hierarchy is empty"))
         XCTAssertTrue(diagnostics.contains("Next:"))
     }
@@ -639,10 +688,12 @@ final class TheStashResolutionTests: XCTestCase {
         register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 5))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .ordinalOutOfRange(requested: 5, matchCount: 2))
         XCTAssertTrue(diagnostics.contains("ordinal 5 requested"))
         XCTAssertTrue(diagnostics.contains("2 matches"))
         XCTAssertTrue(diagnostics.contains("Next:"))
@@ -656,10 +707,12 @@ final class TheStashResolutionTests: XCTestCase {
         register(save2, heistId: "button_save_2", index: 1)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
-        guard case .ambiguous(_, let diagnostics) = result else {
+        guard case .ambiguous(let facts) = result else {
             XCTFail("Expected .ambiguous, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.matchedCount, 2)
         XCTAssertTrue(diagnostics.contains("2 elements match"))
         XCTAssertTrue(diagnostics.contains("ordinal"), "Should hint about ordinal usage")
     }
@@ -678,20 +731,24 @@ final class TheStashResolutionTests: XCTestCase {
         register(element, heistId: "button_save", index: 0)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save"), ordinal: -1))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .ordinalNegative(-1))
         XCTAssertTrue(diagnostics.contains("non-negative"))
         XCTAssertTrue(diagnostics.contains("Next:"))
     }
 
     func testOrdinalZeroOnNoMatchReturnsNotFound() {
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Nonexistent"), ordinal: 0))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected .notFound, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .ordinalOutOfRange(requested: 0, matchCount: 0))
         XCTAssertTrue(diagnostics.contains("ordinal 0 requested"))
         XCTAssertTrue(diagnostics.contains("0 matches"))
         XCTAssertTrue(diagnostics.contains("Next:"))
@@ -792,11 +849,13 @@ final class TheStashResolutionTests: XCTestCase {
 
         let result = bagman.resolveVisibleTarget(.predicate(ElementPredicate(label: "Save")))
 
-        guard case .ambiguous(let candidates, let diagnostics) = result else {
+        guard case .ambiguous(let facts) = result else {
             XCTFail("Expected visible ambiguity, got \(result)")
             return
         }
-        XCTAssertEqual(candidates.count, 2)
+        XCTAssertEqual(facts.candidates.count, 2)
+        XCTAssertEqual(facts.resolutionScope, .visible)
+        let diagnostics = result.diagnostics
         XCTAssertTrue(diagnostics.contains("2 elements match"))
     }
 
@@ -806,10 +865,13 @@ final class TheStashResolutionTests: XCTestCase {
 
         let result = bagman.resolveVisibleTarget(.predicate(ElementPredicate(label: "Save"), ordinal: 4))
 
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Expected ordinal miss, got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .ordinalOutOfRange(requested: 4, matchCount: 1))
+        XCTAssertEqual(facts.resolutionScope, .visible)
         XCTAssertTrue(diagnostics.contains("ordinal 4 requested"))
         XCTAssertTrue(diagnostics.contains("1 match"))
     }
@@ -824,10 +886,13 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(knownResult.resolved?.heistId, "below_fold_button")
 
         let visibleResult = bagman.resolveVisibleTarget(.predicate(ElementPredicate(label: "Below Fold")))
-        guard case .notFound(let diagnostics) = visibleResult else {
+        guard case .notFound(let facts) = visibleResult else {
             XCTFail("Expected visible miss, got \(visibleResult)")
             return
         }
+        let diagnostics = visibleResult.diagnostics
+        XCTAssertEqual(facts.reason, .noMatches)
+        XCTAssertEqual(facts.resolutionScope, .visible)
         XCTAssertTrue(diagnostics.contains("No match for"))
         XCTAssertTrue(diagnostics.contains("scope: visible"), "Should identify failed resolution scope: \(diagnostics)")
     }
@@ -984,10 +1049,12 @@ final class TheStashResolutionTests: XCTestCase {
         register(save, heistId: "button_save_draft", index: 0)
 
         let result = bagman.resolveTarget(.predicate(ElementPredicate(label: "Save")))
-        guard case .notFound(let diagnostics) = result else {
+        guard case .notFound(let facts) = result else {
             XCTFail("Substring partial must not auto-resolve to exact-or-miss; got \(result)")
             return
         }
+        let diagnostics = result.diagnostics
+        XCTAssertEqual(facts.reason, .noMatches)
         XCTAssertTrue(diagnostics.contains("Save Draft"),
                       "Near-miss should surface the actual label as a suggestion: \(diagnostics)")
         XCTAssertTrue(diagnostics.contains("did you mean") || diagnostics.contains("near miss"),

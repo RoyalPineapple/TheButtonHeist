@@ -24,12 +24,51 @@ extension TheStash {
         case visible
     }
 
-    /// Three-case result from `resolveTarget` — diagnostics are produced
-    /// inline during resolution, not via a separate re-scan.
+    struct TargetCandidateFacts {
+        let label: String?
+        let identifier: String?
+        let value: String?
+        let isVisible: Bool
+        let isReachable: Bool
+
+        init(screenElement: ScreenElement, visibleHeistIds: Set<HeistId>) {
+            let element = screenElement.element
+            label = element.label
+            identifier = element.identifier
+            value = element.value
+            isVisible = visibleHeistIds.contains(screenElement.heistId)
+            isReachable = screenElement.contentSpaceOrigin != nil
+        }
+    }
+
+    enum TargetNotFoundReason: Equatable {
+        case ordinalNegative(Int)
+        case ordinalOutOfRange(requested: Int, matchCount: Int)
+        case noMatches
+    }
+
+    struct TargetNotFoundFacts {
+        let predicate: ElementPredicate
+        let ordinal: Int?
+        let reason: TargetNotFoundReason
+        let resolutionScope: ResolutionScope
+        let screenElements: [ScreenElement]
+        let visibleHeistIds: Set<HeistId>
+    }
+
+    struct TargetAmbiguityFacts {
+        let predicate: ElementPredicate
+        let candidates: [TargetCandidateFacts]
+        let matchedCount: Int
+        let resolutionScope: ResolutionScope
+    }
+
+    /// Three-case result from `resolveTarget`. Resolution returns facts;
+    /// diagnostic wording is projected separately.
     enum TargetResolution {
         case resolved(ScreenElement)
-        case notFound(diagnostics: String)
-        case ambiguous(candidates: [String], diagnostics: String)
+        case notFound(TargetNotFoundFacts)
+        case ambiguous(TargetAmbiguityFacts)
 
         var resolved: ScreenElement? {
             if case .resolved(let resolved) = self { return resolved }
@@ -37,11 +76,12 @@ extension TheStash {
         }
 
         var diagnostics: String {
-            switch self {
-            case .resolved: return ""
-            case .notFound(let message): return message
-            case .ambiguous(_, let message): return message
-            }
+            TargetResolutionDiagnostics.message(for: self)
+        }
+
+        var candidates: [String] {
+            guard case .ambiguous(let facts) = self else { return [] }
+            return facts.candidates.map(TargetResolutionDiagnostics.candidateSummary)
         }
     }
 
@@ -154,20 +194,6 @@ extension TheStash {
         return resolveVisibleTarget(effectiveTarget).resolved
     }
 
-    func matcherNotFoundMessage(
-        _ predicate: ElementPredicate,
-        in screen: Screen? = nil,
-        resolutionScope: ResolutionScope = .known
-    ) -> String {
-        let screen = screen ?? currentScreen
-        return Diagnostics.matcherNotFound(
-            predicate,
-            screenElements: selectElements(in: screen),
-            visibleHeistIds: screen.visibleIds,
-            resolutionScope: resolutionScope
-        )
-    }
-
     /// All elements in the current screen.
     ///
     /// Live elements appear first in hierarchy (depth-first) traversal order;
@@ -203,75 +229,52 @@ private extension TheStash {
     ) -> TargetResolution {
         if let ordinal {
             guard ordinal >= 0 else {
-                return .notFound(diagnostics: """
-                    ordinal must be non-negative, got \(ordinal)
-                    Next: remove ordinal, or use ordinal 0 after the target query resolves candidates.
-                    """)
+                return .notFound(TargetNotFoundFacts(
+                    predicate: predicate,
+                    ordinal: ordinal,
+                    reason: .ordinalNegative(ordinal),
+                    resolutionScope: resolutionScope,
+                    screenElements: selectElements(in: screen),
+                    visibleHeistIds: screen.visibleIds
+                ))
             }
             let matches = matchScreenElements(predicate, limit: ordinal + 1, in: screen)
             guard ordinal < matches.count else {
-                let total = matches.count
-                let nextMove: String
-                if total == 0 {
-                    nextMove = "Next: retry with an exact label, identifier, or value."
-                } else {
-                    nextMove = "Next: use ordinal 0...\(total - 1), omit ordinal to inspect ambiguity, "
-                        + "or target a listed element by exact label, identifier, or value."
-                }
-                return .notFound(diagnostics: """
-                    ordinal \(ordinal) requested but only \(total) match\(total == 1 ? "" : "es") found
-                    \(nextMove)
-                    """)
+                return .notFound(TargetNotFoundFacts(
+                    predicate: predicate,
+                    ordinal: ordinal,
+                    reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
+                    resolutionScope: resolutionScope,
+                    screenElements: matches,
+                    visibleHeistIds: screen.visibleIds
+                ))
             }
             return .resolved(matches[ordinal])
         }
         let matches = matchScreenElements(predicate, limit: 2, in: screen)
         switch matches.count {
         case 0:
-            return .notFound(diagnostics: matcherNotFoundMessage(
-                predicate,
-                in: screen,
-                resolutionScope: resolutionScope
+            return .notFound(TargetNotFoundFacts(
+                predicate: predicate,
+                ordinal: nil,
+                reason: .noMatches,
+                resolutionScope: resolutionScope,
+                screenElements: selectElements(in: screen),
+                visibleHeistIds: screen.visibleIds
             ))
         case 1:
             return .resolved(matches[0])
         default:
             let capped = matchScreenElements(predicate, limit: 11, in: screen)
-            return ambiguousResolution(
-                predicate,
-                screenElements: capped,
-                visibleHeistIds: screen.visibleIds,
+            return .ambiguous(TargetAmbiguityFacts(
+                predicate: predicate,
+                candidates: capped.prefix(10).map {
+                    TargetCandidateFacts(screenElement: $0, visibleHeistIds: screen.visibleIds)
+                },
+                matchedCount: capped.count,
                 resolutionScope: resolutionScope
-            )
+            ))
         }
-    }
-
-    func ambiguousResolution(
-        _ predicate: ElementPredicate,
-        screenElements: [ScreenElement],
-        visibleHeistIds: Set<HeistId>,
-        resolutionScope: ResolutionScope
-    ) -> TargetResolution {
-        let candidates = screenElements.prefix(10).map { screenElement -> String in
-            let element = screenElement.element
-            var parts: [String] = []
-            if let label = element.label, !label.isEmpty { parts.append("\"\(label)\"") }
-            if let identifier = element.identifier, !identifier.isEmpty { parts.append("id=\(identifier)") }
-            if let value = element.value, !value.isEmpty { parts.append("value=\(value)") }
-            parts.append(Diagnostics.availabilityDescription(for: screenElement, visibleHeistIds: visibleHeistIds))
-            return parts.joined(separator: " ")
-        }
-        let query = Diagnostics.formatMatcher(predicate)
-        let countLabel = screenElements.count > 10 ? "10+" : "\(screenElements.count)"
-        let rangeLabel = screenElements.count > 10 ? "0, 1, 2, ..." : "0–\(screenElements.count - 1)"
-        var lines = [
-            "\(countLabel) elements match: \(query) (scope: \(resolutionScope.rawValue)) — use ordinal \(rangeLabel) to select one"
-        ]
-        lines.append(contentsOf: candidates.map { "  \($0)" })
-        if screenElements.count > 10 {
-            lines.append("  ... and more")
-        }
-        return .ambiguous(candidates: candidates, diagnostics: lines.joined(separator: "\n"))
     }
 }
 

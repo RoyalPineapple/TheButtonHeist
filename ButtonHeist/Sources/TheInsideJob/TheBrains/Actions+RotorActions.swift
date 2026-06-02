@@ -79,13 +79,13 @@ extension Actions {
                                 suggestion: "specify rotorIndex or an exact rotor name")
         case .currentItemUnavailable(let heistId):
             return rotorFailure(
-                observed: "continuation.heistId=\(ActionCapabilityDiagnostic.quote(heistId)) is not available",
+                observed: "rotor continuation target \(ActionCapabilityDiagnostic.quote(heistId)) is not available",
                 rotor: rotor,
                 rotorIndex: rotorIndex,
                 direction: direction,
                 element: element,
                 liveObject: liveObject,
-                suggestion: "use the heistId returned by the previous rotor result",
+                suggestion: "start from the semantic target again or use the current continuation returned by the previous rotor result",
                 failureKind: .targetUnavailable
             )
         case .continuationTextRangeUnavailable:

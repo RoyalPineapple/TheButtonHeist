@@ -4,8 +4,8 @@ Button Heist drives iOS apps through the accessibility layer — the same interf
 
 ## Core Loop
 
-1. **Read** — `get_interface` returns the app accessibility state with heistIds, labels, values, traits, and actions.
-2. **Act** — `activate`, `type_text`, `scroll`, `swipe`, and the other canonical action tools — target by heistId or matcher. Always attach `expect` when you know what should change.
+1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, and capture-local diagnostic annotations.
+2. **Act** — `activate`, `type_text`, `scroll`, `swipe`, and the other canonical action tools target semantic matcher fields (`ElementTarget` predicates). Always attach `expect` when you know what should change.
 3. **Read the response** — action responses carry trace-backed result evidence. If the delta answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state (spinner, loading overlay) and your expectation wasn't met, call `wait_for_change` with the same expectation. The server checks the current state first, then watches settled changes until the expectation is true.
 5. **Repeat** — only re-fetch when you need elements you haven't seen.
@@ -103,7 +103,7 @@ xcrun simctl delete "$SIM_UDID"
 ## Async Changes
 
 For operations that take time (payments, network requests):
-1. `activate pay_button expect={"type":"screen_changed"}` — tap and declare intent
+1. `activate target={"label":"Pay","traits":["button"]} expect={"type":"screen_changed"}` — tap and declare intent
 2. Delta shows spinner, expectation not met → `wait_for_change expect={"type":"screen_changed"}` — server waits until the real screen arrives
 
 ## Expectations
@@ -115,9 +115,9 @@ Before you act, ask: what should change? A toggle flips a value. A nav button ch
 Expectations are as specific as you need — say what you know, omit what you don't:
 - `{"type": "elements_changed"}` — something should change (broadest).
 - `{"type": "element_updated"}` — some element's property should change.
-- `{"type": "element_updated", "heistId": "counter"}` — this specific element should change.
-- `{"type": "element_updated", "heistId": "counter", "property": "value"}` — its value specifically.
-- `{"type": "element_updated", "heistId": "counter", "newValue": "5"}` — and it should become "5".
+- `{"type": "element_updated", "element": {"label": "Counter"}}` — this specific element should change.
+- `{"type": "element_updated", "element": {"label": "Counter"}, "property": "value"}` — its value specifically.
+- `{"type": "element_updated", "element": {"label": "Counter"}, "property": "value", "to": "5"}` — and it should become "5".
 
 Each level narrows what counts as success. The more specific, the more a failure tells you.
 
@@ -125,7 +125,7 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 `start_heist` / `stop_heist` capture your session as a replayable .heist file. The recording is automatic: a recorded step exists only after the action succeeded and its explicit expectation was satisfied. Actions without explicit expectations keep the existing successful-action recording behavior.
 
-**Prime the interface first.** Call `get_interface` before your first action. The recorder converts heistIds to portable matchers behind the scenes, but needs current element data to do it well.
+**Prime the interface first.** Call `get_interface` before your first action. The recorder derives portable matchers from current element data.
 
 **Attach expectations to every meaningful action.** Expectations are recorded with the step. A heist without expectations is a sequence of taps; a heist with expectations is a self-verifying test suite that validates on every replay.
 
@@ -135,4 +135,4 @@ Each level narrows what counts as success. The more specific, the more a failure
 
 ## Efficiency
 
-Read the delta first — skip `get_interface` when the delta already told you what changed. Use heistIds on the current screen, matchers after navigation. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.
+Read the delta first — skip `get_interface` when the delta already told you what changed. Use semantic matcher fields from the current screen; after navigation, build targets from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.

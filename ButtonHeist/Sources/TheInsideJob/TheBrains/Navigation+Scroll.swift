@@ -20,28 +20,28 @@ import TheScore
 extension Navigation {
 
     enum ScrollTargetDescription: Equatable, CustomStringConvertible {
-        case label(String, heistId: HeistId)
-        case identifier(String, heistId: HeistId)
-        case heistId(HeistId)
+        case label(String)
+        case identifier(String)
+        case element
 
         init(_ screenElement: TheStash.ScreenElement) {
             if let label = screenElement.element.label, !label.isEmpty {
-                self = .label(label, heistId: screenElement.heistId)
+                self = .label(label)
             } else if let identifier = screenElement.element.identifier, !identifier.isEmpty {
-                self = .identifier(identifier, heistId: screenElement.heistId)
+                self = .identifier(identifier)
             } else {
-                self = .heistId(screenElement.heistId)
+                self = .element
             }
         }
 
         var description: String {
             switch self {
-            case .label(let label, let heistId):
-                return "\"\(label)\" (heistId: \(heistId))"
-            case .identifier(let identifier, let heistId):
-                return "identifier \"\(identifier)\" (heistId: \(heistId))"
-            case .heistId(let heistId):
-                return "heistId \(heistId)"
+            case .label(let label):
+                return "\"\(label)\""
+            case .identifier(let identifier):
+                return "identifier \"\(identifier)\""
+            case .element:
+                return "semantic element"
             }
         }
     }
