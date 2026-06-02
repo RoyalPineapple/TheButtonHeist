@@ -83,7 +83,7 @@ final class TheGetaway {
         case .wait(let target):
             let result = await brains.performWait(target: target)
             sendMessage(.actionResult(result), requestId: requestId, respond: respond)
-            brains.recordSentState()
+            await brains.recordSentState()
 
         // Interactions
         default:
@@ -108,7 +108,7 @@ final class TheGetaway {
             requestId: requestId,
             respond: respond
         )
-        brains.recordSentState()
+        await brains.recordSentState()
     }
 
     func sendInterface(
@@ -124,7 +124,7 @@ final class TheGetaway {
                 requestId: requestId,
                 respond: respond
             )
-            brains.recordSentState()
+            await brains.recordSentState()
         case .failure(let error):
             sendMessage(.error(ServerError(kind: .general, message: error.message)), requestId: requestId, respond: respond)
         }

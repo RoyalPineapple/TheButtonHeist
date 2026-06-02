@@ -128,9 +128,9 @@ final class WaitForIntegrationTests: XCTestCase {
     }
 
     @discardableResult
-    private func refreshAndRecordSentState() -> Bool {
+    private func refreshAndRecordSentState() async -> Bool {
         guard insideJob.brains.stash.recordVisibleSemanticObservation() != nil else { return false }
-        insideJob.brains.recordSentState()
+        await insideJob.brains.recordSentState()
         return true
     }
 
@@ -353,7 +353,8 @@ final class WaitForIntegrationTests: XCTestCase {
     func testWaitForChangeElementAppearedAfterBaselineReturnsThroughChangePath() async throws {
         let baseline = addLabel("WaitForChange-Baseline")
         defer { baseline.removeFromSuperview() }
-        XCTAssertTrue(refreshAndRecordSentState())
+        let recordedBaseline = await refreshAndRecordSentState()
+        XCTAssertTrue(recordedBaseline)
 
         let addTask = Task { @MainActor in
             await self.insideJob.tripwire.yieldRealFrames(2)
@@ -380,7 +381,8 @@ final class WaitForIntegrationTests: XCTestCase {
     func testWaitForChangeLateCallElementsChangedUsesAlreadyChangedCapture() async throws {
         let baseline = addLabel("WaitForChange-ElementsBaseline")
         defer { baseline.removeFromSuperview() }
-        XCTAssertTrue(refreshAndRecordSentState())
+        let recordedBaseline = await refreshAndRecordSentState()
+        XCTAssertTrue(recordedBaseline)
 
         let changed = addLabel("WaitForChange-ElementsChanged")
         defer { changed.removeFromSuperview() }
@@ -422,7 +424,7 @@ final class WaitForIntegrationTests: XCTestCase {
         insideJob.brains.stash.installScreenForTesting(offViewportMemory.merging(
             insideJob.brains.stash.currentScreen
         ))
-        insideJob.brains.recordSentState()
+        await insideJob.brains.recordSentState()
         XCTAssertNotNil(insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId))
 
         let updateTask = Task { @MainActor in

@@ -85,9 +85,9 @@ final class TheBrains {
     // MARK: - Response State Tracking
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
-    func recordSentState() {
-        let state = stash.latestSettledSemanticObservation.map(postActionObservation.captureSemanticState(from:))
-            ?? postActionObservation.captureSemanticState()
+    func recordSentState() async {
+        startSemanticObservation()
+        guard let state = await postActionObservation.currentSemanticState() else { return }
         waitForChangeState.recordDeliveredBaseline(state)
     }
 
@@ -104,10 +104,9 @@ final class TheBrains {
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
         startSemanticObservation()
-        let currentSequence = stash.latestSettledSemanticObservation?.sequence
         guard await stash.settledSemanticObservation(
             scope: .discovery,
-            after: currentSequence,
+            after: nil,
             timeout: 2.0
         ) != nil else {
             return .failure(.rootViewUnavailable)

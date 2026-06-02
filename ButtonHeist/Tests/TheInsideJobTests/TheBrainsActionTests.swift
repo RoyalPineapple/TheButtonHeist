@@ -611,7 +611,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeouts, [0])
     }
 
-    func testHeistWaitTimeoutZeroEvaluatesImmediately() async throws {
+    func testHeistWaitTimeoutZeroTurnsObservationCrankOnce() async throws {
         let plan = HeistPlan(steps: [
             .wait(WaitStep(
                 predicate: .state(.present(ElementPredicate(label: "Never Appears"))),
@@ -624,14 +624,16 @@ final class TheBrainsActionTests: XCTestCase {
         let elapsed = CFAbsoluteTimeGetCurrent() - start
 
         XCTAssertFalse(result.success)
-        XCTAssertLessThan(elapsed, 1)
+        XCTAssertLessThan(elapsed, 3)
         XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
     }
 
-    func testHeistWaitTimeoutZeroSucceedsFromLatestSettledState() async throws {
-        brains.stash.installScreenForTesting(.makeForTests(elements: [
-            (makeElement(label: "Home"), "home"),
-        ]))
+    func testHeistWaitTimeoutZeroSucceedsFromOneObservation() async throws {
+        var observedTimeouts: [Double?] = []
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Home"])],
+            observedTimeouts: { observedTimeouts.append($0) }
+        )
         let plan = HeistPlan(steps: [
             .wait(WaitStep(
                 predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -639,9 +641,10 @@ final class TheBrainsActionTests: XCTestCase {
             )),
         ])
 
-        let result = await brains.executeHeistPlan(plan)
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
 
         XCTAssertTrue(result.success)
+        XCTAssertEqual(observedTimeouts, [])
     }
 
     func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
@@ -1532,7 +1535,8 @@ final class TheBrainsActionTests: XCTestCase {
 
     func testExecuteCommandWaitForFailsWhenAccessibilityTreeUnavailable() async {
         let target = WaitTarget(
-            predicate: .state(.present(ElementPredicate(label: "never")))
+            predicate: .state(.present(ElementPredicate(label: "never"))),
+            timeout: 0
         )
         let result = await withNoTraversableWindows {
             await brains.executeCommand(.wait(target))
@@ -1540,7 +1544,8 @@ final class TheBrainsActionTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
     }
 
     // MARK: - Helpers

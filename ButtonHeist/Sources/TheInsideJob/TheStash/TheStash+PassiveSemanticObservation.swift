@@ -46,16 +46,9 @@ extension TheStash {
         let subscription = subscribeSemanticObservation(scope: scope)
         defer { _ = subscription }
 
-        let requiredSequence: UInt64? = {
-            if scope == .discovery {
-                return max(sequence ?? 0, latestSettledSemanticObservation?.sequence ?? 0)
-            }
-            return sequence
-        }()
+        let requiredSequence = semanticObservationBaselineSequence(for: scope, after: sequence)
 
-        if let latest = latestSettledSemanticObservation,
-           latest.scope >= scope,
-           latest.sequence > (requiredSequence ?? 0) {
+        if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
             return latest
         }
 
@@ -75,23 +68,18 @@ extension TheStash {
         after sequence: UInt64?,
         timeout: Double?
     ) async -> SettledSemanticObservation? {
-        if let latest = latestSettledSemanticObservation,
-           latest.scope >= scope,
-           latest.sequence > (sequence ?? 0) {
-            return latest
-        }
+        let requiredSequence = semanticObservationBaselineSequence(for: scope, after: sequence)
 
-        if timeout == 0 {
-            return nil
+        if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
+            return latest
         }
 
         let id = nextSettledSemanticWaiterID
         nextSettledSemanticWaiterID += 1
 
         return await withCheckedContinuation { continuation in
-            let timeoutTask: Task<Void, Never>? = timeout.map { timeout in
+            let timeoutTask: Task<Void, Never>? = observationWaitTimeout(timeout).map { timeout in
                 Task { [weak self] in
-                    guard timeout > 0 else { return }
                     let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
                     guard await Task.cancellableSleep(for: .nanoseconds(nanoseconds)) else { return }
                     self?.completeSettledSemanticWaiter(id, returning: nil)
@@ -99,11 +87,43 @@ extension TheStash {
             }
             settledSemanticWaiters[id] = SettledSemanticWaiter(
                 scope: scope,
-                afterSequence: sequence,
+                afterSequence: requiredSequence,
                 continuation: continuation,
                 timeoutTask: timeoutTask
             )
         }
+    }
+
+    private func observationWaitTimeout(_ timeout: Double?) -> Double? {
+        guard let timeout else { return nil }
+        guard timeout > 0 else { return 1.0 }
+        return timeout
+    }
+
+    private func semanticObservationBaselineSequence(
+        for scope: SemanticObservationScope,
+        after sequence: UInt64?
+    ) -> UInt64? {
+        let currentSequence = latestSettledSemanticObservation?.sequence
+        let baseline = sequence ?? currentSequence
+        if scope == .discovery {
+            return max(baseline ?? 0, currentSequence ?? 0)
+        }
+        return baseline
+    }
+
+    private func cleanSettledSemanticObservation(
+        scope: SemanticObservationScope,
+        after sequence: UInt64?
+    ) -> SettledSemanticObservation? {
+        guard !latestSettledSemanticObservationIsDirty,
+              let latest = latestSettledSemanticObservation,
+              latest.scope >= scope,
+              latest.sequence > (sequence ?? 0)
+        else {
+            return nil
+        }
+        return latest
     }
 
     func markDirtyFromTripwire() {

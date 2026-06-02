@@ -30,7 +30,7 @@ extension TheBrains {
                 },
                 recordDeliveredObservationAfterStep: {
                     if await semanticObservations.refreshDeliveredBaselineAfterStep() {
-                        brains.recordSentState()
+                        await brains.recordSentState()
                     }
                 }
             )
@@ -38,7 +38,8 @@ extension TheBrains {
     }
 
     func executeHeistPlan(_ plan: HeistPlan) async -> ActionResult {
-        await executeHeistPlan(plan, runtime: .live(self))
+        startSemanticObservation()
+        return await executeHeistPlan(plan, runtime: .live(self))
     }
 
     func executeHeistPlanForTest(

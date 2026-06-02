@@ -257,11 +257,22 @@ final class PostActionObservation {
     }
 
     func currentSemanticState(baseline: BeforeState? = nil) async -> BeforeState? {
-        guard stash.recordVisibleSemanticObservation() != nil else { return nil }
+        guard let observation = await stash.settledSemanticObservation(
+            scope: .visible,
+            after: baseline?.settledObservationSequence,
+            timeout: 1.0
+        ) else { return nil }
+        let current = captureSemanticState(from: observation)
         if let baseline {
-            return await semanticStateAfterVisibleRefresh(baseline: baseline)
+            let classification = ScreenClassifier.classify(
+                before: baseline.screenSnapshot,
+                after: current.screenSnapshot
+            )
+            guard classification.isScreenChange else { return current }
+
+            return await semanticStateAfterDiscovery(after: current.settledObservationSequence) ?? current
         }
-        return captureSemanticState()
+        return current
     }
 
     func settledSemanticState(after baseline: BeforeState, timeout: Double?) async -> BeforeState? {
@@ -275,11 +286,8 @@ final class PostActionObservation {
             baselineTripwireSignal: baseline.tripwireSignal
         )
         guard settle.outcome.didSettleCleanly else { return nil }
-        if let screen = settle.finalScreen {
-            stash.recordSettledSemanticObservation(screen)
-        } else if stash.recordVisibleSemanticObservation() == nil {
-            return nil
-        }
+        guard let screen = settle.finalScreen else { return nil }
+        stash.recordSettledSemanticObservation(screen)
         return await semanticStateAfterVisibleRefresh(baseline: baseline)
     }
 
@@ -302,7 +310,7 @@ final class PostActionObservation {
         if usedInjectedSettleOutcome {
             return settleResult.finalScreen
         }
-        return settleResult.finalScreen ?? stash.semanticObservationForSettle()
+        return settleResult.finalScreen
     }
 
     private func semanticSettleTimeoutMs(_ timeout: Double?) -> Int {

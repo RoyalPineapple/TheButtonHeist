@@ -32,20 +32,11 @@ final class HeistSemanticObservations {
         baseline: PostActionObservation.BeforeState?,
         timeout: Double?
     ) async -> HeistSemanticObservation? {
-        let baseline = baseline ?? latestSettledSemanticState()
-
-        let observation: TheStash.SettledSemanticObservation?
-        if timeout == 0 {
-            observation = stash.latestSettledSemanticObservation.flatMap { latest in
-                latest.scope >= scope ? latest : nil
-            }
-        } else {
-            observation = await stash.settledSemanticObservation(
-                scope: scope,
-                after: baseline?.settledObservationSequence,
-                timeout: timeout ?? defaultSemanticObservationTimeout
-            )
-        }
+        let observation = await stash.settledSemanticObservation(
+            scope: scope,
+            after: baseline?.settledObservationSequence,
+            timeout: timeout ?? defaultSemanticObservationTimeout
+        )
 
         guard let observation else { return nil }
         return semanticObservation(from: observation, baseline: baseline)
@@ -110,7 +101,7 @@ final class HeistSemanticObservations {
         }
 
         let deadline = start + timeout
-        var baseline = lastObservation?.state ?? latestSettledSemanticState()
+        var baseline = lastObservation?.state
         while CFAbsoluteTimeGetCurrent() < deadline {
             let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
             guard let observation = await observe(
@@ -144,12 +135,8 @@ final class HeistSemanticObservations {
         )
     }
 
-    func latestSettledSemanticState() -> PostActionObservation.BeforeState? {
-        stash.latestSettledSemanticObservation.map(postActionObservation.captureSemanticState(from:))
-    }
-
     func refreshDeliveredBaselineAfterStep() async -> Bool {
-        latestSettledSemanticState() != nil
+        await observe(scope: .visible, baseline: nil, timeout: 0) != nil
     }
 
     private func evaluate(
@@ -216,6 +203,15 @@ final class HeistSemanticObservations {
         start: CFAbsoluteTime
     ) -> String {
         let elapsed = elapsedSeconds(since: start)
+        guard observation != nil else {
+            return [
+                "timed out after \(elapsed)s waiting for heist predicate",
+                "expected: \(step.predicate.description)",
+                "last result: \(expectation.actual ?? "not met")",
+                "last observed: no settled semantic observation available",
+            ].joined(separator: "; ")
+        }
+
         if let presenceMessage = presenceWaitTimeoutMessage(for: step.predicate, elapsed: elapsed) {
             return presenceMessage
         }

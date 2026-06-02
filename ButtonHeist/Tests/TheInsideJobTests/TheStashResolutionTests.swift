@@ -153,6 +153,51 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.screen.orderedElements.first?.element.label, "Second")
     }
 
+    func testUnbaselinedSettledObservationWaiterRequiresNextObservation() async {
+        let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
+        bagman.recordSettledSemanticObservation(first)
+
+        let waiter = Task { @MainActor in
+            await bagman.waitForNextSettledSemanticObservation(after: nil, timeout: 1)
+        }
+
+        for _ in 0..<10 where bagman.settledSemanticWaiters.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+
+        let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
+        bagman.recordSettledSemanticObservation(second)
+
+        let observation = await waiter.value
+        XCTAssertEqual(observation?.sequence, 2)
+        XCTAssertEqual(observation?.screen.orderedElements.first?.element.label, "Second")
+    }
+
+    func testDirtySettledObservationIsNotReturnedAsCurrentTruth() async {
+        let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
+        bagman.recordSettledSemanticObservation(first)
+
+        let visibleRefresh = Screen.makeForTests(elements: [(element(label: "Refresh"), "refresh")])
+        bagman.commitVisibleRefresh(visibleRefresh)
+
+        let waiter = Task { @MainActor in
+            await bagman.waitForNextSettledSemanticObservation(after: nil, timeout: 1)
+        }
+
+        for _ in 0..<10 where bagman.settledSemanticWaiters.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+
+        let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
+        bagman.recordSettledSemanticObservation(second)
+
+        let observation = await waiter.value
+        XCTAssertEqual(observation?.sequence, 2)
+        XCTAssertEqual(observation?.screen.orderedElements.first?.element.label, "Second")
+    }
+
     func testDiscoveryWaiterIgnoresVisibleObservation() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.recordSettledSemanticObservation(first)

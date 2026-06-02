@@ -80,10 +80,10 @@ extension TheBrains {
         method: ActionMethod,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        guard stash.recordVisibleSemanticObservation() != nil else {
+        startSemanticObservation()
+        guard let before = await postActionObservation.currentSemanticState() else {
             return treeUnavailableResult(method: method)
         }
-        let before = postActionObservation.captureSemanticState()
         let result = await interaction()
 
         return await postActionObservation.actionResultWithDelta(
@@ -117,10 +117,10 @@ extension TheBrains {
         direction: ScrollDirection,
         method: ActionMethod
     ) async -> ActionResult {
-        guard stash.recordVisibleSemanticObservation() != nil else {
+        startSemanticObservation()
+        guard let before = await postActionObservation.currentSemanticState() else {
             return treeUnavailableResult(method: method)
         }
-        let before = postActionObservation.captureSemanticState()
         let result = await navigation.executeElementSearch(elementTarget: elementTarget, direction: direction)
 
         return await postActionObservation.actionResultWithDelta(
@@ -134,6 +134,7 @@ extension TheBrains {
     }
 
     func performWait(target: WaitTarget) async -> ActionResult {
+        startSemanticObservation()
         let semanticObservations = HeistSemanticObservations(
             stash: stash,
             postActionObservation: postActionObservation
