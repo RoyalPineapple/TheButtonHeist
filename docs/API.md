@@ -93,9 +93,9 @@ focus, and targeted gestures. If identity, actionability, or live geometry
 cannot be proven, the command fails with diagnostics instead of acting on stale
 state.
 
-Explicit viewport commands are different: `scroll`, `scroll_to_visible`,
-`element_search`, and `scroll_to_edge` expose viewport state because moving the
-viewport is the caller's intent.
+Explicit viewport commands are different: `scroll`, `scroll_to_visible`, and
+`scroll_to_edge` expose viewport state because moving the viewport is the
+caller's intent.
 
 ## Element Identity
 

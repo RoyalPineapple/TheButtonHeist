@@ -44,7 +44,7 @@ extension TheFence {
         switch message {
         case .getPasteboard:
             return Timeouts.healthSeconds
-        case .elementSearch, .typeText:
+        case .typeText:
             return Timeouts.longActionSeconds
         case .wait(let target):
             return target.resolvedTimeout + 5

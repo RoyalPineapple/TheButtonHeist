@@ -91,7 +91,7 @@ final class WireCommandParityTests: XCTestCase {
             return ["target": target, "endX": .double(120), "endY": .double(240)]
         case .scroll:
             return ["direction": .string(ScrollDirection.down.rawValue)]
-        case .scrollToVisible, .elementSearch, .activate:
+        case .scrollToVisible, .activate:
             return ["target": target]
         case .wait:
             return [
@@ -156,7 +156,6 @@ final class WireCommandParityTests: XCTestCase {
             .typeText(TypeTextTarget(text: "hello")),
             .scroll(ScrollTarget(direction: .down)),
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),
-            .elementSearch(ElementSearchTarget(elementTarget: target)),
             .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
             .heistPlan(HeistPlan(steps: [

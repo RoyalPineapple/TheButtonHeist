@@ -7,21 +7,11 @@ extension FenceResponse {
     func compactActionResult(command: TheFence.Command, _ result: ActionResult, expectation: ExpectationResult?) -> String {
         let commandName = command.rawValue
         guard result.success else {
-            if case .scrollSearch(let search) = result.payload {
-                return Self.compactScrollSearchNotFound(
-                    search,
-                    commandName: commandName,
-                    errorKind: Self.compactActionErrorKind(result),
-                    screenId: result.accessibilityTrace?.endpointScreenIdProjection
-                )
-            }
             return Self.compactActionFailure(result, commandName: commandName)
         }
 
         var text: String
         switch result.payload {
-        case .scrollSearch(let search):
-            text = Self.compactScrollSearchFound(search, commandName: commandName)
         case .rotor(let search):
             text = Self.compactRotor(search)
         case .heistExecution(let heist):
@@ -85,53 +75,7 @@ extension FenceResponse {
         if let errorKind = result.errorKind {
             return errorKind
         }
-        if case .scrollSearch = result.payload {
-            return .elementNotFound
-        }
         return .actionFailed
-    }
-
-    private static func compactScrollSearchFound(
-        _ search: ScrollSearchResult,
-        commandName: String
-    ) -> String {
-        var header: String
-        if search.scrollCount == 0 {
-            header = "\(commandName): already visible"
-        } else {
-            let itemInfo = scrollSearchItemInfo(search)
-            header = "\(commandName): found after \(search.scrollCount) scrolls\(itemInfo)"
-        }
-        return header
-    }
-
-    private static func compactScrollSearchNotFound(
-        _ search: ScrollSearchResult,
-        commandName: String,
-        errorKind: ErrorKind,
-        screenId: String?
-    ) -> String {
-        var text: String
-        if search.exhaustive {
-            let itemInfo = scrollSearchItemInfo(search)
-            text = "\(commandName): error[\(errorKind.rawValue)]: not found\(itemInfo) (exhaustive)"
-        } else if search.scrollCount > 0 {
-            let itemInfo = scrollSearchItemInfo(search)
-            text = "\(commandName): error[\(errorKind.rawValue)]: not found after \(search.scrollCount) scrolls\(itemInfo)"
-        } else {
-            text = "\(commandName): error[\(errorKind.rawValue)]: not found"
-        }
-        if let screenId {
-            text = "\(screenId) | \(text)"
-        }
-        return text
-    }
-
-    private static func scrollSearchItemInfo(_ search: ScrollSearchResult) -> String {
-        if search.uniqueElementsSeen > 0 {
-            return " (\(search.uniqueElementsSeen) unique elements seen)"
-        }
-        return ""
     }
 
 }

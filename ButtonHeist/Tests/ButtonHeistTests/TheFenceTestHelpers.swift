@@ -429,7 +429,6 @@ private extension ClientMessage {
         case .setPasteboard: return .setPasteboard
         case .scroll: return .scroll
         case .scrollToVisible: return .scrollToVisible
-        case .elementSearch: return .elementSearch
         case .scrollToEdge: return .scrollToEdge
         case .resignFirstResponder: return .dismissKeyboard
         case .getPasteboard: return .getPasteboard

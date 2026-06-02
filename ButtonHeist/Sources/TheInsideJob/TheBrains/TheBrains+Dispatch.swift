@@ -52,8 +52,6 @@ extension TheBrains {
             return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
             return await performInteraction(method: .scrollToVisible) { await self.navigation.executeScrollToVisible(target) }
-        case .elementSearch(let target):
-            return await performElementSearch(target: target, method: .elementSearch)
         case .scrollToEdge(let target):
             return await performInteraction(method: .scrollToEdge) { await self.navigation.executeScrollToEdge(target) }
         case .wait(let target):
@@ -105,41 +103,6 @@ extension TheBrains {
 
     func performRotor(_ target: RotorTarget) async -> ActionResult {
         return await performInteraction(method: .rotor) { await self.actions.executeRotor(target) }
-    }
-
-    /// Element search: dedicated path because the scroll loop manages its own refresh/settle.
-    func performElementSearch(
-        target: ElementSearchTarget,
-        method: ActionMethod
-    ) async -> ActionResult {
-        await performElementSearch(
-            elementTarget: target.elementTarget,
-            direction: target.direction,
-            method: method
-        )
-    }
-
-    func performElementSearch(
-        elementTarget: ElementTarget?,
-        direction: ScrollDirection,
-        method: ActionMethod
-    ) async -> ActionResult {
-        guard semanticObservationIsActive else {
-            return runtimeInactiveResult(method: method)
-        }
-        guard let before = await interactionObservation.prepareBeforeState() else {
-            return treeUnavailableResult(method: method)
-        }
-        let result = await navigation.executeElementSearch(elementTarget: elementTarget, direction: direction)
-
-        return await interactionObservation.finishAfterAction(
-            success: result.success,
-            method: result.method,
-            message: result.message,
-            payload: result.payload,
-            errorKind: result.success ? nil : .elementNotFound,
-            before: before
-        )
     }
 
     func performWait(target: WaitTarget) async -> ActionResult {

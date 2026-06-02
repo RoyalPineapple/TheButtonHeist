@@ -13,15 +13,11 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
               buttonheist scroll_to_edge
               buttonheist scroll_to_edge btn_list
               buttonheist scroll_to_edge btn_list -e top
-              buttonheist scroll_to_edge --stable-id "main_scroll" -e left
               buttonheist scroll_to_edge --identifier "longList" -e left
             """
     )
 
     @OptionGroup var element: ElementTargetOptions
-
-    @Option(name: .customLong("stable-id"), help: "Scrollable container stableId from get_interface")
-    var stableId: String?
 
     @Option(
         name: .shortAndLong,
@@ -39,11 +35,10 @@ struct ScrollToEdgeCommand: AsyncParsableCommand, CLICommandContract {
             throw ValidationError("Invalid edge '\(edge)'. Valid: \(Self.catalogAllowedValuesDescription(for: .edge))")
         }
 
-        var request: CLIRequestParameters = [
+        let request: CLIRequestParameters = [
             .edge: .string(scrollEdge),
             .timeout: .double(timeoutOption.timeout),
         ]
-        if let stableId { request.set(.stableId, stableId) }
         let target = try element.parsedTarget()
 
         try await CLIRunner.run(

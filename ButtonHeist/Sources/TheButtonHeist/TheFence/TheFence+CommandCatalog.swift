@@ -15,7 +15,6 @@ extension TheFence {
         case drag
         case scroll
         case scrollToVisible = "scroll_to_visible"
-        case elementSearch = "element_search"
         case scrollToEdge = "scroll_to_edge"
         case activate
         case rotor

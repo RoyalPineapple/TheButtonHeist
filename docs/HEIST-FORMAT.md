@@ -232,7 +232,7 @@ On failure, the response includes a `failure` object with everything needed to d
 | `command` | `String` | The command that failed (e.g. `activate`, `type_text`) |
 | `target` | `ElementTarget?` | The semantic target from the failed step |
 | `error` | `String` | Human-readable error message |
-| `actionResult` | `ActionResult?` | Full action result — includes `errorKind`, `scrollSearchResult`, delta, etc. |
+| `actionResult` | `ActionResult?` | Full action result — includes `errorKind`, accessibility trace, delta, etc. |
 | `expectation` | `ExpectationResult?` | Expectation check result (when top-level `expectation` was attached to the step) |
 | `interface` | `Interface?` | Complete interface state at time of failure |
 

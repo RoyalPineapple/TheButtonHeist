@@ -48,7 +48,7 @@ public enum ClientWireMessageType: String, DirectionalWireMessageType {
     case activate, increment, decrement, performCustomAction, rotor
     case oneFingerTap, longPress, swipe, drag
     case typeText, editAction, setPasteboard, getPasteboard
-    case scroll, scrollToVisible, elementSearch, scrollToEdge, resignFirstResponder
+    case scroll, scrollToVisible, scrollToEdge, resignFirstResponder
     case requestScreen
     case wait, heistPlan
 }

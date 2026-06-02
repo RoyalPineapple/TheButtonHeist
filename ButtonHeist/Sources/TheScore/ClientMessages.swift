@@ -92,10 +92,6 @@ public enum ClientMessage: Codable, Sendable, Equatable {
     /// Fails if the element has no recorded content-space position.
     case scrollToVisible(ScrollToVisibleTarget)
 
-    /// Iterative search: page through scroll content looking for an element.
-    /// Used when the element has never been seen (not in the registry).
-    case elementSearch(ElementSearchTarget)
-
     /// Scroll the nearest scroll view ancestor to an edge (top, bottom, left, right)
     case scrollToEdge(ScrollToEdgeTarget)
 

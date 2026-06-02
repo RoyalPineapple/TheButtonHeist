@@ -918,11 +918,29 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testScrollRejectsCaptureLocalRefContainerAlias() async {
+    func testScrollRejectsPublicContainerHandle() async {
         await assertValidationError(
             command: .scroll,
             arguments: ["container": .object(["captureLocalRef": .string("main_scroll")])],
-            contains: "schema validation failed for container.captureLocalRef"
+            contains: "schema validation failed for container"
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollRejectsPublicStableId() async {
+        await assertValidationError(
+            command: .scroll,
+            arguments: ["stableId": .string("main_scroll")],
+            contains: "schema validation failed for stableId"
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollToEdgeRejectsPublicStableId() async {
+        await assertValidationError(
+            command: .scrollToEdge,
+            arguments: ["edge": .string("bottom"), "stableId": .string("main_scroll")],
+            contains: "schema validation failed for stableId"
         )
     }
 
@@ -985,20 +1003,6 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertPassesValidation(
             command: .scrollToEdge,
             arguments: ["edge": .string("bottom")]
-        )
-    }
-
-    @ButtonHeistActor
-    func testElementSearchMissingElement() async {
-        await assertContractError(
-            command: .elementSearch,
-            contains: [
-                "element_search request contract failed: missing target",
-                "requires target object",
-                "Next: get_interface()",
-            ],
-            errorCode: "request.missing_target",
-            nextCommand: "get_interface()"
         )
     }
 

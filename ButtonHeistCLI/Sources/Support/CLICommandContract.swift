@@ -47,7 +47,6 @@ enum CLICommandAdapterCatalog {
         .drag: DragSubcommand.self,
         .scroll: ScrollCommand.self,
         .scrollToVisible: ScrollToVisibleCommand.self,
-        .elementSearch: ElementSearchCommand.self,
         .scrollToEdge: ScrollToEdgeCommand.self,
         .activate: ActivateCommand.self,
         .rotor: RotorCommand.self,

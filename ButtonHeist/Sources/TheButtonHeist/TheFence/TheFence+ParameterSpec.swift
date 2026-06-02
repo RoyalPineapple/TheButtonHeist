@@ -217,14 +217,6 @@ enum FenceParameterBlocks: Sendable {
 
     static let elementFilter = matcherFields
 
-    private static let scrollContainerFields: [FenceParameterSpec] = [
-        param(.stableId, .string),
-    ]
-
-    static let scrollContainerTarget: [FenceParameterSpec] = scrollContainerFields + [
-        param(.container, .object, objectProperties: scrollContainerFields),
-    ]
-
     private static let subtreeElementProperties = matcherFields
 
     private static let subtreeContainerProperties: [FenceParameterSpec] = [

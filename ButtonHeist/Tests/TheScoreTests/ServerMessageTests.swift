@@ -258,19 +258,6 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(payload["data"] as? String, "Hi")
     }
 
-    func testActionResultPayloadScrollSearchWireShape() throws {
-        let search = ScrollSearchResult(
-            scrollCount: 2, uniqueElementsSeen: 10, exhaustive: false
-        )
-        let result = ActionResult(success: true, method: .elementSearch, payload: .scrollSearch(search))
-        let data = try JSONEncoder().encode(result)
-        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let payload = try XCTUnwrap(json["payload"] as? [String: Any])
-        XCTAssertEqual(payload["kind"] as? String, "scrollSearch")
-        let inner = try XCTUnwrap(payload["data"] as? [String: Any])
-        XCTAssertEqual(inner["scrollCount"] as? Int, 2)
-    }
-
     func testActionResultPayloadRotorWireShape() throws {
         let rotor = RotorResult(
             rotor: "Errors",

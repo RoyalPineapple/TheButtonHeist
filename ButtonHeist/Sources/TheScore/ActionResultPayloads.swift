@@ -67,19 +67,15 @@ public struct AuthApprovalPendingPayload: Codable, Sendable, Equatable {
 ///
 /// Modeled as an enum so the "at most one" invariant is structural rather than
 /// documented. Encodes natively as a tagged union under the `payload` key on
-/// `ActionResult`: `{"kind": "value", "data": "..."}`,
-/// `{"kind": "scrollSearch", "data": {...}}`, etc.
+/// `ActionResult`: `{"kind": "value", "data": "..."}`, etc.
 ///   - `.value`        → typeText / setPasteboard / getPasteboard
-///   - `.scrollSearch` → element_search / scroll_to_visible
 public enum ResultPayload: Codable, Sendable {
     case value(String)
-    case scrollSearch(ScrollSearchResult)
     case rotor(RotorResult)
     case heistExecution(HeistExecutionResult)
 
     private enum Kind: String, Codable {
         case value
-        case scrollSearch
         case rotor
         case heistExecution
     }
@@ -95,8 +91,6 @@ public enum ResultPayload: Codable, Sendable {
         switch kind {
         case .value:
             self = .value(try container.decode(String.self, forKey: .data))
-        case .scrollSearch:
-            self = .scrollSearch(try container.decode(ScrollSearchResult.self, forKey: .data))
         case .rotor:
             self = .rotor(try container.decode(RotorResult.self, forKey: .data))
         case .heistExecution:
@@ -110,9 +104,6 @@ public enum ResultPayload: Codable, Sendable {
         case .value(let string):
             try container.encode(Kind.value, forKey: .kind)
             try container.encode(string, forKey: .data)
-        case .scrollSearch(let search):
-            try container.encode(Kind.scrollSearch, forKey: .kind)
-            try container.encode(search, forKey: .data)
         case .rotor(let rotor):
             try container.encode(Kind.rotor, forKey: .kind)
             try container.encode(rotor, forKey: .data)
