@@ -57,9 +57,20 @@ final class HeistSemanticObservations {
         baseline: PostActionObservation.BeforeState?,
         timeout: Double?
     ) async -> HeistSemanticObservation? {
-        let baseline = baseline ?? postActionObservation.captureSemanticState()
-        guard var current = await postActionObservation.settledSemanticState(after: baseline, timeout: timeout) else {
-            return nil
+        let observationBaseline: PostActionObservation.BeforeState
+        var current: PostActionObservation.BeforeState
+        if let observedBaseline = baseline {
+            observationBaseline = observedBaseline
+            guard let settled = await postActionObservation.settledSemanticState(after: observedBaseline, timeout: timeout) else {
+                return nil
+            }
+            current = settled
+        } else {
+            guard let observed = await postActionObservation.currentSemanticState() else {
+                return nil
+            }
+            observationBaseline = observed
+            current = observed
         }
 
         switch scope {
@@ -79,9 +90,9 @@ final class HeistSemanticObservations {
             }
         }
 
-        let trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: baseline)
+        let trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: observationBaseline)
         return HeistSemanticObservation(
-            baseline: baseline,
+            baseline: observationBaseline,
             state: current,
             accessibilityTrace: trace,
             delta: trace.endpointDeltaProjection,
@@ -215,12 +226,69 @@ final class HeistSemanticObservations {
         observation: HeistSemanticObservation?,
         start: CFAbsoluteTime
     ) -> String {
-        [
-            "timed out after \(elapsedSeconds(since: start))s waiting for heist predicate",
+        let elapsed = elapsedSeconds(since: start)
+        if let presenceMessage = presenceWaitTimeoutMessage(for: step.predicate, elapsed: elapsed) {
+            return presenceMessage
+        }
+
+        return [
+            "timed out after \(elapsed)s waiting for heist predicate",
             "expected: \(step.predicate.description)",
             "last result: \(expectation.actual ?? "not met")",
             "last observed: \(observation?.summary ?? "no settled accessibility state")",
         ].joined(separator: "; ")
+    }
+
+    private func presenceWaitTimeoutMessage(
+        for predicate: AccessibilityPredicate,
+        elapsed: String
+    ) -> String? {
+        let target: ElementTarget
+        let absent: Bool
+        switch predicate {
+        case .state(.present(let elementPredicate)):
+            target = .predicate(elementPredicate, ordinal: 0)
+            absent = false
+        case .state(.absent(let elementPredicate)):
+            target = .predicate(elementPredicate, ordinal: 0)
+            absent = true
+        default:
+            return nil
+        }
+
+        let resolution = stash.resolveTarget(target)
+        let expected = absent ? "element to disappear" : "element to appear"
+        let reason = absent ? "element still present" : "element not found"
+        let diagnostics = resolution.diagnostics
+        var parts = [
+            "timed out after \(elapsed)s waiting for \(expected)",
+            "expected: \(waitForTargetDescription(target))",
+            "known: \(stash.knownElementCount) elements",
+        ]
+        if let screenId = stash.lastScreenId {
+            parts.append("screen: \(screenId)")
+        }
+        if diagnostics.isEmpty {
+            parts.append("last result: \(reason)")
+        } else {
+            parts.append("last result: \(reason): \(diagnostics)")
+        }
+        parts.append(
+            "Next: get_interface() to inspect current elements, " +
+                "then retry wait with an exact predicate."
+        )
+        return parts.joined(separator: "; ")
+    }
+
+    private func waitForTargetDescription(_ target: ElementTarget) -> String {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            var description = TheStash.Diagnostics.formatMatcher(predicate)
+            if let ordinal {
+                description += " ordinal=\(ordinal)"
+            }
+            return description
+        }
     }
 
     private func elapsedSeconds(since start: CFAbsoluteTime) -> String {
