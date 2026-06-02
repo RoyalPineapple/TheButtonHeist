@@ -2,7 +2,7 @@ import Foundation
 
 /// Target for typing non-empty text character-by-character via keyboard key taps.
 public struct TypeTextTarget: Codable, Sendable, Equatable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case text
         case elementTarget
     }
@@ -19,6 +19,7 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
     }
 
     public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "type text target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         text = try container.decode(String.self, forKey: .text)
         guard !text.isEmpty else {
@@ -53,11 +54,26 @@ public enum EditAction: String, Codable, Sendable, CaseIterable, Equatable {
 
 /// Target for writing text to the general pasteboard.
 public struct SetPasteboardTarget: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case text
+    }
+
     /// Text to write to the pasteboard
     public let text: String
 
     public init(text: String) {
         self.text = text
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "pasteboard target")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
     }
 }
 
@@ -71,11 +87,26 @@ extension SetPasteboardTarget: CustomStringConvertible {
 
 /// Target for edit actions dispatched via the responder chain
 public struct EditActionTarget: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case action
+    }
+
     /// The edit action to perform
     public let action: EditAction
 
     public init(action: EditAction) {
         self.action = action
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "edit action target")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        action = try container.decode(EditAction.self, forKey: .action)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(action, forKey: .action)
     }
 }
 

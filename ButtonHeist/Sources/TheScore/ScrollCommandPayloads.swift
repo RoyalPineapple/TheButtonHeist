@@ -57,12 +57,18 @@ extension ScrollTarget: CustomStringConvertible {
 }
 
 extension ScrollTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case direction
         case container
     }
 
     public init(from decoder: Decoder) throws {
+        try rejectUnknownScrollPayloadKeys(
+            from: decoder,
+            commandFields: [CodingKeys.direction.stringValue],
+            allowsContainerKey: true,
+            typeName: "scroll target"
+        )
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let hasContainerTarget = container.contains(.container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
@@ -110,6 +116,7 @@ extension ScrollToVisibleTarget: CustomStringConvertible {
 
 extension ScrollToVisibleTarget: Codable {
     public init(from decoder: Decoder) throws {
+        try rejectUnknownScrollPayloadKeys(from: decoder, typeName: "scroll_to_visible target")
         guard let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder) else {
             throw DecodingError.dataCorrupted(
                 DecodingError.Context(
@@ -169,12 +176,18 @@ extension ScrollToEdgeTarget: CustomStringConvertible {
 }
 
 extension ScrollToEdgeTarget: Codable {
-    private enum CodingKeys: String, CodingKey {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
         case edge
         case container
     }
 
     public init(from decoder: Decoder) throws {
+        try rejectUnknownScrollPayloadKeys(
+            from: decoder,
+            commandFields: [CodingKeys.edge.stringValue],
+            allowsContainerKey: true,
+            typeName: "scroll_to_edge target"
+        )
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let hasContainerTarget = container.contains(.container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
@@ -199,4 +212,15 @@ extension ScrollToEdgeTarget: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(edge, forKey: .edge)
     }
+}
+
+private func rejectUnknownScrollPayloadKeys(
+    from decoder: Decoder,
+    commandFields: [String] = [],
+    allowsContainerKey: Bool = false,
+    typeName: String
+) throws {
+    let containerKeys = allowsContainerKey ? ["container"] : []
+    let allowed = Set(ElementTarget.inlineFieldNames + commandFields + containerKeys)
+    try decoder.rejectUnknownKeys(allowed: allowed, typeName: typeName)
 }
