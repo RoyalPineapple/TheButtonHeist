@@ -6,6 +6,7 @@ extension TheStash {
     typealias DiscoveryObservation = @MainActor () async -> Void
 
     func startPassiveSemanticObservation(discovery: @escaping DiscoveryObservation) {
+        passiveSemanticDiscoveryObservation = discovery
         guard passiveSemanticObservationTask == nil else { return }
         latestSettledSemanticObservationIsDirty = true
         passiveSemanticObservationTask = Task { [weak self] in
@@ -19,6 +20,7 @@ extension TheStash {
     func stopPassiveSemanticObservation() {
         passiveSemanticObservationTask?.cancel()
         passiveSemanticObservationTask = nil
+        passiveSemanticDiscoveryObservation = nil
         passiveObservationSettledReading = nil
         completeAllSettledSemanticWaiters(returning: nil)
     }
@@ -50,6 +52,11 @@ extension TheStash {
 
         if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
             return latest
+        }
+
+        if timeout == 0 {
+            await performSingleSemanticObservationCycle(scope: scope)
+            return cleanSettledSemanticObservation(scope: scope, after: requiredSequence)
         }
 
         return await waitForNextSettledSemanticObservation(
@@ -92,7 +99,7 @@ extension TheStash {
 
     private func observationWaitTimeout(_ timeout: Double?) -> Double? {
         guard let timeout else { return nil }
-        guard timeout > 0 else { return 1.0 }
+        guard timeout > 0 else { return nil }
         return timeout
     }
 
@@ -142,10 +149,29 @@ extension TheStash {
 
     private func runPassiveSemanticObservationCycle(discovery: @escaping DiscoveryObservation) async {
         let scope = currentSubscribedObservationScope()
+        await performSemanticObservationCycle(scope: scope, discovery: discovery)
+    }
+
+    private func performSingleSemanticObservationCycle(scope: SemanticObservationScope) async {
+        await performSemanticObservationCycle(
+            scope: scope,
+            discovery: passiveSemanticDiscoveryObservation
+        )
+    }
+
+    private func performSemanticObservationCycle(
+        scope: SemanticObservationScope,
+        discovery: DiscoveryObservation?
+    ) async {
         switch scope {
         case .visible:
             await observeVisibleSemanticState()
         case .discovery:
+            guard let discovery else {
+                markDirtyFromTripwire()
+                await Task.yield()
+                return
+            }
             await discovery()
             markCurrentSemanticObservationSettled(scope: .discovery)
             await Task.yield()

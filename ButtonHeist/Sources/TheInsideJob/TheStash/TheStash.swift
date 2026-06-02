@@ -42,6 +42,7 @@ final class TheStash {
     var nextSemanticObservationSubscriptionID: UInt64 = 1
     var semanticObservationSubscriptions: [UInt64: SemanticObservationScope] = [:]
     var passiveSemanticObservationTask: Task<Void, Never>?
+    var passiveSemanticDiscoveryObservation: (@MainActor () async -> Void)?
     var passiveObservationSettledReading: TheTripwire.PulseReading?
 
     /// Held rotor cursor — the single current selection while in rotor mode.
