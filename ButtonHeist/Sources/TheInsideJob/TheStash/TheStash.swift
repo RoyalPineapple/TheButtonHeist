@@ -179,10 +179,39 @@ final class TheStash {
     /// updates live interaction evidence without dropping known semantic
     /// elements when it is still observing the same screen.
     @discardableResult
-    func refresh() -> Screen? {
+    private func refresh() -> Screen? {
         guard let screen = parse() else { return nil }
         commitVisibleRefresh(screen)
         return screen
+    }
+
+    /// Ingest the latest visible accessibility observation into stitched
+    /// semantic state. Runtime code uses this instead of calling parser-shaped
+    /// APIs directly.
+    @discardableResult
+    func commitVisibleObservation() -> Screen? {
+        refresh()
+    }
+
+    /// Produce one visible observation for the settle loop without committing
+    /// it yet. The caller commits the proven final screen through
+    /// `commitSettledVisibleObservation(_:)`.
+    func parseVisibleObservationForSettle() -> Screen? {
+        parse()
+    }
+
+    /// Produce one page observation for scroll exploration. Exploration owns a
+    /// local semantic union until it finishes and commits the explored screen.
+    func parseVisiblePageForExploration() -> Screen? {
+        parse()
+    }
+
+    func commitSettledVisibleObservation(_ screen: Screen) {
+        commitVisibleRefresh(screen)
+    }
+
+    func commitObservedVisiblePage(_ screen: Screen) {
+        commitVisiblePage(screen)
     }
 
     func commitVisiblePage(_ screen: Screen) {

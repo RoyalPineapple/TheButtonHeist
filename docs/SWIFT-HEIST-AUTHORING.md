@@ -31,3 +31,5 @@ expansion and emits only the linear child steps. `ForEach(.matching(predicate),
 limit:)` emits one runtime `for_each` step; the closure receives
 `ElementTarget.predicate(predicate, ordinal: 0)`, so each iteration repeats the
 same semantic promise and command execution re-resolves it normally.
+Runtime `ForEach` repeats semantic intent; commands re-resolve targets. The
+loop owns match counting and limit enforcement only.

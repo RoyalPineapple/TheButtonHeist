@@ -91,7 +91,7 @@ extension Navigation {
             } else {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
             }
-            stash.refresh()
+            stash.commitVisibleObservation()
             return ScrollSettleProof(result: .moved, previousVisibleIds: before)
         case .swipeable(let frame, let contentSize):
             let targetKey = swipeTargetKey(frame: frame, contentSize: contentSize)

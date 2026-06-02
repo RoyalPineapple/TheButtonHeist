@@ -68,17 +68,6 @@ final class TheBrains {
         )
     }
 
-    // MARK: - Refresh Convenience
-
-    /// Refresh the accessibility tree into the stash. Returns the new Screen
-    /// or nil if the parser couldn't produce one. Callers in an exploration
-    /// cycle should use `stash.parse()` directly and accumulate into a local
-    /// union — TheStash has no mode flag.
-    @discardableResult
-    func refresh() -> Screen? {
-        stash.refresh()
-    }
-
     func treeUnavailableResult(method: ActionMethod) -> ActionResult {
         var builder = ActionResultBuilder(method: method)
         builder.message = TheBrains.treeUnavailableMessage
@@ -103,7 +92,7 @@ final class TheBrains {
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
 
-        guard refresh() != nil else {
+        guard stash.commitVisibleObservation() != nil else {
             return .failure(.rootViewUnavailable)
         }
 

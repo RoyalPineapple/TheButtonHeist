@@ -206,7 +206,7 @@ extension TheBrains {
     private func refreshSemanticSnapshot(
         baseline: PostActionObservation.BeforeState? = nil
     ) async -> PostActionObservation.BeforeState? {
-        guard refresh() != nil else { return nil }
+        guard stash.commitVisibleObservation() != nil else { return nil }
         if let baseline {
             return await postActionObservation.semanticStateAfterVisibleRefresh(baseline: baseline)
         }
@@ -228,7 +228,7 @@ extension TheBrains {
             baselineTripwireSignal: baseline.tripwireSignal
         )
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
-        stash.commitVisibleRefresh(screen)
+        stash.commitSettledVisibleObservation(screen)
         return await postActionObservation.semanticStateAfterVisibleRefresh(baseline: baseline)
     }
 

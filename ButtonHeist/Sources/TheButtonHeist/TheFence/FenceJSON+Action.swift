@@ -187,12 +187,7 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
         let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
         self.results = result.projectedOutcomes(for: plan).compactMap { projection in
-            guard let response = projection.outcome.actionResponse(
-                command: projection.step.fenceCommand ?? .runHeist,
-                step: projection.step
-            )
-            else { return nil }
-            return PublicResponseModel(response: response)
+            projection.response.map(PublicResponseModel.init(response:))
         }
         self.completedSteps = result.completedStepCount
         self.totalTimingMs = result.totalTimingMs
@@ -214,35 +209,5 @@ struct PublicHeistExpectations: Encodable {
         self.checked = checked
         self.met = met
         self.allMet = checked == met
-    }
-}
-
-private extension HeistStep {
-    var fenceCommand: TheFence.Command? {
-        guard case .action(let action) = self else { return nil }
-        return TheFence.Command(clientWireType: action.command.wireType)
-    }
-}
-
-private extension TheFence.Command {
-    init?(clientWireType: ClientWireMessageType) {
-        self.init(rawValue: clientWireType.commandName)
-    }
-}
-
-private extension ClientWireMessageType {
-    var commandName: String {
-        switch self {
-        case .performCustomAction: return TheFence.Command.activate.rawValue
-        case .oneFingerTap: return TheFence.Command.oneFingerTap.rawValue
-        case .longPress: return TheFence.Command.longPress.rawValue
-        case .typeText: return TheFence.Command.typeText.rawValue
-        case .setPasteboard: return TheFence.Command.setPasteboard.rawValue
-        case .scrollToVisible: return TheFence.Command.scrollToVisible.rawValue
-        case .elementSearch: return TheFence.Command.elementSearch.rawValue
-        case .scrollToEdge: return TheFence.Command.scrollToEdge.rawValue
-        case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
-        default: return rawValue
-        }
     }
 }

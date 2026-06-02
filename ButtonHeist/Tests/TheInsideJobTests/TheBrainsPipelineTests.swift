@@ -106,7 +106,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     // MARK: - Post-Action Success Path
 
     func testActionResultWithDeltaSuccessAllowsNoSemanticDelta() async throws {
-        guard brains.refresh() != nil else {
+        guard brains.stash.commitVisibleObservation() != nil else {
             throw XCTSkip("No live hierarchy available for post-action observation test")
         }
         _ = await brains.navigation.exploreAndPrune()
@@ -401,7 +401,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
-        guard let screen = brains.refresh(),
+        guard let screen = brains.stash.commitVisibleObservation(),
               let label = screen.visibleIds
                   .compactMap({ screen.findElement(heistId: $0)?.element.label })
                   .first(where: { !$0.isEmpty }) else {
@@ -472,7 +472,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     func testExploreScreenExploresSwipeableContainer() async throws {
-        guard brains.refresh() != nil else {
+        guard brains.stash.commitVisibleObservation() != nil else {
             throw XCTSkip("No live hierarchy available for swipeable explore test")
         }
         guard let container = brains.stash.currentHierarchy.scrollableContainers.first(where: {

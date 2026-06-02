@@ -266,7 +266,7 @@ final class TheStashRotorTests: XCTestCase {
         }
 
         let brains = TheBrains(tripwire: TheTripwire())
-        guard let screen = brains.refresh() else {
+        guard let screen = brains.stash.commitVisibleObservation() else {
             XCTFail("Expected live parse result")
             return
         }

@@ -11,7 +11,7 @@ extension TheBrains {
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime
     ) async -> HeistExecutionStepResult {
-        guard let observation = await runtime.observeCases(step.observationScope, nil, nil) else {
+        guard let observation = await runtime.observePredicate(step.observationScope, nil, nil) else {
             return caseObservationFailure(index: index, kind: .conditional, start: start)
         }
 
@@ -80,7 +80,7 @@ extension TheBrains {
 
         repeat {
             let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
-            guard let observation = await runtime.observeCases(
+            guard let observation = await runtime.observePredicate(
                 step.observationScope,
                 baseline,
                 step.timeout == 0 ? nil : min(remaining, 1.0)
@@ -152,7 +152,7 @@ extension TheBrains {
 
     private func evaluatePredicateCases(
         _ cases: [PredicateCase],
-        observation: HeistCaseObservation
+        observation: HeistPredicateObservation
     ) -> PredicateCaseSelection {
         let evaluatedCases = cases.map {
             HeistCaseMatchResult(
