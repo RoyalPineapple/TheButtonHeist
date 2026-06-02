@@ -43,7 +43,12 @@ extension TheBrains {
         case .drag(let target):
             return await performInteraction(method: .syntheticDrag) { await self.actions.executeDrag(target) }
         case .typeText(let target):
-            return await performInteraction(method: .typeText) { await self.actions.executeTypeText(target) }
+            return await performInteraction(
+                method: .typeText,
+                afterStatePayload: { self.actions.typeTextPayload(for: target, in: $0) }
+            ) {
+                await self.actions.executeTypeText(target)
+            }
         case .scroll(let target):
             return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
@@ -77,6 +82,7 @@ extension TheBrains {
 
     func performInteraction(
         method: ActionMethod,
+        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         guard semanticObservationIsActive else {
@@ -92,6 +98,7 @@ extension TheBrains {
             method: result.method,
             message: result.message,
             payload: result.payload,
+            afterStatePayload: afterStatePayload,
             errorKind: Self.actionErrorKind(for: result),
             before: before
         )

@@ -1455,7 +1455,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(liveObject.activationCount, 1)
     }
 
-    func testExecuteTypeTextReportsFinalValueFromTextInputPostcondition() async throws {
+    func testExecuteTypeTextReportsFinalValueFromInteractionAfterState() async throws {
         brains.tripwire.startPulse()
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white

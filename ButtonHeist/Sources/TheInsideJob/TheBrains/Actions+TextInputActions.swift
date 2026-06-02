@@ -66,17 +66,21 @@ extension Actions {
         let elementTarget = target.elementTarget
         if let failure = await focusTextInput(elementTarget) { return failure }
 
-        let postcondition = TextInputPostcondition(
-            target: elementTarget,
-            beforeValue: elementTarget.flatMap { stash.resolveTarget($0).resolved?.element.value },
-            afterSequence: stash.latestSettledSemanticObservationEvent?.sequence
-        )
         let typingResult = await safecracker.typeText(target.text)
         if let diagnostic = typingResult.diagnostic {
             return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic))
         }
 
-        return .success(method: .typeText, payload: await postcondition.payload(stash: stash))
+        return .success(method: .typeText)
+    }
+
+    func typeTextPayload(
+        for target: TypeTextTarget,
+        in afterState: PostActionObservation.BeforeState
+    ) -> ResultPayload? {
+        guard let elementTarget = target.elementTarget else { return nil }
+        return Self.textInputValue(for: elementTarget, in: afterState.interface.projectedElements)
+            .map(ResultPayload.value)
     }
 
     private func typeTextInjectionFailureMessage(for diagnostic: KeyboardTextInjectionDiagnostic) -> String {
@@ -152,56 +156,16 @@ extension Actions {
         return false
     }
 
-    private struct TextInputPostcondition {
-        private static let timeout: Double = 1.0
-        private static let observationStepTimeout: Double = 0.25
-
-        let target: ElementTarget?
-        let beforeValue: String?
-        let afterSequence: UInt64?
-
-        @MainActor
-        func payload(stash: TheStash) async -> ResultPayload? {
-            guard let target else { return nil }
-            let deadline = CFAbsoluteTimeGetCurrent() + Self.timeout
-            var observedSequence = afterSequence
-            var lastObservedValue: String?
-
-            while CFAbsoluteTimeGetCurrent() < deadline {
-                let remaining = deadline - CFAbsoluteTimeGetCurrent()
-                guard remaining > 0 else { break }
-                guard let event = await stash.settledSemanticObservationEvent(
-                    scope: .visible,
-                    after: observedSequence,
-                    timeout: min(remaining, Self.observationStepTimeout)
-                ) else {
-                    continue
-                }
-                observedSequence = event.sequence
-                guard let value = Self.value(for: target, in: event.observation.screen) else {
-                    continue
-                }
-                lastObservedValue = value
-                if value != beforeValue {
-                    return .value(value)
-                }
+    private static func textInputValue(for target: ElementTarget, in elements: [HeistElement]) -> String? {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            let matches = elements.filter { predicate.matches($0) }
+            if let ordinal {
+                guard matches.indices.contains(ordinal) else { return nil }
+                return matches[ordinal].value
             }
-
-            return lastObservedValue.map(ResultPayload.value)
-        }
-
-        private static func value(for target: ElementTarget, in screen: Screen) -> String? {
-            let visibleElements = screen.visibleOnly.orderedElements
-            switch target {
-            case .predicate(let predicate, let ordinal):
-                let matches = visibleElements.filter { predicate.matches($0.element) }
-                if let ordinal {
-                    guard matches.indices.contains(ordinal) else { return nil }
-                    return matches[ordinal].element.value
-                }
-                guard matches.count == 1 else { return nil }
-                return matches[0].element.value
-            }
+            guard matches.count == 1 else { return nil }
+            return matches[0].value
         }
     }
 

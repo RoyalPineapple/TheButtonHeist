@@ -52,6 +52,7 @@ final class InteractionObservation {
         method: ActionMethod,
         message: String? = nil,
         payload: ResultPayload? = nil,
+        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         errorKind: ErrorKind? = nil,
         before: PostActionObservation.BeforeState,
         settleOutcome: SettleSession.Outcome? = nil
@@ -99,13 +100,15 @@ final class InteractionObservation {
         )
 
         guard let postCapture = trace.captures.last else {
+            let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
             return InteractionObservationProjection.failedActionResult(
-                method: method, capture: before.capture, message: message, payload: payload
+                method: method, capture: before.capture, message: message, payload: resolvedPayload
             )
         }
 
+        let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
         return InteractionObservationProjection.actionResult(
-            method: method, capture: postCapture, message: message, payload: payload,
+            method: method, capture: postCapture, message: message, payload: resolvedPayload,
             errorKind: errorKind, accessibilityTrace: trace, settled: didSettle,
             settleTimeMs: settleResult.outcome.timeMs, success: success
         )
