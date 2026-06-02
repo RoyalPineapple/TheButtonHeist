@@ -276,6 +276,11 @@ final class TheStashResolutionTests: XCTestCase {
             await bagman.settledSemanticObservation(scope: .visible, after: nil, timeout: 10)
         }
 
+        for _ in 0..<20 where bagman.settledSemanticWaiters.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+
         bagman.stopPassiveSemanticObservation()
 
         let observation = await waiter.value

@@ -60,6 +60,21 @@ extension TheStash {
             return cleanSettledSemanticObservation(scope: scope, after: requiredSequence)
         }
 
+        if sequence == nil, scope == .visible {
+            if passiveSemanticObservationTask != nil {
+                await waitForNextSemanticObservationCycle(
+                    scope: scope,
+                    after: semanticObservationBaselineCycle()
+                )
+            } else {
+                return await waitForNextSettledSemanticObservation(
+                    scope: scope,
+                    after: latestSettledSemanticObservation?.sequence,
+                    timeout: timeout
+                )
+            }
+        }
+
         if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
             return latest
         }
@@ -113,11 +128,14 @@ extension TheStash {
         after sequence: UInt64?
     ) -> UInt64? {
         let currentSequence = latestSettledSemanticObservation?.sequence
-        let baseline = sequence ?? currentSequence
         if scope == .discovery {
+            let baseline = sequence ?? currentSequence
             return max(baseline ?? 0, currentSequence ?? 0)
         }
-        return baseline
+        if sequence == nil, passiveSemanticObservationTask == nil {
+            return currentSequence
+        }
+        return sequence
     }
 
     private func semanticObservationBaselineCycle() -> UInt64 {
@@ -192,7 +210,7 @@ extension TheStash {
            !latestSettledSemanticObservationIsDirty,
            passiveObservationSettledReading?.tick == reading.tick {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
-            return false
+            return true
         }
 
         guard await tripwire.waitForAllClear(timeout: 0.5) else {
