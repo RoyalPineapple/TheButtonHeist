@@ -737,8 +737,9 @@ final class TheBrainsScrollTests: XCTestCase {
 
         XCTAssertFalse(result.success)
         XCTAssertTrue(result.message?.contains("ambiguous") == true)
-        XCTAssertTrue(result.message?.contains("first_scroll") == true)
-        XCTAssertTrue(result.message?.contains("second_scroll") == true)
+        XCTAssertTrue(result.message?.contains("target an element inside the intended scroll region") == true)
+        XCTAssertFalse(result.message?.contains("first_scroll") == true)
+        XCTAssertFalse(result.message?.contains("second_scroll") == true)
     }
 
     func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async {
@@ -927,7 +928,7 @@ final class TheBrainsScrollTests: XCTestCase {
             result.message,
             "scroll target failed: observed \"Item\" inside a scroll view that supports no scrolling; "
                 + "expected vertical scrolling; try a matching scroll direction or target an element "
-                + "inside a matching scroll container"
+                + "inside the intended scroll region"
         )
     }
 
