@@ -50,13 +50,13 @@ extension TheStash {
 
         let requiredSequence = semanticObservationBaselineSequence(for: scope, after: sequence)
 
-        if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
-            return latest
-        }
-
         if timeout == 0 {
             await performSingleSemanticObservationCycle(scope: scope)
             return cleanSettledSemanticObservation(scope: scope, after: requiredSequence)
+        }
+
+        if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
+            return latest
         }
 
         return await waitForNextSettledSemanticObservation(

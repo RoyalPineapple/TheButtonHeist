@@ -1,3 +1,18 @@
+// MARK: - Accessibility Matcher Facts
+
+public enum AccessibilityFactStability: Sendable, Equatable {
+    case identity
+    case state
+}
+
+public enum AccessibilityMatcherFact: Sendable, Equatable {
+    case identifier(String)
+    case label(String)
+    case value(String)
+    case trait(HeistTrait)
+    case excludedTrait(HeistTrait)
+}
+
 // MARK: - AccessibilityPolicy
 
 /// Single source of truth for trait-related rules-of-the-world.
@@ -8,7 +23,7 @@
 /// trait policy is a one-file edit; downstream sites are pure consumers.
 ///
 /// The policy lives in TheScore so both client-side targeting
-/// (`MinimumMatcher`, which builds durable replay matchers) and server-side
+/// (`MinimumPredicateSelector`, which builds durable replay matchers) and server-side
 /// parsing (TheInsideJob, which assigns heistIds and writes the wire
 /// format) read the same `Set<HeistTrait>`. UIKit-bitmask derivations
 /// live in TheInsideJob as `AccessibilityPolicy+UIKit`.
@@ -27,9 +42,9 @@ public enum AccessibilityPolicy {
     /// An element gaining or losing one of these between parses keeps the
     /// same heistId — these traits do not contribute to element identity.
     /// Consumed by:
-    /// - `TheBurglar.hasSameMinimumMatcher` (content-space disambiguation)
+    /// - TheBurglar content-space disambiguation
     /// - `AccessibilityTrace.Delta.between` (functional-move pairing)
-    /// - `MinimumMatcher` (recording matcher construction — adds state only
+    /// - `MinimumPredicateSelector` (recording matcher construction — adds state only
     ///   when semantic predicates remain ambiguous)
     public static let transientTraits: Set<HeistTrait> = [
         .selected,
@@ -99,6 +114,56 @@ public enum AccessibilityPolicy {
         .image,
         .tabBar,
     ]
+
+    // MARK: - Matcher Fact Stability
+
+    public static func matcherFactStability(_ fact: AccessibilityMatcherFact) -> AccessibilityFactStability? {
+        switch fact {
+        case .identifier(let identifier):
+            return isStableIdentifier(identifier) ? .identity : nil
+        case .label:
+            return .identity
+        case .value:
+            return .state
+        case .trait(let trait):
+            return transientTraits.contains(trait) ? .state : .identity
+        case .excludedTrait(let trait):
+            return transientTraits.contains(trait) ? .state : nil
+        }
+    }
+
+    public static func matcherFactPriority(_ fact: AccessibilityMatcherFact) -> Int {
+        switch fact {
+        case .identifier:
+            return 0
+        case .label:
+            return 10
+        case .trait(let trait):
+            return (transientTraits.contains(trait) ? 220 : 20) + matcherTraitPriority(trait)
+        case .value:
+            return 200
+        case .excludedTrait(let trait):
+            return 240 + matcherTraitPriority(trait)
+        }
+    }
+
+    public static func orderedMatcherTraits(_ traits: [HeistTrait]) -> [HeistTrait] {
+        traits.sorted { left, right in
+            matcherTraitSortKey(left) < matcherTraitSortKey(right)
+        }
+    }
+
+    public static var orderedMatcherStateTraits: [HeistTrait] {
+        orderedMatcherTraits(Array(transientTraits))
+    }
+
+    private static func matcherTraitPriority(_ trait: HeistTrait) -> Int {
+        synthesisPriority.firstIndex(of: trait) ?? synthesisPriority.count
+    }
+
+    private static func matcherTraitSortKey(_ trait: HeistTrait) -> (Int, String) {
+        (matcherTraitPriority(trait), trait.rawValue)
+    }
 
     // MARK: - Tab Switch Persistence Threshold
 

@@ -651,6 +651,44 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedTimeouts, [])
     }
 
+    func testPerformWaitTimeoutZeroDoesNotReturnCachedSettledStateWithoutFreshObservation() async {
+        brains.stash.installScreenForTesting(.makeForTests(elements: [
+            (makeElement(label: "Home"), "home"),
+        ]))
+        XCTAssertNil(brains.stash.passiveSemanticObservationTask)
+
+        let result = await brains.performWait(target: WaitTarget(
+            predicate: .state(.present(ElementPredicate(label: "Home"))),
+            timeout: 0
+        ))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
+        XCTAssertNotNil(
+            brains.stash.passiveSemanticObservationTask,
+            "wait should enter the Stash observation gateway before evaluating"
+        )
+    }
+
+    func testPerformWaitTimeoutZeroStartsObservationWhenNoSettledStateExists() async {
+        XCTAssertNil(brains.stash.latestSettledSemanticObservation)
+        XCTAssertNil(brains.stash.passiveSemanticObservationTask)
+
+        let result = await brains.performWait(target: WaitTarget(
+            predicate: .state(.present(ElementPredicate(label: "Home"))),
+            timeout: 0
+        ))
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, .timeout)
+        XCTAssertTrue(result.message?.contains("no settled semantic observation available") == true)
+        XCTAssertNotNil(
+            brains.stash.passiveSemanticObservationTask,
+            "wait should enter the Stash observation gateway before evaluating"
+        )
+    }
+
     func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
         let expectation = WaitStep(
             predicate: .state(.absent(ElementPredicate(label: "Loading"))),
@@ -1634,13 +1672,19 @@ final class TheBrainsActionTests: XCTestCase {
         label: String,
         in screen: Screen
     ) throws -> ElementTarget {
-        let capture = AccessibilityTrace.Capture(
-            sequence: 1,
-            interface: TheStash.WireConversion.toInterface(from: screen)
+        let screenElement = try XCTUnwrap(screen.orderedElements.first { $0.element.label == label })
+        let context = PredicateSelectionContext(
+            elements: screen.orderedElements.map {
+                PredicateSelectionContext.Element(
+                    id: $0.heistId,
+                    element: TheStash.WireConversion.convert($0.element)
+                )
+            },
+            screenId: screen.id,
+            semanticHash: screen.semanticHash,
+            scope: .visible
         )
-        let element = try XCTUnwrap(capture.interface.projectedElements.first { $0.label == label })
-        let minimumMatcher = try XCTUnwrap(MinimumMatcher.build(element: element, in: capture))
-        return .predicate(minimumMatcher.predicate, ordinal: minimumMatcher.ordinal)
+        return try XCTUnwrap(minimumUniquePredicate(for: screenElement.heistId, in: context)).target
     }
 
     private func XCTAssertDiagnostic(

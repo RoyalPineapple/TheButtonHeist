@@ -166,7 +166,7 @@ public extension AccessibilityTrace {
         public static let empty = Context()
 
         /// The focused (first responder) element, as a durable target
-        /// (predicate + ordinal) built server-side via the minimum matcher.
+        /// (predicate + ordinal) built server-side via the minimum predicate selector.
         /// No internal id crosses the wire.
         public let firstResponder: ElementTarget?
         /// Software keyboard state affects text-entry affordances even when

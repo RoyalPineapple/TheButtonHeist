@@ -10,7 +10,7 @@ import AccessibilitySnapshotParser
 
 extension Navigation {
 
-    func observeSemanticDiscovery() async {
+    fileprivate func observeSemanticDiscovery() async {
         _ = await exploreAndPrune()
     }
 
@@ -44,6 +44,16 @@ extension Navigation {
             return true
         case .notFound:
             return false
+        }
+    }
+}
+
+extension TheBrains {
+
+    func startSemanticObservation() {
+        stash.startPassiveSemanticObservation { [weak navigation] in
+            guard let navigation else { return }
+            await navigation.observeSemanticDiscovery()
         }
     }
 }
