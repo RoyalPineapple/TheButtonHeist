@@ -30,15 +30,18 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Post-Action Failure Path
 
-    func testPostActionObservationFailureReturnsBeforeSnapshot() async {
-        seedScreen(elements: [("Sign In", .button, "button_sign_in")])
+    func testPostActionObservationFailureIncludesAfterObservationTrace() async {
+        let beforeScreen = makeScreen(elements: [("Sign In", .button, "button_sign_in")])
+        brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
+        let afterScreen = makeScreen(elements: [("Still Here", .button, "button_sign_in")])
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: false,
             method: .activate,
             message: "target disappeared",
-            before: before
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: afterScreen)
         )
 
         XCTAssertFalse(result.success)
@@ -46,6 +49,11 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(result.message, "target disappeared")
         XCTAssertEqual(result.errorKind, .actionFailed,
                        "Without explicit errorKind, failures default to actionFailed")
+        XCTAssertEqual(result.accessibilityTrace?.captures.first?.hash, before.capture.hash)
+        XCTAssertNotNil(result.accessibilityTrace?.captures.last)
+        guard case .elementsChanged? = result.accessibilityTrace?.endpointDeltaProjection else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
+        }
     }
 
     func testActionErrorKindClassifiesTargetUnavailableSeparatelyFromActionIdentity() {
@@ -62,10 +70,11 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testPostActionObservationFailureDoesNotInferNotFoundFromActionIdentity() async {
         let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: false,
             method: .activate,
-            before: before
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: brains.stash.currentScreen)
         )
 
         XCTAssertEqual(result.errorKind, .actionFailed)
@@ -74,11 +83,12 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testPostActionObservationFailureRespectsExplicitErrorKind() async {
         let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: false,
             method: .activate,
             errorKind: .timeout,
-            before: before
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: brains.stash.currentScreen)
         )
 
         XCTAssertEqual(result.errorKind, .timeout,
@@ -88,12 +98,13 @@ final class TheBrainsPipelineTests: XCTestCase {
     func testPostActionObservationFailureCarriesValueAndMessage() async {
         let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: false,
             method: .getPasteboard,
             message: "pasteboard empty",
             payload: .value(""),
-            before: before
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: brains.stash.currentScreen)
         )
 
         XCTAssertEqual(result.message, "pasteboard empty")
@@ -117,7 +128,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let screen = brains.stash.currentScreen
         let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: true,
             method: .activate,
             before: before,
@@ -140,7 +151,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Total $12.00", .staticText, "total")])
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: true,
             method: .activate,
             before: before,
@@ -158,7 +169,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Checkout", .header, "checkout_header")])
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: true,
             method: .activate,
             before: before,
@@ -177,7 +188,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
         let afterScreen = makeScreen(elements: [("Saved", .button, "save")])
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: true,
             method: .activate,
             before: before,
@@ -194,7 +205,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         brains.stash.installScreenForTesting(beforeScreen)
         let before = brains.postActionObservation.captureSemanticState()
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: true,
             method: .activate,
             before: before,
@@ -213,7 +224,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         let before = brains.postActionObservation.captureSemanticState()
         brains.stash.installScreenForTesting(.empty)
 
-        let result = await brains.postActionObservation.actionResultWithDelta(
+        let result = await brains.interactionObservation.finishAfterAction(
             success: true,
             method: .activate,
             before: before,

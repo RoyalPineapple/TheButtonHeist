@@ -26,9 +26,12 @@ final class SemanticActionabilityProductTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         brains = TheBrains(tripwire: TheTripwire())
+        brains.tripwire.startPulse()
     }
 
     override func tearDown() async throws {
+        brains?.stopSemanticObservation()
+        brains?.tripwire.stopPulse()
         brains = nil
         try await super.tearDown()
     }
@@ -171,6 +174,11 @@ final class SemanticActionabilityProductTests: XCTestCase {
         heist: Bool
     ) async throws -> (result: ActionResult, activationCount: Int) {
         let localBrains = TheBrains(tripwire: TheTripwire())
+        localBrains.tripwire.startPulse()
+        defer {
+            localBrains.stopSemanticObservation()
+            localBrains.tripwire.stopPulse()
+        }
         let fixture = try installOffscreenActivationFixture(
             identifier: identifier,
             label: label

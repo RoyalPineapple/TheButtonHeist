@@ -215,6 +215,11 @@ final class TheStashRotorTests: XCTestCase {
         }
 
         let brains = TheBrains(tripwire: TheTripwire())
+        brains.tripwire.startPulse()
+        defer {
+            brains.stopSemanticObservation()
+            brains.tripwire.stopPulse()
+        }
         let searchResult = await brains.executeCommand(.rotor(
             RotorTarget(
                 elementTarget: .predicate(ElementPredicate(identifier: "virtual_activation_rotor_host")),

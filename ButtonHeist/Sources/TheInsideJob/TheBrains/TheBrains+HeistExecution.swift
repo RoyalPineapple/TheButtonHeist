@@ -8,29 +8,25 @@ extension TheBrains {
 
     struct HeistExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
-        let wait: @MainActor (WaitStep) async -> HeistWaitReceipt
+        let wait: @MainActor (WaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
         let observeSemanticState: @MainActor (SemanticObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistSemanticObservation?
         let recordDeliveredObservationAfterStep: @MainActor () async -> Void
 
         @MainActor
         static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
-            let semanticObservations = HeistSemanticObservations(
-                stash: brains.stash,
-                postActionObservation: brains.postActionObservation
-            )
             return HeistExecutionRuntime(
                 execute: { command in
                     await brains.executeCommand(command)
                 },
-                wait: { waitStep in
-                    await semanticObservations.waitReceipt(for: waitStep)
+                wait: { waitStep, initialTrace in
+                    await brains.interactionObservation.waitForPredicate(waitStep, initialTrace: initialTrace)
                 },
                 observeSemanticState: { scope, baseline, timeout in
-                    await semanticObservations.observe(scope: scope, baseline: baseline, timeout: timeout)
+                    await brains.interactionObservation.observeSemanticState(scope: scope, baseline: baseline, timeout: timeout)
                 },
                 recordDeliveredObservationAfterStep: {
-                    if await semanticObservations.refreshDeliveredBaselineAfterStep() {
-                        await brains.recordSentState()
+                    if let state = await brains.interactionObservation.recordDeliveredBaselineAfterStep() {
+                        brains.waitForChangeState.recordDeliveredBaseline(state)
                     }
                 }
             )

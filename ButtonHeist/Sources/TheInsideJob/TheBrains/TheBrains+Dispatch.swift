@@ -81,12 +81,12 @@ extension TheBrains {
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
         startSemanticObservation()
-        guard let before = await postActionObservation.currentSemanticState() else {
+        guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
         let result = await interaction()
 
-        return await postActionObservation.actionResultWithDelta(
+        return await interactionObservation.finishAfterAction(
             success: result.success,
             method: result.method,
             message: result.message,
@@ -118,12 +118,12 @@ extension TheBrains {
         method: ActionMethod
     ) async -> ActionResult {
         startSemanticObservation()
-        guard let before = await postActionObservation.currentSemanticState() else {
+        guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
         let result = await navigation.executeElementSearch(elementTarget: elementTarget, direction: direction)
 
-        return await postActionObservation.actionResultWithDelta(
+        return await interactionObservation.finishAfterAction(
             success: result.success,
             method: result.method,
             message: result.message,
@@ -135,12 +135,8 @@ extension TheBrains {
 
     func performWait(target: WaitTarget) async -> ActionResult {
         startSemanticObservation()
-        let semanticObservations = HeistSemanticObservations(
-            stash: stash,
-            postActionObservation: postActionObservation
-        )
-        let receipt = await semanticObservations.waitReceipt(
-            for: WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
+        let receipt = await interactionObservation.waitForPredicate(
+            WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
         )
         return receipt.actionResult
     }

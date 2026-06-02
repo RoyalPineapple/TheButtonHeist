@@ -23,6 +23,7 @@ extension TheStash {
         passiveSemanticDiscoveryObservation = nil
         passiveObservationSettledReading = nil
         completeAllSettledSemanticWaiters(returning: nil)
+        completeAllSemanticObservationCycleWaiters()
     }
 
     func subscribeSemanticObservation(scope: SemanticObservationScope) -> SemanticObservationSubscription {
@@ -51,8 +52,27 @@ extension TheStash {
         let requiredSequence = semanticObservationBaselineSequence(for: scope, after: sequence)
 
         if timeout == 0 {
-            await performSingleSemanticObservationCycle(scope: scope)
+            guard passiveSemanticObservationTask != nil else { return nil }
+            await waitForNextSemanticObservationCycle(
+                scope: scope,
+                after: semanticObservationBaselineCycle()
+            )
             return cleanSettledSemanticObservation(scope: scope, after: requiredSequence)
+        }
+
+        if sequence == nil, scope == .visible {
+            if passiveSemanticObservationTask != nil {
+                await waitForNextSemanticObservationCycle(
+                    scope: scope,
+                    after: semanticObservationBaselineCycle()
+                )
+            } else {
+                return await waitForNextSettledSemanticObservation(
+                    scope: scope,
+                    after: latestSettledSemanticObservation?.sequence,
+                    timeout: timeout
+                )
+            }
         }
 
         if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
@@ -108,11 +128,18 @@ extension TheStash {
         after sequence: UInt64?
     ) -> UInt64? {
         let currentSequence = latestSettledSemanticObservation?.sequence
-        let baseline = sequence ?? currentSequence
         if scope == .discovery {
+            let baseline = sequence ?? currentSequence
             return max(baseline ?? 0, currentSequence ?? 0)
         }
-        return baseline
+        if sequence == nil, passiveSemanticObservationTask == nil {
+            return currentSequence
+        }
+        return sequence
+    }
+
+    private func semanticObservationBaselineCycle() -> UInt64 {
+        semanticObservationCycleSequence + (semanticObservationCycleInProgress ? 1 : 0)
     }
 
     private func cleanSettledSemanticObservation(
@@ -149,47 +176,47 @@ extension TheStash {
 
     private func runPassiveSemanticObservationCycle(discovery: @escaping DiscoveryObservation) async {
         let scope = currentSubscribedObservationScope()
-        await performSemanticObservationCycle(scope: scope, discovery: discovery)
-    }
-
-    private func performSingleSemanticObservationCycle(scope: SemanticObservationScope) async {
-        await performSemanticObservationCycle(
-            scope: scope,
-            discovery: passiveSemanticDiscoveryObservation
-        )
+        semanticObservationCycleInProgress = true
+        let didObserve = await performSemanticObservationCycle(scope: scope, discovery: discovery)
+        semanticObservationCycleInProgress = false
+        guard didObserve else { return }
+        semanticObservationCycleSequence += 1
+        completeSemanticObservationCycleWaiters(scope: scope)
+        await Task.yield()
     }
 
     private func performSemanticObservationCycle(
         scope: SemanticObservationScope,
         discovery: DiscoveryObservation?
-    ) async {
+    ) async -> Bool {
         switch scope {
         case .visible:
-            await observeVisibleSemanticState()
+            return await observeVisibleSemanticState()
         case .discovery:
             guard let discovery else {
                 markDirtyFromTripwire()
                 await Task.yield()
-                return
+                return true
             }
             await discovery()
             markCurrentSemanticObservationSettled(scope: .discovery)
             await Task.yield()
+            return true
         }
     }
 
-    private func observeVisibleSemanticState() async {
+    private func observeVisibleSemanticState() async -> Bool {
         if let reading = tripwire.latestReading,
            !latestSettledSemanticObservationIsDirty,
            passiveObservationSettledReading?.tick == reading.tick {
             _ = await Task.cancellableSleep(for: .milliseconds(100))
-            return
+            return true
         }
 
         guard await tripwire.waitForAllClear(timeout: 0.5) else {
             markDirtyFromTripwire()
             await Task.yield()
-            return
+            return true
         }
 
         let baselineSignal = latestSettledSemanticObservation?.tripwireSignal ?? tripwire.tripwireSignal()
@@ -202,11 +229,47 @@ extension TheStash {
         guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else {
             markDirtyFromTripwire()
             await Task.yield()
-            return
+            return true
         }
 
         recordSettledSemanticObservation(screen, scope: .visible)
         await Task.yield()
+        return true
+    }
+
+    private func waitForNextSemanticObservationCycle(
+        scope: SemanticObservationScope,
+        after cycle: UInt64
+    ) async {
+        let id = nextSemanticObservationCycleWaiterID
+        nextSemanticObservationCycleWaiterID += 1
+
+        return await withCheckedContinuation { continuation in
+            semanticObservationCycleWaiters[id] = SemanticObservationCycleWaiter(
+                scope: scope,
+                afterCycle: cycle,
+                continuation: continuation
+            )
+        }
+    }
+
+    private func completeSemanticObservationCycleWaiters(scope: SemanticObservationScope) {
+        for (id, waiter) in semanticObservationCycleWaiters {
+            guard scope >= waiter.scope else { continue }
+            guard semanticObservationCycleSequence > waiter.afterCycle else { continue }
+            completeSemanticObservationCycleWaiter(id)
+        }
+    }
+
+    private func completeAllSemanticObservationCycleWaiters() {
+        for id in Array(semanticObservationCycleWaiters.keys) {
+            completeSemanticObservationCycleWaiter(id)
+        }
+    }
+
+    private func completeSemanticObservationCycleWaiter(_ id: UInt64) {
+        guard let waiter = semanticObservationCycleWaiters.removeValue(forKey: id) else { return }
+        waiter.continuation.resume()
     }
 
     private func completeSettledSemanticWaiters(with observation: SettledSemanticObservation) {

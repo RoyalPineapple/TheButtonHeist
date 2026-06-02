@@ -34,11 +34,21 @@ final class TheStash {
         let timeoutTask: Task<Void, Never>?
     }
 
+    struct SemanticObservationCycleWaiter {
+        let scope: SemanticObservationScope
+        let afterCycle: UInt64
+        let continuation: CheckedContinuation<Void, Never>
+    }
+
     var settledSemanticSequence: UInt64 = 0
     var latestSettledSemanticObservation: SettledSemanticObservation?
     var latestSettledSemanticObservationIsDirty = true
     var nextSettledSemanticWaiterID: UInt64 = 1
     var settledSemanticWaiters: [UInt64: SettledSemanticWaiter] = [:]
+    var semanticObservationCycleSequence: UInt64 = 0
+    var semanticObservationCycleInProgress = false
+    var nextSemanticObservationCycleWaiterID: UInt64 = 1
+    var semanticObservationCycleWaiters: [UInt64: SemanticObservationCycleWaiter] = [:]
     var nextSemanticObservationSubscriptionID: UInt64 = 1
     var semanticObservationSubscriptions: [UInt64: SemanticObservationScope] = [:]
     var passiveSemanticObservationTask: Task<Void, Never>?

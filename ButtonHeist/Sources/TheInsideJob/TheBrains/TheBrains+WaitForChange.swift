@@ -23,10 +23,11 @@ extension TheBrains {
 
         let sentBaseline = waitForChangeState.lastDeliveredBaseline
 
-        guard let initial = await postActionObservation.currentSemanticState(
+        guard let initial = await interactionObservation.observeSemanticState(
+            scope: .visible,
             baseline: sentBaseline,
             timeout: min(max(timeout, 0), 1.0)
-        ) else {
+        )?.state else {
             return treeUnavailableResult(method: .wait)
         }
 
@@ -71,7 +72,11 @@ extension TheBrains {
 
         // Timeout
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let current = await postActionObservation.currentSemanticState(baseline: baseline, timeout: 0)
+        let current = await interactionObservation.observeSemanticState(
+            scope: .visible,
+            baseline: baseline,
+            timeout: 0
+        )?.state
         let afterSnapshot = current?.snapshot ?? []
         let timeoutAccessibilityTrace = current.map {
             postActionObservation.makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
@@ -105,10 +110,11 @@ extension TheBrains {
             let remaining = predicate.deadline - CFAbsoluteTimeGetCurrent()
             guard remaining > 0 else { break }
 
-            guard let current = await postActionObservation.currentSemanticState(
+            guard let current = await interactionObservation.observeSemanticState(
+                scope: .visible,
                 baseline: settleBaseline,
                 timeout: min(remaining, 1.0)
-            ) else { continue }
+            )?.state else { continue }
             round += 1
 
             let classification = ScreenClassifier.classify(
