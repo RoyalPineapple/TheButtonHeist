@@ -45,10 +45,9 @@ extension TheBrains {
         case .typeText(let target):
             return await performInteraction(
                 method: .typeText,
-                afterStatePayload: { self.actions.typeTextPayload(for: target, in: $0) }
-            ) {
-                await self.actions.executeTypeText(target)
-            }
+                afterStatePayload: { self.actions.typeTextPayload(for: target, in: $0) },
+                interaction: { await self.actions.executeTypeText(target) }
+            )
         case .scroll(let target):
             return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):

@@ -12,7 +12,6 @@ struct HeistSemanticObservation {
     let summary: String
 }
 
-@MainActor
 enum InteractionObservationProjection {
     struct InitialTraceResult {
         let trace: AccessibilityTrace
