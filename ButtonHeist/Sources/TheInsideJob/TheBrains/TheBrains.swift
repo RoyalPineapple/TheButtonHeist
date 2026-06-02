@@ -127,7 +127,7 @@ final class TheBrains {
         }
 
         do {
-            let interface = try InterfaceSelector(interface: observation.state.interface).select(query)
+            let interface = try InterfaceSelector(interface: stash.interface()).select(query)
             return .success(interface)
         } catch {
             return .failure(.selection(error))

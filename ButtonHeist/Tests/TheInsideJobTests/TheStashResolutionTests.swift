@@ -260,6 +260,39 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(observation?.observation.screen.orderedElements.first?.element.label, "Discovery")
     }
 
+    func testPublicInterfaceProjectionStaysVisibleWhileSemanticProjectionIncludesKnownElements() throws {
+        let visible = element(label: "Visible", traits: .button)
+        let known = element(label: "Known", traits: .button)
+        let container = AccessibilityContainer(
+            type: .scrollable(contentSize: AccessibilitySize(CGSize(width: 320, height: 800))),
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 320, height: 400))
+        )
+        let screen = Screen(
+            elements: [
+                "visible": Screen.ScreenElement(heistId: "visible", contentSpaceOrigin: nil, element: visible),
+                "known": Screen.ScreenElement(heistId: "known", contentSpaceOrigin: nil, element: known),
+            ],
+            hierarchy: [.container(container, children: [.element(visible, traversalIndex: 0)])],
+            containerStableIds: [container: "main_scroll"],
+            heistIdByElement: [visible: "visible"],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        )
+        bagman.recordSettledSemanticObservation(screen, scope: .discovery)
+
+        let publicInterface = bagman.interface()
+        let semanticInterface = bagman.semanticInterface()
+
+        XCTAssertEqual(publicInterface.projectedElements.map(\.label), ["Visible"])
+        XCTAssertEqual(semanticInterface.projectedElements.map(\.label).sorted(), ["Known", "Visible"])
+        guard case .container(_, let children) = publicInterface.tree.first else {
+            return XCTFail("Expected public interface to preserve visible container hierarchy")
+        }
+        XCTAssertEqual(children.count, 1)
+        XCTAssertEqual(publicInterface.annotations.containers.first?.stableId, "main_scroll")
+        XCTAssertEqual(semanticInterface.annotations.containers, [])
+    }
+
     func testTimeoutZeroTurnsObservationCycleBeforeReturningCleanLatest() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
         bagman.recordSettledSemanticObservation(first, scope: .discovery)
