@@ -1707,6 +1707,59 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertTrue(mockConn.sent.isEmpty)
     }
 
+    @ButtonHeistActor
+    func testActionExpectationUsesWaitObservationInsteadOfActionTraceShortcut() async throws {
+        let (fence, mockConn) = makeConnectedFence()
+        let predicate = AccessibilityPredicate.changed(.appeared(ElementPredicate(label: "Home")))
+        let interface = makeReceiptTestInterface([
+            testElement(label: "Home", traits: [.staticText]),
+        ])
+        let trace = AccessibilityTrace.projectingForTests(.screenChanged(.init(
+            elementCount: 1,
+            newInterface: interface
+        )))
+
+        mockConn.autoResponse = { message in
+            switch message {
+            case .activate:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .activate,
+                    accessibilityTrace: trace
+                ))
+            case .wait:
+                return .actionResult(ActionResult(
+                    success: true,
+                    method: .wait,
+                    message: "expectation met after observed change",
+                    accessibilityTrace: trace
+                ))
+            default:
+                return .actionResult(ActionResult(success: true, method: .activate))
+            }
+        }
+
+        let response = try await fence.execute(command: .activate, values: [
+            "target": targetValue(identifier: "myElement"),
+            "expect": .object([
+                "type": .string("element_appeared"),
+                "element": .object(["label": .string("Home")]),
+            ]),
+        ])
+
+        XCTAssertEqual(mockConn.sent.count, 2)
+        guard case .wait(let waitTarget) = mockConn.sent.last?.0 else {
+            return XCTFail("Expected action expectation to execute a wait message, got \(String(describing: mockConn.sent.last))")
+        }
+        XCTAssertEqual(waitTarget.predicate, predicate)
+
+        guard case .action(_, let result, let expectation) = response else {
+            return XCTFail("Expected action response, got \(response)")
+        }
+        XCTAssertEqual(result.method, .wait)
+        XCTAssertEqual(expectation?.met, true)
+    }
+
     // MARK: - Expectation Parsing
 
     @ButtonHeistActor

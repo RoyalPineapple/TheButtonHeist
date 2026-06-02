@@ -93,17 +93,10 @@ extension TheFence {
                 )
             }
             if let expectation {
-                let validation = expectation.validate(against: actionResult)
-                if validation.met {
-                    return ValidatedResponse(
-                        response: .action(command: command, result: actionResult, expectation: validation)
-                    )
-                }
                 return try await waitForPostActionExpectation(
                     expectation,
                     command: command,
                     initialResult: actionResult,
-                    initialValidation: validation,
                     timeout: expectationTimeout
                 )
             }
@@ -155,7 +148,6 @@ extension TheFence {
         _ expectation: AccessibilityPredicate,
         command: Command,
         initialResult: ActionResult,
-        initialValidation: ExpectationResult,
         timeout: Double?
     ) async throws -> ValidatedResponse {
         let target = WaitTarget(predicate: expectation, timeout: timeout)
@@ -164,6 +156,12 @@ extension TheFence {
                 .wait(target),
                 timeout: target.resolvedTimeout + config.postActionExpectationTimeoutBuffer
             )
+            let delivery = deliveryExpectationResult(for: waitResult)
+            guard delivery.met else {
+                return ValidatedResponse(
+                    response: .action(command: .wait, result: waitResult, expectation: delivery)
+                )
+            }
             let waitValidation = expectation.validate(against: waitResult)
             return ValidatedResponse(
                 response: .action(
@@ -173,8 +171,13 @@ extension TheFence {
                 )
             )
         } catch FenceError.actionTimeout {
+            let validation = ExpectationResult(
+                met: false,
+                predicate: expectation,
+                actual: "timed out after \(target.resolvedTimeout)s — expectation not met"
+            )
             return ValidatedResponse(
-                response: .action(command: command, result: initialResult, expectation: initialValidation)
+                response: .action(command: command, result: initialResult, expectation: validation)
             )
         }
     }

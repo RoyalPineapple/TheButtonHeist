@@ -561,6 +561,77 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
     }
 
+    func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
+        let expectation = WaitStep(
+            predicate: .state(.absent(ElementPredicate(label: "Loading"))),
+            timeout: 0
+        )
+        var waitedSteps: [WaitStep] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { _ in
+                ActionResult(success: true, method: .activate)
+            },
+            wait: { waitStep in
+                waitedSteps.append(waitStep)
+                return ActionResult(success: true, method: .wait)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .action(try ActionStep(
+                command: .activate(.predicate(ElementPredicate(label: "Submit"))),
+                expectation: expectation
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(waitedSteps, [expectation])
+        XCTAssertEqual(step.expectationActionResult?.method, .wait)
+        XCTAssertEqual(step.expectation?.met, false)
+        XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
+    }
+
+    func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
+        let expectation = WaitStep(
+            predicate: .changed(.disappeared(ElementPredicate(label: "Loading"))),
+            timeout: 0.2
+        )
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { _ in
+                ActionResult(success: true, method: .activate)
+            },
+            wait: { _ in
+                ActionResult(
+                    success: false,
+                    method: .wait,
+                    message: "timed out after 0.2s — expectation not met",
+                    errorKind: .timeout,
+                    accessibilityTrace: .projectingForTests(.noChange(.init(elementCount: 1)))
+                )
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .action(try ActionStep(
+                command: .activate(.predicate(ElementPredicate(label: "Submit"))),
+                expectation: expectation
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(step.expectationActionResult?.errorKind, .timeout)
+        XCTAssertEqual(step.expectation?.met, false)
+        XCTAssertEqual(step.expectation?.actual, "timed out after 0.2s — expectation not met")
+    }
+
     func testHeistCaseObservationScopeMergesRevealTargets() async throws {
         var observedScopes: [HeistPredicateObservationScope] = []
         let runtime = heistRuntime(
@@ -796,6 +867,7 @@ final class TheBrainsActionTests: XCTestCase {
         let stillPresentState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
+        let waitObservedState = observedState(labels: ["Done"])
         let runtime = heistRuntime(
             observations: [initialState],
             execute: { command in
@@ -808,7 +880,11 @@ final class TheBrainsActionTests: XCTestCase {
             },
             wait: { waitStep in
                 waitedSteps.append(waitStep)
-                return ActionResult(success: true, method: .wait)
+                return ActionResult(
+                    success: true,
+                    method: .wait,
+                    accessibilityTrace: AccessibilityTrace(capture: waitObservedState.capture)
+                )
             }
         )
         let plan = HeistPlan(steps: [
@@ -1554,7 +1630,8 @@ final class TheBrainsActionTests: XCTestCase {
                     success: met.met,
                     method: .wait,
                     message: met.actual,
-                    errorKind: met.met ? nil : .timeout
+                    errorKind: met.met ? nil : .timeout,
+                    accessibilityTrace: state.map { AccessibilityTrace(capture: $0.capture) }
                 )
             },
             observeCases: { scope, _, _ in

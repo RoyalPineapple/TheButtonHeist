@@ -55,6 +55,14 @@ final class AccessibilityPredicateTests: XCTestCase {
         XCTAssertFalse(AccessibilityPredicate.State.absent(ElementPredicate(label: "Ready")).evaluatePresence(in: elements))
     }
 
+    func testStatePredicateRequiresObservedTraceForActionResultValidation() {
+        let action = ActionResult(success: true, method: .activate)
+        let result = AccessibilityPredicate.state(.absent(ElementPredicate(label: "Loading"))).validate(against: action)
+
+        XCTAssertFalse(result.met)
+        XCTAssertEqual(result.actual, "no observed accessibility trace")
+    }
+
     // MARK: - ExpectationResult Codable Round-Trip
 
     func testExpectationResultEncodeDecode() throws {
@@ -108,7 +116,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let action = makeResult(success: true)
         let result = AccessibilityPredicate.changed(.screen()).validate(against: action)
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "noTrace")
+        XCTAssertEqual(result.actual, "no observed accessibility trace")
     }
 
     func testScreenChangedUsesTraceEndpointProjection() {
@@ -270,7 +278,7 @@ final class AccessibilityPredicateTests: XCTestCase {
         let predicate = AccessibilityPredicate.changed(.updated(ElementUpdatePredicate(to: "5")))
         let result = predicate.validate(against: action)
         XCTAssertFalse(result.met)
-        XCTAssertEqual(result.actual, "no element updates")
+        XCTAssertEqual(result.actual, "no observed accessibility trace")
     }
 
     func testElementUpdatedNotMetWhenEmptyUpdates() {
