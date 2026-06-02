@@ -79,7 +79,7 @@ extension TheBrains {
         method: ActionMethod,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        guard stash.commitVisibleObservation() != nil else {
+        guard stash.recordVisibleSemanticObservation() != nil else {
             return treeUnavailableResult(method: method)
         }
         let before = postActionObservation.captureSemanticState()
@@ -116,7 +116,7 @@ extension TheBrains {
         direction: ScrollDirection,
         method: ActionMethod
     ) async -> ActionResult {
-        guard stash.commitVisibleObservation() != nil else {
+        guard stash.recordVisibleSemanticObservation() != nil else {
             return treeUnavailableResult(method: method)
         }
         let before = postActionObservation.captureSemanticState()
@@ -158,7 +158,7 @@ extension TheBrains {
     /// `performPresenceWait` so they keep ambiguity diagnostics; this path
     /// evaluates the whole `State` against each fresh observation.
     func performStateWait(state: AccessibilityPredicate.State, timeout: Double?) async -> ActionResult {
-        guard stash.commitVisibleObservation() != nil else {
+        guard stash.recordVisibleSemanticObservation() != nil else {
             return treeUnavailableResult(method: .wait)
         }
         let before = postActionObservation.captureSemanticState()
@@ -168,7 +168,7 @@ extension TheBrains {
         var met = state.evaluatePresence(in: before.interface.projectedElements)
         while !met, ContinuousClock.now < deadline {
             _ = await tripwire.waitForAllClear(timeout: 1.0)
-            guard stash.commitVisibleObservation() != nil else {
+            guard stash.recordVisibleSemanticObservation() != nil else {
                 return treeUnavailableResult(method: .wait)
             }
             _ = await navigation.exploreAndPrune()
@@ -191,7 +191,7 @@ extension TheBrains {
         absent: Bool,
         timeout: Double?
     ) async -> ActionResult {
-        guard stash.commitVisibleObservation() != nil else {
+        guard stash.recordVisibleSemanticObservation() != nil else {
             return treeUnavailableResult(method: .wait)
         }
         let before = postActionObservation.captureSemanticState()
@@ -351,7 +351,7 @@ extension TheBrains {
     /// latest parsed page. Exploration may stop as soon as the target is found;
     /// if it is not found, all reachable scroll containers are scanned.
     private func refreshSemanticStateForWait(target: ElementTarget) async -> Bool {
-        guard stash.commitVisibleObservation() != nil else { return false }
+        guard stash.recordVisibleSemanticObservation() != nil else { return false }
         _ = await navigation.exploreAndPrune(target: target)
         return true
     }

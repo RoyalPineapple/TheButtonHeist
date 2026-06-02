@@ -92,7 +92,7 @@ final class TheBrains {
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
         _ = await tripwire.waitForAllClear(timeout: 0.5)
 
-        guard stash.commitVisibleObservation() != nil else {
+        guard stash.recordVisibleSemanticObservation() != nil else {
             return .failure(.rootViewUnavailable)
         }
 

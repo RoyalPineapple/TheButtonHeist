@@ -189,28 +189,28 @@ final class TheStash {
     /// semantic state. Runtime code uses this instead of calling parser-shaped
     /// APIs directly.
     @discardableResult
-    func commitVisibleObservation() -> Screen? {
+    func recordVisibleSemanticObservation() -> Screen? {
         refresh()
     }
 
     /// Produce one visible observation for the settle loop without committing
     /// it yet. The caller commits the proven final screen through
-    /// `commitSettledVisibleObservation(_:)`.
-    func parseVisibleObservationForSettle() -> Screen? {
+    /// `recordSettledSemanticObservation(_:)`.
+    func semanticObservationForSettle() -> Screen? {
         parse()
     }
 
     /// Produce one page observation for scroll exploration. Exploration owns a
     /// local semantic union until it finishes and commits the explored screen.
-    func parseVisiblePageForExploration() -> Screen? {
+    func semanticPageForExploration() -> Screen? {
         parse()
     }
 
-    func commitSettledVisibleObservation(_ screen: Screen) {
+    func recordSettledSemanticObservation(_ screen: Screen) {
         commitVisibleRefresh(screen)
     }
 
-    func commitObservedVisiblePage(_ screen: Screen) {
+    func recordVisiblePageObservation(_ screen: Screen) {
         commitVisiblePage(screen)
     }
 

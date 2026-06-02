@@ -20,7 +20,7 @@ extension Navigation {
             return .failure(.scrollToVisible, message: "Element target required for scroll_to_visible")
         }
 
-        stash.commitVisibleObservation()
+        stash.recordVisibleSemanticObservation()
 
         switch await actionability.makeActionable(
             for: elementTarget,

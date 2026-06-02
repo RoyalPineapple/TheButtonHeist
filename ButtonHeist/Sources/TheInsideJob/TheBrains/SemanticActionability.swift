@@ -109,7 +109,7 @@ final class SemanticActionability {
             }
             if reveal.didReveal {
                 await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-                stash.commitVisibleObservation()
+                stash.recordVisibleSemanticObservation()
                 didRevealTarget = true
             }
         case .notFound(let diagnostics):
@@ -129,7 +129,7 @@ final class SemanticActionability {
             // A semantic target can outlive its capture-local UIKit object.
             // Refresh once before failing; reveal and activation-point placement
             // own the other bounded refresh points.
-            stash.commitVisibleObservation()
+            stash.recordVisibleSemanticObservation()
             freshTarget = resolveFreshElementTarget(
                 target: target,
                 method: method,
@@ -307,7 +307,7 @@ final class SemanticActionability {
             return .failure(.geometryNotActionable(scrollFailedMessage))
         }
         await tripwire.yieldFrames(Self.postScrollLayoutFrames)
-        stash.commitVisibleObservation()
+        stash.recordVisibleSemanticObservation()
         return .success(true)
     }
 

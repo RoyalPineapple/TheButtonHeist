@@ -206,30 +206,14 @@ extension TheBrains {
     private func refreshSemanticSnapshot(
         baseline: PostActionObservation.BeforeState? = nil
     ) async -> PostActionObservation.BeforeState? {
-        guard stash.commitVisibleObservation() != nil else { return nil }
-        if let baseline {
-            return await postActionObservation.semanticStateAfterVisibleRefresh(baseline: baseline)
-        }
-        return postActionObservation.captureSemanticState()
+        await postActionObservation.currentSemanticState(baseline: baseline)
     }
 
     private func waitForSettledSemanticSnapshot(
         baseline: PostActionObservation.BeforeState,
         timeout: TimeInterval
     ) async -> PostActionObservation.BeforeState? {
-        let timeoutMs = max(1, Int(timeout * 1000))
-        let settleSession = SettleSession.live(
-            stash: stash,
-            tripwire: tripwire,
-            timeoutMs: timeoutMs
-        )
-        let settle = await settleSession.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: baseline.tripwireSignal
-        )
-        guard settle.outcome.didSettleCleanly, let screen = settle.finalScreen else { return nil }
-        stash.commitSettledVisibleObservation(screen)
-        return await postActionObservation.semanticStateAfterVisibleRefresh(baseline: baseline)
+        await postActionObservation.settledSemanticState(after: baseline, timeout: timeout)
     }
 
     private static func deltaKindDescription(_ delta: AccessibilityTrace.Delta) -> String {
