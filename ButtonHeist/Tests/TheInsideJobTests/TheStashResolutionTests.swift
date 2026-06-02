@@ -237,7 +237,7 @@ final class TheStashResolutionTests: XCTestCase {
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
         var discoveryCount = 0
-        bagman.passiveSemanticDiscoveryObservation = { [bagman] in
+        bagman.startPassiveSemanticObservation { [bagman] in
             discoveryCount += 1
             bagman?.commitExploredScreen(second)
         }
@@ -251,6 +251,24 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(discoveryCount, 1)
         XCTAssertGreaterThan(observation?.sequence ?? 0, firstSequence ?? 0)
         XCTAssertEqual(observation?.screen.orderedElements.first?.element.label, "Second")
+    }
+
+    func testTimeoutZeroDoesNotInvokeDiscoveryWithoutPassiveObserver() async {
+        let screen = Screen.makeForTests(elements: [(element(label: "Hidden"), "hidden")])
+        var discoveryCount = 0
+        bagman.passiveSemanticDiscoveryObservation = { [bagman] in
+            discoveryCount += 1
+            bagman?.commitExploredScreen(screen)
+        }
+
+        let observation = await bagman.settledSemanticObservation(
+            scope: .discovery,
+            after: nil,
+            timeout: 0
+        )
+
+        XCTAssertNil(observation)
+        XCTAssertEqual(discoveryCount, 0)
     }
 
     func testStopPassiveSemanticObservationCancelsWaiters() async {

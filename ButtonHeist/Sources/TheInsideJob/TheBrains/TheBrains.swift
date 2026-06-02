@@ -21,6 +21,7 @@ final class TheBrains {
     let navigation: Navigation
     let actions: Actions
     let postActionObservation: PostActionObservation
+    let interactionObservation: InteractionObservation
     let waitForChangeState = WaitForChangeState()
 
     enum InterfaceObservation {
@@ -60,11 +61,17 @@ final class TheBrains {
             tripwire: tripwire,
             navigation: navigation
         )
-        self.postActionObservation = PostActionObservation(
+        let postActionObservation = PostActionObservation(
             stash: stash,
             safecracker: safecracker,
             tripwire: tripwire,
             navigation: navigation
+        )
+        self.postActionObservation = postActionObservation
+        self.interactionObservation = InteractionObservation(
+            stash: stash,
+            tripwire: tripwire,
+            postActionObservation: postActionObservation
         )
     }
 
@@ -87,7 +94,7 @@ final class TheBrains {
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() async {
         startSemanticObservation()
-        guard let state = await postActionObservation.currentSemanticState() else { return }
+        guard let state = await interactionObservation.prepareBeforeState() else { return }
         waitForChangeState.recordDeliveredBaseline(state)
     }
 

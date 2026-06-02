@@ -107,6 +107,35 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(before.elements.count, 1)
     }
 
+    func testInteractionObservationBeforeStateRequiresCleanSettledObservation() async {
+        installScreen(elements: [(makeElement(label: "Title", traits: .header), "header_title")])
+        brains.stash.markDirtyFromTripwire()
+
+        let current = await brains.interactionObservation.prepareBeforeState(timeout: 0.001)
+
+        XCTAssertNil(
+            current,
+            "dirty settled state must not be returned or repaired through a private visible refresh"
+        )
+    }
+
+    func testPerformInteractionFailsBeforeActionWhenSettledObservationUnavailable() async {
+        var interactionRan = false
+
+        let result = await withNoTraversableWindows {
+            await brains.performInteraction(method: .activate) {
+                interactionRan = true
+                return .success(method: .activate)
+            }
+        }
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.method, .activate)
+        XCTAssertEqual(result.errorKind, .actionFailed)
+        XCTAssertEqual(result.message, TheBrains.treeUnavailableMessage)
+        XCTAssertFalse(interactionRan, "command action must not run without settled pre-state")
+    }
+
     func testExecuteIncrementFailsWhenElementIsNotAdjustable() async {
         let heistId = "live_button"
         let liveObject = UIButton(type: .system)
@@ -689,6 +718,60 @@ final class TheBrainsActionTests: XCTestCase {
         )
     }
 
+    func testWaitReceiptUsesBeforeAndMatchedSettledObservations() async throws {
+        let beforeScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Before"), "before"),
+        ])
+        let matchedScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Before"), "before"),
+            (makeElement(label: "Loaded"), "loaded"),
+        ])
+        brains.stash.startPassiveSemanticObservation { [stash = brains.stash] in
+            stash.commitExploredScreen(beforeScreen)
+        }
+
+        let receiptTask = Task { @MainActor in
+            await self.brains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .changed(.appeared(ElementPredicate(label: "Loaded"))),
+                timeout: 1
+            ))
+        }
+
+        for _ in 0..<20 where brains.stash.settledSemanticWaiters.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(brains.stash.settledSemanticWaiters.count, 1)
+
+        brains.stash.recordSettledSemanticObservation(matchedScreen, scope: .discovery)
+        let receipt = await receiptTask.value
+        let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
+
+        XCTAssertTrue(receipt.actionResult.success)
+        XCTAssertEqual(trace.captures.first?.interface.projectedElements.map(\.label), ["Before"])
+        XCTAssertEqual(trace.captures.last?.interface.projectedElements.map(\.label), ["Before", "Loaded"])
+        guard case .elementsChanged? = trace.endpointDeltaProjection else {
+            return XCTFail("Expected elementsChanged delta, got \(String(describing: trace.endpointDeltaProjection))")
+        }
+    }
+
+    func testWaitReceiptTimeoutDiagnosticUsesFinalSettledObservation() async throws {
+        let beforeScreen = Screen.makeForTests(elements: [
+            (makeElement(label: "Known"), "known"),
+        ])
+        brains.stash.startPassiveSemanticObservation { [stash = brains.stash] in
+            stash.commitExploredScreen(beforeScreen)
+        }
+
+        let receipt = await brains.interactionObservation.waitForPredicate(WaitStep(
+            predicate: .changed(.appeared(ElementPredicate(label: "Missing"))),
+            timeout: 0.01
+        ))
+
+        XCTAssertFalse(receipt.actionResult.success)
+        XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
+        XCTAssertTrue(receipt.actionResult.message?.contains("last observed: known: 1 elements") == true)
+    }
+
     func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
         let expectation = WaitStep(
             predicate: .state(.absent(ElementPredicate(label: "Loading"))),
@@ -700,7 +783,7 @@ final class TheBrainsActionTests: XCTestCase {
             execute: { _ in
                 ActionResult(success: true, method: .activate)
             },
-            wait: { waitStep in
+            wait: { waitStep, _ in
                 waitedSteps.append(waitStep)
                 return ActionResult(success: true, method: .wait)
             }
@@ -723,7 +806,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
     }
 
-    func testHeistActionExpectationTimeoutZeroUsesDeliveredActionTrace() async throws {
+    func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
         let expectation = WaitStep(predicate: .changed(.screen()), timeout: 0)
         let beforeState = observedState(labels: ["Controls Demo"])
         let afterState = observedState(labels: ["Buttons & Actions"])
@@ -739,15 +822,10 @@ final class TheBrainsActionTests: XCTestCase {
             context: AccessibilityTrace.Context(screenId: "buttons_actions")
         )
         let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
-        var waitedSteps: [WaitStep] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
                 ActionResult(success: true, method: .activate, accessibilityTrace: trace)
-            },
-            wait: { waitStep in
-                waitedSteps.append(waitStep)
-                return ActionResult(success: false, method: .wait, errorKind: .timeout)
             }
         )
         let plan = HeistPlan(steps: [
@@ -762,9 +840,9 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertTrue(result.success)
-        XCTAssertTrue(waitedSteps.isEmpty)
         XCTAssertEqual(step.expectationActionResult?.method, .wait)
         XCTAssertTrue(step.expectationActionResult?.success == true)
+        XCTAssertEqual(step.expectationActionResult?.accessibilityTrace, trace)
         XCTAssertEqual(step.expectation?.met, true)
         XCTAssertEqual(step.expectation?.actual, "screenChanged")
     }
@@ -779,7 +857,7 @@ final class TheBrainsActionTests: XCTestCase {
             execute: { _ in
                 ActionResult(success: true, method: .activate)
             },
-            wait: { _ in
+            wait: { _, _ in
                 ActionResult(
                     success: false,
                     method: .wait,
@@ -1052,7 +1130,7 @@ final class TheBrainsActionTests: XCTestCase {
                     accessibilityTrace: AccessibilityTrace(capture: stillPresentState.capture)
                 )
             },
-            wait: { waitStep in
+            wait: { waitStep, _ in
                 waitedSteps.append(waitStep)
                 return ActionResult(
                     success: true,
@@ -1779,7 +1857,7 @@ final class TheBrainsActionTests: XCTestCase {
     private func heistRuntime(
         observations: [PostActionObservation.BeforeState],
         execute: (@MainActor (ClientMessage) async -> ActionResult)? = nil,
-        wait: (@MainActor (WaitStep) async -> ActionResult)? = nil,
+        wait: (@MainActor (WaitStep, AccessibilityTrace?) async -> ActionResult)? = nil,
         observedScopes: (@MainActor (SemanticObservationScope) -> Void)? = nil,
         observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
         unavailableObservationCount: Int = 0,
@@ -1795,9 +1873,25 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 return ActionResult(success: true, method: .heistPlan, message: command.wireType.rawValue)
             },
-            wait: { waitStep in
+            wait: { waitStep, initialTrace in
                 if let wait {
-                    return self.heistWaitReceipt(for: waitStep, result: await wait(waitStep))
+                    return self.heistWaitReceipt(for: waitStep, result: await wait(waitStep, initialTrace))
+                }
+                if let initialTrace {
+                    let expectation = waitStep.predicate.evaluate(
+                        currentElements: initialTrace.captures.last?.interface.projectedElements ?? [],
+                        delta: initialTrace.endpointDeltaProjection
+                    )
+                    if expectation.met || waitStep.timeout == 0 {
+                        let result = ActionResult(
+                            success: expectation.met,
+                            method: .wait,
+                            message: expectation.actual,
+                            errorKind: expectation.met ? nil : .timeout,
+                            accessibilityTrace: initialTrace
+                        )
+                        return HeistWaitReceipt(actionResult: result, expectation: expectation)
+                    }
                 }
                 let state = remainingObservations.first
                 let trace = state.map { AccessibilityTrace(capture: $0.capture) }

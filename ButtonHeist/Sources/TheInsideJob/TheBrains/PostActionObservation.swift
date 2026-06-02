@@ -5,7 +5,7 @@ import Foundation
 import AccessibilitySnapshotModel
 import TheScore
 
-/// After an action succeeds, settle visible state, observe semantics, compare captures, and return one action result.
+/// Projects supplied semantic states into traces, captures, and deltas.
 @MainActor
 final class PostActionObservation {
     let stash: TheStash
@@ -75,90 +75,6 @@ final class PostActionObservation {
             screenId: screen.id,
             settledObservationSequence: settledObservationSequence
         )
-    }
-
-    /// Settle after an action, consume semantic discovery, diff against before-state, and return enriched ActionResult.
-    func actionResultWithDelta(
-        success: Bool,
-        method: ActionMethod,
-        message: String? = nil,
-        payload: ResultPayload? = nil,
-        errorKind: ErrorKind? = nil,
-        before: BeforeState,
-        settleOutcome: SettleSession.Outcome? = nil
-    ) async -> ActionResult {
-        guard success else {
-            return failureActionResult(
-                method: method,
-                message: message,
-                payload: payload,
-                errorKind: errorKind,
-                before: before
-            )
-        }
-
-        let settleResult = await resolvedSettleOutcome(settleOutcome, baseline: before)
-        let didSettle = settleResult.outcome.didSettleCleanly
-        if case .cancelled(let cancelMs) = settleResult.outcome {
-            var builder = ActionResultBuilder(method: method, capture: before.capture)
-            builder.message = "cancelled after \(cancelMs)ms"
-            builder.settled = false
-            builder.settleTimeMs = cancelMs
-            return builder.failure(errorKind: .actionFailed, payload: payload)
-        }
-
-        guard let afterScreen = settledScreen(from: settleResult, usedInjectedSettleOutcome: settleOutcome != nil) else {
-            var builder = ActionResultBuilder(method: method, capture: before.capture)
-            builder.message = "Could not parse post-action accessibility tree"
-            builder.settled = didSettle
-            builder.settleTimeMs = settleResult.outcome.timeMs
-            return builder.failure(errorKind: .actionFailed, payload: payload)
-        }
-
-        stash.recordSettledSemanticObservation(afterScreen)
-        let finalState = await semanticStateAfterDiscovery(
-            after: stash.latestSettledSemanticObservation?.sequence
-        ) ?? captureSemanticState()
-        let finalClassification = ScreenClassifier.classify(
-            before: before.screenSnapshot,
-            after: finalState.screenSnapshot
-        )
-        let trace = makeAccessibilityTrace(
-            afterInterface: finalState.interface,
-            parentCapture: before.capture,
-            classification: finalClassification,
-            transient: transientElements(settleResult: settleResult, before: before, final: finalState, classification: finalClassification)
-        )
-
-        guard let postCapture = trace.captures.last else {
-            return failureActionResult(
-                method: method,
-                message: message,
-                payload: payload,
-                errorKind: .actionFailed,
-                before: before
-            )
-        }
-
-        var builder = ActionResultBuilder(method: method, capture: postCapture)
-        builder.message = message
-        builder.accessibilityTrace = trace
-        builder.settled = didSettle
-        builder.settleTimeMs = settleResult.outcome.timeMs
-        return builder.success(payload: payload)
-    }
-
-    func failureActionResult(
-        method: ActionMethod,
-        message: String?,
-        payload: ResultPayload?,
-        errorKind: ErrorKind?,
-        before: BeforeState
-    ) -> ActionResult {
-        let kind = errorKind ?? .actionFailed
-        var builder = ActionResultBuilder(method: method, capture: before.capture)
-        builder.message = message
-        return builder.failure(errorKind: kind, payload: payload)
     }
 
     static func shouldRecordAccessibilityTrace(
@@ -234,90 +150,6 @@ final class PostActionObservation {
             hash: after.capture.hash
         )
         return AccessibilityTrace(captures: [parent.capture, capture])
-    }
-
-    func semanticStateAfterVisibleRefresh(baseline: BeforeState) async -> BeforeState {
-        let current = captureSemanticState()
-        let classification = ScreenClassifier.classify(
-            before: baseline.screenSnapshot,
-            after: current.screenSnapshot
-        )
-        guard classification.isScreenChange else { return current }
-
-        return await semanticStateAfterDiscovery(after: current.settledObservationSequence) ?? current
-    }
-
-    func semanticStateAfterDiscovery(after sequence: UInt64?) async -> BeforeState? {
-        guard let observation = await stash.settledSemanticObservation(
-            scope: .discovery,
-            after: sequence,
-            timeout: 2.0
-        ) else { return nil }
-        return captureSemanticState(from: observation)
-    }
-
-    func currentSemanticState(baseline: BeforeState? = nil, timeout: Double? = 1.0) async -> BeforeState? {
-        let current: BeforeState
-        if let observation = await stash.settledSemanticObservation(
-            scope: .visible,
-            after: baseline?.settledObservationSequence,
-            timeout: timeout
-        ) {
-            current = captureSemanticState(from: observation)
-        } else {
-            guard stash.recordVisibleSemanticObservation() != nil else { return nil }
-            current = captureSemanticState()
-        }
-
-        if let baseline {
-            let classification = ScreenClassifier.classify(
-                before: baseline.screenSnapshot,
-                after: current.screenSnapshot
-            )
-            guard classification.isScreenChange else { return current }
-
-            return await semanticStateAfterDiscovery(after: current.settledObservationSequence) ?? current
-        }
-        return current
-    }
-
-    private func resolvedSettleOutcome(
-        _ settleOutcome: SettleSession.Outcome?,
-        baseline: BeforeState
-    ) async -> SettleSession.Outcome {
-        if let settleOutcome {
-            return settleOutcome
-        }
-        let start = CFAbsoluteTimeGetCurrent()
-        let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
-        return await settleSession.run(start: start, baselineTripwireSignal: baseline.tripwireSignal)
-    }
-
-    private func settledScreen(
-        from settleResult: SettleSession.Outcome,
-        usedInjectedSettleOutcome: Bool
-    ) -> Screen? {
-        if usedInjectedSettleOutcome {
-            return settleResult.finalScreen
-        }
-        return settleResult.finalScreen
-    }
-
-    private func transientElements(
-        settleResult: SettleSession.Outcome,
-        before: BeforeState,
-        final: BeforeState,
-        classification: ScreenClassifier.Classification
-    ) -> [HeistElement] {
-        guard !classification.isScreenChange,
-              !settleResult.events.containsTripwireSignalChange else {
-            return []
-        }
-        return SettleSession.transientElements(
-            seenByKey: settleResult.elementsByKey,
-            baseline: before.elements,
-            final: final.elements
-        ).map { TheStash.WireConversion.convert($0) }
     }
 
     private func makeCaptureContext(tripwireSignal: TheTripwire.TripwireSignal? = nil) -> AccessibilityTrace.Context {

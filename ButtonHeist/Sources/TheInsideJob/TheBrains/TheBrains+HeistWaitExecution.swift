@@ -11,7 +11,7 @@ extension TheBrains {
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime
     ) async -> HeistExecutionStepResult {
-        let receipt = await runtime.wait(step)
+        let receipt = await runtime.wait(step, nil)
         return HeistExecutionStepResult(
             index: index,
             kind: .wait,
