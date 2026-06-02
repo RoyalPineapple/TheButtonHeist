@@ -357,7 +357,8 @@ final class WaitForIntegrationTests: XCTestCase {
     func testWaitForChangeElementAppearedOnNextEventReturnsThroughChangePath() async throws {
         let baseline = addLabel("WaitForChange-Baseline")
         defer { baseline.removeFromSuperview() }
-        XCTAssertTrue(await waitForSettledVisibleObservation())
+        let didObserveBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveBaseline)
 
         let addTask = Task { @MainActor in
             await self.insideJob.tripwire.yieldRealFrames(2)
@@ -375,7 +376,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertTrue(result.message?.contains("expectation met after") == true)
+        XCTAssertTrue(result.message?.contains("predicate met after") == true, result.message ?? "missing wait message")
         guard case .elementsChanged = result.accessibilityTrace?.endpointDeltaProjection else {
             return XCTFail("Expected elementsChanged delta, got \(String(describing: result.accessibilityTrace?.endpointDeltaProjection))")
         }
@@ -384,7 +385,8 @@ final class WaitForIntegrationTests: XCTestCase {
     func testWaitForChangeElementsChangedRequiresFutureSettledDelta() async throws {
         let changed = addLabel("WaitForChange-ElementsChanged")
         defer { changed.removeFromSuperview() }
-        XCTAssertTrue(await waitForSettledVisibleObservation())
+        let didObserveBaseline = await waitForSettledVisibleObservation()
+        XCTAssertTrue(didObserveBaseline)
 
         let result = await waitForChange(
             expectation: .changed(.elements),

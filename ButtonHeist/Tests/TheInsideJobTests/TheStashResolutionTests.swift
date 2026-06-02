@@ -284,7 +284,7 @@ final class TheStashResolutionTests: XCTestCase {
         let semanticInterface = bagman.semanticInterface()
 
         XCTAssertEqual(publicInterface.projectedElements.map(\.label), ["Visible"])
-        XCTAssertEqual(semanticInterface.projectedElements.map(\.label).sorted(), ["Known", "Visible"])
+        XCTAssertEqual(semanticInterface.projectedElements.compactMap(\.label).sorted(), ["Known", "Visible"])
         guard case .container(_, let children) = publicInterface.tree.first else {
             return XCTFail("Expected public interface to preserve visible container hierarchy")
         }
