@@ -371,6 +371,7 @@ final class TheBrainsActionTests: XCTestCase {
         failing.isAccessibilityElement = true
         failing.accessibilityLabel = "Trace Failure"
         failing.accessibilityIdentifier = "trace_failure"
+        failing.accessibilityTraits = .notEnabled
         rootView.addSubview(failing)
 
         let window = try installModalWindow(rootView: rootView)
@@ -802,6 +803,8 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testWaitReceiptUsesBeforeAndMatchedSettledObservations() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
         let beforeScreen = Screen.makeForTests(elements: [
             (makeElement(label: "Before"), "before"),
         ])
@@ -809,23 +812,19 @@ final class TheBrainsActionTests: XCTestCase {
             (makeElement(label: "Before"), "before"),
             (makeElement(label: "Loaded"), "loaded"),
         ])
-        brains.stash.startPassiveSemanticObservation { [stash = brains.stash] in
-            stash.commitExploredScreen(beforeScreen)
-        }
 
         let receiptTask = Task { @MainActor in
-            await self.brains.interactionObservation.waitForPredicate(WaitStep(
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
                 predicate: .changed(.appeared(ElementPredicate(label: "Loaded"))),
                 timeout: 1
             ))
         }
 
-        for _ in 0..<20 where brains.stash.settledSemanticWaiters.isEmpty {
-            await Task.yield()
-        }
-        XCTAssertEqual(brains.stash.settledSemanticWaiters.count, 1)
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        isolatedBrains.stash.recordSettledSemanticObservation(beforeScreen, scope: .discovery)
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
 
-        brains.stash.recordSettledSemanticObservation(matchedScreen, scope: .discovery)
+        isolatedBrains.stash.recordSettledSemanticObservation(matchedScreen, scope: .discovery)
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -838,17 +837,21 @@ final class TheBrainsActionTests: XCTestCase {
     }
 
     func testWaitReceiptTimeoutDiagnosticUsesFinalSettledObservation() async throws {
+        let isolatedBrains = TheBrains(tripwire: TheTripwire())
+        defer { isolatedBrains.stopSemanticObservation() }
         let beforeScreen = Screen.makeForTests(elements: [
             (makeElement(label: "Known"), "known"),
         ])
-        brains.stash.startPassiveSemanticObservation { [stash = brains.stash] in
-            stash.commitExploredScreen(beforeScreen)
+        let receiptTask = Task { @MainActor in
+            await isolatedBrains.interactionObservation.waitForPredicate(WaitStep(
+                predicate: .changed(.appeared(ElementPredicate(label: "Missing"))),
+                timeout: 0.05
+            ))
         }
+        await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
+        isolatedBrains.stash.recordSettledSemanticObservation(beforeScreen, scope: .discovery)
 
-        let receipt = await brains.interactionObservation.waitForPredicate(WaitStep(
-            predicate: .changed(.appeared(ElementPredicate(label: "Missing"))),
-            timeout: 0.01
-        ))
+        let receipt = await receiptTask.value
 
         XCTAssertFalse(receipt.actionResult.success)
         XCTAssertEqual(receipt.actionResult.errorKind, .timeout)
@@ -2051,6 +2054,17 @@ final class TheBrainsActionTests: XCTestCase {
         observedState(elements: labels.enumerated().map { index, label in
             (makeElement(label: label), "element_\(index)")
         })
+    }
+
+    private func waitForSettledSemanticWaiter(
+        on stash: TheStash,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 0..<50 where stash.settledSemanticWaiters.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(stash.settledSemanticWaiters.count, 1, file: file, line: line)
     }
 
     private func observedState(
