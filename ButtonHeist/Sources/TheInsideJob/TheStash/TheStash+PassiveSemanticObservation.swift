@@ -2,6 +2,8 @@
 #if DEBUG
 import Foundation
 
+import TheScore
+
 extension TheStash {
     typealias DiscoveryObservation = @MainActor () async -> Void
 
@@ -41,11 +43,11 @@ extension TheStash {
         semanticObservationSubscriptions.values.max() ?? .visible
     }
 
-    func settledSemanticObservation(
+    func settledSemanticObservationEvent(
         scope: SemanticObservationScope,
         after sequence: UInt64?,
         timeout: Double?
-    ) async -> SettledSemanticObservation? {
+    ) async -> SettledSemanticObservationEvent? {
         let subscription = subscribeSemanticObservation(scope: scope)
         defer { _ = subscription }
 
@@ -57,7 +59,7 @@ extension TheStash {
                 scope: scope,
                 after: semanticObservationBaselineCycle()
             )
-            return cleanSettledSemanticObservation(scope: scope, after: requiredSequence)
+            return cleanSettledSemanticObservationEvent(scope: scope, after: requiredSequence)
         }
 
         if sequence == nil, scope == .visible {
@@ -67,7 +69,7 @@ extension TheStash {
                     after: semanticObservationBaselineCycle()
                 )
             } else {
-                return await waitForNextSettledSemanticObservation(
+                return await waitForNextSettledSemanticObservationEvent(
                     scope: scope,
                     after: latestSettledSemanticObservation?.sequence,
                     timeout: timeout
@@ -75,25 +77,25 @@ extension TheStash {
             }
         }
 
-        if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
+        if let latest = cleanSettledSemanticObservationEvent(scope: scope, after: requiredSequence) {
             return latest
         }
 
-        return await waitForNextSettledSemanticObservation(
+        return await waitForNextSettledSemanticObservationEvent(
             scope: scope,
             after: requiredSequence,
             timeout: timeout
         )
     }
 
-    private func waitForNextSettledSemanticObservation(
+    private func waitForNextSettledSemanticObservationEvent(
         scope: SemanticObservationScope = .visible,
         after sequence: UInt64?,
         timeout: Double?
-    ) async -> SettledSemanticObservation? {
+    ) async -> SettledSemanticObservationEvent? {
         let requiredSequence = semanticObservationBaselineSequence(for: scope, after: sequence)
 
-        if let latest = cleanSettledSemanticObservation(scope: scope, after: requiredSequence) {
+        if let latest = cleanSettledSemanticObservationEvent(scope: scope, after: requiredSequence) {
             return latest
         }
 
@@ -127,7 +129,7 @@ extension TheStash {
         for scope: SemanticObservationScope,
         after sequence: UInt64?
     ) -> UInt64? {
-        let currentSequence = latestSettledSemanticObservation?.sequence
+        let currentSequence = latestSettledSemanticObservationEvent?.sequence
         if scope == .discovery {
             let baseline = sequence ?? currentSequence
             return max(baseline ?? 0, currentSequence ?? 0)
@@ -142,12 +144,12 @@ extension TheStash {
         semanticObservationCycleSequence + (semanticObservationCycleInProgress ? 1 : 0)
     }
 
-    private func cleanSettledSemanticObservation(
+    private func cleanSettledSemanticObservationEvent(
         scope: SemanticObservationScope,
         after sequence: UInt64?
-    ) -> SettledSemanticObservation? {
+    ) -> SettledSemanticObservationEvent? {
         guard !latestSettledSemanticObservationIsDirty,
-              let latest = latestSettledSemanticObservation,
+              let latest = latestSettledSemanticObservationEvent,
               latest.scope >= scope,
               latest.sequence > (sequence ?? 0)
         else {
@@ -168,10 +170,63 @@ extension TheStash {
             screen: currentScreen,
             tripwireSignal: tripwire.tripwireSignal()
         )
-        latestSettledSemanticObservation = observation
+        let event = makeSettledSemanticObservationEvent(
+            observation: observation,
+            previous: latestSettledSemanticObservationEvent
+        )
+        latestSettledSemanticObservationEvent = event
         latestSettledSemanticObservationIsDirty = false
         passiveObservationSettledReading = tripwire.latestReading
-        completeSettledSemanticWaiters(with: observation)
+        completeSettledSemanticWaiters(with: event)
+    }
+
+    private func makeSettledSemanticObservationEvent(
+        observation: SettledSemanticObservation,
+        previous: SettledSemanticObservationEvent?
+    ) -> SettledSemanticObservationEvent {
+        let previousCapture = previous?.trace.captures.last
+        let currentCapture = semanticTraceCapture(
+            for: observation,
+            sequence: previousCapture == nil ? 1 : 2,
+            parentHash: previousCapture?.hash
+        )
+        let trace = if let previousCapture {
+            AccessibilityTrace(captures: [previousCapture, currentCapture])
+        } else {
+            AccessibilityTrace(capture: currentCapture)
+        }
+        return SettledSemanticObservationEvent(
+            sequence: observation.sequence,
+            scope: observation.scope,
+            observation: observation,
+            previous: previous?.observation,
+            trace: trace,
+            delta: trace.endpointDeltaProjection
+        )
+    }
+
+    private func semanticTraceCapture(
+        for observation: SettledSemanticObservation,
+        sequence: Int,
+        parentHash: String?
+    ) -> AccessibilityTrace.Capture {
+        let interface = semanticInterfaceWithHash(for: observation.screen).interface
+        let windows = observation.tripwireSignal.windowStack.windows.enumerated().map { index, window in
+            AccessibilityTrace.WindowContext(
+                index: index,
+                level: Double(window.level),
+                isKeyWindow: window.isKeyWindow
+            )
+        }
+        return AccessibilityTrace.Capture(
+            sequence: sequence,
+            interface: interface,
+            parentHash: parentHash,
+            context: AccessibilityTrace.Context(
+                screenId: observation.screen.id,
+                windowStack: windows
+            )
+        )
     }
 
     private func runPassiveSemanticObservationCycle(discovery: @escaping DiscoveryObservation) async {
@@ -219,7 +274,7 @@ extension TheStash {
             return true
         }
 
-        let baselineSignal = latestSettledSemanticObservation?.tripwireSignal ?? tripwire.tripwireSignal()
+        let baselineSignal = latestSettledSemanticObservationEvent?.observation.tripwireSignal ?? tripwire.tripwireSignal()
         let settleSession = SettleSession.live(stash: self, tripwire: tripwire, timeoutMs: 1_000)
         let settle = await settleSession.run(
             start: CFAbsoluteTimeGetCurrent(),
@@ -272,27 +327,27 @@ extension TheStash {
         waiter.continuation.resume()
     }
 
-    private func completeSettledSemanticWaiters(with observation: SettledSemanticObservation) {
+    private func completeSettledSemanticWaiters(with event: SettledSemanticObservationEvent) {
         for (id, waiter) in settledSemanticWaiters {
-            guard observation.scope >= waiter.scope else { continue }
-            guard observation.sequence > (waiter.afterSequence ?? 0) else { continue }
-            completeSettledSemanticWaiter(id, returning: observation)
+            guard event.scope >= waiter.scope else { continue }
+            guard event.sequence > (waiter.afterSequence ?? 0) else { continue }
+            completeSettledSemanticWaiter(id, returning: event)
         }
     }
 
-    func completeAllSettledSemanticWaiters(returning observation: SettledSemanticObservation?) {
+    func completeAllSettledSemanticWaiters(returning event: SettledSemanticObservationEvent?) {
         for id in Array(settledSemanticWaiters.keys) {
-            completeSettledSemanticWaiter(id, returning: observation)
+            completeSettledSemanticWaiter(id, returning: event)
         }
     }
 
     private func completeSettledSemanticWaiter(
         _ id: UInt64,
-        returning observation: SettledSemanticObservation?
+        returning event: SettledSemanticObservationEvent?
     ) {
         guard let waiter = settledSemanticWaiters.removeValue(forKey: id) else { return }
         waiter.timeoutTask?.cancel()
-        waiter.continuation.resume(returning: observation)
+        waiter.continuation.resume(returning: event)
     }
 }
 

@@ -42,7 +42,7 @@ final class PostActionObservation {
         captureSemanticState(
             from: stash.currentScreen,
             tripwireSignal: tripwire.tripwireSignal(),
-            settledObservationSequence: stash.latestSettledSemanticObservation?.sequence
+            settledObservationSequence: stash.latestSettledSemanticObservationEvent?.sequence
         )
     }
 

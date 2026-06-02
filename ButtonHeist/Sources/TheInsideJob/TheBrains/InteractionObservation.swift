@@ -7,7 +7,7 @@ import TheScore
 private let defaultSemanticObservationTimeout: Double = 1
 
 struct HeistSemanticObservation {
-    let baseline: PostActionObservation.BeforeState
+    let event: TheStash.SettledSemanticObservationEvent
     let state: PostActionObservation.BeforeState
     let accessibilityTrace: AccessibilityTrace
     let delta: AccessibilityTrace.Delta?
@@ -32,25 +32,27 @@ final class InteractionObservation {
     }
 
     func prepareBeforeState(timeout: Double? = 1.0) async -> PostActionObservation.BeforeState? {
-        guard let observation = await stash.settledSemanticObservation(
+        guard let event = await stash.settledSemanticObservationEvent(
             scope: .visible,
             after: nil,
             timeout: timeout
         ) else { return nil }
-        return postActionObservation.captureSemanticState(from: observation)
+        return postActionObservation.captureSemanticState(from: event.observation)
     }
 
     func observeSemanticState(
         scope: SemanticObservationScope,
-        baseline: PostActionObservation.BeforeState?,
+        after sequence: UInt64?,
         timeout: Double?
     ) async -> HeistSemanticObservation? {
-        await observeSemanticState(
+        let event = await stash.settledSemanticObservationEvent(
             scope: scope,
-            after: baseline?.settledObservationSequence,
-            traceBaseline: baseline,
-            timeout: timeout
+            after: sequence,
+            timeout: timeout ?? defaultSemanticObservationTimeout
         )
+
+        guard let event else { return nil }
+        return semanticObservation(from: event)
     }
 
     func finishAfterAction(
@@ -81,15 +83,15 @@ final class InteractionObservation {
         }
 
         stash.recordSettledSemanticObservation(afterScreen)
-        guard let visibleObservation = stash.latestSettledSemanticObservation else {
+        guard let visibleEvent = stash.latestSettledSemanticObservationEvent else {
             var builder = ActionResultBuilder(method: method, capture: before.capture)
             builder.message = "Could not produce post-action settled semantic observation"
             builder.settled = didSettle
             builder.settleTimeMs = settleResult.outcome.timeMs
             return builder.failure(errorKind: .actionFailed, payload: payload)
         }
-        let finalState = await semanticStateAfterDiscovery(after: visibleObservation.sequence)
-            ?? postActionObservation.captureSemanticState(from: visibleObservation)
+        let finalState = await semanticStateAfterDiscovery(after: visibleEvent.sequence)
+            ?? postActionObservation.captureSemanticState(from: visibleEvent.observation)
         let finalClassification = ScreenClassifier.classify(
             before: before.screenSnapshot,
             after: finalState.screenSnapshot
@@ -133,8 +135,6 @@ final class InteractionObservation {
         var lastObservation: HeistSemanticObservation?
         var lastTrace: AccessibilityTrace?
         var lastObservationSummary: String?
-        var interactionBaseline: PostActionObservation.BeforeState?
-        var traceBaselineCapture: AccessibilityTrace.Capture?
         var observedSequence: UInt64?
         var lastEvaluation = ExpectationResult(
             met: false,
@@ -146,17 +146,15 @@ final class InteractionObservation {
             lastTrace = initialTraceResult.trace
             lastObservationSummary = initialTraceResult.summary
             lastEvaluation = initialTraceResult.expectation
-            observedSequence = stash.latestSettledSemanticObservation?.sequence
-            traceBaselineCapture = initialTraceResult.trace.captures.last
+            observedSequence = stash.latestSettledSemanticObservationEvent?.sequence
             if initialTraceResult.shouldReturn {
                 return initialTraceResult.receipt
             }
-        } else if let initial = await observeSemanticState(scope: step.predicate.observationScope, baseline: nil, timeout: 0) {
+        } else if let initial = await observeSemanticState(scope: step.predicate.observationScope, after: nil, timeout: 0) {
             lastObservation = initial
             lastTrace = initial.accessibilityTrace
             lastObservationSummary = initial.summary
-            interactionBaseline = initial.state
-            observedSequence = initial.state.settledObservationSequence
+            observedSequence = initial.event.sequence
             lastEvaluation = evaluate(step.predicate, in: initial)
             if lastEvaluation.met {
                 return waitReceipt(
@@ -193,17 +191,12 @@ final class InteractionObservation {
             guard let observation = await observeSemanticState(
                 scope: step.predicate.observationScope,
                 after: observedSequence,
-                traceBaseline: interactionBaseline,
-                traceBaselineCapture: traceBaselineCapture,
                 timeout: min(remaining, defaultSemanticObservationTimeout)
             ) else {
                 continue
             }
 
-            if interactionBaseline == nil && traceBaselineCapture == nil {
-                interactionBaseline = observation.state
-            }
-            observedSequence = observation.state.settledObservationSequence
+            observedSequence = observation.event.sequence
             lastObservation = observation
             lastTrace = observation.accessibilityTrace
             lastObservationSummary = observation.summary
@@ -230,28 +223,7 @@ final class InteractionObservation {
     }
 
     func recordDeliveredBaselineAfterStep() async -> PostActionObservation.BeforeState? {
-        (await observeSemanticState(scope: .visible, baseline: nil, timeout: 0))?.state
-    }
-
-    private func observeSemanticState(
-        scope: SemanticObservationScope,
-        after sequence: UInt64?,
-        traceBaseline: PostActionObservation.BeforeState?,
-        traceBaselineCapture: AccessibilityTrace.Capture? = nil,
-        timeout: Double?
-    ) async -> HeistSemanticObservation? {
-        let observation = await stash.settledSemanticObservation(
-            scope: scope,
-            after: sequence,
-            timeout: timeout ?? defaultSemanticObservationTimeout
-        )
-
-        guard let observation else { return nil }
-        return semanticObservation(
-            from: observation,
-            baseline: traceBaseline,
-            traceBaselineCapture: traceBaselineCapture
-        )
+        (await observeSemanticState(scope: .visible, after: nil, timeout: 0))?.state
     }
 
     private func initialTraceResult(
@@ -286,37 +258,25 @@ final class InteractionObservation {
     }
 
     private func semanticObservation(
-        from observation: TheStash.SettledSemanticObservation,
-        baseline: PostActionObservation.BeforeState?,
-        traceBaselineCapture: AccessibilityTrace.Capture? = nil
+        from event: TheStash.SettledSemanticObservationEvent
     ) -> HeistSemanticObservation {
-        let current = postActionObservation.captureSemanticState(from: observation)
-        let parent = baseline ?? current
-        let trace: AccessibilityTrace
-        if let traceBaselineCapture {
-            trace = postActionObservation.makeAccessibilityTrace(
-                afterInterface: current.interface,
-                parentCapture: traceBaselineCapture
-            )
-        } else {
-            trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: parent)
-        }
+        let current = postActionObservation.captureSemanticState(from: event.observation)
         return HeistSemanticObservation(
-            baseline: parent,
+            event: event,
             state: current,
-            accessibilityTrace: trace,
-            delta: baseline == nil && traceBaselineCapture == nil ? nil : trace.endpointDeltaProjection,
+            accessibilityTrace: event.trace,
+            delta: event.delta,
             summary: heistObservationSummary(current)
         )
     }
 
     private func semanticStateAfterDiscovery(after sequence: UInt64?) async -> PostActionObservation.BeforeState? {
-        guard let observation = await stash.settledSemanticObservation(
+        guard let event = await stash.settledSemanticObservationEvent(
             scope: .discovery,
             after: sequence,
             timeout: 2.0
         ) else { return nil }
-        return postActionObservation.captureSemanticState(from: observation)
+        return postActionObservation.captureSemanticState(from: event.observation)
     }
 
     private func resolvedSettleOutcome(

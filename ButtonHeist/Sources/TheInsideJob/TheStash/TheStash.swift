@@ -27,10 +27,19 @@ final class TheStash {
         let tripwireSignal: TheTripwire.TripwireSignal
     }
 
+    struct SettledSemanticObservationEvent {
+        let sequence: UInt64
+        let scope: SemanticObservationScope
+        let observation: SettledSemanticObservation
+        let previous: SettledSemanticObservation?
+        let trace: AccessibilityTrace
+        let delta: AccessibilityTrace.Delta?
+    }
+
     struct SettledSemanticWaiter {
         let scope: SemanticObservationScope
         let afterSequence: UInt64?
-        let continuation: CheckedContinuation<SettledSemanticObservation?, Never>
+        let continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>
         let timeoutTask: Task<Void, Never>?
     }
 
@@ -41,7 +50,10 @@ final class TheStash {
     }
 
     var settledSemanticSequence: UInt64 = 0
-    var latestSettledSemanticObservation: SettledSemanticObservation?
+    var latestSettledSemanticObservationEvent: SettledSemanticObservationEvent?
+    var latestSettledSemanticObservation: SettledSemanticObservation? {
+        latestSettledSemanticObservationEvent?.observation
+    }
     var latestSettledSemanticObservationIsDirty = true
     var nextSettledSemanticWaiterID: UInt64 = 1
     var settledSemanticWaiters: [UInt64: SettledSemanticWaiter] = [:]
@@ -348,7 +360,7 @@ final class TheStash {
     private func clearCommittedScreen() {
         semanticState = .empty
         liveCapture = .empty
-        latestSettledSemanticObservation = nil
+        latestSettledSemanticObservationEvent = nil
         latestSettledSemanticObservationIsDirty = true
         passiveObservationSettledReading = nil
         completeAllSettledSemanticWaiters(returning: nil)

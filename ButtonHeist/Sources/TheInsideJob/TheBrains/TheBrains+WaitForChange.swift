@@ -23,50 +23,35 @@ extension TheBrains {
 
         let sentBaseline = waitForChangeState.lastDeliveredBaseline
 
-        guard let initial = await interactionObservation.observeSemanticState(
+        guard let initialObservation = await interactionObservation.observeSemanticState(
             scope: .visible,
-            baseline: sentBaseline,
+            after: sentBaseline?.settledObservationSequence,
             timeout: min(max(timeout, 0), 1.0)
-        )?.state else {
+        ) else {
             return treeUnavailableResult(method: .wait)
         }
+        let initial = initialObservation.state
 
-        let baseline = sentBaseline ?? initial
-
-        // Fast path: semantic state already changed since the last response.
-        if let sentBaseline {
-            let classification = ScreenClassifier.classify(
-                before: sentBaseline.screenSnapshot,
-                after: initial.screenSnapshot
-            )
-            if PostActionObservation.shouldRecordAccessibilityTrace(
-                baseline: sentBaseline,
-                current: initial,
-                classification: classification
+        if let delta = initialObservation.delta {
+            if let result = evaluateWaitForChange(
+                delta: delta,
+                accessibilityTrace: initialObservation.accessibilityTrace,
+                afterSnapshot: initial.snapshot,
+                expectation: predicate.expectation,
+                start: start,
+                round: 0,
+                message: "already changed (0.0s)"
             ) {
-                let accessibilityTrace = postActionObservation.makeClassifiedAccessibilityTrace(after: initial, parent: baseline)
-                if let delta = accessibilityTrace.endpointDeltaProjection {
-                    if let result = evaluateWaitForChange(
-                        delta: delta,
-                        accessibilityTrace: accessibilityTrace,
-                        afterSnapshot: initial.snapshot,
-                        expectation: predicate.expectation,
-                        start: start,
-                        round: 0,
-                        message: "already changed (0.0s)"
-                    ) {
-                        return result
-                    }
-                }
+                return result
             }
         }
 
-        if let result = await waitForChangeThroughSettledSnapshots(
-            baseline: baseline,
-            initial: initial,
+        let streamResult = await waitForChangeThroughSettledSnapshots(
+            after: initialObservation.event.sequence,
             predicate: predicate,
             start: start
-        ) {
+        )
+        if let result = streamResult.result {
             return result
         }
 
@@ -74,14 +59,11 @@ extension TheBrains {
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         let current = await interactionObservation.observeSemanticState(
             scope: .visible,
-            baseline: baseline,
+            after: streamResult.lastObservation?.event.sequence ?? initialObservation.event.sequence,
             timeout: 0
-        )?.state
-        let afterSnapshot = current?.snapshot ?? []
-        let timeoutAccessibilityTrace = current.map {
-            postActionObservation.makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
-        }
-        let delta = timeoutAccessibilityTrace?.endpointDeltaProjection
+        ) ?? streamResult.lastObservation ?? initialObservation
+        let afterSnapshot = current.state.snapshot
+        let delta = current.delta
         var builder = ActionResultBuilder(method: .wait)
         builder.message = waitForChangeTimeoutMessage(
             elapsed: elapsed,
@@ -89,71 +71,51 @@ extension TheBrains {
             delta: delta,
             elementCount: afterSnapshot.count
         )
-        builder.accessibilityTrace = timeoutAccessibilityTrace
+        builder.accessibilityTrace = current.accessibilityTrace
         return builder.failure(errorKind: .timeout)
     }
 
     private func waitForChangeThroughSettledSnapshots(
-        baseline: PostActionObservation.BeforeState,
-        initial: PostActionObservation.BeforeState,
+        after sequence: UInt64,
         predicate: WaitForChangeState.Predicate,
         start: CFAbsoluteTime
-    ) async -> ActionResult? {
-        // Wait for stable AX-tree observations until a change lands or we time
-        // out. Tripwire signals reset the settle baseline inside
-        // `SettleSession`; the parsed AX captures below still decide whether
-        // anything changed.
-        var settleBaseline = initial
+    ) async -> (result: ActionResult?, lastObservation: HeistSemanticObservation?) {
+        var observedSequence = sequence
+        var lastObservation: HeistSemanticObservation?
         var round = 0
 
         while CFAbsoluteTimeGetCurrent() < predicate.deadline {
             let remaining = predicate.deadline - CFAbsoluteTimeGetCurrent()
             guard remaining > 0 else { break }
 
-            guard let current = await interactionObservation.observeSemanticState(
+            guard let observation = await interactionObservation.observeSemanticState(
                 scope: .visible,
-                baseline: settleBaseline,
+                after: observedSequence,
                 timeout: min(remaining, 1.0)
-            )?.state else { continue }
+            ) else { continue }
             round += 1
+            observedSequence = observation.event.sequence
+            lastObservation = observation
 
-            let classification = ScreenClassifier.classify(
-                before: settleBaseline.screenSnapshot,
-                after: current.screenSnapshot
-            )
-            guard PostActionObservation.shouldRecordAccessibilityTrace(
-                baseline: settleBaseline,
-                current: current,
-                classification: classification
-            ) else {
-                settleBaseline = current
-                continue
-            }
-
-            let accessibilityTrace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: baseline)
-            guard let delta = accessibilityTrace.endpointDeltaProjection else {
-                settleBaseline = current
-                continue
-            }
+            guard let delta = observation.delta else { continue }
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if let result = evaluateWaitForChange(
                 delta: delta,
-                accessibilityTrace: accessibilityTrace,
-                afterSnapshot: current.snapshot,
+                accessibilityTrace: observation.accessibilityTrace,
+                afterSnapshot: observation.state.snapshot,
                 expectation: predicate.expectation,
                 start: start,
                 round: round,
                 message: "changed after \(elapsed)s (\(round) rounds)"
             ) {
-                return result
+                return (result, lastObservation)
             }
 
-            settleBaseline = current
             insideJobLogger.debug("wait_for_change round \(round): \(Self.deltaKindDescription(delta)), expectation not yet met")
         }
 
-        return nil
+        return (nil, lastObservation)
     }
 
     private func waitForChangeTimeoutMessage(

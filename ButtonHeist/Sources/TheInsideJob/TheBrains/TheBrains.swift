@@ -104,7 +104,7 @@ final class TheBrains {
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
         startSemanticObservation()
-        guard await stash.settledSemanticObservation(
+        guard await stash.settledSemanticObservationEvent(
             scope: .discovery,
             after: nil,
             timeout: 2.0

@@ -960,6 +960,32 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.discovery])
     }
 
+    func testWaitForCasesChangedPredicateConsumesStreamEventDelta() async throws {
+        let runtime = heistRuntime(observations: [
+            observedState(labels: ["Loading"]),
+            observedState(labels: ["Loading", "Toast"]),
+        ])
+        let plan = HeistPlan(steps: [
+            .waitForCases(try WaitForCasesStep(
+                timeout: 1,
+                cases: [
+                    PredicateCase(
+                        predicate: .changed(.appeared(ElementPredicate(label: "Toast"))),
+                        steps: [.warn(WarnStep(message: "toast"))]
+                    ),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
+        XCTAssertEqual(step.caseSelection?.cases.first?.result.met, true)
+    }
+
     func testHeistForEachWithZeroMatchesSucceedsWithoutIterations() async throws {
         let matching = ElementPredicate(label: "Delete")
         var observedScopes: [SemanticObservationScope] = []
@@ -1866,6 +1892,9 @@ final class TheBrainsActionTests: XCTestCase {
     ) -> TheBrains.HeistExecutionRuntime {
         var remainingObservations = observations
         var remainingUnavailableObservations = unavailableObservationCount
+        var previousObservation: TheStash.SettledSemanticObservation?
+        var previousCapture: AccessibilityTrace.Capture?
+        var nextObservationSequence: UInt64 = 0
         return TheBrains.HeistExecutionRuntime(
             execute: { command in
                 if let execute {
@@ -1920,12 +1949,33 @@ final class TheBrainsActionTests: XCTestCase {
                     return nil
                 }
                 let state = remainingObservations.removeFirst()
-                let trace = AccessibilityTrace(capture: state.capture)
+                nextObservationSequence += 1
+                let settledObservation = TheStash.SettledSemanticObservation(
+                    sequence: nextObservationSequence,
+                    scope: scope,
+                    screen: .empty,
+                    tripwireSignal: .empty
+                )
+                let trace = if let previousCapture {
+                    AccessibilityTrace(captures: [previousCapture, state.capture])
+                } else {
+                    AccessibilityTrace(capture: state.capture)
+                }
+                let event = TheStash.SettledSemanticObservationEvent(
+                    sequence: nextObservationSequence,
+                    scope: scope,
+                    observation: settledObservation,
+                    previous: previousObservation,
+                    trace: trace,
+                    delta: trace.endpointDeltaProjection
+                )
+                previousObservation = settledObservation
+                previousCapture = trace.captures.last
                 return HeistSemanticObservation(
-                    baseline: state,
+                    event: event,
                     state: state,
                     accessibilityTrace: trace,
-                    delta: nil,
+                    delta: event.delta,
                     summary: "known: \(state.interface.projectedElements.count) elements"
                 )
             },
