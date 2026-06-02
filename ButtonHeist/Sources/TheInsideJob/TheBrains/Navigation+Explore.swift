@@ -10,7 +10,11 @@ import AccessibilitySnapshotParser
 
 extension Navigation {
 
-    func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
+    func observeSemanticDiscovery() async {
+        _ = await exploreAndPrune()
+    }
+
+    private func exploreAndPrune(target: ElementTarget? = nil) async -> ScreenManifest {
         let exploration = await exploreScreen(target: target)
         stash.commitExploredScreen(exploration.screen)
         return exploration.manifest

@@ -20,6 +20,30 @@ final class TheStash {
     private var semanticState: SemanticScreen = .empty
     private var liveCapture: LiveCapture = .empty
 
+    struct SettledSemanticObservation {
+        let sequence: UInt64
+        let scope: SemanticObservationScope
+        let screen: Screen
+        let tripwireSignal: TheTripwire.TripwireSignal
+    }
+
+    struct SettledSemanticWaiter {
+        let scope: SemanticObservationScope
+        let afterSequence: UInt64?
+        let continuation: CheckedContinuation<SettledSemanticObservation?, Never>
+        let timeoutTask: Task<Void, Never>?
+    }
+
+    var settledSemanticSequence: UInt64 = 0
+    var latestSettledSemanticObservation: SettledSemanticObservation?
+    var latestSettledSemanticObservationIsDirty = true
+    var nextSettledSemanticWaiterID: UInt64 = 1
+    var settledSemanticWaiters: [UInt64: SettledSemanticWaiter] = [:]
+    var nextSemanticObservationSubscriptionID: UInt64 = 1
+    var semanticObservationSubscriptions: [UInt64: SemanticObservationScope] = [:]
+    var passiveSemanticObservationTask: Task<Void, Never>?
+    var passiveObservationSettledReading: TheTripwire.PulseReading?
+
     /// Held rotor cursor — the single current selection while in rotor mode.
     /// Entering rotor mode on a host starts at index 0; subsequent steps cycle
     /// this held selection. Any non-rotor action clears it (rotor mode exit).
@@ -206,8 +230,12 @@ final class TheStash {
         parse()
     }
 
-    func recordSettledSemanticObservation(_ screen: Screen) {
+    func recordSettledSemanticObservation(
+        _ screen: Screen,
+        scope: SemanticObservationScope = .visible
+    ) {
         commitVisibleRefresh(screen)
+        markCurrentSemanticObservationSettled(scope: scope)
     }
 
     func recordVisiblePageObservation(_ screen: Screen) {
@@ -228,6 +256,7 @@ final class TheStash {
 
     func installScreenForTesting(_ screen: Screen) {
         commitScreen(screen)
+        markCurrentSemanticObservationSettled()
     }
 
     /// Starting value for page-by-page exploration. Exploration is the one
@@ -306,12 +335,18 @@ final class TheStash {
     }
 
     private func clearCommittedScreen() {
-        commitScreen(.empty)
+        semanticState = .empty
+        liveCapture = .empty
+        latestSettledSemanticObservation = nil
+        latestSettledSemanticObservationIsDirty = true
+        passiveObservationSettledReading = nil
+        completeAllSettledSemanticWaiters(returning: nil)
     }
 
     private func commitScreen(_ screen: Screen) {
         semanticState = screen.semantic
         liveCapture = screen.liveCapture
+        latestSettledSemanticObservationIsDirty = true
     }
 
     // MARK: - Interface Read Helpers
@@ -336,6 +371,14 @@ final class TheStash {
     /// Single-build semantic variant for state capture and delta projection.
     func semanticInterfaceWithHash(timestamp: Date = Date()) -> (interface: Interface, hash: String) {
         let interface = semanticInterface(timestamp: timestamp)
+        return (interface, AccessibilityTrace.Capture.hash(interface))
+    }
+
+    func semanticInterfaceWithHash(
+        for screen: Screen,
+        timestamp: Date = Date()
+    ) -> (interface: Interface, hash: String) {
+        let interface = WireConversion.toSemanticInterface(from: screen, timestamp: timestamp)
         return (interface, AccessibilityTrace.Capture.hash(interface))
     }
 }

@@ -5,7 +5,7 @@ import Foundation
 import AccessibilitySnapshotModel
 import TheScore
 
-/// After an action succeeds, settle visible state, explore semantics, compare captures, and return one action result.
+/// After an action succeeds, settle visible state, observe semantics, compare captures, and return one action result.
 @MainActor
 final class PostActionObservation {
     let stash: TheStash
@@ -25,6 +25,7 @@ final class PostActionObservation {
         let tripwireSignal: TheTripwire.TripwireSignal
         let screenSnapshot: ScreenClassifier.Snapshot
         let screenId: String?
+        let settledObservationSequence: UInt64?
     }
 
     init(stash: TheStash, safecracker: TheSafecracker, tripwire: TheTripwire, navigation: Navigation) {
@@ -38,25 +39,45 @@ final class PostActionObservation {
     /// semantic set; this capture projects that state so deltas compare the
     /// whole discovered interface rather than the latest viewport parse.
     func captureSemanticState() -> BeforeState {
-        let snapshot = stash.selectElements()
-        let (interface, interfaceHash) = stash.semanticInterfaceWithHash()
-        let tripwireSignal = tripwire.tripwireSignal()
+        captureSemanticState(
+            from: stash.currentScreen,
+            tripwireSignal: tripwire.tripwireSignal(),
+            settledObservationSequence: stash.latestSettledSemanticObservation?.sequence
+        )
+    }
+
+    func captureSemanticState(from observation: TheStash.SettledSemanticObservation) -> BeforeState {
+        captureSemanticState(
+            from: observation.screen,
+            tripwireSignal: observation.tripwireSignal,
+            settledObservationSequence: observation.sequence
+        )
+    }
+
+    func captureSemanticState(
+        from screen: Screen,
+        tripwireSignal: TheTripwire.TripwireSignal,
+        settledObservationSequence: UInt64?
+    ) -> BeforeState {
+        let snapshot = stash.selectElements(in: screen)
+        let (interface, interfaceHash) = stash.semanticInterfaceWithHash(for: screen)
         let capture = makeTraceCapture(interface: interface, sequence: 0, tripwireSignal: tripwireSignal)
         return BeforeState(
             snapshot: snapshot,
             elements: snapshot.map(\.element),
-            hierarchy: stash.currentHierarchy,
+            hierarchy: screen.liveCapture.hierarchy,
             interface: interface,
             interfaceHash: interfaceHash,
-            semanticHash: stash.semanticHash,
+            semanticHash: screen.semantic.semanticHash,
             capture: capture,
             tripwireSignal: tripwireSignal,
-            screenSnapshot: ScreenClassifier.snapshot(of: stash),
-            screenId: stash.lastScreenId
+            screenSnapshot: ScreenClassifier.snapshot(of: screen),
+            screenId: screen.id,
+            settledObservationSequence: settledObservationSequence
         )
     }
 
-    /// Settle after an action, explore reachable semantics, diff against before-state, and return enriched ActionResult.
+    /// Settle after an action, consume semantic discovery, diff against before-state, and return enriched ActionResult.
     func actionResultWithDelta(
         success: Bool,
         method: ActionMethod,
@@ -94,10 +115,10 @@ final class PostActionObservation {
             return builder.failure(errorKind: .actionFailed, payload: payload)
         }
 
-        stash.recordVisiblePageObservation(afterScreen)
-        _ = await navigation.exploreAndPrune()
-
-        let finalState = captureSemanticState()
+        stash.recordSettledSemanticObservation(afterScreen)
+        let finalState = await semanticStateAfterDiscovery(
+            after: stash.latestSettledSemanticObservation?.sequence
+        ) ?? captureSemanticState()
         let finalClassification = ScreenClassifier.classify(
             before: before.screenSnapshot,
             after: finalState.screenSnapshot
@@ -215,9 +236,6 @@ final class PostActionObservation {
         return AccessibilityTrace(captures: [parent.capture, capture])
     }
 
-    /// A Tripwire tick is permission to parse visible state, not to tickle
-    /// scroll views. Full exploration is reserved for screen changes and
-    /// explicit interface observation.
     func semanticStateAfterVisibleRefresh(baseline: BeforeState) async -> BeforeState {
         var current = captureSemanticState()
         let classification = ScreenClassifier.classify(
@@ -226,9 +244,16 @@ final class PostActionObservation {
         )
         guard classification.isScreenChange else { return current }
 
-        _ = await navigation.exploreAndPrune()
-        current = captureSemanticState()
-        return current
+        return await semanticStateAfterDiscovery(after: current.settledObservationSequence) ?? current
+    }
+
+    func semanticStateAfterDiscovery(after sequence: UInt64?) async -> BeforeState? {
+        guard let observation = await stash.settledSemanticObservation(
+            scope: .discovery,
+            after: sequence,
+            timeout: 2.0
+        ) else { return nil }
+        return captureSemanticState(from: observation)
     }
 
     func currentSemanticState(baseline: BeforeState? = nil) async -> BeforeState? {

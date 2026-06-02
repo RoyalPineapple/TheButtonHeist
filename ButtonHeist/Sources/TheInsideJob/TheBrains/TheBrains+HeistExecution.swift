@@ -9,15 +9,13 @@ extension TheBrains {
     struct HeistExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
         let wait: @MainActor (WaitStep) async -> HeistWaitReceipt
-        let observeSemanticState: @MainActor (HeistSemanticObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistSemanticObservation?
+        let observeSemanticState: @MainActor (SemanticObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistSemanticObservation?
         let recordDeliveredObservationAfterStep: @MainActor () async -> Void
 
         @MainActor
         static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
             let semanticObservations = HeistSemanticObservations(
                 stash: brains.stash,
-                tripwire: brains.tripwire,
-                navigation: brains.navigation,
                 postActionObservation: brains.postActionObservation
             )
             return HeistExecutionRuntime(
