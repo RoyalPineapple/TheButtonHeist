@@ -94,7 +94,7 @@ final class PostActionObservation {
             return builder.failure(errorKind: .actionFailed, payload: payload)
         }
 
-        stash.commitObservedVisiblePage(afterScreen)
+        stash.recordVisiblePageObservation(afterScreen)
         _ = await navigation.exploreAndPrune()
 
         let finalState = captureSemanticState()
@@ -231,6 +231,33 @@ final class PostActionObservation {
         return current
     }
 
+    func currentSemanticState(baseline: BeforeState? = nil) async -> BeforeState? {
+        guard stash.recordVisibleSemanticObservation() != nil else { return nil }
+        if let baseline {
+            return await semanticStateAfterVisibleRefresh(baseline: baseline)
+        }
+        return captureSemanticState()
+    }
+
+    func settledSemanticState(after baseline: BeforeState, timeout: Double?) async -> BeforeState? {
+        let settleSession = SettleSession.live(
+            stash: stash,
+            tripwire: tripwire,
+            timeoutMs: semanticSettleTimeoutMs(timeout)
+        )
+        let settle = await settleSession.run(
+            start: CFAbsoluteTimeGetCurrent(),
+            baselineTripwireSignal: baseline.tripwireSignal
+        )
+        guard settle.outcome.didSettleCleanly else { return nil }
+        if let screen = settle.finalScreen {
+            stash.recordSettledSemanticObservation(screen)
+        } else if stash.recordVisibleSemanticObservation() == nil {
+            return nil
+        }
+        return await semanticStateAfterVisibleRefresh(baseline: baseline)
+    }
+
     private func resolvedSettleOutcome(
         _ settleOutcome: SettleSession.Outcome?,
         baseline: BeforeState
@@ -250,7 +277,13 @@ final class PostActionObservation {
         if usedInjectedSettleOutcome {
             return settleResult.finalScreen
         }
-        return settleResult.finalScreen ?? stash.parseVisibleObservationForSettle()
+        return settleResult.finalScreen ?? stash.semanticObservationForSettle()
+    }
+
+    private func semanticSettleTimeoutMs(_ timeout: Double?) -> Int {
+        guard let timeout else { return SettleSession.defaultTimeoutMs }
+        guard timeout > 0 else { return 1 }
+        return max(1, Int(min(timeout, 1.0) * 1000))
     }
 
     private func transientElements(

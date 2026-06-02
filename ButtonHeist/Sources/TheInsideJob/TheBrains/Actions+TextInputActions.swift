@@ -72,7 +72,7 @@ extension Actions {
         }
 
         guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return .failure(.typeText, message: "Cancelled") }
-        stash.commitVisibleObservation()
+        stash.recordVisibleSemanticObservation()
 
         var fieldValue: String?
         if let elementTarget {

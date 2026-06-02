@@ -8,27 +8,30 @@ extension TheBrains {
 
     struct HeistExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
-        let wait: @MainActor (WaitStep) async -> ActionResult
-        let observePredicate: @MainActor (HeistPredicateObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistPredicateObservation?
-        let settleRefreshRecordBaseline: @MainActor () async -> Void
+        let wait: @MainActor (WaitStep) async -> HeistWaitReceipt
+        let observeSemanticState: @MainActor (HeistSemanticObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistSemanticObservation?
+        let recordDeliveredObservationAfterStep: @MainActor () async -> Void
 
+        @MainActor
         static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
-            HeistExecutionRuntime(
+            let semanticObservations = HeistSemanticObservations(
+                stash: brains.stash,
+                tripwire: brains.tripwire,
+                navigation: brains.navigation,
+                postActionObservation: brains.postActionObservation
+            )
+            return HeistExecutionRuntime(
                 execute: { command in
                     await brains.executeCommand(command)
                 },
                 wait: { waitStep in
-                    await brains.performWait(target: WaitTarget(
-                        predicate: waitStep.predicate,
-                        timeout: waitStep.timeout
-                    ))
+                    await semanticObservations.waitReceipt(for: waitStep)
                 },
-                observePredicate: { scope, baseline, timeout in
-                    await brains.observeHeistPredicate(scope: scope, baseline: baseline, timeout: timeout)
+                observeSemanticState: { scope, baseline, timeout in
+                    await semanticObservations.observe(scope: scope, baseline: baseline, timeout: timeout)
                 },
-                settleRefreshRecordBaseline: {
-                    _ = await brains.tripwire.waitForAllClear(timeout: 0.5)
-                    if brains.stash.commitVisibleObservation() != nil {
+                recordDeliveredObservationAfterStep: {
+                    if await semanticObservations.refreshDeliveredBaselineAfterStep() {
                         brains.recordSentState()
                     }
                 }
@@ -89,7 +92,7 @@ extension TheBrains {
             }
             stepResults.append(stepResult)
 
-            await runtime.settleRefreshRecordBaseline()
+            await runtime.recordDeliveredObservationAfterStep()
 
             if failedIndex != nil {
                 appendSkippedHeistSteps(

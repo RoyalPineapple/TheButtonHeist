@@ -11,7 +11,7 @@ extension TheBrains {
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime
     ) async -> HeistExecutionStepResult {
-        let receipt = await waitReceipt(for: step, runtime: runtime)
+        let receipt = await runtime.wait(step)
         return HeistExecutionStepResult(
             index: index,
             kind: .wait,
@@ -19,29 +19,6 @@ extension TheBrains {
             expectation: receipt.expectation,
             durationMs: elapsedMilliseconds(since: start)
         )
-    }
-
-    func waitReceipt(
-        for step: WaitStep,
-        runtime: HeistExecutionRuntime
-    ) async -> HeistWaitReceipt {
-        let waitResult = await runtime.wait(step)
-        let expectation = heistWaitExpectation(for: step, result: waitResult)
-        return HeistWaitReceipt(actionResult: waitResult, expectation: expectation)
-    }
-
-    private func heistWaitExpectation(
-        for step: WaitStep,
-        result: ActionResult
-    ) -> ExpectationResult {
-        guard result.success else {
-            return ExpectationResult(
-                met: false,
-                predicate: step.predicate,
-                actual: result.message ?? "failed"
-            )
-        }
-        return step.predicate.validate(against: result)
     }
 }
 

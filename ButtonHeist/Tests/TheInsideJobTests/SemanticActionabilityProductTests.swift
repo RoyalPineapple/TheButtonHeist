@@ -149,7 +149,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
             label: "Explicit Scroll Revealed"
         )
         defer { fixture.cleanup() }
-        let initialScreen = try XCTUnwrap(brains.stash.commitVisibleObservation())
+        let initialScreen = try XCTUnwrap(brains.stash.recordVisibleSemanticObservation())
         let stableId = try XCTUnwrap(firstScrollableStableId(in: initialScreen))
 
         let result = await brains.executeCommand(.scroll(ScrollTarget(
@@ -293,7 +293,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         scrollContainerOverride: HeistContainer? = nil
     ) throws {
         let targetBrains = targetBrains ?? brains!
-        let screen = try XCTUnwrap(targetBrains.stash.commitVisibleObservation())
+        let screen = try XCTUnwrap(targetBrains.stash.recordVisibleSemanticObservation())
         let element = makeElement(
             label: fixture.label,
             identifier: fixture.identifier,

@@ -561,6 +561,71 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
     }
 
+    func testHeistWaitForCasesContinuesAfterUnavailableObservation() async throws {
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Home"])],
+            unavailableObservationCount: 1
+        )
+        let plan = HeistPlan(steps: [
+            .waitForCases(try WaitForCasesStep(
+                timeout: 1,
+                cases: [
+                    PredicateCase(
+                        predicate: .state(.present(ElementPredicate(label: "Home"))),
+                        steps: [.warn(WarnStep(message: "home flow"))]
+                    ),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(step.caseSelection?.selectedCaseIndex, 0)
+        XCTAssertEqual(step.childResults?.map(\.kind), [.warn])
+    }
+
+    func testHeistWaitForCasesZeroTimeoutPassesImmediateObservationBudget() async throws {
+        var observedTimeouts: [Double?] = []
+        let runtime = heistRuntime(
+            observations: [observedState(labels: ["Settings"])],
+            observedTimeouts: { observedTimeouts.append($0) }
+        )
+        let plan = HeistPlan(steps: [
+            .waitForCases(try WaitForCasesStep(
+                timeout: 0,
+                cases: [
+                    PredicateCase(
+                        predicate: .state(.present(ElementPredicate(label: "Home"))),
+                        steps: [.warn(WarnStep(message: "home flow"))]
+                    ),
+                ]
+            )),
+        ])
+
+        _ = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertEqual(observedTimeouts, [0])
+    }
+
+    func testHeistWaitTimeoutZeroEvaluatesImmediately() async throws {
+        let plan = HeistPlan(steps: [
+            .wait(WaitStep(
+                predicate: .state(.present(ElementPredicate(label: "Never Appears"))),
+                timeout: 0
+            )),
+        ])
+
+        let start = CFAbsoluteTimeGetCurrent()
+        let result = await brains.executeHeistPlan(plan)
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+
+        XCTAssertFalse(result.success)
+        XCTAssertLessThan(elapsed, 1)
+    }
+
     func testHeistActionExpectationRequiresWaitObservationEvidence() async throws {
         let expectation = WaitStep(
             predicate: .state(.absent(ElementPredicate(label: "Loading"))),
@@ -593,6 +658,52 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.expectationActionResult?.method, .wait)
         XCTAssertEqual(step.expectation?.met, false)
         XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
+    }
+
+    func testHeistActionExpectationTimeoutZeroUsesDeliveredActionTrace() async throws {
+        let expectation = WaitStep(predicate: .changed(.screen()), timeout: 0)
+        let beforeState = observedState(labels: ["Controls Demo"])
+        let afterState = observedState(labels: ["Buttons & Actions"])
+        let beforeCapture = AccessibilityTrace.Capture(
+            sequence: 1,
+            interface: beforeState.interface,
+            context: AccessibilityTrace.Context(screenId: "controls_demo")
+        )
+        let afterCapture = AccessibilityTrace.Capture(
+            sequence: 2,
+            interface: afterState.interface,
+            parentHash: beforeCapture.hash,
+            context: AccessibilityTrace.Context(screenId: "buttons_actions")
+        )
+        let trace = AccessibilityTrace(captures: [beforeCapture, afterCapture])
+        var waitedSteps: [WaitStep] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { _ in
+                ActionResult(success: true, method: .activate, accessibilityTrace: trace)
+            },
+            wait: { waitStep in
+                waitedSteps.append(waitStep)
+                return ActionResult(success: false, method: .wait, errorKind: .timeout)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .action(try ActionStep(
+                command: .activate(.predicate(ElementPredicate(label: "Controls Demo"))),
+                expectation: expectation
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+
+        XCTAssertTrue(result.success)
+        XCTAssertTrue(waitedSteps.isEmpty)
+        XCTAssertEqual(step.expectationActionResult?.method, .wait)
+        XCTAssertTrue(step.expectationActionResult?.success == true)
+        XCTAssertEqual(step.expectation?.met, true)
+        XCTAssertEqual(step.expectation?.actual, "screenChanged")
     }
 
     func testHeistActionExpectationUsesWaitFailureDiagnostic() async throws {
@@ -632,8 +743,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.expectation?.actual, "timed out after 0.2s — expectation not met")
     }
 
-    func testHeistPredicateObservationScopeMergesRevealTargets() async throws {
-        var observedScopes: [HeistPredicateObservationScope] = []
+    func testHeistSemanticObservationScopeMergesRevealTargets() async throws {
+        var observedScopes: [HeistSemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
             observedScopes: { observedScopes.append($0) }
@@ -661,8 +772,8 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testHeistPredicateObservationScopeUsesFullExploreForAppearanceCases() async throws {
-        var observedScopes: [HeistPredicateObservationScope] = []
+    func testHeistSemanticObservationScopeUsesFullExploreForAppearanceCases() async throws {
+        var observedScopes: [HeistSemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
             observedScopes: { observedScopes.append($0) }
@@ -685,8 +796,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.fullSemanticExplore])
     }
 
-    func testHeistPredicateObservationScopeFullExploreWinsOverReveal() async throws {
-        var observedScopes: [HeistPredicateObservationScope] = []
+    func testHeistSemanticObservationScopeFullExploreWinsOverReveal() async throws {
+        var observedScopes: [HeistSemanticObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
             observedScopes: { observedScopes.append($0) }
@@ -1608,11 +1719,14 @@ final class TheBrainsActionTests: XCTestCase {
         observations: [PostActionObservation.BeforeState],
         execute: (@MainActor (ClientMessage) async -> ActionResult)? = nil,
         wait: (@MainActor (WaitStep) async -> ActionResult)? = nil,
-        observedScopes: (@MainActor (HeistPredicateObservationScope) -> Void)? = nil,
+        observedScopes: (@MainActor (HeistSemanticObservationScope) -> Void)? = nil,
+        observedTimeouts: (@MainActor (Double?) -> Void)? = nil,
+        unavailableObservationCount: Int = 0,
         file: StaticString = #filePath,
         line: UInt = #line
     ) -> TheBrains.HeistExecutionRuntime {
         var remainingObservations = observations
+        var remainingUnavailableObservations = unavailableObservationCount
         return TheBrains.HeistExecutionRuntime(
             execute: { command in
                 if let execute {
@@ -1622,33 +1736,63 @@ final class TheBrainsActionTests: XCTestCase {
             },
             wait: { waitStep in
                 if let wait {
-                    return await wait(waitStep)
+                    return self.heistWaitReceipt(for: waitStep, result: await wait(waitStep))
                 }
                 let state = remainingObservations.first
-                let met = waitStep.predicate.evaluate(currentElements: state?.interface.projectedElements ?? [])
-                return ActionResult(
+                let trace = state.map { AccessibilityTrace(capture: $0.capture) }
+                let met = waitStep.predicate.evaluate(
+                    currentElements: state?.interface.projectedElements ?? [],
+                    delta: trace?.endpointDeltaProjection
+                )
+                let result = ActionResult(
                     success: met.met,
                     method: .wait,
                     message: met.actual,
                     errorKind: met.met ? nil : .timeout,
-                    accessibilityTrace: state.map { AccessibilityTrace(capture: $0.capture) }
+                    accessibilityTrace: trace
                 )
+                return HeistWaitReceipt(actionResult: result, expectation: met)
             },
-            observePredicate: { scope, _, _ in
+            observeSemanticState: { scope, _, timeout in
                 observedScopes?(scope)
+                observedTimeouts?(timeout)
+                if remainingUnavailableObservations > 0 {
+                    remainingUnavailableObservations -= 1
+                    return nil
+                }
                 guard !remainingObservations.isEmpty else {
                     XCTFail("Expected scripted heist case observation", file: file, line: line)
                     return nil
                 }
                 let state = remainingObservations.removeFirst()
-                return HeistPredicateObservation(
+                let trace = AccessibilityTrace(capture: state.capture)
+                return HeistSemanticObservation(
+                    baseline: state,
                     state: state,
+                    accessibilityTrace: trace,
                     delta: nil,
                     summary: "known: \(state.interface.projectedElements.count) elements"
                 )
             },
-            settleRefreshRecordBaseline: {}
+            recordDeliveredObservationAfterStep: {}
         )
+    }
+
+    private func heistWaitReceipt(
+        for step: WaitStep,
+        result: ActionResult
+    ) -> HeistWaitReceipt {
+        let expectation: ExpectationResult
+        if result.success {
+            expectation = step.predicate.validate(against: result)
+        } else {
+            expectation = ExpectationResult(
+                met: false,
+                predicate: step.predicate,
+                actual: result.message ?? "failed"
+            )
+        }
+        return HeistWaitReceipt(actionResult: result, expectation: expectation)
     }
 
     private func normalizedActionMessage(

@@ -129,7 +129,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
     @discardableResult
     private func refreshAndRecordSentState() -> Bool {
-        guard insideJob.brains.stash.commitVisibleObservation() != nil else { return false }
+        guard insideJob.brains.stash.recordVisibleSemanticObservation() != nil else { return false }
         insideJob.brains.recordSentState()
         return true
     }
@@ -406,7 +406,7 @@ final class WaitForIntegrationTests: XCTestCase {
         visible.accessibilityValue = "Old"
         defer { visible.removeFromSuperview() }
 
-        guard insideJob.brains.stash.commitVisibleObservation() != nil else {
+        guard insideJob.brains.stash.recordVisibleSemanticObservation() != nil else {
             throw XCTSkip("No live hierarchy available for wait_for_change memory test")
         }
 

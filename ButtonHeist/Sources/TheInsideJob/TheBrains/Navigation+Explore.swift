@@ -20,7 +20,7 @@ extension Navigation {
         let startTime = CACurrentMediaTime()
         var exploration = SemanticExploration(baseline: stash.explorationBaseline())
 
-        exploration.absorb(stash.commitVisibleObservation())
+        exploration.absorb(stash.recordVisibleSemanticObservation())
 
         if let target, hasTerminalExplorationResolution(target) {
             return exploration.finish(startTime: startTime)
