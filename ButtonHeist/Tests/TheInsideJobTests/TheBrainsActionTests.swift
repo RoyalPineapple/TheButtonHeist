@@ -19,6 +19,52 @@ private final class RefusingActivationView: UIView {
     }
 }
 
+@MainActor
+private final class ActionTextInputKeyboardImpl: NSObject {
+    private final class TextInputDelegate: NSObject, UIKeyInput {
+        var hasText: Bool { false }
+        func insertText(_ text: String) {}
+        func deleteBackward() {}
+    }
+
+    private let inputDelegate = TextInputDelegate()
+    private weak var textField: UITextField?
+    private let onInput: @MainActor () -> Void
+
+    init(textField: UITextField, onInput: @escaping @MainActor () -> Void) {
+        self.textField = textField
+        self.onInput = onInput
+    }
+
+    @objc(delegate)
+    func delegate() -> AnyObject? {
+        inputDelegate
+    }
+
+    @objc(addInputString:)
+    func addInputString(_ text: NSString) {
+        let nextValue = (textField?.text ?? "") + (text as String)
+        textField?.text = nextValue
+        textField?.accessibilityValue = nextValue
+        onInput()
+    }
+
+    @objc(taskQueue)
+    func taskQueue() -> AnyObject? {
+        self
+    }
+
+    @objc(waitUntilAllTasksAreFinished)
+    func waitUntilAllTasksAreFinished() {}
+
+    func bridge() -> KeyboardBridge {
+        KeyboardBridge(
+            impl: self,
+            textInjection: UIKeyboardImplTextInjection(impl: self)
+        )
+    }
+}
+
 private final class CustomActionTargetObject: NSObject {
     private(set) var invocationCount = 0
 
@@ -307,6 +353,46 @@ final class TheBrainsActionTests: XCTestCase {
             "actions=[]",
             "try retarget an element whose actions include activate",
         ])
+    }
+
+    func testExecuteCommandFailedActivateCarriesPostActionTraceLikeSuccessfulAction() async throws {
+        brains.tripwire.startPulse()
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+
+        let successful = ActionActivationOverrideView(frame: CGRect(x: 40, y: 140, width: 220, height: 44))
+        successful.isAccessibilityElement = true
+        successful.accessibilityLabel = "Trace Success"
+        successful.accessibilityIdentifier = "trace_success"
+        successful.accessibilityTraits = .button
+        rootView.addSubview(successful)
+
+        let failing = UIView(frame: CGRect(x: 40, y: 220, width: 220, height: 44))
+        failing.isAccessibilityElement = true
+        failing.accessibilityLabel = "Trace Failure"
+        failing.accessibilityIdentifier = "trace_failure"
+        rootView.addSubview(failing)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            brains.stopSemanticObservation()
+            brains.tripwire.stopPulse()
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+        await brains.tripwire.yieldFrames(3)
+
+        let success = await brains.executeCommand(.activate(.predicate(ElementPredicate(identifier: "trace_success"))))
+        XCTAssertTrue(success.success, success.message ?? "activate failed")
+        XCTAssertNotNil(success.accessibilityTrace?.captures.last)
+
+        let failure = await brains.executeCommand(.activate(.predicate(ElementPredicate(identifier: "trace_failure"))))
+        XCTAssertFalse(failure.success)
+        XCTAssertEqual(failure.method, .activate)
+        let afterCapture = try XCTUnwrap(failure.accessibilityTrace?.captures.last)
+        XCTAssertTrue(afterCapture.interface.projectedElements.contains {
+            $0.identifier == "trace_failure"
+        })
     }
 
     func testExecuteActivateBlocksDisabledElementWithActivationOverride() async {
@@ -1052,7 +1138,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertNil(step.childResults)
     }
 
-    func testHeistForEachReexecutesOrdinalZeroForEachInitialMatch() async throws {
+    func testHeistForEachBindsOrdinalTargetForEachInitialMatch() async throws {
         let matching = ElementPredicate(label: "Delete")
         var executedCommands: [ClientMessage] = []
         let initialState = observedState(elements: [
@@ -1085,10 +1171,63 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.iterationCount, 3)
         XCTAssertEqual(executedCommands, [
             .activate(.predicate(matching, ordinal: 0)),
-            .activate(.predicate(matching, ordinal: 0)),
-            .activate(.predicate(matching, ordinal: 0)),
+            .activate(.predicate(matching, ordinal: 1)),
+            .activate(.predicate(matching, ordinal: 2)),
         ])
         XCTAssertEqual(step.childResults?.map(\.kind), [.action, .action, .action])
+    }
+
+    func testHeistForEachMutationFailureUsesNormalTargetResolution() async throws {
+        let matching = ElementPredicate(label: "Delete")
+        var executedCommands: [ClientMessage] = []
+        let initialState = observedState(elements: [
+            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
+            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
+        ])
+        let runtime = heistRuntime(
+            observations: [initialState],
+            execute: { command in
+                executedCommands.append(command)
+                guard case .activate(let target) = command else {
+                    return ActionResult(success: true, method: .activate)
+                }
+                guard self.brains.stash.resolveTarget(target).resolved != nil else {
+                    return ActionResult(
+                        success: false,
+                        method: .activate,
+                        message: self.brains.stash.resolveTarget(target).diagnostics,
+                        errorKind: .elementNotFound
+                    )
+                }
+                self.installScreen(elements: [
+                    (self.makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
+                ])
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .forEach(try ForEachStep(
+                matching: matching,
+                limit: 10,
+                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+        let step = try XCTUnwrap(heist.steps.first)
+        let forEachResult = try XCTUnwrap(step.forEachResult)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(forEachResult.matchedCount, 2)
+        XCTAssertEqual(forEachResult.iterationCount, 2)
+        XCTAssertEqual(forEachResult.failureReason, "iteration 1 failed")
+        XCTAssertEqual(executedCommands, [
+            .activate(.predicate(matching, ordinal: 0)),
+            .activate(.predicate(matching, ordinal: 1)),
+        ])
+        XCTAssertEqual(step.childResults?.last?.actionResult?.errorKind, .elementNotFound)
+        XCTAssertTrue(step.childResults?.last?.actionResult?.message?.contains("ordinal 1 requested but only 1 match found") == true)
     }
 
     func testHeistForEachBodyFailureStopsHeistAndSkipsFollowingTopLevelSteps() async throws {
@@ -1186,6 +1325,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands.first, .activate(.predicate(matching, ordinal: 0)))
         XCTAssertEqual(waitedSteps.first?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 0))))
+        XCTAssertEqual(executedCommands.last, .activate(.predicate(matching, ordinal: 1)))
+        XCTAssertEqual(waitedSteps.last?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 1))))
     }
 
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
@@ -1312,6 +1453,48 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertTrue(result.success, result.message ?? "activate failed")
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(liveObject.activationCount, 1)
+    }
+
+    func testExecuteTypeTextReportsFinalValueFromTextInputPostcondition() async throws {
+        brains.tripwire.startPulse()
+        let rootView = UIView(frame: UIScreen.main.bounds)
+        rootView.backgroundColor = .white
+
+        let textField = UITextField(frame: CGRect(x: 48, y: 180, width: 240, height: 44))
+        textField.borderStyle = .roundedRect
+        textField.isAccessibilityElement = true
+        textField.accessibilityLabel = "Message"
+        textField.accessibilityIdentifier = "message_field"
+        textField.accessibilityValue = ""
+        rootView.addSubview(textField)
+
+        let window = try installModalWindow(rootView: rootView)
+        defer {
+            brains.stopSemanticObservation()
+            brains.tripwire.stopPulse()
+            window.rootViewController?.view.accessibilityViewIsModal = false
+            window.isHidden = true
+        }
+
+        let keyboardImpl = ActionTextInputKeyboardImpl(textField: textField) { [stash = brains.stash] in
+            stash.markDirtyFromTripwire()
+        }
+        brains.safecracker.keyboardBridgeProvider = { keyboardImpl.bridge() }
+        await brains.tripwire.yieldFrames(3)
+
+        let result = await brains.executeCommand(.typeText(TypeTextTarget(
+            text: "hello",
+            elementTarget: .predicate(ElementPredicate(identifier: "message_field"))
+        )))
+
+        XCTAssertTrue(result.success, result.message ?? "type_text failed")
+        XCTAssertEqual(result.method, .typeText)
+        XCTAssertEqual(textField.text, "hello")
+        guard case .value(let value) = result.payload else {
+            XCTFail("Expected final text value payload, got \(String(describing: result.payload))")
+            return
+        }
+        XCTAssertEqual(value, "hello")
     }
 
     func testExecuteTypeTextWithoutActiveInputReportsFocusState() async {
