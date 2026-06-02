@@ -36,20 +36,10 @@ extension TheBrains {
         guard actionResult.success else { return nil }
         guard let expectation = step.expectation else { return nil }
 
-        let waitResult = await runtime.wait(expectation)
-        guard waitResult.success else {
-            return HeistExpectationReceipt(
-                actionResult: waitResult,
-                expectation: ExpectationResult(
-                    met: false,
-                    predicate: expectation.predicate,
-                    actual: waitResult.message ?? "failed"
-                )
-            )
-        }
+        let waitReceipt = await waitReceipt(for: expectation, runtime: runtime)
         return HeistExpectationReceipt(
-            actionResult: waitResult,
-            expectation: expectation.predicate.validate(against: waitResult)
+            actionResult: waitReceipt.actionResult,
+            expectation: waitReceipt.expectation
         )
     }
 }

@@ -166,7 +166,7 @@ enum SettleOutcome: Equatable {
         timeoutMs: Int = SettleSession.defaultTimeoutMs
     ) -> SettleSession {
         SettleSession(
-            parseProvider: { stash.parse() },
+            parseProvider: { stash.parseVisibleObservationForSettle() },
             tripwireSignalProvider: { tripwire.tripwireSignal() },
             timeoutMs: timeoutMs
         )

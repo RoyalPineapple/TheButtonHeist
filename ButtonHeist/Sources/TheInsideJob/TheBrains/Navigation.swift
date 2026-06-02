@@ -93,7 +93,7 @@ final class Navigation {
     /// need different answers:
     ///
     /// 1. `SettleSwipeLoopState` (here) — visible heistId set + content-space
-    ///    anchor signature, interleaved frame-by-frame with `stash.refresh()`.
+    ///    anchor signature, interleaved frame-by-frame with Stash visible observations.
     ///    Answers "did the swipe move us, and has the visible set stopped
     ///    accepting new heistIds?" — the only signal that distinguishes
     ///    spring-bounce-then-settle from edge-rejected gestures.

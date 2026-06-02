@@ -632,7 +632,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.expectation?.actual, "timed out after 0.2s — expectation not met")
     }
 
-    func testHeistCaseObservationScopeMergesRevealTargets() async throws {
+    func testHeistPredicateObservationScopeMergesRevealTargets() async throws {
         var observedScopes: [HeistPredicateObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Home"])],
@@ -661,7 +661,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
     }
 
-    func testHeistCaseObservationScopeUsesFullExploreForAppearanceCases() async throws {
+    func testHeistPredicateObservationScopeUsesFullExploreForAppearanceCases() async throws {
         var observedScopes: [HeistPredicateObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
@@ -685,7 +685,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(observedScopes, [.fullSemanticExplore])
     }
 
-    func testHeistCaseObservationScopeFullExploreWinsOverReveal() async throws {
+    func testHeistPredicateObservationScopeFullExploreWinsOverReveal() async throws {
         var observedScopes: [HeistPredicateObservationScope] = []
         let runtime = heistRuntime(
             observations: [observedState(labels: ["Loading"])],
@@ -1634,14 +1634,14 @@ final class TheBrainsActionTests: XCTestCase {
                     accessibilityTrace: state.map { AccessibilityTrace(capture: $0.capture) }
                 )
             },
-            observeCases: { scope, _, _ in
+            observePredicate: { scope, _, _ in
                 observedScopes?(scope)
                 guard !remainingObservations.isEmpty else {
                     XCTFail("Expected scripted heist case observation", file: file, line: line)
                     return nil
                 }
                 let state = remainingObservations.removeFirst()
-                return HeistCaseObservation(
+                return HeistPredicateObservation(
                     state: state,
                     delta: nil,
                     summary: "known: \(state.interface.projectedElements.count) elements"

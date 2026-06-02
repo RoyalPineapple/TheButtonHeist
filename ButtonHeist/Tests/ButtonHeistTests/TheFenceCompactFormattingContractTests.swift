@@ -95,4 +95,50 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertTrue(output.contains("[expectations: 1/1 met]"), output)
     }
 
+    func testCompactHeistFormattingReportsFailStepMessage() {
+        let plan = HeistPlan(steps: [.fail(FailStep(message: "Unknown screen"))])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .fail,
+                    message: "Unknown screen",
+                    durationMs: 1,
+                    stopsHeist: true
+                ),
+            ],
+            totalTimingMs: 1,
+            failedIndex: 0
+        )
+
+        let output = FenceResponse.heistExecution(plan: plan, result: result).compactFormatted()
+
+        XCTAssertTrue(output.contains("[0] fail -> error: Unknown screen"), output)
+    }
+
+    func testPublicHeistJSONReportsFailStepMessage() {
+        let plan = HeistPlan(steps: [.fail(FailStep(message: "Unknown screen"))])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .fail,
+                    message: "Unknown screen",
+                    durationMs: 1,
+                    stopsHeist: true
+                ),
+            ],
+            totalTimingMs: 1,
+            failedIndex: 0
+        )
+        let response = FenceResponse.heistExecution(plan: plan, result: result)
+
+        let json = publicJSONObject(response)
+        let results = json["results"] as? [[String: Any]]
+
+        XCTAssertEqual(json["status"] as? String, "partial")
+        XCTAssertEqual(results?.first?["status"] as? String, "error")
+        XCTAssertEqual(results?.first?["message"] as? String, "Unknown screen")
+    }
+
 }

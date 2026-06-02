@@ -4,7 +4,7 @@ import Foundation
 
 import TheScore
 
-struct HeistCaseObservation {
+struct HeistPredicateObservation {
     let state: PostActionObservation.BeforeState
     let delta: AccessibilityTrace.Delta?
     let summary: String
@@ -32,11 +32,11 @@ enum HeistPredicateObservationScope: Equatable {
 }
 
 extension TheBrains {
-    func observeHeistCases(
+    func observeHeistPredicate(
         scope: HeistPredicateObservationScope,
         baseline: PostActionObservation.BeforeState?,
         timeout: Double?
-    ) async -> HeistCaseObservation? {
+    ) async -> HeistPredicateObservation? {
         let baseline = baseline ?? postActionObservation.captureSemanticState()
         guard var current = await settledVisibleState(after: baseline, timeout: timeout) else {
             return nil
@@ -59,7 +59,7 @@ extension TheBrains {
         }
 
         let trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: baseline)
-        return HeistCaseObservation(
+        return HeistPredicateObservation(
             state: current,
             delta: trace.endpointDeltaProjection,
             summary: heistObservationSummary(current)
@@ -81,8 +81,8 @@ extension TheBrains {
         )
         guard settle.outcome.didSettleCleanly else { return nil }
         if let screen = settle.finalScreen {
-            stash.commitVisibleRefresh(screen)
-        } else if refresh() == nil {
+            stash.commitSettledVisibleObservation(screen)
+        } else if stash.commitVisibleObservation() == nil {
             return nil
         }
         return await postActionObservation.semanticStateAfterVisibleRefresh(baseline: baseline)

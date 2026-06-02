@@ -135,7 +135,7 @@ final class TheGetaway {
     func handleScreen(requestId: String? = nil, respond: @escaping (Data) -> Void) {
         insideJobLogger.debug("Screen requested")
 
-        guard brains.refresh() != nil else {
+        guard brains.stash.commitVisibleObservation() != nil else {
             sendMessage(.error(ServerError(kind: .general, message: "Could not access accessibility tree")), requestId: requestId, respond: respond)
             return
         }

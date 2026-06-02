@@ -94,7 +94,7 @@ final class PostActionObservation {
             return builder.failure(errorKind: .actionFailed, payload: payload)
         }
 
-        stash.commitVisiblePage(afterScreen)
+        stash.commitObservedVisiblePage(afterScreen)
         _ = await navigation.exploreAndPrune()
 
         let finalState = captureSemanticState()
@@ -250,7 +250,7 @@ final class PostActionObservation {
         if usedInjectedSettleOutcome {
             return settleResult.finalScreen
         }
-        return settleResult.finalScreen ?? stash.parse()
+        return settleResult.finalScreen ?? stash.parseVisibleObservationForSettle()
     }
 
     private func transientElements(

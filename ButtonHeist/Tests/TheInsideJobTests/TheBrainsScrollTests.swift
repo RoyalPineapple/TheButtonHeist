@@ -52,7 +52,7 @@ final class TheBrainsScrollTests: XCTestCase {
         window.layoutIfNeeded()
         await brains.tripwire.yieldFrames(3)
 
-        guard brains.refresh() != nil else {
+        guard brains.stash.commitVisibleObservation() != nil else {
             throw XCTSkip("No live hierarchy available for UIPageViewController regression test")
         }
 
@@ -969,7 +969,7 @@ final class TheBrainsScrollTests: XCTestCase {
             window.isHidden = true
         }
         await brains.tripwire.yieldFrames(3)
-        guard brains.refresh() != nil else {
+        guard brains.stash.commitVisibleObservation() != nil else {
             throw XCTSkip("No live hierarchy available for scroll_to_visible post-reveal regression test")
         }
         if !brains.stash.matchScreenElements(ElementPredicate(label: "Jump Target"), limit: 1).isEmpty {

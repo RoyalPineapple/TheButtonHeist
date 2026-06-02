@@ -45,7 +45,7 @@ extension Actions {
     private func refreshActivationTarget(
         _ target: ElementTarget
     ) async -> ActivationPolicy.RefreshResult {
-        stash.refresh()
+        stash.commitVisibleObservation()
         switch await navigation.actionability.makeActionable(
             for: target,
             method: .activate,

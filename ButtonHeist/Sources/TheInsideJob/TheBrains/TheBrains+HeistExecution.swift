@@ -9,7 +9,7 @@ extension TheBrains {
     struct HeistExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
         let wait: @MainActor (WaitStep) async -> ActionResult
-        let observeCases: @MainActor (HeistPredicateObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistCaseObservation?
+        let observePredicate: @MainActor (HeistPredicateObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistPredicateObservation?
         let settleRefreshRecordBaseline: @MainActor () async -> Void
 
         static func live(_ brains: TheBrains) -> HeistExecutionRuntime {
@@ -23,12 +23,12 @@ extension TheBrains {
                         timeout: waitStep.timeout
                     ))
                 },
-                observeCases: { scope, baseline, timeout in
-                    await brains.observeHeistCases(scope: scope, baseline: baseline, timeout: timeout)
+                observePredicate: { scope, baseline, timeout in
+                    await brains.observeHeistPredicate(scope: scope, baseline: baseline, timeout: timeout)
                 },
                 settleRefreshRecordBaseline: {
                     _ = await brains.tripwire.waitForAllClear(timeout: 0.5)
-                    if brains.refresh() != nil {
+                    if brains.stash.commitVisibleObservation() != nil {
                         brains.recordSentState()
                     }
                 }
@@ -114,14 +114,7 @@ extension TheBrains {
         case .action(let action):
             return await executeActionStep(action, index: index, start: start, runtime: runtime)
         case .wait(let waitStep):
-            let result = await runtime.wait(waitStep)
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .wait,
-                actionResult: result,
-                expectation: waitStep.predicate.validate(against: result),
-                durationMs: elapsedMilliseconds(since: start)
-            )
+            return await executeWaitStep(waitStep, index: index, start: start, runtime: runtime)
         case .conditional(let conditional):
             return await executeConditionalStep(conditional, index: index, start: start, runtime: runtime)
         case .waitForCases(let waitForCases):
