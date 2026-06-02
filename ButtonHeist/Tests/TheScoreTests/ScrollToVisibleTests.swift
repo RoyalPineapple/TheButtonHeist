@@ -46,14 +46,14 @@ final class ScrollToVisibleTests: XCTestCase {
     func testScrollToVisibleTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"label":"Settings","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll_to_visible target field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "foo""#])
         }
     }
 
     func testScrollToVisibleTargetRejectsPublicStableId() throws {
         let data = Data(#"{"label":"Settings","stableId":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll_to_visible target field "stableId""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "stableId""#])
         }
     }
 
@@ -62,7 +62,7 @@ final class ScrollToVisibleTests: XCTestCase {
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToVisible","payload":{"label":"Settings","containerId":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll_to_visible target field "containerId""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "containerId""#])
         }
     }
 
@@ -71,5 +71,25 @@ final class ScrollToVisibleTests: XCTestCase {
         let data = try JSONEncoder().encode(result)
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
         XCTAssertNil(decoded.payload)
+    }
+
+    private func assertDecodingError(
+        _ error: Error,
+        contains fragments: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case DecodingError.dataCorrupted(let context) = error else {
+            XCTFail("Expected DecodingError.dataCorrupted, got \(error)", file: file, line: line)
+            return
+        }
+        for fragment in fragments {
+            XCTAssertTrue(
+                context.debugDescription.contains(fragment),
+                context.debugDescription,
+                file: file,
+                line: line
+            )
+        }
     }
 }

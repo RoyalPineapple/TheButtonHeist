@@ -99,30 +99,6 @@ extension Navigation {
         }
     }
 
-    func scrollSeedCandidate(
-        for target: ElementTarget,
-        requiredAxis axis: ScrollAxis
-    ) -> ScrollPlan? {
-        guard let resolved = stash.resolveTarget(target).resolved,
-              let scrollView = stash.liveScrollView(for: resolved),
-              !scrollView.bhIsUnsafeForProgrammaticScrolling else {
-            return nil
-        }
-        let availableAxis = Self.scrollableAxis(contentSize: scrollView.contentSize, frame: scrollView.frame)
-        guard availableAxis.contains(axis) else { return nil }
-
-        let container = scrollContainer(for: scrollView)
-            ?? AccessibilityContainer(
-                type: .scrollable(contentSize: AccessibilitySize(scrollView.contentSize)),
-                frame: AccessibilityRect(scrollView.frame)
-            )
-        return ScrollPlan(target: .uiScrollView(scrollView), container: container)
-    }
-
-    private func scrollContainer(for scrollView: UIScrollView) -> AccessibilityContainer? {
-        stash.liveScrollContainer(matching: scrollView)
-    }
-
     /// Build a ScrollableTarget for a container. Geometry comes from the current
     /// accessibility capture; UIKit refs are only dispatch objects for real scroll
     /// actions, not semantic state authority.

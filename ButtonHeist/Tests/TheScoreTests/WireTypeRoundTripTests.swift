@@ -41,7 +41,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testEditActionTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"action":"paste","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(EditActionTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown edit action target field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown edit action target field "foo""#])
         }
     }
 
@@ -50,21 +50,21 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testTypeTextTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"text":"hello","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(TypeTextTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown type text target field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown type text target field "foo""#])
         }
     }
 
     func testSetPasteboardTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"text":"hello","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(SetPasteboardTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown pasteboard target field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown pasteboard target field "foo""#])
         }
     }
 
     func testAuthenticatePayloadRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"token":"secret","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(AuthenticatePayload.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown authenticate payload field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown authenticate payload field "foo""#])
         }
     }
 
@@ -73,7 +73,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"typeText","payload":{"text":"hello","foo":"bar"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown type text target field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown type text target field "foo""#])
         }
     }
 
@@ -113,8 +113,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         """.utf8)
 
         XCTAssertThrowsError(try decoder.decode(CustomActionTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains("Unknown custom action target field"), "\(error)")
-            XCTAssertTrue("\(error)".contains("container"), "\(error)")
+            assertDecodingError(error, contains: ["Unknown custom action target field", "container"])
         }
     }
 
@@ -195,16 +194,14 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testDragTargetRejectsUnknownField() {
         let json = #"{"startX":10,"startY":20,"endX":30,"endY":40,"unexpected":true}"#
         XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("Unknown drag target field"), "\(error)")
-            XCTAssertTrue("\(error)".contains("unexpected"), "\(error)")
+            assertDecodingError(error, contains: ["Unknown drag target field", "unexpected"])
         }
     }
 
     func testSwipeTargetRejectsUnknownField() {
         let json = #"{"label":"list","direction":"down","unexpected":true}"#
         XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("Unknown swipe target field"), "\(error)")
-            XCTAssertTrue("\(error)".contains("unexpected"), "\(error)")
+            assertDecodingError(error, contains: ["Unknown swipe target field", "unexpected"])
         }
     }
 
@@ -251,14 +248,14 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testScrollTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"direction":"down","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll target field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll target field "foo""#])
         }
     }
 
     func testScrollTargetRejectsStableIdPayloadKey() throws {
         let data = Data(#"{"direction":"down","stableId":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll target field "stableId""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll target field "stableId""#])
         }
     }
 
@@ -267,7 +264,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scroll","payload":{"direction":"down","stableId":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll target field "stableId""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll target field "stableId""#])
         }
     }
 
@@ -296,14 +293,14 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testScrollToEdgeTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"edge":"bottom","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll_to_edge target field "foo""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "foo""#])
         }
     }
 
     func testScrollToEdgeTargetRejectsStableIdPayloadKey() throws {
         let data = Data(#"{"edge":"bottom","stableId":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll_to_edge target field "stableId""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "stableId""#])
         }
     }
 
@@ -312,7 +309,7 @@ final class WireTypeRoundTripTests: XCTestCase {
         {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToEdge","payload":{"edge":"bottom","containerId":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try decoder.decode(RequestEnvelope.self, from: data)) { error in
-            XCTAssertTrue("\(error)".contains(#"Unknown scroll_to_edge target field "containerId""#), "\(error)")
+            assertDecodingError(error, contains: [#"Unknown scroll_to_edge target field "containerId""#])
         }
     }
 
@@ -861,5 +858,25 @@ final class WireTypeRoundTripTests: XCTestCase {
     func testWaitTargetChangedResolvedDefaults() {
         let target = WaitTarget(predicate: .changed(.elements))
         XCTAssertEqual(target.resolvedTimeout, 10)
+    }
+
+    private func assertDecodingError(
+        _ error: Error,
+        contains fragments: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard case DecodingError.dataCorrupted(let context) = error else {
+            XCTFail("Expected DecodingError.dataCorrupted, got \(error)", file: file, line: line)
+            return
+        }
+        for fragment in fragments {
+            XCTAssertTrue(
+                context.debugDescription.contains(fragment),
+                context.debugDescription,
+                file: file,
+                line: line
+            )
+        }
     }
 }
