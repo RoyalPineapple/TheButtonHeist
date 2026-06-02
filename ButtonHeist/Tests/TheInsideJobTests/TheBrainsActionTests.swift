@@ -867,6 +867,7 @@ final class TheBrainsActionTests: XCTestCase {
         let stillPresentState = observedState(elements: [
             (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
         ])
+        let waitObservedState = observedState(labels: ["Done"])
         let runtime = heistRuntime(
             observations: [initialState],
             execute: { command in
@@ -879,7 +880,11 @@ final class TheBrainsActionTests: XCTestCase {
             },
             wait: { waitStep in
                 waitedSteps.append(waitStep)
-                return ActionResult(success: true, method: .wait)
+                return ActionResult(
+                    success: true,
+                    method: .wait,
+                    accessibilityTrace: AccessibilityTrace(capture: waitObservedState.capture)
+                )
             }
         )
         let plan = HeistPlan(steps: [
@@ -1625,7 +1630,8 @@ final class TheBrainsActionTests: XCTestCase {
                     success: met.met,
                     method: .wait,
                     message: met.actual,
-                    errorKind: met.met ? nil : .timeout
+                    errorKind: met.met ? nil : .timeout,
+                    accessibilityTrace: state.map { AccessibilityTrace(capture: $0.capture) }
                 )
             },
             observeCases: { scope, _, _ in
