@@ -33,7 +33,6 @@ final class HeistSemanticObservations {
         timeout: Double?
     ) async -> HeistSemanticObservation? {
         let baseline = baseline ?? latestSettledSemanticState()
-        guard let baseline else { return nil }
 
         let observation: TheStash.SettledSemanticObservation?
         if timeout == 0 {
@@ -43,19 +42,27 @@ final class HeistSemanticObservations {
         } else {
             observation = await stash.settledSemanticObservation(
                 scope: scope,
-                after: baseline.settledObservationSequence,
+                after: baseline?.settledObservationSequence,
                 timeout: timeout ?? defaultSemanticObservationTimeout
             )
         }
 
         guard let observation else { return nil }
+        return semanticObservation(from: observation, baseline: baseline)
+    }
+
+    private func semanticObservation(
+        from observation: TheStash.SettledSemanticObservation,
+        baseline: PostActionObservation.BeforeState?
+    ) -> HeistSemanticObservation {
         let current = postActionObservation.captureSemanticState(from: observation)
-        let trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: baseline)
+        let parent = baseline ?? current
+        let trace = postActionObservation.makeClassifiedAccessibilityTrace(after: current, parent: parent)
         return HeistSemanticObservation(
-            baseline: baseline,
+            baseline: parent,
             state: current,
             accessibilityTrace: trace,
-            delta: trace.endpointDeltaProjection,
+            delta: baseline == nil ? nil : trace.endpointDeltaProjection,
             summary: heistObservationSummary(current)
         )
     }
@@ -173,7 +180,7 @@ final class HeistSemanticObservations {
         var builder = ActionResultBuilder(method: .wait)
         builder.accessibilityTrace = observation?.accessibilityTrace
         builder.message = success
-            ? "predicate met after \(elapsedSeconds(since: start))s"
+            ? waitSuccessMessage(for: step.predicate, start: start)
             : waitTimeoutMessage(
                 for: step,
                 expectation: expectation,
@@ -185,6 +192,21 @@ final class HeistSemanticObservations {
             ? builder.success()
             : builder.failure(errorKind: .timeout)
         return HeistWaitReceipt(actionResult: actionResult, expectation: expectation)
+    }
+
+    private func waitSuccessMessage(
+        for predicate: AccessibilityPredicate,
+        start: CFAbsoluteTime
+    ) -> String {
+        let elapsed = elapsedSeconds(since: start)
+        switch predicate {
+        case .state(.present):
+            return elapsed == "0.0" ? "matched immediately" : "matched after \(elapsed)s"
+        case .state(.absent):
+            return "absent confirmed after \(elapsed)s"
+        default:
+            return "predicate met after \(elapsed)s"
+        }
     }
 
     private func waitTimeoutMessage(
