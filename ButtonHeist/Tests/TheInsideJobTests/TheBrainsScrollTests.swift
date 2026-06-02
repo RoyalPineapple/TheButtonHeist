@@ -901,18 +901,31 @@ final class TheBrainsScrollTests: XCTestCase {
         XCTAssertTrue(scrollView.setContentOffsetAnimations.isEmpty)
     }
 
-    func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async throws {
-        let rootView = UIView()
-        rootView.backgroundColor = .white
-        rootView.addSubview(makeButton(label: "Duplicate", frame: CGRect(x: 40, y: 120, width: 260, height: 44)))
-        rootView.addSubview(makeButton(label: "Duplicate", frame: CGRect(x: 40, y: 180, width: 260, height: 44)))
-
-        let window = try installModalWindow(rootView: rootView)
-        defer {
-            window.rootViewController?.view.accessibilityViewIsModal = false
-            window.isHidden = true
-        }
-        await brains.tripwire.yieldFrames(3)
+    func testScrollToVisibleVisibleAmbiguousMatcherFailsClosed() async {
+        let first = makeElement(label: "Duplicate", traits: .button)
+        let second = makeElement(label: "Duplicate", traits: .button)
+        let firstEntry = Screen.ScreenElement(
+            heistId: "duplicate_1",
+            contentSpaceOrigin: nil,
+            element: first
+        )
+        let secondEntry = Screen.ScreenElement(
+            heistId: "duplicate_2",
+            contentSpaceOrigin: nil,
+            element: second
+        )
+        brains.stash.installScreenForTesting(Screen(
+            elements: [
+                firstEntry.heistId: firstEntry,
+                secondEntry.heistId: secondEntry,
+            ],
+            hierarchy: [
+                .element(first, traversalIndex: 0),
+                .element(second, traversalIndex: 1),
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViews: [:]
+        ))
 
         let result = await brains.navigation.executeScrollToVisible(
             ScrollToVisibleTarget(elementTarget: .predicate(ElementPredicate(label: "Duplicate")))

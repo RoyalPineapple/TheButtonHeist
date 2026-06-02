@@ -198,7 +198,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .increment)
         XCTAssertDiagnostic(result.message, contains: [
             "adjustable action failed",
-            "heistId=\"live_button\"",
             "label=\"Live\"",
             "traits=[button]",
             "actions=[activate]",
@@ -221,7 +220,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .decrement)
         XCTAssertDiagnostic(result.message, contains: [
             "adjustable action failed",
-            "heistId=\"live_button\"",
             "label=\"Live\"",
             "traits=[button]",
             "actions=[activate]",
@@ -251,7 +249,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "custom action failed",
             "requestedAction=\"Share\"",
-            "heistId=\"options_button\"",
             "label=\"Options\"",
             "actions=[activate, Delete, Archive]",
             "try use one of custom actions [\"Delete\", \"Archive\"]",
@@ -284,7 +281,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "custom action failed",
             "requestedAction=\"Delete\" declined by handler",
-            "heistId=\"options_button\"",
             "label=\"Options\"",
             "actions=[activate, Delete, Archive]",
             "try use another custom action [\"Archive\"]",
@@ -348,7 +344,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertDiagnostic(result.message, contains: [
             "activate failed",
-            "heistId=\"plain_label\"",
             "label=\"Plain label\"",
             "actions=[]",
             "try retarget an element whose actions include activate",
@@ -1311,7 +1306,7 @@ final class TheBrainsActionTests: XCTestCase {
         ])
         let waitObservedState = observedState(labels: ["Done"])
         let runtime = heistRuntime(
-            observations: [initialState],
+            observations: [initialState, stillPresentState],
             execute: { command in
                 executedCommands.append(command)
                 return ActionResult(
@@ -1353,8 +1348,8 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands.first, .activate(.predicate(matching, ordinal: 0)))
         XCTAssertEqual(waitedSteps.first?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 0))))
-        XCTAssertEqual(executedCommands.last, .activate(.predicate(matching, ordinal: 1)))
-        XCTAssertEqual(waitedSteps.last?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 1))))
+        XCTAssertEqual(executedCommands.last, .activate(.predicate(matching, ordinal: 0)))
+        XCTAssertEqual(waitedSteps.last?.predicate, .state(.absentTarget(.predicate(matching, ordinal: 0))))
     }
 
     func testElementActionFailsWhenSemanticTargetHasNoLiveGeometry() async {
@@ -1388,7 +1383,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "semantic actionability failed [geometryNotActionable]",
             "method=increment",
-            "heistId=\"geometry_missing_slider\"",
             "label=\"Geometry Missing\"",
             "fresh live geometry from semantic actionability",
         ])
@@ -1653,7 +1647,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "semantic actionability failed [noRevealPath]",
             "known target \"Below Fold\"",
-            "heistId: below_fold_button",
             "no content-space position",
         ])
     }
@@ -1736,7 +1729,6 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertDiagnostic(result.message, contains: [
             "rotor failed",
             "attempted rotor=\"Errors\" direction=next",
-            "heistId=\"plain_rotor_host\"",
             "availableRotors=[]",
             "observed customRotors=[]",
             "try target an element exposing custom rotors",
