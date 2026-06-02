@@ -66,7 +66,7 @@ public struct HeistSwiftRenderer {
             }
             return "TypeText(\(SwiftString.literal(target.text)))"
         case .scroll(let target):
-            return renderScroll(target, forEachBinding: forEachBinding)
+            return try renderScroll(target, forEachBinding: forEachBinding)
         case .clientHello, .authenticate, .requestInterface, .ping, .status,
              .increment, .decrement, .performCustomAction, .rotor,
              .longPress, .swipe, .drag, .editAction, .setPasteboard,
@@ -181,18 +181,15 @@ public struct HeistSwiftRenderer {
         return lines
     }
 
-    private func renderScroll(_ target: ScrollTarget, forEachBinding: ElementPredicate?) -> String {
+    private func renderScroll(_ target: ScrollTarget, forEachBinding: ElementPredicate?) throws -> String {
         let direction = ".\(target.direction.rawValue)"
         switch target.selection {
         case .visibleContainer:
             return "Scroll(\(direction))"
         case .element(let elementTarget):
             return "Scroll(\(direction), in: \(renderTarget(elementTarget, forEachBinding: forEachBinding)))"
-        case .container(let containerTarget):
-            if let stableId = containerTarget.stableId {
-                return "Scroll(\(direction), in: .container(\(SwiftString.literal(stableId))))"
-            }
-            return "Scroll(\(direction), in: .container)"
+        case .container:
+            throw HeistSwiftRendererError.unsupportedCommand("scroll container target")
         }
     }
 

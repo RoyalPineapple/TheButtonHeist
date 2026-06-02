@@ -7,7 +7,8 @@ public enum ScrollDirection: String, Codable, Sendable, CaseIterable, Equatable 
 
 /// Target for container-moving scroll commands.
 public struct ScrollContainerTarget: Codable, Sendable, Equatable {
-    /// Stable container id returned by get_interface.
+    /// Internal/debug stable container id. Public scroll commands do not accept
+    /// this as durable input.
     public let stableId: HeistContainer?
 
     public init(stableId: HeistContainer? = nil) {
@@ -108,29 +109,41 @@ extension ScrollTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
+        let hasContainerTarget = container.contains(.container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        switch (containerTarget, elementTarget) {
-        case (.some, .some):
+        switch (hasContainerTarget, elementTarget) {
+        case (true, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
-                debugDescription: "ScrollTarget requires at most one of container or element target"
+                debugDescription: "ScrollTarget does not accept public container handles; target an element inside the intended scroll region"
             )
-        case (.some(let containerTarget), nil):
-            self.selection = .container(containerTarget)
-        case (nil, .some(let elementTarget)):
+        case (true, nil):
+            throw DecodingError.dataCorruptedError(
+                forKey: .container,
+                in: container,
+                debugDescription: "ScrollTarget does not accept public container handles; target an element inside the intended scroll region"
+            )
+        case (false, .some(let elementTarget)):
             self.selection = .element(elementTarget)
-        case (nil, nil):
+        case (false, nil):
             self.selection = .visibleContainer
         }
         self.direction = try container.decode(ScrollDirection.self, forKey: .direction)
     }
 
     public func encode(to encoder: Encoder) throws {
+        if containerTarget != nil {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(
+                    codingPath: encoder.codingPath,
+                    debugDescription: "ScrollTarget does not encode public container handles; target an element inside the intended scroll region"
+                )
+            )
+        }
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(containerTarget, forKey: .container)
         try container.encode(direction, forKey: .direction)
     }
 }
@@ -286,29 +299,41 @@ extension ScrollToEdgeTarget: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let containerTarget = try container.decodeIfPresent(ScrollContainerTarget.self, forKey: .container)
+        let hasContainerTarget = container.contains(.container)
         let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        switch (containerTarget, elementTarget) {
-        case (.some, .some):
+        switch (hasContainerTarget, elementTarget) {
+        case (true, .some):
             throw DecodingError.dataCorruptedError(
                 forKey: .container,
                 in: container,
-                debugDescription: "ScrollToEdgeTarget requires at most one of container or element target"
+                debugDescription: "ScrollToEdgeTarget does not accept public container handles; target an element inside the intended scroll region"
             )
-        case (.some(let containerTarget), nil):
-            self.selection = .container(containerTarget)
-        case (nil, .some(let elementTarget)):
+        case (true, nil):
+            throw DecodingError.dataCorruptedError(
+                forKey: .container,
+                in: container,
+                debugDescription: "ScrollToEdgeTarget does not accept public container handles; target an element inside the intended scroll region"
+            )
+        case (false, .some(let elementTarget)):
             self.selection = .element(elementTarget)
-        case (nil, nil):
+        case (false, nil):
             self.selection = .visibleContainer
         }
         self.edge = try container.decode(ScrollEdge.self, forKey: .edge)
     }
 
     public func encode(to encoder: Encoder) throws {
+        if containerTarget != nil {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(
+                    codingPath: encoder.codingPath,
+                    debugDescription: "ScrollToEdgeTarget does not encode public container handles; target an element inside the intended scroll region"
+                )
+            )
+        }
         if let elementTarget { try elementTarget.encode(to: encoder) }
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(containerTarget, forKey: .container)
         try container.encode(edge, forKey: .edge)
     }
 }

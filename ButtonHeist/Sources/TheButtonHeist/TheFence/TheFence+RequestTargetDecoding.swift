@@ -28,32 +28,12 @@ extension TheFence.CommandArgumentEnvelope {
         return target
     }
 
-    func scrollContainerTarget() throws -> ScrollContainerTarget? {
-        let container = try schemaDictionary("container")
-        try container?.rejectUnknownKeys(allowed: ["stableId"], expected: "valid scroll container field")
-        let stableId = try container?.schemaString("stableId") ?? schemaString("stableId")
-        guard stableId != nil else { return nil }
-        return ScrollContainerTarget(stableId: stableId)
-    }
-
     @ButtonHeistActor
     func scrollContainerSelection() throws -> ScrollContainerSelection {
-        let elementTarget = try decodedElementTarget()
-        let containerTarget = try scrollContainerTarget()
-        switch (containerTarget, elementTarget) {
-        case (.some, .some):
-            throw SchemaValidationError(
-                field: "target",
-                observed: observedDescription,
-                expected: "at most one of container or element target"
-            )
-        case (.some(let containerTarget), nil):
-            return .container(containerTarget)
-        case (nil, .some(let elementTarget)):
+        if let elementTarget = try decodedElementTarget() {
             return .element(elementTarget)
-        case (nil, nil):
-            return .visibleContainer
         }
+        return .visibleContainer
     }
 
     func nonEmptyString(_ key: String) throws -> String {

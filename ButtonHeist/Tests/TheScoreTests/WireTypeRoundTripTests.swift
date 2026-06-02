@@ -202,15 +202,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollTargetContainerRoundTrip() throws {
+    func testScrollTargetRejectsPublicContainerHandle() throws {
         let target = ScrollTarget(
             selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
             direction: .up
         )
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(ScrollTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .container(ScrollContainerTarget(stableId: "main_scroll")))
-        XCTAssertEqual(decoded.direction, .up)
+        XCTAssertThrowsError(try encoder.encode(target))
+
+        let data = Data(#"{"container":{"stableId":"main_scroll"},"direction":"up"}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(ScrollTarget.self, from: data))
     }
 
     func testScrollContainerTargetRejectsCaptureLocalRefAlias() throws {
@@ -234,15 +234,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
-    func testScrollToEdgeTargetContainerRoundTrip() throws {
+    func testScrollToEdgeTargetRejectsPublicContainerHandle() throws {
         let target = ScrollToEdgeTarget(
             selection: .container(ScrollContainerTarget(stableId: "main_scroll")),
             edge: .bottom
         )
-        let data = try encoder.encode(target)
-        let decoded = try decoder.decode(ScrollToEdgeTarget.self, from: data)
-        XCTAssertEqual(decoded.selection, .container(ScrollContainerTarget(stableId: "main_scroll")))
-        XCTAssertEqual(decoded.edge, .bottom)
+        XCTAssertThrowsError(try encoder.encode(target))
+
+        let data = Data(#"{"container":{"stableId":"main_scroll"},"edge":"bottom"}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(ScrollToEdgeTarget.self, from: data))
     }
 
     // MARK: - ProtocolMismatchPayload

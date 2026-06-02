@@ -11,7 +11,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | Drag from one point to another using explicit coordinates or a semantic target. |
 | `edit_action` | Perform an edit action on the current first responder. |
-| `element_search` | Search scrollable content for a semantic element match without performing an action. |
 | `get_interface` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | Read text from the general pasteboard. |
 | `get_screen` | Capture a PNG screenshot with optional inline data and interface state. |
@@ -24,8 +23,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | Execute an inline typed heist plan. |
-| `scroll` | Scroll one page in a selected container or semantic target's owning scroll ancestor. |
-| `scroll_to_edge` | Scroll the selected container, or the target's owning scroll ancestor, to a requested edge. |
+| `scroll` | Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
+| `scroll_to_edge` | Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
 | `scroll_to_visible` | Make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
 | `start_heist` | Start recording replayable heist steps from successful commands. |
@@ -99,19 +98,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `action` | `string` | yes | - | `copy`, `paste`, `cut`, `select`, `selectAll`, `delete` |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `element_search`
-
-Search scrollable content for a semantic element match without performing an action.
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `direction` | `string` | no | - | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -250,14 +236,12 @@ Parameters:
 
 ### `scroll`
 
-Scroll one page in a selected container or semantic target's owning scroll ancestor.
+Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `stableId` | `string` | no | - | - |
-| `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
@@ -265,14 +249,12 @@ Parameters:
 
 ### `scroll_to_edge`
 
-Scroll the selected container, or the target's owning scroll ancestor, to a requested edge.
+Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `stableId` | `string` | no | - | - |
-| `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
 | `expect` | `object` | no | - | - |

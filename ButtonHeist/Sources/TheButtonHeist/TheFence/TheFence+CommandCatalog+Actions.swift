@@ -37,10 +37,10 @@ extension TheFence.Command {
             commandDescriptor(
                 .scroll, requestDecoder: TheFence.decodeScrollRequest,
                 isHeistExecutable: true,
-                parameters: FenceParameterBlocks.scrollContainerTarget + FenceParameterBlocks.elementTarget + [
+                parameters: FenceParameterBlocks.elementTarget + [
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Scroll one page in a selected container or semantic target's owning scroll ancestor."
+                description: "Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor."
             ),
             commandDescriptor(
                 .scrollToVisible, requestDecoder: TheFence.decodeScrollToVisibleRequest,
@@ -50,7 +50,9 @@ extension TheFence.Command {
             ),
             commandDescriptor(
                 .elementSearch, requestDecoder: TheFence.decodeElementSearchRequest,
-                isHeistExecutable: true,
+                cliExposure: .notExposed,
+                mcpExposure: .notExposed,
+                isHeistExecutable: false,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self))] + FenceParameterBlocks.expectation,
                 description: "Search scrollable content for a semantic element match without performing an action."
@@ -58,10 +60,10 @@ extension TheFence.Command {
             commandDescriptor(
                 .scrollToEdge, requestDecoder: TheFence.decodeScrollToEdgeRequest,
                 isHeistExecutable: true,
-                parameters: FenceParameterBlocks.scrollContainerTarget + FenceParameterBlocks.elementTarget + [
+                parameters: FenceParameterBlocks.elementTarget + [
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Scroll the selected container, or the target's owning scroll ancestor, to a requested edge."
+                description: "Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge."
             ),
             commandDescriptor(
                 .activate, requestDecoder: TheFence.decodeActivateRequest,

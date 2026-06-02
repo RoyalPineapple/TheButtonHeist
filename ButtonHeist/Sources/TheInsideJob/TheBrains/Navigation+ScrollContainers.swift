@@ -49,13 +49,13 @@ extension Navigation {
             guard let scrollView = stash.liveScrollView(for: resolved) else {
                 return .failed(
                     "scroll target failed: observed \(targetDescription) with no live scrollable ancestor; "
-                        + "try element_search or target an element inside a scroll container"
+                        + "target an element inside the intended scroll region"
                 )
             }
             guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
                 return .failed(
                     "scroll target failed: observed \(targetDescription) inside a scroll view that is unsafe "
-                        + "for programmatic scrolling; try element_search to use semantic search"
+                        + "for programmatic scrolling; target the element you want made actionable"
                 )
             }
             let availableAxis = Self.scrollableAxis(contentSize: scrollView.contentSize, frame: scrollView.frame)
@@ -63,7 +63,7 @@ extension Navigation {
                 return .failed(
                     "scroll target failed: observed \(targetDescription) inside a scroll view that supports "
                         + "\(Self.axisDescription(availableAxis)); expected \(Self.axisDescription(axis)); "
-                        + "try a matching scroll direction or target an element inside a matching scroll container"
+                        + "try a matching scroll direction or target an element inside the intended scroll region"
                 )
             }
             return .resolved(.uiScrollView(scrollView))
@@ -75,7 +75,7 @@ extension Navigation {
             guard candidates.count == 1, let plan = candidates.first else {
                 return .failed(
                     "\(commandName) ambiguous: multiple visible scroll containers support \(Self.axisDescription(axis)); "
-                        + "specify stableId. Candidates: \(candidateContainerRefs(candidates))"
+                        + "target an element inside the intended scroll region. Candidates: \(candidateContainerRefs(candidates))"
                 )
             }
             return .resolved(plan.target)
@@ -239,7 +239,7 @@ extension Navigation {
         switch stash.resolveTarget(target) {
         case .resolved:
             return "\(commandName) failed: target is known but not currently visible; "
-                + "use scroll_to_visible to reveal it, then retry \(commandName)."
+                + "target the element you want made actionable, or use scroll_to_visible as an explicit viewport inspection step."
         case .ambiguous(let facts):
             return "\(commandName) failed: target is not uniquely resolved in the visible hierarchy; "
                 + "\(TargetResolutionDiagnostics.message(for: .ambiguous(facts)))\nNext: refine the semantic target with "

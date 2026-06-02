@@ -185,12 +185,6 @@ expect_element_label() {
     fi
 }
 
-scrollable_stable_id() {
-    jq -er '
-        [.. | objects | .container? | select(.type == "scrollable") | .stableId | select(. != null)][0]
-    ' || fail "expected a scrollable container stableId"
-}
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --keep-simulator)
@@ -481,15 +475,14 @@ log "Verifying root interface"
 ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_JSON" | json_expect_ok "root get_interface"
 printf '%s' "$ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
-ROOT_SCROLLABLE="$(printf '%s' "$ROOT_JSON" | scrollable_stable_id)"
 
 log "Verifying root scroll"
-ROOT_SCROLL_JSON="$(run_cli_json scroll --stable-id "$ROOT_SCROLLABLE" --direction down)"
+ROOT_SCROLL_JSON="$(run_cli_json scroll --direction down)"
 printf '%s' "$ROOT_SCROLL_JSON" | json_expect_ok "scroll root list"
 SCROLLED_ROOT_JSON="$(run_cli_json get_interface)"
 printf '%s' "$SCROLLED_ROOT_JSON" | json_expect_ok "scrolled root get_interface"
 printf '%s' "$SCROLLED_ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
-ROOT_BOTTOM_JSON="$(run_cli_json scroll_to_edge --stable-id "$ROOT_SCROLLABLE" --edge bottom)"
+ROOT_BOTTOM_JSON="$(run_cli_json scroll_to_edge --edge bottom)"
 printf '%s' "$ROOT_BOTTOM_JSON" | json_expect_ok "scroll root to bottom"
 ROOT_BOTTOM_INTERFACE_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_BOTTOM_INTERFACE_JSON" | json_expect_ok "root bottom get_interface"
@@ -517,11 +510,8 @@ printf '%s' "$ROOT_FROM_ROTOR_JSON" | json_expect_ok "activate back to ButtonHei
 ROOT_AFTER_ROTOR_JSON="$(run_cli_json get_interface)"
 printf '%s' "$ROOT_AFTER_ROTOR_JSON" | json_expect_ok "root after rotor get_interface"
 printf '%s' "$ROOT_AFTER_ROTOR_JSON" | expect_screen_title "ButtonHeist Demo"
-ROOT_SCROLLABLE="$(printf '%s' "$ROOT_AFTER_ROTOR_JSON" | scrollable_stable_id)"
-ROOT_TOP_JSON="$(run_cli_json scroll_to_edge --stable-id "$ROOT_SCROLLABLE" --edge top)"
-printf '%s' "$ROOT_TOP_JSON" | json_expect_ok "scroll root to top"
 
-log "Navigating to Controls Demo"
+log "Navigating to Controls Demo semantically from the scrolled root"
 CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
 printf '%s' "$CONTROLS_ACTION_JSON" | json_expect_ok "activate Controls Demo"
 CONTROLS_JSON="$(run_cli_json get_interface)"

@@ -11,7 +11,6 @@ _Generated from `TheFence.Command.descriptors`._
 | `dismiss_keyboard` | `dismiss_keyboard` | direct | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `drag` | direct | yes | Drag from one point to another using explicit coordinates or a semantic target. |
 | `edit_action` | `edit_action` | direct | yes | Perform an edit action on the current first responder. |
-| `element_search` | `element_search` | direct | yes | Search scrollable content for a semantic element match without performing an action. |
 | `get_interface` | `get_interface` | direct | no | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `get_pasteboard` | direct | no | Read text from the general pasteboard. |
 | `get_screen` | `get_screen` | direct | no | Capture a PNG screenshot with optional inline data and interface state. |
@@ -24,8 +23,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | `run_heist` | direct | no | Execute an inline typed heist plan. |
-| `scroll` | `scroll` | direct | yes | Scroll one page in a selected container or semantic target's owning scroll ancestor. |
-| `scroll_to_edge` | `scroll_to_edge` | direct | yes | Scroll the selected container, or the target's owning scroll ancestor, to a requested edge. |
+| `scroll` | `scroll` | direct | yes | Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
+| `scroll_to_edge` | `scroll_to_edge` | direct | yes | Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
 | `scroll_to_visible` | `scroll_to_visible` | direct | yes | Make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
 | `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
@@ -124,24 +123,6 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `action` | `string` | yes | - | `copy`, `paste`, `cut`, `select`, `selectAll`, `delete` |
-| `expect` | `object` | no | - | - |
-| `timeout` | `number` | no | - | - |
-
-### `element_search`
-
-Search scrollable content for a semantic element match without performing an action.
-
-- CLI: direct command `element_search`
-- MCP: direct tool
-- Heist: yes
-- Connection before dispatch: yes
-
-Parameters:
-
-| Parameter | Type | Required | Default | Values |
-|-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `direction` | `string` | no | - | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -340,7 +321,7 @@ Parameters:
 
 ### `scroll`
 
-Scroll one page in a selected container or semantic target's owning scroll ancestor.
+Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
 
 - CLI: direct command `scroll`
 - MCP: direct tool
@@ -351,8 +332,6 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `stableId` | `string` | no | - | - |
-| `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
@@ -360,7 +339,7 @@ Parameters:
 
 ### `scroll_to_edge`
 
-Scroll the selected container, or the target's owning scroll ancestor, to a requested edge.
+Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
 
 - CLI: direct command `scroll_to_edge`
 - MCP: direct tool
@@ -371,8 +350,6 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `stableId` | `string` | no | - | - |
-| `container` | `object` | no | - | - |
 | `target` | `object` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
 | `expect` | `object` | no | - | - |
