@@ -118,11 +118,11 @@ final class TheBrains {
         guard semanticObservationIsActive else {
             return .failure(.runtimeInactive)
         }
-        guard let observation = await interactionObservation.observeSemanticState(
+        guard await interactionObservation.observeSemanticState(
             scope: .discovery,
             after: nil,
             timeout: 2.0
-        ) else {
+        ) != nil else {
             return .failure(.rootViewUnavailable)
         }
 
