@@ -237,7 +237,7 @@ final class PostActionObservation {
     }
 
     func semanticStateAfterVisibleRefresh(baseline: BeforeState) async -> BeforeState {
-        var current = captureSemanticState()
+        let current = captureSemanticState()
         let classification = ScreenClassifier.classify(
             before: baseline.screenSnapshot,
             after: current.screenSnapshot

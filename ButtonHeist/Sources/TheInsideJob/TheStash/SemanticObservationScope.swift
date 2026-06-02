@@ -24,7 +24,9 @@ final class SemanticObservationSubscription {
     }
 
     deinit {
-        stash?.removeSemanticObservationSubscription(id)
+        MainActor.assumeIsolated {
+            stash?.removeSemanticObservationSubscription(id)
+        }
     }
 }
 

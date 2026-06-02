@@ -94,7 +94,7 @@ extension TheStash {
                     guard timeout > 0 else { return }
                     let nanoseconds = UInt64((timeout * 1_000_000_000).rounded(.up))
                     guard await Task.cancellableSleep(for: .nanoseconds(nanoseconds)) else { return }
-                    await self?.completeSettledSemanticWaiter(id, returning: nil)
+                    self?.completeSettledSemanticWaiter(id, returning: nil)
                 }
             }
             settledSemanticWaiters[id] = SettledSemanticWaiter(
