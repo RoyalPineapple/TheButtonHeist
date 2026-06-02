@@ -13,7 +13,8 @@ final class TheBrains {
 
     // Keep this literal in sync with `FenceResponse.accessibilityTreeUnavailableMessage`;
     // TheFence uses it to enrich wire-shaped `actionFailed` results locally.
-    static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
+    nonisolated static let treeUnavailableMessage = "Could not access accessibility tree: no traversable app windows"
+    nonisolated static let runtimeInactiveMessage = "ButtonHeist runtime is not active; start TheInsideJob before executing commands"
 
     let stash: TheStash
     let safecracker: TheSafecracker
@@ -23,6 +24,7 @@ final class TheBrains {
     let postActionObservation: PostActionObservation
     let interactionObservation: InteractionObservation
     let waitForChangeState = WaitForChangeState()
+    var semanticObservationIsActive = false
 
     enum InterfaceObservation {
         case success(Interface)
@@ -31,12 +33,15 @@ final class TheBrains {
 
     enum InterfaceObservationError: Error, Equatable {
         case rootViewUnavailable
+        case runtimeInactive
         case selection(InterfaceSelectionError)
 
         var message: String {
             switch self {
             case .rootViewUnavailable:
                 return "Could not access root view"
+            case .runtimeInactive:
+                return TheBrains.runtimeInactiveMessage
             case .selection(let error):
                 return error.message
             }
@@ -81,6 +86,12 @@ final class TheBrains {
         return builder.failure(errorKind: .actionFailed)
     }
 
+    func runtimeInactiveResult(method: ActionMethod) -> ActionResult {
+        var builder = ActionResultBuilder(method: method)
+        builder.message = TheBrains.runtimeInactiveMessage
+        return builder.failure(errorKind: .actionFailed)
+    }
+
     // MARK: - Clear
 
     func clearCache() {
@@ -93,17 +104,20 @@ final class TheBrains {
 
     /// Snapshot current state as "last sent" — call after every response to the driver.
     func recordSentState() async {
-        startSemanticObservation()
+        guard semanticObservationIsActive else { return }
         guard let state = await interactionObservation.prepareBeforeState() else { return }
         waitForChangeState.recordDeliveredBaseline(state)
     }
 
     func stopSemanticObservation() {
+        semanticObservationIsActive = false
         stash.stopPassiveSemanticObservation()
     }
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return .failure(.runtimeInactive)
+        }
         guard await stash.settledSemanticObservationEvent(
             scope: .discovery,
             after: nil,

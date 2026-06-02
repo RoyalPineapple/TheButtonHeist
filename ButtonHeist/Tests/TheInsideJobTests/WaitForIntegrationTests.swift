@@ -30,6 +30,7 @@ final class WaitForIntegrationTests: XCTestCase {
         hostView = viewController.view
         insideJob = TheInsideJob(token: "wait-for-test-token")
         insideJob.tripwire.startPulse()
+        insideJob.brains.startSemanticObservation()
     }
 
     override func tearDown() async throws {

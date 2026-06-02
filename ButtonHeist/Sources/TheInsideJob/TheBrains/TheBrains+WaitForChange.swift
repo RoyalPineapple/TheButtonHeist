@@ -7,7 +7,9 @@ import TheScore
 extension TheBrains {
     /// Install one wait predicate, then watch settled changes until a trace-derived expectation matches.
     func executeWaitForChange(timeout: TimeInterval, expectation: AccessibilityPredicate?) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: .wait)
+        }
         let start = CFAbsoluteTimeGetCurrent()
 
         guard let predicate = waitForChangeState.install(

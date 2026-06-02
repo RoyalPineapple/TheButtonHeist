@@ -27,6 +27,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         try await super.setUp()
         brains = TheBrains(tripwire: TheTripwire())
         brains.tripwire.startPulse()
+        brains.startSemanticObservation()
     }
 
     override func tearDown() async throws {
@@ -175,6 +176,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
     ) async throws -> (result: ActionResult, activationCount: Int) {
         let localBrains = TheBrains(tripwire: TheTripwire())
         localBrains.tripwire.startPulse()
+        localBrains.startSemanticObservation()
         defer {
             localBrains.stopSemanticObservation()
             localBrains.tripwire.stopPulse()

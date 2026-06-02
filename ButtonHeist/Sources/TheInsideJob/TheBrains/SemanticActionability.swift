@@ -148,6 +148,21 @@ final class SemanticActionability {
         }
     }
 
+    func makeActionableAfterActivationRetryRefresh(
+        for target: ElementTarget
+    ) async -> SemanticActionabilityResult {
+        recordVisibleObservationForActivationRetry()
+        return await makeActionable(
+            for: target,
+            method: .activate,
+            deallocatedBoundary: "activation retry"
+        )
+    }
+
+    private func recordVisibleObservationForActivationRetry() {
+        stash.recordVisibleSemanticObservation()
+    }
+
     private func placeElementActivationPoint(
         _ actionableTarget: SemanticActionableTarget,
         method: ActionMethod,

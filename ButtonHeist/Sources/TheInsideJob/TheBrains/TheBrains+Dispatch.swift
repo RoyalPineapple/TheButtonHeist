@@ -11,7 +11,6 @@ extension TheBrains {
     /// refresh → snapshot → execute → settle → semantic observation → delta → result.
     /// Returns the ActionResult for TheInsideJob to send.
     func executeCommand(_ message: ClientMessage) async -> ActionResult {
-        startSemanticObservation()
         // Rotor mode holds a single cursor only while consecutive rotor steps
         // run on the same host. Any other interaction exits rotor mode and drops
         // the held cursor.
@@ -44,7 +43,11 @@ extension TheBrains {
         case .drag(let target):
             return await performInteraction(method: .syntheticDrag) { await self.actions.executeDrag(target) }
         case .typeText(let target):
-            return await performInteraction(method: .typeText) { await self.actions.executeTypeText(target) }
+            return await performInteraction(
+                method: .typeText,
+                afterStatePayload: { self.actions.typeTextPayload(for: target, in: $0) },
+                interaction: { await self.actions.executeTypeText(target) }
+            )
         case .scroll(let target):
             return await performInteraction(method: .scroll) { await self.navigation.executeScroll(target) }
         case .scrollToVisible(let target):
@@ -78,9 +81,12 @@ extension TheBrains {
 
     func performInteraction(
         method: ActionMethod,
+        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         interaction: () async -> TheSafecracker.InteractionResult
     ) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: method)
+        }
         guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
@@ -91,6 +97,7 @@ extension TheBrains {
             method: result.method,
             message: result.message,
             payload: result.payload,
+            afterStatePayload: afterStatePayload,
             errorKind: Self.actionErrorKind(for: result),
             before: before
         )
@@ -117,7 +124,9 @@ extension TheBrains {
         direction: ScrollDirection,
         method: ActionMethod
     ) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: method)
+        }
         guard let before = await interactionObservation.prepareBeforeState() else {
             return treeUnavailableResult(method: method)
         }
@@ -134,7 +143,9 @@ extension TheBrains {
     }
 
     func performWait(target: WaitTarget) async -> ActionResult {
-        startSemanticObservation()
+        guard semanticObservationIsActive else {
+            return runtimeInactiveResult(method: .wait)
+        }
         let receipt = await interactionObservation.waitForPredicate(
             WaitStep(predicate: target.predicate, timeout: target.resolvedTimeout)
         )

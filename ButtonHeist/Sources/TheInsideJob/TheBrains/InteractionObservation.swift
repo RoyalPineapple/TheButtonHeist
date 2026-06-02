@@ -6,14 +6,6 @@ import TheScore
 
 private let defaultSemanticObservationTimeout: Double = 1
 
-struct HeistSemanticObservation {
-    let event: TheStash.SettledSemanticObservationEvent
-    let state: PostActionObservation.BeforeState
-    let accessibilityTrace: AccessibilityTrace
-    let delta: AccessibilityTrace.Delta?
-    let summary: String
-}
-
 /// Owns the before/body/after observation contract for executable interactions.
 @MainActor
 final class InteractionObservation {
@@ -60,6 +52,7 @@ final class InteractionObservation {
         method: ActionMethod,
         message: String? = nil,
         payload: ResultPayload? = nil,
+        afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         errorKind: ErrorKind? = nil,
         before: PostActionObservation.BeforeState,
         settleOutcome: SettleSession.Outcome? = nil
@@ -67,28 +60,26 @@ final class InteractionObservation {
         let settleResult = await resolvedSettleOutcome(settleOutcome, baseline: before)
         let didSettle = settleResult.outcome.didSettleCleanly
         if case .cancelled(let cancelMs) = settleResult.outcome {
-            var builder = ActionResultBuilder(method: method, capture: before.capture)
-            builder.message = "cancelled after \(cancelMs)ms"
-            builder.settled = false
-            builder.settleTimeMs = cancelMs
-            return builder.failure(errorKind: .actionFailed, payload: payload)
+            return InteractionObservationProjection.failedActionResult(
+                method: method, capture: before.capture, message: "cancelled after \(cancelMs)ms",
+                payload: payload, settled: false, settleTimeMs: cancelMs
+            )
         }
 
         guard let afterScreen = settleResult.finalScreen else {
-            var builder = ActionResultBuilder(method: method, capture: before.capture)
-            builder.message = "Could not parse post-action accessibility tree"
-            builder.settled = didSettle
-            builder.settleTimeMs = settleResult.outcome.timeMs
-            return builder.failure(errorKind: .actionFailed, payload: payload)
+            return InteractionObservationProjection.failedActionResult(
+                method: method, capture: before.capture, message: "Could not parse post-action accessibility tree",
+                payload: payload, settled: didSettle, settleTimeMs: settleResult.outcome.timeMs
+            )
         }
 
         stash.recordSettledSemanticObservation(afterScreen)
         guard let visibleEvent = stash.latestSettledSemanticObservationEvent else {
-            var builder = ActionResultBuilder(method: method, capture: before.capture)
-            builder.message = "Could not produce post-action settled semantic observation"
-            builder.settled = didSettle
-            builder.settleTimeMs = settleResult.outcome.timeMs
-            return builder.failure(errorKind: .actionFailed, payload: payload)
+            return InteractionObservationProjection.failedActionResult(
+                method: method, capture: before.capture,
+                message: "Could not produce post-action settled semantic observation",
+                payload: payload, settled: didSettle, settleTimeMs: settleResult.outcome.timeMs
+            )
         }
         let finalState = await semanticStateAfterDiscovery(after: visibleEvent.sequence)
             ?? postActionObservation.captureSemanticState(from: visibleEvent.observation)
@@ -100,7 +91,7 @@ final class InteractionObservation {
             afterInterface: finalState.interface,
             parentCapture: before.capture,
             classification: finalClassification,
-            transient: transientElements(
+            transient: InteractionObservationProjection.transientElements(
                 settleResult: settleResult,
                 before: before,
                 final: finalState,
@@ -109,24 +100,18 @@ final class InteractionObservation {
         )
 
         guard let postCapture = trace.captures.last else {
-            return failureActionResult(
-                method: method,
-                message: message,
-                payload: payload,
-                errorKind: .actionFailed,
-                before: before
+            let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
+            return InteractionObservationProjection.failedActionResult(
+                method: method, capture: before.capture, message: message, payload: resolvedPayload
             )
         }
 
-        var builder = ActionResultBuilder(method: method, capture: postCapture)
-        builder.message = message
-        builder.accessibilityTrace = trace
-        builder.settled = didSettle
-        builder.settleTimeMs = settleResult.outcome.timeMs
-        if success {
-            return builder.success(payload: payload)
-        }
-        return builder.failure(errorKind: errorKind ?? .actionFailed, payload: payload)
+        let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
+        return InteractionObservationProjection.actionResult(
+            method: method, capture: postCapture, message: message, payload: resolvedPayload,
+            errorKind: errorKind, accessibilityTrace: trace, settled: didSettle,
+            settleTimeMs: settleResult.outcome.timeMs, success: success
+        )
     }
 
     func waitForPredicate(_ step: WaitStep, initialTrace: AccessibilityTrace? = nil) async -> HeistWaitReceipt {
@@ -142,20 +127,31 @@ final class InteractionObservation {
             actual: "no settled semantic observation available"
         )
 
-        if let initialTraceResult = initialTraceResult(for: step, initialTrace: initialTrace, start: start, timeout: timeout) {
+        if let initialTraceResult = InteractionObservationProjection.initialTraceResult(
+            for: step,
+            initialTrace: initialTrace,
+            timeout: timeout
+        ) {
             lastTrace = initialTraceResult.trace
             lastObservationSummary = initialTraceResult.summary
             lastEvaluation = initialTraceResult.expectation
             observedSequence = stash.latestSettledSemanticObservationEvent?.sequence
             if initialTraceResult.shouldReturn {
-                return initialTraceResult.receipt
+                return waitReceipt(
+                    for: step,
+                    trace: initialTraceResult.trace,
+                    observationSummary: initialTraceResult.summary,
+                    expectation: initialTraceResult.expectation,
+                    start: start,
+                    success: initialTraceResult.expectation.met
+                )
             }
         } else if let initial = await observeSemanticState(scope: step.predicate.observationScope, after: nil, timeout: 0) {
             lastObservation = initial
             lastTrace = initial.accessibilityTrace
             lastObservationSummary = initial.summary
             observedSequence = initial.event.sequence
-            lastEvaluation = evaluate(step.predicate, in: initial)
+            lastEvaluation = InteractionObservationProjection.evaluate(step.predicate, in: initial)
             if lastEvaluation.met {
                 return waitReceipt(
                     for: step,
@@ -200,7 +196,7 @@ final class InteractionObservation {
             lastObservation = observation
             lastTrace = observation.accessibilityTrace
             lastObservationSummary = observation.summary
-            lastEvaluation = evaluate(step.predicate, in: observation)
+            lastEvaluation = InteractionObservationProjection.evaluate(step.predicate, in: observation)
             if lastEvaluation.met {
                 return waitReceipt(
                     for: step,
@@ -226,48 +222,11 @@ final class InteractionObservation {
         (await observeSemanticState(scope: .visible, after: nil, timeout: 0))?.state
     }
 
-    private func initialTraceResult(
-        for step: WaitStep,
-        initialTrace: AccessibilityTrace?,
-        start: CFAbsoluteTime,
-        timeout: Double
-    ) -> (
-        trace: AccessibilityTrace,
-        summary: String?,
-        expectation: ExpectationResult,
-        shouldReturn: Bool,
-        receipt: HeistWaitReceipt
-    )? {
-        guard let initialTrace else { return nil }
-        let expectation = evaluate(step.predicate, in: initialTrace)
-        let shouldReturn = expectation.met || timeout == 0
-        return (
-            trace: initialTrace,
-            summary: traceSummary(initialTrace),
-            expectation: expectation,
-            shouldReturn: shouldReturn,
-            receipt: waitReceipt(
-                for: step,
-                trace: initialTrace,
-                observationSummary: traceSummary(initialTrace),
-                expectation: expectation,
-                start: start,
-                success: expectation.met
-            )
-        )
-    }
-
     private func semanticObservation(
         from event: TheStash.SettledSemanticObservationEvent
     ) -> HeistSemanticObservation {
         let current = postActionObservation.captureSemanticState(from: event.observation)
-        return HeistSemanticObservation(
-            event: event,
-            state: current,
-            accessibilityTrace: event.trace,
-            delta: event.delta,
-            summary: heistObservationSummary(current)
-        )
+        return InteractionObservationProjection.semanticObservation(event: event, state: current)
     }
 
     private func semanticStateAfterDiscovery(after sequence: UInt64?) async -> PostActionObservation.BeforeState? {
@@ -289,73 +248,6 @@ final class InteractionObservation {
         let start = CFAbsoluteTimeGetCurrent()
         let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
         return await settleSession.run(start: start, baselineTripwireSignal: baseline.tripwireSignal)
-    }
-
-    private func transientElements(
-        settleResult: SettleSession.Outcome,
-        before: PostActionObservation.BeforeState,
-        final: PostActionObservation.BeforeState,
-        classification: ScreenClassifier.Classification
-    ) -> [HeistElement] {
-        guard !classification.isScreenChange,
-              !settleResult.events.containsTripwireSignalChange else {
-            return []
-        }
-        return SettleSession.transientElements(
-            seenByKey: settleResult.elementsByKey,
-            baseline: before.elements,
-            final: final.elements
-        ).map { TheStash.WireConversion.convert($0) }
-    }
-
-    private func failureActionResult(
-        method: ActionMethod,
-        message: String?,
-        payload: ResultPayload?,
-        errorKind: ErrorKind?,
-        before: PostActionObservation.BeforeState
-    ) -> ActionResult {
-        let kind = errorKind ?? .actionFailed
-        var builder = ActionResultBuilder(method: method, capture: before.capture)
-        builder.message = message
-        return builder.failure(errorKind: kind, payload: payload)
-    }
-
-    private func evaluate(
-        _ predicate: AccessibilityPredicate,
-        in observation: HeistSemanticObservation
-    ) -> ExpectationResult {
-        predicate.evaluate(
-            currentElements: observation.state.interface.projectedElements,
-            delta: observation.delta
-        )
-    }
-
-    private func evaluate(
-        _ predicate: AccessibilityPredicate,
-        in trace: AccessibilityTrace
-    ) -> ExpectationResult {
-        predicate.evaluate(
-            currentElements: trace.captures.last?.interface.projectedElements ?? [],
-            delta: trace.endpointDeltaProjection
-        )
-    }
-
-    private func traceSummary(_ trace: AccessibilityTrace) -> String? {
-        guard let capture = trace.captures.last else { return nil }
-        var parts = ["known: \(capture.interface.projectedElements.count) elements"]
-        if let screenId = capture.context.screenId {
-            parts.insert("screen: \(screenId)", at: 0)
-        }
-        return parts.joined(separator: "; ")
-    }
-
-    private func heistObservationSummary(_ state: PostActionObservation.BeforeState) -> String {
-        var parts = ["known: \(state.interface.projectedElements.count) elements"]
-        if let screenId = state.screenId {
-            parts.insert("screen: \(screenId)", at: 0)
-        }
-        return parts.joined(separator: "; ")
     }
 
     private func waitReceipt(
@@ -383,68 +275,19 @@ final class InteractionObservation {
         start: CFAbsoluteTime,
         success: Bool
     ) -> HeistWaitReceipt {
-        var builder = ActionResultBuilder(method: .wait)
-        builder.accessibilityTrace = trace
-        builder.message = success
-            ? waitSuccessMessage(for: step.predicate, start: start)
-            : waitTimeoutMessage(
-                for: step,
-                expectation: expectation,
-                observationSummary: observationSummary,
-                start: start
-            )
-
-        let actionResult = success
-            ? builder.success()
-            : builder.failure(errorKind: .timeout)
-        return HeistWaitReceipt(actionResult: actionResult, expectation: expectation)
-    }
-
-    private func waitSuccessMessage(
-        for predicate: AccessibilityPredicate,
-        start: CFAbsoluteTime
-    ) -> String {
-        let elapsed = elapsedSeconds(since: start)
-        switch predicate {
-        case .state(.present):
-            return elapsed == "0.0" ? "matched immediately" : "matched after \(elapsed)s"
-        case .state(.absent):
-            return "absent confirmed after \(elapsed)s"
-        default:
-            return "predicate met after \(elapsed)s"
-        }
-    }
-
-    private func waitTimeoutMessage(
-        for step: WaitStep,
-        expectation: ExpectationResult,
-        observationSummary: String?,
-        start: CFAbsoluteTime
-    ) -> String {
-        let elapsed = elapsedSeconds(since: start)
-        guard let observationSummary else {
-            return [
-                "timed out after \(elapsed)s waiting for heist predicate",
-                "expected: \(step.predicate.description)",
-                "last result: \(expectation.actual ?? "not met")",
-                "last observed: no settled semantic observation available",
-            ].joined(separator: "; ")
-        }
-
-        if let presenceMessage = stash.presenceWaitTimeoutMessage(for: step.predicate, elapsed: elapsed) {
-            return presenceMessage
-        }
-
-        return [
-            "timed out after \(elapsed)s waiting for heist predicate",
-            "expected: \(step.predicate.description)",
-            "last result: \(expectation.actual ?? "not met")",
-            "last observed: \(observationSummary)",
-        ].joined(separator: "; ")
-    }
-
-    private func elapsedSeconds(since start: CFAbsoluteTime) -> String {
-        String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
+        let elapsed = InteractionObservationProjection.elapsedSeconds(since: start)
+        let presenceMessage = success || observationSummary == nil
+            ? nil
+            : stash.presenceWaitTimeoutMessage(for: step.predicate, elapsed: elapsed)
+        return InteractionObservationProjection.waitReceipt(
+            for: step,
+            trace: trace,
+            observationSummary: observationSummary,
+            expectation: expectation,
+            elapsed: elapsed,
+            success: success,
+            presenceTimeoutMessage: presenceMessage
+        )
     }
 }
 

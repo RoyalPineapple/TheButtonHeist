@@ -42,25 +42,6 @@ extension Actions {
         }
     }
 
-    private func refreshActivationTarget(
-        _ target: ElementTarget
-    ) async -> ActivationPolicy.RefreshResult {
-        stash.recordVisibleSemanticObservation()
-        switch await navigation.actionability.makeActionable(
-            for: target,
-            method: .activate,
-            deallocatedBoundary: "activation retry"
-        ) {
-        case .actionable(let actionableTarget):
-            return .resolved(
-                screenElement: actionableTarget.screenElement,
-                liveTarget: actionableTarget.liveTarget
-            )
-        case .failed(let failure):
-            return .failure(failure.interactionResult(commandMethod: .activate))
-        }
-    }
-
     private func interactivityFailure(
         _ context: SemanticActionability.SemanticActionableTarget,
         method: ActionMethod,
@@ -97,7 +78,17 @@ extension Actions {
             await ActivationPolicy(
                 activate: stash.activate,
                 refreshAndResolve: {
-                    await self.refreshActivationTarget(context.target)
+                    switch await self.navigation.actionability.makeActionableAfterActivationRetryRefresh(
+                        for: context.target
+                    ) {
+                    case .actionable(let actionableTarget):
+                        return .resolved(
+                            screenElement: actionableTarget.screenElement,
+                            liveTarget: actionableTarget.liveTarget
+                        )
+                    case .failed(let failure):
+                        return .failure(failure.interactionResult(commandMethod: .activate))
+                    }
                 },
                 syntheticTap: safecracker.tap
             ).apply(to: context.liveTarget)

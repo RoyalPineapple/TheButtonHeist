@@ -14,6 +14,7 @@ final class TheBrainsScrollTests: XCTestCase {
         try await super.setUp()
         brains = TheBrains(tripwire: TheTripwire())
         brains.tripwire.startPulse()
+        brains.startSemanticObservation()
     }
 
     override func tearDown() async throws {

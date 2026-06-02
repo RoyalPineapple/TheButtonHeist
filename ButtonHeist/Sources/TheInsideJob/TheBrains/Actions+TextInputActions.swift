@@ -71,17 +71,16 @@ extension Actions {
             return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic))
         }
 
-        guard await Task.cancellableSleep(for: TheSafecracker.keyboardPollInterval) else { return .failure(.typeText, message: "Cancelled") }
-        stash.recordVisibleSemanticObservation()
+        return .success(method: .typeText)
+    }
 
-        var fieldValue: String?
-        if let elementTarget {
-            if let resolved = stash.resolveTarget(elementTarget).resolved {
-                fieldValue = resolved.element.value
-            }
-        }
-
-        return .success(method: .typeText, payload: fieldValue.map(ResultPayload.value))
+    func typeTextPayload(
+        for target: TypeTextTarget,
+        in afterState: PostActionObservation.BeforeState
+    ) -> ResultPayload? {
+        guard let elementTarget = target.elementTarget else { return nil }
+        return Self.textInputValue(for: elementTarget, in: afterState.interface.projectedElements)
+            .map(ResultPayload.value)
     }
 
     private func typeTextInjectionFailureMessage(for diagnostic: KeyboardTextInjectionDiagnostic) -> String {
@@ -155,6 +154,19 @@ extension Actions {
             if safecracker.hasActiveTextInput() { return true }
         }
         return false
+    }
+
+    private static func textInputValue(for target: ElementTarget, in elements: [HeistElement]) -> String? {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            let matches = elements.filter { predicate.matches($0) }
+            if let ordinal {
+                guard matches.indices.contains(ordinal) else { return nil }
+                return matches[ordinal].value
+            }
+            guard matches.count == 1 else { return nil }
+            return matches[0].value
+        }
     }
 
 }
