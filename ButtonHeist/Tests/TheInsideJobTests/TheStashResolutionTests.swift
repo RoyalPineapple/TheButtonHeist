@@ -142,7 +142,7 @@ final class TheStashResolutionTests: XCTestCase {
         let firstSequence = bagman.latestSettledSemanticObservation?.sequence
 
         let waiter = Task {
-            await bagman.waitForNextSettledSemanticObservation(after: firstSequence, timeout: 1)
+            await bagman.settledSemanticObservation(scope: .visible, after: firstSequence, timeout: 1)
         }
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
@@ -158,7 +158,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.recordSettledSemanticObservation(first)
 
         let waiter = Task { @MainActor in
-            await bagman.waitForNextSettledSemanticObservation(after: nil, timeout: 1)
+            await bagman.settledSemanticObservation(scope: .visible, after: nil, timeout: 1)
         }
 
         for _ in 0..<10 where bagman.settledSemanticWaiters.isEmpty {
@@ -182,7 +182,7 @@ final class TheStashResolutionTests: XCTestCase {
         bagman.commitVisibleRefresh(visibleRefresh)
 
         let waiter = Task { @MainActor in
-            await bagman.waitForNextSettledSemanticObservation(after: nil, timeout: 1)
+            await bagman.settledSemanticObservation(scope: .visible, after: nil, timeout: 1)
         }
 
         for _ in 0..<10 where bagman.settledSemanticWaiters.isEmpty {
@@ -204,7 +204,7 @@ final class TheStashResolutionTests: XCTestCase {
         let firstSequence = bagman.latestSettledSemanticObservation?.sequence
 
         let waiter = Task { @MainActor in
-            await bagman.waitForNextSettledSemanticObservation(
+            await bagman.settledSemanticObservation(
                 scope: .discovery,
                 after: firstSequence,
                 timeout: nil
@@ -232,7 +232,7 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testStopPassiveSemanticObservationCancelsWaiters() async {
         let waiter = Task {
-            await bagman.waitForNextSettledSemanticObservation(after: nil, timeout: 10)
+            await bagman.settledSemanticObservation(scope: .visible, after: nil, timeout: 10)
         }
 
         bagman.stopPassiveSemanticObservation()

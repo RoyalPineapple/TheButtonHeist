@@ -256,13 +256,19 @@ final class PostActionObservation {
         return captureSemanticState(from: observation)
     }
 
-    func currentSemanticState(baseline: BeforeState? = nil) async -> BeforeState? {
-        guard let observation = await stash.settledSemanticObservation(
+    func currentSemanticState(baseline: BeforeState? = nil, timeout: Double? = 1.0) async -> BeforeState? {
+        let current: BeforeState
+        if let observation = await stash.settledSemanticObservation(
             scope: .visible,
             after: baseline?.settledObservationSequence,
-            timeout: 1.0
-        ) else { return nil }
-        let current = captureSemanticState(from: observation)
+            timeout: timeout
+        ) {
+            current = captureSemanticState(from: observation)
+        } else {
+            guard stash.recordVisibleSemanticObservation() != nil else { return nil }
+            current = captureSemanticState()
+        }
+
         if let baseline {
             let classification = ScreenClassifier.classify(
                 before: baseline.screenSnapshot,
@@ -273,22 +279,6 @@ final class PostActionObservation {
             return await semanticStateAfterDiscovery(after: current.settledObservationSequence) ?? current
         }
         return current
-    }
-
-    func settledSemanticState(after baseline: BeforeState, timeout: Double?) async -> BeforeState? {
-        let settleSession = SettleSession.live(
-            stash: stash,
-            tripwire: tripwire,
-            timeoutMs: semanticSettleTimeoutMs(timeout)
-        )
-        let settle = await settleSession.run(
-            start: CFAbsoluteTimeGetCurrent(),
-            baselineTripwireSignal: baseline.tripwireSignal
-        )
-        guard settle.outcome.didSettleCleanly else { return nil }
-        guard let screen = settle.finalScreen else { return nil }
-        stash.recordSettledSemanticObservation(screen)
-        return await semanticStateAfterVisibleRefresh(baseline: baseline)
     }
 
     private func resolvedSettleOutcome(
@@ -311,12 +301,6 @@ final class PostActionObservation {
             return settleResult.finalScreen
         }
         return settleResult.finalScreen
-    }
-
-    private func semanticSettleTimeoutMs(_ timeout: Double?) -> Int {
-        guard let timeout else { return SettleSession.defaultTimeoutMs }
-        guard timeout > 0 else { return 1 }
-        return max(1, Int(min(timeout, 1.0) * 1000))
     }
 
     private func transientElements(

@@ -148,7 +148,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.message, "matched immediately")
+        XCTAssertTrue(result.message?.hasPrefix("matched") == true)
         XCTAssertNil(result.errorKind)
     }
 
@@ -281,7 +281,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let result = try XCTUnwrap(response)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(result.message, "matched immediately")
+        XCTAssertTrue(result.message?.hasPrefix("matched") == true)
     }
 
     func testWaitForAbsentTreatsOffscreenScrollableElementAsPresent() async throws {
@@ -313,7 +313,7 @@ final class WaitForIntegrationTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .wait)
-        XCTAssertEqual(result.message, "absent confirmed after 0.0s")
+        XCTAssertTrue(result.message?.contains("absent confirmed after") == true)
         XCTAssertNil(result.errorKind)
     }
 

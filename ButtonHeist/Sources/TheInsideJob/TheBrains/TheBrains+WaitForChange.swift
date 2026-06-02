@@ -7,6 +7,7 @@ import TheScore
 extension TheBrains {
     /// Install one wait predicate, then watch settled changes until a trace-derived expectation matches.
     func executeWaitForChange(timeout: TimeInterval, expectation: AccessibilityPredicate?) async -> ActionResult {
+        startSemanticObservation()
         let start = CFAbsoluteTimeGetCurrent()
 
         guard let predicate = waitForChangeState.install(
@@ -22,7 +23,10 @@ extension TheBrains {
 
         let sentBaseline = waitForChangeState.lastDeliveredBaseline
 
-        guard let initial = await refreshSemanticSnapshot(baseline: sentBaseline) else {
+        guard let initial = await postActionObservation.currentSemanticState(
+            baseline: sentBaseline,
+            timeout: min(max(timeout, 0), 1.0)
+        ) else {
             return treeUnavailableResult(method: .wait)
         }
 
@@ -67,7 +71,7 @@ extension TheBrains {
 
         // Timeout
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-        let current = await refreshSemanticSnapshot(baseline: baseline)
+        let current = await postActionObservation.currentSemanticState(baseline: baseline, timeout: 0)
         let afterSnapshot = current?.snapshot ?? []
         let timeoutAccessibilityTrace = current.map {
             postActionObservation.makeClassifiedAccessibilityTrace(after: $0, parent: baseline)
@@ -101,7 +105,7 @@ extension TheBrains {
             let remaining = predicate.deadline - CFAbsoluteTimeGetCurrent()
             guard remaining > 0 else { break }
 
-            guard let current = await waitForSettledSemanticSnapshot(
+            guard let current = await postActionObservation.currentSemanticState(
                 baseline: settleBaseline,
                 timeout: min(remaining, 1.0)
             ) else { continue }
@@ -201,19 +205,6 @@ extension TheBrains {
         let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
         builder.message = "expectation met after \(elapsed)s (\(round) rounds)"
         return builder.success()
-    }
-
-    private func refreshSemanticSnapshot(
-        baseline: PostActionObservation.BeforeState? = nil
-    ) async -> PostActionObservation.BeforeState? {
-        await postActionObservation.currentSemanticState(baseline: baseline)
-    }
-
-    private func waitForSettledSemanticSnapshot(
-        baseline: PostActionObservation.BeforeState,
-        timeout: TimeInterval
-    ) async -> PostActionObservation.BeforeState? {
-        await postActionObservation.settledSemanticState(after: baseline, timeout: timeout)
     }
 
     private static func deltaKindDescription(_ delta: AccessibilityTrace.Delta) -> String {

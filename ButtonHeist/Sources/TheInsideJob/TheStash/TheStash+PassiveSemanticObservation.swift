@@ -52,10 +52,6 @@ extension TheStash {
             return latest
         }
 
-        guard passiveSemanticObservationTask != nil else {
-            return nil
-        }
-
         return await waitForNextSettledSemanticObservation(
             scope: scope,
             after: requiredSequence,
@@ -63,7 +59,7 @@ extension TheStash {
         )
     }
 
-    func waitForNextSettledSemanticObservation(
+    private func waitForNextSettledSemanticObservation(
         scope: SemanticObservationScope = .visible,
         after sequence: UInt64?,
         timeout: Double?
