@@ -394,14 +394,15 @@ final class TheBrainsPipelineTests: XCTestCase {
         seedScreen(elements: [("Seed", .button, "button_seed")])
         XCTAssertEqual(brains.stash.currentScreen.semantic.elements.count, 1)
 
-        await brains.navigation.observeSemanticDiscovery()
+        brains.startSemanticObservation()
+        let observation = await brains.stash.settledSemanticObservation(scope: .discovery, after: nil, timeout: 2)
 
         // Either the seed survives (no live parse landed and the union still
         // holds it) or it merges with new live entries — either way, the
         // currentScreen reflects the committed union, not the pre-explore
         // value alone.
-        XCTAssertNotNil(brains.stash.currentScreen,
-                        "semantic discovery observation always commits a screen value")
+        XCTAssertNotNil(observation)
+        XCTAssertGreaterThanOrEqual(brains.stash.currentScreen.semantic.elements.count, 1)
     }
 
     func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {

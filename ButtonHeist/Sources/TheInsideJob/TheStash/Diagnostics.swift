@@ -23,6 +23,58 @@ private struct Relaxation {
 
 extension TheStash {
 
+    func presenceWaitTimeoutMessage(
+        for predicate: AccessibilityPredicate,
+        elapsed: String
+    ) -> String? {
+        let target: ElementTarget
+        let absent: Bool
+        switch predicate {
+        case .state(.present(let elementPredicate)):
+            target = .predicate(elementPredicate, ordinal: 0)
+            absent = false
+        case .state(.absent(let elementPredicate)):
+            target = .predicate(elementPredicate, ordinal: 0)
+            absent = true
+        default:
+            return nil
+        }
+
+        let resolution = resolveTarget(target)
+        let expected = absent ? "element to disappear" : "element to appear"
+        let reason = absent ? "element still present" : "element not found"
+        let diagnostics = resolution.diagnostics
+        var parts = [
+            "timed out after \(elapsed)s waiting for \(expected)",
+            "expected: \(waitForTargetDescription(target))",
+            "known: \(knownElementCount) elements",
+        ]
+        if let screenId = lastScreenId {
+            parts.append("screen: \(screenId)")
+        }
+        if diagnostics.isEmpty {
+            parts.append("last result: \(reason)")
+        } else {
+            parts.append("last result: \(reason): \(diagnostics)")
+        }
+        parts.append(
+            "Next: get_interface() to inspect current elements, " +
+                "then retry wait with an exact predicate."
+        )
+        return parts.joined(separator: "; ")
+    }
+
+    private func waitForTargetDescription(_ target: ElementTarget) -> String {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            var description = Diagnostics.formatMatcher(predicate)
+            if let ordinal {
+                description += " ordinal=\(ordinal)"
+            }
+            return description
+        }
+    }
+
     enum Diagnostics {
 
     static func matcherNotFound(

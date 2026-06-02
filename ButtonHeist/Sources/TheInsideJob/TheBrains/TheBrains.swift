@@ -91,13 +91,6 @@ final class TheBrains {
         waitForChangeState.recordDeliveredBaseline(state)
     }
 
-    func startSemanticObservation() {
-        stash.startPassiveSemanticObservation { [weak self] in
-            guard let self else { return }
-            await self.navigation.observeSemanticDiscovery()
-        }
-    }
-
     func stopSemanticObservation() {
         stash.stopPassiveSemanticObservation()
     }
