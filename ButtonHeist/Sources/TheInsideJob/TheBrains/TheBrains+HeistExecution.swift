@@ -9,7 +9,7 @@ extension TheBrains {
     struct HeistExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
         let wait: @MainActor (WaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
-        let observeSemanticState: @MainActor (SemanticObservationScope, PostActionObservation.BeforeState?, Double?) async -> HeistSemanticObservation?
+        let observeSemanticState: @MainActor (SemanticObservationScope, UInt64?, Double?) async -> HeistSemanticObservation?
         let recordDeliveredObservationAfterStep: @MainActor () async -> Void
 
         @MainActor
@@ -21,8 +21,8 @@ extension TheBrains {
                 wait: { waitStep, initialTrace in
                     await brains.interactionObservation.waitForPredicate(waitStep, initialTrace: initialTrace)
                 },
-                observeSemanticState: { scope, baseline, timeout in
-                    await brains.interactionObservation.observeSemanticState(scope: scope, baseline: baseline, timeout: timeout)
+                observeSemanticState: { scope, sequence, timeout in
+                    await brains.interactionObservation.observeSemanticState(scope: scope, after: sequence, timeout: timeout)
                 },
                 recordDeliveredObservationAfterStep: {
                     if let state = await brains.interactionObservation.recordDeliveredBaselineAfterStep() {

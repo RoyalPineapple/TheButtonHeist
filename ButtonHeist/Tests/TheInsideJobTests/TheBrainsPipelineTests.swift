@@ -122,7 +122,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             throw XCTSkip("No live hierarchy available for post-action observation test")
         }
         brains.startSemanticObservation()
-        guard await brains.stash.settledSemanticObservation(scope: .discovery, after: nil, timeout: 2) != nil else {
+        guard await brains.stash.settledSemanticObservationEvent(scope: .discovery, after: nil, timeout: 2) != nil else {
             throw XCTSkip("No settled discovery observation available")
         }
         let screen = brains.stash.currentScreen
@@ -406,7 +406,7 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertEqual(brains.stash.currentScreen.semantic.elements.count, 1)
 
         brains.startSemanticObservation()
-        let observation = await brains.stash.settledSemanticObservation(scope: .discovery, after: nil, timeout: 2)
+        let observation = await brains.stash.settledSemanticObservationEvent(scope: .discovery, after: nil, timeout: 2)
 
         // Either the seed survives (no live parse landed and the union still
         // holds it) or it merges with new live entries — either way, the

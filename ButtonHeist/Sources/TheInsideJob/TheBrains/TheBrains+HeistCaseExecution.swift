@@ -74,7 +74,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> HeistExecutionStepResult {
         let deadline = start + step.timeout
-        var baseline: PostActionObservation.BeforeState?
+        var observedSequence: UInt64?
         var lastSelection = PredicateCaseSelection.unevaluated(step.cases)
         var lastSummary: String?
 
@@ -82,7 +82,7 @@ extension TheBrains {
             let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
             let observation = await runtime.observeSemanticState(
                 step.observationScope,
-                baseline,
+                observedSequence,
                 min(remaining, 1.0)
             )
 
@@ -90,7 +90,7 @@ extension TheBrains {
                 if step.timeout == 0 { break }
                 continue
             }
-            baseline = observation.state
+            observedSequence = observation.event.sequence
             lastSummary = observation.summary
             lastSelection = evaluatePredicateCases(step.cases, observation: observation)
 
