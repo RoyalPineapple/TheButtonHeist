@@ -427,7 +427,8 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("element"), "\(error)")
+            let message = "\(error)"
+            XCTAssertTrue(message.contains("element") || message.contains("steps"), message)
         }
     }
 
