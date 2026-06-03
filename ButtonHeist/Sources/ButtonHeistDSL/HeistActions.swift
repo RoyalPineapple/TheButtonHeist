@@ -186,6 +186,54 @@ public struct Rotor: HeistActionContent {
     }
 }
 
+public struct SetPasteboard: HeistActionContent {
+    public let command: HeistActionCommand
+    public let expectation: WaitStep?
+    public let expectationWaiver: String?
+
+    public init(_ text: String) {
+        self.init(command: .setPasteboard(SetPasteboardTarget(text: text)))
+    }
+
+    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        self.command = command
+        self.expectation = expectation
+        self.expectationWaiver = expectationWaiver
+    }
+}
+
+public struct Edit: HeistActionContent {
+    public let command: HeistActionCommand
+    public let expectation: WaitStep?
+    public let expectationWaiver: String?
+
+    public init(_ action: EditAction) {
+        self.init(command: .editAction(EditActionTarget(action: action)))
+    }
+
+    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        self.command = command
+        self.expectation = expectation
+        self.expectationWaiver = expectationWaiver
+    }
+}
+
+public struct DismissKeyboard: HeistActionContent {
+    public let command: HeistActionCommand
+    public let expectation: WaitStep?
+    public let expectationWaiver: String?
+
+    public init() {
+        self.init(command: .dismissKeyboard)
+    }
+
+    init(command: HeistActionCommand, expectation: WaitStep? = nil, expectationWaiver: String? = nil) {
+        self.command = command
+        self.expectation = expectation
+        self.expectationWaiver = expectationWaiver
+    }
+}
+
 public enum Mechanical {
     public struct Tap: HeistActionContent {
         public let command: HeistActionCommand

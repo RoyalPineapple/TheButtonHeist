@@ -46,6 +46,18 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let heistStart = CFAbsoluteTimeGetCurrent()
+        let admissionFailures = plan.runtimeAdmissionFailures()
+        guard admissionFailures.isEmpty else {
+            let heistResult = HeistExecutionResult(
+                steps: [],
+                totalTimingMs: Int((CFAbsoluteTimeGetCurrent() - heistStart) * 1000),
+                failedIndex: nil
+            )
+            var builder = ActionResultBuilder(method: .heistPlan)
+            builder.message = HeistPlanAdmissionError(failures: admissionFailures).description
+            return builder.failure(errorKind: .validationError, payload: .heistExecution(heistResult))
+        }
+
         let stepResults = await executeHeistSteps(plan.steps, runtime: runtime, environment: .empty)
         let failedIndex = stepResults.firstIndex(where: \.isFailure)
 

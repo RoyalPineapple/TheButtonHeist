@@ -887,6 +887,86 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
     }
 
+    func testHeistRuntimeAdmissionRejectsInvalidPlanBeforeDispatchOrObservation() async throws {
+        var executedCommands: [ClientMessage] = []
+        var observedScopes: [SemanticObservationScope] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .activate)
+            },
+            observedScopes: { observedScopes.append($0) }
+        )
+        let plan = HeistPlan(steps: [
+            .action(try ActionStep(command: .activate(.ref("missing")))),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let heist = try XCTUnwrap(result.heistExecutionPayload)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, ErrorKind.validationError)
+        XCTAssertTrue(result.message?.contains("$.steps[0].action.command.payload.target") == true)
+        XCTAssertTrue(result.message?.contains("target_ref must resolve") == true)
+        XCTAssertTrue(heist.steps.isEmpty)
+        XCTAssertTrue(executedCommands.isEmpty)
+        XCTAssertTrue(observedScopes.isEmpty)
+    }
+
+    func testHeistRuntimeAdmissionRejectsInvalidStringLoopBeforeDispatch() async throws {
+        var executedCommands: [ClientMessage] = []
+        let runtime = heistRuntime(
+            observations: [],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .typeText)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .forEachString(try ForEachStringStep(
+                values: [""],
+                parameter: "item",
+                steps: [
+                    .action(try ActionStep(command: .typeText(
+                        text: .ref("item"),
+                        target: .target(.predicate(.label("Search")))
+                    ))),
+                ]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, ErrorKind.validationError)
+        XCTAssertTrue(result.message?.contains("text must be non-empty") == true)
+        XCTAssertTrue(executedCommands.isEmpty)
+    }
+
+    func testHeistRuntimeAdmissionRejectsOversizedForEachBeforeObservation() async throws {
+        var observedScopes: [SemanticObservationScope] = []
+        let runtime = heistRuntime(
+            observations: [],
+            observedScopes: { observedScopes.append($0) }
+        )
+        let plan = HeistPlan(steps: [
+            .forEachElement(try ForEachElementStep(
+                matching: .label("Delete"),
+                limit: HeistPlanRuntimeAdmissionLimits.standard.maxForEachElementLimit + 1,
+                parameter: "target",
+                steps: [.action(try ActionStep(command: .activate(.ref("target"))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.errorKind, .validationError)
+        XCTAssertTrue(result.message?.contains("max for_each_element limit") == true)
+        XCTAssertTrue(observedScopes.isEmpty)
+    }
+
     func testHeistActionExpectationTimeoutZeroUsesActionInteractionTrace() async throws {
         let expectation = WaitStep(predicate: .changed(.screen()), timeout: 0)
         let beforeState = observedState(labels: ["Controls Demo"])

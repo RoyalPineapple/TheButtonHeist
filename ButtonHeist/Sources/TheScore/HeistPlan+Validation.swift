@@ -88,9 +88,9 @@ private struct HeistPlanValidator {
             if mode == .strictTest {
                 findings.append(viewportFinding(path: path))
             }
-        case .escapeHatch:
-            if mode == .strictTest {
-                findings.append(escapeHatchFinding(path: path))
+        case .ambient:
+            if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
+                findings.append(ambientExpectationFinding(path: path))
             }
         }
         return findings
@@ -184,12 +184,12 @@ private struct HeistPlanValidator {
         )
     }
 
-    private func escapeHatchFinding(path: String) -> HeistPlanValidationFinding {
+    private func ambientExpectationFinding(path: String) -> HeistPlanValidationFinding {
         .init(
-            severity: .error,
+            severity: .warning,
             path: path,
-            message: "Mechanical escape hatch appears in strict semantic-test mode",
-            suggestion: "Use semantic actions and expectations unless this heist explicitly tests mechanics"
+            message: "Ambient action has no expectation",
+            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") when this side effect has no durable semantic outcome"
         )
     }
 
@@ -261,7 +261,7 @@ private enum HeistCommandValidationKind: Equatable {
     case typeTextWithoutTarget
     case mechanical
     case viewport
-    case escapeHatch
+    case ambient
 }
 
 private extension HeistActionCommand {
@@ -276,7 +276,7 @@ private extension HeistActionCommand {
         case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
             return .viewport
         case .editAction, .setPasteboard, .dismissKeyboard:
-            return .escapeHatch
+            return .ambient
         }
     }
 }

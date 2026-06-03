@@ -72,6 +72,13 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    func testSetPasteboardTargetRejectsEmptyText() throws {
+        let data = Data(#"{"text":""}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(SetPasteboardTarget.self, from: data)) { error in
+            assertDecodingError(error, contains: ["pasteboard text must be non-empty"])
+        }
+    }
+
     func testAuthenticatePayloadRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"token":"secret","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(AuthenticatePayload.self, from: data)) { error in

@@ -267,10 +267,6 @@ public struct ConditionalStep: Codable, Sendable, Equatable {
         guard !cases.isEmpty else {
             throw HeistPlanError.emptyPredicateCases("conditional")
         }
-        guard !cases.contains(where: { $0.steps.containsRuntimeForEach }),
-              elseSteps?.containsRuntimeForEach != true else {
-            throw HeistPlanError.nestedForEachUnsupported
-        }
         self.cases = cases
         self.elseSteps = elseSteps
     }
@@ -305,10 +301,6 @@ public struct WaitForCasesStep: Codable, Sendable, Equatable {
         }
         guard !cases.isEmpty else {
             throw HeistPlanError.emptyPredicateCases("wait_for_cases")
-        }
-        guard !cases.contains(where: { $0.steps.containsRuntimeForEach }),
-              elseSteps?.containsRuntimeForEach != true else {
-            throw HeistPlanError.nestedForEachUnsupported
         }
         self.timeout = timeout
         self.cases = cases
@@ -384,16 +376,12 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
         guard limit > 0 else {
             throw HeistPlanError.invalidForEachLimit(limit)
         }
-        let trimmedParameter = try HeistParameterName.normalized(parameter)
         guard !steps.isEmpty else {
             throw HeistPlanError.emptyForEachSteps
         }
-        guard !steps.containsRuntimeForEach else {
-            throw HeistPlanError.nestedForEachUnsupported
-        }
         self.matching = matching
         self.limit = limit
-        self.parameter = trimmedParameter
+        self.parameter = parameter
         self.steps = steps
     }
 
@@ -426,15 +414,11 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
         guard !values.isEmpty else {
             throw HeistPlanError.emptyForEachValues
         }
-        let trimmedParameter = try HeistParameterName.normalized(parameter)
         guard !steps.isEmpty else {
             throw HeistPlanError.emptyForEachSteps
         }
-        guard !steps.containsRuntimeForEach else {
-            throw HeistPlanError.nestedForEachUnsupported
-        }
         self.values = values
-        self.parameter = trimmedParameter
+        self.parameter = parameter
         self.steps = steps
     }
 
@@ -559,23 +543,4 @@ public extension PredicateCase {
 public struct ResolvedPredicateCase: Sendable, Equatable {
     public let predicate: AccessibilityPredicate
     public let steps: [HeistStep]
-}
-
-private extension Array where Element == HeistStep {
-    var containsRuntimeForEach: Bool {
-        contains { step in
-            switch step {
-            case .forEachElement, .forEachString:
-                return true
-            case .conditional(let conditional):
-                return conditional.cases.contains { $0.steps.containsRuntimeForEach }
-                    || conditional.elseSteps?.containsRuntimeForEach == true
-            case .waitForCases(let waitForCases):
-                return waitForCases.cases.contains { $0.steps.containsRuntimeForEach }
-                    || waitForCases.elseSteps?.containsRuntimeForEach == true
-            case .action, .wait, .warn, .fail:
-                return false
-            }
-        }
-    }
 }

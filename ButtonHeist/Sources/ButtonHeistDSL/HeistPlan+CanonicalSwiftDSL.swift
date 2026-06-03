@@ -124,12 +124,12 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return "Viewport.ScrollToVisible(\(try render(target: target, environment: environment)))"
         case .viewportScrollToEdge(let target):
             return try render(viewportScrollToEdge: target)
-        case .editAction:
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("edit_action")
-        case .setPasteboard:
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("set_pasteboard")
+        case .editAction(let target):
+            return "Edit(.\(target.action.rawValue))"
+        case .setPasteboard(let target):
+            return "SetPasteboard(\(quote(target.text)))"
         case .dismissKeyboard:
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("dismiss_keyboard")
+            return "DismissKeyboard()"
         }
     }
 

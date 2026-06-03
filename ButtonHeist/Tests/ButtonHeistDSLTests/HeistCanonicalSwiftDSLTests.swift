@@ -78,13 +78,37 @@ func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
 @Test
 func decodedRuntimeLoopsRejectNonCanonicalSwiftParameters() throws {
     for json in [invalidElementLoopParameterJSON, invalidStringLoopParameterJSON] {
+        let plan = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
+        let failures = plan.runtimeAdmissionFailures()
+        #expect(failures.contains { $0.contract.contains("Swift-style identifier") })
+
         do {
-            _ = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
-            Issue.record("Expected invalid loop parameter decode failure")
-        } catch let error as HeistPlanError {
-            #expect(error == .invalidForEachParameter("target-name"))
+            _ = try plan.canonicalSwiftDSL()
+            Issue.record("Expected invalid loop parameter render failure")
+        } catch let error as HeistCanonicalSwiftDSLError {
+            #expect(error == .invalidParameter("target-name"))
         }
     }
+}
+
+@Test
+func canonicalSwiftRendererRendersAmbientActions() throws {
+    let plan = HeistPlan(steps: [
+        .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
+        .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
+        .action(try ActionStep(command: .dismissKeyboard)),
+    ])
+
+    #expect(plan.runtimeAdmissionFailures().isEmpty)
+    #expect(try plan.canonicalSwiftDSL() == """
+    try Heist {
+        SetPasteboard("milk")
+
+        Edit(.paste)
+
+        DismissKeyboard()
+    }
+    """)
 }
 
 private let fullASTJSON = """
