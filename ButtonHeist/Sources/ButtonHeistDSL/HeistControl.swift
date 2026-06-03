@@ -14,10 +14,18 @@ public struct WaitFor: HeistContent {
     public let heistSteps: [HeistStep]
 
     public init(
-        _ predicate: AccessibilityPredicate,
+        _ predicate: AccessibilityPredicateExpr,
         timeout: Double = 0
     ) {
         heistSteps = [.wait(WaitStep(predicate: predicate, timeout: timeout))]
+    }
+
+    @_disfavoredOverload
+    public init(
+        _ predicate: AccessibilityPredicate,
+        timeout: Double = 0
+    ) {
+        self.init(.predicate(predicate), timeout: timeout)
     }
 
     public init(
@@ -37,7 +45,7 @@ public struct If: HeistContent {
     public let heistSteps: [HeistStep]
 
     public init(
-        _ predicate: AccessibilityPredicate,
+        _ predicate: AccessibilityPredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         heistSteps = [.conditional(makeConditionalStep(
@@ -45,8 +53,16 @@ public struct If: HeistContent {
         ))]
     }
 
+    @_disfavoredOverload
     public init(
         _ predicate: AccessibilityPredicate,
+        @HeistBuilder _ content: () -> some HeistContent
+    ) {
+        self.init(.predicate(predicate), content)
+    }
+
+    public init(
+        _ predicate: AccessibilityPredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent,
         @HeistBuilder otherwise: () -> some HeistContent
     ) {
@@ -54,6 +70,15 @@ public struct If: HeistContent {
             cases: [PredicateCase(predicate: predicate, steps: content().heistSteps)],
             elseSteps: otherwise().heistSteps
         ))]
+    }
+
+    @_disfavoredOverload
+    public init(
+        _ predicate: AccessibilityPredicate,
+        @HeistBuilder _ content: () -> some HeistContent,
+        @HeistBuilder otherwise: () -> some HeistContent
+    ) {
+        self.init(.predicate(predicate), content, otherwise: otherwise)
     }
 
     public init(
@@ -71,10 +96,18 @@ public struct Case {
     let predicateBranch: PredicateBranch
 
     public init(
-        _ predicate: AccessibilityPredicate,
+        _ predicate: AccessibilityPredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
         predicateBranch = .case(PredicateCase(predicate: predicate, steps: content().heistSteps))
+    }
+
+    @_disfavoredOverload
+    public init(
+        _ predicate: AccessibilityPredicate,
+        @HeistBuilder _ content: () -> some HeistContent
+    ) {
+        self.init(.predicate(predicate), content)
     }
 }
 
@@ -125,10 +158,6 @@ public enum PredicateBranchBuilder {
     }
 
     public static func buildBlock(_ components: [PredicateBranch]...) -> [PredicateBranch] {
-        components.flatMap { $0 }
-    }
-
-    public static func buildArray(_ components: [[PredicateBranch]]) -> [PredicateBranch] {
         components.flatMap { $0 }
     }
 

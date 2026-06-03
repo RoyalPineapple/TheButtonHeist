@@ -160,10 +160,10 @@ final class ClientMessageTests: XCTestCase {
         XCTAssertEqual(decodedPlan.steps.count, 3)
         guard case .action(let decodedAction) = decodedPlan.steps[0],
               case .activate(let decodedTarget) = decodedAction.command,
-              decodedAction.expectation?.predicate == .changed(.screen()) else {
+              decodedAction.expectation?.predicate == .predicate(.changed(.screen())) else {
             return XCTFail("Expected activate command with screen change predicate")
         }
-        XCTAssertEqual(decodedTarget, saveTarget)
+        XCTAssertEqual(decodedTarget, .target(saveTarget))
     }
 
     func testHeistPlanEnvelopeRoundTrip() throws {
@@ -187,12 +187,12 @@ final class ClientMessageTests: XCTestCase {
         guard case .heistPlan(let decodedPlan) = decoded.message,
               let step = decodedPlan.steps.first,
               case .action(let action) = step,
-              case .typeText(let target) = action.command,
+              case .typeText(let text, let target) = action.command,
               action.expectation == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
-        XCTAssertEqual(target.text, "hello")
-        XCTAssertEqual(target.elementTarget, .predicate(ElementPredicate(identifier: "nameField")))
+        XCTAssertEqual(text, .literal("hello"))
+        XCTAssertEqual(target, .target(.predicate(ElementPredicate(identifier: "nameField"))))
     }
 
     func testHeistActionDescriptionUsesNormalCommandIdentity() throws {

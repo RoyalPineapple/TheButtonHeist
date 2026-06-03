@@ -115,7 +115,7 @@ private extension HeistStep {
         switch self {
         case .action, .wait:
             return true
-        case .conditional, .waitForCases, .forEach, .warn, .fail:
+        case .conditional, .waitForCases, .forEachElement, .forEachString, .warn, .fail:
             return false
         }
     }
@@ -138,7 +138,7 @@ private extension HeistStep {
                 return waitForCases.elseSteps
             }
             return nil
-        case .forEach:
+        case .forEachElement, .forEachString:
             return nil
         case .action, .wait, .warn, .fail:
             return nil
@@ -151,7 +151,8 @@ private extension HeistStep {
         case .wait: return "wait"
         case .conditional: return "if"
         case .waitForCases: return "wait_for_cases"
-        case .forEach: return "for_each"
+        case .forEachElement: return "for_each_element"
+        case .forEachString: return "for_each_string"
         case .warn: return "warn"
         case .fail: return "fail"
         }
@@ -236,6 +237,50 @@ extension ClientMessage {
             return nil
         case .clientHello, .authenticate, .requestInterface, .ping, .status, .requestScreen,
              .getPasteboard, .wait, .heistPlan, .resignFirstResponder:
+            return nil
+        }
+    }
+}
+
+extension HeistActionCommand {
+    var reportTarget: ElementTarget? {
+        switch self {
+        case .activate(let target), .increment(let target), .decrement(let target), .viewportScrollToVisible(let target):
+            if case .target(let target) = target { return target }
+            return nil
+        case .customAction(_, let target):
+            if case .target(let target) = target { return target }
+            return nil
+        case .rotor(_, let target, _):
+            if case .target(let target) = target { return target }
+            return nil
+        case .typeText(_, let target):
+            if case .target(let target) = target { return target }
+            return nil
+        case .mechanicalTap(let target):
+            if case .element(let target) = target.selection { return target }
+            return nil
+        case .mechanicalLongPress(let target):
+            if case .element(let target) = target.selection { return target }
+            return nil
+        case .mechanicalSwipe(let target):
+            switch target.selection {
+            case .unitElement(let target, _, _), .elementDirection(let target, _):
+                return target
+            case .point(let start, _):
+                if case .element(let target) = start { return target }
+                return nil
+            }
+        case .mechanicalDrag(let target):
+            if case .element(let target) = target.start { return target }
+            return nil
+        case .viewportScroll(let target):
+            if case .element(let target) = target.selection { return target }
+            return nil
+        case .viewportScrollToEdge(let target):
+            if case .element(let target) = target.selection { return target }
+            return nil
+        case .editAction, .setPasteboard, .dismissKeyboard:
             return nil
         }
     }

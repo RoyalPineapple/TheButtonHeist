@@ -17,7 +17,7 @@ final class WireCommandParityTests: XCTestCase {
 
         XCTAssertEqual(
             type?.enumValues,
-            ["action", "wait", "conditional", "wait_for_cases", "warn", "fail"]
+            ["action", "wait", "conditional", "wait_for_cases", "for_each_element", "for_each_string", "warn", "fail"]
         )
     }
 
@@ -200,16 +200,18 @@ final class WireCommandParityTests: XCTestCase {
     private func clientMessages(for step: HeistStep) -> [ClientMessage] {
         switch step {
         case .action(let action):
-            return [action.command]
+            guard let command = try? action.command.resolve(in: .empty) else { return [] }
+            return [command]
         case .wait(let wait):
-            return [.wait(WaitTarget(predicate: wait.predicate, timeout: wait.timeout))]
+            guard let resolved = try? wait.resolve(in: .empty) else { return [] }
+            return [.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))]
         case .conditional(let conditional):
             return conditional.cases.flatMap { $0.steps.flatMap(clientMessages) }
                 + (conditional.elseSteps ?? []).flatMap(clientMessages)
         case .waitForCases(let waitForCases):
             return waitForCases.cases.flatMap { $0.steps.flatMap(clientMessages) }
                 + (waitForCases.elseSteps ?? []).flatMap(clientMessages)
-        case .forEach:
+        case .forEachElement, .forEachString:
             return []
         case .warn, .fail:
             return []

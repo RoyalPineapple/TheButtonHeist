@@ -1960,7 +1960,7 @@ final class TheFenceHandlerTests: XCTestCase {
             return XCTFail("Expected action step")
         }
 
-        XCTAssertEqual(action.expectation?.predicate, expectation)
+        XCTAssertEqual(action.expectation?.predicate, .predicate(expectation))
     }
 
     // MARK: - Parse Expectation: Discriminator Wire Shape
@@ -2717,12 +2717,12 @@ final class TheFenceHandlerTests: XCTestCase {
     func testPlayHeistReportProjectsSwiftAuthoredForEachWithoutDurableBodyFlattening() async throws {
         let matching = ElementPredicate(label: "Delete")
         let heist = HeistPlan(steps: [
-            .forEach(try ForEachStep(
+            .forEachElement(try ForEachElementStep(
                 matching: matching,
-                limit: 20
-            ) { target in
-                [try self.activateHeistStep(target: target)]
-            }),
+                limit: 20,
+                parameter: "target",
+                steps: [try activateHeistStep(target: .ref("target"))]
+            )),
         ])
         let executionResult = HeistExecutionResult(
             steps: [
@@ -2761,7 +2761,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let projection = fence.playbackProjection(contract: contract, result: executionResult)
 
-        XCTAssertEqual(projection.stepResults.map(\.command), ["for_each"])
+        XCTAssertEqual(projection.stepResults.map(\.command), ["for_each_element"])
         XCTAssertTrue(projection.stepResults.allSatisfy(\.passed))
         XCTAssertNil(projection.failedIndex)
         XCTAssertNil(projection.failure)
@@ -2792,7 +2792,7 @@ final class TheFenceHandlerTests: XCTestCase {
         .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier)))))
     }
 
-    private func activateHeistStep(target: ElementTarget) throws -> HeistStep {
+    private func activateHeistStep(target: ElementTargetExpr) throws -> HeistStep {
         .action(try ActionStep(command: .activate(target)))
     }
 

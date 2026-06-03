@@ -406,7 +406,34 @@ private extension HeistStep {
             return action.command.fenceCommandForInspection
         case .wait:
             return .wait
-        case .conditional, .waitForCases, .forEach, .warn, .fail:
+        case .conditional, .waitForCases, .forEachElement, .forEachString, .warn, .fail:
+            return .runHeist
+        }
+    }
+}
+
+private extension HeistActionCommand {
+    var fenceCommandForInspection: TheFence.Command {
+        switch wireType {
+        case .activate: return .activate
+        case .increment: return .activate
+        case .decrement: return .activate
+        case .performCustomAction: return .activate
+        case .rotor: return .rotor
+        case .oneFingerTap: return .oneFingerTap
+        case .longPress: return .longPress
+        case .swipe: return .swipe
+        case .drag: return .drag
+        case .typeText: return .typeText
+        case .editAction: return .editAction
+        case .setPasteboard: return .setPasteboard
+        case .scroll: return .scroll
+        case .scrollToVisible: return .scrollToVisible
+        case .scrollToEdge: return .scrollToEdge
+        case .resignFirstResponder: return .dismissKeyboard
+        case .getPasteboard: return .getPasteboard
+        case .wait: return .wait
+        case .clientHello, .authenticate, .requestInterface, .ping, .status, .heistPlan, .requestScreen:
             return .runHeist
         }
     }

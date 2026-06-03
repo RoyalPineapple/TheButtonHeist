@@ -5,7 +5,7 @@ import TheScore
 extension ConditionalStep {
     var observationScope: SemanticObservationScope {
         cases
-            .map(\.predicate.observationScope)
+            .compactMap { try? $0.predicate.resolve(in: .empty).observationScope }
             .max() ?? .visible
     }
 }
@@ -13,7 +13,7 @@ extension ConditionalStep {
 extension WaitForCasesStep {
     var observationScope: SemanticObservationScope {
         cases
-            .map(\.predicate.observationScope)
+            .compactMap { try? $0.predicate.resolve(in: .empty).observationScope }
             .max() ?? .visible
     }
 }

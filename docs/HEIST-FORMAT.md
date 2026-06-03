@@ -224,9 +224,8 @@ The first matching case wins; no match without Else is a no-op.
 ## Semantic ForEach
 
 Semantic ForEach evaluates a predicate match set, enforces a bounded limit, and
-executes its body through the normal heist pipeline. It is currently a
-Swift-authored runtime feature because the wire contract does not yet have a
-durable body AST.
+executes its body through the normal heist pipeline. It is a durable AST node,
+not native Swift loop expansion.
 
 ```swift
 ForEach(.matching(.label("Delete")), limit: 20) { target in
@@ -235,12 +234,75 @@ ForEach(.matching(.label("Delete")), limit: 20) { target in
 }
 ```
 
+Wire shape:
+
+```json
+{
+  "type": "for_each_element",
+  "for_each_element": {
+    "matching": { "label": "Delete" },
+    "limit": 20,
+    "parameter": "target",
+    "steps": [
+      {
+        "type": "action",
+        "action": {
+          "command": {
+            "type": "activate",
+            "payload": { "target_ref": "target" }
+          },
+          "expectation": {
+            "predicate": {
+              "type": "absent",
+              "target_ref": "target"
+            },
+            "timeout": 2
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
 At runtime each iteration computes
-`ElementTarget.predicate(matching, ordinal: index)`, calls the Swift-authored
-body with that target, and executes the returned steps. Each body target is the
-real target for that iteration. The body does not receive cached geometry,
-UIKit objects, or a capture-local handle. Nested runtime ForEach is currently
-rejected during execution.
+`ElementTarget.predicate(matching, ordinal: index)`, binds it to the target
+reference, and executes the body steps. The body does not receive cached
+geometry, UIKit objects, or a capture-local handle. Nested collection ForEach
+is rejected by plan validation.
+
+String-array ForEach serializes as `for_each_string`:
+
+```json
+{
+  "type": "for_each_string",
+  "for_each_string": {
+    "values": ["Milk", "Eggs"],
+    "parameter": "item",
+    "steps": [
+      {
+        "type": "action",
+        "action": {
+          "command": {
+            "type": "typeText",
+            "payload": {
+              "text_ref": "item",
+              "target": { "label": "Add item" }
+            }
+          },
+          "expectation": {
+            "predicate": {
+              "type": "present",
+              "element": { "label_ref": "item" }
+            },
+            "timeout": 2
+          }
+        }
+      }
+    ]
+  }
+}
+```
 
 ## Mechanical And Viewport Escape Hatches
 

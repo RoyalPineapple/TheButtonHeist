@@ -56,12 +56,16 @@ public enum HeistStep: Codable, Sendable, Equatable {
     case wait(WaitStep)
     case conditional(ConditionalStep)
     case waitForCases(WaitForCasesStep)
-    case forEach(ForEachStep)
+    case forEachElement(ForEachElementStep)
+    case forEachString(ForEachStringStep)
     case warn(WarnStep)
     case fail(FailStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, action, wait, conditional, waitForCases = "wait_for_cases", forEach = "for_each", warn, fail
+        case type, action, wait, conditional, waitForCases = "wait_for_cases"
+        case forEachElement = "for_each_element"
+        case forEachString = "for_each_string"
+        case warn, fail
     }
 
     private enum StepType: String, Codable {
@@ -69,7 +73,8 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case wait
         case conditional
         case waitForCases = "wait_for_cases"
-        case forEach = "for_each"
+        case forEachElement = "for_each_element"
+        case forEachString = "for_each_string"
         case warn
         case fail
     }
@@ -93,12 +98,18 @@ public enum HeistStep: Codable, Sendable, Equatable {
                 typeName: "wait_for_cases heist step"
             )
             self = .waitForCases(try container.decode(WaitForCasesStep.self, forKey: .waitForCases))
-        case .forEach:
+        case .forEachElement:
             try decoder.rejectUnknownKeys(
-                allowed: ["type", CodingKeys.forEach.stringValue],
-                typeName: "for_each heist step"
+                allowed: ["type", CodingKeys.forEachElement.stringValue],
+                typeName: "for_each_element heist step"
             )
-            self = .forEach(try container.decode(ForEachStep.self, forKey: .forEach))
+            self = .forEachElement(try container.decode(ForEachElementStep.self, forKey: .forEachElement))
+        case .forEachString:
+            try decoder.rejectUnknownKeys(
+                allowed: ["type", CodingKeys.forEachString.stringValue],
+                typeName: "for_each_string heist step"
+            )
+            self = .forEachString(try container.decode(ForEachStringStep.self, forKey: .forEachString))
         case .warn:
             try decoder.rejectUnknownKeys(allowed: ["type", "warn"], typeName: "warn heist step")
             self = .warn(try container.decode(WarnStep.self, forKey: .warn))
@@ -123,9 +134,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .waitForCases(let step):
             try container.encode(StepType.waitForCases, forKey: .type)
             try container.encode(step, forKey: .waitForCases)
-        case .forEach(let step):
-            try container.encode(StepType.forEach, forKey: .type)
-            try container.encode(step, forKey: .forEach)
+        case .forEachElement(let step):
+            try container.encode(StepType.forEachElement, forKey: .type)
+            try container.encode(step, forKey: .forEachElement)
+        case .forEachString(let step):
+            try container.encode(StepType.forEachString, forKey: .type)
+            try container.encode(step, forKey: .forEachString)
         case .warn(let step):
             try container.encode(StepType.warn, forKey: .type)
             try container.encode(step, forKey: .warn)
@@ -139,18 +153,15 @@ public enum HeistStep: Codable, Sendable, Equatable {
 // MARK: - Step Payloads
 
 public struct ActionStep: Codable, Sendable, Equatable {
-    public let command: ClientMessage
+    public let command: HeistActionCommand
     public let expectation: WaitStep?
     public let expectationWaiver: String?
 
     public init(
-        command: ClientMessage,
+        command: HeistActionCommand,
         expectation: WaitStep? = nil,
         expectationWaiver: String? = nil
     ) throws {
-        guard command.isHeistActionCommand else {
-            throw HeistPlanError.unsupportedActionCommand(command.wireType.rawValue)
-        }
         if let expectationWaiver {
             guard !expectationWaiver.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw HeistPlanError.emptyExpectationWaiver
@@ -164,6 +175,19 @@ public struct ActionStep: Codable, Sendable, Equatable {
         self.expectationWaiver = expectationWaiver
     }
 
+    @_disfavoredOverload
+    public init(
+        command: ClientMessage,
+        expectation: WaitStep? = nil,
+        expectationWaiver: String? = nil
+    ) throws {
+        try self.init(
+            command: HeistActionCommand(clientMessage: command),
+            expectation: expectation,
+            expectationWaiver: expectationWaiver
+        )
+    }
+
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case command, expectation
         case expectationWaiver = "without_expectation"
@@ -173,7 +197,7 @@ public struct ActionStep: Codable, Sendable, Equatable {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "action step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
-            command: try container.decode(ClientMessage.self, forKey: .command),
+            command: try container.decode(HeistActionCommand.self, forKey: .command),
             expectation: try container.decodeIfPresent(WaitStep.self, forKey: .expectation),
             expectationWaiver: try container.decodeIfPresent(String.self, forKey: .expectationWaiver)
         )
@@ -192,13 +216,18 @@ public struct WaitStep: Codable, Sendable, Equatable {
         case predicate, timeout
     }
 
-    public let predicate: AccessibilityPredicate
+    public let predicate: AccessibilityPredicateExpr
     /// Seconds. `0` means immediate predicate evaluation.
     public let timeout: Double
 
-    public init(predicate: AccessibilityPredicate, timeout: Double = 0) {
+    public init(predicate: AccessibilityPredicateExpr, timeout: Double = 0) {
         self.predicate = predicate
         self.timeout = timeout
+    }
+
+    @_disfavoredOverload
+    public init(predicate: AccessibilityPredicate, timeout: Double = 0) {
+        self.init(predicate: .predicate(predicate), timeout: timeout)
     }
 
     public init(from decoder: Decoder) throws {
@@ -213,7 +242,7 @@ public struct WaitStep: Codable, Sendable, Equatable {
             )
         }
         self.init(
-            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
             timeout: decodedTimeout
         )
     }
@@ -302,41 +331,44 @@ public struct PredicateCase: Codable, Sendable, Equatable {
         case predicate, steps
     }
 
-    public let predicate: AccessibilityPredicate
+    public let predicate: AccessibilityPredicateExpr
     public let steps: [HeistStep]
 
-    public init(predicate: AccessibilityPredicate, steps: [HeistStep]) {
+    public init(predicate: AccessibilityPredicateExpr, steps: [HeistStep]) {
         self.predicate = predicate
         self.steps = steps
+    }
+
+    @_disfavoredOverload
+    public init(predicate: AccessibilityPredicate, steps: [HeistStep]) {
+        self.init(predicate: .predicate(predicate), steps: steps)
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "predicate case")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            predicate: try container.decode(AccessibilityPredicate.self, forKey: .predicate),
+            predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
             steps: try container.decode([HeistStep].self, forKey: .steps)
         )
     }
 }
 
-// Swift-authored body is invoked synchronously by the heist runtime.
-// swiftlint:disable:next agent_unchecked_sendable_no_comment
-public struct ForEachStep: Codable, Equatable, @unchecked Sendable {
-    public typealias Body = (ElementTarget) throws -> [HeistStep]
-
+public struct ForEachElementStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case matching, limit
+        case matching, limit, parameter, steps
     }
 
     public let matching: ElementPredicate
     public let limit: Int
-    private let body: Body
+    public let parameter: String
+    public let steps: [HeistStep]
 
     public init(
         matching: ElementPredicate,
         limit: Int,
-        _ body: @escaping Body
+        parameter: String,
+        steps: [HeistStep]
     ) throws {
         guard matching.hasPredicates else {
             throw HeistPlanError.emptyForEachPredicate
@@ -344,43 +376,60 @@ public struct ForEachStep: Codable, Equatable, @unchecked Sendable {
         guard limit > 0 else {
             throw HeistPlanError.invalidForEachLimit(limit)
         }
+        guard !steps.isEmpty else {
+            throw HeistPlanError.emptyForEachSteps
+        }
         self.matching = matching
         self.limit = limit
-        self.body = body
-    }
-
-    public func steps(for target: ElementTarget) throws -> [HeistStep] {
-        try body(target)
+        self.parameter = parameter
+        self.steps = steps
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each step")
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each_element step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let matching = try container.decode(ElementPredicate.self, forKey: .matching)
-        guard matching.hasPredicates else {
-            throw HeistPlanError.emptyForEachPredicate
-        }
-        let limit = try container.decode(Int.self, forKey: .limit)
-        guard limit > 0 else {
-            throw HeistPlanError.invalidForEachLimit(limit)
-        }
-        throw DecodingError.dataCorruptedError(
-            forKey: .matching,
-            in: container,
-            debugDescription: "semantic for_each bodies are Swift-authored only until a durable body AST exists"
+        try self.init(
+            matching: try container.decode(ElementPredicate.self, forKey: .matching),
+            limit: try container.decode(Int.self, forKey: .limit),
+            parameter: try container.decode(String.self, forKey: .parameter),
+            steps: try container.decode([HeistStep].self, forKey: .steps)
         )
     }
+}
 
-    public func encode(to encoder: Encoder) throws {
-        let context = EncodingError.Context(
-            codingPath: encoder.codingPath,
-            debugDescription: "semantic for_each bodies are Swift-authored only until a durable body AST exists"
-        )
-        throw EncodingError.invalidValue("for_each", context)
+public struct ForEachStringStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case values, parameter, steps
     }
 
-    public static func == (lhs: ForEachStep, rhs: ForEachStep) -> Bool {
-        lhs.matching == rhs.matching && lhs.limit == rhs.limit
+    public let values: [String]
+    public let parameter: String
+    public let steps: [HeistStep]
+
+    public init(
+        values: [String],
+        parameter: String,
+        steps: [HeistStep]
+    ) throws {
+        guard !values.isEmpty else {
+            throw HeistPlanError.emptyForEachValues
+        }
+        guard !steps.isEmpty else {
+            throw HeistPlanError.emptyForEachSteps
+        }
+        self.values = values
+        self.parameter = parameter
+        self.steps = steps
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each_string step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            values: try container.decode([String].self, forKey: .values),
+            parameter: try container.decode(String.self, forKey: .parameter),
+            steps: try container.decode([HeistStep].self, forKey: .steps)
+        )
     }
 }
 
@@ -428,5 +477,70 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case negativeTimeout(Double)
     case emptyForEachPredicate
     case invalidForEachLimit(Int)
+    case emptyForEachParameter
+    case invalidForEachParameter(String)
+    case emptyForEachSteps
+    case emptyForEachValues
     case nestedForEachUnsupported
+}
+
+public enum HeistParameterName {
+    public static func normalized(_ parameter: String) throws -> String {
+        let trimmed = parameter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw HeistPlanError.emptyForEachParameter
+        }
+        guard isValid(trimmed) else {
+            throw HeistPlanError.invalidForEachParameter(trimmed)
+        }
+        return trimmed
+    }
+
+    public static func isValid(_ parameter: String) -> Bool {
+        guard let first = parameter.unicodeScalars.first,
+              CharacterSet.letters.union(CharacterSet(charactersIn: "_")).contains(first) else {
+            return false
+        }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+        return parameter.unicodeScalars.allSatisfy { allowed.contains($0) } && !swiftKeywords.contains(parameter)
+    }
+
+    private static let swiftKeywords: Set<String> = [
+        "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import",
+        "init", "inout", "internal", "let", "open", "operator", "private", "precedencegroup", "protocol",
+        "public", "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
+        "catch", "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if",
+        "in", "repeat", "return", "throw", "switch", "where", "while", "as", "Any", "catch", "false",
+        "is", "nil", "super", "self", "Self", "throw", "throws", "true", "try",
+    ]
+}
+
+public struct ResolvedWaitStep: Sendable, Equatable {
+    public let predicate: AccessibilityPredicate
+    public let timeout: Double
+
+    public init(predicate: AccessibilityPredicate, timeout: Double = 0) {
+        self.predicate = predicate
+        self.timeout = timeout
+    }
+}
+
+public extension WaitStep {
+    func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedWaitStep {
+        ResolvedWaitStep(predicate: try predicate.resolve(in: environment), timeout: timeout)
+    }
+}
+
+public extension PredicateCase {
+    func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedPredicateCase {
+        ResolvedPredicateCase(
+            predicate: try predicate.resolve(in: environment),
+            steps: steps
+        )
+    }
+}
+
+public struct ResolvedPredicateCase: Sendable, Equatable {
+    public let predicate: AccessibilityPredicate
+    public let steps: [HeistStep]
 }

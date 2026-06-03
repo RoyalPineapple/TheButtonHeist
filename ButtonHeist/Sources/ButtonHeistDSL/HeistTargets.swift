@@ -34,6 +34,24 @@ public extension ElementTarget {
     }
 }
 
+public extension ElementPredicateExpr {
+    static func label(_ label: StringExpr) -> ElementPredicateExpr {
+        ElementPredicateExpr(label: label)
+    }
+
+    static func label(_ label: String) -> ElementPredicateExpr {
+        ElementPredicateExpr(label: .literal(label))
+    }
+
+    static func identifier(_ identifier: StringExpr) -> ElementPredicateExpr {
+        ElementPredicateExpr(identifier: identifier)
+    }
+
+    static func value(_ value: StringExpr) -> ElementPredicateExpr {
+        ElementPredicateExpr(value: value)
+    }
+}
+
 public extension AccessibilityPredicate {
     static func present(_ predicate: ElementPredicate) -> AccessibilityPredicate {
         .state(.present(predicate))
@@ -54,6 +72,30 @@ public extension AccessibilityPredicate {
     }
 
     static func all(_ states: [AccessibilityPredicate.State]) -> AccessibilityPredicate {
+        .state(.all(states))
+    }
+}
+
+public extension AccessibilityPredicateExpr {
+    static func present(_ predicate: ElementPredicateExpr) -> AccessibilityPredicateExpr {
+        .state(.present(predicate))
+    }
+
+    @_disfavoredOverload
+    static func present(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
+        .state(.presentTarget(target))
+    }
+
+    static func absent(_ predicate: ElementPredicateExpr) -> AccessibilityPredicateExpr {
+        .state(.absent(predicate))
+    }
+
+    @_disfavoredOverload
+    static func absent(_ target: ElementTargetExpr) -> AccessibilityPredicateExpr {
+        .state(.absentTarget(target))
+    }
+
+    static func all(_ states: [StatePredicateExpr]) -> AccessibilityPredicateExpr {
         .state(.all(states))
     }
 }

@@ -58,10 +58,6 @@ extension HeistPlan: HeistContent {
     public var heistSteps: [HeistStep] { steps }
 }
 
-extension Array: HeistContent where Element == HeistStep {
-    public var heistSteps: [HeistStep] { self }
-}
-
 public struct EmptyHeistContent: HeistContent {
     public let heistSteps: [HeistStep] = []
 
@@ -82,19 +78,7 @@ public enum HeistBuilder {
         expression
     }
 
-    public static func buildExpression(_ expression: [HeistStep]) -> some HeistContent {
-        expression
-    }
-
-    public static func buildExpression(_ expression: [some HeistContent]) -> some HeistContent {
-        HeistStepList(expression.flatMap(\.heistSteps))
-    }
-
     public static func buildBlock(_ components: any HeistContent...) -> some HeistContent {
-        HeistStepList(components.flatMap(\.heistSteps))
-    }
-
-    public static func buildArray(_ components: [any HeistContent]) -> some HeistContent {
         HeistStepList(components.flatMap(\.heistSteps))
     }
 
@@ -138,20 +122,36 @@ public struct ElementMatches: Sendable, Equatable {
 public struct ForEach<Content: HeistContent>: HeistContent {
     public let heistSteps: [HeistStep]
 
-    public init<Data: Sequence>(_ data: Data, @HeistBuilder content: (Data.Element) throws -> Content) rethrows {
-        self.heistSteps = try data.flatMap { element in
-            try content(element).heistSteps
-        }
+    public init(
+        _ values: [String],
+        parameter: String = "item",
+        @HeistBuilder content: (StringExpr) throws -> Content
+    ) throws {
+        let item = try StringExpr(ref: parameter)
+        let steps = try content(item).heistSteps
+        self.heistSteps = [
+            .forEachString(try ForEachStringStep(
+                values: values,
+                parameter: parameter,
+                steps: steps
+            )),
+        ]
     }
 
     public init(
         _ matches: ElementMatches,
         limit: Int = 20,
-        @HeistBuilder _ content: @escaping (ElementTarget) throws -> Content
+        parameter: String = "target",
+        @HeistBuilder _ content: (ElementTargetExpr) throws -> Content
     ) throws {
-        let step = try ForEachStep(matching: matches.predicate, limit: limit) { target in
-            try content(target).heistSteps
-        }
-        self.heistSteps = [.forEach(step)]
+        let target = try ElementTargetExpr(ref: parameter)
+        let steps = try content(target).heistSteps
+        let step = try ForEachElementStep(
+            matching: matches.predicate,
+            limit: limit,
+            parameter: parameter,
+            steps: steps
+        )
+        self.heistSteps = [.forEachElement(step)]
     }
 }

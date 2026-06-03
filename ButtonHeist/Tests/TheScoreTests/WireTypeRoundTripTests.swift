@@ -54,10 +54,28 @@ final class WireTypeRoundTripTests: XCTestCase {
         }
     }
 
+    func testTypeTextStringRefLoweringRejectsEmptyResolvedText() throws {
+        let command = HeistActionCommand.typeText(
+            text: .ref("item"),
+            target: .target(.predicate(ElementPredicate(label: "Add item")))
+        )
+
+        XCTAssertThrowsError(try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))) { error in
+            XCTAssertEqual(error as? TypeTextTargetError, .emptyText)
+        }
+    }
+
     func testSetPasteboardTargetRejectsUnknownPayloadKey() throws {
         let data = Data(#"{"text":"hello","foo":"bar"}"#.utf8)
         XCTAssertThrowsError(try decoder.decode(SetPasteboardTarget.self, from: data)) { error in
             assertDecodingError(error, contains: [#"Unknown pasteboard target field "foo""#])
+        }
+    }
+
+    func testSetPasteboardTargetRejectsEmptyText() throws {
+        let data = Data(#"{"text":""}"#.utf8)
+        XCTAssertThrowsError(try decoder.decode(SetPasteboardTarget.self, from: data)) { error in
+            assertDecodingError(error, contains: ["pasteboard text must be non-empty"])
         }
     }
 

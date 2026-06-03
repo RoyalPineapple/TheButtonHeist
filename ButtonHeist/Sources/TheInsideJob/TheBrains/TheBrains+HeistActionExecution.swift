@@ -9,13 +9,28 @@ extension TheBrains {
         _ step: ActionStep,
         index: Int,
         start: CFAbsoluteTime,
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
-        let actionResult = await runtime.execute(step.command)
+        let command: ClientMessage
+        do {
+            command = try step.command.resolve(in: environment)
+        } catch {
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .action,
+                message: "could not resolve heist action command: \(error)",
+                durationMs: elapsedMilliseconds(since: start),
+                stopsHeist: true
+            )
+        }
+
+        let actionResult = await runtime.execute(command)
         let expectationReceipt = await expectationReceipt(
             for: step,
             actionResult: actionResult,
-            runtime: runtime
+            runtime: runtime,
+            environment: environment
         )
 
         return HeistExecutionStepResult(
@@ -31,12 +46,28 @@ extension TheBrains {
     private func expectationReceipt(
         for step: ActionStep,
         actionResult: ActionResult,
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> HeistExpectationReceipt? {
         guard actionResult.success else { return nil }
         guard let expectation = step.expectation else { return nil }
+        let resolvedExpectation: ResolvedWaitStep
+        do {
+            resolvedExpectation = try expectation.resolve(in: environment)
+        } catch {
+            let failed = ActionResultBuilder(method: .wait)
+                .failure(errorKind: .actionFailed)
+            return HeistExpectationReceipt(
+                actionResult: failed,
+                expectation: ExpectationResult(
+                    met: false,
+                    predicate: nil,
+                    actual: "could not resolve heist expectation: \(error)"
+                )
+            )
+        }
 
-        let waitReceipt = await runtime.wait(expectation, actionResult.accessibilityTrace)
+        let waitReceipt = await runtime.wait(resolvedExpectation, actionResult.accessibilityTrace)
         return HeistExpectationReceipt(
             actionResult: waitReceipt.actionResult,
             expectation: waitReceipt.expectation
