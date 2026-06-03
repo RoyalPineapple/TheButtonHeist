@@ -7,8 +7,6 @@ import TheScore
 private let receiveLogger = Logger(subsystem: "com.buttonheist.thehandoff", category: "server")
 
 extension SimpleSocketServer {
-    static let maxMessagesPerSecond = SocketRateLimiter.defaultMaxMessagesPerSecond
-
     func startReceiving(clientId: Int, connection: NWConnection) {
         receiveNextChunk(clientId: clientId, connection: connection, framer: SocketReceiveFramer())
     }
@@ -70,27 +68,11 @@ extension SimpleSocketServer {
     }
 
     private func routeMessageFrame(clientId: Int, messageData: Data) -> Bool {
-        switch clientRegistry.recordInboundMessage(clientId: clientId) {
-        case .missingClient:
-            return false
-        case .rateLimited(let shouldNotify):
-            receiveLogger.warning("Client \(clientId) rate limited, dropping message")
-            if shouldNotify {
-                notifyRateLimit(clientId)
-            }
-        case .accepted:
-            clientLifecycle.receivedData(clientId: clientId, data: messageData) { [weak self] response in
-                guard let self else { return }
-                self.spawnTrackedTask { server in await server.send(response, to: clientId) }
-            }
-        }
-        return true
-    }
-
-    private func notifyRateLimit(_ clientId: Int) {
-        clientLifecycle.rateLimited(clientId) { [weak self] response in
+        guard clientRegistry.client(clientId) != nil else { return false }
+        clientLifecycle.receivedData(clientId: clientId, data: messageData) { [weak self] response in
             guard let self else { return }
             self.spawnTrackedTask { server in await server.send(response, to: clientId) }
         }
+        return true
     }
 }

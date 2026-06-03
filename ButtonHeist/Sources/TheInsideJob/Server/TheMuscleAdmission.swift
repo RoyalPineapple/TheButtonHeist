@@ -101,13 +101,15 @@ struct TheMuscleAdmission {
         _ clientId: Int,
         data: Data,
         respond: @escaping ResponseHandler,
-        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?
+        uiApprovalUnavailableDiagnostic: SessionLease.SessionLockDiagnostic?,
+        at now: Date = Date()
     ) -> MuscleAdmissionDecision {
         authentication.admitClientMessage(
             clientId,
             data: data,
             respond: respond,
-            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic
+            uiApprovalUnavailableDiagnostic: uiApprovalUnavailableDiagnostic,
+            at: now
         )
     }
 

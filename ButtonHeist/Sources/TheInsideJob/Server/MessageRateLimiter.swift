@@ -1,8 +1,8 @@
 import Foundation
 
-/// One-second fixed-window rate limiter for a single socket client.
+/// One-second fixed-window rate limiter for a single client message stream.
 /// It owns both the recent-message window and the once-per-window notification bit.
-struct SocketRateLimiter: Equatable, Sendable {
+struct MessageRateLimiter: Equatable, Sendable {
     static let defaultMaxMessagesPerSecond = 30
 
     let maxMessagesPerSecond: Int

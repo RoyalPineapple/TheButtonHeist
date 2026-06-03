@@ -3,26 +3,23 @@ import Network
 
 typealias SocketDataHandler = @Sendable (Int, Data, @escaping @Sendable (Data) -> Void) -> Void
 
-/// Callback bundle for socket lifecycle, send, rate-limit, and data events.
+/// Callback bundle for socket lifecycle, send, and data events.
 struct SocketServerCallbacks: Sendable {
     var onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)?
     var onClientDisconnected: (@Sendable (Int) -> Void)?
     var onDataReceived: SocketDataHandler?
     var onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)?
-    var onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)?
 
     init(
         onClientConnected: (@Sendable (_ clientId: Int, _ remoteAddress: String?) -> Void)? = nil,
         onClientDisconnected: (@Sendable (Int) -> Void)? = nil,
         onDataReceived: SocketDataHandler? = nil,
-        onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)? = nil,
-        onRateLimited: (@Sendable (_ clientId: Int, _ respond: @escaping @Sendable (Data) -> Void) -> Void)? = nil
+        onSendFailed: (@Sendable (_ clientId: Int, _ failure: ServerSendFailure) -> Void)? = nil
     ) {
         self.onClientConnected = onClientConnected
         self.onClientDisconnected = onClientDisconnected
         self.onDataReceived = onDataReceived
         self.onSendFailed = onSendFailed
-        self.onRateLimited = onRateLimited
     }
 }
 
@@ -40,10 +37,6 @@ struct SocketClientLifecycle: Sendable {
 
     func sendFailed(_ clientId: Int, failure: ServerSendFailure) {
         callbacks.onSendFailed?(clientId, failure)
-    }
-
-    func rateLimited(_ clientId: Int, respond: @escaping @Sendable (Data) -> Void) {
-        callbacks.onRateLimited?(clientId, respond)
     }
 
     func receivedData(
