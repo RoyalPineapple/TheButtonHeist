@@ -16,6 +16,17 @@ enum TargetResolutionDiagnostics {
         }
     }
 
+    static func message(for resolution: TheStash.ContainerTargetResolution) -> String {
+        switch resolution {
+        case .resolved:
+            return ""
+        case .notFound(let facts):
+            return containerNotFoundMessage(facts)
+        case .ambiguous(let facts):
+            return containerAmbiguousMessage(facts)
+        }
+    }
+
     static func candidateSummary(_ candidate: TheStash.TargetCandidateFacts) -> String {
         var parts: [String] = []
         if let label = candidate.label, !label.isEmpty { parts.append("\"\(label)\"") }
@@ -23,6 +34,16 @@ enum TargetResolutionDiagnostics {
         if let value = candidate.value, !value.isEmpty { parts.append("value=\(value)") }
         parts.append(availabilityDescription(candidate))
         return parts.joined(separator: " ")
+    }
+
+    static func containerCandidateSummary(_ candidate: TheStash.ContainerCandidateFacts) -> String {
+        [
+            "type=\(candidate.type.rawValue)",
+            candidate.identifier.map { "identifier=\"\($0)\"" },
+            candidate.label.map { "label=\"\($0)\"" },
+            candidate.value.map { "value=\"\($0)\"" },
+            candidate.isModalBoundary ? "modal=true" : nil,
+        ].compactMap { $0 }.joined(separator: " ")
     }
 
     private static func notFoundMessage(_ facts: TheStash.TargetNotFoundFacts) -> String {
@@ -78,6 +99,25 @@ enum TargetResolutionDiagnostics {
             details.append("unreachable")
         }
         return "(\(details.joined(separator: ", ")))"
+    }
+
+    private static func containerNotFoundMessage(_ facts: TheStash.ContainerNotFoundFacts) -> String {
+        switch facts.reason {
+        case .emptyMatcher:
+            return "container target needs semantic scope: use type, label, value, identifier, or target an element inside the intended region"
+        case .ordinalOutOfRange(let requested, let matchCount):
+            return "container target ordinal \(requested) is outside \(matchCount) matching container(s); "
+                + "narrow the container matcher or target an element inside the intended region"
+        case .noMatches:
+            return "no semantic container matched \(facts.matcher); target an element inside the intended region or inspect the current interface"
+        }
+    }
+
+    private static func containerAmbiguousMessage(_ facts: TheStash.ContainerAmbiguityFacts) -> String {
+        let candidates = facts.candidates.map(containerCandidateSummary)
+        return "container target is ambiguous across \(facts.matchedCount) containers; "
+            + "narrow by semantic facts or target an element inside the intended region. Candidates: "
+            + candidates.joined(separator: "; ")
     }
 }
 

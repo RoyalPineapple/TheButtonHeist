@@ -205,7 +205,7 @@ final class InteractionObservation {
     }
 
     private func semanticObservation(
-        from event: TheStash.SettledSemanticObservationEvent
+        from event: SettledSemanticObservationEvent
     ) -> HeistSemanticObservation {
         let current = postActionObservation.captureSemanticState(from: event.observation)
         return InteractionObservationProjection.semanticObservation(event: event, state: current)

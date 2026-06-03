@@ -3,6 +3,28 @@ import Foundation
 import TheScore
 
 extension TheFence.CommandArgumentEnvelope {
+    @ButtonHeistActor
+    func schemaGestureElementTarget(_ key: String) throws -> ElementTarget? {
+        guard let object = try schemaDictionary(key) else { return nil }
+        return try object.decodeElementTargetPayload()
+    }
+
+    func schemaScreenPoint(_ key: String) throws -> ScreenPoint? {
+        guard let object = try schemaDictionary(key) else { return nil }
+        try object.rejectUnknownKeys(allowed: Set(["x", "y"]), expected: "valid screen point field")
+        return ScreenPoint(
+            x: try object.requiredSchemaNumber("x"),
+            y: try object.requiredSchemaNumber("y")
+        )
+    }
+
+    func requiredScreenPoint(_ key: String) throws -> ScreenPoint {
+        guard let point = try schemaScreenPoint(key) else {
+            throw SchemaValidationError(field: field(key), observed: "missing", expected: "object")
+        }
+        return point
+    }
+
     func schemaUnitPoint(_ key: String) throws -> UnitPoint? {
         guard let value = argumentValues[key] else { return nil }
         guard case .object(let values) = value else {
@@ -31,45 +53,24 @@ extension TheFence.CommandArgumentEnvelope {
 }
 
 extension TheFence {
-
-    func decodeRequiredPointIntent(
+    @ButtonHeistActor
+    func decodePointSelection(
         request: CommandArgumentEnvelope,
-        elementTarget: ElementTarget?,
-        xKey: String,
-        yKey: String,
-        field: String,
-        missingMessage: String
+        elementKey: String = "element",
+        pointKey: String = "point"
     ) throws -> GesturePointSelection {
-        let point = try decodeCoordinatePair(request: request, xKey: xKey, yKey: yKey, field: field)
-        if elementTarget != nil, point != nil {
-            throw mixedGestureShape(field: field, expected: "target object or coordinates")
-        }
-        if let elementTarget {
-            return .element(elementTarget)
-        }
-        if let point {
+        let element = try request.schemaGestureElementTarget(elementKey)
+        let point = try request.schemaScreenPoint(pointKey)
+        switch (element, point) {
+        case (.some(let element), nil):
+            return .element(element)
+        case (nil, .some(let point)):
             return .coordinate(point)
+        case (.some, .some):
+            throw mixedGestureShape(field: "\(elementKey)/\(pointKey)", expected: "element or point")
+        case (nil, nil):
+            throw FenceError.invalidRequest("Must specify element or point")
         }
-        throw FenceError.invalidRequest(missingMessage)
-    }
-
-    func decodeCoordinatePair(
-        request: CommandArgumentEnvelope,
-        xKey: String,
-        yKey: String,
-        field: String
-    ) throws -> ScreenPoint? {
-        let x = try request.schemaNumber(xKey)
-        let y = try request.schemaNumber(yKey)
-        guard (x != nil) == (y != nil) else {
-            throw SchemaValidationError(
-                field: field,
-                observed: "partial coordinates",
-                expected: "both \(xKey) and \(yKey), or neither"
-            )
-        }
-        guard let x, let y else { return nil }
-        return ScreenPoint(x: x, y: y)
     }
 
     func mixedGestureShape(field: String, expected: String) -> SchemaValidationError {

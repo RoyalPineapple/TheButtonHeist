@@ -15,17 +15,17 @@ enum SemanticObservationScope: Int, Comparable, Sendable {
 final class SemanticObservationSubscription {
     let id: UInt64
     let scope: SemanticObservationScope
-    private weak var stash: TheStash?
+    private weak var stream: SemanticObservationStream?
 
-    init(id: UInt64, scope: SemanticObservationScope, stash: TheStash) {
+    init(id: UInt64, scope: SemanticObservationScope, stream: SemanticObservationStream) {
         self.id = id
         self.scope = scope
-        self.stash = stash
+        self.stream = stream
     }
 
     deinit {
         MainActor.assumeIsolated {
-            stash?.removeSemanticObservationSubscription(id)
+            stream?.removeSubscription(id)
         }
     }
 }

@@ -35,7 +35,7 @@ final class PostActionObservation {
         self.navigation = navigation
     }
 
-    func captureSemanticState(from observation: TheStash.SettledSemanticObservation) -> BeforeState {
+    func captureSemanticState(from observation: SettledSemanticObservation) -> BeforeState {
         captureSemanticState(
             from: observation.screen,
             tripwireSignal: observation.tripwireSignal,

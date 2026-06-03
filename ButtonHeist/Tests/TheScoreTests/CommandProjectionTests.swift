@@ -6,7 +6,7 @@ final class CommandProjectionTests: XCTestCase {
     func testPointGestureProjectionUsesCoordinateWhenNoSemanticTargetExists() throws {
         let target = TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))
 
-        XCTAssertEqual(target.gesturePointSelection(), GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20)))
+        XCTAssertEqual(target.selection, GesturePointSelection.coordinate(ScreenPoint(x: 10, y: 20)))
     }
 
     func testSwipeProjectionPreservesElementDirectionIntent() {
@@ -15,7 +15,7 @@ final class CommandProjectionTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            target.gestureSelection(),
+            target.selection,
             .elementDirection(.predicate(ElementPredicate(label: "carousel")), .left)
         )
     }
@@ -29,7 +29,7 @@ final class CommandProjectionTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            target.gestureSelection(),
+            target.selection,
             .point(
                 start: .coordinate(ScreenPoint(x: 10, y: 20)),
                 destination: .direction(.down)

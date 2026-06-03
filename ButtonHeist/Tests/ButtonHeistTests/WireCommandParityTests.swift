@@ -82,13 +82,23 @@ final class WireCommandParityTests: XCTestCase {
              .listTargets, .startHeist, .dismissKeyboard:
             return [:]
         case .oneFingerTap:
-            return ["x": .double(12), "y": .double(34)]
+            return ["point": .object(["x": .double(12), "y": .double(34)])]
         case .longPress:
-            return ["x": .double(12), "y": .double(34)]
+            return ["point": .object(["x": .double(12), "y": .double(34)])]
         case .swipe:
-            return ["target": target, "direction": .string(SwipeDirection.left.rawValue)]
+            return [
+                "elementDirection": .object([
+                    "element": target,
+                    "direction": .string(SwipeDirection.left.rawValue),
+                ]),
+            ]
         case .drag:
-            return ["target": target, "endX": .double(120), "endY": .double(240)]
+            return [
+                "elementToPoint": .object([
+                    "element": target,
+                    "end": .object(["x": .double(120), "y": .double(240)]),
+                ]),
+            ]
         case .scroll:
             return ["direction": .string(ScrollDirection.down.rawValue)]
         case .scrollToVisible, .activate:

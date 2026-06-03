@@ -25,9 +25,8 @@ extension Actions {
     // MARK: - Synthetic Gesture Dispatch
 
     func executeTap(_ target: TapTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.gesturePointSelection()
         return await performPointAction(
-            selection: selection,
+            selection: target.selection,
             method: .syntheticTap
         ) { point in
             await self.safecracker.tap(at: point)
@@ -35,9 +34,8 @@ extension Actions {
     }
 
     func executeLongPress(_ target: LongPressTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.gesturePointSelection()
         return await performPointAction(
-            selection: selection,
+            selection: target.selection,
             method: .syntheticLongPress
         ) { point in
             await self.safecracker.longPress(at: point, duration: target.duration)
@@ -45,8 +43,7 @@ extension Actions {
     }
 
     func executeSwipe(_ target: SwipeTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.gestureSelection()
-        switch selection {
+        switch target.selection {
         case .unitElement(let elementTarget, let start, let end):
             return await performElementFrameSwipe(
                 elementTarget: elementTarget,
@@ -137,8 +134,17 @@ extension Actions {
     }
 
     func executeDrag(_ target: DragTarget) async -> TheSafecracker.InteractionResult {
-        let selection = target.startSelection()
-        let endPoint = target.end.cgPoint
+        let selection: GesturePointSelection
+        let end: ScreenPoint
+        switch target.selection {
+        case .elementToPoint(let target, let endPoint):
+            selection = .element(target)
+            end = endPoint
+        case .pointToPoint(let startPoint, let endPoint):
+            selection = .coordinate(startPoint)
+            end = endPoint
+        }
+        let endPoint = end.cgPoint
         if let failure = geometryFailure(method: .syntheticDrag, field: "endPoint", point: endPoint) {
             return failure
         }

@@ -176,6 +176,7 @@ func semanticForEachBuildsRuntimeForEachStep() throws {
         .forEach(try ForEachStep(
             matching: matching,
             limit: 20,
+            element: .predicate(matching, ordinal: 0),
             steps: [
                 .action(try ActionStep(
                     command: .activate(.predicate(matching, ordinal: 0)),
@@ -213,82 +214,6 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
     #expect(!json.contains("source"))
     #expect(!json.contains("source_map"))
     #expect(!json.contains("static_loop"))
-}
-
-@Test
-func semanticForEachRendererOutputMatchesConstructibleDSLShape() throws {
-    let heist = try Heist {
-        try ForEach(.matching(.label("Delete")), limit: 20) { element in
-            Activate(element)
-                .expect(.absent(element), timeout: .seconds(2))
-        }
-    }
-
-    let rendered = try HeistSwiftRenderer().render(heist.plan)
-
-    #expect(rendered == """
-    Heist {
-        ForEach(.matching(.label("Delete")), limit: 20) { element in
-            Activate(element)
-                .expect(.absent(element), timeout: .seconds(2))
-        }
-    }
-    """)
-}
-
-@Test
-func rendererProducesCanonicalExpandedDSL() throws {
-    let heist = try Heist {
-        Activate(.label("Sign In"))
-            .expect(.changed(.screen(where: .present(.label("Home")))), timeout: .seconds(5))
-
-        WaitFor(.absent(.label("Loading")), timeout: .seconds(10))
-
-        If(.present(.label("Home"))) {
-            Warn("home")
-        } otherwise: {
-            Fail("unknown")
-        }
-
-        WaitFor(timeout: .seconds(8)) {
-            Case(.present(.label("Receipt"))) {
-                Warn("receipt")
-            }
-
-            Else {
-                Fail("missing receipt")
-            }
-        }
-
-        Warn("Optional onboarding was skipped")
-        Fail("Unexpected login state")
-    }
-
-    let rendered = try HeistSwiftRenderer().render(heist.plan)
-
-    #expect(rendered == """
-    Heist {
-        Activate(.label("Sign In"))
-            .expect(.changed(.screen(where: .present(.label("Home")))), timeout: .seconds(5))
-        WaitFor(.absent(.label("Loading")), timeout: .seconds(10))
-        If(.present(.label("Home"))) {
-            Warn("home")
-        } otherwise: {
-            Fail("unknown")
-        }
-        WaitFor(timeout: .seconds(8)) {
-            Case(.present(.label("Receipt"))) {
-                Warn("receipt")
-            }
-
-            Else {
-                Fail("missing receipt")
-            }
-        }
-        Warn("Optional onboarding was skipped")
-        Fail("Unexpected login state")
-    }
-    """)
 }
 
 @Test

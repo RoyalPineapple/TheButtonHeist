@@ -657,7 +657,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapMissingTarget() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
-            contains: "Must specify target object"
+            contains: "Must specify element or point"
         )
     }
 
@@ -665,7 +665,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapWithCoordinatesPassesValidation() async {
         await assertOperationPassesValidation(
             command: .oneFingerTap,
-            arguments: ["x": .double(100.0), "y": .double(200.0)]
+            arguments: ["point": .object(["x": .double(100.0), "y": .double(200.0)])]
         )
     }
 
@@ -673,8 +673,8 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapRejectsPartialCoordinates() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
-            arguments: ["x": .double(100.0)],
-            equals: "schema validation failed for x/y: observed partial coordinates; expected both x and y, or neither"
+            arguments: ["point": .object(["x": .double(100.0)])],
+            equals: "schema validation failed for point.y: observed missing; expected number"
         )
     }
 
@@ -682,8 +682,8 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapRejectsNaNCoordinate() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
-            arguments: ["x": .double(Double.nan), "y": .double(200.0)],
-            equals: "schema validation failed for x: observed number nan; expected number"
+            arguments: ["point": .object(["x": .double(Double.nan), "y": .double(200.0)])],
+            equals: "schema validation failed for point.x: observed number nan; expected number"
         )
     }
 
@@ -691,8 +691,8 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapRejectsInfiniteCoordinate() async {
         await assertOperationValidationError(
             command: .oneFingerTap,
-            arguments: ["x": .double(Double.infinity), "y": .double(200.0)],
-            equals: "schema validation failed for x: observed number inf; expected number"
+            arguments: ["point": .object(["x": .double(Double.infinity), "y": .double(200.0)])],
+            equals: "schema validation failed for point.x: observed number inf; expected number"
         )
     }
 
@@ -700,7 +700,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testOneFingerTapWithIdentifierPassesValidation() async {
         await assertOperationPassesValidation(
             command: .oneFingerTap,
-            arguments: ["target": targetValue(identifier: "myButton")]
+            arguments: ["element": targetValue(identifier: "myButton")]
         )
     }
 
@@ -709,7 +709,7 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .oneFingerTap,
             arguments: [
-                "target": elementTargetValue([
+                "element": elementTargetValue([
                     "heistId": .string("button_save"),
                     "label": .string("Save"),
                 ]),
@@ -722,7 +722,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testLongPressMissingTarget() async {
         await assertOperationValidationError(
             command: .longPress,
-            contains: "Must specify target object"
+            contains: "Must specify element or point"
         )
     }
 
@@ -730,7 +730,7 @@ final class TheFenceHandlerTests: XCTestCase {
     func testLongPressWithCoordinatesPassesValidation() async {
         await assertOperationPassesValidation(
             command: .longPress,
-            arguments: ["x": .double(50.0), "y": .double(50.0)]
+            arguments: ["point": .object(["x": .double(50.0), "y": .double(50.0)])]
         )
     }
 
@@ -738,7 +738,10 @@ final class TheFenceHandlerTests: XCTestCase {
     func testLongPressRejectsNegativeDuration() async {
         await assertOperationValidationError(
             command: .longPress,
-            arguments: ["x": .double(50.0), "y": .double(50.0), "duration": .double(-1.0)],
+            arguments: [
+                "point": .object(["x": .double(50.0), "y": .double(50.0)]),
+                "duration": .double(-1.0),
+            ],
             equals: "schema validation failed for duration: observed number -1.0; expected number > 0"
         )
     }
@@ -747,7 +750,10 @@ final class TheFenceHandlerTests: XCTestCase {
     func testLongPressRejectsOversizedDurationBeforeExecution() async {
         await assertOperationValidationError(
             command: .longPress,
-            arguments: ["x": .double(50.0), "y": .double(50.0), "duration": .double(61.0)],
+            arguments: [
+                "point": .object(["x": .double(50.0), "y": .double(50.0)]),
+                "duration": .double(61.0),
+            ],
             equals: "schema validation failed for duration: observed number 61.0; expected number in 0...60.0"
         )
     }
@@ -756,8 +762,14 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSwipeInvalidDirection() async {
         await assertOperationValidationError(
             command: .swipe,
-            arguments: ["direction": .string("diagonal")],
-            equals: "schema validation failed for direction: observed string \"diagonal\"; expected enum one of up, down, left, right"
+            arguments: [
+                "pointDirection": .object([
+                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
+                    "direction": .string("diagonal"),
+                ]),
+            ],
+            equals: "schema validation failed for pointDirection.direction: observed string \"diagonal\"; " +
+                "expected enum one of up, down, left, right"
         )
     }
 
@@ -765,8 +777,10 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSwipeDirectionWithoutTargetOrCoordinatesIsRejected() async {
         await assertOperationValidationError(
             command: .swipe,
-            arguments: ["direction": .string("up")],
-            equals: "Swipe requires target object or start coordinates (startX, startY)"
+            arguments: [
+                "pointDirection": .object(["direction": .string("up")]),
+            ],
+            equals: "schema validation failed for pointDirection.start: observed missing; expected object"
         )
     }
 
@@ -775,12 +789,12 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .swipe,
             arguments: [
-                "startX": .double(10.0),
-                "endX": .double(100.0),
-                "endY": .double(200.0),
+                "pointToPoint": .object([
+                    "start": .object(["x": .double(10.0)]),
+                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
+                ]),
             ],
-            equals: "schema validation failed for startX/startY: observed partial coordinates; " +
-                "expected both startX and startY, or neither"
+            equals: "schema validation failed for pointToPoint.start.y: observed missing; expected number"
         )
     }
 
@@ -789,9 +803,11 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationPassesValidation(
             command: .swipe,
             arguments: [
-                "target": targetValue(identifier: "row_5"),
-                "start": .object(["x": .double(0.8), "y": .double(0.5)]),
-                "end": .object(["x": .double(0.2), "y": .double(0.5)]),
+                "elementUnitPoints": .object([
+                    "element": targetValue(identifier: "row_5"),
+                    "start": .object(["x": .double(0.8), "y": .double(0.5)]),
+                    "end": .object(["x": .double(0.2), "y": .double(0.5)]),
+                ]),
             ]
         )
     }
@@ -801,11 +817,13 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationValidationError(
             command: .swipe,
             arguments: [
-                "target": targetValue(identifier: "row_5"),
-                "start": .object(["x": .double(1.2), "y": .double(0.5)]),
-                "end": .object(["x": .double(0.2), "y": .double(0.5)]),
+                "elementUnitPoints": .object([
+                    "element": targetValue(identifier: "row_5"),
+                    "start": .object(["x": .double(1.2), "y": .double(0.5)]),
+                    "end": .object(["x": .double(0.2), "y": .double(0.5)]),
+                ]),
             ],
-            equals: "schema validation failed for start.x: observed number 1.2; expected number in 0...1"
+            equals: "schema validation failed for elementUnitPoints.start.x: observed number 1.2; expected number in 0...1"
         )
     }
 
@@ -813,7 +831,12 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSwipeDirectionWithElementPassesValidation() async {
         await assertOperationPassesValidation(
             command: .swipe,
-            arguments: ["target": targetValue(identifier: "row_5"), "direction": .string("left")]
+            arguments: [
+                "elementDirection": .object([
+                    "element": targetValue(identifier: "row_5"),
+                    "direction": .string("left"),
+                ]),
+            ]
         )
     }
 
@@ -821,8 +844,10 @@ final class TheFenceHandlerTests: XCTestCase {
     func testSwipeDirectionWithElementDispatchesElementDirectionPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .swipe, values: [
-            "target": targetValue(identifier: "row_5"),
-            "direction": .string("left"),
+            "elementDirection": .object([
+                "element": targetValue(identifier: "row_5"),
+                "direction": .string("left"),
+            ]),
         ])
         guard let (message, _ ) = mockConn.sent.last,
               case .swipe(let target) = message,
@@ -835,11 +860,33 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testSwipeRejectsMixedIntentObjects() async {
+        await assertOperationValidationError(
+            command: .swipe,
+            arguments: [
+                "pointDirection": .object([
+                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
+                    "direction": .string("down"),
+                ]),
+                "pointToPoint": .object([
+                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
+                    "end": .object(["x": .double(30.0), "y": .double(40.0)]),
+                ]),
+            ],
+            equals: "schema validation failed for swipe: observed mixed or missing gesture intent; expected exactly one swipe intent"
+        )
+    }
+
+    @ButtonHeistActor
     func testDragMissingEndCoordinates() async {
         await assertOperationValidationError(
             command: .drag,
-            arguments: ["startX": .double(10.0), "startY": .double(10.0)],
-            equals: "schema validation failed for endX: observed missing; expected number"
+            arguments: [
+                "pointToPoint": .object([
+                    "start": .object(["x": .double(10.0), "y": .double(10.0)]),
+                ]),
+            ],
+            equals: "schema validation failed for pointToPoint.end: observed missing; expected object"
         )
     }
 
@@ -847,8 +894,12 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDragWithoutStartTargetIsRejected() async {
         await assertOperationValidationError(
             command: .drag,
-            arguments: ["endX": .double(100.0), "endY": .double(200.0)],
-            equals: "Drag requires target object or start coordinates (startX, startY)"
+            arguments: [
+                "pointToPoint": .object([
+                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
+                ]),
+            ],
+            equals: "schema validation failed for pointToPoint.start: observed missing; expected object"
         )
     }
 
@@ -857,9 +908,10 @@ final class TheFenceHandlerTests: XCTestCase {
         await assertOperationPassesValidation(
             command: .drag,
             arguments: [
-                "target": targetValue(identifier: "source"),
-                "endX": .double(100.0),
-                "endY": .double(200.0),
+                "elementToPoint": .object([
+                    "element": targetValue(identifier: "source"),
+                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
+                ]),
             ]
         )
     }
@@ -868,10 +920,10 @@ final class TheFenceHandlerTests: XCTestCase {
     func testDragWithStartCoordinatesDispatchesCanonicalPayload() async {
         let (fence, mockConn) = makeConnectedFence()
         _ = try? await fence.execute(command: .drag, values: [
-                "startX": .double(100.0),
-                "startY": .double(300.0),
-                "endX": .double(300.0),
-                "endY": .double(600.0),
+                "pointToPoint": .object([
+                    "start": .object(["x": .double(100.0), "y": .double(300.0)]),
+                    "end": .object(["x": .double(300.0), "y": .double(600.0)]),
+                ]),
             ])
         guard let (message, _) = mockConn.sent.last,
               case .drag(let target) = message else {
@@ -880,6 +932,24 @@ final class TheFenceHandlerTests: XCTestCase {
         }
         XCTAssertEqual(target.start, .coordinate(ScreenPoint(x: 100.0, y: 300.0)))
         XCTAssertEqual(target.end, ScreenPoint(x: 300.0, y: 600.0))
+    }
+
+    @ButtonHeistActor
+    func testDragRejectsMixedIntentObjects() async {
+        await assertOperationValidationError(
+            command: .drag,
+            arguments: [
+                "elementToPoint": .object([
+                    "element": targetValue(identifier: "source"),
+                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
+                ]),
+                "pointToPoint": .object([
+                    "start": .object(["x": .double(10.0), "y": .double(20.0)]),
+                    "end": .object(["x": .double(100.0), "y": .double(200.0)]),
+                ]),
+            ],
+            equals: "schema validation failed for drag: observed mixed or missing gesture intent; expected exactly one drag intent"
+        )
     }
 
     // MARK: - Scroll Action Validation
@@ -1913,7 +1983,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(
             result,
             .changed(.updated(ElementUpdatePredicate(
-                element: ElementPredicate(identifier: "slider"), property: .value, from: "0", to: "50"
+            element: ElementPredicate(identifier: "slider"), property: .value, from: "0", to: "50"
             )))
         )
     }
@@ -2645,11 +2715,13 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistReportFlattensForEachIterationActions() async throws {
+        let matching = ElementPredicate(label: "Delete")
         let deleteAction = try activateHeistStep(identifier: "delete")
         let heist = HeistPlan(steps: [
             .forEach(try ForEachStep(
-                matching: ElementPredicate(label: "Delete"),
+                matching: matching,
                 limit: 20,
+                element: .predicate(matching, ordinal: 0),
                 steps: [deleteAction]
             )),
         ])

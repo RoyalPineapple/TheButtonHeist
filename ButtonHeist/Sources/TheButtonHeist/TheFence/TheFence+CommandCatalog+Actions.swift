@@ -6,33 +6,29 @@ extension TheFence.Command {
             commandDescriptor(
                 .oneFingerTap, requestDecoder: TheFence.decodeOneFingerTapRequest,
                 isHeistExecutable: true,
-                parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.coordinateXY + FenceParameterBlocks.expectation,
-                description: "Tap a coordinate or semantic target after actionability resolution."
+                parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
+                description: "Tap an explicit point or semantic element after actionability resolution."
             ),
             commandDescriptor(
                 .longPress, requestDecoder: TheFence.decodeLongPressRequest,
                 isHeistExecutable: true,
-                parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.coordinateXY
+                parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Long-press a coordinate or semantic target for a resolved duration."
+                description: "Long-press an explicit point or semantic element for a resolved duration."
             ),
             commandDescriptor(
                 .swipe, requestDecoder: TheFence.decodeSwipeRequest,
                 isHeistExecutable: true,
-                parameters: FenceParameterBlocks.elementTarget + [
-                    param(.direction, .string, enumValues: fenceEnumValues(SwipeDirection.self)),
-                    param(.start, .object, objectProperties: FenceParameterBlocks.unitPoint),
-                    param(.end, .object, objectProperties: FenceParameterBlocks.unitPoint),
-                ] + FenceParameterBlocks.optionalStart + FenceParameterBlocks.optionalEnd
+                parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Swipe in a direction or between explicit points; semantic targets are made actionable first."
+                description: "Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
             ),
             commandDescriptor(
                 .drag, requestDecoder: TheFence.decodeDragRequest,
                 isHeistExecutable: true,
-                parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.requiredEnd
-                    + FenceParameterBlocks.optionalStart + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Drag from one point to another using explicit coordinates or a semantic target."
+                parameters: FenceParameterBlocks.dragIntents
+                    + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
+                description: "Drag using exactly one typed intent: elementToPoint or pointToPoint."
             ),
             commandDescriptor(
                 .scroll, requestDecoder: TheFence.decodeScrollRequest,
