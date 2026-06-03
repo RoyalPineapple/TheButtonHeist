@@ -11,19 +11,19 @@ final class ActivationPolicyTests: XCTestCase {
 
     func testSemanticActionabilityFailureMapsNoRevealPathToCommandMethod() {
         let result = SemanticActionability.SemanticActionabilityFailure.noRevealPath("target has no reveal path")
-            .interactionResult(commandMethod: .syntheticTap)
+            .interactionResult(commandMethod: .activate)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.message, "semantic actionability failed [noRevealPath]: target has no reveal path")
     }
 
     func testSemanticActionabilityFailurePreservesElementNotFoundMethod() {
         let result = SemanticActionability.SemanticActionabilityFailure.notFound("no such element")
-            .interactionResult(commandMethod: .syntheticTap)
+            .interactionResult(commandMethod: .activate)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.failureKind, .targetUnavailable)
         XCTAssertEqual(result.message, "semantic actionability failed [notFound]: no such element")
     }
@@ -32,10 +32,10 @@ final class ActivationPolicyTests: XCTestCase {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         var activateCount = 0
         var didRefresh = false
-        var tappedPoints: [CGPoint] = []
+        var dispatchedPoints: [CGPoint] = []
 
         let result = await makePolicy(
-            activate: { _ in
+            accessibilityActivate: { _ in
                 activateCount += 1
                 return .success
             },
@@ -43,8 +43,8 @@ final class ActivationPolicyTests: XCTestCase {
                 didRefresh = true
                 return .failure(.failure(.activate, message: "unexpected refresh"))
             },
-            syntheticTap: { point in
-                tappedPoints.append(point)
+            activationPointDispatch: { point in
+                dispatchedPoints.append(point)
                 return true
             }
         ).apply(to: initialTarget)
@@ -53,25 +53,25 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 1)
         XCTAssertFalse(didRefresh)
-        XCTAssertTrue(tappedPoints.isEmpty)
+        XCTAssertTrue(dispatchedPoints.isEmpty)
     }
 
     func testRefreshReresolveRetryCanSucceed() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let retryTarget = makeLiveTarget(heistId: "retry", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
-        var tappedPoints: [CGPoint] = []
+        var dispatchedPoints: [CGPoint] = []
 
         let result = await makePolicy(
-            activate: { _ in
+            accessibilityActivate: { _ in
                 activateCount += 1
                 return activateCount == 1 ? .refused : .success
             },
             refreshAndResolve: {
                 .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
-            syntheticTap: { point in
-                tappedPoints.append(point)
+            activationPointDispatch: { point in
+                dispatchedPoints.append(point)
                 return true
             }
         ).apply(to: initialTarget)
@@ -79,24 +79,24 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
-        XCTAssertTrue(tappedPoints.isEmpty)
+        XCTAssertTrue(dispatchedPoints.isEmpty)
     }
 
-    func testRefreshReresolveFailureReturnsWithoutSyntheticTap() async {
+    func testRefreshReresolveFailureReturnsWithoutActivationPointDispatch() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         var activateCount = 0
-        var tappedPoints: [CGPoint] = []
+        var dispatchedPoints: [CGPoint] = []
 
         let result = await makePolicy(
-            activate: { _ in
+            accessibilityActivate: { _ in
                 activateCount += 1
                 return .refused
             },
             refreshAndResolve: {
                 .failure(.failure(.activate, message: "retry actionability failed"))
             },
-            syntheticTap: { point in
-                tappedPoints.append(point)
+            activationPointDispatch: { point in
+                dispatchedPoints.append(point)
                 return true
             }
         ).apply(to: initialTarget)
@@ -105,33 +105,33 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(result.message, "retry actionability failed")
         XCTAssertEqual(activateCount, 1)
-        XCTAssertTrue(tappedPoints.isEmpty)
+        XCTAssertTrue(dispatchedPoints.isEmpty)
     }
 
-    func testSyntheticTapRecoveryCanSucceed() async {
+    func testActivationPointDispatchCanCompleteActivate() async {
         let initialTarget = makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let retryTarget = makeLiveTarget(heistId: "retry", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
-        var tappedPoints: [CGPoint] = []
+        var dispatchedPoints: [CGPoint] = []
 
         let result = await makePolicy(
-            activate: { _ in
+            accessibilityActivate: { _ in
                 activateCount += 1
                 return .refused
             },
             refreshAndResolve: {
                 .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
-            syntheticTap: { point in
-                tappedPoints.append(point)
+            activationPointDispatch: { point in
+                dispatchedPoints.append(point)
                 return true
             }
         ).apply(to: initialTarget)
 
         XCTAssertTrue(result.success)
-        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
-        XCTAssertEqual(tappedPoints, [CGPoint(x: 30, y: 40)])
+        XCTAssertEqual(dispatchedPoints, [CGPoint(x: 30, y: 40)])
     }
 
     func testFinalFailureUsesRetryTargetAndFreshActivationPoint() async {
@@ -144,18 +144,18 @@ final class ActivationPolicyTests: XCTestCase {
             activationPoint: CGPoint(x: 52, y: 52)
         )
         var activateCount = 0
-        var tappedPoints: [CGPoint] = []
+        var dispatchedPoints: [CGPoint] = []
 
         let result = await makePolicy(
-            activate: { _ in
+            accessibilityActivate: { _ in
                 activateCount += 1
                 return .refused
             },
             refreshAndResolve: {
                 .resolved(screenElement: retryTarget.screenElement, liveTarget: retryTarget)
             },
-            syntheticTap: { point in
-                tappedPoints.append(point)
+            activationPointDispatch: { point in
+                dispatchedPoints.append(point)
                 return false
             }
         ).apply(to: initialTarget)
@@ -163,24 +163,25 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 2)
-        XCTAssertEqual(tappedPoints, [CGPoint(x: 52, y: 52)])
+        XCTAssertEqual(dispatchedPoints, [CGPoint(x: 52, y: 52)])
         XCTAssertDiagnostic(result.message, contains: [
-            "activate failed: accessibilityActivate returned false after semantic refresh",
-            "synthetic tap at fresh activation point also failed",
+            "activate failed: accessibilityActivate() declined after semantic refresh",
+            "activation-point dispatch was attempted at the fresh accessibility activation point",
             "label=\"Retry Button\"",
             "actions=[activate]",
+            "correction: target an element with primary accessibility activation",
         ])
     }
 
     private func makePolicy(
-        activate: @escaping @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome,
+        accessibilityActivate: @escaping @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationPolicy.RefreshResult,
-        syntheticTap: @escaping @MainActor (CGPoint) async -> Bool
+        activationPointDispatch: @escaping @MainActor (CGPoint) async -> Bool
     ) -> ActivationPolicy {
         ActivationPolicy(
-            activate: activate,
+            accessibilityActivate: accessibilityActivate,
             refreshAndResolve: refreshAndResolve,
-            syntheticTap: syntheticTap
+            activationPointDispatch: activationPointDispatch
         )
     }
 
