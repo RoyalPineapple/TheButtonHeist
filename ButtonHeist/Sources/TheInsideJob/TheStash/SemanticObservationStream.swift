@@ -147,6 +147,19 @@ final class SemanticObservationStream {
         return await waitForNextSettledEvent(scope: scope, after: requiredSequence, timeout: timeout)
     }
 
+    @discardableResult
+    func commitSettledObservation(
+        _ screen: Screen,
+        scope: SemanticObservationScope = .visible
+    ) -> SettledSemanticObservationEvent {
+        stash.commitSettledSemanticObservationForStream(screen)
+        markCurrentSettled(scope: scope)
+        guard let event = latestEvent else {
+            preconditionFailure("settled semantic observation commit did not publish an event")
+        }
+        return event
+    }
+
     func clearLatestObservation() {
         latestEvent = nil
         latestObservationIsDirty = true
@@ -352,7 +365,7 @@ final class SemanticObservationStream {
             return true
         }
 
-        stash.recordSettledSemanticObservation(screen, scope: .visible)
+        _ = commitSettledObservation(screen, scope: .visible)
         await Task.yield()
         return true
     }

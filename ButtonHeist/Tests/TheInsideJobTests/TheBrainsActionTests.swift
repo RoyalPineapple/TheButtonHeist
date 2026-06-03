@@ -816,10 +816,10 @@ final class TheBrainsActionTests: XCTestCase {
         }
 
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        isolatedBrains.stash.recordSettledSemanticObservation(beforeScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(beforeScreen, scope: .discovery)
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
 
-        isolatedBrains.stash.recordSettledSemanticObservation(matchedScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(matchedScreen, scope: .discovery)
         let receipt = await receiptTask.value
         let trace = try XCTUnwrap(receipt.actionResult.accessibilityTrace)
 
@@ -844,7 +844,7 @@ final class TheBrainsActionTests: XCTestCase {
             ))
         }
         await waitForSettledSemanticWaiter(on: isolatedBrains.stash)
-        isolatedBrains.stash.recordSettledSemanticObservation(beforeScreen, scope: .discovery)
+        _ = isolatedBrains.stash.semanticObservationStream.commitSettledObservation(beforeScreen, scope: .discovery)
 
         let receipt = await receiptTask.value
 

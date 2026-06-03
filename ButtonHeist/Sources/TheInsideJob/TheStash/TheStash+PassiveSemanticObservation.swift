@@ -25,7 +25,7 @@ extension TheStash {
         semanticObservationStream.currentSubscribedScope()
     }
 
-    func settledSemanticObservationEvent(
+    func observeSettledSemanticObservation(
         scope: SemanticObservationScope,
         after sequence: UInt64?,
         timeout: Double?
@@ -35,10 +35,6 @@ extension TheStash {
 
     func markDirtyFromTripwire() {
         semanticObservationStream.markDirtyFromTripwire()
-    }
-
-    func markCurrentSemanticObservationSettled(scope: SemanticObservationScope = .visible) {
-        semanticObservationStream.markCurrentSettled(scope: scope)
     }
 }
 

@@ -208,8 +208,8 @@ final class TheStash {
     }
 
     /// Produce one visible observation for the settle loop without committing
-    /// it yet. The caller commits the proven final screen through
-    /// `recordSettledSemanticObservation(_:)`.
+    /// it yet. The observation stream commits the proven final screen through
+    /// `commitSettledSemanticObservationForStream`.
     func semanticObservationForSettle() -> Screen? {
         parse()
     }
@@ -220,12 +220,8 @@ final class TheStash {
         parse()
     }
 
-    func recordSettledSemanticObservation(
-        _ screen: Screen,
-        scope: SemanticObservationScope = .visible
-    ) {
+    func commitSettledSemanticObservationForStream(_ screen: Screen) {
         commitVisibleRefresh(screen)
-        markCurrentSemanticObservationSettled(scope: scope)
     }
 
     func recordVisiblePageObservation(_ screen: Screen) {
@@ -245,8 +241,7 @@ final class TheStash {
     }
 
     func installScreenForTesting(_ screen: Screen) {
-        commitScreen(screen)
-        markCurrentSemanticObservationSettled()
+        _ = semanticObservationStream.commitSettledObservation(screen)
     }
 
     /// Starting value for page-by-page exploration. Exploration is the one
