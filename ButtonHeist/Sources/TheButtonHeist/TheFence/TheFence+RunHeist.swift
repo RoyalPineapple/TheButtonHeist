@@ -18,7 +18,7 @@ extension TheFence {
             totalTimingMs: totalMs,
             failedIndex: executionResult.failedIndex
         )
-        let accessibilityTrace = Self.heistAccessibilityTrace(result)
+        let accessibilityTrace = Self.heistAccessibilityTrace(plan: request.plan, result: result)
         return .heistExecution(
             plan: request.plan,
             result: result,
@@ -27,9 +27,10 @@ extension TheFence {
     }
 
     private static func heistAccessibilityTrace(
-        _ result: HeistExecutionResult
+        plan: HeistPlan,
+        result: HeistExecutionResult
     ) -> AccessibilityTrace? {
-        let actionResults = result.flattenedOutcomes.compactMap { $0.finalActionResult() }
+        let actionResults = HeistReportProjection(plan: plan, result: result).finalActionResultsInExecutionOrder
         let actionOutcomeCount = actionResults.count
         let stepAccessibilityTraces = actionResults.compactMap(\.accessibilityTrace)
         guard actionOutcomeCount > 0,

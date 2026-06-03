@@ -2,18 +2,18 @@ import Foundation
 
 // MARK: - Heist Playback Report
 
-/// Per-step results from playing back a `.heist` file. Built by the playback
-/// engine and consumed by report formatters (JUnit XML, future formats).
+/// Legacy flat rows from playing back a `.heist` file. These rows are derived
+/// from the structured heist report projection and consumed by JUnit XML.
 public struct HeistPlaybackReport: Sendable, Equatable {
     /// Name derived from the input file (e.g. "navigation-flow" from "navigation-flow.heist").
     public let heistName: String
     /// Bundle identifier of the app the heist targets.
     public let app: String
-    /// Total number of flattened report steps for the executed playback path.
+    /// Total number of legacy flat report rows for the executed playback path.
     public let totalStepCount: Int
     /// Total wall-clock time for the entire playback, in seconds.
     public let totalTimeSeconds: Double
-    /// Per-step outcomes, flattened in execution order.
+    /// Legacy flat step outcomes in execution order.
     public let steps: [StepResult]
 
     public init(
@@ -42,9 +42,9 @@ public struct HeistPlaybackReport: Sendable, Equatable {
 extension HeistPlaybackReport {
     /// The outcome of executing a single heist step.
     public struct StepResult: Sendable, Equatable {
-        /// 0-based display index in the flattened playback report.
+        /// 0-based display index in the legacy flat playback report.
         public let index: Int
-        /// TheFence command name (e.g. "activate", "swipe", "type_text").
+        /// Heist report action or structural step name.
         public let command: String
         /// Durable matcher target used to target the element, if any.
         public let target: ElementTarget?

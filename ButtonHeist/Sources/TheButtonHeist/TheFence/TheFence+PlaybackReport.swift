@@ -20,16 +20,15 @@ private struct PlaybackReportProjection {
     let result: HeistExecutionResult
 
     func project() -> TheFence.PlaybackProjection {
-        let projections = result.projectedOutcomes(for: contract.plan)
+        let projection = HeistReportProjection(plan: contract.plan, result: result)
         var failures: [PlaybackFailure] = []
-        let stepResults = projections.enumerated().map { reportIndex, projection in
-            let failure = playbackFailure(projection)
+        let stepResults = projection.legacyFlatRows.map { row in
+            let failure = row.playbackFailure
             if let failure {
                 failures.append(failure)
             }
             return stepResult(
-                reportIndex: reportIndex,
-                projection: projection,
+                row: row,
                 failure: failure
             )
         }
@@ -41,8 +40,7 @@ private struct PlaybackReportProjection {
     }
 
     private func stepResult(
-        reportIndex: Int,
-        projection: ProjectedHeistStepOutcome,
+        row: HeistReportFlatRow,
         failure: PlaybackFailure?
     ) -> HeistPlaybackReport.StepResult {
         let reportOutcome: HeistPlaybackReport.Outcome
@@ -55,10 +53,10 @@ private struct PlaybackReportProjection {
             reportOutcome = .passed
         }
         return HeistPlaybackReport.StepResult(
-            index: reportIndex,
-            command: projection.commandName,
-            target: projection.target,
-            timeSeconds: Double(projection.outcome.durationMs) / 1000,
+            index: row.index,
+            command: row.commandName,
+            target: row.target,
+            timeSeconds: Double(row.node.durationMs) / 1000,
             outcome: reportOutcome
         )
     }
@@ -73,28 +71,5 @@ private struct PlaybackReportProjection {
         case .thrown:
             return .thrown
         }
-    }
-
-    private func playbackFailure(_ projection: ProjectedHeistStepOutcome) -> PlaybackFailure? {
-        let failedStep = PlaybackFailure.FailedStep(command: projection.fenceCommand ?? .runHeist, target: projection.target)
-        if let result = projection.outcome.finalActionResult(),
-           result.success == false || projection.outcome.expectationActionResult?.success == false || projection.outcome.expectation?.met == false {
-            return .actionFailed(
-                step: failedStep,
-                result: result,
-                expectation: projection.outcome.expectation,
-                interface: nil,
-                diagnosticCaptureFailure: nil
-            )
-        }
-        guard let response = projection.response,
-              case .error(let message, _) = response
-        else { return nil }
-        return .fenceError(
-            step: failedStep,
-            message: message,
-            interface: nil,
-            diagnosticCaptureFailure: nil
-        )
     }
 }

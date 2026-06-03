@@ -36,6 +36,7 @@
 		0D0CE63C63F1CC461BD48891 /* swift-crypto_Crypto.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 9FEA3B02F99B93FD31784356 /* swift-crypto_Crypto.bundle */; };
 		0D253E79093D393E37C9C241 /* SemanticScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2483323F7EA275CB4598FFC8 /* SemanticScreen.swift */; };
 		0DB249CA4805D5D002B7E9FF /* ScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD60080E4BE14A994AC72411 /* ScreenTests.swift */; };
+		0DDD6737B5B11BE31BDB68A9 /* HeistReportProjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E109F48317DF643520C92F3B /* HeistReportProjectionTests.swift */; };
 		0DED20C54C549E96B5F72EAD /* HeistPlan+RuntimeAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = BACF3D6261B917C7273E4620 /* HeistPlan+RuntimeAdmission.swift */; };
 		0E2C28E4F9B2ECA2C9DB4369 /* AccessibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B05AC474B9C2427612BB9A7 /* AccessibilityPolicyTests.swift */; };
 		0E77F4DD95376FF2835B9817 /* SocketConnectionAdmission.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AB999A39F6788A19B1F2865 /* SocketConnectionAdmission.swift */; };
@@ -1099,6 +1100,7 @@
 		DFC03A30C236EF36D48BC3AD /* TheFence+CommandCatalog+Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandCatalog+Session.swift"; sourceTree = "<group>"; };
 		DFCA981B7E21FF878CF51159 /* SocketListenerStartup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketListenerStartup.swift; sourceTree = "<group>"; };
 		DFE165B7F4612979A10F917F /* USBDeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = USBDeviceDiscovery.swift; sourceTree = "<group>"; };
+		E109F48317DF643520C92F3B /* HeistReportProjectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistReportProjectionTests.swift; sourceTree = "<group>"; };
 		E239B3DF04A37884F2E211EA /* ServerExposureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerExposureTests.swift; sourceTree = "<group>"; };
 		E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+LiveGeometry.swift"; sourceTree = "<group>"; };
 		E29A46AE6FD888EAC8D0E2EA /* ElementPredicateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElementPredicateTests.swift; sourceTree = "<group>"; };
@@ -1259,6 +1261,7 @@
 				3929DF06998FDCC1E23824BF /* EnvironmentConfigTests.swift */,
 				D641A008DEAE05EF3E0D0E65 /* FencePlaybackLifecycleTests.swift */,
 				4BC89E2BFE30B17274F2A404 /* GetScreenArtifactResponseTests.swift */,
+				E109F48317DF643520C92F3B /* HeistReportProjectionTests.swift */,
 				8DC7B1E5D945349D951D363A /* HeistStoreTests.swift */,
 				6D7445CF41642EDCE04E831F /* IdleMonitorTests.swift */,
 				5B12846943603FCF34BBBFCA /* Mocks.swift */,
@@ -2714,6 +2717,7 @@
 				BB087841628B78C69870795C /* EnvironmentConfigTests.swift in Sources */,
 				7CE3BB030AC7FF4535DF44EE /* FencePlaybackLifecycleTests.swift in Sources */,
 				28E8AA3221959231CA3154F2 /* GetScreenArtifactResponseTests.swift in Sources */,
+				0DDD6737B5B11BE31BDB68A9 /* HeistReportProjectionTests.swift in Sources */,
 				8980B0C4D663EA59F07927AF /* HeistStoreTests.swift in Sources */,
 				118A50FD8EB5B37B8C5FC4F3 /* TempDirectoryFixture.swift in Sources */,
 				462DDE00FBBD9214256650F2 /* IdleMonitorTests.swift in Sources */,

@@ -184,17 +184,18 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
         result: HeistExecutionResult,
         accessibilityTrace: AccessibilityTrace?
     ) {
+        let projection = HeistReportProjection(plan: plan, result: result)
         let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
-        self.results = result.projectedOutcomes(for: plan).compactMap { projection in
-            projection.response.map(PublicResponseModel.init(response:))
+        self.results = projection.legacyFlatRows.compactMap { row in
+            row.response.map(PublicResponseModel.init(response:))
         }
         self.completedSteps = result.completedStepCount
         self.totalTimingMs = result.totalTimingMs
         self.failedIndex = failedIndex
-        let checked = result.projectedExpectationsChecked(for: plan)
+        let checked = projection.summary.expectationsChecked
         self.expectations = checked > 0
-            ? PublicHeistExpectations(checked: checked, met: result.projectedExpectationsMet(for: plan))
+            ? PublicHeistExpectations(checked: checked, met: projection.summary.expectationsMet)
             : nil
         self.netDelta = accessibilityTrace?.meaningfulEndpointDeltaProjection.map(PublicDelta.init)
     }

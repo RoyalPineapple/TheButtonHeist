@@ -2504,7 +2504,7 @@ final class TheFenceHandlerTests: XCTestCase {
         guard case .actionFailed(let step, let result, _, _, _) = failure else {
             return XCTFail("Expected typed actionFailed playback failure, got \(String(describing: failure))")
         }
-        XCTAssertEqual(step.command, .activate)
+        XCTAssertEqual(step.commandName, "activate")
         XCTAssertTrue(result.message?.contains("server exploded") == true)
 
         guard case .failed(let reportMessage, let errorKind) = report?.steps.first?.outcome else {
@@ -2704,7 +2704,7 @@ final class TheFenceHandlerTests: XCTestCase {
         XCTAssertEqual(projection.stepResults.map(\.command), ["if", "activate"])
         XCTAssertTrue(projection.stepResults[0].passed)
         XCTAssertEqual(projection.failedIndex, 1)
-        XCTAssertEqual(projection.failure?.step.command, .activate)
+        XCTAssertEqual(projection.failure?.step.commandName, "activate")
         guard case .failed(let message, let errorKind) = projection.stepResults[1].outcome else {
             return XCTFail("Expected nested action failure, got \(projection.stepResults[1].outcome)")
         }
