@@ -673,6 +673,14 @@ private struct HeistPlanRuntimeAdmissionValidator {
             validateScroll(target.selection, path: "\(path).payload", scope: scope)
         case .setPasteboard(let target):
             addString(target.text, path: "\(path).payload.text", role: "pasteboard text")
+            if target.text.isEmpty {
+                fail(
+                    path: "\(path).payload.text",
+                    contract: "set_pasteboard text must be non-empty",
+                    observed: "empty string",
+                    correction: "Use non-empty text for SetPasteboard."
+                )
+            }
         case .editAction, .dismissKeyboard:
             break
         }

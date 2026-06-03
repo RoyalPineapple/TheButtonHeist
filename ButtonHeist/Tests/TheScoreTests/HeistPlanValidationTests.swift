@@ -254,8 +254,10 @@ func runtimeAdmissionRejectsEmptySetPasteboardPayload() throws {
 
     let failures = plan.runtimeAdmissionFailures()
 
-    #expect(failures.contains { $0.contract.contains("direct Fence command contract") })
-    #expect(failures.contains { $0.observed.contains("pasteboard text must be non-empty") })
+    #expect(failures.contains {
+        $0.path == "$.steps[0].action.command.payload.text"
+            && $0.contract == "set_pasteboard text must be non-empty"
+    })
 }
 
 @Test
