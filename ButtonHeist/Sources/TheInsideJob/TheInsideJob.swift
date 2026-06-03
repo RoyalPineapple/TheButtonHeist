@@ -158,6 +158,7 @@ public final class TheInsideJob {
     ) {
         self.init(
             runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(
+                startupConfiguration: StartupConfiguration.resolve(),
                 token: token,
                 instanceId: instanceId,
                 allowedScopes: allowedScopes,

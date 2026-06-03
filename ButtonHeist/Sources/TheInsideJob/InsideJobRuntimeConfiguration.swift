@@ -16,12 +16,12 @@ struct InsideJobRuntimeConfiguration: Equatable, Sendable {
     let sessionIdentity: InsideJobSessionIdentity
 
     static func resolve(
+        startupConfiguration: StartupConfiguration,
         token: String?,
         instanceId: String?,
         allowedScopes: Set<ConnectionScope>?,
         port: UInt16
     ) -> InsideJobRuntimeConfiguration {
-        let startupConfiguration = StartupConfiguration.resolve()
         return InsideJobRuntimeConfiguration(
             token: token,
             tokenSource: token == nil ? .generated : .api,
