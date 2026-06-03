@@ -181,8 +181,8 @@ The agent says what it expects. Button Heist says whether it happened.
 ```json
 {
   "command": "run_heist",
-  "version": 1,
-  "steps": [
+  "version": 2,
+  "body": [
     {
       "type": "action",
       "action": {

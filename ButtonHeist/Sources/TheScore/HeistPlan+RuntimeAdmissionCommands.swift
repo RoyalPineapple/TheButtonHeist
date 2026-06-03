@@ -103,6 +103,8 @@ extension HeistPlanRuntimeAdmissionValidator {
         switch target {
         case .target(let target):
             validateElementTarget(target, path: path)
+        case .predicate(let predicate, _):
+            validateElementPredicate(predicate, path: path, scope: scope)
         case .ref(let reference):
             validateReference(reference, path: path, role: "target_ref")
             if !scope.targetRefs.contains(reference) {
@@ -154,7 +156,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     }
 
     mutating func validateElementPredicate(
-        _ predicate: ElementPredicateExpr,
+        _ predicate: ElementPredicateTemplate,
         path: String,
         scope: HeistReferenceScope
     ) {

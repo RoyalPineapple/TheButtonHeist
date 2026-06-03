@@ -9,6 +9,7 @@ public struct HeistPlanRuntimeAdmissionLimits: Sendable, Equatable {
     public let maxAllPredicateChildren: Int
     public let maxForEachStringValues: Int
     public let maxForEachElementLimit: Int
+    public let maxArgumentValues: Int
     public let maxStringBytes: Int
     public let maxTotalStringBytes: Int
     public let maxParameterBytes: Int
@@ -20,6 +21,7 @@ public struct HeistPlanRuntimeAdmissionLimits: Sendable, Equatable {
         maxAllPredicateChildren: Int = 20,
         maxForEachStringValues: Int = 100,
         maxForEachElementLimit: Int = 100,
+        maxArgumentValues: Int = 100,
         maxStringBytes: Int = 4_096,
         maxTotalStringBytes: Int = 65_536,
         maxParameterBytes: Int = 64
@@ -30,6 +32,7 @@ public struct HeistPlanRuntimeAdmissionLimits: Sendable, Equatable {
         self.maxAllPredicateChildren = maxAllPredicateChildren
         self.maxForEachStringValues = maxForEachStringValues
         self.maxForEachElementLimit = maxForEachElementLimit
+        self.maxArgumentValues = maxArgumentValues
         self.maxStringBytes = maxStringBytes
         self.maxTotalStringBytes = maxTotalStringBytes
         self.maxParameterBytes = maxParameterBytes
@@ -111,6 +114,16 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         return failures
     }
 
+    mutating func visitPlan(_ plan: HeistPlan, context: HeistTraversalContext) {
+        validatePlanHeader(plan, path: context.path, requiresName: false)
+        validateDefinitions(plan.definitions, path: "\(context.path).definitions")
+    }
+
+    mutating func visitDefinition(_ plan: HeistPlan, context: HeistTraversalContext) {
+        validatePlanHeader(plan, path: context.path, requiresName: true)
+        validateDefinitions(plan.definitions, path: "\(context.path).definitions")
+    }
+
     mutating func visitStep(
         _ step: HeistStep,
         context: HeistTraversalContext
@@ -172,6 +185,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
             bodyDepth: context.depth + 1,
             scope: context.scope,
             environment: context.environment,
+            definitionScope: context.definitionScope,
             allowsCollectionLoops: context.allowsCollectionLoops
         )
     }
@@ -182,6 +196,158 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
 
     mutating func visitFail(_ fail: FailStep, context: HeistTraversalContext) {
         addString(fail.message, path: "\(context.path).message", role: "fail message")
+    }
+
+    mutating func visitHeist(_ plan: HeistPlan, context: HeistTraversalContext) {
+        validatePlanHeader(plan, path: context.path, requiresName: false)
+        validateDefinitions(plan.definitions, path: "\(context.path).definitions")
+        if plan.parameter != .none {
+            fail(
+                path: "\(context.path).parameter",
+                contract: "inline heist group must not declare a parameter",
+                observed: plan.parameter.kind.rawValue,
+                correction: "Use invoke with a named definition when a heist needs an argument."
+            )
+        }
+    }
+
+    mutating func visitInvoke(_ step: HeistInvocationStep, context: HeistTraversalContext) {
+        validateInvocation(step, context: context)
+    }
+
+    mutating func validatePlanHeader(
+        _ plan: HeistPlan,
+        path: String,
+        requiresName: Bool
+    ) {
+        if requiresName {
+            guard let name = plan.name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                fail(
+                    path: "\(path).name",
+                    contract: "heist definitions must have a non-empty name",
+                    observed: "missing name",
+                    correction: "Name every heist in a definitions array."
+                )
+                return
+            }
+        }
+        if let name = plan.name {
+            validateParameter(name, path: "\(path).name", role: "heist definition name")
+        }
+        validateParameterDeclaration(plan.parameter, path: "\(path).parameter")
+        if plan.body.isEmpty, plan.definitions.isEmpty {
+            fail(
+                path: "\(path).body",
+                contract: "heist plan must contain a body or nested definitions",
+                observed: "empty heist",
+                correction: "Add body steps, or use this plan only as a namespace with nested definitions."
+            )
+        }
+    }
+
+    mutating func validateDefinitions(_ definitions: [HeistPlan], path: String) {
+        var seen: Set<String> = []
+        for (index, definition) in definitions.enumerated() {
+            guard let name = definition.name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                continue
+            }
+            if seen.contains(name) {
+                fail(
+                    path: "\(path)[\(index)].name",
+                    contract: "duplicate heist definition names are not allowed in the same scope",
+                    observed: "\"\(escaped(name))\"",
+                    correction: "Rename one definition or put it in a different namespace."
+                )
+            }
+            seen.insert(name)
+        }
+    }
+
+    mutating func validateParameterDeclaration(_ parameter: HeistParameter, path: String) {
+        guard let name = parameter.name else { return }
+        validateParameter(name, path: "\(path).name", role: "\(parameter.kind.rawValue) parameter")
+    }
+
+    mutating func validateInvocation(_ step: HeistInvocationStep, context: HeistTraversalContext) {
+        guard !step.path.isEmpty else {
+            fail(
+                path: "\(context.path).path",
+                contract: "heist invocation path must not be empty",
+                observed: "empty path",
+                correction: "Invoke a named local definition path."
+            )
+            return
+        }
+        for (index, component) in step.path.enumerated() {
+            validateParameter(component, path: "\(context.path).path[\(index)]", role: "heist invocation path component")
+        }
+        validateArgument(step.argument, path: "\(context.path).argument", scope: context.scope)
+        guard let resolved = context.definitionScope.resolve(path: step.path) else {
+            fail(
+                path: "\(context.path).path",
+                contract: "heist invocation path must resolve to a local definition",
+                observed: step.path.joined(separator: "."),
+                correction: "Define this heist in the current scope or qualify it through an exported namespace."
+            )
+            return
+        }
+        let resolvedName = resolved.qualifiedName
+        if context.invocationStack.contains(resolvedName) {
+            fail(
+                path: "\(context.path).path",
+                contract: "heist invocations must not be recursive",
+                observed: (context.invocationStack + [resolvedName]).joined(separator: " -> "),
+                correction: "Remove the recursive heist invocation cycle."
+            )
+            return
+        }
+        guard step.argument.kind == resolved.plan.parameter.kind else {
+            fail(
+                path: "\(context.path).argument",
+                contract: "heist invocation argument type must match the target parameter",
+                observed: "\(step.argument.kind.rawValue) for \(resolved.plan.parameter.kind.rawValue)",
+                correction: "Pass the argument shape declared by the invoked heist definition."
+            )
+            return
+        }
+        do {
+            _ = try context.environment.binding(argument: step.argument, to: resolved.plan.parameter)
+        } catch {
+            fail(
+                path: "\(context.path).argument",
+                contract: "heist invocation argument must bind to the target parameter",
+                observed: summarize(error),
+                correction: "Use a finite semantic value matching the invoked heist parameter."
+            )
+        }
+    }
+
+    mutating func validateArgument(_ argument: HeistArgument, path: String, scope: HeistReferenceScope) {
+        switch argument {
+        case .none:
+            break
+        case .strings(let values):
+            validateArgumentArrayCount(values.count, path: "\(path).values")
+            for (index, value) in values.enumerated() {
+                validateString(value, path: "\(path).values[\(index)]", scope: scope)
+            }
+        case .elementTargets(let targets):
+            validateArgumentArrayCount(targets.count, path: "\(path).targets")
+            for (index, target) in targets.enumerated() {
+                validateTarget(target, path: "\(path).targets[\(index)]", scope: scope)
+            }
+        }
+    }
+
+    mutating func validateArgumentArrayCount(_ count: Int, path: String) {
+        if count > limits.maxArgumentValues {
+            fail(
+                path: path,
+                contract: "max heist argument values",
+                observed: "\(count) values",
+                correction: "Use \(limits.maxArgumentValues) argument values or fewer."
+            )
+        }
     }
 
     mutating func validateAction(
@@ -320,6 +486,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         bodyDepth: Int,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
+        definitionScope: HeistDefinitionScope,
         allowsCollectionLoops: Bool
     ) {
         guard allowsCollectionLoops else {
@@ -346,11 +513,12 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
 
         for (index, value) in step.values.enumerated() {
             validateResolvedStringLoopPayloads(
-                step.steps,
-                path: "\(path).steps",
+                step.body,
+                path: "\(path).body",
                 depth: bodyDepth,
                 scope: scope.bindingString(step.parameter),
                 environment: environment.binding(string: value, to: step.parameter),
+                definitionScope: definitionScope,
                 valuePath: "\(path).values[\(index)]"
             )
         }
@@ -362,6 +530,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         depth: Int,
         scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
+        definitionScope: HeistDefinitionScope,
         valuePath: String
     ) {
         var validator = StringLoopResolvedPayloadValidator(valuePath: valuePath)
@@ -373,6 +542,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
             allowsCollectionLoops: false,
             scope: scope,
             environment: environment,
+            definitionScope: definitionScope,
             visitor: &validator
         )
         failures += validator.failures

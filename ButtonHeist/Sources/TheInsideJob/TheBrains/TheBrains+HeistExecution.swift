@@ -6,6 +6,12 @@ import TheScore
 
 extension TheBrains {
 
+    struct HeistExecutionScope {
+        let plan: HeistPlan
+        var definitionPath: [String] = []
+        var invocationStack: Set<String> = []
+    }
+
     struct HeistExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
         let wait: @MainActor (ResolvedWaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
@@ -58,7 +64,12 @@ extension TheBrains {
             return builder.failure(errorKind: .validationError, payload: .heistExecution(heistResult))
         }
 
-        let stepResults = await executeHeistSteps(plan.steps, runtime: runtime, environment: .empty)
+        let stepResults = await executeHeistSteps(
+            plan.body,
+            runtime: runtime,
+            environment: .empty,
+            scope: HeistExecutionScope(plan: plan)
+        )
         let failedIndex = stepResults.firstIndex(where: \.isFailure)
 
         let heistResult = HeistExecutionResult(
@@ -83,13 +94,20 @@ extension TheBrains {
     func executeHeistSteps(
         _ steps: [HeistStep],
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
     ) async -> [HeistExecutionStepResult] {
         var stepResults: [HeistExecutionStepResult] = []
         var failedIndex: Int?
 
         stepLoop: for (index, step) in steps.enumerated() {
-            var stepResult = await executeHeistStep(step, index: index, runtime: runtime, environment: environment)
+            var stepResult = await executeHeistStep(
+                step,
+                index: index,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
             if stepResult.isFailure {
                 stepResult = stepResult.markingStop()
                 failedIndex = index
@@ -113,7 +131,8 @@ extension TheBrains {
         _ step: HeistStep,
         index: Int,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         let start = CFAbsoluteTimeGetCurrent()
         switch step {
@@ -122,13 +141,41 @@ extension TheBrains {
         case .wait(let waitStep):
             return await executeWaitStep(waitStep, index: index, start: start, runtime: runtime, environment: environment)
         case .conditional(let conditional):
-            return await executeConditionalStep(conditional, index: index, start: start, runtime: runtime, environment: environment)
+            return await executeConditionalStep(
+                conditional,
+                index: index,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
         case .waitForCases(let waitForCases):
-            return await executeWaitForCasesStep(waitForCases, index: index, start: start, runtime: runtime, environment: environment)
+            return await executeWaitForCasesStep(
+                waitForCases,
+                index: index,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
         case .forEachElement(let forEach):
-            return await executeForEachElementStep(forEach, index: index, start: start, runtime: runtime, environment: environment)
+            return await executeForEachElementStep(
+                forEach,
+                index: index,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
         case .forEachString(let forEach):
-            return await executeForEachStringStep(forEach, index: index, start: start, runtime: runtime, environment: environment)
+            return await executeForEachStringStep(
+                forEach,
+                index: index,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,
@@ -144,7 +191,113 @@ extension TheBrains {
                 durationMs: elapsedMilliseconds(since: start),
                 stopsHeist: true
             )
+        case .heist(let plan):
+            return await executeInlineHeistStep(
+                plan,
+                index: index,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
+        case .invoke(let invoke):
+            return await executeInvocationStep(
+                invoke,
+                index: index,
+                start: start,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
         }
+    }
+
+    private func executeInlineHeistStep(
+        _ plan: HeistPlan,
+        index: Int,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
+    ) async -> HeistExecutionStepResult {
+        let childResults = await executeHeistSteps(
+            plan.body,
+            runtime: runtime,
+            environment: environment,
+            scope: HeistExecutionScope(
+                plan: plan,
+                definitionPath: scope.definitionPath,
+                invocationStack: scope.invocationStack
+            )
+        )
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .heist,
+            message: plan.name.map { "heist \($0)" } ?? "inline heist",
+            durationMs: elapsedMilliseconds(since: start),
+            stopsHeist: childResults.contains(where: \.isFailure),
+            childResults: childResults
+        )
+    }
+
+    private func executeInvocationStep(
+        _ invoke: HeistInvocationStep,
+        index: Int,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
+    ) async -> HeistExecutionStepResult {
+        let invocationName = invoke.path.joined(separator: ".")
+        let resolvedInvocationName = (scope.definitionPath + invoke.path).joined(separator: ".")
+        guard !scope.invocationStack.contains(resolvedInvocationName) else {
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .invoke,
+                message: "Recursive heist invocation \(resolvedInvocationName)",
+                durationMs: elapsedMilliseconds(since: start),
+                stopsHeist: true
+            )
+        }
+        guard let definition = scope.plan.heistDefinition(at: invoke.path) else {
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .invoke,
+                message: "Unknown heist invocation \(invocationName)",
+                durationMs: elapsedMilliseconds(since: start),
+                stopsHeist: true
+            )
+        }
+        let childEnvironment: HeistExecutionEnvironment
+        do {
+            childEnvironment = try environment.binding(argument: invoke.argument, to: definition.parameter)
+        } catch {
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .invoke,
+                message: "Could not bind heist invocation argument: \(error)",
+                durationMs: elapsedMilliseconds(since: start),
+                stopsHeist: true
+            )
+        }
+        let childResults = await executeHeistSteps(
+            definition.body,
+            runtime: runtime,
+            environment: childEnvironment,
+            scope: HeistExecutionScope(
+                plan: definition,
+                definitionPath: scope.definitionPath + invoke.path,
+                invocationStack: scope.invocationStack.union([resolvedInvocationName])
+            )
+        )
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .invoke,
+            message: "invoked \(invocationName)",
+            durationMs: elapsedMilliseconds(since: start),
+            stopsHeist: childResults.contains(where: \.isFailure),
+            childResults: childResults
+        )
     }
 
     private func appendSkippedHeistSteps(

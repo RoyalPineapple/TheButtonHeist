@@ -133,8 +133,7 @@ final class ClientMessageTests: XCTestCase {
 
     func testHeistPlanClientMessageRoundTrip() throws {
         let saveTarget = ElementTarget.predicate(ElementPredicate(label: "Save", traits: [.button]))
-        let plan = HeistPlan(
-            steps: [
+        let plan = HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(saveTarget),
                     expectation: WaitStep(predicate: .changed(.screen()), timeout: 10)
@@ -157,8 +156,8 @@ final class ClientMessageTests: XCTestCase {
         guard case .heistPlan(let decodedPlan) = decoded else {
             return XCTFail("Expected heistPlan, got \(decoded)")
         }
-        XCTAssertEqual(decodedPlan.steps.count, 3)
-        guard case .action(let decodedAction) = decodedPlan.steps[0],
+        XCTAssertEqual(decodedPlan.body.count, 3)
+        guard case .action(let decodedAction) = decodedPlan.body[0],
               case .activate(let decodedTarget) = decodedAction.command,
               decodedAction.expectation?.predicate == .predicate(.changed(.screen())) else {
             return XCTFail("Expected activate command with screen change predicate")
@@ -167,7 +166,7 @@ final class ClientMessageTests: XCTestCase {
     }
 
     func testHeistPlanEnvelopeRoundTrip() throws {
-        let plan = HeistPlan(steps: [
+        let plan = HeistPlan(body: [
             .action(try ActionStep(
                 command: .typeText(TypeTextTarget(
                     text: "hello",
@@ -185,7 +184,7 @@ final class ClientMessageTests: XCTestCase {
 
         XCTAssertEqual(decoded.requestId, "heist-1")
         guard case .heistPlan(let decodedPlan) = decoded.message,
-              let step = decodedPlan.steps.first,
+              let step = decodedPlan.body.first,
               case .action(let action) = step,
               case .typeText(let text, let target) = action.command,
               action.expectation == nil else {

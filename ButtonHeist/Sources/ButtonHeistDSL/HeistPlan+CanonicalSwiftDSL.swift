@@ -29,11 +29,19 @@ public extension HeistPlan {
 
 private struct HeistCanonicalSwiftDSLRenderer {
     func render(_ plan: HeistPlan) throws -> String {
-        let body = try render(steps: plan.steps, indent: 1, environment: .empty)
-        return """
-        try Heist {
+        let definitions = try renderDefinitions(plan.definitions, path: [], indent: 0)
+        let body = try render(steps: plan.body, indent: 1, environment: .empty)
+        let heistHeader = plan.name.map { "try Heist(\(quote($0))) {" } ?? "try Heist {"
+        let heist = """
+        \(heistHeader)
         \(body)
         }
+        """
+        guard !definitions.isEmpty else { return heist }
+        return """
+        \(definitions)
+
+        \(heist)
         """
     }
 
@@ -68,6 +76,114 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return line("Warn(\(quote(warn.message)))", indent)
         case .fail(let fail):
             return line("Fail(\(quote(fail.message)))", indent)
+        case .heist(let plan):
+            let body = try render(steps: plan.body, indent: indent + 1, environment: environment)
+            let header = plan.name.map { "try Heist(\(quote($0))) {" } ?? "try Heist {"
+            return """
+            \(line(header, indent))
+            \(body)
+            \(line("}", indent))
+            """
+        case .invoke(let invoke):
+            return try line(render(invoke: invoke, environment: environment), indent)
+        }
+    }
+
+    private func renderDefinitions(
+        _ definitions: [HeistPlan],
+        path: [String],
+        indent: Int
+    ) throws -> String {
+        try definitions.map { definition in
+            try renderDefinition(definition, path: path, indent: indent)
+        }.joined(separator: "\n\n")
+    }
+
+    private func renderDefinition(
+        _ definition: HeistPlan,
+        path: [String],
+        indent: Int
+    ) throws -> String {
+        guard let name = definition.name else {
+            throw HeistCanonicalSwiftDSLError.invalidParameter("<anonymous>")
+        }
+        try validateParameter(name)
+        let fullPath = path + [name]
+        if definition.body.isEmpty, !definition.definitions.isEmpty, definition.parameter == .none {
+            let nested = try renderDefinitions(definition.definitions, path: fullPath, indent: indent + 1)
+            return """
+            \(line("enum \(name) {", indent))
+            \(nested)
+            \(line("}", indent))
+            """
+        }
+        let declaration = indent == 0 ? "let" : "static let"
+        let definitionType = try renderDefinitionType(definition.parameter)
+        let path = quote(fullPath.joined(separator: "."))
+        let nestedDefinitions = try renderDefinitions(definition.definitions, path: [], indent: indent + 1)
+
+        switch definition.parameter {
+        case .none:
+            let body = try render(steps: definition.body, indent: indent + 1, environment: .empty)
+            let content = [nestedDefinitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
+            return """
+            \(line("\(declaration) \(name) = try! \(definitionType)(\(path)) {", indent))
+            \(content)
+            \(line("}", indent))
+            """
+        case .strings, .elementTargets:
+            let parameterName = try renderDefinitionParameter(definition.parameter)
+            let childEnvironment = try RenderEnvironment.empty.binding(parameter: definition.parameter)
+            let body = try render(steps: definition.body, indent: indent + 1, environment: childEnvironment)
+            let content = [nestedDefinitions, body].filter { !$0.isEmpty }.joined(separator: "\n\n")
+            let parameter = quote(parameterName)
+            return """
+            \(line("\(declaration) \(name) = try! \(definitionType)(\(path), parameter: \(parameter)) { \(parameterName) in", indent))
+            \(content)
+            \(line("}", indent))
+            """
+        }
+    }
+
+    private func renderDefinitionType(_ parameter: HeistParameter) throws -> String {
+        switch parameter {
+        case .strings:
+            return "HeistDef<String>"
+        case .elementTargets:
+            return "HeistDef<ElementTarget>"
+        case .none:
+            return "HeistDef<Void>"
+        }
+    }
+
+    private func renderDefinitionParameter(_ parameter: HeistParameter) throws -> String {
+        guard let name = parameter.name else {
+            throw HeistCanonicalSwiftDSLError.invalidParameter("<none>")
+        }
+        try validateParameter(name)
+        return name
+    }
+
+    private func render(invoke: HeistInvocationStep, environment: RenderEnvironment) throws -> String {
+        let callee = invoke.path.joined(separator: ".")
+        let argument = try render(argument: invoke.argument, environment: environment)
+        return argument.isEmpty ? "\(callee)()" : "\(callee)(\(argument))"
+    }
+
+    private func render(argument: HeistArgument, environment: RenderEnvironment) throws -> String {
+        switch argument {
+        case .none:
+            return ""
+        case .strings(let values):
+            guard values.count == 1, let value = values.first else {
+                throw HeistCanonicalSwiftDSLError.unsupportedAction("canonical Swift invocation arguments must contain exactly one string value")
+            }
+            return try render(string: value, environment: environment)
+        case .elementTargets(let targets):
+            guard targets.count == 1, let target = targets.first else {
+                throw HeistCanonicalSwiftDSLError.unsupportedAction("canonical Swift invocation arguments must contain exactly one element target")
+            }
+            return try render(target: target, environment: environment)
         }
     }
 
@@ -206,7 +322,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
     ) throws -> String {
         let cases = try renderCases(
             conditional.cases,
-            elseSteps: conditional.elseSteps,
+            elseBody: conditional.elseBody,
             indent: indent + 1,
             environment: environment
         )
@@ -224,7 +340,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
     ) throws -> String {
         let cases = try renderCases(
             waitForCases.cases,
-            elseSteps: waitForCases.elseSteps,
+            elseBody: waitForCases.elseBody,
             indent: indent + 1,
             environment: environment
         )
@@ -237,7 +353,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
 
     private func renderCases(
         _ cases: [PredicateCase],
-        elseSteps: [HeistStep]?,
+        elseBody: [HeistStep]?,
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
@@ -245,8 +361,8 @@ private struct HeistCanonicalSwiftDSLRenderer {
         for predicateCase in cases {
             blocks.append(try renderCase(predicateCase, indent: indent, environment: environment))
         }
-        if let elseSteps {
-            let body = try render(steps: elseSteps, indent: indent + 1, environment: environment)
+        if let elseBody {
+            let body = try render(steps: elseBody, indent: indent + 1, environment: environment)
             blocks.append("""
             \(line("Else {", indent))
             \(body)
@@ -261,7 +377,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
         indent: Int,
         environment: RenderEnvironment
     ) throws -> String {
-        let body = try render(steps: predicateCase.steps, indent: indent + 1, environment: environment)
+        let body = try render(steps: predicateCase.body, indent: indent + 1, environment: environment)
         return """
         \(line("Case(\(try render(predicate: predicateCase.predicate, environment: environment))) {", indent))
         \(body)
@@ -276,7 +392,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
     ) throws -> String {
         try validateParameter(forEach.parameter)
         let childEnvironment = environment.bindingTargetReference(forEach.parameter)
-        let body = try render(steps: forEach.steps, indent: indent + 1, environment: childEnvironment)
+        let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
         return """
         \(line("try ForEach(.matching(\(render(predicate: forEach.matching))), limit: \(forEach.limit)) { \(forEach.parameter) in", indent))
         \(body)
@@ -292,7 +408,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
         try validateParameter(forEach.parameter)
         let childEnvironment = environment.bindingStringReference(forEach.parameter)
         let values = forEach.values.map(quote).joined(separator: ", ")
-        let body = try render(steps: forEach.steps, indent: indent + 1, environment: childEnvironment)
+        let body = try render(steps: forEach.body, indent: indent + 1, environment: childEnvironment)
         return """
         \(line("try ForEach([\(values)]) { \(forEach.parameter) in", indent))
         \(body)
@@ -380,6 +496,10 @@ private struct HeistCanonicalSwiftDSLRenderer {
         switch target {
         case .target(let target):
             return render(target: target)
+        case .predicate(let predicate, let ordinal):
+            let renderedPredicate = try render(predicate: predicate, environment: environment)
+            guard let ordinal else { return renderedPredicate }
+            return ".target(\(renderedPredicate), ordinal: \(ordinal))"
         case .ref(let reference):
             guard environment.targetReferences.contains(reference) else {
                 throw HeistCanonicalSwiftDSLError.unresolvedTargetReference(reference)
@@ -428,7 +548,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
         return ".element(\(renderElementPredicateFields(predicate)))"
     }
 
-    private func render(predicate: ElementPredicateExpr, environment: RenderEnvironment) throws -> String {
+    private func render(predicate: ElementPredicateTemplate, environment: RenderEnvironment) throws -> String {
         if predicate.traits.isEmpty, predicate.excludeTraits.isEmpty {
             switch (predicate.label, predicate.identifier, predicate.value) {
             case (.some(let label), nil, nil):
@@ -441,7 +561,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
                 break
             }
         }
-        return "ElementPredicateExpr(\(try renderElementPredicateExprFields(predicate, environment: environment)))"
+        return "ElementPredicateTemplate(\(try renderElementPredicateTemplateFields(predicate, environment: environment)))"
     }
 
     private func renderElementPredicateFields(_ predicate: ElementPredicate) -> String {
@@ -454,8 +574,8 @@ private struct HeistCanonicalSwiftDSLRenderer {
         ].compactMap { $0 }.joined(separator: ", ")
     }
 
-    private func renderElementPredicateExprFields(
-        _ predicate: ElementPredicateExpr,
+    private func renderElementPredicateTemplateFields(
+        _ predicate: ElementPredicateTemplate,
         environment: RenderEnvironment
     ) throws -> String {
         try [
@@ -533,18 +653,30 @@ private struct HeistCanonicalSwiftDSLRenderer {
 private struct RenderEnvironment {
     static let empty = RenderEnvironment()
 
-    var targetReferences: Set<String> = []
-    var stringReferences: Set<String> = []
+    var targetReferences: Set<HeistReferenceName> = []
+    var stringReferences: Set<HeistReferenceName> = []
 
-    func bindingTargetReference(_ reference: String) -> RenderEnvironment {
+    func bindingTargetReference(_ reference: HeistReferenceName) -> RenderEnvironment {
         var copy = self
         copy.targetReferences.insert(reference)
         return copy
     }
 
-    func bindingStringReference(_ reference: String) -> RenderEnvironment {
+    func bindingStringReference(_ reference: HeistReferenceName) -> RenderEnvironment {
         var copy = self
         copy.stringReferences.insert(reference)
         return copy
+    }
+
+    func binding(parameter: HeistParameter) throws -> RenderEnvironment {
+        guard let name = parameter.name else { return self }
+        switch parameter {
+        case .none:
+            return self
+        case .strings:
+            return bindingStringReference(name)
+        case .elementTargets:
+            return bindingTargetReference(name)
+        }
     }
 }

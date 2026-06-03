@@ -382,7 +382,7 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
     guard case .heistExecution(let plan, let result, let accessibilityTrace) = response else {
         return nil
     }
-    let plannedSteps = plan.steps
+    let plannedSteps = plan.body
     let projection = HeistReportProjection(plan: plan, result: result)
     return HeistInspection(
         commands: plannedSteps.map(\.commandForInspection),
@@ -407,7 +407,7 @@ private extension HeistStep {
             return action.command.fenceCommandForInspection
         case .wait:
             return .wait
-        case .conditional, .waitForCases, .forEachElement, .forEachString, .warn, .fail:
+        case .conditional, .waitForCases, .forEachElement, .forEachString, .heist, .invoke, .warn, .fail:
             return .runHeist
         }
     }

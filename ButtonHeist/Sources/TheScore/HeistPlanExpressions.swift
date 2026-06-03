@@ -2,27 +2,29 @@ import Foundation
 
 // MARK: - Heist Execution Environment
 
+public typealias HeistReferenceName = String
+
 public struct HeistExecutionEnvironment: Sendable, Equatable {
     public static let empty = HeistExecutionEnvironment()
 
-    public let targets: [String: ElementTarget]
-    public let strings: [String: String]
+    public let targets: [HeistReferenceName: ElementTarget]
+    public let strings: [HeistReferenceName: String]
 
     public init(
-        targets: [String: ElementTarget] = [:],
-        strings: [String: String] = [:]
+        targets: [HeistReferenceName: ElementTarget] = [:],
+        strings: [HeistReferenceName: String] = [:]
     ) {
         self.targets = targets
         self.strings = strings
     }
 
-    public func binding(target: ElementTarget, to parameter: String) -> HeistExecutionEnvironment {
+    public func binding(target: ElementTarget, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
         var targets = self.targets
         targets[parameter] = target
         return HeistExecutionEnvironment(targets: targets, strings: strings)
     }
 
-    public func binding(string: String, to parameter: String) -> HeistExecutionEnvironment {
+    public func binding(string: String, to parameter: HeistReferenceName) -> HeistExecutionEnvironment {
         var strings = self.strings
         strings[parameter] = string
         return HeistExecutionEnvironment(targets: targets, strings: strings)
@@ -34,6 +36,8 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
     case unresolvedStringReference(String)
     case emptyReference(String)
     case unsupportedHeistActionCommand(String)
+    case parameterArgumentMismatch(parameter: HeistParameterKind, argument: HeistParameterKind)
+    case parameterArgumentCardinality(parameter: HeistParameterKind, count: Int)
 
     public var description: String {
         switch self {
@@ -45,25 +49,62 @@ public enum HeistExpressionError: Error, Sendable, Equatable, CustomStringConver
             return "\(type) reference must not be empty"
         case .unsupportedHeistActionCommand(let command):
             return "unsupported heist action command \"\(command)\""
+        case .parameterArgumentMismatch(let parameter, let argument):
+            return "heist argument type \(argument.rawValue) does not match parameter type \(parameter.rawValue)"
+        case .parameterArgumentCardinality(let parameter, let count):
+            return "heist argument type \(parameter.rawValue) requires exactly one value, got \(count)"
+        }
+    }
+}
+
+public extension HeistExecutionEnvironment {
+    func binding(argument: HeistArgument, to parameter: HeistParameter) throws -> HeistExecutionEnvironment {
+        guard argument.kind == parameter.kind else {
+            throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
+        }
+        switch (parameter, argument) {
+        case (.none, .none):
+            return self
+        case (.strings(let name), .strings(let values)):
+            guard values.count == 1, let value = values.first else {
+                throw HeistExpressionError.parameterArgumentCardinality(parameter: parameter.kind, count: values.count)
+            }
+            return binding(string: try value.resolve(in: self), to: name)
+        case (.elementTargets(let name), .elementTargets(let targets)):
+            guard targets.count == 1, let target = targets.first else {
+                throw HeistExpressionError.parameterArgumentCardinality(parameter: parameter.kind, count: targets.count)
+            }
+            return binding(target: try target.resolve(in: self), to: name)
+        default:
+            throw HeistExpressionError.parameterArgumentMismatch(parameter: parameter.kind, argument: argument.kind)
         }
     }
 }
 
 // MARK: - Typed Expressions
 
-public enum ElementTargetExpr: Codable, Sendable, Equatable {
+public enum ElementTargetExpr: Codable, Sendable, Equatable, Hashable {
     case target(ElementTarget)
-    case ref(String)
+    case predicate(ElementPredicateTemplate, ordinal: Int? = nil)
+    case ref(HeistReferenceName)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case ref
+        case ref, ordinal
+    }
+
+    public static var inlineFieldNames: [String] {
+        ElementTarget.inlineFieldNames
+            + ElementPredicateTemplate.CodingKeys.allCases.map(\.stringValue)
     }
 
     public init(_ target: ElementTarget) {
-        self = .target(target)
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            self = .predicate(ElementPredicateTemplate(predicate), ordinal: ordinal)
+        }
     }
 
-    public init(ref: String) throws {
+    public init(ref: HeistReferenceName) throws {
         let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw HeistExpressionError.emptyReference("target") }
         self = .ref(trimmed)
@@ -76,13 +117,52 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable {
             self = try .ref(Self.decodeReference(from: container, key: .ref, type: "target"))
             return
         }
+        let predicate = try ElementPredicateTemplate.decodeAllowingAdditionalKeys(from: decoder)
+        if predicate.hasPredicates {
+            let ordinal = try container.decodeIfPresent(Int.self, forKey: .ordinal)
+            if let ordinal, ordinal < 0 {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .ordinal,
+                    in: container,
+                    debugDescription: "ordinal must be non-negative"
+                )
+            }
+            self = .predicate(predicate, ordinal: ordinal)
+            return
+        }
         self = .target(try ElementTarget(from: decoder))
+    }
+
+    public static func decodeInlineIfPresent(from decoder: Decoder) throws -> ElementTargetExpr? {
+        struct AnyCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int? = nil
+
+            init?(stringValue: String) {
+                self.stringValue = stringValue
+            }
+
+            init?(intValue: Int) {
+                return nil
+            }
+        }
+
+        let probe = try decoder.container(keyedBy: AnyCodingKey.self)
+        let allowed = Set(inlineFieldNames)
+        guard probe.allKeys.contains(where: { allowed.contains($0.stringValue) }) else { return nil }
+        return try ElementTargetExpr(from: decoder)
     }
 
     public func encode(to encoder: Encoder) throws {
         switch self {
         case .target(let target):
             try target.encode(to: encoder)
+        case .predicate(let predicate, let ordinal):
+            try predicate.encode(to: encoder)
+            if let ordinal {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(ordinal, forKey: .ordinal)
+            }
         case .ref(let reference):
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(reference, forKey: .ref)
@@ -93,6 +173,8 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable {
         switch self {
         case .target(let target):
             return target
+        case .predicate(let predicate, let ordinal):
+            return .predicate(try predicate.resolve(in: environment), ordinal: ordinal)
         case .ref(let reference):
             guard let target = environment.targets[reference] else {
                 throw HeistExpressionError.unresolvedTargetReference(reference)
@@ -105,7 +187,7 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable {
         from container: KeyedDecodingContainer<CodingKeys>,
         key: CodingKeys,
         type: String
-    ) throws -> String {
+    ) throws -> HeistReferenceName {
         let reference = try container.decode(String.self, forKey: key)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !reference.isEmpty else {
@@ -119,11 +201,56 @@ public enum ElementTargetExpr: Codable, Sendable, Equatable {
     }
 }
 
+public extension ElementTargetExpr {
+    // Keep target-backed predicates equal to their canonical predicate-template form
+    // so Swift-authored targets and decoded inline predicate targets compare as the
+    // same heist intent.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        switch (lhs, rhs) {
+        case (.ref(let lhsReference), .ref(let rhsReference)):
+            return lhsReference == rhsReference
+        case (.target(let lhsTarget), .target(let rhsTarget)):
+            return lhsTarget == rhsTarget
+        case (.predicate(let lhsPredicate, let lhsOrdinal), .predicate(let rhsPredicate, let rhsOrdinal)):
+            return lhsPredicate == rhsPredicate && lhsOrdinal == rhsOrdinal
+        case (.target(let target), .predicate(let predicate, let ordinal)),
+             (.predicate(let predicate, let ordinal), .target(let target)):
+            guard case .predicate(let targetPredicate, let targetOrdinal) = target else {
+                return false
+            }
+            return ElementPredicateTemplate(targetPredicate) == predicate && targetOrdinal == ordinal
+        default:
+            return false
+        }
+    }
+
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case .ref(let reference):
+            hasher.combine("ref")
+            hasher.combine(reference)
+        case .target(.predicate(let predicate, let ordinal)):
+            hasher.combine("predicate")
+            hasher.combine(ElementPredicateTemplate(predicate))
+            hasher.combine(ordinal)
+        case .predicate(let predicate, let ordinal):
+            hasher.combine("predicate")
+            hasher.combine(predicate)
+            hasher.combine(ordinal)
+        }
+    }
+}
+
 extension ElementTargetExpr: CustomStringConvertible {
     public var description: String {
         switch self {
         case .target(let target):
             return target.description
+        case .predicate(let predicate, let ordinal):
+            return ScoreDescription.call("targetExpr", [
+                predicate.description,
+                ScoreDescription.valueField("ordinal", ordinal),
+            ].compactMap { $0 })
         case .ref(let reference):
             return ScoreDescription.call("targetRef", [ScoreDescription.quoted(reference)])
         }
@@ -132,7 +259,7 @@ extension ElementTargetExpr: CustomStringConvertible {
 
 public enum StringExpr: Codable, Sendable, Equatable, Hashable {
     case literal(String)
-    case ref(String)
+    case ref(HeistReferenceName)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case ref
@@ -142,7 +269,7 @@ public enum StringExpr: Codable, Sendable, Equatable, Hashable {
         self = .literal(literal)
     }
 
-    public init(ref: String) throws {
+    public init(ref: HeistReferenceName) throws {
         let trimmed = ref.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw HeistExpressionError.emptyReference("string") }
         self = .ref(trimmed)
@@ -204,7 +331,7 @@ extension StringExpr: CustomStringConvertible {
 
 // MARK: - Predicate Expressions
 
-public struct ElementPredicateExpr: Codable, Sendable, Equatable, Hashable {
+public struct ElementPredicateTemplate: Codable, Sendable, Equatable, Hashable {
     public let label: StringExpr?
     public let identifier: StringExpr?
     public let value: StringExpr?
@@ -249,7 +376,7 @@ public struct ElementPredicateExpr: Codable, Sendable, Equatable, Hashable {
         )
     }
 
-    private enum CodingKeys: String, CodingKey, CaseIterable {
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case label, labelRef = "label_ref"
         case identifier, identifierRef = "identifier_ref"
         case value, valueRef = "value_ref"
@@ -257,8 +384,17 @@ public struct ElementPredicateExpr: Codable, Sendable, Equatable, Hashable {
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate expression")
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element predicate template")
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(container: container)
+    }
+
+    static func decodeAllowingAdditionalKeys(from decoder: Decoder) throws -> ElementPredicateTemplate {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        return try ElementPredicateTemplate(container: container)
+    }
+
+    init(container: KeyedDecodingContainer<CodingKeys>) throws {
         label = try Self.decodeStringExpr(container, literalKey: .label, refKey: .labelRef, field: "label")
         identifier = try Self.decodeStringExpr(container, literalKey: .identifier, refKey: .identifierRef, field: "identifier")
         value = try Self.decodeStringExpr(container, literalKey: .value, refKey: .valueRef, field: "value")
@@ -324,7 +460,7 @@ public struct ElementPredicateExpr: Codable, Sendable, Equatable, Hashable {
     }
 }
 
-extension ElementPredicateExpr: CustomStringConvertible {
+extension ElementPredicateTemplate: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("predicate", [
             label.map { "label=\($0)" },
@@ -337,8 +473,8 @@ extension ElementPredicateExpr: CustomStringConvertible {
 }
 
 public enum StatePredicateExpr: Codable, Sendable, Equatable {
-    case present(ElementPredicateExpr)
-    case absent(ElementPredicateExpr)
+    case present(ElementPredicateTemplate)
+    case absent(ElementPredicateTemplate)
     case presentTarget(ElementTargetExpr)
     case absentTarget(ElementTargetExpr)
     case all([StatePredicateExpr])
@@ -419,7 +555,7 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
     private static func decodeElementState(
         _ decoder: Decoder,
         _ container: KeyedDecodingContainer<CodingKeys>,
-        predicateState: (ElementPredicateExpr) -> Self,
+        predicateState: (ElementPredicateTemplate) -> Self,
         targetState: (ElementTargetExpr) -> Self
     ) throws -> Self {
         try decoder.rejectUnknownKeys(
@@ -438,10 +574,10 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
             )
         }
         if hasElement {
-            return predicateState(try container.decode(ElementPredicateExpr.self, forKey: .element))
+            return predicateState(try container.decode(ElementPredicateTemplate.self, forKey: .element))
         }
         if hasTarget {
-            return targetState(.target(try container.decode(ElementTarget.self, forKey: .target)))
+            return targetState(try container.decode(ElementTargetExpr.self, forKey: .target))
         }
         let reference = try container.decode(String.self, forKey: .targetRef)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -461,6 +597,8 @@ public enum StatePredicateExpr: Codable, Sendable, Equatable {
     ) throws {
         switch target {
         case .target(let target):
+            try container.encode(target, forKey: .target)
+        case .predicate:
             try container.encode(target, forKey: .target)
         case .ref(let reference):
             try container.encode(reference, forKey: .targetRef)

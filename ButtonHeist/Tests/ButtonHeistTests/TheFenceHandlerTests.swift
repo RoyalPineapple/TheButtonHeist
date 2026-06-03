@@ -1955,8 +1955,8 @@ final class TheFenceHandlerTests: XCTestCase {
             expectation: WaitStep(predicate: expectation, timeout: 10)
         ))
         let (fence, _) = makeConnectedFence()
-        let contract = try fence.validateHeistPlayback(HeistPlan(steps: [sourceStep]))
-        guard case .action(let action)? = contract.plan.steps.first else {
+        let contract = try fence.validateHeistPlayback(HeistPlan(body: [sourceStep]))
+        guard case .action(let action)? = contract.plan.body.first else {
             return XCTFail("Expected action step")
         }
 
@@ -2407,7 +2407,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistDispatchesTypedPlan() async throws {
-        let heist = HeistPlan(steps: [
+        let heist = HeistPlan(body: [
             try activateHeistStep(identifier: "btn1"),
             .warn(WarnStep(message: "optional onboarding skipped")),
         ])
@@ -2434,7 +2434,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistDoesNotImplicitlyRecoverElementNotFoundWithScrollToVisible() async throws {
-        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "offscreen")])
+        let heist = HeistPlan(body: [try activateHeistStep(identifier: "offscreen")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -2477,7 +2477,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistMapsServerErrorResponseToCommandFailure() async throws {
-        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
+        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -2538,7 +2538,12 @@ final class TheFenceHandlerTests: XCTestCase {
             _ = try await fence.execute(command: .playHeist, values: ["input": .string(heistURL.path)])
             XCTFail("Expected invalid heist file")
         } catch {
-            XCTAssertTrue("\(error)".contains("Unsupported heist plan version") || "\(error)".contains("app"), "\(error)")
+            XCTAssertTrue(
+                "\(error)".contains("Unsupported heist plan version")
+                    || "\(error)".contains("app")
+                    || "\(error)".contains("steps"),
+                "\(error)"
+            )
         }
         XCTAssertFalse(mockConn.sent.contains { message, _ in
             if case .heistPlan = message { return true }
@@ -2552,8 +2557,8 @@ final class TheFenceHandlerTests: XCTestCase {
             .appendingPathComponent("invalid-command-\(UUID().uuidString).heist")
         try """
         {
-          "version": 1,
-          "steps": [
+          "version": 2,
+          "body": [
             {
               "type": "action",
               "action": {
@@ -2580,7 +2585,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistReentrantGuard() async throws {
-        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
+        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -2616,7 +2621,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistReportsTimingMs() async throws {
-        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
+        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -2631,7 +2636,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistReportUsesStepDuration() async throws {
-        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
+        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 
@@ -2648,12 +2653,12 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistReportSurfacesNestedCaseActionFailure() async throws {
         let nestedAction = try activateHeistStep(identifier: "nested")
-        let heist = HeistPlan(steps: [
+        let heist = HeistPlan(body: [
             .conditional(try ConditionalStep(
                 cases: [
                     PredicateCase(
                         predicate: .state(.present(ElementPredicate(label: "Home"))),
-                        steps: [nestedAction]
+                        body: [nestedAction]
                     ),
                 ]
             )),
@@ -2716,12 +2721,12 @@ final class TheFenceHandlerTests: XCTestCase {
     @ButtonHeistActor
     func testPlayHeistReportProjectsSwiftAuthoredForEachWithoutDurableBodyFlattening() async throws {
         let matching = ElementPredicate(label: "Delete")
-        let heist = HeistPlan(steps: [
+        let heist = HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 20,
                 parameter: "target",
-                steps: [try activateHeistStep(target: .ref("target"))]
+                body: [try activateHeistStep(target: .ref("target"))]
             )),
         ])
         let executionResult = HeistExecutionResult(
@@ -2770,7 +2775,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
     @ButtonHeistActor
     func testPlayHeistResetsPhaseAfterCompletion() async throws {
-        let heist = HeistPlan(steps: [try activateHeistStep(identifier: "btn1")])
+        let heist = HeistPlan(body: [try activateHeistStep(identifier: "btn1")])
         let heistURL = try writeTemporaryHeist(heist)
         defer { try? FileManager.default.removeItem(at: heistURL) }
 

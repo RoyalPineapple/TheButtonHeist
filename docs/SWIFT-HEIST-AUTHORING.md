@@ -9,7 +9,7 @@ use Button Heist's explicit `ForEach` primitives, not native Swift `for`.
 `.heist` JSON file stores and transports a `HeistPlan`. JSON is the wire and
 storage artifact, not the source authoring surface.
 
-Decoding `.heist` JSON reconstructs an executable `HeistPlan` with the steps,
+Decoding `.heist` JSON reconstructs an executable `HeistPlan` with the body,
 targets, arguments, and expectations required for playback. `ButtonHeistDSL`
 can render that AST back to canonical Swift DSL. Canonical rendering preserves
 semantic meaning, not arbitrary authorship details. In particular, JSON does

@@ -7,7 +7,7 @@ extension TheFence.Command {
             parameters: [
                 param(.version, .integer, required: true),
                 param(
-                    .steps, .array, required: true,
+                    .body, .array, required: true,
                     minItems: 1,
                     maxItems: TheFence.DecodeLimits.maxRunHeistSteps,
                     arrayItemType: .object,

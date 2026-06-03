@@ -44,7 +44,7 @@ func actionStepRejectsExpectationAndWaiverTogether() {
 
 @Test
 func strictValidationRequiresSemanticActionExpectation() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(command: .activate(.predicate(.label("Save"))))),
     ])
 
@@ -53,7 +53,7 @@ func strictValidationRequiresSemanticActionExpectation() throws {
     #expect(findings == [
         HeistPlanLintFinding(
             severity: .error,
-            path: "$.steps[0].action",
+            path: "$.body[0].action",
             message: "Semantic action has no expectation",
             suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\")"
         ),
@@ -62,7 +62,7 @@ func strictValidationRequiresSemanticActionExpectation() throws {
 
 @Test
 func recordingQualityAllowsExplicitExpectationWaiver() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.predicate(.label("Save"))),
             expectationWaiver: "No durable semantic outcome"
@@ -75,7 +75,7 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
 
 @Test
     func lintFlagsMechanicalCommandsAndViewportSetup() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
         .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
         .action(try ActionStep(
@@ -93,7 +93,7 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
 
 @Test
     func lintReportsTypeTextWithoutTarget() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(command: .typeText(TypeTextTarget(text: "milk")))),
     ])
 
@@ -102,7 +102,7 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
     #expect(findings == [
         HeistPlanLintFinding(
             severity: .warning,
-            path: "$.steps[0].action",
+            path: "$.body[0].action",
             message: "TypeText has no semantic target",
             suggestion: "Use TypeText(text, into: target) for durable semantic tests"
         ),
@@ -111,16 +111,16 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
 
 @Test
 func lintReportsEmptyBranches() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .conditional(try ConditionalStep(cases: [
-            PredicateCase(predicate: .state(.present(.label("Home"))), steps: []),
+            PredicateCase(predicate: .state(.present(.label("Home"))), body: []),
         ])),
     ])
 
     let messages = plan.lint(.strictTest).map(\.message)
 
     #expect(messages == ["Branch has no steps"])
-    #expect(plan.lint(.strictTest).map(\.path) == ["$.steps[0].conditional.cases[0]"])
+    #expect(plan.lint(.strictTest).map(\.path) == ["$.body[0].conditional.cases[0]"])
 }
 
 @Test
@@ -137,18 +137,18 @@ func runtimeAdmissionRejectsInvalidLoopParameters() throws {
     ]
 
     for parameter in invalidParameters {
-        let plan = HeistPlan(steps: [
+        let plan = HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
                 limit: 1,
                 parameter: parameter,
-                steps: [.warn(WarnStep(message: "body"))]
+                body: [.warn(WarnStep(message: "body"))]
             )),
         ])
 
         let failures = plan.runtimeAdmissionFailures()
 
-        #expect(failures.contains { $0.path == "$.steps[0].for_each_element.parameter" })
+        #expect(failures.contains { $0.path == "$.body[0].for_each_element.parameter" })
         #expect(failures.contains { $0.contract.contains("Swift-style identifier") })
     }
 }
@@ -159,22 +159,22 @@ func runtimeAdmissionRejectsInvalidRefs() throws {
     let cases: [(String, HeistPlan, String)] = [
         (
             "empty target ref",
-            HeistPlan(steps: [.action(try ActionStep(command: .activate(.ref(""))))]),
+            HeistPlan(body: [.action(try ActionStep(command: .activate(.ref(""))))]),
             "target_ref"
         ),
         (
             "whitespace target ref",
-            HeistPlan(steps: [.action(try ActionStep(command: .activate(.ref(" "))))]),
+            HeistPlan(body: [.action(try ActionStep(command: .activate(.ref(" "))))]),
             "target_ref"
         ),
         (
             "unknown target ref",
-            HeistPlan(steps: [.action(try ActionStep(command: .activate(.ref("target"))))]),
+            HeistPlan(body: [.action(try ActionStep(command: .activate(.ref("target"))))]),
             "target_ref must resolve"
         ),
         (
             "empty text ref",
-            HeistPlan(steps: [.action(try ActionStep(command: .typeText(
+            HeistPlan(body: [.action(try ActionStep(command: .typeText(
                 text: .ref(""),
                 target: .target(.predicate(.label("Search")))
             )))]),
@@ -182,7 +182,7 @@ func runtimeAdmissionRejectsInvalidRefs() throws {
         ),
         (
             "whitespace text ref",
-            HeistPlan(steps: [.action(try ActionStep(command: .typeText(
+            HeistPlan(body: [.action(try ActionStep(command: .typeText(
                 text: .ref(" "),
                 target: .target(.predicate(.label("Search")))
             )))]),
@@ -190,7 +190,7 @@ func runtimeAdmissionRejectsInvalidRefs() throws {
         ),
         (
             "unknown text ref",
-            HeistPlan(steps: [.action(try ActionStep(command: .typeText(
+            HeistPlan(body: [.action(try ActionStep(command: .typeText(
                 text: .ref("item"),
                 target: .target(.predicate(.label("Search")))
             )))]),
@@ -198,7 +198,7 @@ func runtimeAdmissionRejectsInvalidRefs() throws {
         ),
         (
             "long target ref",
-            HeistPlan(steps: [.action(try ActionStep(command: .activate(.ref(tooLong))))]),
+            HeistPlan(body: [.action(try ActionStep(command: .activate(.ref(tooLong))))]),
             "max parameter/ref length"
         ),
     ]
@@ -211,11 +211,11 @@ func runtimeAdmissionRejectsInvalidRefs() throws {
 
 @Test
 func runtimeAdmissionRejectsRefsOutsideTheirLoopScope() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .forEachString(try ForEachStringStep(
             values: ["Milk"],
             parameter: "item",
-            steps: [.warn(WarnStep(message: "inside string loop"))]
+            body: [.warn(WarnStep(message: "inside string loop"))]
         )),
         .action(try ActionStep(command: .typeText(
             text: .ref("item"),
@@ -225,7 +225,7 @@ func runtimeAdmissionRejectsRefsOutsideTheirLoopScope() throws {
             matching: .label("Delete"),
             limit: 1,
             parameter: "target",
-            steps: [.warn(WarnStep(message: "inside element loop"))]
+            body: [.warn(WarnStep(message: "inside element loop"))]
         )),
         .action(try ActionStep(command: .activate(.ref("target")))),
     ])
@@ -233,22 +233,22 @@ func runtimeAdmissionRejectsRefsOutsideTheirLoopScope() throws {
     let failures = plan.runtimeAdmissionFailures()
 
     #expect(failures.contains {
-        $0.path == "$.steps[1].action.command.payload.text"
+        $0.path == "$.body[1].action.command.payload.text"
             && $0.contract == "text_ref must resolve in the current heist scope"
     })
     #expect(failures.contains {
-        $0.path == "$.steps[3].action.command.payload.target"
+        $0.path == "$.body[3].action.command.payload.target"
             && $0.contract == "target_ref must resolve in the current heist scope"
     })
 }
 
 @Test
 func runtimeAdmissionRejectsStringRefThatLowersToInvalidCommandPayload() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .forEachString(try ForEachStringStep(
             values: [""],
             parameter: "item",
-            steps: [
+            body: [
                 .action(try ActionStep(command: .typeText(
                     text: .ref("item"),
                     target: .target(.predicate(.label("Search")))
@@ -265,14 +265,14 @@ func runtimeAdmissionRejectsStringRefThatLowersToInvalidCommandPayload() throws 
 
 @Test
 func runtimeAdmissionRejectsEmptySetPasteboardPayload() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "")))),
     ])
 
     let failures = plan.runtimeAdmissionFailures()
 
     #expect(failures.contains {
-        $0.path == "$.steps[0].action.command.payload.text"
+        $0.path == "$.body[0].action.command.payload.text"
             && $0.contract == "set_pasteboard text must be non-empty"
     })
 }
@@ -292,22 +292,22 @@ func runtimeAdmissionEnforcesBounds() throws {
     )
     let deepPredicate = AccessibilityPredicateExpr.state(.all([
         .all([
-            .present(ElementPredicateExpr(label: .literal("Nested"))),
+            .present(ElementPredicateTemplate(label: .literal("Nested"))),
         ]),
-        .present(ElementPredicateExpr(label: .literal("Sibling"))),
+        .present(ElementPredicateTemplate(label: .literal("Sibling"))),
     ]))
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .wait(WaitStep(predicate: deepPredicate, timeout: 0)),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
             limit: 2,
             parameter: "target",
-            steps: [.warn(WarnStep(message: "Nested body"))]
+            body: [.warn(WarnStep(message: "Nested body"))]
         )),
         .forEachString(try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            steps: [.warn(WarnStep(message: "body"))]
+            body: [.warn(WarnStep(message: "body"))]
         )),
     ])
 
@@ -328,28 +328,28 @@ func runtimeAdmissionRejectsNestedCollectionLoops() throws {
     let nested = try ForEachStringStep(
         values: ["Milk"],
         parameter: "item",
-        steps: [.warn(WarnStep(message: "nested"))]
+        body: [.warn(WarnStep(message: "nested"))]
     )
     let cases: [(HeistPlan, String)] = [
-        (HeistPlan(steps: [
+        (HeistPlan(body: [
             .conditional(try ConditionalStep(cases: [
-                PredicateCase(predicate: .state(.present(.label("Home"))), steps: [.forEachString(nested)]),
+                PredicateCase(predicate: .state(.present(.label("Home"))), body: [.forEachString(nested)]),
             ])),
-        ]), "$.steps[0].conditional.cases[0].steps[0].for_each_string"),
-        (HeistPlan(steps: [
+        ]), "$.body[0].conditional.cases[0].body[0].for_each_string"),
+        (HeistPlan(body: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 1,
-                cases: [PredicateCase(predicate: .state(.present(.label("Home"))), steps: [.forEachString(nested)])]
+                cases: [PredicateCase(predicate: .state(.present(.label("Home"))), body: [.forEachString(nested)])]
             )),
-        ]), "$.steps[0].wait_for_cases.cases[0].steps[0].for_each_string"),
-        (HeistPlan(steps: [
+        ]), "$.body[0].wait_for_cases.cases[0].body[0].for_each_string"),
+        (HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
                 limit: 1,
                 parameter: "target",
-                steps: [.forEachString(nested)]
+                body: [.forEachString(nested)]
             )),
-        ]), "$.steps[0].for_each_element.steps[0].for_each_string"),
+        ]), "$.body[0].for_each_element.body[0].for_each_string"),
     ]
 
     for (plan, path) in cases {
@@ -361,28 +361,178 @@ func runtimeAdmissionRejectsNestedCollectionLoops() throws {
 }
 
 @Test
+func runtimeAdmissionRejectsInvalidHeistDefinitionsAndInvocations() throws {
+    let definition = HeistPlan(
+        name: "addToCart",
+        parameter: .strings(name: "item"),
+        body: [.action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item"))))))]
+    )
+    let cases: [(HeistPlan, String)] = [
+        (
+            HeistPlan(definitions: [HeistPlan(name: nil, body: [.warn(WarnStep(message: "x"))])], body: [
+                .warn(WarnStep(message: "body")),
+            ]),
+            "heist definitions must have a non-empty name"
+        ),
+        (
+            HeistPlan(definitions: [
+                HeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "a"))]),
+                HeistPlan(name: "duplicate", body: [.warn(WarnStep(message: "b"))]),
+            ], body: [.warn(WarnStep(message: "body"))]),
+            "duplicate heist definition names are not allowed"
+        ),
+        (
+            HeistPlan(definitions: [definition], body: [
+                .invoke(HeistInvocationStep(
+                    path: ["missing"],
+                    argument: .strings([.literal("Milk")])
+                )),
+            ]),
+            "heist invocation path must resolve"
+        ),
+        (
+            HeistPlan(definitions: [definition], body: [
+                .invoke(HeistInvocationStep(path: ["addToCart"], argument: .none)),
+            ]),
+            "heist invocation argument type must match"
+        ),
+        (
+            HeistPlan(definitions: [definition], body: [
+                .invoke(HeistInvocationStep(
+                    path: ["addToCart"],
+                    argument: .strings([.literal("Milk"), .literal("Bread")])
+                )),
+            ]),
+            "heist invocation argument must bind"
+        ),
+        (
+            HeistPlan(definitions: [definition], body: [
+                .invoke(HeistInvocationStep(path: [], argument: .none)),
+            ]),
+            "heist invocation path must not be empty"
+        ),
+    ]
+
+    for (plan, expectedContract) in cases {
+        #expect(plan.runtimeAdmissionFailures().contains {
+            $0.contract.contains(expectedContract)
+        }, "\(expectedContract): \(plan.runtimeAdmissionFailures())")
+    }
+}
+
+@Test
+func runtimeAdmissionRejectsDefinitionSelfInvocationOutsideLocalScope() throws {
+    let plan = HeistPlan(definitions: [
+        HeistPlan(name: "repeat", body: [
+            .invoke(HeistInvocationStep(path: ["repeat"])),
+        ]),
+    ], body: [
+        .invoke(HeistInvocationStep(path: ["repeat"])),
+    ])
+
+    let failures = plan.runtimeAdmissionFailures()
+
+    #expect(failures.contains {
+        $0.contract == "heist invocation path must resolve to a local definition"
+    })
+}
+
+@Test
+func runtimeAdmissionUsesInvokedDefinitionScopeForHelperDependencies() throws {
+    let plan = HeistPlan(definitions: [
+        HeistPlan(
+            name: "addToCart",
+            parameter: .strings(name: "item"),
+            definitions: [
+                HeistPlan(name: "tapAddButton", body: [
+                    .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .literal("Add to Cart")))))),
+                ]),
+            ],
+            body: [
+                .action(try ActionStep(command: .activate(.predicate(ElementPredicateTemplate(label: .ref("item")))))),
+                .invoke(HeistInvocationStep(path: ["tapAddButton"])),
+            ]
+        ),
+    ], body: [
+        .invoke(HeistInvocationStep(
+            path: ["addToCart"],
+            argument: .strings([.literal("Milk")])
+        )),
+    ])
+
+    #expect(plan.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
+func runtimeAdmissionAllowsSameLeafDefinitionNamesInDifferentScopes() throws {
+    let plan = HeistPlan(definitions: [
+        HeistPlan(
+            name: "setup",
+            definitions: [
+                HeistPlan(name: "setup", body: [
+                    .warn(WarnStep(message: "Nested setup")),
+                ]),
+            ],
+            body: [
+                .invoke(HeistInvocationStep(path: ["setup"])),
+            ]
+        ),
+    ], body: [
+        .invoke(HeistInvocationStep(path: ["setup"])),
+    ])
+
+    #expect(plan.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
+func runtimeAdmissionValidatesInvokedBodiesWithBoundArguments() throws {
+    let plan = HeistPlan(definitions: [
+        HeistPlan(
+            name: "typeSearch",
+            parameter: .strings(name: "query"),
+            body: [
+                .action(try ActionStep(command: .typeText(
+                    text: .ref("query"),
+                    target: .target(.predicate(.label("Search")))
+                ))),
+            ]
+        ),
+    ], body: [
+        .invoke(HeistInvocationStep(
+            path: ["typeSearch"],
+            argument: .strings([.literal("")])
+        )),
+    ])
+
+    let failures = plan.runtimeAdmissionFailures()
+
+    #expect(failures.contains { $0.contract.contains("direct Fence command contract") })
+    #expect(failures.contains { $0.observed.contains("text must be non-empty") })
+}
+
+@Test
 func runtimeAdmissionAcceptsRepresentativeCanonicalPlan() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.target(.predicate(.label("Sign In")))),
             expectation: WaitStep(predicate: .state(.present(.label("Home"))), timeout: 5)
         )),
         .wait(WaitStep(predicate: .state(.absent(.label("Loading"))), timeout: 1)),
         .conditional(try ConditionalStep(cases: [
-            PredicateCase(predicate: .state(.present(.label("Home"))), steps: [.warn(WarnStep(message: "home"))]),
+            PredicateCase(predicate: .state(.present(.label("Home"))), body: [.warn(WarnStep(message: "home"))]),
         ])),
         .waitForCases(try WaitForCasesStep(
             timeout: 2,
             cases: [
-                PredicateCase(predicate: .state(.present(.label("Done"))), steps: [.warn(WarnStep(message: "done"))]),
+                PredicateCase(predicate: .state(.present(.label("Done"))), body: [.warn(WarnStep(message: "done"))]),
             ],
-            elseSteps: [.fail(FailStep(message: "timeout"))]
+            elseBody: [.fail(FailStep(message: "timeout"))]
         )),
         .forEachElement(try ForEachElementStep(
             matching: .label("Delete"),
             limit: 20,
             parameter: "target",
-            steps: [
+            body: [
                 .action(try ActionStep(
                     command: .activate(.ref("target")),
                     expectation: WaitStep(predicate: .state(.absentTarget(.ref("target"))), timeout: 2)
@@ -392,11 +542,11 @@ func runtimeAdmissionAcceptsRepresentativeCanonicalPlan() throws {
         .forEachString(try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            steps: [
+            body: [
                 .action(try ActionStep(
                     command: .typeText(text: .ref("item"), target: .target(.predicate(.label("Add item")))),
                     expectation: WaitStep(
-                        predicate: .state(.present(ElementPredicateExpr(label: .ref("item")))),
+                        predicate: .state(.present(ElementPredicateTemplate(label: .ref("item")))),
                         timeout: 2
                     )
                 )),

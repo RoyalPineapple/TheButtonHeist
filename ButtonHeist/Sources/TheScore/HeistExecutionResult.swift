@@ -27,6 +27,8 @@ public enum HeistExecutionStepKind: String, Codable, Sendable {
     case forEach = "for_each"
     case warn
     case fail
+    case heist
+    case invoke
     case skipped
 }
 

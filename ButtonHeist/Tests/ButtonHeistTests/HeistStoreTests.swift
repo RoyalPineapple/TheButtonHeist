@@ -28,7 +28,7 @@ final class HeistStoreTests: XCTestCase {
 
         XCTAssertFalse(heistStore.isRecordingHeist)
         XCTAssertEqual(heist.version, HeistPlan.currentVersion)
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             try activateStep(label: "Pay", traits: [.button]),
         ])
     }
@@ -94,7 +94,7 @@ final class HeistStoreTests: XCTestCase {
         try heistStore.startRecording(identifier: "new", app: "com.example.app")
         try heistStore.appendStep(try activateStep(label: "New"))
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps[0], try activateStep(label: "New"))
+        XCTAssertEqual(heist.body[0], try activateStep(label: "New"))
     }
 
     @ButtonHeistActor
@@ -136,7 +136,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [try activateStep(label: "Go")])
+        XCTAssertEqual(heist.body, [try activateStep(label: "Go")])
     }
 
     @ButtonHeistActor
@@ -160,7 +160,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Save",
                 expectation: WaitStep(predicate: .changed(.screen()), timeout: 2.5)
@@ -196,7 +196,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Delete",
                 expectation: WaitStep(predicate: expectation, timeout: 10)
@@ -251,7 +251,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             try activateStep(label: "Save"),
         ])
     }
@@ -282,7 +282,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [try activateStep(label: "Delete")])
+        XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
     }
 
     @ButtonHeistActor
@@ -301,7 +301,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             .wait(WaitStep(predicate: .state(.present(ElementPredicate(label: "Ready"))), timeout: 4)),
         ])
     }
@@ -323,7 +323,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [try activateStep(label: "Delete")])
+        XCTAssertEqual(heist.body, [try activateStep(label: "Delete")])
     }
 
     @ButtonHeistActor
@@ -350,7 +350,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             try activateStep(label: "Delete", traits: [.button]),
         ])
     }
@@ -380,7 +380,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             .action(try ActionStep(command: .activate(
                 .predicate(ElementPredicate(label: "Delete"), ordinal: 1)
             ))),
@@ -411,7 +411,7 @@ final class HeistStoreTests: XCTestCase {
 
         let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             try activateStep(
                 label: "Delete",
                 expectation: WaitStep(predicate: .state(.absentTarget(target)), timeout: 10)
@@ -447,7 +447,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             .action(try ActionStep(
                 command: .typeText(TypeTextTarget(
                     text: "milk",
@@ -486,7 +486,7 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let heist = try heistStore.finishRecording()
-        XCTAssertEqual(heist.steps, [
+        XCTAssertEqual(heist.body, [
             .action(try ActionStep(command: .oneFingerTap(TapTarget(
                 selection: .coordinate(ScreenPoint(x: 20, y: 30))
             )))),
@@ -495,8 +495,7 @@ final class HeistStoreTests: XCTestCase {
 
     @ButtonHeistActor
     func testWriteAndReadHeist() async throws {
-        let heist = HeistPlan(
-            steps: [
+        let heist = HeistPlan(body: [
                 try activateStep(label: "Go", traits: [.button]),
                 .action(try ActionStep(command: .typeText(TypeTextTarget(text: "test")))),
             ]

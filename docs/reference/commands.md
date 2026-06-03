@@ -312,7 +312,7 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `version` | `integer` | yes | - | - |
-| `steps` | `array` | yes | - | - |
+| `body` | `array` | yes | - | - |
 
 ### `scroll`
 

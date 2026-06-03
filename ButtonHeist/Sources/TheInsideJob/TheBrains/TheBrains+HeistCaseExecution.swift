@@ -10,7 +10,8 @@ extension TheBrains {
         index: Int,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         let resolvedCases: [ResolvedPredicateCase]
         do {
@@ -27,9 +28,10 @@ extension TheBrains {
         if let selectedCaseIndex = selection.selectedCaseIndex {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
             let childResults = await executeHeistSteps(
-                resolvedCases[selectedCaseIndex].steps,
+                resolvedCases[selectedCaseIndex].body,
                 runtime: runtime,
-                environment: environment
+                environment: environment,
+                scope: scope
             )
             return HeistExecutionStepResult(
                 index: index,
@@ -46,9 +48,14 @@ extension TheBrains {
             )
         }
 
-        if let elseSteps = step.elseSteps {
+        if let elseBody = step.elseBody {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(elseSteps, runtime: runtime, environment: environment)
+            let childResults = await executeHeistSteps(
+                elseBody,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
             return HeistExecutionStepResult(
                 index: index,
                 kind: .conditional,
@@ -84,7 +91,8 @@ extension TheBrains {
         index: Int,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         let resolvedCases: [ResolvedPredicateCase]
         do {
@@ -117,9 +125,10 @@ extension TheBrains {
             if let selectedCaseIndex = lastSelection.selectedCaseIndex {
                 let selectionElapsedMs = elapsedMilliseconds(since: start)
                 let childResults = await executeHeistSteps(
-                    resolvedCases[selectedCaseIndex].steps,
+                    resolvedCases[selectedCaseIndex].body,
                     runtime: runtime,
-                    environment: environment
+                    environment: environment,
+                    scope: scope
                 )
                 return HeistExecutionStepResult(
                     index: index,
@@ -140,9 +149,14 @@ extension TheBrains {
             if step.timeout == 0 { break }
         } while CFAbsoluteTimeGetCurrent() < deadline
 
-        if let elseSteps = step.elseSteps {
+        if let elseBody = step.elseBody {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(elseSteps, runtime: runtime, environment: environment)
+            let childResults = await executeHeistSteps(
+                elseBody,
+                runtime: runtime,
+                environment: environment,
+                scope: scope
+            )
             return HeistExecutionStepResult(
                 index: index,
                 kind: .waitForCases,

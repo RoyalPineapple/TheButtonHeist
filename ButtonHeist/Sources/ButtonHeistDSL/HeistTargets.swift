@@ -34,21 +34,39 @@ public extension ElementTarget {
     }
 }
 
-public extension ElementPredicateExpr {
-    static func label(_ label: StringExpr) -> ElementPredicateExpr {
-        ElementPredicateExpr(label: label)
+public extension ElementPredicateTemplate {
+    static func label(_ label: StringExpr) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(label: label)
     }
 
-    static func label(_ label: String) -> ElementPredicateExpr {
-        ElementPredicateExpr(label: .literal(label))
+    static func label(_ label: String) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(label: .literal(label))
     }
 
-    static func identifier(_ identifier: StringExpr) -> ElementPredicateExpr {
-        ElementPredicateExpr(identifier: identifier)
+    static func identifier(_ identifier: StringExpr) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(identifier: identifier)
     }
 
-    static func value(_ value: StringExpr) -> ElementPredicateExpr {
-        ElementPredicateExpr(value: value)
+    static func value(_ value: StringExpr) -> ElementPredicateTemplate {
+        ElementPredicateTemplate(value: value)
+    }
+}
+
+public extension ElementTargetExpr {
+    static func label(_ label: StringExpr) -> ElementTargetExpr {
+        .predicate(.label(label))
+    }
+
+    static func identifier(_ identifier: StringExpr) -> ElementTargetExpr {
+        .predicate(.identifier(identifier))
+    }
+
+    static func value(_ value: StringExpr) -> ElementTargetExpr {
+        .predicate(.value(value))
+    }
+
+    static func target(_ predicate: ElementPredicateTemplate, ordinal: Int) -> ElementTargetExpr {
+        .predicate(predicate, ordinal: ordinal)
     }
 }
 
@@ -77,7 +95,7 @@ public extension AccessibilityPredicate {
 }
 
 public extension AccessibilityPredicateExpr {
-    static func present(_ predicate: ElementPredicateExpr) -> AccessibilityPredicateExpr {
+    static func present(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
         .state(.present(predicate))
     }
 
@@ -86,7 +104,7 @@ public extension AccessibilityPredicateExpr {
         .state(.presentTarget(target))
     }
 
-    static func absent(_ predicate: ElementPredicateExpr) -> AccessibilityPredicateExpr {
+    static func absent(_ predicate: ElementPredicateTemplate) -> AccessibilityPredicateExpr {
         .state(.absent(predicate))
     }
 

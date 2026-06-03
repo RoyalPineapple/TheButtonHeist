@@ -12,8 +12,8 @@ final class WireCommandParityTests: XCTestCase {
 
     func testRunHeistDescriptorAdvertisesPublicJSONPlanStepTypes() {
         let descriptor = TheFence.Command.descriptor(for: .runHeist)
-        let steps = descriptor.parameters.first { $0.key == "steps" }
-        let type = steps?.arrayItemProperties.first { $0.key == "type" }
+        let body = descriptor.parameters.first { $0.key == "body" }
+        let type = body?.arrayItemProperties.first { $0.key == "type" }
 
         XCTAssertEqual(
             type?.enumValues,
@@ -86,8 +86,8 @@ final class WireCommandParityTests: XCTestCase {
             XCTAssertFalse(singleMessages.isEmpty, command.rawValue)
 
             let sourceStep = try fence.heistStep(for: singleRequest)
-            let playback = try fence.validateHeistPlayback(HeistPlan(steps: [sourceStep]))
-            let playbackMessages = playback.plan.steps.flatMap(clientMessages(for:))
+            let playback = try fence.validateHeistPlayback(HeistPlan(body: [sourceStep]))
+            let playbackMessages = playback.plan.body.flatMap(clientMessages(for:))
 
             XCTAssertEqual(
                 String(reflecting: playbackMessages),
@@ -153,7 +153,7 @@ final class WireCommandParityTests: XCTestCase {
         case .runHeist:
             return [
                 "version": .int(HeistPlan.currentVersion),
-                "steps": .array([heistStepValue(
+                "body": .array([heistStepValue(
                     type: "action",
                     payload: [
                         "command": .object([
@@ -200,7 +200,7 @@ final class WireCommandParityTests: XCTestCase {
             .scrollToVisible(ScrollToVisibleTarget(elementTarget: target)),
             .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)),
             .wait(WaitTarget(predicate: .changed(.elements), timeout: 1)),
-            .heistPlan(HeistPlan(steps: [
+            .heistPlan(HeistPlan(body: [
                 .action(try ActionStep(command: .activate(target))),
             ])),
         ]
@@ -227,12 +227,12 @@ final class WireCommandParityTests: XCTestCase {
             guard let resolved = try? wait.resolve(in: .empty) else { return [] }
             return [.wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout))]
         case .conditional(let conditional):
-            return conditional.cases.flatMap { $0.steps.flatMap(clientMessages) }
-                + (conditional.elseSteps ?? []).flatMap(clientMessages)
+            return conditional.cases.flatMap { $0.body.flatMap(clientMessages) }
+                + (conditional.elseBody ?? []).flatMap(clientMessages)
         case .waitForCases(let waitForCases):
-            return waitForCases.cases.flatMap { $0.steps.flatMap(clientMessages) }
-                + (waitForCases.elseSteps ?? []).flatMap(clientMessages)
-        case .forEachElement, .forEachString:
+            return waitForCases.cases.flatMap { $0.body.flatMap(clientMessages) }
+                + (waitForCases.elseBody ?? []).flatMap(clientMessages)
+        case .forEachElement, .forEachString, .heist, .invoke:
             return []
         case .warn, .fail:
             return []

@@ -4,7 +4,7 @@ import XCTest
 final class HeistPlanTests: XCTestCase {
 
     func testHeistPlanRoundTrip() throws {
-        let heist = HeistPlan(steps: [
+        let heist = HeistPlan(body: [
             try activateStep(label: "Login", traits: [.button]),
             .action(try ActionStep(command: .typeText(TypeTextTarget(text: "user@example.com")))),
             try activateStep(label: "Submit", traits: [.button]),
@@ -14,13 +14,13 @@ final class HeistPlanTests: XCTestCase {
         let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
 
         XCTAssertEqual(decoded.version, HeistPlan.currentVersion)
-        XCTAssertEqual(decoded.steps, heist.steps)
+        XCTAssertEqual(decoded.body, heist.body)
     }
 
     func testDecodeRejectsUnsupportedVersionAtBoundary() {
         let json = """
         {
-          "version": \(HeistPlan.currentVersion + 1),
+          "version": 1,
           "steps": [{"type":"warn","warn":{"message":"check state"}}]
         }
         """
@@ -31,6 +31,7 @@ final class HeistPlanTests: XCTestCase {
             }
             XCTAssertTrue(context.debugDescription.contains("Unsupported heist plan version"))
             XCTAssertTrue(context.debugDescription.contains("supports version \(HeistPlan.currentVersion)"))
+            XCTAssertTrue(context.debugDescription.contains(#"renamed "steps" to "body""#))
         }
     }
 
@@ -38,7 +39,7 @@ final class HeistPlanTests: XCTestCase {
         let json = """
         {
           "version": \(HeistPlan.currentVersion),
-          "steps": [{"type":"warn","warn":{"message":"check state"}}],
+          "body": [{"type":"warn","warn":{"message":"check state"}}],
           "unexpectedField": {}
         }
         """
@@ -49,10 +50,10 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testDecodeRejectsEmptyPlan() {
-        let json = #"{"version":1,"steps":[]}"#
+        let json = #"{"version":\#(HeistPlan.currentVersion),"body":[]}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("requires at least one step"), "\(error)")
+            XCTAssertTrue("\(error)".contains("requires a non-empty body or definitions"), "\(error)")
         }
     }
 
@@ -124,7 +125,7 @@ final class HeistPlanTests: XCTestCase {
     }
 
     func testWaitWarnAndFailRoundTrip() throws {
-        let plan = HeistPlan(steps: [
+        let plan = HeistPlan(body: [
             .wait(WaitStep(predicate: .state(.present(ElementPredicate(label: "Ready"))), timeout: 1.5)),
             .warn(WarnStep(message: "optional branch skipped")),
             .fail(FailStep(message: "unexpected state")),
@@ -139,17 +140,17 @@ final class HeistPlanTests: XCTestCase {
     func testConditionalAndWaitForCasesRoundTrip() throws {
         let conditionCase = PredicateCase(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
-            steps: [.warn(WarnStep(message: "home"))]
+            body: [.warn(WarnStep(message: "home"))]
         )
-        let plan = HeistPlan(steps: [
+        let plan = HeistPlan(body: [
             .conditional(try ConditionalStep(
                 cases: [conditionCase],
-                elseSteps: [.warn(WarnStep(message: "not home"))]
+                elseBody: [.warn(WarnStep(message: "not home"))]
             )),
             .waitForCases(try WaitForCasesStep(
                 timeout: 2,
                 cases: [conditionCase],
-                elseSteps: [.fail(FailStep(message: "no known state"))]
+                elseBody: [.fail(FailStep(message: "no known state"))]
             )),
         ])
 
@@ -166,7 +167,7 @@ final class HeistPlanTests: XCTestCase {
           "conditional": {
             "cases": [{
               "predicate": {"type": "present", "element": {"label": "Home"}},
-              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+              "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
             "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
           }
@@ -186,7 +187,7 @@ final class HeistPlanTests: XCTestCase {
             "timeout": 1,
             "cases": [{
               "predicate": {"type": "present", "element": {"label": "Home"}},
-              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+              "body": [{"type": "warn", "warn": {"message": "home"}}]
             }],
             "elseSteps": [{"type": "warn", "warn": {"message": "not home"}}]
           }
@@ -196,6 +197,21 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("elseSteps"), "\(error)")
         }
+    }
+
+    func testInvokeStepDecodesMissingArgumentAsNone() throws {
+        let json = """
+        {
+          "type": "invoke",
+          "invoke": {
+            "path": ["setup"]
+          }
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded, .invoke(HeistInvocationStep(path: ["setup"])))
     }
 
     func testConditionalRejectsEmptyCases() {
@@ -221,7 +237,7 @@ final class HeistPlanTests: XCTestCase {
             "timeout": -1,
             "cases": [{
               "predicate": {"type": "present", "element": {"label": "Home"}},
-              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+              "body": [{"type": "warn", "warn": {"message": "home"}}]
             }]
           }
         }
@@ -240,7 +256,7 @@ final class HeistPlanTests: XCTestCase {
             "timeout": 1,
             "cases": [{
               "predicate": {"type": "present", "element": {"label": "Home"}},
-              "steps": [{"type": "warn", "warn": {"message": "home"}}]
+              "body": [{"type": "warn", "warn": {"message": "home"}}]
             }]
           }
         }
@@ -305,6 +321,14 @@ final class HeistPlanTests: XCTestCase {
         )
     }
 
+    func testElementTargetExprHashMatchesCrossCaseEquality() {
+        let target = ElementTargetExpr.target(.predicate(ElementPredicate(label: "Save"), ordinal: 1))
+        let template = ElementTargetExpr.predicate(ElementPredicateTemplate(label: .literal("Save")), ordinal: 1)
+
+        XCTAssertEqual(target, template)
+        XCTAssertEqual(Set([target, template]).count, 1)
+    }
+
     // MARK: - ForEach
 
     func testForEachElementStepStoresRefBackedBodyAST() throws {
@@ -314,7 +338,7 @@ final class HeistPlanTests: XCTestCase {
             matching: matching,
             limit: 5,
             parameter: "target",
-            steps: [
+            body: [
                 .action(try ActionStep(
                     command: .activate(target),
                     expectation: WaitStep(
@@ -327,7 +351,7 @@ final class HeistPlanTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            step.steps,
+            step.body,
             [
                 .action(try ActionStep(
                     command: .activate(target),
@@ -343,12 +367,12 @@ final class HeistPlanTests: XCTestCase {
 
     func testForEachElementEncodesDurableBodyAST() throws {
         let matching = ElementPredicate(label: "Cell", traits: [.button])
-        let plan = HeistPlan(steps: [
+        let plan = HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: 5,
                 parameter: "target",
-                steps: [.action(try ActionStep(command: .activate(try ElementTargetExpr(ref: "target"))))]
+                body: [.action(try ActionStep(command: .activate(try ElementTargetExpr(ref: "target"))))]
             )),
         ])
 
@@ -366,7 +390,7 @@ final class HeistPlanTests: XCTestCase {
             "matching": {},
             "limit": 10,
             "parameter": "target",
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "body": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
@@ -384,7 +408,7 @@ final class HeistPlanTests: XCTestCase {
             "matching": {"label": "Cell"},
             "limit": 0,
             "parameter": "target",
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "body": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
@@ -400,7 +424,7 @@ final class HeistPlanTests: XCTestCase {
             "matching": {"label": "Cell"},
             "limit": -1,
             "parameter": "target",
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "body": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
@@ -423,7 +447,7 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("steps"), "\(error)")
+            XCTAssertTrue("\(error)".contains("body"), "\(error)")
         }
     }
 
@@ -435,7 +459,7 @@ final class HeistPlanTests: XCTestCase {
             "matching": {"label": "Cell"},
             "limit": 5,
             "element": {"label": "Cell", "ordinal": 0},
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "body": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
@@ -453,7 +477,7 @@ final class HeistPlanTests: XCTestCase {
             "matching": {"label": "Cell"},
             "limit": 5,
             "parameter": "target",
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "body": [{"type": "warn", "warn": {"message": "hi"}}]
           },
           "unexpected": true
         }
@@ -470,7 +494,7 @@ final class HeistPlanTests: XCTestCase {
             "matching": {"label": "Cell"},
             "limit": 5,
             "parameter": "target",
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}],
+            "body": [{"type": "warn", "warn": {"message": "hi"}}],
             "bogus": 42
           }
         }
@@ -512,12 +536,12 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertFalse(result.isFailure)
     }
 
-    func testCurrentVersionIsOne() {
-        XCTAssertEqual(HeistPlan.currentVersion, 1)
+    func testCurrentVersionIsTwo() {
+        XCTAssertEqual(HeistPlan.currentVersion, 2)
     }
 
     func testFullHeistJsonShape() throws {
-        let heist = HeistPlan(steps: [
+        let heist = HeistPlan(body: [
             try activateStep(label: "Go", traits: [.button]),
         ])
 
@@ -530,9 +554,9 @@ final class HeistPlanTests: XCTestCase {
         XCTAssertNil(json["app"])
         XCTAssertNil(json["recorded"])
 
-        let steps = try XCTUnwrap(json["steps"] as? [[String: Any]])
-        XCTAssertEqual(steps.count, 1)
-        XCTAssertEqual(steps.first?["type"] as? String, "action")
+        let body = try XCTUnwrap(json["body"] as? [[String: Any]])
+        XCTAssertEqual(body.count, 1)
+        XCTAssertEqual(body.first?["type"] as? String, "action")
     }
 }
 

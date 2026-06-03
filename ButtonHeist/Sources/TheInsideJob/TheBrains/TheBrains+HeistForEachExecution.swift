@@ -10,7 +10,8 @@ extension TheBrains {
         index: Int,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         guard let observation = await runtime.observeSemanticState(.discovery, nil, nil) else {
             return forEachUnavailableResult(index: index, start: start, limit: step.limit)
@@ -35,9 +36,10 @@ extension TheBrains {
             let currentElement = ElementTarget.predicate(step.matching, ordinal: nextOrdinal)
             let iterationEnvironment = environment.binding(target: currentElement, to: step.parameter)
             let iterationResults = await executeHeistSteps(
-                step.steps,
+                step.body,
                 runtime: runtime,
-                environment: iterationEnvironment
+                environment: iterationEnvironment,
+                scope: scope
             )
             iterationCount += 1
 
@@ -97,7 +99,8 @@ extension TheBrains {
         index: Int,
         start: CFAbsoluteTime,
         runtime: HeistExecutionRuntime,
-        environment: HeistExecutionEnvironment
+        environment: HeistExecutionEnvironment,
+        scope: HeistExecutionScope
     ) async -> HeistExecutionStepResult {
         var childResults: [HeistExecutionStepResult] = []
         var failureReason: String?
@@ -106,9 +109,10 @@ extension TheBrains {
         for (valueIndex, value) in step.values.enumerated() {
             let iterationEnvironment = environment.binding(string: value, to: step.parameter)
             let iterationResults = await executeHeistSteps(
-                step.steps,
+                step.body,
                 runtime: runtime,
-                environment: iterationEnvironment
+                environment: iterationEnvironment,
+                scope: scope
             )
             iterationCount += 1
 

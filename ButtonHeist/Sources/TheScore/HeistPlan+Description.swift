@@ -4,7 +4,7 @@ extension HeistPlan: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("heistPlan", [
             ScoreDescription.valueField("version", version),
-            "steps=\(steps.count)",
+            "body=\(body.count)",
         ].compactMap { $0 })
     }
 }
@@ -20,6 +20,8 @@ extension HeistStep: CustomStringConvertible {
         case .forEachString(let step): return step.description
         case .warn(let step): return step.description
         case .fail(let step): return step.description
+        case .heist(let plan): return plan.description
+        case .invoke(let step): return step.description
         }
     }
 }
@@ -46,7 +48,7 @@ extension ConditionalStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("if", [
             "cases=\(cases.count)",
-            elseSteps.map { "else=\($0.count)" },
+            elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
     }
 }
@@ -56,7 +58,7 @@ extension WaitForCasesStep: CustomStringConvertible {
         ScoreDescription.call("waitForCases", [
             "timeout=\(ScoreDescription.decimal(timeout))",
             "cases=\(cases.count)",
-            elseSteps.map { "else=\($0.count)" },
+            elseBody.map { "else=\($0.count)" },
         ].compactMap { $0 })
     }
 }
@@ -65,7 +67,7 @@ extension PredicateCase: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("case", [
             predicate.description,
-            "steps=\(steps.count)",
+            "body=\(body.count)",
         ])
     }
 }
@@ -76,7 +78,7 @@ extension ForEachElementStep: CustomStringConvertible {
             matching.description,
             "limit=\(limit)",
             "parameter=\(parameter)",
-            "steps=\(steps.count)",
+            "body=\(body.count)",
         ])
     }
 }
@@ -86,7 +88,7 @@ extension ForEachStringStep: CustomStringConvertible {
         ScoreDescription.call("forEachString", [
             "values=\(values.count)",
             "parameter=\(parameter)",
-            "steps=\(steps.count)",
+            "body=\(body.count)",
         ])
     }
 }
@@ -100,5 +102,14 @@ extension WarnStep: CustomStringConvertible {
 extension FailStep: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("fail", [ScoreDescription.quoted(message)])
+    }
+}
+
+extension HeistInvocationStep: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("invoke", [
+            "path=\(path.joined(separator: "."))",
+            "argument=\(argument.kind.rawValue)",
+        ])
     }
 }

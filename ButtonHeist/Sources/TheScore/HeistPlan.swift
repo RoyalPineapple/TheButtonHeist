@@ -8,25 +8,33 @@ import Foundation
 /// on this value. DSL syntax is source authoring; `HeistPlan` is the product
 /// contract executed by the runtime.
 public struct HeistPlan: Codable, Sendable, Equatable {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public let version: Int
-    public let steps: [HeistStep]
+    public let name: String?
+    public let parameter: HeistParameter
+    public let definitions: [HeistPlan]
+    public let body: [HeistStep]
 
     public init(
         version: Int = HeistPlan.currentVersion,
-        steps: [HeistStep]
+        name: String? = nil,
+        parameter: HeistParameter = .none,
+        definitions: [HeistPlan] = [],
+        body: [HeistStep]
     ) {
         self.version = version
-        self.steps = steps
+        self.name = name
+        self.parameter = parameter
+        self.definitions = definitions
+        self.body = body
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case version, steps
+        case version, name, parameter, definitions, body
     }
 
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedVersion = try container.decode(Int.self, forKey: .version)
         guard decodedVersion == Self.currentVersion else {
@@ -34,17 +42,200 @@ public struct HeistPlan: Codable, Sendable, Equatable {
                 forKey: .version,
                 in: container,
                 debugDescription: "Unsupported heist plan version \(decodedVersion). " +
-                    "This Button Heist build supports version \(Self.currentVersion)."
+                    "This Button Heist build supports version \(Self.currentVersion). " +
+                    "Version 2 renamed \"steps\" to \"body\"."
             )
         }
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist plan")
         version = decodedVersion
-        steps = try container.decode([HeistStep].self, forKey: .steps)
-        guard !steps.isEmpty else {
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        parameter = try container.decodeIfPresent(HeistParameter.self, forKey: .parameter) ?? .none
+        definitions = try container.decodeIfPresent([HeistPlan].self, forKey: .definitions) ?? []
+        body = try container.decode([HeistStep].self, forKey: .body)
+        guard !body.isEmpty || !definitions.isEmpty else {
             throw DecodingError.dataCorruptedError(
-                forKey: .steps,
+                forKey: .body,
                 in: container,
-                debugDescription: "HeistPlan requires at least one step"
+                debugDescription: "HeistPlan requires a non-empty body or definitions"
             )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encodeIfPresent(name, forKey: .name)
+        if parameter != .none {
+            try container.encode(parameter, forKey: .parameter)
+        }
+        if !definitions.isEmpty {
+            try container.encode(definitions, forKey: .definitions)
+        }
+        try container.encode(body, forKey: .body)
+    }
+}
+
+public enum HeistParameter: Codable, Sendable, Equatable {
+    case none
+    case strings(name: HeistReferenceName)
+    case elementTargets(name: HeistReferenceName)
+
+    public var name: HeistReferenceName? {
+        switch self {
+        case .none:
+            return nil
+        case .strings(let name), .elementTargets(let name):
+            return name
+        }
+    }
+
+    public var kind: HeistParameterKind {
+        switch self {
+        case .none: return .none
+        case .strings: return .strings
+        case .elementTargets: return .elementTargets
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type, name
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist parameter")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(HeistParameterKind.self, forKey: .type)
+        switch type {
+        case .none:
+            if container.contains(.name) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .name,
+                    in: container,
+                    debugDescription: "none heist parameter must not include a name"
+                )
+            }
+            self = .none
+        case .strings:
+            self = .strings(name: try container.decode(String.self, forKey: .name))
+        case .elementTargets:
+            self = .elementTargets(name: try container.decode(String.self, forKey: .name))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .type)
+        if let name {
+            try container.encode(name, forKey: .name)
+        }
+    }
+}
+
+public enum HeistParameterKind: String, Codable, Sendable, Equatable {
+    case none
+    case strings
+    case elementTargets = "element_targets"
+}
+
+public enum HeistArgument: Codable, Sendable, Equatable {
+    case none
+    case strings([StringExpr])
+    case elementTargets([ElementTargetExpr])
+
+    public var kind: HeistParameterKind {
+        switch self {
+        case .none: return .none
+        case .strings: return .strings
+        case .elementTargets: return .elementTargets
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case type, value
+        case valueRef = "value_ref"
+        case target
+        case targetRef = "target_ref"
+        case values, targets
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist argument")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(HeistParameterKind.self, forKey: .type)
+        switch type {
+        case .none:
+            let hasValue = container.contains(.value)
+                || container.contains(.valueRef)
+                || container.contains(.target)
+                || container.contains(.targetRef)
+                || container.contains(.values)
+                || container.contains(.targets)
+            if hasValue {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath,
+                    debugDescription: "none heist argument must not include a value"
+                ))
+            }
+            self = .none
+        case .strings:
+            let hasValues = container.contains(.values)
+            let hasValue = container.contains(.value)
+            let hasRef = container.contains(.valueRef)
+            guard hasValues != (hasValue || hasRef) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath,
+                    debugDescription: "strings heist argument requires values or exactly one of value/value_ref"
+                ))
+            }
+            if hasValues {
+                self = .strings(try container.decode([StringExpr].self, forKey: .values))
+            } else {
+                guard hasValue != hasRef else {
+                    throw DecodingError.dataCorrupted(.init(
+                        codingPath: container.codingPath,
+                        debugDescription: "strings heist argument requires values or exactly one of value/value_ref"
+                    ))
+                }
+                self = hasValue
+                    ? .strings([.literal(try container.decode(String.self, forKey: .value))])
+                    : .strings([.ref(try container.decode(String.self, forKey: .valueRef))])
+            }
+        case .elementTargets:
+            let hasTargets = container.contains(.targets)
+            let hasTarget = container.contains(.target)
+            let hasRef = container.contains(.targetRef)
+            guard hasTargets != (hasTarget || hasRef) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: container.codingPath,
+                    debugDescription: "element_targets heist argument requires targets or exactly one of target/target_ref"
+                ))
+            }
+            if hasTargets {
+                self = .elementTargets(try container.decode([ElementTargetExpr].self, forKey: .targets))
+            } else {
+                guard hasTarget != hasRef else {
+                    throw DecodingError.dataCorrupted(.init(
+                        codingPath: container.codingPath,
+                        debugDescription: "element_targets heist argument requires targets or exactly one of target/target_ref"
+                    ))
+                }
+                self = hasTarget
+                    ? .elementTargets([.target(try container.decode(ElementTarget.self, forKey: .target))])
+                    : .elementTargets([.ref(try container.decode(String.self, forKey: .targetRef))])
+            }
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .type)
+        switch self {
+        case .none:
+            break
+        case .strings(let values):
+            try container.encode(values, forKey: .values)
+        case .elementTargets(let targets):
+            try container.encode(targets, forKey: .targets)
         }
     }
 }
@@ -60,12 +251,14 @@ public enum HeistStep: Codable, Sendable, Equatable {
     case forEachString(ForEachStringStep)
     case warn(WarnStep)
     case fail(FailStep)
+    indirect case heist(HeistPlan)
+    case invoke(HeistInvocationStep)
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case type, action, wait, conditional, waitForCases = "wait_for_cases"
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
-        case warn, fail
+        case warn, fail, heist, invoke
     }
 
     private enum StepType: String, Codable {
@@ -77,6 +270,8 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case forEachString = "for_each_string"
         case warn
         case fail
+        case heist
+        case invoke
     }
 
     public init(from decoder: Decoder) throws {
@@ -116,6 +311,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .fail:
             try decoder.rejectUnknownKeys(allowed: ["type", "fail"], typeName: "fail heist step")
             self = .fail(try container.decode(FailStep.self, forKey: .fail))
+        case .heist:
+            try decoder.rejectUnknownKeys(allowed: ["type", "heist"], typeName: "heist group step")
+            self = .heist(try container.decode(HeistPlan.self, forKey: .heist))
+        case .invoke:
+            try decoder.rejectUnknownKeys(allowed: ["type", "invoke"], typeName: "invoke heist step")
+            self = .invoke(try container.decode(HeistInvocationStep.self, forKey: .invoke))
         }
     }
 
@@ -146,6 +347,12 @@ public enum HeistStep: Codable, Sendable, Equatable {
         case .fail(let step):
             try container.encode(StepType.fail, forKey: .type)
             try container.encode(step, forKey: .fail)
+        case .heist(let plan):
+            try container.encode(StepType.heist, forKey: .type)
+            try container.encode(plan, forKey: .heist)
+        case .invoke(let step):
+            try container.encode(StepType.invoke, forKey: .type)
+            try container.encode(step, forKey: .invoke)
         }
     }
 }
@@ -257,18 +464,18 @@ public struct WaitStep: Codable, Sendable, Equatable {
 public struct ConditionalStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case cases
-        case elseSteps = "else_steps"
+        case elseBody = "else_body"
     }
 
     public let cases: [PredicateCase]
-    public let elseSteps: [HeistStep]?
+    public let elseBody: [HeistStep]?
 
-    public init(cases: [PredicateCase], elseSteps: [HeistStep]? = nil) throws {
+    public init(cases: [PredicateCase], elseBody: [HeistStep]? = nil) throws {
         guard !cases.isEmpty else {
             throw HeistPlanError.emptyPredicateCases("conditional")
         }
         self.cases = cases
-        self.elseSteps = elseSteps
+        self.elseBody = elseBody
     }
 
     public init(from decoder: Decoder) throws {
@@ -276,7 +483,7 @@ public struct ConditionalStep: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
             cases: try container.decode([PredicateCase].self, forKey: .cases),
-            elseSteps: try container.decodeIfPresent([HeistStep].self, forKey: .elseSteps)
+            elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
         )
     }
 }
@@ -284,17 +491,17 @@ public struct ConditionalStep: Codable, Sendable, Equatable {
 public struct WaitForCasesStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case timeout, cases
-        case elseSteps = "else_steps"
+        case elseBody = "else_body"
     }
 
     public let timeout: Double
     public let cases: [PredicateCase]
-    public let elseSteps: [HeistStep]?
+    public let elseBody: [HeistStep]?
 
     public init(
         timeout: Double,
         cases: [PredicateCase],
-        elseSteps: [HeistStep]? = nil
+        elseBody: [HeistStep]? = nil
     ) throws {
         guard timeout >= 0 else {
             throw HeistPlanError.negativeTimeout(timeout)
@@ -304,7 +511,7 @@ public struct WaitForCasesStep: Codable, Sendable, Equatable {
         }
         self.timeout = timeout
         self.cases = cases
-        self.elseSteps = elseSteps
+        self.elseBody = elseBody
     }
 
     public init(from decoder: Decoder) throws {
@@ -321,27 +528,27 @@ public struct WaitForCasesStep: Codable, Sendable, Equatable {
         try self.init(
             timeout: decodedTimeout,
             cases: try container.decode([PredicateCase].self, forKey: .cases),
-            elseSteps: try container.decodeIfPresent([HeistStep].self, forKey: .elseSteps)
+            elseBody: try container.decodeIfPresent([HeistStep].self, forKey: .elseBody)
         )
     }
 }
 
 public struct PredicateCase: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case predicate, steps
+        case predicate, body
     }
 
     public let predicate: AccessibilityPredicateExpr
-    public let steps: [HeistStep]
+    public let body: [HeistStep]
 
-    public init(predicate: AccessibilityPredicateExpr, steps: [HeistStep]) {
+    public init(predicate: AccessibilityPredicateExpr, body: [HeistStep]) {
         self.predicate = predicate
-        self.steps = steps
+        self.body = body
     }
 
     @_disfavoredOverload
-    public init(predicate: AccessibilityPredicate, steps: [HeistStep]) {
-        self.init(predicate: .predicate(predicate), steps: steps)
+    public init(predicate: AccessibilityPredicate, body: [HeistStep]) {
+        self.init(predicate: .predicate(predicate), body: body)
     }
 
     public init(from decoder: Decoder) throws {
@@ -349,26 +556,26 @@ public struct PredicateCase: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             predicate: try container.decode(AccessibilityPredicateExpr.self, forKey: .predicate),
-            steps: try container.decode([HeistStep].self, forKey: .steps)
+            body: try container.decode([HeistStep].self, forKey: .body)
         )
     }
 }
 
 public struct ForEachElementStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case matching, limit, parameter, steps
+        case matching, limit, parameter, body
     }
 
     public let matching: ElementPredicate
     public let limit: Int
     public let parameter: String
-    public let steps: [HeistStep]
+    public let body: [HeistStep]
 
     public init(
         matching: ElementPredicate,
         limit: Int,
         parameter: String,
-        steps: [HeistStep]
+        body: [HeistStep]
     ) throws {
         guard matching.hasPredicates else {
             throw HeistPlanError.emptyForEachPredicate
@@ -376,13 +583,13 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
         guard limit > 0 else {
             throw HeistPlanError.invalidForEachLimit(limit)
         }
-        guard !steps.isEmpty else {
+        guard !body.isEmpty else {
             throw HeistPlanError.emptyForEachSteps
         }
         self.matching = matching
         self.limit = limit
         self.parameter = parameter
-        self.steps = steps
+        self.body = body
     }
 
     public init(from decoder: Decoder) throws {
@@ -392,34 +599,34 @@ public struct ForEachElementStep: Codable, Sendable, Equatable {
             matching: try container.decode(ElementPredicate.self, forKey: .matching),
             limit: try container.decode(Int.self, forKey: .limit),
             parameter: try container.decode(String.self, forKey: .parameter),
-            steps: try container.decode([HeistStep].self, forKey: .steps)
+            body: try container.decode([HeistStep].self, forKey: .body)
         )
     }
 }
 
 public struct ForEachStringStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case values, parameter, steps
+        case values, parameter, body
     }
 
     public let values: [String]
     public let parameter: String
-    public let steps: [HeistStep]
+    public let body: [HeistStep]
 
     public init(
         values: [String],
         parameter: String,
-        steps: [HeistStep]
+        body: [HeistStep]
     ) throws {
         guard !values.isEmpty else {
             throw HeistPlanError.emptyForEachValues
         }
-        guard !steps.isEmpty else {
+        guard !body.isEmpty else {
             throw HeistPlanError.emptyForEachSteps
         }
         self.values = values
         self.parameter = parameter
-        self.steps = steps
+        self.body = body
     }
 
     public init(from decoder: Decoder) throws {
@@ -428,7 +635,7 @@ public struct ForEachStringStep: Codable, Sendable, Equatable {
         try self.init(
             values: try container.decode([String].self, forKey: .values),
             parameter: try container.decode(String.self, forKey: .parameter),
-            steps: try container.decode([HeistStep].self, forKey: .steps)
+            body: try container.decode([HeistStep].self, forKey: .body)
         )
     }
 }
@@ -469,6 +676,32 @@ public struct FailStep: Codable, Sendable, Equatable {
     }
 }
 
+public struct HeistInvocationStep: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case path, argument
+    }
+
+    public let path: [String]
+    public let argument: HeistArgument
+
+    public init(
+        path: [String],
+        argument: HeistArgument = .none
+    ) {
+        self.path = path
+        self.argument = argument
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist invocation step")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            path: try container.decode([String].self, forKey: .path),
+            argument: try container.decodeIfPresent(HeistArgument.self, forKey: .argument) ?? .none
+        )
+    }
+}
+
 public enum HeistPlanError: Error, Sendable, Equatable {
     case unsupportedActionCommand(String)
     case ambiguousExpectationContract
@@ -482,6 +715,20 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case emptyForEachSteps
     case emptyForEachValues
     case nestedForEachUnsupported
+}
+
+public extension HeistPlan {
+    func heistDefinition(at path: [String]) -> HeistPlan? {
+        guard let first = path.first else { return nil }
+        guard let direct = definitions.first(where: { $0.name == first }) else { return nil }
+        return direct.heistDefinition(remaining: Array(path.dropFirst()))
+    }
+
+    private func heistDefinition(remaining: [String]) -> HeistPlan? {
+        guard let next = remaining.first else { return self }
+        guard let child = definitions.first(where: { $0.name == next }) else { return nil }
+        return child.heistDefinition(remaining: Array(remaining.dropFirst()))
+    }
 }
 
 public enum HeistParameterName {
@@ -535,12 +782,12 @@ public extension PredicateCase {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedPredicateCase {
         ResolvedPredicateCase(
             predicate: try predicate.resolve(in: environment),
-            steps: steps
+            body: body
         )
     }
 }
 
 public struct ResolvedPredicateCase: Sendable, Equatable {
     public let predicate: AccessibilityPredicate
-    public let steps: [HeistStep]
+    public let body: [HeistStep]
 }
