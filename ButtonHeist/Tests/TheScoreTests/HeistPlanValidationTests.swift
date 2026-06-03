@@ -48,10 +48,10 @@ func strictValidationRequiresSemanticActionExpectation() throws {
         .action(try ActionStep(command: .activate(.predicate(.label("Save"))))),
     ])
 
-    let findings = plan.validate(.strictTest)
+    let findings = plan.lint(.strictTest)
 
     #expect(findings == [
-        HeistPlanValidationFinding(
+        HeistPlanLintFinding(
             severity: .error,
             path: "$.steps[0].action",
             message: "Semantic action has no expectation",
@@ -69,12 +69,12 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
         )),
     ])
 
-    #expect(plan.validate(.recordingQuality).isEmpty)
-    #expect(plan.validate(.strictTest).isEmpty)
+    #expect(plan.lint(.recordingQuality).isEmpty)
+    #expect(plan.lint(.strictTest).isEmpty)
 }
 
 @Test
-func validationFlagsMechanicalCommandsAndViewportSetup() throws {
+    func lintFlagsMechanicalCommandsAndViewportSetup() throws {
     let plan = HeistPlan(steps: [
         .action(try ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 10, y: 20)))))),
         .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
@@ -84,7 +84,7 @@ func validationFlagsMechanicalCommandsAndViewportSetup() throws {
         )),
     ])
 
-    let messages = plan.validate(.strictTest).map(\.message)
+    let messages = plan.lint(.strictTest).map(\.message)
 
     #expect(messages.contains("Mechanical command appears in strict semantic-test mode"))
     #expect(messages.contains("Viewport command appears in strict semantic-test mode"))
@@ -92,15 +92,15 @@ func validationFlagsMechanicalCommandsAndViewportSetup() throws {
 }
 
 @Test
-func validationReportsTypeTextWithoutTarget() throws {
+    func lintReportsTypeTextWithoutTarget() throws {
     let plan = HeistPlan(steps: [
         .action(try ActionStep(command: .typeText(TypeTextTarget(text: "milk")))),
     ])
 
-    let findings = plan.validate(.recordingQuality)
+    let findings = plan.lint(.recordingQuality)
 
     #expect(findings == [
-        HeistPlanValidationFinding(
+        HeistPlanLintFinding(
             severity: .warning,
             path: "$.steps[0].action",
             message: "TypeText has no semantic target",
@@ -110,33 +110,16 @@ func validationReportsTypeTextWithoutTarget() throws {
 }
 
 @Test
-func validationReportsEmptyBranchesAndLargeForEachLimit() throws {
-    let matching = ElementPredicate.label("Delete")
+func lintReportsEmptyBranches() throws {
     let plan = HeistPlan(steps: [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .state(.present(.label("Home"))), steps: []),
         ])),
-        .forEachElement(try ForEachElementStep(
-            matching: matching,
-            limit: 101,
-            parameter: "target",
-            steps: [.warn(WarnStep(message: "too many"))]
-        )),
     ])
 
-    let messages = plan.validate(.strictTest).map(\.message)
+    let messages = plan.lint(.strictTest).map(\.message)
 
-    #expect(messages.contains("Branch has no steps"))
-    #expect(messages.contains("ForEach limit is too large for a durable semantic heist"))
-}
-
-@Test
-func runtimeValidationDoesNotEnforceRecordingQuality() throws {
-    let plan = HeistPlan(steps: [
-        .action(try ActionStep(command: .activate(.predicate(.label("Save"))))),
-    ])
-
-    #expect(plan.validate(.runtime).isEmpty)
+    #expect(messages == ["Branch has no steps"])
 }
 
 @Test

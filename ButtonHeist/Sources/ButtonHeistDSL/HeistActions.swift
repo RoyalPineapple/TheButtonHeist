@@ -292,6 +292,10 @@ public enum Mechanical {
             self.init(command: .mechanicalSwipe(SwipeTarget(selection: .elementDirection(target, direction))))
         }
 
+        public init(_ target: ElementTarget, from start: UnitPoint, to end: UnitPoint) {
+            self.init(command: .mechanicalSwipe(SwipeTarget(selection: .unitElement(target, start: start, end: end))))
+        }
+
         public init(from start: ScreenPoint, to end: ScreenPoint) {
             self.init(command: .mechanicalSwipe(SwipeTarget(selection: .point(start: .coordinate(start), destination: .coordinate(end)))))
         }

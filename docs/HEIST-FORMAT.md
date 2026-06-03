@@ -269,7 +269,7 @@ At runtime each iteration computes
 `ElementTarget.predicate(matching, ordinal: index)`, binds it to the target
 reference, and executes the body steps. The body does not receive cached
 geometry, UIKit objects, or a capture-local handle. Nested collection ForEach
-is rejected by plan validation.
+is rejected by runtime admission.
 
 String-array ForEach serializes as `for_each_string`:
 
@@ -284,7 +284,7 @@ String-array ForEach serializes as `for_each_string`:
         "type": "action",
         "action": {
           "command": {
-            "type": "typeText",
+            "type": "type_text",
             "payload": {
               "text_ref": "item",
               "target": { "label": "Add item" }
@@ -342,18 +342,21 @@ Viewport movement:
 Semantic actions do not require `scroll_to_visible` setup. Recording drops
 viewport setup when a semantic action intent can be derived.
 
-## Validation
+## Runtime Admission And Lint
 
-Heists can be validated in three modes:
+Runtime admission is the hard execution preflight. It rejects non-executable
+plans before any action dispatch: unresolved refs, invalid payloads, oversized
+loops, excessive depth, noncanonical commands, and nested collection loops.
+
+Lint is quality guidance for authored or recorded tests:
 
 | Mode | Purpose |
 |------|---------|
-| `runtime` | Basic runtime contract validation. |
 | `recordingQuality` | Warns when recordings look like fragile transcripts. |
-| `strictTest` | Fails missing expectations, mechanical commands, viewport setup, empty branches, and unsafe bounds. |
+| `strictTest` | Fails missing expectations, mechanical commands, viewport setup, and empty branches. |
 
-Validation returns structured findings with severity, step path, message, and a
-fix suggestion.
+Lint returns structured findings with severity, step path, message, and a fix
+suggestion. It does not replace runtime admission.
 
 ## Recording Contract
 
@@ -367,7 +370,7 @@ Rules:
 - Unmet expectations record no steps.
 - Scroll setup before semantic action records no setup step.
 - Coordinate gestures survive only when no semantic element intent exists.
-- Recorded heists should pass recording-quality validation.
+- Recorded heists should pass recording-quality lint.
 
 Recorded heists must not depend on scroll position, geometry, runtime IDs,
 capture-local IDs, or public container handles unless the command is explicitly

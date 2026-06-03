@@ -1,12 +1,11 @@
 import Foundation
 
-public enum HeistPlanValidationMode: Sendable, Equatable {
-    case runtime
+public enum HeistPlanLintMode: Sendable, Equatable {
     case recordingQuality
     case strictTest
 }
 
-public struct HeistPlanValidationFinding: Sendable, Equatable {
+public struct HeistPlanLintFinding: Sendable, Equatable {
     public enum Severity: String, Sendable, Equatable {
         case warning
         case error
@@ -31,18 +30,18 @@ public struct HeistPlanValidationFinding: Sendable, Equatable {
 }
 
 public extension HeistPlan {
-    func validate(_ mode: HeistPlanValidationMode) -> [HeistPlanValidationFinding] {
-        HeistPlanValidator(mode: mode).validate(steps: steps, path: "$.steps")
+    func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
+        HeistPlanLinter(mode: mode).lint(steps: steps, path: "$.steps")
     }
 }
 
-private struct HeistPlanValidator {
-    let mode: HeistPlanValidationMode
+private struct HeistPlanLinter {
+    let mode: HeistPlanLintMode
 
-    func validate(steps: [HeistStep], path: String) -> [HeistPlanValidationFinding] {
-        var findings: [HeistPlanValidationFinding] = []
+    func lint(steps: [HeistStep], path: String) -> [HeistPlanLintFinding] {
+        var findings: [HeistPlanLintFinding] = []
         for (index, step) in steps.enumerated() {
-            findings += validate(step: step, path: "\(path)[\(index)]")
+            findings += lint(step: step, path: "\(path)[\(index)]")
             if isViewportSetup(step), let next = steps[safe: index + 1], next.isSemanticActionStep {
                 findings.append(viewportBeforeSemanticActionFinding(path: "\(path)[\(index)]"))
             }
@@ -50,27 +49,27 @@ private struct HeistPlanValidator {
         return findings
     }
 
-    private func validate(step: HeistStep, path: String) -> [HeistPlanValidationFinding] {
+    private func lint(step: HeistStep, path: String) -> [HeistPlanLintFinding] {
         switch step {
         case .action(let step):
-            return validate(action: step, path: "\(path).action")
+            return lint(action: step, path: "\(path).action")
         case .wait:
             return []
         case .conditional(let step):
-            return validate(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).conditional")
+            return lint(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).conditional")
         case .waitForCases(let step):
-            return validate(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).wait_for_cases")
+            return lint(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).wait_for_cases")
         case .forEachElement(let step):
-            return validate(forEachElement: step, path: "\(path).for_each_element")
+            return lint(forEachElement: step, path: "\(path).for_each_element")
         case .forEachString(let step):
-            return validate(forEachString: step, path: "\(path).for_each_string")
+            return lint(forEachString: step, path: "\(path).for_each_string")
         case .warn, .fail:
             return []
         }
     }
 
-    private func validate(action: ActionStep, path: String) -> [HeistPlanValidationFinding] {
-        var findings: [HeistPlanValidationFinding] = []
+    private func lint(action: ActionStep, path: String) -> [HeistPlanLintFinding] {
+        var findings: [HeistPlanLintFinding] = []
         switch action.command.validationKind {
         case .semantic:
             if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
@@ -96,59 +95,37 @@ private struct HeistPlanValidator {
         return findings
     }
 
-    private func validate(
+    private func lint(
         cases: [PredicateCase],
         elseSteps: [HeistStep]?,
         path: String
-    ) -> [HeistPlanValidationFinding] {
-        var findings: [HeistPlanValidationFinding] = []
+    ) -> [HeistPlanLintFinding] {
+        var findings: [HeistPlanLintFinding] = []
         for (index, predicateCase) in cases.enumerated() {
             let casePath = "\(path).cases[\(index)]"
             if predicateCase.steps.isEmpty {
                 findings.append(emptyBranchFinding(path: casePath))
             }
-            findings += validate(steps: predicateCase.steps, path: "\(casePath).steps")
+            findings += lint(steps: predicateCase.steps, path: "\(casePath).steps")
         }
         if let elseSteps {
             if elseSteps.isEmpty {
                 findings.append(emptyBranchFinding(path: "\(path).else_steps"))
             }
-            findings += validate(steps: elseSteps, path: "\(path).else_steps")
+            findings += lint(steps: elseSteps, path: "\(path).else_steps")
         }
         return findings
     }
 
-    private func validate(forEachElement step: ForEachElementStep, path: String) -> [HeistPlanValidationFinding] {
-        var findings: [HeistPlanValidationFinding] = []
-        if step.limit > 100 {
-            findings.append(.init(
-                severity: mode == .runtime ? .warning : .error,
-                path: "\(path).limit",
-                message: "ForEach limit is too large for a durable semantic heist",
-                suggestion: "Use a bounded limit of 100 or less"
-            ))
-        }
-        findings += validate(steps: step.steps, path: "\(path).steps")
-        findings += nestedCollectionFindings(in: step.steps, path: "\(path).steps")
-        return findings
+    private func lint(forEachElement step: ForEachElementStep, path: String) -> [HeistPlanLintFinding] {
+        lint(steps: step.steps, path: "\(path).steps")
     }
 
-    private func validate(forEachString step: ForEachStringStep, path: String) -> [HeistPlanValidationFinding] {
-        var findings: [HeistPlanValidationFinding] = []
-        if step.values.count > 100 {
-            findings.append(.init(
-                severity: mode == .runtime ? .warning : .error,
-                path: "\(path).values",
-                message: "ForEach string value count is too large for a durable semantic heist",
-                suggestion: "Use 100 values or fewer"
-            ))
-        }
-        findings += validate(steps: step.steps, path: "\(path).steps")
-        findings += nestedCollectionFindings(in: step.steps, path: "\(path).steps")
-        return findings
+    private func lint(forEachString step: ForEachStringStep, path: String) -> [HeistPlanLintFinding] {
+        lint(steps: step.steps, path: "\(path).steps")
     }
 
-    private func missingExpectationFinding(path: String) -> HeistPlanValidationFinding {
+    private func missingExpectationFinding(path: String) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
             path: path,
@@ -157,7 +134,7 @@ private struct HeistPlanValidator {
         )
     }
 
-    private func typeTextTargetFinding(path: String) -> HeistPlanValidationFinding {
+    private func typeTextTargetFinding(path: String) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
             path: path,
@@ -166,7 +143,7 @@ private struct HeistPlanValidator {
         )
     }
 
-    private func mechanicalFinding(path: String) -> HeistPlanValidationFinding {
+    private func mechanicalFinding(path: String) -> HeistPlanLintFinding {
         .init(
             severity: .error,
             path: path,
@@ -175,7 +152,7 @@ private struct HeistPlanValidator {
         )
     }
 
-    private func viewportFinding(path: String) -> HeistPlanValidationFinding {
+    private func viewportFinding(path: String) -> HeistPlanLintFinding {
         .init(
             severity: .error,
             path: path,
@@ -184,7 +161,7 @@ private struct HeistPlanValidator {
         )
     }
 
-    private func ambientExpectationFinding(path: String) -> HeistPlanValidationFinding {
+    private func ambientExpectationFinding(path: String) -> HeistPlanLintFinding {
         .init(
             severity: .warning,
             path: path,
@@ -193,7 +170,7 @@ private struct HeistPlanValidator {
         )
     }
 
-    private func viewportBeforeSemanticActionFinding(path: String) -> HeistPlanValidationFinding {
+    private func viewportBeforeSemanticActionFinding(path: String) -> HeistPlanLintFinding {
         .init(
             severity: mode == .strictTest ? .error : .warning,
             path: path,
@@ -202,9 +179,9 @@ private struct HeistPlanValidator {
         )
     }
 
-    private func emptyBranchFinding(path: String) -> HeistPlanValidationFinding {
+    private func emptyBranchFinding(path: String) -> HeistPlanLintFinding {
         .init(
-            severity: mode == .runtime ? .warning : .error,
+            severity: .error,
             path: path,
             message: "Branch has no steps",
             suggestion: "Add a step or remove the empty branch"
@@ -216,44 +193,6 @@ private struct HeistPlanValidator {
         return action.command.validationKind == .viewport
     }
 
-    private func nestedCollectionFindings(in steps: [HeistStep], path: String) -> [HeistPlanValidationFinding] {
-        var findings: [HeistPlanValidationFinding] = []
-        for (index, step) in steps.enumerated() {
-            let stepPath = "\(path)[\(index)]"
-            switch step {
-            case .forEachElement, .forEachString:
-                findings.append(.init(
-                    severity: .error,
-                    path: stepPath,
-                    message: "Collection ForEach steps are top-level only",
-                    suggestion: "Move the collection loop to the top-level heist steps"
-                ))
-            case .conditional(let conditional):
-                for (caseIndex, predicateCase) in conditional.cases.enumerated() {
-                    findings += nestedCollectionFindings(
-                        in: predicateCase.steps,
-                        path: "\(stepPath).conditional.cases[\(caseIndex)].steps"
-                    )
-                }
-                if let elseSteps = conditional.elseSteps {
-                    findings += nestedCollectionFindings(in: elseSteps, path: "\(stepPath).conditional.else_steps")
-                }
-            case .waitForCases(let waitForCases):
-                for (caseIndex, predicateCase) in waitForCases.cases.enumerated() {
-                    findings += nestedCollectionFindings(
-                        in: predicateCase.steps,
-                        path: "\(stepPath).wait_for_cases.cases[\(caseIndex)].steps"
-                    )
-                }
-                if let elseSteps = waitForCases.elseSteps {
-                    findings += nestedCollectionFindings(in: elseSteps, path: "\(stepPath).wait_for_cases.else_steps")
-                }
-            case .action, .wait, .warn, .fail:
-                break
-            }
-        }
-        return findings
-    }
 }
 
 private enum HeistCommandValidationKind: Equatable {
@@ -288,11 +227,9 @@ private extension HeistStep {
     }
 }
 
-private extension HeistPlanValidationMode {
+private extension HeistPlanLintMode {
     var requiresExpectationFinding: Bool {
         switch self {
-        case .runtime:
-            return false
         case .recordingQuality, .strictTest:
             return true
         }

@@ -10,8 +10,8 @@ public struct Heist: HeistContent {
 
     public var heistSteps: [HeistStep] { plan.steps }
 
-    public func validate(_ mode: HeistPlanValidationMode) -> [HeistPlanValidationFinding] {
-        plan.validate(mode)
+    public func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
+        plan.lint(mode)
     }
 
     public init(@HeistBuilder _ content: () throws -> some HeistContent) throws {

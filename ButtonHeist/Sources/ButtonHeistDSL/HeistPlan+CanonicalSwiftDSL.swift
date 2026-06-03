@@ -91,6 +91,9 @@ private struct HeistCanonicalSwiftDSLRenderer {
         command: HeistActionCommand,
         environment: RenderEnvironment
     ) throws -> String {
+        if let failure = command.durableHeistActionFailure {
+            throw HeistCanonicalSwiftDSLError.unsupportedAction(failure)
+        }
         switch command {
         case .activate(let target):
             return "Activate(\(try render(target: target, environment: environment)))"
@@ -102,7 +105,7 @@ private struct HeistCanonicalSwiftDSLRenderer {
             return "CustomAction(\(quote(name)), on: \(try render(target: target, environment: environment)))"
         case .rotor(let selection, let target, let direction):
             guard case .named(let name) = selection else {
-                throw HeistCanonicalSwiftDSLError.unsupportedAction("rotor selection \(selection)")
+                throw HeistCanonicalSwiftDSLError.unsupportedAction(command.durableHeistActionFailure ?? "rotor selection \(selection)")
             }
             return "Rotor(\(quote(name)), on: \(try render(target: target, environment: environment)), direction: .\(direction.rawValue))"
         case .typeText(let text, let target):
@@ -145,9 +148,6 @@ private struct HeistCanonicalSwiftDSLRenderer {
     private func render(mechanicalLongPress target: LongPressTarget) throws -> String {
         switch target.selection {
         case .element(let elementTarget):
-            guard target.duration == .longPressDefault else {
-                throw HeistCanonicalSwiftDSLError.unsupportedAction("long_press element duration")
-            }
             return "Mechanical.LongPress(\(render(target: elementTarget)))"
         case .coordinate(let point):
             if target.duration == .longPressDefault {
@@ -158,25 +158,21 @@ private struct HeistCanonicalSwiftDSLRenderer {
     }
 
     private func render(mechanicalSwipe target: SwipeTarget) throws -> String {
-        guard target.duration == nil else {
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("swipe duration")
-        }
         switch target.selection {
+        case .unitElement(let target, let start, let end):
+            return "Mechanical.Swipe(\(render(target: target)), from: \(render(unitPoint: start)), to: \(render(unitPoint: end)))"
         case .elementDirection(let target, let direction):
             return "Mechanical.Swipe(\(render(target: target)), .\(direction.rawValue))"
         case .point(.coordinate(let start), .coordinate(let end)):
             return "Mechanical.Swipe(from: \(render(point: start)), to: \(render(point: end)))"
         case .point(.coordinate(let start), .direction(let direction)):
             return "Mechanical.Swipe(from: \(render(point: start)), .\(direction.rawValue))"
-        case .unitElement, .point(.element, _):
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("swipe selection")
+        case .point(.element, _):
+            throw HeistCanonicalSwiftDSLError.unsupportedAction("swipe selection is not a durable heist action")
         }
     }
 
     private func render(mechanicalDrag target: DragTarget) throws -> String {
-        guard target.duration == nil else {
-            throw HeistCanonicalSwiftDSLError.unsupportedAction("drag duration")
-        }
         switch target.selection {
         case .elementToPoint(let target, let end):
             return "Mechanical.Drag(\(render(target: target)), to: \(render(point: end)))"
@@ -485,6 +481,10 @@ private struct HeistCanonicalSwiftDSLRenderer {
 
     private func render(point: ScreenPoint) -> String {
         "ScreenPoint(x: \(decimal(point.x)), y: \(decimal(point.y)))"
+    }
+
+    private func render(unitPoint: UnitPoint) -> String {
+        "UnitPoint(x: \(decimal(unitPoint.x)), y: \(decimal(unitPoint.y)))"
     }
 
     private func render(duration: GestureDuration) -> String {

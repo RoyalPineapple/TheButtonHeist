@@ -89,17 +89,17 @@ public extension HeistPlan {
     }
 }
 
-private struct HeistPlanRuntimeAdmissionValidator {
+struct HeistPlanRuntimeAdmissionValidator {
     let limits: HeistPlanRuntimeAdmissionLimits
 
-    private var failures: [HeistPlanAdmissionFailure] = []
-    private var stepCount = 0
-    private var totalStringBytes = 0
-    private var reportedStepLimit = false
-    private var reportedTotalStringLimit = false
+    var failures: [HeistPlanAdmissionFailure] = []
+    var stepCount = 0
+    var totalStringBytes = 0
+    var reportedStepLimit = false
+    var reportedTotalStringLimit = false
 
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
 
     init(limits: HeistPlanRuntimeAdmissionLimits) {
         self.limits = limits
@@ -117,7 +117,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         return failures
     }
 
-    private mutating func validateSteps(
+    mutating func validateSteps(
         _ steps: [HeistStep],
         path: String,
         depth: Int,
@@ -137,7 +137,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validateStep(
+    mutating func validateStep(
         _ step: HeistStep,
         path: String,
         depth: Int,
@@ -210,7 +210,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validateAction(
+    mutating func validateAction(
         _ action: ActionStep,
         path: String,
         scope: AdmissionScope,
@@ -225,14 +225,21 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validateCommand(
+    mutating func validateCommand(
         _ command: HeistActionCommand,
         path: String,
         scope: AdmissionScope,
         environment: HeistExecutionEnvironment
     ) {
         validateCommandExpressions(command, path: path, scope: scope)
-        validateCanonicalRenderability(command, path: path)
+        if let failure = command.durableHeistActionFailure {
+            fail(
+                path: path,
+                contract: "durable heist action support",
+                observed: failure,
+                correction: "Use a heist action shape that can execute, serialize, and render canonically."
+            )
+        }
 
         do {
             let message = try command.resolve(in: environment)
@@ -247,7 +254,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validateWait(
+    mutating func validateWait(
         _ wait: WaitStep,
         path: String,
         scope: AdmissionScope,
@@ -276,7 +283,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validateConditional(
+    mutating func validateConditional(
         _ conditional: ConditionalStep,
         path: String,
         depth: Int,
@@ -304,7 +311,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validateWaitForCases(
+    mutating func validateWaitForCases(
         _ waitForCases: WaitForCasesStep,
         path: String,
         depth: Int,
@@ -341,7 +348,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validatePredicateCase(
+    mutating func validatePredicateCase(
         _ predicateCase: PredicateCase,
         path: String,
         depth: Int,
@@ -369,7 +376,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         )
     }
 
-    private mutating func validateForEachElement(
+    mutating func validateForEachElement(
         _ step: ForEachElementStep,
         path: String,
         depth: Int,
@@ -412,7 +419,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         )
     }
 
-    private mutating func validateForEachString(
+    mutating func validateForEachString(
         _ step: ForEachStringStep,
         path: String,
         depth: Int,
@@ -463,7 +470,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validateResolvedPayloads(
+    mutating func validateResolvedPayloads(
         _ steps: [HeistStep],
         path: String,
         environment: HeistExecutionEnvironment,
@@ -534,402 +541,12 @@ private struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    private mutating func validatePredicate(
-        _ predicate: AccessibilityPredicateExpr,
-        path: String,
-        depth: Int,
-        scope: AdmissionScope
-    ) {
-        switch predicate {
-        case .predicate(let predicate):
-            validatePredicate(predicate, path: path, depth: depth)
-        case .state(let state):
-            validateStatePredicate(state, path: path, depth: depth, scope: scope)
-        }
-    }
-
-    private mutating func validatePredicate(
-        _ predicate: AccessibilityPredicate,
-        path: String,
-        depth: Int
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch predicate {
-        case .state(let state):
-            validateStatePredicate(state, path: path, depth: depth)
-        case .changed(let change):
-            switch change {
-            case .screen(let state):
-                if let state {
-                    validateStatePredicate(state, path: "\(path).where", depth: depth + 1)
-                }
-            case .appeared(let predicate), .disappeared(let predicate):
-                validateElementPredicate(predicate, path: "\(path).element")
-            case .updated(let update):
-                if let element = update.element {
-                    validateElementPredicate(element, path: "\(path).element")
-                }
-                addString(update.from, path: "\(path).from", role: "change predicate from value")
-                addString(update.to, path: "\(path).to", role: "change predicate to value")
-            case .elements:
-                break
-            }
-        }
-    }
-
-    private mutating func validateStatePredicate(
-        _ state: AccessibilityPredicate.State,
-        path: String,
-        depth: Int
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch state {
-        case .present(let predicate), .absent(let predicate):
-            validateElementPredicate(predicate, path: "\(path).element")
-        case .presentTarget(let target), .absentTarget(let target):
-            validateElementTarget(target, path: "\(path).target")
-        case .all(let states):
-            validateAllChildCount(states.count, path: "\(path).states")
-            for (index, child) in states.enumerated() {
-                validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1)
-            }
-        }
-    }
-
-    private mutating func validateStatePredicate(
-        _ state: StatePredicateExpr,
-        path: String,
-        depth: Int,
-        scope: AdmissionScope
-    ) {
-        checkPredicateDepth(depth, path: path)
-        switch state {
-        case .present(let predicate), .absent(let predicate):
-            validateElementPredicate(predicate, path: "\(path).element", scope: scope)
-        case .presentTarget(let target), .absentTarget(let target):
-            validateTarget(target, path: "\(path).target", scope: scope)
-        case .all(let states):
-            validateAllChildCount(states.count, path: "\(path).states")
-            for (index, child) in states.enumerated() {
-                validateStatePredicate(child, path: "\(path).states[\(index)]", depth: depth + 1, scope: scope)
-            }
-        }
-    }
-
-    private mutating func checkPredicateDepth(_ depth: Int, path: String) {
-        if depth > limits.maxPredicateDepth {
-            fail(
-                path: path,
-                contract: "max predicate depth",
-                observed: "depth \(depth)",
-                correction: "Use predicates nested \(limits.maxPredicateDepth) levels or fewer."
-            )
-        }
-    }
-
-    private mutating func validateAllChildCount(_ count: Int, path: String) {
-        if count > limits.maxAllPredicateChildren {
-            fail(
-                path: path,
-                contract: "max .all child count",
-                observed: "\(count) children",
-                correction: "Use \(limits.maxAllPredicateChildren) child predicates or fewer."
-            )
-        }
-    }
-
-    private mutating func validateCommandExpressions(
-        _ command: HeistActionCommand,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        switch command {
-        case .activate(let target), .increment(let target), .decrement(let target), .viewportScrollToVisible(let target):
-            validateTarget(target, path: "\(path).payload.target", scope: scope)
-        case .customAction(let name, let target):
-            addString(name, path: "\(path).payload.actionName", role: "custom action name")
-            validateTarget(target, path: "\(path).payload.target", scope: scope)
-        case .rotor(let selection, let target, _):
-            if case .named(let name) = selection {
-                addString(name, path: "\(path).payload.rotor", role: "rotor name")
-            }
-            validateTarget(target, path: "\(path).payload.target", scope: scope)
-        case .typeText(let text, let target):
-            validateString(text, path: "\(path).payload.text", scope: scope)
-            if let target {
-                validateTarget(target, path: "\(path).payload.target", scope: scope)
-            }
-        case .mechanicalTap(let target):
-            validateGesturePointSelection(target.selection, path: "\(path).payload", scope: scope)
-        case .mechanicalLongPress(let target):
-            validateGesturePointSelection(target.selection, path: "\(path).payload", scope: scope)
-        case .mechanicalSwipe(let target):
-            validateSwipe(target, path: "\(path).payload", scope: scope)
-        case .mechanicalDrag(let target):
-            validateDrag(target, path: "\(path).payload", scope: scope)
-        case .viewportScroll(let target):
-            validateScroll(target.selection, path: "\(path).payload", scope: scope)
-        case .viewportScrollToEdge(let target):
-            validateScroll(target.selection, path: "\(path).payload", scope: scope)
-        case .setPasteboard(let target):
-            addString(target.text, path: "\(path).payload.text", role: "pasteboard text")
-            if target.text.isEmpty {
-                fail(
-                    path: "\(path).payload.text",
-                    contract: "set_pasteboard text must be non-empty",
-                    observed: "empty string",
-                    correction: "Use non-empty text for SetPasteboard."
-                )
-            }
-        case .editAction, .dismissKeyboard:
-            break
-        }
-    }
-
-    private mutating func validateGesturePointSelection(
-        _ selection: GesturePointSelection,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        if case .element(let target) = selection {
-            validateElementTarget(target, path: "\(path).element")
-        }
-    }
-
-    private mutating func validateSwipe(
-        _ target: SwipeTarget,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        switch target.selection {
-        case .unitElement(let target, _, _), .elementDirection(let target, _):
-            validateElementTarget(target, path: "\(path).element")
-        case .point(let start, _):
-            validateGesturePointSelection(start, path: "\(path).start", scope: scope)
-        }
-    }
-
-    private mutating func validateDrag(
-        _ target: DragTarget,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        switch target.selection {
-        case .elementToPoint(let target, _):
-            validateElementTarget(target, path: "\(path).element")
-        case .pointToPoint:
-            break
-        }
-    }
-
-    private mutating func validateScroll(
-        _ selection: ScrollContainerSelection,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        if case .element(let target) = selection {
-            validateElementTarget(target, path: "\(path).target")
-        }
-    }
-
-    private mutating func validateTarget(
-        _ target: ElementTargetExpr,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        switch target {
-        case .target(let target):
-            validateElementTarget(target, path: path)
-        case .ref(let reference):
-            validateReference(reference, path: path, role: "target_ref")
-            if !scope.targetRefs.contains(reference) {
-                fail(
-                    path: path,
-                    contract: "target_ref must resolve in the current heist scope",
-                    observed: "\"\(reference)\"",
-                    correction: "Use target_ref only inside the for_each_element body that defines it."
-                )
-            }
-        }
-    }
-
-    private mutating func validateString(
-        _ string: StringExpr,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        switch string {
-        case .literal(let literal):
-            addString(literal, path: path, role: "string literal")
-        case .ref(let reference):
-            validateReference(reference, path: path, role: "text_ref")
-            if !scope.stringRefs.contains(reference) {
-                fail(
-                    path: path,
-                    contract: "text_ref must resolve in the current heist scope",
-                    observed: "\"\(reference)\"",
-                    correction: "Use text_ref only inside the for_each_string body that defines it."
-                )
-            }
-        }
-    }
-
-    private mutating func validateElementTarget(_ target: ElementTarget, path: String) {
-        switch target {
-        case .predicate(let predicate, _):
-            validateElementPredicate(predicate, path: path)
-        }
-    }
-
-    private mutating func validateElementPredicate(
-        _ predicate: ElementPredicate,
-        path: String
-    ) {
-        addString(predicate.label, path: "\(path).label", role: "element label")
-        addString(predicate.identifier, path: "\(path).identifier", role: "element identifier")
-        addString(predicate.value, path: "\(path).value", role: "element value")
-    }
-
-    private mutating func validateElementPredicate(
-        _ predicate: ElementPredicateExpr,
-        path: String,
-        scope: AdmissionScope
-    ) {
-        if let label = predicate.label {
-            validateString(label, path: "\(path).label", scope: scope)
-        }
-        if let identifier = predicate.identifier {
-            validateString(identifier, path: "\(path).identifier", scope: scope)
-        }
-        if let value = predicate.value {
-            validateString(value, path: "\(path).value", scope: scope)
-        }
-    }
-
-    private mutating func validateParameter(_ parameter: String, path: String, role: String) {
-        addParameterString(parameter, path: path, role: role)
-        guard HeistParameterName.isValid(parameter) else {
-            fail(
-                path: path,
-                contract: "\(role) must be a Swift-style identifier",
-                observed: "\"\(escaped(parameter))\"",
-                correction: "Use letters, digits, and underscores, starting with a letter or underscore; avoid Swift keywords."
-            )
-            return
-        }
-    }
-
-    private mutating func validateReference(_ reference: String, path: String, role: String) {
-        addParameterString(reference, path: path, role: role)
-        if !HeistParameterName.isValid(reference) {
-            fail(
-                path: path,
-                contract: "\(role) must be a Swift-style identifier",
-                observed: "\"\(escaped(reference))\"",
-                correction: "Use a ref matching the loop parameter exactly."
-            )
-        }
-    }
-
-    private mutating func addParameterString(_ value: String, path: String, role: String) {
-        let bytes = value.utf8.count
-        if bytes > limits.maxParameterBytes {
-            fail(
-                path: path,
-                contract: "max parameter/ref length",
-                observed: "\(bytes) bytes for \(role)",
-                correction: "Use \(limits.maxParameterBytes) bytes or fewer."
-            )
-        }
-        addString(value, path: path, role: role)
-    }
-
-    private mutating func addString(_ value: String?, path: String, role: String) {
-        guard let value else { return }
-        let bytes = value.utf8.count
-        if bytes > limits.maxStringBytes {
-            fail(
-                path: path,
-                contract: "max string length",
-                observed: "\(bytes) bytes for \(role)",
-                correction: "Use \(limits.maxStringBytes) bytes or fewer for any single string."
-            )
-        }
-        totalStringBytes += bytes
-        if totalStringBytes > limits.maxTotalStringBytes, !reportedTotalStringLimit {
-            reportedTotalStringLimit = true
-            fail(
-                path: path,
-                contract: "max total string bytes",
-                observed: "\(totalStringBytes) bytes",
-                correction: "Use \(limits.maxTotalStringBytes) total UTF-8 string bytes or fewer."
-            )
-        }
-    }
-
-    private mutating func validateCanonicalRenderability(_ command: HeistActionCommand, path: String) {
-        switch command {
-        case .rotor(let selection, _, _):
-            if case .named = selection {
-                return
-            }
-            fail(
-                path: path,
-                contract: "canonical Swift DSL renderability",
-                observed: "rotor selection \(selection)",
-                correction: "Use a named rotor selection in durable heist JSON."
-            )
-        case .mechanicalLongPress(let target):
-            if case .element = target.selection, target.duration != .longPressDefault {
-                fail(
-                    path: path,
-                    contract: "canonical Swift DSL renderability",
-                    observed: "long_press element duration \(target.duration)",
-                    correction: "Use the default element long-press duration or a coordinate long press."
-                )
-            }
-        case .mechanicalSwipe(let target):
-            if target.duration != nil {
-                fail(
-                    path: path,
-                    contract: "canonical Swift DSL renderability",
-                    observed: "swipe duration \(String(describing: target.duration))",
-                    correction: "Use the default swipe duration in durable heist JSON."
-                )
-            }
-            switch target.selection {
-            case .elementDirection, .point(.coordinate, .coordinate), .point(.coordinate, .direction):
-                break
-            case .unitElement, .point(.element, _):
-                fail(
-                    path: path,
-                    contract: "canonical Swift DSL renderability",
-                    observed: "unsupported swipe selection \(target.selection)",
-                    correction: "Use element-direction, point-to-point, or point-direction swipe."
-                )
-            }
-        case .mechanicalDrag(let target):
-            if target.duration != nil {
-                fail(
-                    path: path,
-                    contract: "canonical Swift DSL renderability",
-                    observed: "drag duration \(String(describing: target.duration))",
-                    correction: "Use the default drag duration in durable heist JSON."
-                )
-            }
-        case .activate, .increment, .decrement, .customAction, .typeText, .mechanicalTap,
-             .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge,
-             .editAction, .setPasteboard, .dismissKeyboard:
-            break
-        }
-    }
-
-    private func validateDirectCommandContract(_ message: ClientMessage) throws {
+    func validateDirectCommandContract(_ message: ClientMessage) throws {
         let data = try encoder.encode(message)
         _ = try decoder.decode(ClientMessage.self, from: data)
     }
 
-    private mutating func fail(
+    mutating func fail(
         path: String,
         contract: String,
         observed: String,
@@ -943,13 +560,13 @@ private struct HeistPlanRuntimeAdmissionValidator {
         ))
     }
 
-    private func summarize(_ error: Error) -> String {
+    func summarize(_ error: Error) -> String {
         let text = String(describing: error)
         guard text.count > 220 else { return text }
         return "\(text.prefix(217))..."
     }
 
-    private func escaped(_ value: String) -> String {
+    func escaped(_ value: String) -> String {
         value
             .replacingOccurrences(of: "\0", with: "\\0")
             .replacingOccurrences(of: "\n", with: "\\n")
@@ -958,7 +575,7 @@ private struct HeistPlanRuntimeAdmissionValidator {
     }
 }
 
-private struct AdmissionScope {
+struct AdmissionScope {
     static let empty = AdmissionScope()
 
     var targetRefs: Set<String> = []

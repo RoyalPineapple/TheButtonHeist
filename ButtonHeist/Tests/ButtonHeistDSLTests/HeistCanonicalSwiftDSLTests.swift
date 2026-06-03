@@ -111,6 +111,47 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
     """)
 }
 
+@Test
+func elementUnitPointSwipeIsDurableAndCanonical() throws {
+    let command = HeistActionCommand.mechanicalSwipe(SwipeTarget(selection: .unitElement(
+        .predicate(.label("Carousel")),
+        start: UnitPoint(x: 0.8, y: 0.5),
+        end: UnitPoint(x: 0.2, y: 0.5)
+    )))
+    let plan = HeistPlan(steps: [.action(try ActionStep(command: command))])
+
+    #expect(command.durableHeistActionFailure == nil)
+    #expect(plan.runtimeAdmissionFailures().isEmpty)
+    #expect(try plan.canonicalSwiftDSL() == """
+    try Heist {
+        Mechanical.Swipe(.label("Carousel"), from: UnitPoint(x: 0.8, y: 0.5), to: UnitPoint(x: 0.2, y: 0.5))
+    }
+    """)
+}
+
+@Test
+func nonDurableActionShapeFailsAdmissionAndRenderingWithSameReason() throws {
+    let command = HeistActionCommand.rotor(
+        selection: .index(0),
+        target: .target(.predicate(.label("Article"))),
+        direction: .next
+    )
+    let plan = HeistPlan(steps: [.action(try ActionStep(command: command))])
+    let reason = try #require(command.durableHeistActionFailure)
+
+    #expect(plan.runtimeAdmissionFailures().contains {
+        $0.contract == "durable heist action support"
+            && $0.observed == reason
+    })
+
+    do {
+        _ = try plan.canonicalSwiftDSL()
+        Issue.record("Expected non-durable action to fail canonical rendering")
+    } catch let error as HeistCanonicalSwiftDSLError {
+        #expect(error == .unsupportedAction(reason))
+    }
+}
+
 private let fullASTJSON = """
 {
   "version": 1,
