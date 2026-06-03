@@ -116,12 +116,12 @@ func validationReportsEmptyBranchesAndLargeForEachLimit() throws {
         .conditional(try ConditionalStep(cases: [
             PredicateCase(predicate: .state(.present(.label("Home"))), steps: []),
         ])),
-        .forEach(try ForEachStep(
+        .forEachElement(try ForEachElementStep(
             matching: matching,
-            limit: 101
-        ) { _ in
-            [.warn(WarnStep(message: "too many"))]
-        }),
+            limit: 101,
+            parameter: "target",
+            steps: [.warn(WarnStep(message: "too many"))]
+        )),
     ])
 
     let messages = plan.validate(.strictTest).map(\.message)

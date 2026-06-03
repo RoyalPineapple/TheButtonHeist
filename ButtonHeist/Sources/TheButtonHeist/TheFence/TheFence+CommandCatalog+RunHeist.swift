@@ -16,7 +16,7 @@ extension TheFence.Command {
                             .type,
                             .string,
                             required: true,
-                            enumValues: ["action", "wait", "conditional", "wait_for_cases", "warn", "fail"]
+                            enumValues: ["action", "wait", "conditional", "wait_for_cases", "for_each_element", "for_each_string", "warn", "fail"]
                         ),
                     ],
                     arrayItemAdditionalProperties: true

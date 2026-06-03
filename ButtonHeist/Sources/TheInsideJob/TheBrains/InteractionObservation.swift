@@ -118,6 +118,37 @@ final class InteractionObservation {
         after sequence: UInt64? = nil,
         evaluateCurrent: Bool = true
     ) async -> HeistWaitReceipt {
+        do {
+            return await waitForPredicate(
+                try step.resolve(in: .empty),
+                initialTrace: initialTrace,
+                after: sequence,
+                evaluateCurrent: evaluateCurrent
+            )
+        } catch {
+            let predicate = AccessibilityPredicate.state(.absent(ElementPredicate(identifier: "__unresolved_heist_predicate__")))
+            let resolvedStep = ResolvedWaitStep(predicate: predicate, timeout: step.timeout)
+            let expectation = ExpectationResult(
+                met: false,
+                predicate: predicate,
+                actual: "\(error)"
+            )
+            return waitReceipt(
+                for: resolvedStep,
+                observation: nil,
+                expectation: expectation,
+                start: CFAbsoluteTimeGetCurrent(),
+                success: false
+            )
+        }
+    }
+
+    func waitForPredicate(
+        _ step: ResolvedWaitStep,
+        initialTrace: AccessibilityTrace? = nil,
+        after sequence: UInt64? = nil,
+        evaluateCurrent: Bool = true
+    ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
         let timeout = max(0, min(step.timeout, 30))
         var lastObservation: HeistSemanticObservation?
@@ -238,7 +269,7 @@ final class InteractionObservation {
     }
 
     private func waitReceipt(
-        for step: WaitStep,
+        for step: ResolvedWaitStep,
         observation: HeistSemanticObservation? = nil,
         trace: AccessibilityTrace? = nil,
         observationSummary: String? = nil,

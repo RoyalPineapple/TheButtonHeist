@@ -307,10 +307,14 @@ final class HeistPlanTests: XCTestCase {
 
     // MARK: - ForEach
 
-    func testForEachStepInvokesBodyForSuppliedTarget() throws {
+    func testForEachElementStepStoresRefBackedBodyAST() throws {
         let matching = ElementPredicate(label: "Cell", traits: [.button])
-        let step = try ForEachStep(matching: matching, limit: 5) { target in
-            [
+        let target = try ElementTargetExpr(ref: "target")
+        let step = try ForEachElementStep(
+            matching: matching,
+            limit: 5,
+            parameter: "target",
+            steps: [
                 .action(try ActionStep(
                     command: .activate(target),
                     expectation: WaitStep(
@@ -320,11 +324,10 @@ final class HeistPlanTests: XCTestCase {
                 )),
                 .warn(WarnStep(message: "activated one")),
             ]
-        }
-        let target = ElementTarget.predicate(matching, ordinal: 4)
+        )
 
         XCTAssertEqual(
-            try step.steps(for: target),
+            step.steps,
             [
                 .action(try ActionStep(
                     command: .activate(target),
@@ -338,26 +341,32 @@ final class HeistPlanTests: XCTestCase {
         )
     }
 
-    func testForEachEncodeRejectsSwiftAuthoredBody() throws {
+    func testForEachElementEncodesDurableBodyAST() throws {
         let matching = ElementPredicate(label: "Cell", traits: [.button])
         let plan = HeistPlan(steps: [
-            .forEach(try ForEachStep(matching: matching, limit: 5) { target in
-                [.action(try ActionStep(command: .activate(target)))]
-            }),
+            .forEachElement(try ForEachElementStep(
+                matching: matching,
+                limit: 5,
+                parameter: "target",
+                steps: [.action(try ActionStep(command: .activate(try ElementTargetExpr(ref: "target"))))]
+            )),
         ])
 
-        XCTAssertThrowsError(try JSONEncoder().encode(plan)) { error in
-            XCTAssertTrue("\(error)".contains("Swift-authored only"), "\(error)")
-        }
+        let data = try JSONEncoder().encode(plan)
+        let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
+
+        XCTAssertEqual(decoded, plan)
     }
 
     func testForEachDecodeRejectsEmptyMatchingPredicate() {
         let json = """
         {
-          "type": "for_each",
-          "for_each": {
+          "type": "for_each_element",
+          "for_each_element": {
             "matching": {},
-            "limit": 10
+            "limit": 10,
+            "parameter": "target",
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
@@ -370,10 +379,12 @@ final class HeistPlanTests: XCTestCase {
     func testForEachDecodeRejectsNonPositiveLimit() {
         let zeroJSON = """
         {
-          "type": "for_each",
-          "for_each": {
+          "type": "for_each_element",
+          "for_each_element": {
             "matching": {"label": "Cell"},
-            "limit": 0
+            "limit": 0,
+            "parameter": "target",
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
@@ -384,10 +395,12 @@ final class HeistPlanTests: XCTestCase {
 
         let negativeJSON = """
         {
-          "type": "for_each",
-          "for_each": {
+          "type": "for_each_element",
+          "for_each_element": {
             "matching": {"label": "Cell"},
-            "limit": -1
+            "limit": -1,
+            "parameter": "target",
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
@@ -397,23 +410,24 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
-    func testForEachDecodeRejectsPlainJSONBodyUntilDurableASTExists() {
+    func testForEachDecodeRejectsMissingBodySteps() {
         let json = """
         {
-          "type": "for_each",
-          "for_each": {
+          "type": "for_each_element",
+          "for_each_element": {
             "matching": {"label": "Cell"},
-            "limit": 5
+            "limit": 5,
+            "parameter": "target"
           }
         }
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("Swift-authored only"), "\(error)")
+            XCTAssertTrue("\(error)".contains("steps"), "\(error)")
         }
     }
 
-    func testForEachDecodeRejectsOldElementAndStepsShapeAsUnknownFields() {
+    func testForEachDecodeRejectsOldForEachStepType() {
         let json = """
         {
           "type": "for_each",
@@ -427,18 +441,19 @@ final class HeistPlanTests: XCTestCase {
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            let message = "\(error)"
-            XCTAssertTrue(message.contains("element") || message.contains("steps"), message)
+            XCTAssertTrue("\(error)".contains("for_each"), "\(error)")
         }
     }
 
     func testForEachDecodeRejectsUnknownFields() {
         let outerJSON = """
         {
-          "type": "for_each",
-          "for_each": {
+          "type": "for_each_element",
+          "for_each_element": {
             "matching": {"label": "Cell"},
-            "limit": 5
+            "limit": 5,
+            "parameter": "target",
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           },
           "unexpected": true
         }
@@ -450,10 +465,12 @@ final class HeistPlanTests: XCTestCase {
 
         let innerJSON = """
         {
-          "type": "for_each",
-          "for_each": {
+          "type": "for_each_element",
+          "for_each_element": {
             "matching": {"label": "Cell"},
             "limit": 5,
+            "parameter": "target",
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}],
             "bogus": 42
           }
         }

@@ -16,7 +16,8 @@ extension HeistStep: CustomStringConvertible {
         case .wait(let step): return step.description
         case .conditional(let step): return step.description
         case .waitForCases(let step): return step.description
-        case .forEach(let step): return step.description
+        case .forEachElement(let step): return step.description
+        case .forEachString(let step): return step.description
         case .warn(let step): return step.description
         case .fail(let step): return step.description
         }
@@ -69,11 +70,23 @@ extension PredicateCase: CustomStringConvertible {
     }
 }
 
-extension ForEachStep: CustomStringConvertible {
+extension ForEachElementStep: CustomStringConvertible {
     public var description: String {
-        ScoreDescription.call("forEach", [
+        ScoreDescription.call("forEachElement", [
             matching.description,
             "limit=\(limit)",
+            "parameter=\(parameter)",
+            "steps=\(steps.count)",
+        ])
+    }
+}
+
+extension ForEachStringStep: CustomStringConvertible {
+    public var description: String {
+        ScoreDescription.call("forEachString", [
+            "values=\(values.count)",
+            "parameter=\(parameter)",
+            "steps=\(steps.count)",
         ])
     }
 }

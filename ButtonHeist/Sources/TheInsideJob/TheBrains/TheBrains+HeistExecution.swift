@@ -8,7 +8,7 @@ extension TheBrains {
 
     struct HeistExecutionRuntime {
         let execute: @MainActor (ClientMessage) async -> ActionResult
-        let wait: @MainActor (WaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
+        let wait: @MainActor (ResolvedWaitStep, AccessibilityTrace?) async -> HeistWaitReceipt
         let observeSemanticState: @MainActor (SemanticObservationScope, UInt64?, Double?) async -> HeistSemanticObservation?
 
         @MainActor
@@ -46,7 +46,7 @@ extension TheBrains {
         runtime: HeistExecutionRuntime
     ) async -> ActionResult {
         let heistStart = CFAbsoluteTimeGetCurrent()
-        let stepResults = await executeHeistSteps(plan.steps, runtime: runtime)
+        let stepResults = await executeHeistSteps(plan.steps, runtime: runtime, environment: .empty)
         let failedIndex = stepResults.firstIndex(where: \.isFailure)
 
         let heistResult = HeistExecutionResult(
@@ -70,13 +70,14 @@ extension TheBrains {
 
     func executeHeistSteps(
         _ steps: [HeistStep],
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> [HeistExecutionStepResult] {
         var stepResults: [HeistExecutionStepResult] = []
         var failedIndex: Int?
 
         stepLoop: for (index, step) in steps.enumerated() {
-            var stepResult = await executeHeistStep(step, index: index, runtime: runtime)
+            var stepResult = await executeHeistStep(step, index: index, runtime: runtime, environment: environment)
             if stepResult.isFailure {
                 stepResult = stepResult.markingStop()
                 failedIndex = index
@@ -99,20 +100,23 @@ extension TheBrains {
     private func executeHeistStep(
         _ step: HeistStep,
         index: Int,
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
         let start = CFAbsoluteTimeGetCurrent()
         switch step {
         case .action(let action):
-            return await executeActionStep(action, index: index, start: start, runtime: runtime)
+            return await executeActionStep(action, index: index, start: start, runtime: runtime, environment: environment)
         case .wait(let waitStep):
-            return await executeWaitStep(waitStep, index: index, start: start, runtime: runtime)
+            return await executeWaitStep(waitStep, index: index, start: start, runtime: runtime, environment: environment)
         case .conditional(let conditional):
-            return await executeConditionalStep(conditional, index: index, start: start, runtime: runtime)
+            return await executeConditionalStep(conditional, index: index, start: start, runtime: runtime, environment: environment)
         case .waitForCases(let waitForCases):
-            return await executeWaitForCasesStep(waitForCases, index: index, start: start, runtime: runtime)
-        case .forEach(let forEach):
-            return await executeForEachStep(forEach, index: index, start: start, runtime: runtime)
+            return await executeWaitForCasesStep(waitForCases, index: index, start: start, runtime: runtime, environment: environment)
+        case .forEachElement(let forEach):
+            return await executeForEachElementStep(forEach, index: index, start: start, runtime: runtime, environment: environment)
+        case .forEachString(let forEach):
+            return await executeForEachStringStep(forEach, index: index, start: start, runtime: runtime, environment: environment)
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,

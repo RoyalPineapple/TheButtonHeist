@@ -223,16 +223,28 @@ func helperFunctionsFlattenIntoParentPlan() throws {
 }
 
 @Test
-func staticForEachFlattensIntoLinearSteps() throws {
+func stringForEachBuildsRuntimeStringLoop() throws {
     let heist = try Heist {
-        ForEach(["Cart", "Checkout"]) { label in
-            Activate(.label(label))
+        try ForEach(["Milk", "Eggs"]) { item in
+            TypeText(item, into: .label("Add item"))
+                .expect(.present(.label(item)), timeout: .seconds(2))
         }
     }
 
     #expect(heist.plan.steps == [
-        .action(try ActionStep(command: .activate(.label("Cart")))),
-        .action(try ActionStep(command: .activate(.label("Checkout")))),
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            steps: [
+                .action(try ActionStep(
+                    command: .typeText(text: .ref("item"), target: .target(.label("Add item"))),
+                    expectation: WaitStep(
+                        predicate: .present(.label(.ref("item"))),
+                        timeout: 2
+                    )
+                )),
+            ]
+        )),
     ])
 }
 
@@ -246,20 +258,19 @@ func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
         }
     }
 
-    guard case .forEach(let step) = heist.plan.steps.first else {
+    guard case .forEachElement(let step) = heist.plan.steps.first else {
         Issue.record("Expected semantic ForEach step")
         return
     }
 
     #expect(step.matching == matching)
     #expect(step.limit == 20)
-
-    let target = ElementTarget.predicate(matching, ordinal: 3)
-    #expect(try step.steps(for: target) == [
+    #expect(step.parameter == "target")
+    #expect(step.steps == [
         .action(try ActionStep(
-            command: .activate(target),
+            command: .activate(.ref("target")),
             expectation: WaitStep(
-                predicate: .state(.absentTarget(target)),
+                predicate: .absent(.ref("target")),
                 timeout: 2
             )
         )),
@@ -271,8 +282,9 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
     let heist = try Heist {
         try loginFlow(email: "alex@example.com", password: "secret")
 
-        ForEach(["Cart", "Checkout"]) { label in
-            Activate(.label(label))
+        try ForEach(["Milk", "Eggs"]) { item in
+            TypeText(item, into: .label("Add item"))
+                .expect(.present(.label(item)), timeout: .seconds(2))
         }
     }
 
@@ -280,7 +292,7 @@ func encodedJSONDecodesBackToEqualPlanAndContainsNoSourceMetadata() throws {
     encoder.outputFormatting = [.sortedKeys]
     let data = try encoder.encode(heist.plan)
     let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
-    let json = try #require(String(data: data, encoding: .utf8))
+    let json = String(data: data, encoding: .utf8)!
 
     #expect(decoded == heist.plan)
     #expect(!json.contains("Login"))

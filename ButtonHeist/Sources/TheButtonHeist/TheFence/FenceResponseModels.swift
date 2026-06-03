@@ -53,7 +53,7 @@ private extension HeistStep {
         switch self {
         case .action, .wait:
             return true
-        case .conditional, .waitForCases, .forEach, .warn, .fail:
+        case .conditional, .waitForCases, .forEachElement, .forEachString, .warn, .fail:
             return false
         }
     }

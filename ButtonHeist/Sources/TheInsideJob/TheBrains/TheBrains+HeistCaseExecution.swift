@@ -9,16 +9,28 @@ extension TheBrains {
         _ step: ConditionalStep,
         index: Int,
         start: CFAbsoluteTime,
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
-        guard let observation = await runtime.observeSemanticState(step.observationScope, nil, nil) else {
+        let resolvedCases: [ResolvedPredicateCase]
+        do {
+            resolvedCases = try step.cases.map { try $0.resolve(in: environment) }
+        } catch {
+            return caseResolutionFailure(index: index, kind: .conditional, start: start, error: error)
+        }
+
+        guard let observation = await runtime.observeSemanticState(resolvedCases.observationScope, nil, nil) else {
             return caseObservationFailure(index: index, kind: .conditional, start: start)
         }
 
-        let selection = evaluatePredicateCases(step.cases, observation: observation)
+        let selection = evaluatePredicateCases(resolvedCases, observation: observation)
         if let selectedCaseIndex = selection.selectedCaseIndex {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(step.cases[selectedCaseIndex].steps, runtime: runtime)
+            let childResults = await executeHeistSteps(
+                resolvedCases[selectedCaseIndex].steps,
+                runtime: runtime,
+                environment: environment
+            )
             return HeistExecutionStepResult(
                 index: index,
                 kind: .conditional,
@@ -36,7 +48,7 @@ extension TheBrains {
 
         if let elseSteps = step.elseSteps {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(elseSteps, runtime: runtime)
+            let childResults = await executeHeistSteps(elseSteps, runtime: runtime, environment: environment)
             return HeistExecutionStepResult(
                 index: index,
                 kind: .conditional,
@@ -71,17 +83,25 @@ extension TheBrains {
         _ step: WaitForCasesStep,
         index: Int,
         start: CFAbsoluteTime,
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
+        let resolvedCases: [ResolvedPredicateCase]
+        do {
+            resolvedCases = try step.cases.map { try $0.resolve(in: environment) }
+        } catch {
+            return caseResolutionFailure(index: index, kind: .waitForCases, start: start, error: error)
+        }
+
         let deadline = start + step.timeout
         var observedSequence: UInt64?
-        var lastSelection = PredicateCaseSelection.unevaluated(step.cases)
+        var lastSelection = PredicateCaseSelection.unevaluated(resolvedCases)
         var lastSummary: String?
 
         repeat {
             let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
             let observation = await runtime.observeSemanticState(
-                step.observationScope,
+                resolvedCases.observationScope,
                 observedSequence,
                 min(remaining, 1.0)
             )
@@ -92,11 +112,15 @@ extension TheBrains {
             }
             observedSequence = observation.event.sequence
             lastSummary = observation.summary
-            lastSelection = evaluatePredicateCases(step.cases, observation: observation)
+            lastSelection = evaluatePredicateCases(resolvedCases, observation: observation)
 
             if let selectedCaseIndex = lastSelection.selectedCaseIndex {
                 let selectionElapsedMs = elapsedMilliseconds(since: start)
-                let childResults = await executeHeistSteps(step.cases[selectedCaseIndex].steps, runtime: runtime)
+                let childResults = await executeHeistSteps(
+                    resolvedCases[selectedCaseIndex].steps,
+                    runtime: runtime,
+                    environment: environment
+                )
                 return HeistExecutionStepResult(
                     index: index,
                     kind: .waitForCases,
@@ -118,7 +142,7 @@ extension TheBrains {
 
         if let elseSteps = step.elseSteps {
             let selectionElapsedMs = elapsedMilliseconds(since: start)
-            let childResults = await executeHeistSteps(elseSteps, runtime: runtime)
+            let childResults = await executeHeistSteps(elseSteps, runtime: runtime, environment: environment)
             return HeistExecutionStepResult(
                 index: index,
                 kind: .waitForCases,
@@ -154,7 +178,7 @@ extension TheBrains {
     }
 
     private func evaluatePredicateCases(
-        _ cases: [PredicateCase],
+        _ cases: [ResolvedPredicateCase],
         observation: HeistSemanticObservation
     ) -> PredicateCaseSelection {
         let evaluatedCases = cases.map {
@@ -186,6 +210,21 @@ extension TheBrains {
         )
     }
 
+    private func caseResolutionFailure(
+        index: Int,
+        kind: HeistExecutionStepKind,
+        start: CFAbsoluteTime,
+        error: Error
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: kind,
+            message: "Could not resolve heist case predicate: \(error)",
+            durationMs: elapsedMilliseconds(since: start),
+            stopsHeist: true
+        )
+    }
+
     private func waitForCasesTimeoutMessage(
         step: WaitForCasesStep,
         lastObservedSummary: String?
@@ -212,7 +251,7 @@ private struct PredicateCaseSelection {
     let cases: [HeistCaseMatchResult]
     let selectedCaseIndex: Int?
 
-    static func unevaluated(_ cases: [PredicateCase]) -> PredicateCaseSelection {
+    static func unevaluated(_ cases: [ResolvedPredicateCase]) -> PredicateCaseSelection {
         PredicateCaseSelection(
             cases: cases.map {
                 HeistCaseMatchResult(
@@ -226,6 +265,12 @@ private struct PredicateCaseSelection {
             },
             selectedCaseIndex: nil
         )
+    }
+}
+
+private extension Array where Element == ResolvedPredicateCase {
+    var observationScope: SemanticObservationScope {
+        map(\.predicate.observationScope).max() ?? .visible
     }
 }
 

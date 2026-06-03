@@ -60,8 +60,10 @@ private struct HeistPlanValidator {
             return validate(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).conditional")
         case .waitForCases(let step):
             return validate(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).wait_for_cases")
-        case .forEach(let step):
-            return validate(forEach: step, path: "\(path).for_each")
+        case .forEachElement(let step):
+            return validate(forEachElement: step, path: "\(path).for_each_element")
+        case .forEachString(let step):
+            return validate(forEachString: step, path: "\(path).for_each_string")
         case .warn, .fail:
             return []
         }
@@ -116,7 +118,7 @@ private struct HeistPlanValidator {
         return findings
     }
 
-    private func validate(forEach step: ForEachStep, path: String) -> [HeistPlanValidationFinding] {
+    private func validate(forEachElement step: ForEachElementStep, path: String) -> [HeistPlanValidationFinding] {
         var findings: [HeistPlanValidationFinding] = []
         if step.limit > 100 {
             findings.append(.init(
@@ -126,6 +128,23 @@ private struct HeistPlanValidator {
                 suggestion: "Use a bounded limit of 100 or less"
             ))
         }
+        findings += validate(steps: step.steps, path: "\(path).steps")
+        findings += nestedCollectionFindings(in: step.steps, path: "\(path).steps")
+        return findings
+    }
+
+    private func validate(forEachString step: ForEachStringStep, path: String) -> [HeistPlanValidationFinding] {
+        var findings: [HeistPlanValidationFinding] = []
+        if step.values.count > 100 {
+            findings.append(.init(
+                severity: mode == .runtime ? .warning : .error,
+                path: "\(path).values",
+                message: "ForEach string value count is too large for a durable semantic heist",
+                suggestion: "Use 100 values or fewer"
+            ))
+        }
+        findings += validate(steps: step.steps, path: "\(path).steps")
+        findings += nestedCollectionFindings(in: step.steps, path: "\(path).steps")
         return findings
     }
 
@@ -196,6 +215,45 @@ private struct HeistPlanValidator {
         guard case .action(let action) = step else { return false }
         return action.command.validationKind == .viewport
     }
+
+    private func nestedCollectionFindings(in steps: [HeistStep], path: String) -> [HeistPlanValidationFinding] {
+        var findings: [HeistPlanValidationFinding] = []
+        for (index, step) in steps.enumerated() {
+            let stepPath = "\(path)[\(index)]"
+            switch step {
+            case .forEachElement, .forEachString:
+                findings.append(.init(
+                    severity: .error,
+                    path: stepPath,
+                    message: "Collection ForEach steps are top-level only",
+                    suggestion: "Move the collection loop to the top-level heist steps"
+                ))
+            case .conditional(let conditional):
+                for (caseIndex, predicateCase) in conditional.cases.enumerated() {
+                    findings += nestedCollectionFindings(
+                        in: predicateCase.steps,
+                        path: "\(stepPath).conditional.cases[\(caseIndex)].steps"
+                    )
+                }
+                if let elseSteps = conditional.elseSteps {
+                    findings += nestedCollectionFindings(in: elseSteps, path: "\(stepPath).conditional.else_steps")
+                }
+            case .waitForCases(let waitForCases):
+                for (caseIndex, predicateCase) in waitForCases.cases.enumerated() {
+                    findings += nestedCollectionFindings(
+                        in: predicateCase.steps,
+                        path: "\(stepPath).wait_for_cases.cases[\(caseIndex)].steps"
+                    )
+                }
+                if let elseSteps = waitForCases.elseSteps {
+                    findings += nestedCollectionFindings(in: elseSteps, path: "\(stepPath).wait_for_cases.else_steps")
+                }
+            case .action, .wait, .warn, .fail:
+                break
+            }
+        }
+        return findings
+    }
 }
 
 private enum HeistCommandValidationKind: Equatable {
@@ -206,21 +264,18 @@ private enum HeistCommandValidationKind: Equatable {
     case escapeHatch
 }
 
-private extension ClientMessage {
+private extension HeistActionCommand {
     var validationKind: HeistCommandValidationKind {
         switch self {
-        case .activate, .increment, .decrement, .performCustomAction, .rotor:
+        case .activate, .increment, .decrement, .customAction, .rotor:
             return .semantic
-        case .typeText(let target):
-            return target.elementTarget == nil ? .typeTextWithoutTarget : .semantic
-        case .oneFingerTap, .longPress, .swipe, .drag:
+        case .typeText(_, let target):
+            return target == nil ? .typeTextWithoutTarget : .semantic
+        case .mechanicalTap, .mechanicalLongPress, .mechanicalSwipe, .mechanicalDrag:
             return .mechanical
-        case .scroll, .scrollToVisible, .scrollToEdge:
+        case .viewportScroll, .viewportScrollToVisible, .viewportScrollToEdge:
             return .viewport
-        case .editAction, .setPasteboard, .resignFirstResponder:
-            return .escapeHatch
-        case .clientHello, .authenticate, .requestInterface, .ping, .status, .getPasteboard, .requestScreen,
-             .wait, .heistPlan:
+        case .editAction, .setPasteboard, .dismissKeyboard:
             return .escapeHatch
         }
     }

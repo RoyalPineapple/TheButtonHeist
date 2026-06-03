@@ -9,9 +9,22 @@ extension TheBrains {
         _ step: WaitStep,
         index: Int,
         start: CFAbsoluteTime,
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
-        let receipt = await runtime.wait(step, nil)
+        let resolvedStep: ResolvedWaitStep
+        do {
+            resolvedStep = try step.resolve(in: environment)
+        } catch {
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .wait,
+                message: "could not resolve heist wait predicate: \(error)",
+                durationMs: elapsedMilliseconds(since: start),
+                stopsHeist: true
+            )
+        }
+        let receipt = await runtime.wait(resolvedStep, nil)
         return HeistExecutionStepResult(
             index: index,
             kind: .wait,

@@ -247,76 +247,17 @@ final class MockConnection: TransportReachabilityConnecting {
     ) -> HeistExecutionStepResult {
         switch step {
         case .action(let action):
-            let actionResult = actionResult(for: action.command, handler: handler)
-            let expectation = actionResult.success
-                ? heistExpectation(for: action.expectation, handler: handler)
-                : nil
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .action,
-                actionResult: actionResult,
-                expectationActionResult: expectation?.actionResult,
-                expectation: expectation?.result,
-                durationMs: heistStepDurationMs
-            )
+            return heistActionStepResult(for: action, index: index, handler: handler)
         case .wait(let wait):
-            let result = actionResult(for: .wait(WaitTarget(predicate: wait.predicate, timeout: wait.timeout)), handler: handler)
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .wait,
-                actionResult: result,
-                expectation: wait.predicate.validate(against: result),
-                durationMs: heistStepDurationMs
-            )
+            return heistWaitStepResult(for: wait, index: index, handler: handler)
         case .conditional(let conditional):
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .conditional,
-                message: "mock conditionals do not execute nested steps",
-                durationMs: heistStepDurationMs,
-                caseSelection: HeistCaseSelectionResult(
-                    cases: conditional.cases.map {
-                        HeistCaseMatchResult(
-                            predicate: $0.predicate,
-                            result: ExpectationResult(met: false, predicate: $0.predicate)
-                        )
-                    },
-                    selectedCaseIndex: nil,
-                    elapsedMs: heistStepDurationMs
-                )
-            )
+            return heistConditionalStepResult(for: conditional, index: index)
         case .waitForCases(let waitForCases):
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .waitForCases,
-                message: "mock wait_for_cases timed out",
-                durationMs: heistStepDurationMs,
-                caseSelection: HeistCaseSelectionResult(
-                    cases: waitForCases.cases.map {
-                        HeistCaseMatchResult(
-                            predicate: $0.predicate,
-                            result: ExpectationResult(met: false, predicate: $0.predicate)
-                        )
-                    },
-                    selectedCaseIndex: nil,
-                    elapsedMs: heistStepDurationMs,
-                    timeout: waitForCases.timeout,
-                    timedOut: true
-                )
-            )
-        case .forEach(let forEach):
-            return HeistExecutionStepResult(
-                index: index,
-                kind: .forEach,
-                message: "mock for_each did not match elements",
-                durationMs: heistStepDurationMs,
-                forEachResult: HeistForEachResult(
-                    matchedCount: 0,
-                    limit: forEach.limit,
-                    iterationCount: 0,
-                    failureReason: nil
-                )
-            )
+            return heistWaitForCasesStepResult(for: waitForCases, index: index)
+        case .forEachElement(let forEach):
+            return heistForEachElementStepResult(for: forEach, index: index)
+        case .forEachString(let forEach):
+            return heistForEachStringStepResult(for: forEach, index: index)
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,
@@ -335,16 +276,178 @@ final class MockConnection: TransportReachabilityConnecting {
         }
     }
 
+    private func heistActionStepResult(
+        for action: ActionStep,
+        index: Int,
+        handler: (ClientMessage) -> ServerMessage
+    ) -> HeistExecutionStepResult {
+        guard let command = try? action.command.resolve(in: .empty) else {
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .action,
+                actionResult: ActionResult(
+                    success: false,
+                    method: .heistPlan,
+                    message: "mock could not resolve heist action command",
+                    errorKind: .validationError
+                ),
+                durationMs: heistStepDurationMs
+            )
+        }
+        let actionResult = actionResult(for: command, handler: handler)
+        let expectation = actionResult.success
+            ? heistExpectation(for: action.expectation, handler: handler)
+            : nil
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .action,
+            actionResult: actionResult,
+            expectationActionResult: expectation?.actionResult,
+            expectation: expectation?.result,
+            durationMs: heistStepDurationMs
+        )
+    }
+
+    private func heistWaitStepResult(
+        for wait: WaitStep,
+        index: Int,
+        handler: (ClientMessage) -> ServerMessage
+    ) -> HeistExecutionStepResult {
+        guard let resolved = try? wait.resolve(in: .empty) else {
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .wait,
+                actionResult: ActionResult(
+                    success: false,
+                    method: .wait,
+                    message: "mock could not resolve heist wait predicate",
+                    errorKind: .validationError
+                ),
+                durationMs: heistStepDurationMs
+            )
+        }
+        let result = actionResult(
+            for: .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout)),
+            handler: handler
+        )
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .wait,
+            actionResult: result,
+            expectation: resolved.predicate.validate(against: result),
+            durationMs: heistStepDurationMs
+        )
+    }
+
+    private func heistConditionalStepResult(
+        for conditional: ConditionalStep,
+        index: Int
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .conditional,
+            message: "mock conditionals do not execute nested steps",
+            durationMs: heistStepDurationMs,
+            caseSelection: HeistCaseSelectionResult(
+                cases: mockCaseResults(for: conditional.cases),
+                selectedCaseIndex: nil,
+                elapsedMs: heistStepDurationMs
+            )
+        )
+    }
+
+    private func heistWaitForCasesStepResult(
+        for waitForCases: WaitForCasesStep,
+        index: Int
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .waitForCases,
+            message: "mock wait_for_cases timed out",
+            durationMs: heistStepDurationMs,
+            caseSelection: HeistCaseSelectionResult(
+                cases: mockCaseResults(for: waitForCases.cases),
+                selectedCaseIndex: nil,
+                elapsedMs: heistStepDurationMs,
+                timeout: waitForCases.timeout,
+                timedOut: true
+            )
+        )
+    }
+
+    private func heistForEachElementStepResult(
+        for forEach: ForEachElementStep,
+        index: Int
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .forEach,
+            message: "mock for_each did not match elements",
+            durationMs: heistStepDurationMs,
+            forEachResult: HeistForEachResult(
+                matchedCount: 0,
+                limit: forEach.limit,
+                iterationCount: 0,
+                failureReason: nil
+            )
+        )
+    }
+
+    private func heistForEachStringStepResult(
+        for forEach: ForEachStringStep,
+        index: Int
+    ) -> HeistExecutionStepResult {
+        HeistExecutionStepResult(
+            index: index,
+            kind: .forEach,
+            message: "mock for_each_string completed \(forEach.values.count) iteration(s)",
+            durationMs: heistStepDurationMs,
+            forEachResult: HeistForEachResult(
+                matchedCount: forEach.values.count,
+                limit: forEach.values.count,
+                iterationCount: forEach.values.count,
+                failureReason: nil
+            )
+        )
+    }
+
+    private func mockCaseResults(for cases: [PredicateCase]) -> [HeistCaseMatchResult] {
+        cases.map {
+            let predicate = (try? $0.predicate.resolve(in: .empty))
+                ?? .state(.present(ElementPredicate(label: "unresolved")))
+            return HeistCaseMatchResult(
+                predicate: predicate,
+                result: ExpectationResult(met: false, predicate: predicate)
+            )
+        }
+    }
+
     private func heistExpectation(
         for expectation: WaitStep?,
         handler: (ClientMessage) -> ServerMessage
     ) -> (actionResult: ActionResult, result: ExpectationResult)? {
         guard let expectation else { return nil }
+        guard let resolved = try? expectation.resolve(in: .empty) else {
+            let result = ActionResult(
+                success: false,
+                method: .wait,
+                message: "mock could not resolve heist expectation predicate",
+                errorKind: .validationError
+            )
+            return (
+                result,
+                ExpectationResult(
+                    met: false,
+                    predicate: .state(.present(ElementPredicate(label: "unresolved"))),
+                    actual: result.message
+                )
+            )
+        }
         let waitResult = actionResult(
-            for: .wait(WaitTarget(predicate: expectation.predicate, timeout: expectation.timeout)),
+            for: .wait(WaitTarget(predicate: resolved.predicate, timeout: resolved.timeout)),
             handler: handler
         )
-        return (waitResult, expectation.predicate.validate(against: waitResult))
+        return (waitResult, resolved.predicate.validate(against: waitResult))
     }
 
     private func actionResult(

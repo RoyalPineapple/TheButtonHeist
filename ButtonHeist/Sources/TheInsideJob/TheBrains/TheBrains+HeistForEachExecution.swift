@@ -5,11 +5,12 @@ import Foundation
 import TheScore
 
 extension TheBrains {
-    func executeForEachStep(
-        _ step: ForEachStep,
+    func executeForEachElementStep(
+        _ step: ForEachElementStep,
         index: Int,
         start: CFAbsoluteTime,
-        runtime: HeistExecutionRuntime
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
     ) async -> HeistExecutionStepResult {
         guard let observation = await runtime.observeSemanticState(.discovery, nil, nil) else {
             return forEachUnavailableResult(index: index, start: start, limit: step.limit)
@@ -32,23 +33,12 @@ extension TheBrains {
 
         while iterationCount < matchedCount {
             let currentElement = ElementTarget.predicate(step.matching, ordinal: nextOrdinal)
-            let iterationSteps: [HeistStep]
-            do {
-                iterationSteps = try step.steps(for: currentElement)
-            } catch {
-                failureReason = "iteration \(iterationCount) body failed: \(error)"
-                break
-            }
-            guard !iterationSteps.isEmpty else {
-                failureReason = "iteration \(iterationCount) body produced no steps"
-                break
-            }
-            guard !iterationSteps.containsRuntimeForEach else {
-                failureReason = "iteration \(iterationCount) body contains unsupported nested runtime for_each"
-                break
-            }
-
-            let iterationResults = await executeHeistSteps(iterationSteps, runtime: runtime)
+            let iterationEnvironment = environment.binding(target: currentElement, to: step.parameter)
+            let iterationResults = await executeHeistSteps(
+                step.steps,
+                runtime: runtime,
+                environment: iterationEnvironment
+            )
             iterationCount += 1
 
             for result in iterationResults {
@@ -95,6 +85,56 @@ extension TheBrains {
             forEachResult: HeistForEachResult(
                 matchedCount: matchedCount,
                 limit: step.limit,
+                iterationCount: iterationCount,
+                failureReason: failureReason
+            ),
+            childResults: childResults.isEmpty ? nil : childResults
+        )
+    }
+
+    func executeForEachStringStep(
+        _ step: ForEachStringStep,
+        index: Int,
+        start: CFAbsoluteTime,
+        runtime: HeistExecutionRuntime,
+        environment: HeistExecutionEnvironment
+    ) async -> HeistExecutionStepResult {
+        var childResults: [HeistExecutionStepResult] = []
+        var failureReason: String?
+        var iterationCount = 0
+
+        for (valueIndex, value) in step.values.enumerated() {
+            let iterationEnvironment = environment.binding(string: value, to: step.parameter)
+            let iterationResults = await executeHeistSteps(
+                step.steps,
+                runtime: runtime,
+                environment: iterationEnvironment
+            )
+            iterationCount += 1
+
+            for result in iterationResults {
+                childResults.append(result.reindexed(childResults.count))
+            }
+
+            if iterationResults.contains(where: \.isFailure) {
+                failureReason = "iteration \(valueIndex) failed for value \"\(value)\""
+                break
+            }
+        }
+
+        return HeistExecutionStepResult(
+            index: index,
+            kind: .forEach,
+            message: forEachStringMessage(
+                valueCount: step.values.count,
+                iterationCount: iterationCount,
+                failureReason: failureReason
+            ),
+            durationMs: elapsedMilliseconds(since: start),
+            stopsHeist: failureReason != nil,
+            forEachResult: HeistForEachResult(
+                matchedCount: step.values.count,
+                limit: step.values.count,
                 iterationCount: iterationCount,
                 failureReason: failureReason
             ),
@@ -154,24 +194,16 @@ extension TheBrains {
         }
         return "for_each completed \(iterationCount) iteration(s) from \(matchedCount) matched element(s)"
     }
-}
 
-private extension Array where Element == HeistStep {
-    var containsRuntimeForEach: Bool {
-        contains { step in
-            switch step {
-            case .forEach:
-                return true
-            case .conditional(let conditional):
-                return conditional.cases.contains { $0.steps.containsRuntimeForEach }
-                    || conditional.elseSteps?.containsRuntimeForEach == true
-            case .waitForCases(let waitForCases):
-                return waitForCases.cases.contains { $0.steps.containsRuntimeForEach }
-                    || waitForCases.elseSteps?.containsRuntimeForEach == true
-            case .action, .wait, .warn, .fail:
-                return false
-            }
+    private func forEachStringMessage(
+        valueCount: Int,
+        iterationCount: Int,
+        failureReason: String?
+    ) -> String {
+        if let failureReason {
+            return "for_each_string stopped after \(iterationCount) of \(valueCount) iteration(s): \(failureReason)"
         }
+        return "for_each_string completed \(iterationCount) iteration(s) from \(valueCount) value(s)"
     }
 }
 

@@ -83,7 +83,7 @@ struct HeistSemanticObservation {
     }
 
     static func initialTraceResult(
-        for step: WaitStep,
+        for step: ResolvedWaitStep,
         initialTrace: AccessibilityTrace?,
         timeout: Double
     ) -> InitialTraceResult? {
@@ -152,7 +152,7 @@ struct HeistSemanticObservation {
     }
 
     static func waitReceipt(
-        for step: WaitStep,
+        for step: ResolvedWaitStep,
         observation: HeistSemanticObservation?,
         expectation: ExpectationResult,
         elapsed: String,
@@ -171,7 +171,7 @@ struct HeistSemanticObservation {
     }
 
     static func waitReceipt(
-        for step: WaitStep,
+        for step: ResolvedWaitStep,
         trace: AccessibilityTrace?,
         observationSummary: String?,
         expectation: ExpectationResult,
@@ -212,7 +212,7 @@ struct HeistSemanticObservation {
     }
 
     static func waitTimeoutMessage(
-        for step: WaitStep,
+        for step: ResolvedWaitStep,
         expectation: ExpectationResult,
         observationSummary: String?,
         elapsed: String,
