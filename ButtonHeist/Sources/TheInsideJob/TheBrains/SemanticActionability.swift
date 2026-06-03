@@ -348,6 +348,7 @@ final class SemanticActionability {
 }
 
 extension SemanticActionability.SemanticActionableTarget {
+    @MainActor
     func subjectEvidence(source: ActionSubjectEvidence.Source) -> ActionSubjectEvidence {
         ActionSubjectEvidence(
             source: source,
