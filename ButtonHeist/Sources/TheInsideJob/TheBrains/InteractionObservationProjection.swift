@@ -20,6 +20,14 @@ struct HeistSemanticObservation {
         let shouldReturn: Bool
     }
 
+    static func clampedWaitTimeout(_ timeout: Double) -> Double {
+        max(0, min(timeout, 30))
+    }
+
+    static func unresolvedWaitPredicate() -> AccessibilityPredicate {
+        AccessibilityPredicate.state(.absent(ElementPredicate(identifier: "__unresolved_heist_predicate__")))
+    }
+
     static func semanticObservation(
         event: SettledSemanticObservationEvent,
         state: PostActionObservation.BeforeState
@@ -149,25 +157,6 @@ struct HeistSemanticObservation {
             baseline: before.elements,
             final: final.elements
         ).map { TheStash.WireConversion.convert($0) }
-    }
-
-    static func waitReceipt(
-        for step: ResolvedWaitStep,
-        observation: HeistSemanticObservation?,
-        expectation: ExpectationResult,
-        elapsed: String,
-        success: Bool,
-        presenceTimeoutMessage: String? = nil
-    ) -> HeistWaitReceipt {
-        waitReceipt(
-            for: step,
-            trace: observation?.accessibilityTrace,
-            observationSummary: observation?.summary,
-            expectation: expectation,
-            elapsed: elapsed,
-            success: success,
-            presenceTimeoutMessage: presenceTimeoutMessage
-        )
     }
 
     static func waitReceipt(
