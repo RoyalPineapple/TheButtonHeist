@@ -290,6 +290,12 @@ final class CLICommandSyncTests: XCTestCase {
         XCTAssertEqual(command.edge, "top")
     }
 
+    func testSwipeCLIHelpUsesDescriptorDirectionValues() {
+        let help = SwipeSubcommand.helpMessage()
+
+        XCTAssertTrue(help.contains("Swipe direction: up, down, left, right"), help)
+    }
+
     private func topLevelCommandNames() -> [String] {
         ButtonHeistApp.configuration.subcommands.map { commandType in
             commandType.configuration.commandName ?? String(describing: commandType)

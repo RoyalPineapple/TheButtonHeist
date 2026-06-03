@@ -96,7 +96,7 @@ extension TheFence {
 
     private func validateRequestKeys(command: Command, arguments: CommandArgumentEnvelope) throws {
         let metadataKeys = Set(["requestId"])
-        let parameterKeys = Set(command.descriptor.parameters.map(\.key))
+        let parameterKeys = command.descriptor.topLevelParameterKeys
         let allowedKeys = metadataKeys.union(parameterKeys)
         guard let unexpectedKey = arguments.keys.sorted().first(where: { !allowedKeys.contains($0) }) else {
             return

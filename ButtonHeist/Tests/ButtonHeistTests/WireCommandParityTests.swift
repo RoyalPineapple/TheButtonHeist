@@ -21,6 +21,27 @@ final class WireCommandParityTests: XCTestCase {
         )
     }
 
+    func testDescriptorLookupFindsEquivalentNestedParameters() {
+        let direction = TheFence.Command.swipe.descriptor.parameter(named: .direction)
+
+        XCTAssertEqual(direction?.enumValues, fenceEnumValues(SwipeDirection.self))
+    }
+
+    func testDescriptorDefaultsOwnCommandFallbackValues() {
+        XCTAssertEqual(
+            TheFence.Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self),
+            .down
+        )
+        XCTAssertEqual(
+            TheFence.Command.scrollToEdge.descriptor.requiredDefaultEnumValue(for: .edge, as: ScrollEdge.self),
+            .top
+        )
+        XCTAssertEqual(
+            TheFence.Command.rotor.descriptor.requiredDefaultEnumValue(for: .direction, as: RotorDirection.self),
+            .next
+        )
+    }
+
     @ButtonHeistActor
     func testEveryPublicCommandRoutesThroughDescriptorOwnedDecoder() async throws {
         let (fence, _) = makeConnectedFence()

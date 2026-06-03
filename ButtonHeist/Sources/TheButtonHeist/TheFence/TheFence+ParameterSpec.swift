@@ -184,6 +184,13 @@ public extension FenceCommandDescriptor {
 }
 
 public extension FenceParameterSpec {
+    func parameters(named key: FenceParameterKey) -> [FenceParameterSpec] {
+        let childMatches = objectProperties.flatMap { $0.parameters(named: key) }
+            + arrayItemProperties.flatMap { $0.parameters(named: key) }
+        guard self.key == key.rawValue else { return childMatches }
+        return [self] + childMatches
+    }
+
     var objectPropertyKeys: Set<String> {
         Set(objectProperties.map(\.key))
     }

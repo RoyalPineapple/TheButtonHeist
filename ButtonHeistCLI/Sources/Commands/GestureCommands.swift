@@ -187,7 +187,7 @@ struct SwipeSubcommand: AsyncParsableCommand, GestureCLICommandContract {
     @Option(name: .customLong("to-y"), help: "Absolute end Y coordinate")
     var toY: Double?
 
-    @Option(name: .shortAndLong, help: "Swipe direction: up, down, left, right")
+    @Option(name: .shortAndLong, help: "Swipe direction: \(Self.catalogAllowedValuesDescription(for: .direction))")
     var direction: String?
 
     @Option(name: .long, help: "Duration in seconds (default 0.15)")
