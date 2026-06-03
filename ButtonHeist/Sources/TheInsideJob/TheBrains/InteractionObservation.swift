@@ -19,7 +19,7 @@ final class InteractionObservation {
     }
 
     func prepareBeforeState(timeout: Double? = 1.0) async -> PostActionObservation.BeforeState? {
-        guard let event = await stash.settledSemanticObservationEvent(
+        guard let event = await stash.observeSettledSemanticObservation(
             scope: .visible, after: nil, timeout: timeout
         ) else { return nil }
         return postActionObservation.captureSemanticState(from: event.observation)
@@ -30,7 +30,7 @@ final class InteractionObservation {
         after sequence: UInt64?,
         timeout: Double?
     ) async -> HeistSemanticObservation? {
-        let event = await stash.settledSemanticObservationEvent(
+        let event = await stash.observeSettledSemanticObservation(
             scope: scope,
             after: sequence,
             timeout: timeout ?? defaultSemanticObservationTimeout
@@ -69,15 +69,7 @@ final class InteractionObservation {
             )
         }
 
-        stash.recordSettledSemanticObservation(afterScreen)
-        guard let visibleEvent = stash.latestSettledSemanticObservationEvent else {
-            return InteractionObservationProjection.failedActionResult(
-                method: method, capture: before.capture,
-                message: "Could not produce post-action settled semantic observation",
-                payload: payload, subjectEvidence: subjectEvidence, settled: didSettle,
-                settleTimeMs: settleResult.outcome.timeMs
-            )
-        }
+        let visibleEvent = stash.semanticObservationStream.commitSettledObservation(afterScreen)
         let finalState = await semanticStateAfterDiscovery(after: visibleEvent.sequence)
             ?? postActionObservation.captureSemanticState(from: visibleEvent.observation)
         let finalClassification = ScreenClassifier.classify(
@@ -248,7 +240,7 @@ final class InteractionObservation {
     }
 
     private func semanticStateAfterDiscovery(after sequence: UInt64?) async -> PostActionObservation.BeforeState? {
-        guard let event = await stash.settledSemanticObservationEvent(
+        guard let event = await stash.observeSettledSemanticObservation(
             scope: .discovery,
             after: sequence,
             timeout: 2.0

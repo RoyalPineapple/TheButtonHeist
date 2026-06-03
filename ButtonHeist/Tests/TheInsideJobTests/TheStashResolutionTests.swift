@@ -110,11 +110,11 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testLatestSettledSemanticObservationAdvancesMonotonically() {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
-        bagman.recordSettledSemanticObservation(first)
+        bagman.semanticObservationStream.commitSettledObservation(first)
         let firstObservation = bagman.latestSettledSemanticObservation
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
-        bagman.recordSettledSemanticObservation(second)
+        bagman.semanticObservationStream.commitSettledObservation(second)
         let secondObservation = bagman.latestSettledSemanticObservation
 
         XCTAssertNotNil(firstObservation)
@@ -128,7 +128,7 @@ final class TheStashResolutionTests: XCTestCase {
         let first = Screen.makeForTests(elements: [
             (element(label: "Home", traits: .header), "home"),
         ])
-        bagman.recordSettledSemanticObservation(first)
+        bagman.semanticObservationStream.commitSettledObservation(first)
         let firstEvent = try XCTUnwrap(bagman.latestSettledSemanticObservationEvent)
 
         XCTAssertEqual(firstEvent.sequence, 1)
@@ -140,7 +140,7 @@ final class TheStashResolutionTests: XCTestCase {
             (element(label: "Home", traits: .header), "home"),
             (element(label: "Toast"), "toast"),
         ])
-        bagman.recordSettledSemanticObservation(second)
+        bagman.semanticObservationStream.commitSettledObservation(second)
         let secondEvent = try XCTUnwrap(bagman.latestSettledSemanticObservationEvent)
 
         XCTAssertEqual(secondEvent.sequence, 2)
@@ -156,7 +156,7 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testVisibleCommitMarksLatestSettledObservationDirtyWithoutReplacingIt() {
         let settled = Screen.makeForTests(elements: [(element(label: "Settled"), "settled")])
-        bagman.recordSettledSemanticObservation(settled)
+        bagman.semanticObservationStream.commitSettledObservation(settled)
         let sequence = bagman.latestSettledSemanticObservation?.sequence
 
         let visibleRefresh = Screen.makeForTests(elements: [(element(label: "Refresh"), "refresh")])
@@ -168,15 +168,15 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testSettledSemanticObservationWaiterCompletesOnLaterObservation() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
-        bagman.recordSettledSemanticObservation(first)
+        bagman.semanticObservationStream.commitSettledObservation(first)
         let firstSequence = bagman.latestSettledSemanticObservation?.sequence
 
         let waiter = Task {
-            await bagman.settledSemanticObservationEvent(scope: .visible, after: firstSequence, timeout: 1)
+            await bagman.observeSettledSemanticObservation(scope: .visible, after: firstSequence, timeout: 1)
         }
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
-        bagman.recordSettledSemanticObservation(second)
+        bagman.semanticObservationStream.commitSettledObservation(second)
 
         let observation = await waiter.value
         XCTAssertEqual(observation?.sequence, 2)
@@ -185,10 +185,10 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testUnbaselinedSettledObservationWaiterRequiresNextObservation() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
-        bagman.recordSettledSemanticObservation(first)
+        bagman.semanticObservationStream.commitSettledObservation(first)
 
         let waiter = Task { @MainActor in
-            await bagman.settledSemanticObservationEvent(scope: .visible, after: nil, timeout: 1)
+            await bagman.observeSettledSemanticObservation(scope: .visible, after: nil, timeout: 1)
         }
 
         for _ in 0..<10 where bagman.semanticObservationStream.settledWaiterCount == 0 {
@@ -197,7 +197,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
-        bagman.recordSettledSemanticObservation(second)
+        bagman.semanticObservationStream.commitSettledObservation(second)
 
         let observation = await waiter.value
         XCTAssertEqual(observation?.sequence, 2)
@@ -206,13 +206,13 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testDirtySettledObservationIsNotReturnedAsCurrentTruth() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
-        bagman.recordSettledSemanticObservation(first)
+        bagman.semanticObservationStream.commitSettledObservation(first)
 
         let visibleRefresh = Screen.makeForTests(elements: [(element(label: "Refresh"), "refresh")])
         bagman.commitVisibleRefresh(visibleRefresh)
 
         let waiter = Task { @MainActor in
-            await bagman.settledSemanticObservationEvent(scope: .visible, after: nil, timeout: 1)
+            await bagman.observeSettledSemanticObservation(scope: .visible, after: nil, timeout: 1)
         }
 
         for _ in 0..<10 where bagman.semanticObservationStream.settledWaiterCount == 0 {
@@ -221,7 +221,7 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
-        bagman.recordSettledSemanticObservation(second)
+        bagman.semanticObservationStream.commitSettledObservation(second)
 
         let observation = await waiter.value
         XCTAssertEqual(observation?.sequence, 2)
@@ -230,11 +230,11 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testDiscoveryWaiterIgnoresVisibleObservation() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
-        bagman.recordSettledSemanticObservation(first)
+        bagman.semanticObservationStream.commitSettledObservation(first)
         let firstSequence = bagman.latestSettledSemanticObservation?.sequence
 
         let waiter = Task { @MainActor in
-            await bagman.settledSemanticObservationEvent(
+            await bagman.observeSettledSemanticObservation(
                 scope: .discovery,
                 after: firstSequence,
                 timeout: nil
@@ -247,12 +247,12 @@ final class TheStashResolutionTests: XCTestCase {
         XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let visible = Screen.makeForTests(elements: [(element(label: "Visible"), "visible")])
-        bagman.recordSettledSemanticObservation(visible, scope: .visible)
+        bagman.semanticObservationStream.commitSettledObservation(visible, scope: .visible)
         XCTAssertEqual(bagman.latestSettledSemanticObservation?.sequence, 2)
         XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let discovery = Screen.makeForTests(elements: [(element(label: "Discovery"), "discovery")])
-        bagman.recordSettledSemanticObservation(discovery, scope: .discovery)
+        bagman.semanticObservationStream.commitSettledObservation(discovery, scope: .discovery)
 
         let observation = await waiter.value
         XCTAssertEqual(observation?.scope, .discovery)
@@ -278,7 +278,7 @@ final class TheStashResolutionTests: XCTestCase {
             firstResponderHeistId: nil,
             scrollableContainerViews: [:]
         )
-        bagman.recordSettledSemanticObservation(screen, scope: .discovery)
+        bagman.semanticObservationStream.commitSettledObservation(screen, scope: .discovery)
 
         let publicInterface = bagman.interface()
         let semanticInterface = bagman.semanticInterface()
@@ -295,7 +295,7 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testTimeoutZeroTurnsObservationCycleBeforeReturningCleanLatest() async {
         let first = Screen.makeForTests(elements: [(element(label: "First"), "first")])
-        bagman.recordSettledSemanticObservation(first, scope: .discovery)
+        bagman.semanticObservationStream.commitSettledObservation(first, scope: .discovery)
         let firstSequence = bagman.latestSettledSemanticObservation?.sequence
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
@@ -305,7 +305,7 @@ final class TheStashResolutionTests: XCTestCase {
             bagman?.commitExploredScreen(second)
         }
 
-        let observation = await bagman.settledSemanticObservationEvent(
+        let observation = await bagman.observeSettledSemanticObservation(
             scope: .discovery,
             after: nil,
             timeout: 0
@@ -317,7 +317,7 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testTimeoutZeroDoesNotInvokeDiscoveryWithoutPassiveObserver() async {
-        let observation = await bagman.settledSemanticObservationEvent(
+        let observation = await bagman.observeSettledSemanticObservation(
             scope: .discovery,
             after: nil,
             timeout: 0
@@ -328,7 +328,7 @@ final class TheStashResolutionTests: XCTestCase {
 
     func testStopPassiveSemanticObservationCancelsWaiters() async {
         let waiter = Task {
-            await bagman.settledSemanticObservationEvent(scope: .visible, after: nil, timeout: 10)
+            await bagman.observeSettledSemanticObservation(scope: .visible, after: nil, timeout: 10)
         }
 
         for _ in 0..<20 where bagman.semanticObservationStream.settledWaiterCount == 0 {
