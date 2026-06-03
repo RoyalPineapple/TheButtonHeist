@@ -79,10 +79,6 @@ extension TheGetaway {
                 break
             }
 
-        case .rateLimited(_, let respond):
-            let message = "Rate limited: max \(SimpleSocketServer.maxMessagesPerSecond) messages per second"
-            sendMessage(.error(ServerError(kind: .general, message: message)), respond: respond)
-
         case .sendFailed(let clientId, let failure):
             let deliveryResult = DeliveryResult(clientId: clientId, sendFailure: failure)
             insideJobLogger.error("\(deliveryResult.description)")

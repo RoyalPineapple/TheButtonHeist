@@ -8,7 +8,6 @@ enum TransportEvent: Sendable {
     case clientConnected(clientId: Int, remoteAddress: String?)
     case clientDisconnected(clientId: Int)
     case dataReceived(clientId: Int, data: Data, respond: @Sendable (Data) -> Void)
-    case rateLimited(clientId: Int, respond: @Sendable (Data) -> Void)
     case sendFailed(clientId: Int, failure: ServerSendFailure)
 }
 

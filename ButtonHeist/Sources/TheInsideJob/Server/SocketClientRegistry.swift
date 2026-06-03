@@ -3,19 +3,12 @@ import Network
 
 /// Actor-owned client table for `SimpleSocketServer`.
 ///
-/// The server decides transport policy; this registry owns per-client mutable
-/// facts: identity allocation, send-buffer accounting, and rate-limit windows.
+/// The server decides transport policy; this registry owns per-client socket
+/// facts: identity allocation and send-buffer accounting.
 struct SocketClientRegistry {
     struct Client {
         let connection: NWConnection
-        var rateLimiter: SocketRateLimiter
         var sendBuffer: SocketSendBuffer
-    }
-
-    enum InboundMessageDecision: Equatable, Sendable {
-        case accepted
-        case rateLimited(shouldNotify: Bool)
-        case missingClient
     }
 
     enum SendReservation {
@@ -34,7 +27,6 @@ struct SocketClientRegistry {
         let clientId = nextClientId
         clients[nextClientId] = Client(
             connection: connection,
-            rateLimiter: SocketRateLimiter(),
             sendBuffer: SocketSendBuffer()
         )
         return clientId
@@ -67,16 +59,5 @@ struct SocketClientRegistry {
         guard var client = clients[clientId] else { return }
         client.sendBuffer.complete(byteCount: byteCount)
         clients[clientId] = client
-    }
-
-    mutating func recordInboundMessage(clientId: Int, at now: Date = Date()) -> InboundMessageDecision {
-        guard var client = clients[clientId] else { return .missingClient }
-        if client.rateLimiter.recordMessage(at: now) {
-            let shouldNotify = client.rateLimiter.markNotifiedIfNeeded()
-            clients[clientId] = client
-            return .rateLimited(shouldNotify: shouldNotify)
-        }
-        clients[clientId] = client
-        return .accepted
     }
 }

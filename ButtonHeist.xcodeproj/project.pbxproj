@@ -432,7 +432,7 @@
 		D6F25E9E22DAE20DEDF76D88 /* DeviceConnection+Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43374284CB68C9068DAD0105 /* DeviceConnection+Messages.swift */; };
 		D73AF669F2F4C132C0391CAF /* TheStash+LiveGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */; };
 		D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */; };
-		D81F66AD0CE80FB559C002B6 /* SocketRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B1C879F7F60355AD00033E /* SocketRateLimiter.swift */; };
+		D81F66AD0CE80FB559C002B6 /* MessageRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B1C879F7F60355AD00033E /* MessageRateLimiter.swift */; };
 		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		D8AA40696432289C348E49A1 /* GestureDirections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CFBB40A1FC23933CF59662 /* GestureDirections.swift */; };
@@ -769,7 +769,7 @@
 		30300EF11850AA2835A7ABB7 /* DeviceConnectionEventStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionEventStream.swift; sourceTree = "<group>"; };
 		30350583523C830C2C298AE7 /* ConnectionResultWaitersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionResultWaitersTests.swift; sourceTree = "<group>"; };
 		309BB45F850067AAEA4E20C3 /* TheFence+Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Connection.swift"; sourceTree = "<group>"; };
-		30B1C879F7F60355AD00033E /* SocketRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketRateLimiter.swift; sourceTree = "<group>"; };
+		30B1C879F7F60355AD00033E /* MessageRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRateLimiter.swift; sourceTree = "<group>"; };
 		30CFBB40A1FC23933CF59662 /* GestureDirections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureDirections.swift; sourceTree = "<group>"; };
 		31A8AB866CA1F38E0AC64EB2 /* AccessibilityPredicateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPredicateTests.swift; sourceTree = "<group>"; };
 		31CA8C90B179D05A2C19D5B2 /* TheFence+PlaybackDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+PlaybackDiagnostics.swift"; sourceTree = "<group>"; };
@@ -1604,7 +1604,7 @@
 				BEBDFC5B6B8AF85D9ECA7648 /* SocketClientRegistry.swift */,
 				0AB999A39F6788A19B1F2865 /* SocketConnectionAdmission.swift */,
 				DFCA981B7E21FF878CF51159 /* SocketListenerStartup.swift */,
-				30B1C879F7F60355AD00033E /* SocketRateLimiter.swift */,
+				30B1C879F7F60355AD00033E /* MessageRateLimiter.swift */,
 				4F3A5E72B794AE5FF5E0C245 /* SocketReceiveFramer.swift */,
 				E8078DED719BB15C5C04B462 /* SocketSendBuffer.swift */,
 				EA19ED5851B061834559D109 /* TheMuscle.swift */,
@@ -2467,7 +2467,7 @@
 				9E99BF1161B91DBAB5B1D76B /* SocketClientRegistry.swift in Sources */,
 				0E77F4DD95376FF2835B9817 /* SocketConnectionAdmission.swift in Sources */,
 				24CD2554C4DDD8C0167631C0 /* SocketListenerStartup.swift in Sources */,
-				D81F66AD0CE80FB559C002B6 /* SocketRateLimiter.swift in Sources */,
+				D81F66AD0CE80FB559C002B6 /* MessageRateLimiter.swift in Sources */,
 				C7E2771CC9F65E736304C027 /* SocketReceiveFramer.swift in Sources */,
 				A35FCD03860CA3E9A8DA641F /* SocketSendBuffer.swift in Sources */,
 				9CFA954B8743AFE696EA9778 /* TLSCertificateFacts.swift in Sources */,

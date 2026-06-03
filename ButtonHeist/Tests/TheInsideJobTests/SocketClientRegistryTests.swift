@@ -31,32 +31,6 @@ final class SocketClientRegistryTests: XCTestCase {
         XCTAssertEqual(maxBytes, SocketSendBuffer.defaultMaxPendingBytes)
     }
 
-    func testRegistryOwnsRateLimitWindowAndNotification() {
-        var registry = SocketClientRegistry()
-        let clientId = registry.insert(connection: makeConnection())
-        let now = Date()
-
-        for _ in 0..<SocketRateLimiter.defaultMaxMessagesPerSecond {
-            XCTAssertEqual(
-                registry.recordInboundMessage(clientId: clientId, at: now),
-                .accepted
-            )
-        }
-
-        XCTAssertEqual(
-            registry.recordInboundMessage(clientId: clientId, at: now),
-            .rateLimited(shouldNotify: true)
-        )
-        XCTAssertEqual(
-            registry.recordInboundMessage(clientId: clientId, at: now),
-            .rateLimited(shouldNotify: false)
-        )
-        XCTAssertEqual(
-            registry.recordInboundMessage(clientId: clientId, at: now.addingTimeInterval(1.1)),
-            .accepted
-        )
-    }
-
     private func makeConnection() -> NWConnection {
         NWConnection(
             host: .ipv6(.loopback),

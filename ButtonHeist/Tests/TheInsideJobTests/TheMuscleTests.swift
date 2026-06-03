@@ -216,6 +216,167 @@ final class TheMuscleTests: XCTestCase {
 
     // MARK: - Auth Flow Tests
 
+    func testMessageRateAdmissionReturnsGeneralErrorForFirstOverLimitFrame() throws {
+        var admission = TheMuscleAdmission(
+            tokenSource: .generated("good-token"),
+            maxFailedAttempts: 2,
+            lockoutDuration: 30
+        )
+        let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
+        let now = Date()
+
+        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
+            _ = admission.admitClientMessage(
+                1,
+                data: data,
+                respond: { _ in },
+                uiApprovalUnavailableDiagnostic: nil,
+                at: now
+            )
+        }
+
+        guard case .handled(let effect) = admission.admitClientMessage(
+            1,
+            data: data,
+            respond: { _ in },
+            uiApprovalUnavailableDiagnostic: nil,
+            at: now
+        ) else {
+            return XCTFail("Expected over-limit frame to be handled by admission")
+        }
+
+        XCTAssertNil(effect.delayedDisconnectClientId)
+        XCTAssertEqual(effect.outputs.count, 1)
+        guard case .response(.error(let error), let requestId, _) = effect.outputs[0] else {
+            return XCTFail("Expected rate-limit response, got \(effect.outputs[0])")
+        }
+        XCTAssertNil(requestId)
+        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.message, "Rate limited: max 30 messages per second")
+    }
+
+    func testMessageRateAdmissionNotifiesOnlyOncePerWindow() throws {
+        var admission = TheMuscleAdmission(
+            tokenSource: .generated("good-token"),
+            maxFailedAttempts: 2,
+            lockoutDuration: 30
+        )
+        let data = try JSONEncoder().encode(RequestEnvelope(message: .ping))
+        let now = Date()
+
+        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
+            _ = admission.admitClientMessage(
+                1,
+                data: data,
+                respond: { _ in },
+                uiApprovalUnavailableDiagnostic: nil,
+                at: now
+            )
+        }
+
+        guard case .handled(let firstLimit) = admission.admitClientMessage(
+            1,
+            data: data,
+            respond: { _ in },
+            uiApprovalUnavailableDiagnostic: nil,
+            at: now
+        ) else {
+            return XCTFail("Expected first over-limit frame to be handled")
+        }
+        XCTAssertEqual(firstLimit.outputs.count, 1)
+
+        guard case .handled(let repeatedLimit) = admission.admitClientMessage(
+            1,
+            data: data,
+            respond: { _ in },
+            uiApprovalUnavailableDiagnostic: nil,
+            at: now
+        ) else {
+            return XCTFail("Expected repeated over-limit frame to be handled")
+        }
+        XCTAssertTrue(repeatedLimit.outputs.isEmpty)
+
+        guard case .handled(let nextWindow) = admission.admitClientMessage(
+            1,
+            data: data,
+            respond: { _ in },
+            uiApprovalUnavailableDiagnostic: nil,
+            at: now.addingTimeInterval(1.1)
+        ) else {
+            return XCTFail("Expected next-window frame to continue through normal admission")
+        }
+        XCTAssertEqual(nextWindow.outputs.count, 1)
+        guard case .response(.error(let error), _, _) = nextWindow.outputs[0] else {
+            return XCTFail("Expected normal pre-auth rejection after window reset")
+        }
+        XCTAssertEqual(error.kind, .authFailure)
+        XCTAssertEqual(error.message, "Authentication required before ping.")
+    }
+
+    func testMessageRateAdmissionLimitsAuthenticatedMessagesBeforeDispatch() throws {
+        var admission = TheMuscleAdmission(
+            tokenSource: .generated("good-token"),
+            maxFailedAttempts: 2,
+            lockoutDuration: 30
+        )
+        let respond: @Sendable (Data) -> Void = { _ in }
+        let now = Date()
+
+        admission.registerClientAddress(1, address: "127.0.0.1")
+        let helloData = try JSONEncoder().encode(RequestEnvelope(message: .clientHello))
+        guard case .handled = admission.admitClientMessage(
+            1,
+            data: helloData,
+            respond: respond,
+            uiApprovalUnavailableDiagnostic: nil,
+            at: now
+        ) else {
+            return XCTFail("Expected client hello to be handled")
+        }
+
+        guard case .authenticate(let authentication) = admission.admitClientMessage(
+            1,
+            data: try encodeAuth(token: "good-token"),
+            respond: respond,
+            uiApprovalUnavailableDiagnostic: nil,
+            at: now
+        ) else {
+            return XCTFail("Expected valid token to request authentication completion")
+        }
+        _ = admission.completeAuthentication(authentication)
+
+        let pingData = try JSONEncoder().encode(RequestEnvelope(message: .ping))
+        let nextWindow = now.addingTimeInterval(1.1)
+        for _ in 0..<MessageRateLimiter.defaultMaxMessagesPerSecond {
+            guard case .admitted = admission.admitClientMessage(
+                1,
+                data: pingData,
+                respond: respond,
+                uiApprovalUnavailableDiagnostic: nil,
+                at: nextWindow
+            ) else {
+                return XCTFail("Expected authenticated message to reach dispatch before rate limit")
+            }
+        }
+
+        guard case .handled(let effect) = admission.admitClientMessage(
+            1,
+            data: pingData,
+            respond: respond,
+            uiApprovalUnavailableDiagnostic: nil,
+            at: nextWindow
+        ) else {
+            return XCTFail("Expected over-limit authenticated message to be handled by admission")
+        }
+        XCTAssertEqual(effect.outputs.count, 1)
+        guard case .response(.error(let error), let requestId, _) = effect.outputs[0] else {
+            return XCTFail("Expected rate-limit response, got \(effect.outputs[0])")
+        }
+        XCTAssertNil(requestId)
+        XCTAssertEqual(error.kind, .general)
+        XCTAssertEqual(error.message, "Rate limited: max 30 messages per second")
+    }
+
     func testValidTokenAuthenticates() async throws {
         let (respond, responses) = collectResponses()
         try await authenticate(clientId: 1, token: "test-token", respond: respond)

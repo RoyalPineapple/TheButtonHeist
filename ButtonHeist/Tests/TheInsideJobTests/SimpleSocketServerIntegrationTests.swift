@@ -190,6 +190,52 @@ final class SimpleSocketServerIntegrationTests: XCTestCase {
         connection.cancel()
     }
 
+    func testTransportDeliversFramesBeyondMessageRateLimit() async throws {
+        let capturedFrames = OSAllocatedUnfairLock<[String]>(initialState: [])
+        let clientConnected = expectation(description: "client connected")
+        let dataReceived = expectation(description: "data received")
+        dataReceived.expectedFulfillmentCount = MessageRateLimiter.defaultMaxMessagesPerSecond + 1
+
+        let callbacks = SocketServerCallbacks(
+            onClientConnected: { _, _ in
+                clientConnected.fulfill()
+            },
+            onDataReceived: { _, data, _ in
+                let frame = String(data: data, encoding: .utf8) ?? ""
+                capturedFrames.withLock { $0.append(frame) }
+                dataReceived.fulfill()
+            }
+        )
+        let port = try await server.startPlaintextForTests(port: 0, bindToLoopback: true, callbacks: callbacks)
+
+        let connection = NWConnection(
+            host: .ipv6(.loopback),
+            port: NWEndpoint.Port(rawValue: port)!,
+            using: .tcp
+        )
+        let clientReady = expectation(description: "client ready")
+        connection.stateUpdateHandler = { state in
+            if case .ready = state { clientReady.fulfill() }
+        }
+        connection.start(queue: .global())
+
+        await fulfillment(of: [clientReady, clientConnected], timeout: 5.0)
+
+        let payload = (0...MessageRateLimiter.defaultMaxMessagesPerSecond)
+            .map { "raw-frame-\($0)\n" }
+            .joined()
+        connection.send(content: Data(payload.utf8), completion: .contentProcessed { error in
+            XCTAssertNil(error)
+        })
+
+        await fulfillment(of: [dataReceived], timeout: 5.0)
+        XCTAssertEqual(capturedFrames.withLock { $0.count }, MessageRateLimiter.defaultMaxMessagesPerSecond + 1)
+        XCTAssertEqual(capturedFrames.withLock { $0.first }, "raw-frame-0")
+        XCTAssertEqual(capturedFrames.withLock { $0.last }, "raw-frame-\(MessageRateLimiter.defaultMaxMessagesPerSecond)")
+
+        connection.cancel()
+    }
+
     func testDisconnectRemovesClient() async throws {
         let capturedClientId = OSAllocatedUnfairLock<Int?>(initialState: nil)
         let clientConnected = expectation(description: "client connected")
