@@ -22,6 +22,7 @@ import TheScore
     var accessibilityTrace: AccessibilityTrace?
     var settled: Bool?
     var settleTimeMs: Int?
+    var subjectEvidence: ActionSubjectEvidence?
 
     init(method: ActionMethod) {
         self.method = method
@@ -41,7 +42,8 @@ import TheScore
             payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
-            settleTimeMs: settleTimeMs
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence
         )
     }
 
@@ -54,7 +56,8 @@ import TheScore
             payload: payload,
             accessibilityTrace: accessibilityTrace,
             settled: settled,
-            settleTimeMs: settleTimeMs
+            settleTimeMs: settleTimeMs,
+            subjectEvidence: subjectEvidence
         )
     }
 }

@@ -1,20 +1,7 @@
+import os.log
 import TheScore
 
-private extension FenceResponse {
-    struct HeistRecordingReceipt {
-        let actionResult: ActionResult
-        let expectation: ExpectationResult?
-
-        var shouldRecord: Bool {
-            actionResult.success && expectation?.met != false
-        }
-    }
-
-    var heistRecordingReceipt: HeistRecordingReceipt? {
-        guard case .action(_, let result, let expectation) = self else { return nil }
-        return HeistRecordingReceipt(actionResult: result, expectation: expectation)
-    }
-}
+private let heistRecordingLogger = Logger(subsystem: "com.buttonheist.fence", category: "heist")
 
 extension TheFence {
     func recordHeistStep(
@@ -23,11 +10,29 @@ extension TheFence {
         validatedResponse: FenceResponse
     ) {
         guard playback.isIdle else { return }
-        guard let finalReceipt = validatedResponse.heistRecordingReceipt, finalReceipt.shouldRecord else { return }
-        heistStore.recordHeistStep(
-            request,
-            actionResult: finalReceipt.actionResult,
-            expectation: finalReceipt.expectation
-        )
+        guard heistStore.isRecordingHeist else { return }
+
+        let steps: [HeistStep]
+        do {
+            steps = try HeistRecordingComposition(
+                request: request,
+                dispatchedResponse: dispatchedResponse,
+                validatedResponse: validatedResponse
+            ).steps()
+        } catch {
+            heistRecordingLogger.error(
+                "Skipped heist step for \(request.command.rawValue): composition failed: \(String(describing: error))"
+            )
+            return
+        }
+
+        guard !steps.isEmpty else { return }
+        do {
+            try heistStore.appendRecordingSteps(steps)
+        } catch {
+            heistRecordingLogger.error(
+                "Failed to encode heist step for \(request.command.rawValue): \(error.localizedDescription)"
+            )
+        }
     }
 }

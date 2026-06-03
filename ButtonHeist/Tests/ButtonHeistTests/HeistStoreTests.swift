@@ -151,7 +151,12 @@ final class HeistStoreTests: XCTestCase {
                 "target": targetArgumentValue(label: "Save"),
                 "expect": .object(["type": .string("screen_changed")]),
                 "timeout": .double(2.5),
-            ]
+            ],
+            expectation: ExpectationResult(
+                met: true,
+                predicate: .changed(.screen()),
+                actual: "screen changed"
+            )
         )
 
         let heist = try heistStore.finishRecording()
@@ -161,6 +166,74 @@ final class HeistStoreTests: XCTestCase {
                 expectation: WaitStep(predicate: .changed(.screen()), timeout: 2.5)
             ),
         ])
+    }
+
+    @ButtonHeistActor
+    func testActionExpectationWaitRecordsOriginalActionIntent() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "validated-wait", app: "com.example.app")
+
+        let expectation = AccessibilityPredicate.state(.absent(ElementPredicate(label: "Delete")))
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: [
+                "target": targetArgumentValue(label: "Delete"),
+                "expect": .object([
+                    "type": .string("absent"),
+                    "element": targetArgumentValue(label: "Delete"),
+                ]),
+            ],
+            dispatchedResponse: .action(
+                command: .activate,
+                result: ActionResult(success: true, method: .activate)
+            ),
+            validatedResponse: .action(
+                command: .wait,
+                result: ActionResult(success: true, method: .wait),
+                expectation: ExpectationResult(met: true, predicate: expectation, actual: "absent")
+            )
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            try activateStep(
+                label: "Delete",
+                expectation: WaitStep(predicate: expectation, timeout: 10)
+            ),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testExplicitExpectationWithoutPassedValidationRecordsNothing() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "missing-expectation-proof", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: [
+                "target": targetArgumentValue(label: "Delete"),
+                "expect": .object([
+                    "type": .string("absent"),
+                    "element": targetArgumentValue(label: "Delete"),
+                ]),
+            ],
+            dispatchedResponse: .action(
+                command: .activate,
+                result: ActionResult(success: true, method: .activate)
+            ),
+            validatedResponse: .action(
+                command: .activate,
+                result: ActionResult(success: true, method: .activate)
+            )
+        )
+
+        XCTAssertThrowsError(try heistStore.finishRecording()) { error in
+            guard case StorageError.heistRecording(.noValidSteps) = error else {
+                return XCTFail("Expected noValidSteps, got \(error)")
+            }
+        }
     }
 
     @ButtonHeistActor
@@ -180,6 +253,243 @@ final class HeistStoreTests: XCTestCase {
         let heist = try heistStore.finishRecording()
         XCTAssertEqual(heist.steps, [
             try activateStep(label: "Save"),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testRecordingObservationCommandsEmitNoStepsAndKeepRecordingActive() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scratchpad-reads", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .getInterface,
+            args: [:],
+            dispatchedResponse: .interface(Interface(timestamp: Date(), tree: []))
+        )
+        XCTAssertTrue(heistStore.isRecordingHeist)
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .getInterface,
+            args: [:],
+            dispatchedResponse: .interface(Interface(timestamp: Date(), tree: []))
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [try activateStep(label: "Delete")])
+    }
+
+    @ButtonHeistActor
+    func testExplicitWaitRecordsCheckpoint() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "explicit-wait", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .wait,
+            args: [
+                "predicate": presentPredicateArgumentValue(label: "Ready"),
+                "timeout": .int(4),
+            ],
+            actionResult: ActionResult(success: true, method: .wait)
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            .wait(WaitStep(predicate: .state(.present(ElementPredicate(label: "Ready"))), timeout: 4)),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testScrollToVisibleIsScratchpadViewportSetupDuringRecording() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "scroll-setup", app: "com.example.app")
+
+        try recordHeistStep(
+            heistStore,
+            command: .scrollToVisible,
+            args: ["target": targetArgumentValue(label: "Delete")]
+        )
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")]
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [try activateStep(label: "Delete")])
+    }
+
+    @ButtonHeistActor
+    func testRecordingUsesMinimumMatcherFromSettledBeforeState() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "minimum-target", app: "com.example.app")
+
+        let label = makeReceiptTestElement(label: "Delete", traits: [.staticText])
+        let button = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let actionResult = semanticActionResult(
+            method: .activate,
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Delete"), ordinal: 1),
+            subject: button,
+            before: [label, button],
+            after: [label, button]
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete", ordinal: 1)],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            try activateStep(label: "Delete", traits: [.button]),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testUnsettledTraceDoesNotGenerateMinimumMatcherOrExpectation() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "unsettled-trace", app: "com.example.app")
+
+        let label = makeReceiptTestElement(label: "Delete", traits: [.staticText])
+        let button = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let actionResult = semanticActionResult(
+            method: .activate,
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Delete"), ordinal: 1),
+            subject: button,
+            before: [label, button],
+            after: [label],
+            settled: false
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete", ordinal: 1)],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            .action(try ActionStep(command: .activate(
+                .predicate(ElementPredicate(label: "Delete"), ordinal: 1)
+            ))),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testRecordingInfersTargetDisappearedExpectation() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "target-disappeared", app: "com.example.app")
+
+        let delete = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let actionResult = semanticActionResult(
+            method: .activate,
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Delete")),
+            subject: delete,
+            before: [delete],
+            after: []
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .activate,
+            args: ["target": targetArgumentValue(label: "Delete")],
+            actionResult: actionResult
+        )
+
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete"))
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            try activateStep(
+                label: "Delete",
+                expectation: WaitStep(predicate: .state(.absentTarget(target)), timeout: 10)
+            ),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testRecordingInfersCurrentTextValueExpectation() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "text-value", app: "com.example.app")
+
+        let before = makeReceiptTestElement(label: "Search", value: "", traits: [.searchField])
+        let after = makeReceiptTestElement(label: "Search", value: "milk", traits: [.searchField])
+        let actionResult = semanticActionResult(
+            method: .typeText,
+            source: .textInputTarget,
+            target: .predicate(ElementPredicate(label: "Search")),
+            subject: before,
+            before: [before],
+            after: [after],
+            payload: .value("milk")
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .typeText,
+            args: [
+                "target": targetArgumentValue(label: "Search"),
+                "text": .string("milk"),
+            ],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            .action(try ActionStep(
+                command: .typeText(TypeTextTarget(
+                    text: "milk",
+                    elementTarget: .predicate(ElementPredicate(label: "Search"))
+                )),
+                expectation: WaitStep(
+                    predicate: .state(.present(ElementPredicate(label: "Search", value: "milk"))),
+                    timeout: 10
+                )
+            )),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testCoordinateTapRecordingDoesNotInferSemanticIntent() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "coordinate-tap", app: "com.example.app")
+
+        let delete = makeReceiptTestElement(label: "Delete", traits: [.button])
+        let trace = makeReceiptTestTrace(
+            before: makeReceiptTestInterface([delete]),
+            after: makeReceiptTestInterface([])
+        )
+        let actionResult = ActionResult(
+            success: true,
+            method: .syntheticTap,
+            accessibilityTrace: trace,
+            settled: true
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .oneFingerTap,
+            args: ["point": .object(["x": .double(20), "y": .double(30)])],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.steps, [
+            .action(try ActionStep(command: .oneFingerTap(TapTarget(
+                selection: .coordinate(ScreenPoint(x: 20, y: 30))
+            )))),
         ])
     }
 
@@ -216,23 +526,89 @@ private func activateStep(
     ))
 }
 
+private func presentPredicateArgumentValue(label: String) -> HeistValue {
+    .object([
+        "type": .string("present"),
+        "element": targetArgumentValue(label: label),
+    ])
+}
+
 @ButtonHeistActor
 private func recordHeistStep(
     _ heistStore: HeistStore,
     command: TheFence.Command,
     args: [String: HeistValue],
     actionResult: ActionResult? = nil,
-    expectation: ExpectationResult? = nil
+    expectation: ExpectationResult? = nil,
+    dispatchedResponse: FenceResponse? = nil,
+    validatedResponse: FenceResponse? = nil
 ) throws {
     var request = args
     request["requestId"] = .string("test")
-    let parsed = try TheFence(configuration: .init()).parseRequest(
+    let fence = TheFence(configuration: .init())
+    let parsed = try fence.parseRequest(
         command: command,
         arguments: TheFence.CommandArgumentEnvelope(values: request)
     )
-    heistStore.recordHeistStep(
-        parsed,
-        actionResult: actionResult,
+    let dispatched = dispatchedResponse ?? defaultRecordingResponse(
+        command: command,
+        result: actionResult
+    )
+    let validated = validatedResponse ?? FenceResponse.action(
+        command: command,
+        result: actionResult ?? defaultActionResult(for: command),
         expectation: expectation
+    )
+    let steps = try HeistRecordingComposition(
+        request: parsed,
+        dispatchedResponse: dispatched,
+        validatedResponse: validated
+    ).steps()
+    try heistStore.appendRecordingSteps(steps)
+}
+
+private func defaultRecordingResponse(
+    command: TheFence.Command,
+    result: ActionResult?
+) -> FenceResponse {
+    .action(command: command, result: result ?? defaultActionResult(for: command))
+}
+
+private func defaultActionResult(for command: TheFence.Command) -> ActionResult {
+    switch command {
+    case .wait:
+        return ActionResult(success: true, method: .wait)
+    case .scrollToVisible:
+        return ActionResult(success: true, method: .scrollToVisible)
+    default:
+        return ActionResult(success: true, method: .activate)
+    }
+}
+
+private func semanticActionResult(
+    method: ActionMethod,
+    source: ActionSubjectEvidence.Source,
+    target: ElementTarget,
+    subject: HeistElement,
+    before: [HeistElement],
+    after: [HeistElement],
+    payload: ResultPayload? = nil,
+    settled: Bool = true
+) -> ActionResult {
+    ActionResult(
+        success: true,
+        method: method,
+        payload: payload,
+        accessibilityTrace: makeReceiptTestTrace(
+            before: makeReceiptTestInterface(before),
+            after: makeReceiptTestInterface(after)
+        ),
+        settled: settled,
+        subjectEvidence: ActionSubjectEvidence(
+            source: source,
+            target: target,
+            element: subject,
+            settledObservationSequence: 1
+        )
     )
 }

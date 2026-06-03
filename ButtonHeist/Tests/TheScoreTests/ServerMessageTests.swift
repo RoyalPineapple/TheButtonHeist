@@ -258,6 +258,73 @@ final class ServerMessageTests: XCTestCase {
         XCTAssertEqual(payload["data"] as? String, "Hi")
     }
 
+    func testActionResultSubjectEvidenceWireShape() throws {
+        let target = ElementTarget.predicate(ElementPredicate(label: "Delete", traits: [.button]))
+        let element = HeistElement(
+            description: "Delete",
+            label: "Delete",
+            value: nil,
+            identifier: "delete_button",
+            traits: [.button],
+            frameX: 10,
+            frameY: 20,
+            frameWidth: 100,
+            frameHeight: 44,
+            actions: [.activate]
+        )
+        let evidence = ActionSubjectEvidence(
+            source: .resolvedSemanticTarget,
+            target: target,
+            element: element,
+            settledObservationSequence: 12
+        )
+        let result = ActionResult(success: true, method: .activate, subjectEvidence: evidence)
+
+        let data = try JSONEncoder().encode(result)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let subjectEvidence = try XCTUnwrap(json["subjectEvidence"] as? [String: Any])
+        XCTAssertEqual(subjectEvidence["source"] as? String, "resolvedSemanticTarget")
+        XCTAssertEqual(subjectEvidence["phase"] as? String, "resolvedBeforeDispatch")
+        XCTAssertEqual(subjectEvidence["settledObservationSequence"] as? Int, 12)
+        let encodedTarget = try XCTUnwrap(subjectEvidence["target"] as? [String: Any])
+        XCTAssertEqual(encodedTarget["label"] as? String, "Delete")
+        XCTAssertEqual(encodedTarget["traits"] as? [String], ["button"])
+        let encodedElement = try XCTUnwrap(subjectEvidence["element"] as? [String: Any])
+        XCTAssertEqual(encodedElement["identifier"] as? String, "delete_button")
+        XCTAssertNil(encodedElement["heistId"], "subject evidence must not expose runtime ids")
+
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
+        XCTAssertEqual(decoded.subjectEvidence, evidence)
+    }
+
+    func testActionSubjectEvidenceRejectsUnknownFields() throws {
+        let json = Data("""
+        {
+          "source": "resolvedSemanticTarget",
+          "phase": "resolvedBeforeDispatch",
+          "target": { "label": "Delete" },
+          "element": {
+            "description": "Delete",
+            "label": "Delete",
+            "traits": ["button"],
+            "frameX": 0,
+            "frameY": 0,
+            "frameWidth": 100,
+            "frameHeight": 44,
+            "activationPointX": 50,
+            "activationPointY": 22,
+            "respondsToUserInteraction": true,
+            "actions": ["activate"]
+          },
+          "heistId": "old-runtime-id"
+        }
+        """.utf8)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(ActionSubjectEvidence.self, from: json)) { error in
+            XCTAssertTrue("\(error)".contains("Unknown ActionSubjectEvidence field"))
+        }
+    }
+
     func testActionResultPayloadRotorWireShape() throws {
         let rotor = RotorResult(
             rotor: "Errors",

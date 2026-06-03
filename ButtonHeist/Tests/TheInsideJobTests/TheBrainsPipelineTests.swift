@@ -163,6 +163,40 @@ final class TheBrainsPipelineTests: XCTestCase {
         XCTAssertNotNil(result.accessibilityTrace?.captures.last)
     }
 
+    func testActionResultWithDeltaPreservesSubjectEvidence() async {
+        let beforeScreen = makeScreen(elements: [("Delete", .button, "delete_button")])
+        brains.stash.installScreenForTesting(beforeScreen)
+        let before = brains.postActionObservation.captureSemanticState()
+        let evidence = ActionSubjectEvidence(
+            source: .resolvedSemanticTarget,
+            target: .predicate(ElementPredicate(label: "Delete", traits: [.button])),
+            element: HeistElement(
+                description: "Delete",
+                label: "Delete",
+                value: nil,
+                identifier: "delete_button",
+                traits: [.button],
+                frameX: 0,
+                frameY: 0,
+                frameWidth: 100,
+                frameHeight: 44,
+                actions: [.activate]
+            ),
+            settledObservationSequence: before.settledObservationSequence
+        )
+
+        let result = await brains.interactionObservation.finishAfterAction(
+            success: true,
+            method: .activate,
+            subjectEvidence: evidence,
+            before: before,
+            settleOutcome: settledOutcome(finalScreen: beforeScreen)
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "action unexpectedly failed")
+        XCTAssertEqual(result.subjectEvidence, evidence)
+    }
+
     func testActionResultWithDeltaSuccessReportsScreenChange() async {
         let beforeScreen = makeScreen(elements: [("Menu", .header, "menu_header")])
         brains.stash.installScreenForTesting(beforeScreen)

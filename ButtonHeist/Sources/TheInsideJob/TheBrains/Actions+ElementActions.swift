@@ -38,7 +38,9 @@ extension Actions {
             ) {
                 return failure
             }
-            return await action(context)
+            return await action(context).withSubjectEvidence(
+                context.subjectEvidence(source: .resolvedSemanticTarget)
+            )
         }
     }
 
