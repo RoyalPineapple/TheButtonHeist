@@ -65,7 +65,8 @@ private extension ActionStep {
     ) throws -> ActionStep {
         try ActionStep(
             command: command.instantiatingForEachElement(templateElement, with: currentElement),
-            expectation: expectation?.instantiatingForEachElement(templateElement, with: currentElement)
+            expectation: expectation?.instantiatingForEachElement(templateElement, with: currentElement),
+            expectationWaiver: expectationWaiver
         )
     }
 }

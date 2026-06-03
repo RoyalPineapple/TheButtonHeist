@@ -1,264 +1,332 @@
-# Heist File Format
+# Heist Plan Format
 
 **Extension**: `.heist`
 **Encoding**: JSON (UTF-8)
-**Version**: 6
+**Current version**: `1`
 
-A `.heist` file stores durable typed command steps. Playback runs those steps
-deterministically through the same command contract as live CLI and MCP
-commands, removing the agent from the loop.
+A heist file stores a `HeistPlan`: the canonical runtime and wire contract for
+semantic Button Heist tests. Swift DSL source, recorded heists, agent-authored
+JSON, and playback all converge on this value.
+
+The plan is not a transcript of viewport mechanics. Normal heists express
+semantic intent and semantic outcomes; Button Heist owns reveal, actionability,
+settlement, live geometry, and diagnostics at replay time.
 
 ## Structure
 
 ```json
 {
-  "version": 6,
-  "app": "com.buttonheist.testapp",
-  "steps": [ ... ]
+  "version": 1,
+  "steps": []
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `Int` | Format version. Currently `6`. |
-| `app` | `String` | Bundle identifier of the app that was running. |
-| `steps` | `[HeistStep]` | Ordered list of durable interaction steps. |
+| `version` | `Int` | Must match the supported `HeistPlan` version. |
+| `steps` | `[HeistStep]` | Ordered list of typed heist steps. |
 
-Version 6 is the current heist contract. Step targets use flat semantic
-matcher fields. Capture-local IDs may appear in live captures or diagnostics,
-but are never stored as replay authority.
+Unknown keys are rejected. There is no app identifier, source metadata,
+runtime ID, capture-local ID, scroll container handle, or stable viewport handle
+in the plan contract.
 
-## Capture Truth
+## Step Types
 
-During live execution, Button Heist uses accessibility captures as the source
-of truth. Segments and compact deltas are derived projections used for
-diagnostics, matcher derivation, expectation checks, and failure reporting;
-they are not stored as heist truth.
-
-Actions may explore scroll views to refresh off-screen state, and
-`get_interface` may refresh the hierarchy it returns. That exploration scope
-does not decide trace history scope. Screen-change classification determines
-how captures are grouped for derived segment views.
-
-## Steps
-
-Each step is a closed playback object. Top-level fields are limited to
-`command`, optional durable semantic `target`, optional `arguments`, and
-optional semantic `expectation`.
-
-Durable replay identity lives under the flat matcher fields in `target`.
-Capture-local IDs are never durable playback authority and are not stored in
-heist steps.
-
-### Element-targeting step
+Each step is a type-discriminated object with exactly one payload:
 
 ```json
 {
-  "command": "activate",
-  "target": {
-    "label": "Review PR, High priority",
-    "traits": ["button"]
-  },
-  "expectation": {
-    "type": "compound",
-    "expectations": [
-      {"type": "element_updated", "property": "value", "newValue": "Completed"},
-      {"type": "element_appeared", "matcher": {"label": "8 items remaining", "traits": ["staticText"]}}
+  "type": "action",
+  "action": {
+    "command": {
+      "type": "activate",
+      "payload": { "label": "Delete" }
+    },
+    "expectation": {
+      "predicate": {
+        "type": "absent",
+        "target": { "label": "Delete" }
+      },
+      "timeout": 2
+    }
+  }
+}
+```
+
+Supported step types:
+
+| Type | Payload key | Purpose |
+|------|-------------|---------|
+| `action` | `action` | Execute one command through the normal command pipeline. |
+| `wait` | `wait` | Wait for one predicate until timeout. |
+| `conditional` | `conditional` | Immediate settled-state branching. |
+| `wait_for_cases` | `wait_for_cases` | Wait until one case predicate matches, or Else handles timeout. |
+| `for_each` | `for_each` | Iterate over semantic matches with a bounded limit. |
+| `warn` | `warn` | Emit a non-failing report message. |
+| `fail` | `fail` | Fail the heist with a message. |
+
+## Actions And Expectations
+
+An action step wraps a `ClientMessage` plus either an expectation or an explicit
+expectation waiver:
+
+```json
+{
+  "type": "action",
+  "action": {
+    "command": {
+      "type": "type_text",
+      "payload": {
+        "text": "milk",
+        "elementTarget": { "label": "Search" }
+      }
+    },
+    "expectation": {
+      "predicate": {
+        "type": "present",
+        "element": { "label": "Search", "value": "milk" }
+      },
+      "timeout": 5
+    }
+  }
+}
+```
+
+Use `without_expectation` only when a semantic action has no durable semantic
+outcome:
+
+```json
+{
+  "type": "action",
+  "action": {
+    "command": {
+      "type": "rotor",
+      "payload": {
+        "label": "Article",
+        "rotor": "Headings",
+        "direction": "next"
+      }
+    },
+    "without_expectation": "Navigation cursor only"
+  }
+}
+```
+
+`expectation` and `without_expectation` are mutually exclusive.
+
+## Element Targets
+
+Semantic commands use `ElementTarget`. An element target is a predicate plus an
+optional ordinal disambiguator:
+
+```json
+{ "label": "Delete", "traits": ["button"], "ordinal": 0 }
+```
+
+Target fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `label` | `String` | Accessibility label exact match after normalization. |
+| `identifier` | `String` | Accessibility identifier exact match after normalization. |
+| `value` | `String` | Accessibility value exact match after normalization. |
+| `traits` | `[String]` | Required semantic traits. |
+| `excludeTraits` | `[String]` | Traits that must not be present. |
+| `ordinal` | `Int` | 0-based index among predicate matches. Requires at least one predicate field. |
+
+Ordinal is not durable identity. It only selects among the current semantic
+match set at runtime. Normal semantic actions re-resolve targets through
+Button Heist actionability; users do not pre-scroll or provide viewport handles.
+
+## Predicates
+
+`AccessibilityPredicate` is the shared predicate vocabulary for waits,
+expectations, conditionals, and semantic ForEach.
+
+State predicates evaluate against one settled semantic observation:
+
+```json
+{ "type": "present", "element": { "label": "Home" } }
+{ "type": "absent", "target": { "label": "Loading" } }
+{ "type": "all", "states": [
+  { "type": "present", "element": { "label": "Results" } },
+  { "type": "absent", "element": { "label": "Loading" } }
+] }
+```
+
+Change predicates evaluate against settled transition evidence:
+
+```json
+{ "type": "screen_changed" }
+{ "type": "screen_changed", "where": { "type": "present", "element": { "label": "Home" } } }
+{ "type": "elements_changed" }
+{ "type": "element_appeared", "element": { "label": "Toast" } }
+{ "type": "element_disappeared", "element": { "label": "Delete" } }
+{ "type": "element_updated", "element": { "label": "Search" }, "property": "value", "to": "milk" }
+```
+
+State predicates do not contain change predicates. Change predicates are not
+search selectors; they require event or action-result delta evidence.
+
+## Waits
+
+Single predicate wait:
+
+```json
+{
+  "type": "wait",
+  "wait": {
+    "predicate": { "type": "present", "element": { "label": "Home" } },
+    "timeout": 5
+  }
+}
+```
+
+Branching wait:
+
+```json
+{
+  "type": "wait_for_cases",
+  "wait_for_cases": {
+    "timeout": 8,
+    "cases": [
+      {
+        "predicate": { "type": "present", "element": { "label": "Home" } },
+        "steps": [{ "type": "warn", "warn": { "message": "Logged in" } }]
+      }
+    ],
+    "else_steps": [{ "type": "fail", "fail": { "message": "No known result" } }]
+  }
+}
+```
+
+Timeout without Else fails. Else handles timeout.
+
+## Conditionals
+
+Conditionals evaluate immediately against the current settled semantic state.
+The first matching case wins; no match without Else is a no-op.
+
+```json
+{
+  "type": "conditional",
+  "conditional": {
+    "cases": [
+      {
+        "predicate": { "type": "present", "element": { "label": "Login" } },
+        "steps": [{ "type": "warn", "warn": { "message": "Login visible" } }]
+      }
+    ],
+    "else_steps": [{ "type": "fail", "fail": { "message": "Unknown state" } }]
+  }
+}
+```
+
+## Semantic ForEach
+
+Semantic ForEach evaluates a predicate match set, enforces a bounded limit, and
+executes its body through the normal heist pipeline.
+
+```json
+{
+  "type": "for_each",
+  "for_each": {
+    "matching": { "label": "Delete" },
+    "limit": 20,
+    "element": { "label": "Delete", "ordinal": 0 },
+    "steps": [
+      {
+        "type": "action",
+        "action": {
+          "command": {
+            "type": "activate",
+            "payload": { "label": "Delete", "ordinal": 0 }
+          },
+          "expectation": {
+            "predicate": {
+              "type": "absent",
+              "target": { "label": "Delete", "ordinal": 0 }
+            },
+            "timeout": 2
+          }
+        }
+      }
     ]
   }
 }
 ```
 
-### Non-element step
+The `element` target is the loop element template. Runtime instantiates it to
+the current predicate plus ordinal for each iteration and then actions
+re-resolve normally. The body does not receive cached geometry, UIKit objects,
+or a capture-local handle. Nested runtime ForEach is currently rejected by
+validation.
+
+## Mechanical And Viewport Escape Hatches
+
+Mechanical gestures and viewport movement are explicit escape hatches. They are
+valid plan actions, but strict semantic-test validation flags them.
+
+Coordinate gesture:
 
 ```json
 {
-  "command": "type_text",
-  "arguments": {
-    "text": "Ship release"
-  },
-  "expectation": {"type": "element_updated", "property": "traits", "newValue": "button"}
-}
-```
-
-### Coordinate-only gesture
-
-```json
-{
-  "command": "one_finger_tap",
-  "arguments": {
-    "x": 200,
-    "y": 500
+  "type": "action",
+  "action": {
+    "command": {
+      "type": "one_finger_tap",
+      "payload": { "point": { "x": 120, "y": 400 } }
+    },
+    "without_expectation": "Canvas coordinate interaction"
   }
 }
 ```
 
-### Field reference
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `command` | `String` | Yes | Canonical `TheFence.Command` name (`activate`, `type_text`, `swipe`, etc.) |
-| `target` | `Object` | No | Durable semantic target. Contains flat matcher fields; never contains `heistId`. |
-| `target.label` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility label |
-| `target.identifier` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility identifier |
-| `target.value` | `String` | No | Element matcher: case-insensitive equality (typography-folded) on accessibility value |
-| `target.traits` | `[String]` | No | Element matcher: all listed traits must be present |
-| `target.excludeTraits` | `[String]` | No | Element matcher: none of these traits may be present |
-| `target.ordinal` | `Int` | No | 0-based index among matcher results; only valid with at least one matcher field |
-| `arguments` | `Object` | No | Command-specific arguments. Text input, gesture coordinates, durations, and wait options live here. |
-| `expectation` | `Object` | No | Semantic outcome expected after the command executes. |
-
-**Note**: `value` and state traits are lower-priority matcher fields. The recorder includes them only when identifier, label, and semantic traits do not uniquely identify the element in the capture. State validation still belongs in expectations when the state itself is the contract being tested.
-
-## Recording Guidance
-
-Minimum matcher is the recording primitive. Given an element in an accessibility capture, Button Heist records the least-specific matcher that uniquely resolves that element in the same capture. Replay durability comes from the derived matcher fields and ordinal, not capture-local IDs.
-
-When recording a heist, public action steps should carry `ElementTarget` predicate fields such as label and traits. The recorder uses current element data to derive a minimum matcher and stores only that matcher on the step.
-
-Ordinal-only steps are the least durable replay target. They are reserved for anonymous elements that have no identifier, label, value, or useful traits; if element order changes, they can target a different element without producing a matcher miss.
-
-**Workflow**: Call `get_interface` before recording actions so the recorder has current element data. Durable heist steps should be the interactions and waits you want to replay; inspection calls help the recorder build good matchers but are not themselves replay steps.
-
-**Example**: You activate the Sign In button with a semantic target. The `.heist` step stores fields like `{"command":"activate","target":{"label":"Sign In","traits":["button"]}}`. Playback targets the matcher, not a live capture ID.
-
-### Async operations
-
-`wait_for` and `wait_for_change` are durable playback steps. They act as timing gates so the next action waits for async UI transitions to complete. Waiting for a visible element to disappear (`absent: true`) is generally more reliable than waiting for an unknown element to appear — you already know what's on screen.
-
-Examples:
-- `{"command":"wait_for","target":{"label":"Loading"},"arguments":{"absent":true}}` — waits for an element to disappear (loading indicator gone)
-- `{"command":"wait_for","target":{"label":"Confirmation","traits":["staticText"]}}` — waits for an element to appear
-- `{"command":"wait_for_change","expectation":{"type":"screen_changed"}}` — waits for a screen transition to finish
-
-## Element Targeting
-
-Matchers describe elements by the least-specific available semantic identity in the capture:
-
-- **Identifier** (developer-assigned `accessibilityIdentifier`) takes priority when stable and unique
-- **Label** is next
-- **Semantic traits** (`button`, `header`, `textEntry`, etc.) disambiguate labels before state is considered
-- **Value** is used only when earlier predicates are still ambiguous
-- **State traits** (`selected`, `notEnabled`, `isEditing`, `inactive`, `visited`, `updatesFrequently`) and `excludeTraits` are used before ordinal
-- **UUID-containing identifiers** (runtime-generated) are detected and skipped in favor of labels
-- **Ordinal** only disambiguates a non-empty matcher; anonymous elements without semantic predicates are not replayable
-
-Matching is exact (case-insensitive, typography-folded); the recorder builds the matcher progressively:
-1. Identifier
-2. Label
-3. Semantic traits
-4. Value
-5. Stateful traits / `excludeTraits`
-6. Ordinal
-
-Every element in a capture can produce a minimum matcher that resolves back to the same element in that capture. If a later capture introduces a conflict, rerun the minimum matcher pass for the new capture. Playback does not silently self-heal stale steps; stale matcher failures should be explicit and diagnostic.
-
-## Expectations
-
-An explicit action expectation is stored as the step's top-level `expectation`.
-On playback, Button Heist binds that field through the same `ActionExpectation`
-object grammar used by live commands and validates it against the live action
-result.
+Viewport movement:
 
 ```json
 {
-  "command": "activate",
-  "target": {"label": "Continue", "traits": ["button"]},
-  "expectation": {"type": "screen_changed"}
-}
-```
-
-Matcher-based expectations keep playback portable:
-
-```json
-{
-  "command": "activate",
-  "target": {"label": "Buy groceries", "traits": ["button"]},
-  "expectation": {
-    "type": "element_appeared",
-    "matcher": {"label": "8 items remaining", "traits": ["staticText"]}
+  "type": "action",
+  "action": {
+    "command": {
+      "type": "scroll",
+      "payload": { "direction": "down" }
+    },
+    "without_expectation": "Explicit viewport inspection"
   }
 }
 ```
 
-Compound expectations remain object-form payloads inside `expectation`; all
-sub-expectations must be met.
+Semantic actions do not require `scroll_to_visible` setup. Recording drops
+viewport setup when a semantic action intent can be derived.
 
-## Durable Recording
+## Validation
 
-Button Heist preserves successful interaction steps as the heist is recorded,
-then writes the final `.heist` file when you call `stop_heist`. If recording
-ends before `stop_heist`, finish the flow again and write a complete fixture;
-heist fixtures are the durable replay artifact.
+Heists can be validated in three modes:
 
-## Recording and Playback Commands
+| Mode | Purpose |
+|------|---------|
+| `runtime` | Basic runtime contract validation. |
+| `recordingQuality` | Warns when recordings look like fragile transcripts. |
+| `strictTest` | Fails missing expectations, mechanical commands, viewport setup, empty branches, and unsafe bounds. |
 
-The executable command surface is generated from `TheFence.Command`. See the
-[Command Reference](reference/commands.md) and
-[MCP Tool Reference](reference/mcp-tools.md) for current CLI and MCP shapes.
+Validation returns structured findings with severity, step path, message, and a
+fix suggestion.
 
-Representative CLI flow:
+## Recording Contract
 
-```bash
-buttonheist start_heist --app com.example.app
-# ... perform actions ...
-buttonheist stop_heist --output recording.heist
-buttonheist play_heist --input recording.heist
-buttonheist play_heist --input recording.heist --junit report.xml
-```
+Recording composes completed interactions and settled semantic evidence into
+semantic action intent plus validated semantic expectation.
 
-The `--junit <path>` flag writes a JUnit XML report to disk. Each heist step becomes a `<testcase>` element; failed steps include a `<failure>` with the error message and typed error kind. The output can be consumed by GitHub Actions, Jenkins, and other CI systems that read JUnit XML.
+Rules:
 
-Representative MCP flow:
+- Read commands are scratchpad and record no steps.
+- Failed actions record no steps.
+- Unmet expectations record no steps.
+- Scroll setup before semantic action records no setup step.
+- Coordinate gestures survive only when no semantic element intent exists.
+- Recorded heists should pass recording-quality validation.
 
-- Call MCP tool `start_heist` with `app: "com.example.app"`.
-- Call MCP tool `stop_heist` with `output: "/path/to/recording.heist"`.
-- Call MCP tool `play_heist` with `input: "/path/to/recording.heist"`.
-
-## Playback Semantics
-
-- Each step is executed through the same public command surface live agent commands use
-- top-level `expectation` is validated against the live action result when present
-- Playback stops on the first failed action (element not found, timeout, etc.)
-- The result reports `completedSteps`, `failedIndex` (if any), and `totalTimingMs`
-- Capture-local heistIds are never used as playback targets
-
-### Failure diagnostics
-
-On failure, the response includes a `failure` object with everything needed to diagnose the problem without re-running:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `command` | `String` | The command that failed (e.g. `activate`, `type_text`) |
-| `target` | `ElementTarget?` | The semantic target from the failed step |
-| `error` | `String` | Human-readable error message |
-| `actionResult` | `ActionResult?` | Full action result — includes `errorKind`, accessibility trace, delta, etc. |
-| `expectation` | `ExpectationResult?` | Expectation check result (when top-level `expectation` was attached to the step) |
-| `interface` | `Interface?` | Complete interface state at time of failure |
-
-The interface state lets you compare the expected target against the actual accessibility elements available when the step failed.
-
-## Playback Performance
-
-Heist playback removes the agent from the loop entirely — no reasoning, no `get_interface` polling, no token consumption. The following data compares a Claude Sonnet 4.6 agent completing benchmark tasks via the `bh` (semantic addressing) config against deterministic playback of `.heist` recordings of the same tasks. Recordings were made on one simulator and played back on a different one to confirm cross-device portability.
-
-| Task | Agent turns | Agent time | Agent tokens | Agent cost | Playback steps | Playback time |
-|------|-------------|------------|--------------|------------|----------------|---------------|
-| T3-settings-roundtrip | 11 | 58s | 415,260 | $0.20 | 4 | 4.5s |
-| T11-increment | 5 | 25s | 181,603 | $0.10 | 7 | 7.9s |
-| T5-controls-gauntlet | 15 | 98s | 582,896 | $0.39 | 20 | 22.4s |
-| **Total** | **31** | **181s** | **1,179,759** | **$0.70** | **31** | **34.8s** |
-
-Playback is **5x faster** at **zero cost** — no API calls, no tokens, no model variance. The agent spends most of its wall time reading the interface, reasoning about what to do next, and formatting tool calls. Playback skips all of that and fires actions directly.
-
-These numbers are against the `bh` config (semantic addressing). Against coordinate-based configs (`idb`, `mobile-mcp`), the agent gap is wider — those use 2-4x more turns per task because every action requires a screenshot/describe cycle to compute tap coordinates.
-
-### When to use playback vs agents
-
-| Use case | Approach |
-|----------|----------|
-| Regression testing known flows | Playback — deterministic, fast, free |
-| Exploring new UI or unknown state | Agent — needs reasoning to navigate |
-| CI smoke tests | Playback — record once, replay on every build |
-| Benchmark scoring | Agent — the benchmark measures agent capability |
-| Demo recordings | Playback — consistent, reproducible |
+Recorded heists must not depend on scroll position, geometry, runtime IDs,
+capture-local IDs, or public container handles unless the command is explicitly
+mechanical or viewport-shaped.

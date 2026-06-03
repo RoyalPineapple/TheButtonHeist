@@ -141,17 +141,32 @@ public enum HeistStep: Codable, Sendable, Equatable {
 public struct ActionStep: Codable, Sendable, Equatable {
     public let command: ClientMessage
     public let expectation: WaitStep?
+    public let expectationWaiver: String?
 
-    public init(command: ClientMessage, expectation: WaitStep? = nil) throws {
+    public init(
+        command: ClientMessage,
+        expectation: WaitStep? = nil,
+        expectationWaiver: String? = nil
+    ) throws {
         guard command.isHeistActionCommand else {
             throw HeistPlanError.unsupportedActionCommand(command.wireType.rawValue)
         }
+        if let expectationWaiver {
+            guard !expectationWaiver.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw HeistPlanError.emptyExpectationWaiver
+            }
+            guard expectation == nil else {
+                throw HeistPlanError.ambiguousExpectationContract
+            }
+        }
         self.command = command
         self.expectation = expectation
+        self.expectationWaiver = expectationWaiver
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case command, expectation
+        case expectationWaiver = "without_expectation"
     }
 
     public init(from decoder: Decoder) throws {
@@ -159,7 +174,8 @@ public struct ActionStep: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
             command: try container.decode(ClientMessage.self, forKey: .command),
-            expectation: try container.decodeIfPresent(WaitStep.self, forKey: .expectation)
+            expectation: try container.decodeIfPresent(WaitStep.self, forKey: .expectation),
+            expectationWaiver: try container.decodeIfPresent(String.self, forKey: .expectationWaiver)
         )
     }
 
@@ -167,6 +183,7 @@ public struct ActionStep: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
         try container.encodeIfPresent(expectation, forKey: .expectation)
+        try container.encodeIfPresent(expectationWaiver, forKey: .expectationWaiver)
     }
 }
 
@@ -406,6 +423,8 @@ public struct FailStep: Codable, Sendable, Equatable {
 
 public enum HeistPlanError: Error, Sendable, Equatable {
     case unsupportedActionCommand(String)
+    case ambiguousExpectationContract
+    case emptyExpectationWaiver
     case emptyPredicateCases(String)
     case negativeTimeout(Double)
     case emptyForEachPredicate

@@ -10,6 +10,17 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
     }
 
+    func testRunHeistDescriptorAdvertisesAllPlanStepTypes() {
+        let descriptor = TheFence.Command.descriptor(for: .runHeist)
+        let steps = descriptor.parameters.first { $0.key == "steps" }
+        let type = steps?.arrayItemProperties.first { $0.key == "type" }
+
+        XCTAssertEqual(
+            type?.enumValues,
+            ["action", "wait", "conditional", "wait_for_cases", "for_each", "warn", "fail"]
+        )
+    }
+
     @ButtonHeistActor
     func testEveryPublicCommandRoutesThroughDescriptorOwnedDecoder() async throws {
         let (fence, _) = makeConnectedFence()

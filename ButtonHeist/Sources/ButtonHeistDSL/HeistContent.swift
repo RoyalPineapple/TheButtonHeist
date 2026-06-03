@@ -10,6 +10,10 @@ public struct Heist: HeistContent {
 
     public var heistSteps: [HeistStep] { plan.steps }
 
+    public func validate(_ mode: HeistPlanValidationMode) -> [HeistPlanValidationFinding] {
+        plan.validate(mode)
+    }
+
     public init(@HeistBuilder _ content: () throws -> some HeistContent) throws {
         let steps = try content().heistSteps
         self.plan = try HeistPlan.validatedDSLPlan(steps: steps)
