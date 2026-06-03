@@ -118,7 +118,7 @@ final class InteractionObservation {
                 evaluateCurrent: evaluateCurrent
             )
         } catch {
-            let predicate = AccessibilityPredicate.state(.absent(ElementPredicate(identifier: "__unresolved_heist_predicate__")))
+            let predicate = InteractionObservationProjection.unresolvedWaitPredicate()
             let resolvedStep = ResolvedWaitStep(predicate: predicate, timeout: step.timeout)
             let expectation = ExpectationResult(
                 met: false,
@@ -127,7 +127,8 @@ final class InteractionObservation {
             )
             return waitReceipt(
                 for: resolvedStep,
-                observation: nil,
+                trace: nil,
+                observationSummary: nil,
                 expectation: expectation,
                 start: CFAbsoluteTimeGetCurrent(),
                 success: false
@@ -142,8 +143,7 @@ final class InteractionObservation {
         evaluateCurrent: Bool = true
     ) async -> HeistWaitReceipt {
         let start = CFAbsoluteTimeGetCurrent()
-        let timeout = max(0, min(step.timeout, 30))
-        var lastObservation: HeistSemanticObservation?
+        let timeout = InteractionObservationProjection.clampedWaitTimeout(step.timeout)
         var lastTrace: AccessibilityTrace?
         var lastObservationSummary: String?
         var observedSequence: UInt64? = sequence
@@ -151,78 +151,75 @@ final class InteractionObservation {
             met: false, predicate: step.predicate, actual: "no settled semantic observation available"
         )
 
+        func record(_ initialTraceResult: InteractionObservationProjection.InitialTraceResult) {
+            lastTrace = initialTraceResult.trace
+            lastObservationSummary = initialTraceResult.summary
+            lastEvaluation = initialTraceResult.expectation
+            observedSequence = stash.latestSettledSemanticObservationEvent?.sequence
+        }
+
+        func record(_ evaluation: WaitEvaluation) {
+            lastTrace = evaluation.observation.accessibilityTrace
+            lastObservationSummary = evaluation.observation.summary
+            lastEvaluation = evaluation.expectation
+            observedSequence = evaluation.observation.event.sequence
+        }
+
         if evaluateCurrent, let initialTraceResult = InteractionObservationProjection.initialTraceResult(
             for: step,
             initialTrace: initialTrace,
             timeout: timeout
         ) {
-            lastTrace = initialTraceResult.trace
-            lastObservationSummary = initialTraceResult.summary
-            lastEvaluation = initialTraceResult.expectation
-            observedSequence = stash.latestSettledSemanticObservationEvent?.sequence
+            record(initialTraceResult)
             if initialTraceResult.shouldReturn {
-                return waitReceipt(for: step, trace: initialTraceResult.trace,
-                                   observationSummary: initialTraceResult.summary,
-                                   expectation: initialTraceResult.expectation, start: start,
-                                   success: initialTraceResult.expectation.met)
+                return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
+                                   expectation: lastEvaluation, start: start, success: lastEvaluation.met)
             }
         } else if evaluateCurrent,
-                  let initial = await observeSemanticState(
-                    scope: step.predicate.observationScope, after: observedSequence, timeout: 0
+                  let initial = await nextWaitEvaluation(
+                    for: step, after: observedSequence, timeout: 0
                   ) {
-            lastObservation = initial
-            lastTrace = initial.accessibilityTrace
-            lastObservationSummary = initial.summary
-            observedSequence = initial.event.sequence
-            lastEvaluation = InteractionObservationProjection.evaluate(step.predicate, in: initial)
+            record(initial)
             if lastEvaluation.met {
-                return waitReceipt(for: step, observation: initial,
+                return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
                                    expectation: lastEvaluation, start: start, success: true)
             }
         } else if timeout == 0,
-                  let observation = await observeSemanticState(
-                    scope: step.predicate.observationScope, after: observedSequence, timeout: 0
+                  let observation = await nextWaitEvaluation(
+                    for: step, after: observedSequence, timeout: 0
                   ) {
-            lastObservation = observation
-            lastTrace = observation.accessibilityTrace
-            lastObservationSummary = observation.summary
-            observedSequence = observation.event.sequence
-            lastEvaluation = InteractionObservationProjection.evaluate(step.predicate, in: observation)
-            return waitReceipt(for: step, observation: observation,
+            record(observation)
+            return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
                                expectation: lastEvaluation, start: start, success: lastEvaluation.met)
         } else if timeout == 0 {
-            return waitReceipt(for: step, observation: nil,
+            return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
                                expectation: lastEvaluation, start: start, success: false)
         }
 
         guard timeout > 0 else {
-            return waitReceipt(for: step, observation: lastObservation,
+            return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
                                expectation: lastEvaluation, start: start, success: false)
         }
 
         let deadline = start + timeout
         while CFAbsoluteTimeGetCurrent() < deadline {
             let remaining = max(0, deadline - CFAbsoluteTimeGetCurrent())
-            guard let observation = await observeSemanticState(
-                scope: step.predicate.observationScope, after: observedSequence,
+            guard let observation = await nextWaitEvaluation(
+                for: step,
+                after: observedSequence,
                 timeout: min(remaining, defaultSemanticObservationTimeout)
             ) else {
                 continue
             }
 
-            observedSequence = observation.event.sequence
-            lastObservation = observation
-            lastTrace = observation.accessibilityTrace
-            lastObservationSummary = observation.summary
-            lastEvaluation = InteractionObservationProjection.evaluate(step.predicate, in: observation)
+            record(observation)
             if lastEvaluation.met {
-                return waitReceipt(for: step, observation: observation,
+                return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
                                    expectation: lastEvaluation, start: start, success: true)
             }
         }
 
-        return waitReceipt(for: step, trace: lastObservation?.accessibilityTrace ?? lastTrace,
-                           observationSummary: lastObservation?.summary ?? lastObservationSummary,
+        return waitReceipt(for: step, trace: lastTrace, observationSummary: lastObservationSummary,
                            expectation: lastEvaluation, start: start, success: false)
     }
 
@@ -262,21 +259,20 @@ final class InteractionObservation {
 
     private func waitReceipt(
         for step: ResolvedWaitStep,
-        observation: HeistSemanticObservation? = nil,
         trace: AccessibilityTrace? = nil,
         observationSummary: String? = nil,
         expectation: ExpectationResult,
         start: CFAbsoluteTime,
         success: Bool
     ) -> HeistWaitReceipt {
-        let summary = observation?.summary ?? observationSummary
+        let summary = observationSummary
         let elapsed = InteractionObservationProjection.elapsedSeconds(since: start)
         let presenceMessage = success || summary == nil
             ? nil
             : stash.presenceWaitTimeoutMessage(for: step.predicate, elapsed: elapsed)
         return InteractionObservationProjection.waitReceipt(
             for: step,
-            trace: observation?.accessibilityTrace ?? trace,
+            trace: trace,
             observationSummary: summary,
             expectation: expectation,
             elapsed: elapsed,
@@ -284,7 +280,23 @@ final class InteractionObservation {
             presenceTimeoutMessage: presenceMessage
         )
     }
+
+    private func nextWaitEvaluation(
+        for step: ResolvedWaitStep,
+        after sequence: UInt64?,
+        timeout: Double
+    ) async -> WaitEvaluation? {
+        guard let observation = await observeSemanticState(
+            scope: step.predicate.observationScope,
+            after: sequence,
+            timeout: timeout
+        ) else { return nil }
+        return (observation, InteractionObservationProjection.evaluate(step.predicate, in: observation))
+    }
+
 }
+
+private typealias WaitEvaluation = (observation: HeistSemanticObservation, expectation: ExpectationResult)
 
 #endif // DEBUG
 #endif // canImport(UIKit)
