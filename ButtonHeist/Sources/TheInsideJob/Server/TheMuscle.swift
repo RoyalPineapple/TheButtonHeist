@@ -21,6 +21,8 @@ actor TheMuscle {
     private var session: TheMuscleSession
     private let approvalPrompts: MuscleApprovalPromptCallbacks
     private var delivery: ClientDelivery = .unwired
+    private var sessionReleaseTimer: Task<Void, Never>?
+    private var sessionReleaseTimerGeneration: UInt64 = 0
 
     private let delayedDisconnects = MuscleDelayedDisconnects(
         gracePeriod: TheMuscle.disconnectGracePeriod
@@ -122,7 +124,7 @@ actor TheMuscle {
 
     /// Called when a ping is received from an authenticated client.
     func noteClientActivity(_ clientId: Int) {
-        session.noteClientActivity(clientId, owner: self)
+        applySessionReleaseTimerAction(session.noteClientActivity(clientId))
     }
 
     /// Send an already-encoded envelope to a single client.
@@ -150,7 +152,7 @@ actor TheMuscle {
     func handleClientDisconnected(_ clientId: Int) async {
         cancelAuthenticationDeadline(for: clientId)
         await applyAdmissionEffect(admission.removeClient(clientId))
-        session.removeConnection(clientId, owner: self)
+        applySessionReleaseTimerAction(session.removeConnection(clientId))
     }
 
     func approveClient(_ clientId: Int) async {
@@ -194,7 +196,8 @@ actor TheMuscle {
             driverIdentity: authentication.driverIdentity,
             clientId: authentication.clientId
         ) {
-        case .accepted:
+        case .accepted(_, let releaseTimerAction):
+            applySessionReleaseTimerAction(releaseTimerAction)
             let effect = admission.completeAuthentication(authentication)
             cancelAuthenticationDeadline(for: authentication.clientId)
             await applyAdmissionEffect(effect)
@@ -272,12 +275,40 @@ actor TheMuscle {
 
     // MARK: - Session Release
 
-    func sessionReleaseTimerFired() async {
+    private func sessionReleaseTimerFired(generation: UInt64) async {
+        guard generation == sessionReleaseTimerGeneration else { return }
         await releaseSession()
     }
 
     private func releaseSession() async {
-        _ = session.release()
+        applySessionReleaseTimerAction(session.release())
+    }
+
+    private func applySessionReleaseTimerAction(_ action: TheMuscleSession.ReleaseTimerAction) {
+        switch action {
+        case .none:
+            break
+        case .cancel:
+            cancelSessionReleaseTimer()
+        case .replace(let timeout):
+            replaceSessionReleaseTimer(timeout: timeout)
+        }
+    }
+
+    private func replaceSessionReleaseTimer(timeout: TimeInterval) {
+        cancelSessionReleaseTimer()
+        let generation = sessionReleaseTimerGeneration
+        sessionReleaseTimer = Task { [weak self, timeout, generation] in
+            guard await Task.cancellableSleep(for: .seconds(timeout)) else { return }
+            guard !Task.isCancelled else { return }
+            await self?.sessionReleaseTimerFired(generation: generation)
+        }
+    }
+
+    private func cancelSessionReleaseTimer() {
+        sessionReleaseTimer?.cancel()
+        sessionReleaseTimer = nil
+        sessionReleaseTimerGeneration &+= 1
     }
 
     // MARK: - Alert Presentation

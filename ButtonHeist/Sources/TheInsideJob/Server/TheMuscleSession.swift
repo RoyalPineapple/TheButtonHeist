@@ -5,15 +5,20 @@ import os
 
 private let sessionLogger = Logger(subsystem: "com.buttonheist.theinsidejob", category: "auth")
 
-/// Owns the runtime lease plus the release timer for a ButtonHeist session.
+/// Owns the runtime lease state for a ButtonHeist session.
 struct TheMuscleSession {
+    enum ReleaseTimerAction {
+        case none
+        case cancel
+        case replace(timeout: TimeInterval)
+    }
+
     enum Acquisition {
-        case accepted(notifyActiveChanged: Bool)
+        case accepted(notifyActiveChanged: Bool, releaseTimerAction: ReleaseTimerAction)
         case rejected(SessionLease.SessionLockDiagnostic)
     }
 
     private var lease: SessionLease
-    private var releaseTimer: Task<Void, Never>?
 
     init(releaseTimeout: TimeInterval) {
         self.lease = SessionLease(releaseTimeout: releaseTimeout)
@@ -46,61 +51,46 @@ struct TheMuscleSession {
     mutating func acquire(driverIdentity: String, clientId: Int) -> Acquisition {
         switch lease.acquire(driverIdentity: driverIdentity, clientId: clientId) {
         case .accepted(let notifyActiveChanged, let shouldCancelReleaseTimer):
-            if shouldCancelReleaseTimer {
-                self.cancelReleaseTimer()
-            }
             if notifyActiveChanged {
                 sessionLogger.info("Session claimed by client \(clientId)")
             } else {
                 sessionLogger.info("Client \(clientId) rejoined session during grace period")
             }
-            return .accepted(notifyActiveChanged: notifyActiveChanged)
+            return .accepted(
+                notifyActiveChanged: notifyActiveChanged,
+                releaseTimerAction: shouldCancelReleaseTimer ? .cancel : .none
+            )
 
         case .rejected(let diagnostic):
             return .rejected(diagnostic)
         }
     }
 
-    mutating func release() -> Bool {
-        cancelReleaseTimer()
+    mutating func release() -> ReleaseTimerAction {
         let hadSession = lease.release()
         if hadSession {
             sessionLogger.info("Session released")
         }
-        return hadSession
+        return .cancel
     }
 
-    mutating func removeConnection(_ clientId: Int, owner: TheMuscle) {
+    mutating func removeConnection(_ clientId: Int) -> ReleaseTimerAction {
         switch lease.removeConnection(clientId) {
         case .draining:
             let releaseTimeout = lease.releaseTimeout
-            replaceReleaseTimer(owner: owner)
             sessionLogger.info("All session connections gone, starting \(releaseTimeout)s release timer")
+            return .replace(timeout: releaseTimeout)
         case .active, .unchanged:
-            break
+            return .none
         }
     }
 
-    mutating func noteClientActivity(_ clientId: Int, owner: TheMuscle) {
-        guard lease.activeSessionConnections.contains(clientId) else { return }
+    mutating func noteClientActivity(_ clientId: Int) -> ReleaseTimerAction {
+        guard lease.activeSessionConnections.contains(clientId) else { return .none }
         if lease.resetInactivityTimer() != nil {
-            replaceReleaseTimer(owner: owner)
+            return .replace(timeout: lease.releaseTimeout)
         }
-    }
-
-    mutating func cancelReleaseTimer() {
-        releaseTimer?.cancel()
-        releaseTimer = nil
-    }
-
-    private mutating func replaceReleaseTimer(owner: TheMuscle) {
-        cancelReleaseTimer()
-        let releaseTimeout = lease.releaseTimeout
-        releaseTimer = Task { [weak owner, releaseTimeout] in
-            guard await Task.cancellableSleep(for: .seconds(releaseTimeout)) else { return }
-            guard !Task.isCancelled else { return }
-            await owner?.sessionReleaseTimerFired()
-        }
+        return .none
     }
 }
 #endif // DEBUG
