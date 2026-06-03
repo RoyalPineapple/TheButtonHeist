@@ -44,14 +44,13 @@ Activate(.label("Optional"))
     .withoutExpectation("No durable semantic outcome")
 ```
 
-Validation can then distinguish an intentional waiver from a missing assertion:
+Runtime admission and lint are separate:
 
-- `.runtime` checks only execution contract concerns.
-- `.recordingQuality` flags recordings that read like transcripts instead of
+- Runtime admission rejects plans that cannot safely execute.
+- `.recordingQuality` lint flags recordings that read like transcripts instead of
   compact semantic tests.
-- `.strictTest` treats missing expectations, mechanical commands, viewport setup
-  before semantic actions, empty branches, and oversized runtime loops as test
-  quality failures.
+- `.strictTest` lint treats missing expectations, mechanical commands, viewport
+  setup before semantic actions, and empty branches as test quality failures.
 
 Mechanical and viewport commands are explicit escape hatches. Use the namespace
 to make that intent visible:

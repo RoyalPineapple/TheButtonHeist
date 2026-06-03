@@ -12,6 +12,10 @@ public struct FenceOperationRoutingError: Error, LocalizedError, Sendable {
 }
 
 public extension TheFence.Command {
+    init?(clientWireType: ClientWireMessageType) {
+        self.init(rawValue: clientWireType.commandName)
+    }
+
     static func routeToolCall(named name: String) -> Result<Self, FenceOperationRoutingError> {
         guard let command = Self(rawValue: name),
               command.descriptor.mcpExposure == .directTool else {
@@ -28,6 +32,22 @@ public extension TheFence.Command {
         routeCanonicalStep(arguments, context: context, isExecutable: nil)
     }
 
+}
+
+extension ClientWireMessageType {
+    var commandName: String {
+        switch self {
+        case .performCustomAction: return TheFence.Command.activate.rawValue
+        case .oneFingerTap: return TheFence.Command.oneFingerTap.rawValue
+        case .longPress: return TheFence.Command.longPress.rawValue
+        case .typeText: return TheFence.Command.typeText.rawValue
+        case .setPasteboard: return TheFence.Command.setPasteboard.rawValue
+        case .scrollToVisible: return TheFence.Command.scrollToVisible.rawValue
+        case .scrollToEdge: return TheFence.Command.scrollToEdge.rawValue
+        case .resignFirstResponder: return TheFence.Command.dismissKeyboard.rawValue
+        default: return rawValue
+        }
+    }
 }
 
 private extension TheFence.Command {

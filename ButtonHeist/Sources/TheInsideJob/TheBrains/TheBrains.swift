@@ -33,14 +33,14 @@ final class TheBrains {
 
     enum InterfaceObservationError: Error, Equatable {
         case rootViewUnavailable
-        case runtimeInactive
+        case inactiveRuntime
         case selection(InterfaceSelectionError)
 
         var message: String {
             switch self {
             case .rootViewUnavailable:
                 return "Could not access root view"
-            case .runtimeInactive:
+            case .inactiveRuntime:
                 return TheBrains.runtimeInactiveMessage
             case .selection(let error):
                 return error.message
@@ -116,7 +116,7 @@ final class TheBrains {
 
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceObservation {
         guard semanticObservationIsActive else {
-            return .failure(.runtimeInactive)
+            return .failure(.inactiveRuntime)
         }
         guard await interactionObservation.observeSemanticState(
             scope: .discovery,

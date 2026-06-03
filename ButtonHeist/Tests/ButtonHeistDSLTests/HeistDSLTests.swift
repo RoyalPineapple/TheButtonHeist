@@ -45,12 +45,12 @@ func actionWithoutExpectationAttachesExplicitWaiver() throws {
 }
 
 @Test
-func heistValidateForwardsToPlanValidation() throws {
+    func heistLintForwardsToPlanLint() throws {
     let heist = try Heist {
         Activate(.label("Save"))
     }
 
-    #expect(heist.validate(.strictTest).map(\.message) == ["Semantic action has no expectation"])
+    #expect(heist.lint(.strictTest).map(\.message) == ["Semantic action has no expectation"])
 }
 
 @Test
