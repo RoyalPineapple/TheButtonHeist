@@ -10,7 +10,7 @@ final class HeistReportProjectionTests: XCTestCase {
             command: .activate(.target(.predicate(ElementPredicate(label: "Submit")))),
             expectation: WaitStep(predicate: expectationPredicate, timeout: 1)
         )
-        let plan = HeistPlan(steps: [step])
+        let plan = HeistPlan(body: [step])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -28,13 +28,13 @@ final class HeistReportProjectionTests: XCTestCase {
 
         XCTAssertEqual(projection.summary.expectationsChecked, 1)
         XCTAssertEqual(projection.summary.expectationsMet, 1)
-        XCTAssertEqual(projection.nodes.map(\.path), ["$.steps[0]"])
+        XCTAssertEqual(projection.nodes.map(\.path), ["$.body[0]"])
         XCTAssertEqual(projection.nodes.first?.kind, .action)
         XCTAssertEqual(projection.nodes.first?.action?.commandName, "activate")
     }
 
     func testFailedActionSkipsLaterSibling() throws {
-        let plan = HeistPlan(steps: [
+        let plan = HeistPlan(body: [
             try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Delete"))))),
             try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Confirm"))))),
         ])
@@ -80,12 +80,11 @@ final class HeistReportProjectionTests: XCTestCase {
         let selectedPredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
         let unselectedPredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Login")))
         let conditional = try ConditionalStep(cases: [
-            PredicateCase(predicate: selectedPredicate, steps: [child]),
-            PredicateCase(predicate: unselectedPredicate, steps: [unselected]),
+            PredicateCase(predicate: selectedPredicate, body: [child]),
+            PredicateCase(predicate: unselectedPredicate, body: [unselected]),
         ])
-        let plan = HeistPlan(steps: [.conditional(conditional)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.conditional(conditional)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .conditional,
@@ -114,7 +113,7 @@ final class HeistReportProjectionTests: XCTestCase {
         let node = HeistReportProjection(plan: plan, result: result).nodes[0]
 
         XCTAssertEqual(node.kind, .conditional)
-        XCTAssertEqual(node.children.map(\.path), ["$.steps[0].conditional.cases[0].steps[0]"])
+        XCTAssertEqual(node.children.map(\.path), ["$.body[0].conditional.cases[0].body[0]"])
         XCTAssertEqual(node.children.first?.action?.commandName, "activate")
     }
 
@@ -122,12 +121,11 @@ final class HeistReportProjectionTests: XCTestCase {
         let elseStep = try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Fallback")))))
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(
-            cases: [PredicateCase(predicate: predicate, steps: [try actionStep()])],
-            elseSteps: [elseStep]
+            cases: [PredicateCase(predicate: predicate, body: [try actionStep()])],
+            elseBody: [elseStep]
         )
-        let plan = HeistPlan(steps: [.conditional(conditional)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.conditional(conditional)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .conditional,
@@ -153,18 +151,17 @@ final class HeistReportProjectionTests: XCTestCase {
 
         let node = HeistReportProjection(plan: plan, result: result).nodes[0]
 
-        XCTAssertEqual(node.children.map(\.path), ["$.steps[0].conditional.else_steps[0]"])
+        XCTAssertEqual(node.children.map(\.path), ["$.body[0].conditional.else_body[0]"])
     }
 
     func testWaitForTimeoutWithoutElseProjectsWaitFailure() throws {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let waitForCases = try WaitForCasesStep(
             timeout: 2,
-            cases: [PredicateCase(predicate: predicate, steps: [try actionStep()])]
+            cases: [PredicateCase(predicate: predicate, body: [try actionStep()])]
         )
-        let plan = HeistPlan(steps: [.waitForCases(waitForCases)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.waitForCases(waitForCases)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .waitForCases,
@@ -196,12 +193,11 @@ final class HeistReportProjectionTests: XCTestCase {
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let waitForCases = try WaitForCasesStep(
             timeout: 2,
-            cases: [PredicateCase(predicate: predicate, steps: [try actionStep()])],
-            elseSteps: [.warn(WarnStep(message: "No result"))]
+            cases: [PredicateCase(predicate: predicate, body: [try actionStep()])],
+            elseBody: [.warn(WarnStep(message: "No result"))]
         )
-        let plan = HeistPlan(steps: [.waitForCases(waitForCases)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.waitForCases(waitForCases)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .waitForCases,
@@ -231,7 +227,7 @@ final class HeistReportProjectionTests: XCTestCase {
         let node = HeistReportProjection(plan: plan, result: result).nodes[0]
 
         XCTAssertEqual(node.status, .passed)
-        XCTAssertEqual(node.children.map(\.path), ["$.steps[0].wait_for_cases.else_steps[0]"])
+        XCTAssertEqual(node.children.map(\.path), ["$.body[0].wait_for_cases.else_body[0]"])
         XCTAssertEqual(node.children.first?.status, .warned)
     }
 
@@ -240,11 +236,10 @@ final class HeistReportProjectionTests: XCTestCase {
             matching: ElementPredicate(label: "Delete"),
             limit: 20,
             parameter: "target",
-            steps: [try actionStep(command: .activate(.ref("target")))]
+            body: [try actionStep(command: .activate(.ref("target")))]
         )
-        let plan = HeistPlan(steps: [.forEachElement(forEach)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.forEachElement(forEach)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .forEach,
@@ -274,12 +269,12 @@ final class HeistReportProjectionTests: XCTestCase {
 
         XCTAssertEqual(node.kind, .forEachElement)
         XCTAssertEqual(node.children.map(\.path), [
-            "$.steps[0].for_each_element.iterations[0]",
-            "$.steps[0].for_each_element.iterations[1]",
+            "$.body[0].for_each_element.iterations[0]",
+            "$.body[0].for_each_element.iterations[1]",
         ])
         XCTAssertEqual(node.children.flatMap { $0.children.map(\.path) }, [
-            "$.steps[0].for_each_element.iterations[0].steps[0]",
-            "$.steps[0].for_each_element.iterations[1].steps[0]",
+            "$.body[0].for_each_element.iterations[0].body[0]",
+            "$.body[0].for_each_element.iterations[1].body[0]",
         ])
     }
 
@@ -287,11 +282,10 @@ final class HeistReportProjectionTests: XCTestCase {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            steps: [try actionStep(command: .typeText(text: .ref("item"), target: nil))]
+            body: [try actionStep(command: .typeText(text: .ref("item"), target: nil))]
         )
-        let plan = HeistPlan(steps: [.forEachString(forEach)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.forEachString(forEach)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .forEach,
@@ -340,12 +334,11 @@ final class HeistReportProjectionTests: XCTestCase {
     }
 
     func testWarnAndFailProjectAsStructuralNodes() {
-        let plan = HeistPlan(steps: [
+        let plan = HeistPlan(body: [
             .warn(WarnStep(message: "Heads up")),
             .fail(FailStep(message: "Stop here")),
         ])
-        let result = HeistExecutionResult(
-            steps: [
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .warn,
@@ -394,12 +387,11 @@ final class HeistLegacyFlatReportTests: XCTestCase {
         let elseStep = try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Fallback")))))
         let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(
-            cases: [PredicateCase(predicate: predicate, steps: [try actionStep()])],
-            elseSteps: [elseStep]
+            cases: [PredicateCase(predicate: predicate, body: [try actionStep()])],
+            elseBody: [elseStep]
         )
-        let plan = HeistPlan(steps: [.conditional(conditional)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.conditional(conditional)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .conditional,
@@ -425,7 +417,7 @@ final class HeistLegacyFlatReportTests: XCTestCase {
 
         let projection = HeistReportProjection(plan: plan, result: result)
 
-        XCTAssertEqual(projection.nodes.first?.children.first?.path, "$.steps[0].conditional.else_steps[0]")
+        XCTAssertEqual(projection.nodes.first?.children.first?.path, "$.body[0].conditional.else_body[0]")
         XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["if", "activate"])
     }
 
@@ -433,11 +425,10 @@ final class HeistLegacyFlatReportTests: XCTestCase {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            steps: [try actionStep(command: .typeText(text: .ref("item"), target: nil))]
+            body: [try actionStep(command: .typeText(text: .ref("item"), target: nil))]
         )
-        let plan = HeistPlan(steps: [.forEachString(forEach)])
-        let result = HeistExecutionResult(
-            steps: [
+        let plan = HeistPlan(body: [.forEachString(forEach)])
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .forEach,

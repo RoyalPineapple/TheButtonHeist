@@ -8,9 +8,10 @@ struct HeistReportProjection {
 
     init(plan: HeistPlan, result: HeistExecutionResult) {
         self.nodes = Self.nodes(
-            steps: plan.steps,
+            steps: plan.body,
             outcomes: result.steps,
-            path: "$.steps"
+            path: "$.body",
+            definitionScope: plan
         )
         self.summary = HeistReportSummary(result: result, nodes: nodes)
     }
@@ -23,6 +24,7 @@ struct HeistReportProjection {
         steps: [HeistStep],
         outcomes: [HeistExecutionStepResult],
         path: String,
+        definitionScope: HeistPlan,
         matchOutcomesByPosition: Bool = false
     ) -> [HeistReportNode] {
         steps.enumerated().compactMap { siblingIndex, step in
@@ -36,7 +38,8 @@ struct HeistReportProjection {
             return node(
                 step: step,
                 outcome: outcome,
-                path: "\(path)[\(siblingIndex)]"
+                path: "\(path)[\(siblingIndex)]",
+                definitionScope: definitionScope
             )
         }
     }
@@ -44,7 +47,8 @@ struct HeistReportProjection {
     private static func node(
         step: HeistStep,
         outcome: HeistExecutionStepResult,
-        path: String
+        path: String,
+        definitionScope: HeistPlan
     ) -> HeistReportNode {
         let kind = HeistReportStepKind(step: step)
         return HeistReportNode(
@@ -57,7 +61,7 @@ struct HeistReportProjection {
             expectation: outcome.expectation,
             caseSelection: outcome.caseSelection,
             forEachResult: outcome.forEachResult,
-            children: children(for: step, outcome: outcome, path: path)
+            children: children(for: step, outcome: outcome, path: path, definitionScope: definitionScope)
         )
     }
 
@@ -81,7 +85,8 @@ struct HeistReportProjection {
     private static func children(
         for step: HeistStep,
         outcome: HeistExecutionStepResult,
-        path: String
+        path: String,
+        definitionScope: HeistPlan
     ) -> [HeistReportNode] {
         guard let childResults = outcome.childResults else { return [] }
         switch step {
@@ -89,16 +94,18 @@ struct HeistReportProjection {
             if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex,
                let selectedCase = conditional.cases[safe: selectedCaseIndex] {
                 return nodes(
-                    steps: selectedCase.steps,
+                    steps: selectedCase.body,
                     outcomes: childResults,
-                    path: "\(path).conditional.cases[\(selectedCaseIndex)].steps"
+                    path: "\(path).conditional.cases[\(selectedCaseIndex)].body",
+                    definitionScope: definitionScope
                 )
             }
             if outcome.caseSelection?.elseRan == true {
                 return nodes(
-                    steps: conditional.elseSteps ?? [],
+                    steps: conditional.elseBody ?? [],
                     outcomes: childResults,
-                    path: "\(path).conditional.else_steps"
+                    path: "\(path).conditional.else_body",
+                    definitionScope: definitionScope
                 )
             }
             return []
@@ -106,32 +113,51 @@ struct HeistReportProjection {
             if let selectedCaseIndex = outcome.caseSelection?.selectedCaseIndex,
                let selectedCase = waitForCases.cases[safe: selectedCaseIndex] {
                 return nodes(
-                    steps: selectedCase.steps,
+                    steps: selectedCase.body,
                     outcomes: childResults,
-                    path: "\(path).wait_for_cases.cases[\(selectedCaseIndex)].steps"
+                    path: "\(path).wait_for_cases.cases[\(selectedCaseIndex)].body",
+                    definitionScope: definitionScope
                 )
             }
             if outcome.caseSelection?.elseRan == true {
                 return nodes(
-                    steps: waitForCases.elseSteps ?? [],
+                    steps: waitForCases.elseBody ?? [],
                     outcomes: childResults,
-                    path: "\(path).wait_for_cases.else_steps"
+                    path: "\(path).wait_for_cases.else_body",
+                    definitionScope: definitionScope
                 )
             }
             return []
         case .forEachElement(let forEach):
             return iterationNodes(
                 kind: .forEachIteration,
-                bodySteps: forEach.steps,
+                bodySteps: forEach.body,
                 childResults: childResults,
-                path: "\(path).for_each_element.iterations"
+                path: "\(path).for_each_element.iterations",
+                definitionScope: definitionScope
             )
         case .forEachString(let forEach):
             return iterationNodes(
                 kind: .forEachIteration,
-                bodySteps: forEach.steps,
+                bodySteps: forEach.body,
                 childResults: childResults,
-                path: "\(path).for_each_string.iterations"
+                path: "\(path).for_each_string.iterations",
+                definitionScope: definitionScope
+            )
+        case .heist(let plan):
+            return nodes(
+                steps: plan.body,
+                outcomes: childResults,
+                path: "\(path).heist.body",
+                definitionScope: plan
+            )
+        case .invoke(let invoke):
+            guard let definition = definitionScope.heistDefinition(at: invoke.path) else { return [] }
+            return nodes(
+                steps: definition.body,
+                outcomes: childResults,
+                path: "\(path).invoke.body",
+                definitionScope: definition
             )
         case .action, .wait, .warn, .fail:
             return []
@@ -142,7 +168,8 @@ struct HeistReportProjection {
         kind: HeistReportStepKind,
         bodySteps: [HeistStep],
         childResults: [HeistExecutionStepResult],
-        path: String
+        path: String,
+        definitionScope: HeistPlan
     ) -> [HeistReportNode] {
         guard !bodySteps.isEmpty, !childResults.isEmpty else { return [] }
         let bodyCount = bodySteps.count
@@ -154,7 +181,8 @@ struct HeistReportProjection {
             let children = nodes(
                 steps: bodySteps,
                 outcomes: iterationResults,
-                path: "\(path)[\(iterationIndex)].steps",
+                path: "\(path)[\(iterationIndex)].body",
+                definitionScope: definitionScope,
                 matchOutcomesByPosition: true
             )
             let failed = children.contains(where: { $0.status == .failed })
@@ -245,6 +273,8 @@ enum HeistReportStepKind: String {
     case forEachIteration = "for_each_iteration"
     case warn
     case fail
+    case heist
+    case invoke
 
     init(step: HeistStep) {
         switch step {
@@ -256,6 +286,8 @@ enum HeistReportStepKind: String {
         case .forEachString: self = .forEachString
         case .warn: self = .warn
         case .fail: self = .fail
+        case .heist: self = .heist
+        case .invoke: self = .invoke
         }
     }
 
@@ -305,6 +337,8 @@ enum HeistReportStepStatus {
             return outcome.stopsHeist && (outcome.childResults?.isEmpty ?? true)
         case .forEachElement, .forEachString:
             return outcome.forEachResult?.failureReason != nil
+        case .heist, .invoke:
+            return outcome.childResults?.contains(where: { $0.isFailure }) == true || outcome.stopsHeist
         case .warn:
             return false
         case .fail:

@@ -251,7 +251,7 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let hasNestedTarget = container.contains(.target)
         let hasTargetRef = container.contains(.targetRef)
-        let inlineTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        let inlineTarget = try ElementTargetExpr.decodeInlineIfPresent(from: decoder)
         let intentCount = [hasNestedTarget, hasTargetRef, inlineTarget != nil].filter { $0 }.count
         guard intentCount == 1 else {
             throw DecodingError.dataCorrupted(.init(
@@ -260,9 +260,9 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
             ))
         }
         if let inlineTarget {
-            target = .target(inlineTarget)
+            target = inlineTarget
         } else if hasNestedTarget {
-            target = .target(try container.decode(ElementTarget.self, forKey: .target))
+            target = try container.decode(ElementTargetExpr.self, forKey: .target)
         } else {
             let reference = try container.decode(String.self, forKey: .targetRef)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -280,6 +280,8 @@ private struct TargetExprPayload: Codable, Sendable, Equatable {
     func encode(to encoder: Encoder) throws {
         switch target {
         case .target(let target):
+            try target.encode(to: encoder)
+        case .predicate:
             try target.encode(to: encoder)
         case .ref(let reference):
             var container = encoder.container(keyedBy: CodingKeys.self)
@@ -479,7 +481,7 @@ private extension TargetExprPayload {
     ) throws -> ElementTargetExpr? {
         let hasNestedTarget = container.contains(nestedKey)
         let hasTargetRef = container.contains(refKey)
-        let inlineTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
+        let inlineTarget = try ElementTargetExpr.decodeInlineIfPresent(from: decoder)
         let intentCount = [hasNestedTarget, hasTargetRef, inlineTarget != nil].filter { $0 }.count
         guard intentCount <= 1 else {
             throw DecodingError.dataCorrupted(.init(
@@ -488,10 +490,10 @@ private extension TargetExprPayload {
             ))
         }
         if let inlineTarget {
-            return .target(inlineTarget)
+            return inlineTarget
         }
         if hasNestedTarget {
-            return .target(try container.decode(ElementTarget.self, forKey: nestedKey))
+            return try container.decode(ElementTargetExpr.self, forKey: nestedKey)
         }
         if hasTargetRef {
             let reference = try container.decode(String.self, forKey: refKey)
@@ -517,6 +519,8 @@ private extension TargetExprPayload {
         switch target {
         case .target(let target):
             try container.encode(target, forKey: nestedKey)
+        case .predicate:
+            try container.encode(target, forKey: nestedKey)
         case .ref(let reference):
             try container.encode(reference, forKey: refKey)
         }
@@ -527,6 +531,6 @@ private func rejectUnknownTargetExprPayloadKeys(
     from decoder: Decoder,
     commandFields: [String]
 ) throws {
-    let allowed = Set(commandFields + ElementTarget.inlineFieldNames)
+    let allowed = Set(commandFields + ElementTargetExpr.inlineFieldNames)
     try decoder.rejectUnknownKeys(allowed: allowed, typeName: "heist action command payload")
 }

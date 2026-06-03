@@ -40,9 +40,9 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         ))
         let casePredicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
         let conditional = try ConditionalStep(cases: [
-            PredicateCase(predicate: casePredicate, steps: [childAction]),
+            PredicateCase(predicate: casePredicate, body: [childAction]),
         ])
-        let plan = HeistPlan(steps: [.conditional(conditional)])
+        let plan = HeistPlan(body: [.conditional(conditional)])
         let childResult = HeistExecutionStepResult(
             index: 0,
             kind: .action,
@@ -50,8 +50,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
             expectation: ExpectationResult(met: true, predicate: expected),
             durationMs: 1
         )
-        let result = HeistExecutionResult(
-            steps: [
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .conditional,
@@ -78,7 +77,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testCompactHeistFormattingReportsFailStepMessage() {
-        let plan = HeistPlan(steps: [.fail(FailStep(message: "Unknown screen"))])
+        let plan = HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(
@@ -99,7 +98,7 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
     }
 
     func testPublicHeistJSONReportsFailStepMessage() {
-        let plan = HeistPlan(steps: [.fail(FailStep(message: "Unknown screen"))])
+        let plan = HeistPlan(body: [.fail(FailStep(message: "Unknown screen"))])
         let result = HeistExecutionResult(
             steps: [
                 HeistExecutionStepResult(

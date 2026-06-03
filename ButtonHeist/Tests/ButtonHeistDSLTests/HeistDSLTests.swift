@@ -9,7 +9,7 @@ func actionConstructorBuildsOneActionStep() throws {
         Activate(.label("Save"))
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .action(try ActionStep(command: .activate(.label("Save")))),
     ]))
 }
@@ -21,7 +21,7 @@ func actionExpectationAttachesWaitStep() throws {
             .expect(.present(.label("Home")), timeout: .seconds(5))
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Sign In")),
             expectation: WaitStep(predicate: .present(.label("Home")), timeout: 5)
@@ -36,7 +36,7 @@ func actionWithoutExpectationAttachesExplicitWaiver() throws {
             .withoutExpectation("No durable semantic outcome")
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .action(try ActionStep(
             command: .activate(.label("Optional")),
             expectationWaiver: "No durable semantic outcome"
@@ -63,7 +63,7 @@ func mechanicalAndViewportNamespacesBuildExplicitEscapeHatches() throws {
         Viewport.ScrollToVisible(.label("Checkout"))
     }
 
-    #expect(heist.plan.steps == [
+    #expect(heist.plan.body == [
         .action(try ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))))),
         .action(try ActionStep(command: .drag(DragTarget(
             start: .coordinate(ScreenPoint(x: 1, y: 2)),
@@ -84,7 +84,7 @@ func customActionAndRotorBuildSemanticActionSteps() throws {
             .withoutExpectation("Navigation cursor only")
     }
 
-    #expect(heist.plan.steps == [
+    #expect(heist.plan.body == [
         .action(try ActionStep(
             command: .performCustomAction(CustomActionTarget(
                 elementTarget: .label("Message"),
@@ -109,7 +109,7 @@ func waitForBuildsWaitStep() throws {
         WaitFor(.present(.label("Home")), timeout: .seconds(5))
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .wait(WaitStep(predicate: .present(.label("Home")), timeout: 5)),
     ]))
 }
@@ -122,11 +122,11 @@ func singleIfBuildsConditionalStep() throws {
         }
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .conditional(try ConditionalStep(cases: [
             PredicateCase(
                 predicate: .present(.label("Allow")),
-                steps: [.action(try ActionStep(command: .activate(.label("Allow"))))]
+                body: [.action(try ActionStep(command: .activate(.label("Allow"))))]
             ),
         ])),
     ]))
@@ -150,13 +150,13 @@ func multiCaseIfBuildsConditionalStep() throws {
         }
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .conditional(try ConditionalStep(
             cases: [
-                PredicateCase(predicate: .present(.label("Home")), steps: [.warn(WarnStep(message: "home"))]),
-                PredicateCase(predicate: .present(.label("Login")), steps: [.warn(WarnStep(message: "login"))]),
+                PredicateCase(predicate: .present(.label("Home")), body: [.warn(WarnStep(message: "home"))]),
+                PredicateCase(predicate: .present(.label("Login")), body: [.warn(WarnStep(message: "login"))]),
             ],
-            elseSteps: [.fail(FailStep(message: "unknown"))]
+            elseBody: [.fail(FailStep(message: "unknown"))]
         )),
     ]))
 }
@@ -179,14 +179,14 @@ func multiCaseWaitForBuildsWaitForCasesStep() throws {
         }
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .waitForCases(try WaitForCasesStep(
             timeout: 8,
             cases: [
-                PredicateCase(predicate: .present(.label("Home")), steps: [.warn(WarnStep(message: "logged in"))]),
-                PredicateCase(predicate: .present(.label("Invalid password")), steps: [.fail(FailStep(message: "invalid password"))]),
+                PredicateCase(predicate: .present(.label("Home")), body: [.warn(WarnStep(message: "logged in"))]),
+                PredicateCase(predicate: .present(.label("Invalid password")), body: [.fail(FailStep(message: "invalid password"))]),
             ],
-            elseSteps: [.fail(FailStep(message: "no known result"))]
+            elseBody: [.fail(FailStep(message: "no known result"))]
         )),
     ]))
 }
@@ -198,7 +198,7 @@ func warnAndFailBuildTheirStepTypes() throws {
         Fail("Unexpected login state")
     }
 
-    #expect(heist.plan == HeistPlan(steps: [
+    #expect(heist.plan == HeistPlan(body: [
         .warn(WarnStep(message: "Optional onboarding was skipped")),
         .fail(FailStep(message: "Unexpected login state")),
     ]))
@@ -211,7 +211,7 @@ func helperFunctionsFlattenIntoParentPlan() throws {
         Activate(.label("Checkout"))
     }
 
-    #expect(heist.plan.steps == [
+    #expect(heist.plan.body == [
         .action(try ActionStep(command: .typeText(TypeTextTarget(text: "alex@example.com", elementTarget: .identifier("email"))))),
         .action(try ActionStep(command: .typeText(TypeTextTarget(text: "secret", elementTarget: .identifier("password"))))),
         .action(try ActionStep(
@@ -223,6 +223,181 @@ func helperFunctionsFlattenIntoParentPlan() throws {
 }
 
 @Test
+func heistDefinitionsCompileToInvocationsWithLocalDefinitions() throws {
+    enum LibraryScreen {
+        static let addToCart = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            Activate(.label(item))
+            Activate(.label("Add to Cart"))
+                .expect(.present(.label(item)), timeout: .seconds(2))
+        }
+    }
+
+    let heist = try Heist("purchaseFlow") {
+        try LibraryScreen.addToCart("Milk")
+        try LibraryScreen.addToCart("Bread")
+    }
+
+    #expect(heist.plan.name == "purchaseFlow")
+    #expect(heist.plan.body == [
+        .invoke(HeistInvocationStep(
+            path: ["LibraryScreen", "addToCart"],
+            argument: .strings([.literal("Milk")])
+        )),
+        .invoke(HeistInvocationStep(
+            path: ["LibraryScreen", "addToCart"],
+            argument: .strings([.literal("Bread")])
+        )),
+    ])
+    #expect(heist.plan.definitions == [
+        HeistPlan(name: "LibraryScreen", definitions: [
+            HeistPlan(
+                name: "addToCart",
+                parameter: .strings(name: "item"),
+                body: [
+                    .action(try ActionStep(command: .activate(.label(.ref("item"))))),
+                    .action(try ActionStep(
+                        command: .activate(.target(.label("Add to Cart"))),
+                        expectation: WaitStep(predicate: .present(.label(.ref("item"))), timeout: 2)
+                    )),
+                ]
+            ),
+        ], body: []),
+    ])
+}
+
+@Test
+func heistDefinitionsPreserveConflictingDuplicatesForAdmission() throws {
+    let first = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+        Activate(.label(item))
+    }
+    let second = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { _ in
+        Activate(.label("Add to Cart"))
+    }
+
+    let heist = try Heist {
+        try first("Milk")
+        try second("Bread")
+    }
+
+    let namespace = try #require(heist.plan.definitions.first)
+    #expect(namespace.definitions.count == 2)
+    #expect(heist.plan.runtimeAdmissionFailures().contains {
+        $0.contract.contains("duplicate heist definition names")
+    })
+}
+
+@Test
+func heistDefinitionsCarryLocalDependenciesInDefinitionScope() throws {
+    enum LibraryScreen {
+        static let tapAddButton = HeistDef<Void>("AddButton.tap") {
+            Activate(.label("Add to Cart"))
+        }
+
+        static let addToCart = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            Activate(.label(item))
+            try tapAddButton()
+        }
+    }
+
+    let heist = try Heist {
+        try LibraryScreen.addToCart("Milk")
+    }
+
+    #expect(heist.plan.runtimeAdmissionFailures().isEmpty)
+    #expect(heist.plan.definitions == [
+        HeistPlan(name: "LibraryScreen", definitions: [
+            HeistPlan(
+                name: "addToCart",
+                parameter: .strings(name: "item"),
+                definitions: [
+                    HeistPlan(name: "AddButton", definitions: [
+                        HeistPlan(
+                            name: "tap",
+                            body: [
+                                .action(try ActionStep(command: .activate(.target(.label("Add to Cart"))))),
+                            ]
+                        ),
+                    ], body: []),
+                ],
+                body: [
+                    .action(try ActionStep(command: .activate(.label(.ref("item"))))),
+                    .invoke(HeistInvocationStep(path: ["AddButton", "tap"])),
+                ]
+            ),
+        ], body: []),
+    ])
+}
+
+@Test
+func rawHeistPlanContentCarriesDefinitions() throws {
+    let rawPlan = HeistPlan(definitions: [
+        HeistPlan(name: "setup", body: [
+            .action(try ActionStep(command: .activate(.target(.label("Setup"))))),
+        ]),
+    ], body: [
+        .invoke(HeistInvocationStep(path: ["setup"])),
+    ])
+
+    let heist = try Heist {
+        rawPlan
+    }
+
+    #expect(heist.plan.body == rawPlan.body)
+    #expect(heist.plan.definitions == rawPlan.definitions)
+    #expect(heist.plan.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
+func heistDefinitionsCanBeInvokedFromForEachBodies() throws {
+    enum LibraryScreen {
+        static let addToCart = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            Activate(.label(item))
+        }
+    }
+    enum CartScreen {
+        static let deleteItem = HeistDef<ElementTarget>("CartScreen.deleteItem", parameter: "target") { target in
+            Activate(target)
+                .expect(.absent(target), timeout: .seconds(2))
+        }
+    }
+
+    let heist = try Heist {
+        try ForEach(["Milk", "Bread"]) { item in
+            try LibraryScreen.addToCart(item)
+        }
+
+        try ForEach(.matching(.label("Delete")), limit: 20) { target in
+            try CartScreen.deleteItem(target)
+        }
+    }
+
+    #expect(heist.plan.body == [
+        .forEachString(try ForEachStringStep(
+            values: ["Milk", "Bread"],
+            parameter: "item",
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["LibraryScreen", "addToCart"],
+                    argument: .strings([.ref("item")])
+                )),
+            ]
+        )),
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 20,
+            parameter: "target",
+            body: [
+                .invoke(HeistInvocationStep(
+                    path: ["CartScreen", "deleteItem"],
+                    argument: .elementTargets([.ref("target")])
+                )),
+            ]
+        )),
+    ])
+    #expect(heist.plan.runtimeAdmissionFailures().isEmpty)
+}
+
+@Test
 func stringForEachBuildsRuntimeStringLoop() throws {
     let heist = try Heist {
         try ForEach(["Milk", "Eggs"]) { item in
@@ -231,11 +406,11 @@ func stringForEachBuildsRuntimeStringLoop() throws {
         }
     }
 
-    #expect(heist.plan.steps == [
+    #expect(heist.plan.body == [
         .forEachString(try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
-            steps: [
+            body: [
                 .action(try ActionStep(
                     command: .typeText(text: .ref("item"), target: .target(.label("Add item"))),
                     expectation: WaitStep(
@@ -258,7 +433,7 @@ func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
         }
     }
 
-    guard case .forEachElement(let step) = heist.plan.steps.first else {
+    guard case .forEachElement(let step) = heist.plan.body.first else {
         Issue.record("Expected semantic ForEach step")
         return
     }
@@ -266,7 +441,7 @@ func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     #expect(step.matching == matching)
     #expect(step.limit == 20)
     #expect(step.parameter == "target")
-    #expect(step.steps == [
+    #expect(step.body == [
         .action(try ActionStep(
             command: .activate(.ref("target")),
             expectation: WaitStep(
@@ -323,8 +498,8 @@ func emptyHeistRejectsPlanUsingDecodedHeistPlanContract() {
         _ = try Heist {}
         Issue.record("Expected empty Heist construction to throw")
     } catch DecodingError.dataCorrupted(let context) {
-        #expect(context.codingPath.map(\.stringValue) == ["steps"])
-        #expect(context.debugDescription == "HeistPlan requires at least one step")
+        #expect(context.codingPath.map(\.stringValue) == ["body"])
+        #expect(context.debugDescription == "HeistPlan requires a non-empty body or definitions")
     } catch {
         Issue.record("Expected DecodingError.dataCorrupted, got \(error)")
     }

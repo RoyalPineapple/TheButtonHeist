@@ -203,7 +203,7 @@ final class MockConnection: TransportReachabilityConnecting {
 
         var stepResults: [HeistExecutionStepResult] = []
         var failedIndex: Int?
-        for (index, step) in plan.steps.enumerated() {
+        for (index, step) in plan.body.enumerated() {
             if let failedIndex {
                 let skipped = HeistExecutionSkippedStepResult(
                     index: index,
@@ -258,6 +258,23 @@ final class MockConnection: TransportReachabilityConnecting {
             return heistForEachElementStepResult(for: forEach, index: index)
         case .forEachString(let forEach):
             return heistForEachStringStepResult(for: forEach, index: index)
+        case .heist(let plan):
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .heist,
+                message: plan.name.map { "heist \($0)" },
+                durationMs: heistStepDurationMs,
+                childResults: plan.body.enumerated().map { childIndex, childStep in
+                    heistStepResult(for: childStep, index: childIndex, handler: handler)
+                }
+            )
+        case .invoke(let invoke):
+            return HeistExecutionStepResult(
+                index: index,
+                kind: .invoke,
+                message: "invoke \(invoke.path.joined(separator: "."))",
+                durationMs: heistStepDurationMs
+            )
         case .warn(let warn):
             return HeistExecutionStepResult(
                 index: index,

@@ -185,7 +185,7 @@ final class SemanticActionabilityProductTests: XCTestCase {
         try seedKnownOffscreenTarget(fixture, in: localBrains)
 
         if heist {
-            let plan = HeistPlan(steps: [
+            let plan = HeistPlan(body: [
                 .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier, traits: [.button]))))),
             ])
             let result = await localBrains.executeHeistPlan(plan)

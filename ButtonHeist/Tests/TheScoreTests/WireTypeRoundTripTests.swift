@@ -567,8 +567,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     // MARK: - HeistPlan
 
     func testHeistPlanRoundTripPreservesCommandStepWireShape() throws {
-        let plan = HeistPlan(
-            steps: [
+        let plan = HeistPlan(body: [
                 .action(try ActionStep(
                     command: .activate(.predicate(ElementPredicate(label: "Settings", traits: [.button]), ordinal: 1)),
                     expectation: WaitStep(predicate: .changed(.screen()), timeout: 2.5)
@@ -585,10 +584,10 @@ final class WireTypeRoundTripTests: XCTestCase {
         let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         XCTAssertEqual(payload["version"] as? Int, HeistPlan.currentVersion)
-        let steps = try XCTUnwrap(payload["steps"] as? [[String: Any]])
-        XCTAssertEqual(steps.count, 4)
-        XCTAssertEqual(steps[0]["type"] as? String, "action")
-        let action = try XCTUnwrap(steps[0]["action"] as? [String: Any])
+        let body = try XCTUnwrap(payload["body"] as? [[String: Any]])
+        XCTAssertEqual(body.count, 4)
+        XCTAssertEqual(body[0]["type"] as? String, "action")
+        let action = try XCTUnwrap(body[0]["action"] as? [String: Any])
         let command = try XCTUnwrap(action["command"] as? [String: Any])
         XCTAssertEqual(command["type"] as? String, "activate")
         let target = try XCTUnwrap(command["payload"] as? [String: Any])
@@ -597,16 +596,15 @@ final class WireTypeRoundTripTests: XCTestCase {
         XCTAssertEqual(target["traits"] as? [String], ["button"])
         XCTAssertEqual(((action["expectation"] as? [String: Any])?["predicate"] as? [String: Any])?["type"] as? String, "screen_changed")
         XCTAssertEqual((action["expectation"] as? [String: Any])?["timeout"] as? Double, 2.5)
-        XCTAssertEqual((steps[2]["warn"] as? [String: Any])?["message"] as? String, "optional step skipped")
-        XCTAssertEqual((steps[3]["fail"] as? [String: Any])?["message"] as? String, "unexpected state")
+        XCTAssertEqual((body[2]["warn"] as? [String: Any])?["message"] as? String, "optional step skipped")
+        XCTAssertEqual((body[3]["fail"] as? [String: Any])?["message"] as? String, "unexpected state")
 
         let decoded = try decoder.decode(HeistPlan.self, from: data)
         XCTAssertEqual(decoded, plan)
     }
 
     func testHeistExecutionResultRoundTripPreservesActionFailureDiagnostics() throws {
-        let result = HeistExecutionResult(
-            steps: [
+        let result = HeistExecutionResult(steps: [
                 HeistExecutionStepResult(
                     index: 0,
                     kind: .action,

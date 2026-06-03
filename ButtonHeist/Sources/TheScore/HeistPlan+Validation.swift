@@ -75,13 +75,13 @@ private struct HeistPlanLinter: HeistPlanTraversalVisitor {
     }
 
     mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {
-        if predicateCase.steps.isEmpty {
+        if predicateCase.body.isEmpty {
             findings.append(emptyBranchFinding(path: context.path))
         }
     }
 
-    mutating func visitElseSteps(_ steps: [HeistStep], context: HeistTraversalContext) {
-        if steps.isEmpty {
+    mutating func visitElseBody(_ body: [HeistStep], context: HeistTraversalContext) {
+        if body.isEmpty {
             findings.append(emptyBranchFinding(path: context.path))
         }
     }

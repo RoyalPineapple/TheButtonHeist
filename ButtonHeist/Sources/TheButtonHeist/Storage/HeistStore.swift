@@ -88,7 +88,7 @@ final class HeistStore {
             throw StorageError.heistRecording(.noValidSteps(path: recording.filePath.path))
         }
 
-        return HeistPlan(steps: steps)
+        return HeistPlan(body: steps)
     }
 
     func abandonRecording() {

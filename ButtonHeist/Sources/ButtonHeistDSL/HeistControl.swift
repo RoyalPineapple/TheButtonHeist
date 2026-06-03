@@ -12,12 +12,14 @@ public extension Double {
 
 public struct WaitFor: HeistContent {
     public let heistSteps: [HeistStep]
+    public let heistDefinitions: [HeistPlan]
 
     public init(
         _ predicate: AccessibilityPredicateExpr,
         timeout: Double = 0
     ) {
         heistSteps = [.wait(WaitStep(predicate: predicate, timeout: timeout))]
+        heistDefinitions = []
     }
 
     @_disfavoredOverload
@@ -36,21 +38,25 @@ public struct WaitFor: HeistContent {
         heistSteps = [.waitForCases(makeWaitForCasesStep(
             timeout: timeout,
             cases: branchSet.cases,
-            elseSteps: branchSet.elseSteps
+            elseBody: branchSet.elseBody
         ))]
+        heistDefinitions = branchSet.definitions
     }
 }
 
 public struct If: HeistContent {
     public let heistSteps: [HeistStep]
+    public let heistDefinitions: [HeistPlan]
 
     public init(
         _ predicate: AccessibilityPredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
+        let content = content()
         heistSteps = [.conditional(makeConditionalStep(
-            cases: [PredicateCase(predicate: predicate, steps: content().heistSteps)]
+            cases: [PredicateCase(predicate: predicate, body: content.heistSteps)]
         ))]
+        heistDefinitions = content.heistDefinitions
     }
 
     @_disfavoredOverload
@@ -66,10 +72,13 @@ public struct If: HeistContent {
         @HeistBuilder _ content: () -> some HeistContent,
         @HeistBuilder otherwise: () -> some HeistContent
     ) {
+        let content = content()
+        let otherwise = otherwise()
         heistSteps = [.conditional(makeConditionalStep(
-            cases: [PredicateCase(predicate: predicate, steps: content().heistSteps)],
-            elseSteps: otherwise().heistSteps
+            cases: [PredicateCase(predicate: predicate, body: content.heistSteps)],
+            elseBody: otherwise.heistSteps
         ))]
+        heistDefinitions = content.heistDefinitions + otherwise.heistDefinitions
     }
 
     @_disfavoredOverload
@@ -87,8 +96,9 @@ public struct If: HeistContent {
         let branchSet = branches()
         heistSteps = [.conditional(makeConditionalStep(
             cases: branchSet.cases,
-            elseSteps: branchSet.elseSteps
+            elseBody: branchSet.elseBody
         ))]
+        heistDefinitions = branchSet.definitions
     }
 }
 
@@ -99,7 +109,11 @@ public struct Case {
         _ predicate: AccessibilityPredicateExpr,
         @HeistBuilder _ content: () -> some HeistContent
     ) {
-        predicateBranch = .case(PredicateCase(predicate: predicate, steps: content().heistSteps))
+        let content = content()
+        predicateBranch = .case(
+            PredicateCase(predicate: predicate, body: content.heistSteps),
+            definitions: content.heistDefinitions
+        )
     }
 
     @_disfavoredOverload
@@ -117,12 +131,14 @@ public struct Else {
     public init(
         @HeistBuilder _ content: () -> some HeistContent
     ) {
-        predicateBranch = .else(content().heistSteps)
+        let content = content()
+        predicateBranch = .else(content.heistSteps, definitions: content.heistDefinitions)
     }
 }
 
 public struct Warn: HeistContent {
     public let heistSteps: [HeistStep]
+    public let heistDefinitions: [HeistPlan] = []
 
     public init(_ message: String) {
         heistSteps = [.warn(WarnStep(message: message))]
@@ -131,6 +147,7 @@ public struct Warn: HeistContent {
 
 public struct Fail: HeistContent {
     public let heistSteps: [HeistStep]
+    public let heistDefinitions: [HeistPlan] = []
 
     public init(_ message: String) {
         heistSteps = [.fail(FailStep(message: message))]
@@ -138,13 +155,14 @@ public struct Fail: HeistContent {
 }
 
 public enum PredicateBranch {
-    case `case`(PredicateCase)
-    case `else`([HeistStep])
+    case `case`(PredicateCase, definitions: [HeistPlan])
+    case `else`([HeistStep], definitions: [HeistPlan])
 }
 
 public struct PredicateBranches {
     public let cases: [PredicateCase]
-    public let elseSteps: [HeistStep]?
+    public let elseBody: [HeistStep]?
+    public let definitions: [HeistPlan]
 }
 
 @resultBuilder
@@ -175,27 +193,30 @@ public enum PredicateBranchBuilder {
 
     public static func buildFinalResult(_ branches: [PredicateBranch]) -> PredicateBranches {
         var cases: [PredicateCase] = []
-        var elseSteps: [HeistStep]?
+        var elseBody: [HeistStep]?
+        var definitions: [HeistPlan] = []
         for branch in branches {
             switch branch {
-            case .case(let predicateCase):
-                precondition(elseSteps == nil, "Case must appear before Else in a heist branch block")
+            case .case(let predicateCase, let branchDefinitions):
+                precondition(elseBody == nil, "Case must appear before Else in a heist branch block")
                 cases.append(predicateCase)
-            case .else(let steps):
-                precondition(elseSteps == nil, "A heist branch block accepts at most one Else")
-                elseSteps = steps
+                definitions.append(contentsOf: branchDefinitions)
+            case .else(let steps, let branchDefinitions):
+                precondition(elseBody == nil, "A heist branch block accepts at most one Else")
+                elseBody = steps
+                definitions.append(contentsOf: branchDefinitions)
             }
         }
-        return PredicateBranches(cases: cases, elseSteps: elseSteps)
+        return PredicateBranches(cases: cases, elseBody: elseBody, definitions: definitions)
     }
 }
 
 private func makeConditionalStep(
     cases: [PredicateCase],
-    elseSteps: [HeistStep]? = nil
+    elseBody: [HeistStep]? = nil
 ) -> ConditionalStep {
     do {
-        return try ConditionalStep(cases: cases, elseSteps: elseSteps)
+        return try ConditionalStep(cases: cases, elseBody: elseBody)
     } catch {
         preconditionFailure("ButtonHeistDSL requires at least one If Case")
     }
@@ -204,10 +225,10 @@ private func makeConditionalStep(
 private func makeWaitForCasesStep(
     timeout: Double,
     cases: [PredicateCase],
-    elseSteps: [HeistStep]? = nil
+    elseBody: [HeistStep]? = nil
 ) -> WaitForCasesStep {
     do {
-        return try WaitForCasesStep(timeout: timeout, cases: cases, elseSteps: elseSteps)
+        return try WaitForCasesStep(timeout: timeout, cases: cases, elseBody: elseBody)
     } catch HeistPlanError.negativeTimeout {
         preconditionFailure("ButtonHeistDSL WaitFor timeout must be non-negative")
     } catch {

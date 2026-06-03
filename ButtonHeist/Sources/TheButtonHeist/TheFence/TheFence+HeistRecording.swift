@@ -18,6 +18,6 @@ extension TheFence {
         }
         let heist = try heistStore.finishRecording()
         try HeistStore.writeHeist(heist, to: resolvedURL)
-        return .heistStopped(path: resolvedURL.path, stepCount: heist.steps.count)
+        return .heistStopped(path: resolvedURL.path, stepCount: heist.body.count)
     }
 }

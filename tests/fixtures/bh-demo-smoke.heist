@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "steps": [
+  "version": 2,
+  "body": [
     {
       "type": "action",
       "action": {

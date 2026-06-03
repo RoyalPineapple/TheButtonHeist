@@ -62,8 +62,46 @@ func swiftDSLAndJSONProjectToEquivalentCanonicalSwift() throws {
 }
 
 @Test
+func canonicalSwiftRendererPreservesHelperDefinitionDependencies() throws {
+    enum LibraryScreen {
+        static let tapAddButton = HeistDef<Void>("AddButton.tap") {
+            Activate(.label("Add to Cart"))
+        }
+
+        static let addToCart = HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            Activate(.label(item))
+            try tapAddButton()
+        }
+    }
+
+    let plan = try Heist("purchaseFlow") {
+        try LibraryScreen.addToCart("Milk")
+    }.plan
+
+    #expect(try plan.canonicalSwiftDSL() == """
+    enum LibraryScreen {
+        static let addToCart = try! HeistDef<String>("LibraryScreen.addToCart", parameter: "item") { item in
+            enum AddButton {
+                static let tap = try! HeistDef<Void>("AddButton.tap") {
+                    Activate(.label("Add to Cart"))
+                }
+            }
+
+            Activate(.label(item))
+
+            AddButton.tap()
+        }
+    }
+
+    try Heist("purchaseFlow") {
+        LibraryScreen.addToCart("Milk")
+    }
+    """)
+}
+
+@Test
 func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(command: .activate(.ref("target")))),
     ])
 
@@ -93,7 +131,7 @@ func decodedRuntimeLoopsRejectNonCanonicalSwiftParameters() throws {
 
 @Test
 func canonicalSwiftRendererRendersAmbientActions() throws {
-    let plan = HeistPlan(steps: [
+    let plan = HeistPlan(body: [
         .action(try ActionStep(command: .setPasteboard(SetPasteboardTarget(text: "milk")))),
         .action(try ActionStep(command: .editAction(EditActionTarget(action: .paste)))),
         .action(try ActionStep(command: .dismissKeyboard)),
@@ -118,7 +156,7 @@ func elementUnitPointSwipeIsDurableAndCanonical() throws {
         start: UnitPoint(x: 0.8, y: 0.5),
         end: UnitPoint(x: 0.2, y: 0.5)
     )))
-    let plan = HeistPlan(steps: [.action(try ActionStep(command: command))])
+    let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
 
     #expect(command.durableHeistActionFailure == nil)
     #expect(plan.runtimeAdmissionFailures().isEmpty)
@@ -136,7 +174,7 @@ func nonDurableActionShapeFailsAdmissionAndRenderingWithSameReason() throws {
         target: .target(.predicate(.label("Article"))),
         direction: .next
     )
-    let plan = HeistPlan(steps: [.action(try ActionStep(command: command))])
+    let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
     let reason = try #require(command.durableHeistActionFailure)
 
     #expect(plan.runtimeAdmissionFailures().contains {
@@ -154,8 +192,8 @@ func nonDurableActionShapeFailsAdmissionAndRenderingWithSameReason() throws {
 
 private let fullASTJSON = """
 {
-  "version": 1,
-  "steps": [
+  "version": 2,
+  "body": [
     {
       "type": "action",
       "action": {
@@ -182,12 +220,12 @@ private let fullASTJSON = """
         "cases": [
           {
             "predicate": { "type": "present", "element": { "label": "Home" } },
-            "steps": [
+            "body": [
               { "type": "warn", "warn": { "message": "home" } }
             ]
           }
         ],
-        "else_steps": [
+        "else_body": [
           { "type": "fail", "fail": { "message": "unknown" } }
         ]
       }
@@ -199,12 +237,12 @@ private let fullASTJSON = """
         "cases": [
           {
             "predicate": { "type": "present", "element": { "label": "Results" } },
-            "steps": [
+            "body": [
               { "type": "warn", "warn": { "message": "results" } }
             ]
           }
         ],
-        "else_steps": [
+        "else_body": [
           { "type": "fail", "fail": { "message": "timeout" } }
         ]
       }
@@ -215,7 +253,7 @@ private let fullASTJSON = """
         "matching": { "label": "Delete" },
         "limit": 20,
         "parameter": "target",
-        "steps": [
+        "body": [
           {
             "type": "action",
             "action": {
@@ -237,7 +275,7 @@ private let fullASTJSON = """
       "for_each_string": {
         "values": ["Milk", "Eggs"],
         "parameter": "item",
-        "steps": [
+        "body": [
           {
             "type": "action",
             "action": {
@@ -265,15 +303,15 @@ private let fullASTJSON = """
 
 private let invalidElementLoopParameterJSON = """
 {
-  "version": 1,
-  "steps": [
+  "version": 2,
+  "body": [
     {
       "type": "for_each_element",
       "for_each_element": {
         "matching": { "label": "Delete" },
         "limit": 20,
         "parameter": "target-name",
-        "steps": [
+        "body": [
           {
             "type": "action",
             "action": {
@@ -292,14 +330,14 @@ private let invalidElementLoopParameterJSON = """
 
 private let invalidStringLoopParameterJSON = """
 {
-  "version": 1,
-  "steps": [
+  "version": 2,
+  "body": [
     {
       "type": "for_each_string",
       "for_each_string": {
         "values": ["Milk"],
         "parameter": "target-name",
-        "steps": [
+        "body": [
           {
             "type": "action",
             "action": {

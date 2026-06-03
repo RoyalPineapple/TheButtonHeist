@@ -16,15 +16,15 @@ settlement, live geometry, and diagnostics at replay time.
 
 ```json
 {
-  "version": 1,
-  "steps": []
+  "version": 2,
+  "body": []
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | `Int` | Must match the supported `HeistPlan` version. |
-| `steps` | `[HeistStep]` | Ordered list of typed heist steps. |
+| `body` | `[HeistStep]` | Ordered list of typed heist steps. |
 
 Unknown keys are rejected. There is no app identifier, source metadata,
 runtime ID, capture-local ID, scroll container handle, or stable viewport handle
@@ -191,10 +191,10 @@ Branching wait:
     "cases": [
       {
         "predicate": { "type": "present", "element": { "label": "Home" } },
-        "steps": [{ "type": "warn", "warn": { "message": "Logged in" } }]
+        "body": [{ "type": "warn", "warn": { "message": "Logged in" } }]
       }
     ],
-    "else_steps": [{ "type": "fail", "fail": { "message": "No known result" } }]
+    "else_body": [{ "type": "fail", "fail": { "message": "No known result" } }]
   }
 }
 ```
@@ -213,10 +213,10 @@ The first matching case wins; no match without Else is a no-op.
     "cases": [
       {
         "predicate": { "type": "present", "element": { "label": "Login" } },
-        "steps": [{ "type": "warn", "warn": { "message": "Login visible" } }]
+        "body": [{ "type": "warn", "warn": { "message": "Login visible" } }]
       }
     ],
-    "else_steps": [{ "type": "fail", "fail": { "message": "Unknown state" } }]
+    "else_body": [{ "type": "fail", "fail": { "message": "Unknown state" } }]
   }
 }
 ```
@@ -243,7 +243,7 @@ Wire shape:
     "matching": { "label": "Delete" },
     "limit": 20,
     "parameter": "target",
-    "steps": [
+    "body": [
       {
         "type": "action",
         "action": {
@@ -279,7 +279,7 @@ String-array ForEach serializes as `for_each_string`:
   "for_each_string": {
     "values": ["Milk", "Eggs"],
     "parameter": "item",
-    "steps": [
+    "body": [
       {
         "type": "action",
         "action": {

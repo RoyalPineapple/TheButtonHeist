@@ -111,7 +111,7 @@ extension HeistReportNode {
         switch kind {
         case .forEachElement, .forEachString:
             return [row]
-        case .action, .wait, .conditional, .waitForCases, .forEachIteration, .warn, .fail:
+        case .action, .wait, .conditional, .waitForCases, .forEachIteration, .warn, .fail, .heist, .invoke:
             return [row] + children.flatMap(\.legacyFlatRows)
         }
     }

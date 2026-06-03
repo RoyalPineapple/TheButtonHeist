@@ -99,15 +99,15 @@ final class CLICommandSyncTests: XCTestCase {
 
     func testRunHeistSerializesPlanFieldsBeforeSending() throws {
         let arguments = try RunHeistCommand.planArguments(
-            inline: #"{"version":1,"steps":[{"type":"warn","warn":{"message":"Check login state"}}]}"#,
+            inline: #"{"version":2,"body":[{"type":"warn","warn":{"message":"Check login state"}}]}"#,
             fromFile: nil
         )
 
-        XCTAssertEqual(arguments[.version], .int(1))
-        guard case .array(let steps)? = arguments[.steps] else {
-            return XCTFail("expected serialized heist plan steps")
+        XCTAssertEqual(arguments[.version], .int(2))
+        guard case .array(let body)? = arguments[.body] else {
+            return XCTFail("expected serialized heist plan body")
         }
-        XCTAssertEqual(steps, [
+        XCTAssertEqual(body, [
             .object([
                 "type": .string("warn"),
                 "warn": .object(["message": .string("Check login state")]),
