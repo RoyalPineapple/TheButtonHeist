@@ -9,7 +9,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `activate` | `activate` | direct | yes | Activate a semantic UI element or one of its named accessibility actions. |
 | `connect` | `connect` | direct | no | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | `dismiss_keyboard` | direct | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
-| `drag` | `drag` | direct | yes | Drag from one point to another using explicit coordinates or a semantic target. |
+| `drag` | `drag` | direct | yes | Drag using exactly one typed intent: elementToPoint or pointToPoint. |
 | `edit_action` | `edit_action` | direct | yes | Perform an edit action on the current first responder. |
 | `get_interface` | `get_interface` | direct | no | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `get_pasteboard` | direct | no | Read text from the general pasteboard. |
@@ -17,8 +17,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_session_state` | `get_session_state` | direct | no | Inspect connection, device, and last-action session state. |
 | `list_devices` | `list_devices` | direct | no | List discovered iOS devices and configured connection targets. |
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
-| `long_press` | `long_press` | direct | yes | Long-press a coordinate or semantic target for a resolved duration. |
-| `one_finger_tap` | `one_finger_tap` | direct | yes | Tap a coordinate or semantic target after actionability resolution. |
+| `long_press` | `long_press` | direct | yes | Long-press an explicit point or semantic element for a resolved duration. |
+| `one_finger_tap` | `one_finger_tap` | direct | yes | Tap an explicit point or semantic element after actionability resolution. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
@@ -29,7 +29,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
 | `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
 | `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic heist fixture. |
-| `swipe` | `swipe` | direct | yes | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
+| `swipe` | `swipe` | direct | yes | Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
 | `wait` | `wait` | direct | yes | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
 
@@ -89,7 +89,7 @@ Parameters:
 
 ### `drag`
 
-Drag from one point to another using explicit coordinates or a semantic target.
+Drag using exactly one typed intent: elementToPoint or pointToPoint.
 
 - CLI: direct command `drag`
 - MCP: direct tool
@@ -100,11 +100,8 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `endX` | `number` | yes | - | - |
-| `endY` | `number` | yes | - | - |
-| `startX` | `number` | no | - | - |
-| `startY` | `number` | no | - | - |
+| `elementToPoint` | `object` | no | - | - |
+| `pointToPoint` | `object` | no | - | - |
 | `duration` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -218,7 +215,7 @@ _None._
 
 ### `long_press`
 
-Long-press a coordinate or semantic target for a resolved duration.
+Long-press an explicit point or semantic element for a resolved duration.
 
 - CLI: direct command `long_press`
 - MCP: direct tool
@@ -229,16 +226,15 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `x` | `number` | no | - | - |
-| `y` | `number` | no | - | - |
+| `element` | `object` | no | - | - |
+| `point` | `object` | no | - | - |
 | `duration` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
 ### `one_finger_tap`
 
-Tap a coordinate or semantic target after actionability resolution.
+Tap an explicit point or semantic element after actionability resolution.
 
 - CLI: direct command `one_finger_tap`
 - MCP: direct tool
@@ -249,9 +245,8 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `x` | `number` | no | - | - |
-| `y` | `number` | no | - | - |
+| `element` | `object` | no | - | - |
+| `point` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -422,7 +417,7 @@ Parameters:
 
 ### `swipe`
 
-Swipe in a direction or between explicit points; semantic targets are made actionable first.
+Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
 
 - CLI: direct command `swipe`
 - MCP: direct tool
@@ -433,14 +428,10 @@ Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `direction` | `string` | no | - | `up`, `down`, `left`, `right` |
-| `start` | `object` | no | - | - |
-| `end` | `object` | no | - | - |
-| `startX` | `number` | no | - | - |
-| `startY` | `number` | no | - | - |
-| `endX` | `number` | no | - | - |
-| `endY` | `number` | no | - | - |
+| `elementDirection` | `object` | no | - | - |
+| `elementUnitPoints` | `object` | no | - | - |
+| `pointToPoint` | `object` | no | - | - |
+| `pointDirection` | `object` | no | - | - |
 | `duration` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |

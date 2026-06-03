@@ -529,8 +529,14 @@ final class ClientMessageTests: XCTestCase {
         let decoded = try JSONDecoder().decode(ClientMessage.self, from: data)
 
         if case .swipe(let target) = decoded {
-            XCTAssertEqual(target.start, UnitPoint(x: 0.8, y: 0.5))
-            XCTAssertEqual(target.end, UnitPoint(x: 0.2, y: 0.5))
+            XCTAssertEqual(
+                target.selection,
+                .unitElement(
+                    .predicate(ElementPredicate(identifier: "scrollable")),
+                    start: UnitPoint(x: 0.8, y: 0.5),
+                    end: UnitPoint(x: 0.2, y: 0.5)
+                )
+            )
         } else {
             XCTFail("Expected swipe, got \(decoded)")
         }

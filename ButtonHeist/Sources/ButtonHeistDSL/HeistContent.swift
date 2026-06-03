@@ -122,12 +122,16 @@ public struct ForEach<Content: HeistContent>: HeistContent {
         limit: Int = 20,
         @HeistBuilder _ content: (ElementTarget) throws -> Content
     ) throws {
+        let element = ElementTarget.predicate(matches.predicate, ordinal: ForEach.runtimeElementInitialOrdinal)
         self.heistSteps = [
             .forEach(try ForEachStep(
                 matching: matches.predicate,
                 limit: limit,
-                steps: try content(.predicate(matches.predicate, ordinal: 0)).heistSteps
+                element: element,
+                steps: try content(element).heistSteps
             )),
         ]
     }
+
+    private static var runtimeElementInitialOrdinal: Int { 0 }
 }

@@ -63,6 +63,45 @@ extension TheStash {
         let resolutionScope: ResolutionScope
     }
 
+    struct ContainerCandidateFacts {
+        let stableId: HeistContainer?
+        let type: ContainerTypeName
+        let label: String?
+        let value: String?
+        let identifier: String?
+        let isModalBoundary: Bool
+
+        init(container: SemanticScreen.Container) {
+            let accessibilityContainer = container.container
+            stableId = container.stableId
+            type = accessibilityContainer.typeName
+            label = accessibilityContainer.containerLabel
+            value = accessibilityContainer.containerValue
+            identifier = accessibilityContainer.containerIdentifier
+            isModalBoundary = accessibilityContainer.isModalBoundary
+        }
+    }
+
+    enum ContainerNotFoundReason: Equatable {
+        case emptyMatcher
+        case ordinalOutOfRange(requested: Int, matchCount: Int)
+        case noMatches
+    }
+
+    struct ContainerNotFoundFacts {
+        let matcher: ContainerMatcher
+        let ordinal: Int?
+        let reason: ContainerNotFoundReason
+        let resolutionScope: ResolutionScope
+    }
+
+    struct ContainerAmbiguityFacts {
+        let matcher: ContainerMatcher
+        let candidates: [ContainerCandidateFacts]
+        let matchedCount: Int
+        let resolutionScope: ResolutionScope
+    }
+
     /// Three-case result from `resolveTarget`. Resolution returns facts;
     /// diagnostic wording is projected separately.
     enum TargetResolution {
@@ -87,15 +126,16 @@ extension TheStash {
 
     enum ContainerTargetResolution {
         case resolved(SemanticScreen.Container)
-        case notFound(diagnostics: String)
-        case ambiguous(candidates: [String], diagnostics: String)
+        case notFound(ContainerNotFoundFacts)
+        case ambiguous(ContainerAmbiguityFacts)
 
         var diagnostics: String {
-            switch self {
-            case .resolved: return ""
-            case .notFound(let message): return message
-            case .ambiguous(_, let message): return message
-            }
+            TargetResolutionDiagnostics.message(for: self)
+        }
+
+        var candidates: [String] {
+            guard case .ambiguous(let facts) = self else { return [] }
+            return facts.candidates.map(TargetResolutionDiagnostics.containerCandidateSummary)
         }
     }
 
@@ -118,7 +158,12 @@ extension TheStash {
 
     func resolveContainerTarget(_ matcher: ContainerMatcher, ordinal: Int?) -> ContainerTargetResolution {
         guard matcher.hasPredicates else {
-            return .notFound(diagnostics: "container target requires stableId, type, label, value, or identifier")
+            return .notFound(ContainerNotFoundFacts(
+                matcher: matcher,
+                ordinal: ordinal,
+                reason: .emptyMatcher,
+                resolutionScope: .known
+            ))
         }
         let matches = semanticContainersInTraversalOrder
             .compactMap { item -> SemanticScreen.Container? in
@@ -131,7 +176,12 @@ extension TheStash {
             }
         if let ordinal {
             guard matches.indices.contains(ordinal) else {
-                return .notFound(diagnostics: "container target ordinal \(ordinal) is outside \(matches.count) matching container(s)")
+                return .notFound(ContainerNotFoundFacts(
+                    matcher: matcher,
+                    ordinal: ordinal,
+                    reason: .ordinalOutOfRange(requested: ordinal, matchCount: matches.count),
+                    resolutionScope: .known
+                ))
             }
             return .resolved(matches[ordinal])
         }
@@ -139,13 +189,19 @@ extension TheStash {
         case 1:
             return .resolved(matches[0])
         case 0:
-            return .notFound(diagnostics: "no semantic container matched \(matcher)")
+            return .notFound(ContainerNotFoundFacts(
+                matcher: matcher,
+                ordinal: nil,
+                reason: .noMatches,
+                resolutionScope: .known
+            ))
         default:
-            let candidates = matches.map(Self.containerCandidateSummary)
-            return .ambiguous(
-                candidates: candidates,
-                diagnostics: "container target matched \(matches.count) containers; provide ordinal. Candidates: \(candidates.joined(separator: "; "))"
-            )
+            return .ambiguous(ContainerAmbiguityFacts(
+                matcher: matcher,
+                candidates: matches.map(ContainerCandidateFacts.init),
+                matchedCount: matches.count,
+                resolutionScope: .known
+            ))
         }
     }
 
@@ -275,19 +331,6 @@ private extension TheStash {
                 resolutionScope: resolutionScope
             ))
         }
-    }
-}
-
-extension TheStash {
-
-    static func containerCandidateSummary(_ target: SemanticScreen.Container) -> String {
-        [
-            target.stableId.map { "stableId=\"\($0)\"" },
-            "type=\(target.container.typeName.rawValue)",
-            target.container.containerIdentifier.map { "identifier=\"\($0)\"" },
-            target.container.containerLabel.map { "label=\"\($0)\"" },
-            target.container.containerValue.map { "value=\"\($0)\"" },
-        ].compactMap { $0 }.joined(separator: " ")
     }
 }
 

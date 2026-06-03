@@ -9,7 +9,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `activate` | Activate a semantic UI element or one of its named accessibility actions. |
 | `connect` | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
-| `drag` | Drag from one point to another using explicit coordinates or a semantic target. |
+| `drag` | Drag using exactly one typed intent: elementToPoint or pointToPoint. |
 | `edit_action` | Perform an edit action on the current first responder. |
 | `get_interface` | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | Read text from the general pasteboard. |
@@ -17,8 +17,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_session_state` | Inspect connection, device, and last-action session state. |
 | `list_devices` | List discovered iOS devices and configured connection targets. |
 | `list_targets` | List configured connection targets and the default target. |
-| `long_press` | Long-press a coordinate or semantic target for a resolved duration. |
-| `one_finger_tap` | Tap a coordinate or semantic target after actionability resolution. |
+| `long_press` | Long-press an explicit point or semantic element for a resolved duration. |
+| `one_finger_tap` | Tap an explicit point or semantic element after actionability resolution. |
 | `ping` | Check connection health without reading accessibility state. |
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
@@ -29,7 +29,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
 | `start_heist` | Start recording replayable heist steps from successful commands. |
 | `stop_heist` | Stop heist recording and save a deterministic heist fixture. |
-| `swipe` | Swipe in a direction or between explicit points; semantic targets are made actionable first. |
+| `swipe` | Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | Type non-empty text, optionally after making a semantic target actionable. |
 | `wait` | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
 
@@ -74,17 +74,14 @@ Parameters:
 
 ### `drag`
 
-Drag from one point to another using explicit coordinates or a semantic target.
+Drag using exactly one typed intent: elementToPoint or pointToPoint.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `endX` | `number` | yes | - | - |
-| `endY` | `number` | yes | - | - |
-| `startX` | `number` | no | - | - |
-| `startY` | `number` | no | - | - |
+| `elementToPoint` | `object` | no | - | - |
+| `pointToPoint` | `object` | no | - | - |
 | `duration` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
@@ -163,30 +160,28 @@ _None._
 
 ### `long_press`
 
-Long-press a coordinate or semantic target for a resolved duration.
+Long-press an explicit point or semantic element for a resolved duration.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `x` | `number` | no | - | - |
-| `y` | `number` | no | - | - |
+| `element` | `object` | no | - | - |
+| `point` | `object` | no | - | - |
 | `duration` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
 ### `one_finger_tap`
 
-Tap a coordinate or semantic target after actionability resolution.
+Tap an explicit point or semantic element after actionability resolution.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `x` | `number` | no | - | - |
-| `y` | `number` | no | - | - |
+| `element` | `object` | no | - | - |
+| `point` | `object` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
@@ -307,20 +302,16 @@ Parameters:
 
 ### `swipe`
 
-Swipe in a direction or between explicit points; semantic targets are made actionable first.
+Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
-| `target` | `object` | no | - | - |
-| `direction` | `string` | no | - | `up`, `down`, `left`, `right` |
-| `start` | `object` | no | - | - |
-| `end` | `object` | no | - | - |
-| `startX` | `number` | no | - | - |
-| `startY` | `number` | no | - | - |
-| `endX` | `number` | no | - | - |
-| `endY` | `number` | no | - | - |
+| `elementDirection` | `object` | no | - | - |
+| `elementUnitPoints` | `object` | no | - | - |
+| `pointToPoint` | `object` | no | - | - |
+| `pointDirection` | `object` | no | - | - |
 | `duration` | `number` | no | - | - |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |

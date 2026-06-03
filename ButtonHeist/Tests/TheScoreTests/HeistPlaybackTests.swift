@@ -313,6 +313,7 @@ final class HeistPlanTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 5,
+                element: .predicate(matching, ordinal: 0),
                 steps: [
                     .action(try ActionStep(
                         command: .activate(.predicate(matching, ordinal: 0)),
@@ -339,6 +340,7 @@ final class HeistPlanTests: XCTestCase {
           "for_each": {
             "matching": {},
             "limit": 10,
+            "element": {"label": "Cell", "ordinal": 0},
             "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
@@ -356,6 +358,7 @@ final class HeistPlanTests: XCTestCase {
           "for_each": {
             "matching": {"label": "Cell"},
             "limit": 0,
+            "element": {"label": "Cell", "ordinal": 0},
             "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
@@ -371,6 +374,7 @@ final class HeistPlanTests: XCTestCase {
           "for_each": {
             "matching": {"label": "Cell"},
             "limit": -1,
+            "element": {"label": "Cell", "ordinal": 0},
             "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
@@ -388,6 +392,7 @@ final class HeistPlanTests: XCTestCase {
           "for_each": {
             "matching": {"label": "Cell"},
             "limit": 5,
+            "element": {"label": "Cell", "ordinal": 0},
             "steps": []
           }
         }
@@ -398,6 +403,34 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
+    func testForEachDecodeRejectsNestedRuntimeForEach() {
+        let json = """
+        {
+          "type": "for_each",
+          "for_each": {
+            "matching": {"label": "Cell"},
+            "limit": 5,
+            "element": {"label": "Cell", "ordinal": 0},
+            "steps": [
+              {
+                "type": "for_each",
+                "for_each": {
+                  "matching": {"label": "Button"},
+                  "limit": 5,
+                  "element": {"label": "Button", "ordinal": 0},
+                  "steps": [{"type": "warn", "warn": {"message": "nested"}}]
+                }
+              }
+            ]
+          }
+        }
+        """
+
+        XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
+            XCTAssertTrue("\(error)".contains("nestedForEachUnsupported"), "\(error)")
+        }
+    }
+
     func testForEachDecodeRejectsUnknownFields() {
         let outerJSON = """
         {
@@ -405,6 +438,7 @@ final class HeistPlanTests: XCTestCase {
           "for_each": {
             "matching": {"label": "Cell"},
             "limit": 5,
+            "element": {"label": "Cell", "ordinal": 0},
             "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           },
           "unexpected": true
@@ -421,6 +455,7 @@ final class HeistPlanTests: XCTestCase {
           "for_each": {
             "matching": {"label": "Cell"},
             "limit": 5,
+            "element": {"label": "Cell", "ordinal": 0},
             "steps": [{"type": "warn", "warn": {"message": "hi"}}],
             "bogus": 42
           }

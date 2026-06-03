@@ -20,52 +20,19 @@ final class TheStash {
     private var semanticState: SemanticScreen = .empty
     private var liveCapture: LiveCapture = .empty
 
-    struct SettledSemanticObservation {
-        let sequence: UInt64
-        let scope: SemanticObservationScope
-        let screen: Screen
-        let tripwireSignal: TheTripwire.TripwireSignal
+    lazy var semanticObservationStream = SemanticObservationStream(stash: self, tripwire: tripwire)
+
+    var latestSettledSemanticObservationEvent: SettledSemanticObservationEvent? {
+        semanticObservationStream.latestEvent
     }
 
-    struct SettledSemanticObservationEvent {
-        let sequence: UInt64
-        let scope: SemanticObservationScope
-        let observation: SettledSemanticObservation
-        let previous: SettledSemanticObservation?
-        let trace: AccessibilityTrace
-        let delta: AccessibilityTrace.Delta?
-    }
-
-    struct SettledSemanticWaiter {
-        let scope: SemanticObservationScope
-        let afterSequence: UInt64?
-        let continuation: CheckedContinuation<SettledSemanticObservationEvent?, Never>
-        let timeoutTask: Task<Void, Never>?
-    }
-
-    struct SemanticObservationCycleWaiter {
-        let scope: SemanticObservationScope
-        let afterCycle: UInt64
-        let continuation: CheckedContinuation<Void, Never>
-    }
-
-    var settledSemanticSequence: UInt64 = 0
-    var latestSettledSemanticObservationEvent: SettledSemanticObservationEvent?
     var latestSettledSemanticObservation: SettledSemanticObservation? {
-        latestSettledSemanticObservationEvent?.observation
+        semanticObservationStream.latestObservation
     }
-    var latestSettledSemanticObservationIsDirty = true
-    var nextSettledSemanticWaiterID: UInt64 = 1
-    var settledSemanticWaiters: [UInt64: SettledSemanticWaiter] = [:]
-    var semanticObservationCycleSequence: UInt64 = 0
-    var semanticObservationCycleInProgress = false
-    var nextSemanticObservationCycleWaiterID: UInt64 = 1
-    var semanticObservationCycleWaiters: [UInt64: SemanticObservationCycleWaiter] = [:]
-    var nextSemanticObservationSubscriptionID: UInt64 = 1
-    var semanticObservationSubscriptions: [UInt64: SemanticObservationScope] = [:]
-    var passiveSemanticObservationTask: Task<Void, Never>?
-    var passiveSemanticDiscoveryObservation: (@MainActor () async -> Void)?
-    var passiveObservationSettledReading: TheTripwire.PulseReading?
+
+    var latestSettledSemanticObservationIsDirty: Bool {
+        semanticObservationStream.latestObservationIsDirty
+    }
 
     /// Held rotor cursor — the single current selection while in rotor mode.
     /// Entering rotor mode on a host starts at index 0; subsequent steps cycle
@@ -360,16 +327,13 @@ final class TheStash {
     private func clearCommittedScreen() {
         semanticState = .empty
         liveCapture = .empty
-        latestSettledSemanticObservationEvent = nil
-        latestSettledSemanticObservationIsDirty = true
-        passiveObservationSettledReading = nil
-        completeAllSettledSemanticWaiters(returning: nil)
+        semanticObservationStream.clearLatestObservation()
     }
 
     private func commitScreen(_ screen: Screen) {
         semanticState = screen.semantic
         liveCapture = screen.liveCapture
-        latestSettledSemanticObservationIsDirty = true
+        semanticObservationStream.markDirtyFromTripwire()
     }
 
     // MARK: - Interface Read Helpers

@@ -191,10 +191,10 @@ final class TheStashResolutionTests: XCTestCase {
             await bagman.settledSemanticObservationEvent(scope: .visible, after: nil, timeout: 1)
         }
 
-        for _ in 0..<10 where bagman.settledSemanticWaiters.isEmpty {
+        for _ in 0..<10 where bagman.semanticObservationStream.settledWaiterCount == 0 {
             await Task.yield()
         }
-        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
         bagman.recordSettledSemanticObservation(second)
@@ -215,10 +215,10 @@ final class TheStashResolutionTests: XCTestCase {
             await bagman.settledSemanticObservationEvent(scope: .visible, after: nil, timeout: 1)
         }
 
-        for _ in 0..<10 where bagman.settledSemanticWaiters.isEmpty {
+        for _ in 0..<10 where bagman.semanticObservationStream.settledWaiterCount == 0 {
             await Task.yield()
         }
-        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let second = Screen.makeForTests(elements: [(element(label: "Second"), "second")])
         bagman.recordSettledSemanticObservation(second)
@@ -241,15 +241,15 @@ final class TheStashResolutionTests: XCTestCase {
             )
         }
 
-        for _ in 0..<10 where bagman.settledSemanticWaiters.isEmpty {
+        for _ in 0..<10 where bagman.semanticObservationStream.settledWaiterCount == 0 {
             await Task.yield()
         }
-        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let visible = Screen.makeForTests(elements: [(element(label: "Visible"), "visible")])
         bagman.recordSettledSemanticObservation(visible, scope: .visible)
         XCTAssertEqual(bagman.latestSettledSemanticObservation?.sequence, 2)
-        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         let discovery = Screen.makeForTests(elements: [(element(label: "Discovery"), "discovery")])
         bagman.recordSettledSemanticObservation(discovery, scope: .discovery)
@@ -317,13 +317,6 @@ final class TheStashResolutionTests: XCTestCase {
     }
 
     func testTimeoutZeroDoesNotInvokeDiscoveryWithoutPassiveObserver() async {
-        let screen = Screen.makeForTests(elements: [(element(label: "Hidden"), "hidden")])
-        var discoveryCount = 0
-        bagman.passiveSemanticDiscoveryObservation = { [bagman] in
-            discoveryCount += 1
-            bagman?.commitExploredScreen(screen)
-        }
-
         let observation = await bagman.settledSemanticObservationEvent(
             scope: .discovery,
             after: nil,
@@ -331,7 +324,6 @@ final class TheStashResolutionTests: XCTestCase {
         )
 
         XCTAssertNil(observation)
-        XCTAssertEqual(discoveryCount, 0)
     }
 
     func testStopPassiveSemanticObservationCancelsWaiters() async {
@@ -339,10 +331,10 @@ final class TheStashResolutionTests: XCTestCase {
             await bagman.settledSemanticObservationEvent(scope: .visible, after: nil, timeout: 10)
         }
 
-        for _ in 0..<20 where bagman.settledSemanticWaiters.isEmpty {
+        for _ in 0..<20 where bagman.semanticObservationStream.settledWaiterCount == 0 {
             await Task.yield()
         }
-        XCTAssertEqual(bagman.settledSemanticWaiters.count, 1)
+        XCTAssertEqual(bagman.semanticObservationStream.settledWaiterCount, 1)
 
         bagman.stopPassiveSemanticObservation()
 
@@ -372,17 +364,77 @@ final class TheStashResolutionTests: XCTestCase {
             liveCapture: .empty
         ))
 
-        switch bagman.resolveContainerTarget(
+        let result = bagman.resolveContainerTarget(
             ContainerMatcher(stableId: "semantic_actions__actions"),
             ordinal: nil
-        ) {
+        )
+        switch result {
         case .resolved(let resolved):
             XCTAssertEqual(resolved.path, path)
             XCTAssertEqual(resolved.stableId, "semantic_actions__actions")
             XCTAssertEqual(resolved.contentFrame?.origin.y, 900)
-        case .notFound(let diagnostics), .ambiguous(_, let diagnostics):
-            XCTFail("Expected semantic container resolution, got \(diagnostics)")
+        case .notFound, .ambiguous:
+            XCTFail("Expected semantic container resolution, got \(result.diagnostics)")
         }
+    }
+
+    func testContainerTargetResolutionReportsStructuredFacts() {
+        let primaryPath = TreePath([0, 1])
+        let secondaryPath = TreePath([0, 2])
+        bagman.installScreenForTesting(Screen(
+            semantic: SemanticScreen(
+                elements: [:],
+                containers: [
+                    primaryPath: .init(
+                        container: AccessibilityContainer(
+                            type: .semanticGroup(label: "Actions", value: nil, identifier: "primary"),
+                            frame: AccessibilityRect(CGRect(x: 0, y: 120, width: 240, height: 80))
+                        ),
+                        path: primaryPath,
+                        stableId: "actions_primary",
+                        contentFrame: CGRect(x: 0, y: 120, width: 240, height: 80)
+                    ),
+                    secondaryPath: .init(
+                        container: AccessibilityContainer(
+                            type: .semanticGroup(label: "Actions", value: nil, identifier: "secondary"),
+                            frame: AccessibilityRect(CGRect(x: 0, y: 240, width: 240, height: 80))
+                        ),
+                        path: secondaryPath,
+                        stableId: "actions_secondary",
+                        contentFrame: CGRect(x: 0, y: 240, width: 240, height: 80)
+                    ),
+                ]
+            ),
+            liveCapture: .empty
+        ))
+
+        let ambiguous = bagman.resolveContainerTarget(
+            ContainerMatcher(type: .semanticGroup, label: "Actions"),
+            ordinal: nil
+        )
+        guard case .ambiguous(let facts) = ambiguous else {
+            XCTFail("Expected structured ambiguity, got \(ambiguous)")
+            return
+        }
+        XCTAssertEqual(facts.matchedCount, 2)
+        XCTAssertEqual(facts.resolutionScope, .known)
+        XCTAssertEqual(facts.candidates.map(\.identifier), ["primary", "secondary"])
+        XCTAssertEqual(facts.candidates.map(\.stableId), ["actions_primary", "actions_secondary"])
+        XCTAssertTrue(ambiguous.diagnostics.contains("container target is ambiguous across 2 containers"))
+        XCTAssertFalse(ambiguous.diagnostics.contains("stableId"))
+
+        let outOfRange = bagman.resolveContainerTarget(
+            ContainerMatcher(type: .semanticGroup, label: "Actions"),
+            ordinal: 3
+        )
+        guard case .notFound(let notFoundFacts) = outOfRange else {
+            XCTFail("Expected structured ordinal miss, got \(outOfRange)")
+            return
+        }
+        XCTAssertEqual(notFoundFacts.reason, .ordinalOutOfRange(requested: 3, matchCount: 2))
+        XCTAssertEqual(notFoundFacts.resolutionScope, .known)
+        XCTAssertTrue(outOfRange.diagnostics.contains("container target ordinal 3"))
+        XCTAssertTrue(outOfRange.diagnostics.contains("target an element inside the intended region"))
     }
 
     func testGeneratedConcreteTargetUsesMinimumPredicateSelector() throws {

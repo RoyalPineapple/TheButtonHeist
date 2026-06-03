@@ -32,14 +32,15 @@ extension TheBrains {
 
         while iterationCount < matchedCount {
             let iterationSteps: [HeistStep]
+            let currentElement = ElementTarget.predicate(step.matching, ordinal: nextOrdinal)
             do {
-                iterationSteps = try HeistPlanTransform.bindingForEachTarget(
-                    matching: step.matching,
-                    ordinal: nextOrdinal,
-                    in: step.steps
+                iterationSteps = try HeistForEachBodyInstantiation.instantiate(
+                    steps: step.steps,
+                    templateElement: step.element,
+                    currentElement: currentElement
                 )
             } catch {
-                failureReason = "iteration \(iterationCount) ordinal expansion failed: \(error)"
+                failureReason = "iteration \(iterationCount) body instantiation failed: \(error)"
                 break
             }
 

@@ -29,7 +29,9 @@ be stored for deterministic playback.
 `ForEach` has two authoring forms. `ForEach(collection)` is static Swift
 expansion and emits only the linear child steps. `ForEach(.matching(predicate),
 limit:)` emits one runtime `for_each` step; the closure receives
-`ElementTarget.predicate(predicate, ordinal: 0)`, so each iteration repeats the
+an `ElementTarget` data value recorded on the step as the body element. At
+runtime each iteration instantiates that element as
+`ElementTarget.predicate(predicate, ordinal: index)`, so the body repeats the
 same semantic promise and command execution re-resolves it normally.
 Runtime `ForEach` repeats semantic intent; commands re-resolve targets. The
 loop owns match counting, ordinal scheduling, and limit enforcement only.

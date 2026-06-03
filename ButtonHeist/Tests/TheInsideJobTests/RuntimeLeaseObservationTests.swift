@@ -32,34 +32,32 @@ final class RuntimeLeaseObservationTests: XCTestCase {
 
     func testLeaseActivationStartsSemanticObservationOnce() {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
-        XCTAssertNil(job.brains.stash.passiveSemanticObservationTask)
+        XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
 
         lease.activate(on: job)
-        let firstTask = job.brains.stash.passiveSemanticObservationTask
 
         XCTAssertTrue(job.brains.semanticObservationIsActive)
-        XCTAssertNotNil(firstTask)
+        XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
 
         lease.activate(on: job)
 
         XCTAssertTrue(job.brains.semanticObservationIsActive)
-        XCTAssertNotNil(firstTask)
-        XCTAssertNotNil(job.brains.stash.passiveSemanticObservationTask)
+        XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
     }
 
     func testLeaseReleaseStopsRuntimeOwnedObservation() async {
         lease.activate(on: job)
         XCTAssertTrue(job.brains.semanticObservationIsActive)
-        XCTAssertNotNil(job.brains.stash.passiveSemanticObservationTask)
+        XCTAssertTrue(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertTrue(job.tripwire.isPulseRunning)
 
         await lease.release(from: job, policy: .stop)?.value
 
         XCTAssertFalse(job.brains.semanticObservationIsActive)
-        XCTAssertNil(job.brains.stash.passiveSemanticObservationTask)
+        XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
     }
 
@@ -70,7 +68,7 @@ final class RuntimeLeaseObservationTests: XCTestCase {
         XCTAssertEqual(result.errorKind, .actionFailed)
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
-        XCTAssertNil(job.brains.stash.passiveSemanticObservationTask)
+        XCTAssertFalse(job.brains.stash.semanticObservationStream.isActive)
     }
 }
 

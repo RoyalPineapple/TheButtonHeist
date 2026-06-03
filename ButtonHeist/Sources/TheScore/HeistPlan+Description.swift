@@ -74,6 +74,7 @@ extension ForEachStep: CustomStringConvertible {
         ScoreDescription.call("forEach", [
             matching.description,
             "limit=\(limit)",
+            "element=\(element)",
             "steps=\(steps.count)",
         ])
     }

@@ -147,19 +147,31 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testLongPressTargetRejectsInvalidDurationAtDecode() {
-        let json = #"{"pointX":10,"pointY":20,"duration":61}"#
+        let json = #"{"point":{"x":10,"y":20},"duration":61}"#
         XCTAssertThrowsError(try decoder.decode(LongPressTarget.self, from: Data(json.utf8))) { error in
             XCTAssertTrue("\(error)".contains("duration must be number in 0...60.0"), "\(error)")
         }
     }
 
+    func testTapAndLongPressRejectMixedPointAndElementIntents() {
+        let tapJSON = #"{"element":{"label":"Save"},"point":{"x":10,"y":20}}"#
+        XCTAssertThrowsError(try decoder.decode(TapTarget.self, from: Data(tapJSON.utf8))) { error in
+            assertErrorDescription(error, contains: ["accepts either a semantic target or coordinates"])
+        }
+
+        let longPressJSON = #"{"element":{"label":"Save"},"point":{"x":10,"y":20},"duration":1}"#
+        XCTAssertThrowsError(try decoder.decode(LongPressTarget.self, from: Data(longPressJSON.utf8))) { error in
+            assertErrorDescription(error, contains: ["accepts either a semantic target or coordinates"])
+        }
+    }
+
     func testSwipeAndDragRejectInvalidDurationAtDecode() {
-        let swipeJSON = #"{"startX":10,"startY":20,"direction":"down","duration":0}"#
+        let swipeJSON = #"{"pointDirection":{"start":{"x":10,"y":20},"direction":"down"},"duration":0}"#
         XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(swipeJSON.utf8))) { error in
             XCTAssertTrue("\(error)".contains("duration must be number > 0"), "\(error)")
         }
 
-        let dragJSON = #"{"startX":10,"startY":20,"endX":30,"endY":40,"duration":61}"#
+        let dragJSON = #"{"pointToPoint":{"start":{"x":10,"y":20},"end":{"x":30,"y":40}},"duration":61}"#
         XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(dragJSON.utf8))) { error in
             XCTAssertTrue("\(error)".contains("duration must be number in 0...60.0"), "\(error)")
         }
@@ -192,16 +204,56 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testDragTargetRejectsUnknownField() {
-        let json = #"{"startX":10,"startY":20,"endX":30,"endY":40,"unexpected":true}"#
+        let json = #"{"pointToPoint":{"start":{"x":10,"y":20},"end":{"x":30,"y":40}},"unexpected":true}"#
         XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
             assertDecodingError(error, contains: ["Unknown drag target field", "unexpected"])
         }
     }
 
     func testSwipeTargetRejectsUnknownField() {
-        let json = #"{"label":"list","direction":"down","unexpected":true}"#
+        let json = #"{"pointDirection":{"start":{"x":10,"y":20},"direction":"down"},"unexpected":true}"#
         XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
             assertDecodingError(error, contains: ["Unknown swipe target field", "unexpected"])
+        }
+    }
+
+    func testSwipeTargetRejectsMixedIntentFields() {
+        let json = #"""
+        {
+          "pointDirection": {"start": {"x": 10, "y": 20}, "direction": "down"},
+          "pointToPoint": {"start": {"x": 10, "y": 20}, "end": {"x": 30, "y": 40}}
+        }
+        """#
+
+        XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
+            assertErrorDescription(error, contains: ["swipe accepts exactly one gesture intent"])
+        }
+    }
+
+    func testSwipeTargetRejectsUnknownNestedIntentField() {
+        let json = #"{"pointDirection":{"start":{"x":10,"y":20},"direction":"down","target":{"label":"Row"}}}"#
+        XCTAssertThrowsError(try decoder.decode(SwipeTarget.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: ["Unknown point direction swipe field", "target"])
+        }
+    }
+
+    func testDragTargetRejectsMixedIntentFields() {
+        let json = #"""
+        {
+          "elementToPoint": {"element": {"label": "Card"}, "end": {"x": 30, "y": 40}},
+          "pointToPoint": {"start": {"x": 10, "y": 20}, "end": {"x": 30, "y": 40}}
+        }
+        """#
+
+        XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
+            assertErrorDescription(error, contains: ["drag accepts exactly one gesture intent"])
+        }
+    }
+
+    func testDragTargetRejectsUnknownNestedIntentField() {
+        let json = #"{"elementToPoint":{"element":{"label":"Handle"},"end":{"x":30,"y":40},"start":{"x":10,"y":20}}}"#
+        XCTAssertThrowsError(try decoder.decode(DragTarget.self, from: Data(json.utf8))) { error in
+            assertDecodingError(error, contains: ["Unknown element-to-point drag field", "start"])
         }
     }
 
@@ -874,6 +926,23 @@ final class WireTypeRoundTripTests: XCTestCase {
             XCTAssertTrue(
                 context.debugDescription.contains(fragment),
                 context.debugDescription,
+                file: file,
+                line: line
+            )
+        }
+    }
+
+    private func assertErrorDescription(
+        _ error: Error,
+        contains fragments: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let description = "\(error)"
+        for fragment in fragments {
+            XCTAssertTrue(
+                description.contains(fragment),
+                description,
                 file: file,
                 line: line
             )

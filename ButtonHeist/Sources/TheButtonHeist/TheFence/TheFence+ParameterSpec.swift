@@ -18,6 +18,8 @@ public struct FenceParameterSpec: Sendable, Equatable {
     public let enumValues: [String]?
     public let defaultValue: HeistValue?
     public let jsonSchemaProperty: HeistValue
+    public let objectProperties: [FenceParameterSpec]
+    public let arrayItemProperties: [FenceParameterSpec]
 
 }
 
@@ -52,17 +54,20 @@ public extension FenceParameterKey {
     static let continuation = Self("continuation")
     static let detail = Self("detail"), device = Self("device"), direction = Self("direction"), duration = Self("duration")
     static let edge = Self("edge"), element = Self("element"), elements = Self("elements"), end = Self("end")
-    static let endOffset = Self("endOffset"), endX = Self("endX"), endY = Self("endY"), excludeTraits = Self("excludeTraits")
+    static let endOffset = Self("endOffset"), excludeTraits = Self("excludeTraits")
+    static let elementDirection = Self("elementDirection"), elementToPoint = Self("elementToPoint")
+    static let elementUnitPoints = Self("elementUnitPoints")
     static let expect = Self("expect"), from = Self("from"), heistId = Self("heistId")
     static let identifier = Self("identifier"), includeInterface = Self("includeInterface")
     static let inlineData = Self("inlineData"), input = Self("input"), isModalBoundary = Self("isModalBoundary")
     static let label = Self("label"), matcher = Self("matcher"), mode = Self("mode")
     static let newValue = Self("newValue"), oldValue = Self("oldValue"), ordinal = Self("ordinal"), output = Self("output")
+    static let point = Self("point"), pointDirection = Self("pointDirection"), pointToPoint = Self("pointToPoint")
     static let policy = Self("policy"), predicate = Self("predicate"), property = Self("property"), radius = Self("radius")
     static let rotor = Self("rotor"), rotorIndex = Self("rotorIndex")
     static let scale = Self("scale"), spread = Self("spread"), start = Self("start")
     static let startOffset = Self("startOffset")
-    static let startX = Self("startX"), startY = Self("startY"), stableId = Self("stableId")
+    static let stableId = Self("stableId")
     static let states = Self("states"), steps = Self("steps")
     static let subtree = Self("subtree"), target = Self("target"), text = Self("text"), textRange = Self("textRange")
     static let timeout = Self("timeout"), version = Self("version")
@@ -127,7 +132,9 @@ func param(
         required: required,
         enumValues: enumValues,
         defaultValue: defaultValue,
-        jsonSchemaProperty: .object(schema)
+        jsonSchemaProperty: .object(schema),
+        objectProperties: objectProperties,
+        arrayItemProperties: arrayItemProperties
     )
 }
 
@@ -177,6 +184,10 @@ public extension FenceCommandDescriptor {
 }
 
 public extension FenceParameterSpec {
+    var objectPropertyKeys: Set<String> {
+        Set(objectProperties.map(\.key))
+    }
+
     static func jsonSchemaProperties(from specs: [FenceParameterSpec]) -> [String: HeistValue] {
         var properties: [String: HeistValue] = [:]
         for spec in specs where properties[spec.key] == nil {
@@ -214,6 +225,104 @@ enum FenceParameterBlocks: Sendable {
             param(.ordinal, .integer, minimum: 0),
         ]),
     ]
+    static let gestureElement = param(.element, .object, objectProperties: matcherFields + [
+        param(.ordinal, .integer, minimum: 0),
+    ])
+    static let gesturePoint = param(.point, .object, objectProperties: screenPoint)
+
+    static let gesturePointSelection: [FenceParameterSpec] = [
+        gestureElement,
+        gesturePoint,
+    ]
+
+    static let swipeElementDirection = param(
+        .elementDirection,
+        .object,
+        objectProperties: [
+            gestureElement,
+            param(.direction, .string, required: true, enumValues: fenceEnumValues(SwipeDirection.self)),
+        ]
+    )
+
+    static let swipeElementUnitPoints = param(
+        .elementUnitPoints,
+        .object,
+        objectProperties: [
+            gestureElement,
+            param(.start, .object, required: true, objectProperties: unitPoint),
+            param(.end, .object, required: true, objectProperties: unitPoint),
+        ]
+    )
+
+    static let swipePointToPoint = param(
+        .pointToPoint,
+        .object,
+        objectProperties: [
+            param(.start, .object, required: true, objectProperties: screenPoint),
+            param(.end, .object, required: true, objectProperties: screenPoint),
+        ]
+    )
+
+    static let swipePointDirection = param(
+        .pointDirection,
+        .object,
+        objectProperties: [
+            param(.start, .object, required: true, objectProperties: screenPoint),
+            param(.direction, .string, required: true, enumValues: fenceEnumValues(SwipeDirection.self)),
+        ]
+    )
+
+    static let swipeIntents = [
+        swipeElementDirection,
+        swipeElementUnitPoints,
+        swipePointToPoint,
+        swipePointDirection,
+    ]
+
+    static var swipeIntentKeys: [String] {
+        swipeIntents.map(\.key)
+    }
+
+    static func swipeIntentSpec(_ key: String) -> FenceParameterSpec {
+        guard let spec = swipeIntents.first(where: { $0.key == key }) else {
+            preconditionFailure("Unknown swipe intent \(key)")
+        }
+        return spec
+    }
+
+    static let dragElementToPoint = param(
+        .elementToPoint,
+        .object,
+        objectProperties: [
+            gestureElement,
+            param(.end, .object, required: true, objectProperties: screenPoint),
+        ]
+    )
+
+    static let dragPointToPoint = param(
+        .pointToPoint,
+        .object,
+        objectProperties: [
+            param(.start, .object, required: true, objectProperties: screenPoint),
+            param(.end, .object, required: true, objectProperties: screenPoint),
+        ]
+    )
+
+    static let dragIntents = [
+        dragElementToPoint,
+        dragPointToPoint,
+    ]
+
+    static var dragIntentKeys: [String] {
+        dragIntents.map(\.key)
+    }
+
+    static func dragIntentSpec(_ key: String) -> FenceParameterSpec {
+        guard let spec = dragIntents.first(where: { $0.key == key }) else {
+            preconditionFailure("Unknown drag intent \(key)")
+        }
+        return spec
+    }
 
     static let elementFilter = matcherFields
 
@@ -288,15 +397,7 @@ enum FenceParameterBlocks: Sendable {
     static let unitPoint: [FenceParameterSpec] = [
         param(.x, .number, required: true), param(.y, .number, required: true),
     ]
-    static let coordinateXY: [FenceParameterSpec] = [param(.x, .number), param(.y, .number)]
-    static let optionalStart: [FenceParameterSpec] = [param(.startX, .number), param(.startY, .number)]
-    static let requiredStart: [FenceParameterSpec] = [
-        param(.startX, .number, required: true), param(.startY, .number, required: true),
-    ]
-    static let optionalEnd: [FenceParameterSpec] = [param(.endX, .number), param(.endY, .number)]
-    static let requiredEnd: [FenceParameterSpec] = [
-        param(.endX, .number, required: true), param(.endY, .number, required: true),
-    ]
+    static let screenPoint: [FenceParameterSpec] = unitPoint
     static let gestureDuration = param(
         .duration, .number,
         maximum: GestureDuration.maximumSeconds

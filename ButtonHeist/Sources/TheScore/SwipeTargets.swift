@@ -82,35 +82,112 @@ extension UnitPoint: CustomStringConvertible {
     }
 }
 
-private enum SwipePointCodingKeys: String, CodingKey, CaseIterable {
-    case startX
-    case startY
-    case endX
-    case endY
-    case direction
+private enum SwipeTargetCodingKeys: String, CodingKey, CaseIterable {
     case duration
-    case start
-    case end
+    case elementDirection
+    case elementUnitPoints
+    case pointToPoint
+    case pointDirection
 }
 
-private func swipeDestinationSelection(
-    x: Double?,
-    y: Double?,
-    direction: SwipeDirection?
-) throws -> SwipeDestinationSelection? {
-    if direction != nil, x != nil || y != nil {
-        throw GestureProjectionError.mixedCoordinateAndDirection(field: "endPoint")
+private struct SwipeElementDirectionPayload: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case element
+        case direction
     }
-    if let x, let y {
-        return .coordinate(ScreenPoint(x: x, y: y))
+
+    let element: ElementTarget
+    let direction: SwipeDirection
+
+    init(element: ElementTarget, direction: SwipeDirection) {
+        self.element = element
+        self.direction = direction
     }
-    if x != nil || y != nil {
-        throw GestureProjectionError.partialCoordinate(field: "endPoint", xPresent: x != nil, yPresent: y != nil)
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element direction swipe")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            element: try container.decode(ElementTarget.self, forKey: .element),
+            direction: try container.decode(SwipeDirection.self, forKey: .direction)
+        )
     }
-    if let direction {
-        return .direction(direction)
+}
+
+private struct SwipeElementUnitPointsPayload: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case element
+        case start
+        case end
     }
-    return nil
+
+    let element: ElementTarget
+    let start: UnitPoint
+    let end: UnitPoint
+
+    init(element: ElementTarget, start: UnitPoint, end: UnitPoint) {
+        self.element = element
+        self.start = start
+        self.end = end
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "element unit-points swipe")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            element: try container.decode(ElementTarget.self, forKey: .element),
+            start: try container.decode(UnitPoint.self, forKey: .start),
+            end: try container.decode(UnitPoint.self, forKey: .end)
+        )
+    }
+}
+
+private struct SwipePointToPointPayload: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case start
+        case end
+    }
+
+    let start: ScreenPoint
+    let end: ScreenPoint
+
+    init(start: ScreenPoint, end: ScreenPoint) {
+        self.start = start
+        self.end = end
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "point-to-point swipe")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            start: try container.decode(ScreenPoint.self, forKey: .start),
+            end: try container.decode(ScreenPoint.self, forKey: .end)
+        )
+    }
+}
+
+private struct SwipePointDirectionPayload: Codable, Sendable, Equatable {
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case start
+        case direction
+    }
+
+    let start: ScreenPoint
+    let direction: SwipeDirection
+
+    init(start: ScreenPoint, direction: SwipeDirection) {
+        self.start = start
+        self.direction = direction
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "point direction swipe")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            start: try container.decode(ScreenPoint.self, forKey: .start),
+            direction: try container.decode(SwipeDirection.self, forKey: .direction)
+        )
+    }
 }
 
 public struct SwipeTarget: Codable, Sendable, Equatable {
@@ -125,110 +202,85 @@ public struct SwipeTarget: Codable, Sendable, Equatable {
         self.duration = duration
     }
 
-    public var direction: SwipeDirection? {
-        switch selection {
-        case .elementDirection(_, let direction):
-            return direction
-        case .point(_, .direction(let direction)):
-            return direction
-        case .unitElement, .point:
-            return nil
-        }
-    }
-
-    public var start: UnitPoint? {
-        guard case .unitElement(_, let start, _) = selection else { return nil }
-        return start
-    }
-
-    public var end: UnitPoint? {
-        guard case .unitElement(_, _, let end) = selection else { return nil }
-        return end
-    }
-
     public var resolvedDuration: GestureDuration { duration ?? Self.defaultDuration }
 
-    public func gestureSelection() -> SwipeGestureSelection {
-        selection
-    }
-
     public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(
-            allowed: SwipePointCodingKeys.self,
-            additional: Set(ElementTarget.inlineFieldNames),
-            typeName: "swipe target"
-        )
-        let elementTarget = try ElementTarget.decodeInlineIfPresent(from: decoder)
-        let pointContainer = try decoder.container(keyedBy: SwipePointCodingKeys.self)
-        let startX = try pointContainer.decodeIfPresent(Double.self, forKey: .startX)
-        let startY = try pointContainer.decodeIfPresent(Double.self, forKey: .startY)
-        let endX = try pointContainer.decodeIfPresent(Double.self, forKey: .endX)
-        let endY = try pointContainer.decodeIfPresent(Double.self, forKey: .endY)
-        let direction = try pointContainer.decodeIfPresent(SwipeDirection.self, forKey: .direction)
-        let start = try pointContainer.decodeIfPresent(UnitPoint.self, forKey: .start)
-        let end = try pointContainer.decodeIfPresent(UnitPoint.self, forKey: .end)
-        self.duration = try pointContainer.decodeIfPresent(GestureDuration.self, forKey: .duration)
-        if start != nil || end != nil {
-            guard let start, let end else {
-                throw GestureProjectionError.partialUnitPoints
-            }
-            guard let elementTarget else {
-                throw GestureProjectionError.unitPointsRequireElementTarget
-            }
-            guard direction == nil else {
-                throw GestureProjectionError.mixedCoordinateAndDirection(field: "unitPoints")
-            }
-            self.selection = .unitElement(elementTarget, start: start, end: end)
-            return
-        }
-        if let direction, let elementTarget, startX == nil, startY == nil, endX == nil, endY == nil {
-            self.selection = .elementDirection(elementTarget, direction)
-            return
-        }
-        let startSelection = try makeGesturePointSelection(
-            elementTarget: elementTarget,
-            x: startX,
-            y: startY,
-            field: "startPoint"
-        )
-        let destination = try swipeDestinationSelection(x: endX, y: endY, direction: direction)
-        guard let startSelection, let destination else {
+        try decoder.rejectUnknownKeys(allowed: SwipeTargetCodingKeys.self, typeName: "swipe target")
+        let container = try decoder.container(keyedBy: SwipeTargetCodingKeys.self)
+        self.duration = try container.decodeIfPresent(GestureDuration.self, forKey: .duration)
+        let elementDirection = try container.decodeIfPresent(SwipeElementDirectionPayload.self, forKey: .elementDirection)
+        let elementUnitPoints = try container.decodeIfPresent(SwipeElementUnitPointsPayload.self, forKey: .elementUnitPoints)
+        let pointToPoint = try container.decodeIfPresent(SwipePointToPointPayload.self, forKey: .pointToPoint)
+        let pointDirection = try container.decodeIfPresent(SwipePointDirectionPayload.self, forKey: .pointDirection)
+        let intentCount = [
+            elementDirection != nil,
+            elementUnitPoints != nil,
+            pointToPoint != nil,
+            pointDirection != nil,
+        ].filter { $0 }.count
+        guard intentCount > 0 else {
             throw GestureProjectionError.missingSwipeIntent
         }
-        self.selection = .point(start: startSelection, destination: destination)
+        guard intentCount == 1 else {
+            throw GestureProjectionError.mixedGestureIntent(kind: "swipe")
+        }
+        if let elementDirection {
+            self.selection = .elementDirection(elementDirection.element, elementDirection.direction)
+        } else if let elementUnitPoints {
+            self.selection = .unitElement(
+                elementUnitPoints.element,
+                start: elementUnitPoints.start,
+                end: elementUnitPoints.end
+            )
+        } else if let pointToPoint {
+            self.selection = .point(
+                start: .coordinate(pointToPoint.start),
+                destination: .coordinate(pointToPoint.end)
+            )
+        } else if let pointDirection {
+            self.selection = .point(
+                start: .coordinate(pointDirection.start),
+                destination: .direction(pointDirection.direction)
+            )
+        } else {
+            throw GestureProjectionError.missingSwipeIntent
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: SwipeTargetCodingKeys.self)
         switch selection {
         case .unitElement(let target, let start, let end):
-            try target.encode(to: encoder)
-            var container = encoder.container(keyedBy: SwipePointCodingKeys.self)
-            try container.encode(start, forKey: .start)
-            try container.encode(end, forKey: .end)
-            try container.encodeIfPresent(duration, forKey: .duration)
+            try container.encode(
+                SwipeElementUnitPointsPayload(element: target, start: start, end: end),
+                forKey: .elementUnitPoints
+            )
         case .elementDirection(let target, let direction):
-            try target.encode(to: encoder)
-            var container = encoder.container(keyedBy: SwipePointCodingKeys.self)
-            try container.encode(direction, forKey: .direction)
-            try container.encodeIfPresent(duration, forKey: .duration)
+            try container.encode(
+                SwipeElementDirectionPayload(element: target, direction: direction),
+                forKey: .elementDirection
+            )
         case .point(let start, let destination):
-            var container = encoder.container(keyedBy: SwipePointCodingKeys.self)
-            switch start {
-            case .element(let target):
-                try target.encode(to: encoder)
-            case .coordinate(let point):
-                try container.encode(point.x, forKey: .startX)
-                try container.encode(point.y, forKey: .startY)
+            guard case .coordinate(let startPoint) = start else {
+                throw EncodingError.invalidValue(
+                    selection,
+                    .init(
+                        codingPath: encoder.codingPath,
+                        debugDescription: "swipe point intents require a coordinate start"
+                    )
+                )
             }
             switch destination {
             case .coordinate(let point):
-                try container.encode(point.x, forKey: .endX)
-                try container.encode(point.y, forKey: .endY)
+                try container.encode(SwipePointToPointPayload(start: startPoint, end: point), forKey: .pointToPoint)
             case .direction(let direction):
-                try container.encode(direction, forKey: .direction)
+                try container.encode(
+                    SwipePointDirectionPayload(start: startPoint, direction: direction),
+                    forKey: .pointDirection
+                )
             }
-            try container.encodeIfPresent(duration, forKey: .duration)
         }
+        try container.encodeIfPresent(duration, forKey: .duration)
     }
 }
 

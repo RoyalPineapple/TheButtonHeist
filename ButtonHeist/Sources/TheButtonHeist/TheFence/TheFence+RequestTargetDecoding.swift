@@ -59,7 +59,7 @@ extension TheFence.CommandArgumentEnvelope {
         )
     }
 
-    private func decodeElementTargetPayload() throws -> ElementTarget {
+    func decodeElementTargetPayload() throws -> ElementTarget {
         let value = HeistValue.object(argumentValues)
         do {
             let data = try JSONEncoder().encode(value)

@@ -768,7 +768,7 @@ final class TheBrainsActionTests: XCTestCase {
         inactiveBrains.stash.installScreenForTesting(.makeForTests(elements: [
             (makeElement(label: "Home"), "home"),
         ]))
-        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
+        XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
         let result = await inactiveBrains.performWait(target: WaitTarget(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -778,13 +778,13 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.errorKind, .actionFailed)
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
-        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
+        XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
     }
 
     func testExecuteCommandDoesNotStartObservationWhenRuntimeInactive() async {
         let inactiveBrains = TheBrains(tripwire: TheTripwire())
         XCTAssertNil(inactiveBrains.stash.latestSettledSemanticObservation)
-        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
+        XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
 
         let result = await inactiveBrains.executeCommand(.wait(WaitTarget(
             predicate: .state(.present(ElementPredicate(label: "Home"))),
@@ -794,7 +794,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.errorKind, .actionFailed)
         XCTAssertEqual(result.message, TheBrains.runtimeInactiveMessage)
-        XCTAssertNil(inactiveBrains.stash.passiveSemanticObservationTask)
+        XCTAssertFalse(inactiveBrains.stash.semanticObservationStream.isActive)
     }
 
     func testWaitReceiptUsesBeforeAndMatchedSettledObservations() async throws {
@@ -1080,6 +1080,7 @@ final class TheBrainsActionTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 20,
+                element: .predicate(matching, ordinal: 0),
                 steps: [.warn(WarnStep(message: "delete one"))]
             )),
         ])
@@ -1118,6 +1119,7 @@ final class TheBrainsActionTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 1,
+                element: .predicate(matching, ordinal: 0),
                 steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
             )),
         ])
@@ -1136,7 +1138,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertNil(step.childResults)
     }
 
-    func testHeistForEachBindsOrdinalTargetForEachInitialMatch() async throws {
+    func testHeistForEachInstantiatesOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
         let matching = ElementPredicate(label: "Delete")
         var executedCommands: [ClientMessage] = []
         let initialState = observedState(elements: [
@@ -1155,9 +1157,11 @@ final class TheBrainsActionTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 10,
+                element: .predicate(matching, ordinal: 0),
                 steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
             )),
         ])
+        let originalSteps = plan.steps
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
         let heist = try XCTUnwrap(result.heistExecutionPayload)
@@ -1173,6 +1177,7 @@ final class TheBrainsActionTests: XCTestCase {
             .activate(.predicate(matching, ordinal: 2)),
         ])
         XCTAssertEqual(step.childResults?.map(\.kind), [.action, .action, .action])
+        XCTAssertEqual(plan.steps, originalSteps)
     }
 
     func testHeistForEachResetsOrdinalWhenMatchedCollectionIdentityChanges() async throws {
@@ -1196,6 +1201,7 @@ final class TheBrainsActionTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 10,
+                element: .predicate(matching, ordinal: 0),
                 steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
             )),
         ])
@@ -1209,6 +1215,46 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertEqual(forEachResult.matchedCount, 2)
         XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertNil(forEachResult.failureReason)
+        XCTAssertEqual(executedCommands, [
+            .activate(.predicate(matching, ordinal: 0)),
+            .activate(.predicate(matching, ordinal: 0)),
+        ])
+    }
+
+    func testHeistForEachAdditionResetsOrdinalWithoutExtendingInitialIterationBudget() async throws {
+        let matching = ElementPredicate(label: "Delete")
+        var executedCommands: [ClientMessage] = []
+        let initialState = observedState(elements: [
+            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
+            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
+        ])
+        let afterAddition = observedState(elements: [
+            (makeElement(label: "Delete", identifier: "delete_new"), "delete_new"),
+            (makeElement(label: "Delete", identifier: "delete_first"), "delete_first"),
+            (makeElement(label: "Delete", identifier: "delete_second"), "delete_second"),
+        ])
+        let runtime = heistRuntime(
+            observations: [initialState, afterAddition],
+            execute: { command in
+                executedCommands.append(command)
+                return ActionResult(success: true, method: .activate)
+            }
+        )
+        let plan = HeistPlan(steps: [
+            .forEach(try ForEachStep(
+                matching: matching,
+                limit: 10,
+                element: .predicate(matching, ordinal: 0),
+                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
+            )),
+        ])
+
+        let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
+        let forEachResult = try XCTUnwrap(result.heistExecutionPayload?.steps.first?.forEachResult)
+
+        XCTAssertTrue(result.success)
+        XCTAssertEqual(forEachResult.matchedCount, 2)
+        XCTAssertEqual(forEachResult.iterationCount, 2)
         XCTAssertEqual(executedCommands, [
             .activate(.predicate(matching, ordinal: 0)),
             .activate(.predicate(matching, ordinal: 0)),
@@ -1237,6 +1283,7 @@ final class TheBrainsActionTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 10,
+                element: .predicate(matching, ordinal: 0),
                 steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
             )),
         ])
@@ -1274,6 +1321,7 @@ final class TheBrainsActionTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 10,
+                element: .predicate(matching, ordinal: 0),
                 steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
             )),
             .warn(WarnStep(message: "should be skipped")),
@@ -1328,6 +1376,7 @@ final class TheBrainsActionTests: XCTestCase {
             .forEach(try ForEachStep(
                 matching: matching,
                 limit: 10,
+                element: .predicate(matching, ordinal: 0),
                 steps: [
                     .action(try ActionStep(
                         command: .activate(.predicate(matching, ordinal: 0)),
@@ -2078,10 +2127,10 @@ final class TheBrainsActionTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        for _ in 0..<50 where stash.settledSemanticWaiters.isEmpty {
+        for _ in 0..<50 where stash.semanticObservationStream.settledWaiterCount == 0 {
             await Task.yield()
         }
-        XCTAssertEqual(stash.settledSemanticWaiters.count, 1, file: file, line: line)
+        XCTAssertEqual(stash.semanticObservationStream.settledWaiterCount, 1, file: file, line: line)
     }
 
     private func observedState(
@@ -2103,7 +2152,7 @@ final class TheBrainsActionTests: XCTestCase {
     ) -> TheBrains.HeistExecutionRuntime {
         var remainingObservations = observations
         var remainingUnavailableObservations = unavailableObservationCount
-        var previousObservation: TheStash.SettledSemanticObservation?
+        var previousObservation: SettledSemanticObservation?
         var previousCapture: AccessibilityTrace.Capture?
         var nextObservationSequence: UInt64 = 0
         return TheBrains.HeistExecutionRuntime(
@@ -2161,7 +2210,7 @@ final class TheBrainsActionTests: XCTestCase {
                 }
                 let state = remainingObservations.removeFirst()
                 nextObservationSequence += 1
-                let settledObservation = TheStash.SettledSemanticObservation(
+                let settledObservation = SettledSemanticObservation(
                     sequence: nextObservationSequence,
                     scope: scope,
                     screen: .empty,
@@ -2172,7 +2221,7 @@ final class TheBrainsActionTests: XCTestCase {
                 } else {
                     AccessibilityTrace(capture: state.capture)
                 }
-                let event = TheStash.SettledSemanticObservationEvent(
+                let event = SettledSemanticObservationEvent(
                     sequence: nextObservationSequence,
                     scope: scope,
                     observation: settledObservation,

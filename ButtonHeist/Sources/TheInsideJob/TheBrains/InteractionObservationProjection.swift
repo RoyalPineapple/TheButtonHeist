@@ -5,7 +5,7 @@ import Foundation
 import TheScore
 
 struct HeistSemanticObservation {
-    let event: TheStash.SettledSemanticObservationEvent
+    let event: SettledSemanticObservationEvent
     let state: PostActionObservation.BeforeState
     let accessibilityTrace: AccessibilityTrace
     let delta: AccessibilityTrace.Delta?
@@ -21,7 +21,7 @@ struct HeistSemanticObservation {
     }
 
     static func semanticObservation(
-        event: TheStash.SettledSemanticObservationEvent,
+        event: SettledSemanticObservationEvent,
         state: PostActionObservation.BeforeState
     ) -> HeistSemanticObservation {
         HeistSemanticObservation(

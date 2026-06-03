@@ -305,16 +305,18 @@ public struct PredicateCase: Codable, Sendable, Equatable {
 
 public struct ForEachStep: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case matching, limit, steps
+        case matching, limit, element, steps
     }
 
     public let matching: ElementPredicate
     public let limit: Int
+    public let element: ElementTarget
     public let steps: [HeistStep]
 
     public init(
         matching: ElementPredicate,
         limit: Int,
+        element: ElementTarget,
         steps: [HeistStep]
     ) throws {
         guard matching.hasPredicates else {
@@ -326,8 +328,12 @@ public struct ForEachStep: Codable, Sendable, Equatable {
         guard !steps.isEmpty else {
             throw HeistPlanError.emptyForEachSteps
         }
+        guard !steps.containsRuntimeForEach else {
+            throw HeistPlanError.nestedForEachUnsupported
+        }
         self.matching = matching
         self.limit = limit
+        self.element = element
         self.steps = steps
     }
 
@@ -337,8 +343,28 @@ public struct ForEachStep: Codable, Sendable, Equatable {
         try self.init(
             matching: try container.decode(ElementPredicate.self, forKey: .matching),
             limit: try container.decode(Int.self, forKey: .limit),
+            element: try container.decode(ElementTarget.self, forKey: .element),
             steps: try container.decode([HeistStep].self, forKey: .steps)
         )
+    }
+}
+
+private extension Array where Element == HeistStep {
+    var containsRuntimeForEach: Bool {
+        contains { step in
+            switch step {
+            case .forEach:
+                return true
+            case .conditional(let conditional):
+                return conditional.cases.contains { $0.steps.containsRuntimeForEach }
+                    || conditional.elseSteps?.containsRuntimeForEach == true
+            case .waitForCases(let waitForCases):
+                return waitForCases.cases.contains { $0.steps.containsRuntimeForEach }
+                    || waitForCases.elseSteps?.containsRuntimeForEach == true
+            case .action, .wait, .warn, .fail:
+                return false
+            }
+        }
     }
 }
 
@@ -385,4 +411,5 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case emptyForEachPredicate
     case invalidForEachLimit(Int)
     case emptyForEachSteps
+    case nestedForEachUnsupported
 }
