@@ -61,6 +61,7 @@
 		18D6ACAF04F901686D4C4989 /* TheMuscleStateMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0025667198ECED19B078766B /* TheMuscleStateMachineTests.swift */; };
 		1962E31FCF67C676B4CF31FE /* TheFence+CommandCatalog+Observation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A9C27684C0CEB5CA3C3973 /* TheFence+CommandCatalog+Observation.swift */; };
 		19B2883BD89FF79837579882 /* TheSafecracker+TapDiagnostic.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2F586190CE1CB11AC6617B /* TheSafecracker+TapDiagnostic.swift */; };
+		1A75E965C7C67E96EDFAAE27 /* MessageRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10E3398D80C7DB0F6E4DAAB /* MessageRateLimiter.swift */; };
 		1AEAF3D1439666369A7D92AC /* Navigation+PageScroll.swift in Sources */ = {isa = PBXBuildFile; fileRef = C58FB1B059E6C4FB54C1A5B2 /* Navigation+PageScroll.swift */; };
 		1B74ABBB3EC8F07B2DAA92B5 /* SimpleSocketServer+ConnectionAcceptance.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F51264FD45B067E6582645 /* SimpleSocketServer+ConnectionAcceptance.swift */; };
 		1BC430199BC9FAA411772D27 /* ScreenshotPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E4CC1813061818AEFEECDC /* ScreenshotPayloadTests.swift */; };
@@ -432,7 +433,6 @@
 		D6F25E9E22DAE20DEDF76D88 /* DeviceConnection+Messages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43374284CB68C9068DAD0105 /* DeviceConnection+Messages.swift */; };
 		D73AF669F2F4C132C0391CAF /* TheStash+LiveGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28F2FCE8E3928F1181D1FF6 /* TheStash+LiveGeometry.swift */; };
 		D75454A1CADC70337F726797 /* TheInsideJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A30441A167F4DEDD5C2F562 /* TheInsideJob.swift */; };
-		D81F66AD0CE80FB559C002B6 /* MessageRateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B1C879F7F60355AD00033E /* MessageRateLimiter.swift */; };
 		D8798A1C0B2AA1291B1E3655 /* AccessibilitySnapshotParser.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10CE4609BC79CCF4BF0CFAA /* AccessibilitySnapshotParser.framework */; };
 		D87D2ABD901052AC655202DB /* ThePlantAutoStart.h in Headers */ = {isa = PBXBuildFile; fileRef = 09C4C594B932300D1817D3F0 /* ThePlantAutoStart.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		D8AA40696432289C348E49A1 /* GestureDirections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CFBB40A1FC23933CF59662 /* GestureDirections.swift */; };
@@ -769,7 +769,6 @@
 		30300EF11850AA2835A7ABB7 /* DeviceConnectionEventStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceConnectionEventStream.swift; sourceTree = "<group>"; };
 		30350583523C830C2C298AE7 /* ConnectionResultWaitersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionResultWaitersTests.swift; sourceTree = "<group>"; };
 		309BB45F850067AAEA4E20C3 /* TheFence+Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Connection.swift"; sourceTree = "<group>"; };
-		30B1C879F7F60355AD00033E /* MessageRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRateLimiter.swift; sourceTree = "<group>"; };
 		30CFBB40A1FC23933CF59662 /* GestureDirections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureDirections.swift; sourceTree = "<group>"; };
 		31A8AB866CA1F38E0AC64EB2 /* AccessibilityPredicateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityPredicateTests.swift; sourceTree = "<group>"; };
 		31CA8C90B179D05A2C19D5B2 /* TheFence+PlaybackDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+PlaybackDiagnostics.swift"; sourceTree = "<group>"; };
@@ -1012,6 +1011,7 @@
 		AE82C21766665FC9B6231C3F /* ConnectionResultWaiters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionResultWaiters.swift; sourceTree = "<group>"; };
 		AF4D1427EF2EC061E0CD0A4B /* TheFence+RequestPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload.swift"; sourceTree = "<group>"; };
 		B04B13599EA3DEFD58B9874C /* AccessibilityTraceCaptures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityTraceCaptures.swift; sourceTree = "<group>"; };
+		B10E3398D80C7DB0F6E4DAAB /* MessageRateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageRateLimiter.swift; sourceTree = "<group>"; };
 		B191B5186E8A65BA9E5042F3 /* ServerMessages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerMessages.swift; sourceTree = "<group>"; };
 		B26A26BB87455CD07CE8FCE8 /* TheStash+PassiveSemanticObservation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheStash+PassiveSemanticObservation.swift"; sourceTree = "<group>"; };
 		B270D706A332CA587FAFDA9A /* Navigation+PresentationObstruction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Navigation+PresentationObstruction.swift"; sourceTree = "<group>"; };
@@ -1581,6 +1581,7 @@
 				143F8D897050CC169D90774F /* ClientDelivery.swift */,
 				826423AFAED8060450AA42A0 /* ClientRegistry.swift */,
 				65D6561D2711191607CCA9E5 /* ConnectionScope+Classify.swift */,
+				B10E3398D80C7DB0F6E4DAAB /* MessageRateLimiter.swift */,
 				C861188FFA33139A5AF11B46 /* MuscleApprovalPromptCallbacks.swift */,
 				98164E3F21F9651CF43F0BC8 /* MuscleAuthenticatedCommandPhase.swift */,
 				1BFB21A95FAFE947CCFE253A /* MuscleAuthenticationDeadlinePhase.swift */,
@@ -1604,7 +1605,6 @@
 				BEBDFC5B6B8AF85D9ECA7648 /* SocketClientRegistry.swift */,
 				0AB999A39F6788A19B1F2865 /* SocketConnectionAdmission.swift */,
 				DFCA981B7E21FF878CF51159 /* SocketListenerStartup.swift */,
-				30B1C879F7F60355AD00033E /* MessageRateLimiter.swift */,
 				4F3A5E72B794AE5FF5E0C245 /* SocketReceiveFramer.swift */,
 				E8078DED719BB15C5C04B462 /* SocketSendBuffer.swift */,
 				EA19ED5851B061834559D109 /* TheMuscle.swift */,
@@ -2444,6 +2444,7 @@
 				BD92B0579EBEE3198FCB84C6 /* ClientDelivery.swift in Sources */,
 				6181AEAB011BCBE962B430E0 /* ClientRegistry.swift in Sources */,
 				524DE1B6B146ECBC15B951E9 /* ConnectionScope+Classify.swift in Sources */,
+				1A75E965C7C67E96EDFAAE27 /* MessageRateLimiter.swift in Sources */,
 				B7F0B3C7BB14E26193053BF1 /* MuscleApprovalPromptCallbacks.swift in Sources */,
 				255C98AE6C1E889033C0830F /* MuscleAuthenticatedCommandPhase.swift in Sources */,
 				F9CBFB6E280623F44A062452 /* MuscleAuthenticationDeadlinePhase.swift in Sources */,
@@ -2467,7 +2468,6 @@
 				9E99BF1161B91DBAB5B1D76B /* SocketClientRegistry.swift in Sources */,
 				0E77F4DD95376FF2835B9817 /* SocketConnectionAdmission.swift in Sources */,
 				24CD2554C4DDD8C0167631C0 /* SocketListenerStartup.swift in Sources */,
-				D81F66AD0CE80FB559C002B6 /* MessageRateLimiter.swift in Sources */,
 				C7E2771CC9F65E736304C027 /* SocketReceiveFramer.swift in Sources */,
 				A35FCD03860CA3E9A8DA641F /* SocketSendBuffer.swift in Sources */,
 				9CFA954B8743AFE696EA9778 /* TLSCertificateFacts.swift in Sources */,
