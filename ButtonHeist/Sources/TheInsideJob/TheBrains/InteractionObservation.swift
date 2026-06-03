@@ -9,12 +9,10 @@ private let defaultSemanticObservationTimeout: Double = 1
 @MainActor
 final class InteractionObservation {
     private let stash: TheStash
-    private let tripwire: TheTripwire
     private let postActionObservation: PostActionObservation
 
-    init(stash: TheStash, tripwire: TheTripwire, postActionObservation: PostActionObservation) {
+    init(stash: TheStash, postActionObservation: PostActionObservation) {
         self.stash = stash
-        self.tripwire = tripwire
         self.postActionObservation = postActionObservation
     }
 
@@ -51,9 +49,12 @@ final class InteractionObservation {
         before: PostActionObservation.BeforeState,
         settleOutcome: SettleSession.Outcome? = nil
     ) async -> ActionResult {
-        let settleResult = await resolvedSettleOutcome(settleOutcome, baseline: before)
-        let didSettle = settleResult.outcome.didSettleCleanly
-        if case .cancelled(let cancelMs) = settleResult.outcome {
+        let settledObservation = await stash.semanticObservationStream.settlePostActionObservation(
+            baselineTripwireSignal: before.tripwireSignal,
+            settleOutcome: settleOutcome
+        )
+        let didSettle = settledObservation.settle.outcome.didSettleCleanly
+        if case .cancelled(let cancelMs) = settledObservation.settle.outcome {
             return InteractionObservationProjection.failedActionResult(
                 method: method, capture: before.capture, message: "cancelled after \(cancelMs)ms",
                 payload: payload, subjectEvidence: subjectEvidence, settled: false,
@@ -61,15 +62,14 @@ final class InteractionObservation {
             )
         }
 
-        guard let afterScreen = settleResult.finalScreen else {
+        guard let visibleEvent = settledObservation.event else {
             return InteractionObservationProjection.failedActionResult(
                 method: method, capture: before.capture, message: "Could not parse post-action accessibility tree",
                 payload: payload, subjectEvidence: subjectEvidence, settled: didSettle,
-                settleTimeMs: settleResult.outcome.timeMs
+                settleTimeMs: settledObservation.settle.outcome.timeMs
             )
         }
 
-        let visibleEvent = stash.semanticObservationStream.commitSettledObservation(afterScreen)
         let finalState = await semanticStateAfterDiscovery(after: visibleEvent.sequence)
             ?? postActionObservation.captureSemanticState(from: visibleEvent.observation)
         let finalClassification = ScreenClassifier.classify(
@@ -81,7 +81,7 @@ final class InteractionObservation {
             parentCapture: before.capture,
             classification: finalClassification,
             transient: InteractionObservationProjection.transientElements(
-                settleResult: settleResult,
+                settleResult: settledObservation.settle,
                 before: before,
                 final: finalState,
                 classification: finalClassification
@@ -100,7 +100,7 @@ final class InteractionObservation {
         return InteractionObservationProjection.actionResult(
             method: method, capture: postCapture, message: message, payload: resolvedPayload,
             errorKind: errorKind, accessibilityTrace: trace, subjectEvidence: subjectEvidence,
-            settled: didSettle, settleTimeMs: settleResult.outcome.timeMs, success: success
+            settled: didSettle, settleTimeMs: settledObservation.settle.outcome.timeMs, success: success
         )
     }
 
@@ -243,18 +243,6 @@ final class InteractionObservation {
             timeout: 2.0
         ) else { return nil }
         return postActionObservation.captureSemanticState(from: event.observation)
-    }
-
-    private func resolvedSettleOutcome(
-        _ settleOutcome: SettleSession.Outcome?,
-        baseline: PostActionObservation.BeforeState
-    ) async -> SettleSession.Outcome {
-        if let settleOutcome {
-            return settleOutcome
-        }
-        let start = CFAbsoluteTimeGetCurrent()
-        let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
-        return await settleSession.run(start: start, baselineTripwireSignal: baseline.tripwireSignal)
     }
 
     private func waitReceipt(

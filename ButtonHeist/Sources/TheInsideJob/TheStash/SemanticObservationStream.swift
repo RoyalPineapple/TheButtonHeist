@@ -152,12 +152,31 @@ final class SemanticObservationStream {
         _ screen: Screen,
         scope: SemanticObservationScope = .visible
     ) -> SettledSemanticObservationEvent {
-        stash.commitSettledSemanticObservationForStream(screen)
-        markCurrentSettled(scope: scope)
-        guard let event = latestEvent else {
-            preconditionFailure("settled semantic observation commit did not publish an event")
+        stash.storeSettledSemanticObservationForStream(screen)
+        return publishCurrentSettledObservation(scope: scope)
+    }
+
+    func settlePostActionObservation(
+        baselineTripwireSignal: TheTripwire.TripwireSignal,
+        settleOutcome providedOutcome: SettleSession.Outcome? = nil
+    ) async -> (settle: SettleSession.Outcome, event: SettledSemanticObservationEvent?) {
+        let outcome: SettleSession.Outcome
+        if let providedOutcome {
+            outcome = providedOutcome
+        } else {
+            let settleSession = SettleSession.live(stash: stash, tripwire: tripwire)
+            outcome = await settleSession.run(
+                start: CFAbsoluteTimeGetCurrent(),
+                baselineTripwireSignal: baselineTripwireSignal
+            )
         }
-        return event
+
+        if case .cancelled = outcome.outcome {
+            return (outcome, nil)
+        }
+
+        guard let finalScreen = outcome.finalScreen else { return (outcome, nil) }
+        return (outcome, commitSettledObservation(finalScreen, scope: .visible))
     }
 
     func clearLatestObservation() {
@@ -170,7 +189,9 @@ final class SemanticObservationStream {
         latestObservationIsDirty = true
     }
 
-    func markCurrentSettled(scope: SemanticObservationScope = .visible) {
+    private func publishCurrentSettledObservation(
+        scope: SemanticObservationScope = .visible
+    ) -> SettledSemanticObservationEvent {
         settledSequence += 1
         let observation = SettledSemanticObservation(
             sequence: settledSequence,
@@ -183,6 +204,7 @@ final class SemanticObservationStream {
         latestObservationIsDirty = false
         passiveObservationSettledReading = tripwire.latestReading
         completeWaiters(with: event)
+        return event
     }
 
     func completeAllWaiters(returning event: SettledSemanticObservationEvent?) {
@@ -332,7 +354,7 @@ final class SemanticObservationStream {
                 return true
             }
             await discoveryObservation()
-            markCurrentSettled(scope: .discovery)
+            _ = publishCurrentSettledObservation(scope: .discovery)
             await Task.yield()
             return true
         }

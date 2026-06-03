@@ -75,7 +75,6 @@ final class TheBrains {
         self.postActionObservation = postActionObservation
         self.interactionObservation = InteractionObservation(
             stash: stash,
-            tripwire: tripwire,
             postActionObservation: postActionObservation
         )
     }
