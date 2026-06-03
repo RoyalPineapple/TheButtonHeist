@@ -1079,10 +1079,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 20,
-                element: .predicate(matching, ordinal: 0),
-                steps: [.warn(WarnStep(message: "delete one"))]
-            )),
+                limit: 20
+            ) { _ in
+                [.warn(WarnStep(message: "delete one"))]
+            }),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -1118,10 +1118,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 1,
-                element: .predicate(matching, ordinal: 0),
-                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
-            )),
+                limit: 1
+            ) { target in
+                [.action(try ActionStep(command: .activate(target)))]
+            }),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -1138,7 +1138,7 @@ final class TheBrainsActionTests: XCTestCase {
         XCTAssertNil(step.childResults)
     }
 
-    func testHeistForEachInstantiatesOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
+    func testHeistForEachCallsBodyWithOrdinalTargetForEachInitialMatchWithoutMutatingPlan() async throws {
         let matching = ElementPredicate(label: "Delete")
         var executedCommands: [ClientMessage] = []
         let initialState = observedState(elements: [
@@ -1156,10 +1156,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 10,
-                element: .predicate(matching, ordinal: 0),
-                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
-            )),
+                limit: 10
+            ) { target in
+                [.action(try ActionStep(command: .activate(target)))]
+            }),
         ])
         let originalSteps = plan.steps
 
@@ -1200,10 +1200,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 10,
-                element: .predicate(matching, ordinal: 0),
-                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
-            )),
+                limit: 10
+            ) { target in
+                [.action(try ActionStep(command: .activate(target)))]
+            }),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -1243,10 +1243,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 10,
-                element: .predicate(matching, ordinal: 0),
-                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
-            )),
+                limit: 10
+            ) { target in
+                [.action(try ActionStep(command: .activate(target)))]
+            }),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -1282,10 +1282,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 10,
-                element: .predicate(matching, ordinal: 0),
-                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
-            )),
+                limit: 10
+            ) { target in
+                [.action(try ActionStep(command: .activate(target)))]
+            }),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)
@@ -1320,10 +1320,10 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 10,
-                element: .predicate(matching, ordinal: 0),
-                steps: [.action(try ActionStep(command: .activate(.predicate(matching, ordinal: 0))))]
-            )),
+                limit: 10
+            ) { target in
+                [.action(try ActionStep(command: .activate(target)))]
+            }),
             .warn(WarnStep(message: "should be skipped")),
         ])
 
@@ -1375,18 +1375,18 @@ final class TheBrainsActionTests: XCTestCase {
         let plan = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 10,
-                element: .predicate(matching, ordinal: 0),
-                steps: [
+                limit: 10
+            ) { target in
+                [
                     .action(try ActionStep(
-                        command: .activate(.predicate(matching, ordinal: 0)),
+                        command: .activate(target),
                         expectation: WaitStep(
-                            predicate: .state(.absentTarget(.predicate(matching, ordinal: 0))),
+                            predicate: .state(.absentTarget(target)),
                             timeout: 2
                         )
                     )),
                 ]
-            )),
+            }),
         ])
 
         let result = await brains.executeHeistPlanForTest(plan, runtime: runtime)

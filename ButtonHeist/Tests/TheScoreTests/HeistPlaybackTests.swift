@@ -307,30 +307,48 @@ final class HeistPlanTests: XCTestCase {
 
     // MARK: - ForEach
 
-    func testForEachRoundTrip() throws {
+    func testForEachStepInvokesBodyForSuppliedTarget() throws {
+        let matching = ElementPredicate(label: "Cell", traits: [.button])
+        let step = try ForEachStep(matching: matching, limit: 5) { target in
+            [
+                .action(try ActionStep(
+                    command: .activate(target),
+                    expectation: WaitStep(
+                        predicate: .state(.absentTarget(target)),
+                        timeout: 2
+                    )
+                )),
+                .warn(WarnStep(message: "activated one")),
+            ]
+        }
+        let target = ElementTarget.predicate(matching, ordinal: 4)
+
+        XCTAssertEqual(
+            try step.steps(for: target),
+            [
+                .action(try ActionStep(
+                    command: .activate(target),
+                    expectation: WaitStep(
+                        predicate: .state(.absentTarget(target)),
+                        timeout: 2
+                    )
+                )),
+                .warn(WarnStep(message: "activated one")),
+            ]
+        )
+    }
+
+    func testForEachEncodeRejectsSwiftAuthoredBody() throws {
         let matching = ElementPredicate(label: "Cell", traits: [.button])
         let plan = HeistPlan(steps: [
-            .forEach(try ForEachStep(
-                matching: matching,
-                limit: 5,
-                element: .predicate(matching, ordinal: 0),
-                steps: [
-                    .action(try ActionStep(
-                        command: .activate(.predicate(matching, ordinal: 0)),
-                        expectation: WaitStep(
-                            predicate: .state(.absentTarget(.predicate(matching, ordinal: 0))),
-                            timeout: 2
-                        )
-                    )),
-                    .warn(WarnStep(message: "activated one")),
-                ]
-            )),
+            .forEach(try ForEachStep(matching: matching, limit: 5) { target in
+                [.action(try ActionStep(command: .activate(target)))]
+            }),
         ])
 
-        let data = try JSONEncoder().encode(plan)
-        let decoded = try JSONDecoder().decode(HeistPlan.self, from: data)
-
-        XCTAssertEqual(decoded, plan)
+        XCTAssertThrowsError(try JSONEncoder().encode(plan)) { error in
+            XCTAssertTrue("\(error)".contains("Swift-authored only"), "\(error)")
+        }
     }
 
     func testForEachDecodeRejectsEmptyMatchingPredicate() {
@@ -339,9 +357,7 @@ final class HeistPlanTests: XCTestCase {
           "type": "for_each",
           "for_each": {
             "matching": {},
-            "limit": 10,
-            "element": {"label": "Cell", "ordinal": 0},
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "limit": 10
           }
         }
         """
@@ -357,9 +373,7 @@ final class HeistPlanTests: XCTestCase {
           "type": "for_each",
           "for_each": {
             "matching": {"label": "Cell"},
-            "limit": 0,
-            "element": {"label": "Cell", "ordinal": 0},
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "limit": 0
           }
         }
         """
@@ -373,9 +387,7 @@ final class HeistPlanTests: XCTestCase {
           "type": "for_each",
           "for_each": {
             "matching": {"label": "Cell"},
-            "limit": -1,
-            "element": {"label": "Cell", "ordinal": 0},
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "limit": -1
           }
         }
         """
@@ -385,25 +397,23 @@ final class HeistPlanTests: XCTestCase {
         }
     }
 
-    func testForEachDecodeRejectsEmptySteps() {
+    func testForEachDecodeRejectsPlainJSONBodyUntilDurableASTExists() {
         let json = """
         {
           "type": "for_each",
           "for_each": {
             "matching": {"label": "Cell"},
-            "limit": 5,
-            "element": {"label": "Cell", "ordinal": 0},
-            "steps": []
+            "limit": 5
           }
         }
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("emptyForEachSteps"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Swift-authored only"), "\(error)")
         }
     }
 
-    func testForEachDecodeRejectsNestedRuntimeForEach() {
+    func testForEachDecodeRejectsOldElementAndStepsShapeAsUnknownFields() {
         let json = """
         {
           "type": "for_each",
@@ -411,23 +421,13 @@ final class HeistPlanTests: XCTestCase {
             "matching": {"label": "Cell"},
             "limit": 5,
             "element": {"label": "Cell", "ordinal": 0},
-            "steps": [
-              {
-                "type": "for_each",
-                "for_each": {
-                  "matching": {"label": "Button"},
-                  "limit": 5,
-                  "element": {"label": "Button", "ordinal": 0},
-                  "steps": [{"type": "warn", "warn": {"message": "nested"}}]
-                }
-              }
-            ]
+            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
           }
         }
         """
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistStep.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("nestedForEachUnsupported"), "\(error)")
+            XCTAssertTrue("\(error)".contains("element"), "\(error)")
         }
     }
 
@@ -437,9 +437,7 @@ final class HeistPlanTests: XCTestCase {
           "type": "for_each",
           "for_each": {
             "matching": {"label": "Cell"},
-            "limit": 5,
-            "element": {"label": "Cell", "ordinal": 0},
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}]
+            "limit": 5
           },
           "unexpected": true
         }
@@ -455,8 +453,6 @@ final class HeistPlanTests: XCTestCase {
           "for_each": {
             "matching": {"label": "Cell"},
             "limit": 5,
-            "element": {"label": "Cell", "ordinal": 0},
-            "steps": [{"type": "warn", "warn": {"message": "hi"}}],
             "bogus": 42
           }
         }

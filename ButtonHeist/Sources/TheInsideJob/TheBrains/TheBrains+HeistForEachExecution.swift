@@ -31,16 +31,20 @@ extension TheBrains {
         var observedSequence = observation.event.sequence
 
         while iterationCount < matchedCount {
-            let iterationSteps: [HeistStep]
             let currentElement = ElementTarget.predicate(step.matching, ordinal: nextOrdinal)
+            let iterationSteps: [HeistStep]
             do {
-                iterationSteps = try HeistForEachBodyInstantiation.instantiate(
-                    steps: step.steps,
-                    templateElement: step.element,
-                    currentElement: currentElement
-                )
+                iterationSteps = try step.steps(for: currentElement)
             } catch {
-                failureReason = "iteration \(iterationCount) body instantiation failed: \(error)"
+                failureReason = "iteration \(iterationCount) body failed: \(error)"
+                break
+            }
+            guard !iterationSteps.isEmpty else {
+                failureReason = "iteration \(iterationCount) body produced no steps"
+                break
+            }
+            guard !iterationSteps.containsRuntimeForEach else {
+                failureReason = "iteration \(iterationCount) body contains unsupported nested runtime for_each"
                 break
             }
 
@@ -149,6 +153,25 @@ extension TheBrains {
             return "for_each stopped after \(iterationCount) of \(matchedCount) iteration(s): \(failureReason)"
         }
         return "for_each completed \(iterationCount) iteration(s) from \(matchedCount) matched element(s)"
+    }
+}
+
+private extension Array where Element == HeistStep {
+    var containsRuntimeForEach: Bool {
+        contains { step in
+            switch step {
+            case .forEach:
+                return true
+            case .conditional(let conditional):
+                return conditional.cases.contains { $0.steps.containsRuntimeForEach }
+                    || conditional.elseSteps?.containsRuntimeForEach == true
+            case .waitForCases(let waitForCases):
+                return waitForCases.cases.contains { $0.steps.containsRuntimeForEach }
+                    || waitForCases.elseSteps?.containsRuntimeForEach == true
+            case .action, .wait, .warn, .fail:
+                return false
+            }
+        }
     }
 }
 

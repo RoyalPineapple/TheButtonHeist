@@ -10,14 +10,14 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(Set(descriptorCommands), Set(TheFence.Command.allCases))
     }
 
-    func testRunHeistDescriptorAdvertisesAllPlanStepTypes() {
+    func testRunHeistDescriptorAdvertisesPublicJSONPlanStepTypes() {
         let descriptor = TheFence.Command.descriptor(for: .runHeist)
         let steps = descriptor.parameters.first { $0.key == "steps" }
         let type = steps?.arrayItemProperties.first { $0.key == "type" }
 
         XCTAssertEqual(
             type?.enumValues,
-            ["action", "wait", "conditional", "wait_for_cases", "for_each", "warn", "fail"]
+            ["action", "wait", "conditional", "wait_for_cases", "warn", "fail"]
         )
     }
 
@@ -209,8 +209,8 @@ final class WireCommandParityTests: XCTestCase {
         case .waitForCases(let waitForCases):
             return waitForCases.cases.flatMap { $0.steps.flatMap(clientMessages) }
                 + (waitForCases.elseSteps ?? []).flatMap(clientMessages)
-        case .forEach(let forEach):
-            return forEach.steps.flatMap(clientMessages)
+        case .forEach:
+            return []
         case .warn, .fail:
             return []
         }

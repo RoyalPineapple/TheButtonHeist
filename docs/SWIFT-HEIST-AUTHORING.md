@@ -78,11 +78,10 @@ Rotor("Headings", on: .label("Article"), direction: .next)
 
 `ForEach` has two authoring forms. `ForEach(collection)` is static Swift
 expansion and emits only the linear child steps. `ForEach(.matching(predicate),
-limit:)` emits one runtime `for_each` step; the closure receives
-an `ElementTarget` data value recorded on the step as the body element. At
-runtime each iteration instantiates that element as
-`ElementTarget.predicate(predicate, ordinal: index)`, so the body repeats the
-same semantic promise and command execution re-resolves it normally.
+limit:)` emits one Swift-authored runtime `for_each` step. At runtime each
+iteration computes `ElementTarget.predicate(predicate, ordinal: index)`, calls
+the closure with that target, and executes the returned body through the normal
+pipeline. The body target is ordinary `ElementTarget` data.
 Runtime `ForEach` repeats semantic intent; commands re-resolve targets. The
 loop owns match counting, ordinal scheduling, and limit enforcement only.
 Runtime `ForEach` takes an initial settled observation, counts the predicate

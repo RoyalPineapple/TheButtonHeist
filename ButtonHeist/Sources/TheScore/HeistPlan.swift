@@ -320,21 +320,23 @@ public struct PredicateCase: Codable, Sendable, Equatable {
     }
 }
 
-public struct ForEachStep: Codable, Sendable, Equatable {
+// Swift-authored body is invoked synchronously by the heist runtime.
+// swiftlint:disable:next agent_unchecked_sendable_no_comment
+public struct ForEachStep: Codable, Equatable, @unchecked Sendable {
+    public typealias Body = (ElementTarget) throws -> [HeistStep]
+
     private enum CodingKeys: String, CodingKey, CaseIterable {
-        case matching, limit, element, steps
+        case matching, limit
     }
 
     public let matching: ElementPredicate
     public let limit: Int
-    public let element: ElementTarget
-    public let steps: [HeistStep]
+    private let body: Body
 
     public init(
         matching: ElementPredicate,
         limit: Int,
-        element: ElementTarget,
-        steps: [HeistStep]
+        _ body: @escaping Body
     ) throws {
         guard matching.hasPredicates else {
             throw HeistPlanError.emptyForEachPredicate
@@ -342,46 +344,43 @@ public struct ForEachStep: Codable, Sendable, Equatable {
         guard limit > 0 else {
             throw HeistPlanError.invalidForEachLimit(limit)
         }
-        guard !steps.isEmpty else {
-            throw HeistPlanError.emptyForEachSteps
-        }
-        guard !steps.containsRuntimeForEach else {
-            throw HeistPlanError.nestedForEachUnsupported
-        }
         self.matching = matching
         self.limit = limit
-        self.element = element
-        self.steps = steps
+        self.body = body
+    }
+
+    public func steps(for target: ElementTarget) throws -> [HeistStep] {
+        try body(target)
     }
 
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "for_each step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        try self.init(
-            matching: try container.decode(ElementPredicate.self, forKey: .matching),
-            limit: try container.decode(Int.self, forKey: .limit),
-            element: try container.decode(ElementTarget.self, forKey: .element),
-            steps: try container.decode([HeistStep].self, forKey: .steps)
+        let matching = try container.decode(ElementPredicate.self, forKey: .matching)
+        guard matching.hasPredicates else {
+            throw HeistPlanError.emptyForEachPredicate
+        }
+        let limit = try container.decode(Int.self, forKey: .limit)
+        guard limit > 0 else {
+            throw HeistPlanError.invalidForEachLimit(limit)
+        }
+        throw DecodingError.dataCorruptedError(
+            forKey: .matching,
+            in: container,
+            debugDescription: "semantic for_each bodies are Swift-authored only until a durable body AST exists"
         )
     }
-}
 
-private extension Array where Element == HeistStep {
-    var containsRuntimeForEach: Bool {
-        contains { step in
-            switch step {
-            case .forEach:
-                return true
-            case .conditional(let conditional):
-                return conditional.cases.contains { $0.steps.containsRuntimeForEach }
-                    || conditional.elseSteps?.containsRuntimeForEach == true
-            case .waitForCases(let waitForCases):
-                return waitForCases.cases.contains { $0.steps.containsRuntimeForEach }
-                    || waitForCases.elseSteps?.containsRuntimeForEach == true
-            case .action, .wait, .warn, .fail:
-                return false
-            }
-        }
+    public func encode(to encoder: Encoder) throws {
+        let context = EncodingError.Context(
+            codingPath: encoder.codingPath,
+            debugDescription: "semantic for_each bodies are Swift-authored only until a durable body AST exists"
+        )
+        throw EncodingError.invalidValue("for_each", context)
+    }
+
+    public static func == (lhs: ForEachStep, rhs: ForEachStep) -> Bool {
+        lhs.matching == rhs.matching && lhs.limit == rhs.limit
     }
 }
 
@@ -429,6 +428,5 @@ public enum HeistPlanError: Error, Sendable, Equatable {
     case negativeTimeout(Double)
     case emptyForEachPredicate
     case invalidForEachLimit(Int)
-    case emptyForEachSteps
     case nestedForEachUnsupported
 }

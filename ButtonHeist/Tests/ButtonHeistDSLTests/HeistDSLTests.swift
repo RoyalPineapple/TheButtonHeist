@@ -237,7 +237,7 @@ func staticForEachFlattensIntoLinearSteps() throws {
 }
 
 @Test
-func semanticForEachBuildsRuntimeForEachStep() throws {
+func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let matching = ElementPredicate.label("Delete")
     let heist = try Heist {
         try ForEach(.matching(matching), limit: 20) { element in
@@ -246,20 +246,22 @@ func semanticForEachBuildsRuntimeForEachStep() throws {
         }
     }
 
-    #expect(heist.plan.steps == [
-        .forEach(try ForEachStep(
-            matching: matching,
-            limit: 20,
-            element: .predicate(matching, ordinal: 0),
-            steps: [
-                .action(try ActionStep(
-                    command: .activate(.predicate(matching, ordinal: 0)),
-                    expectation: WaitStep(
-                        predicate: .state(.absentTarget(.predicate(matching, ordinal: 0))),
-                        timeout: 2
-                    )
-                )),
-            ]
+    guard case .forEach(let step) = heist.plan.steps.first else {
+        Issue.record("Expected semantic ForEach step")
+        return
+    }
+
+    #expect(step.matching == matching)
+    #expect(step.limit == 20)
+
+    let target = ElementTarget.predicate(matching, ordinal: 3)
+    #expect(try step.steps(for: target) == [
+        .action(try ActionStep(
+            command: .activate(target),
+            expectation: WaitStep(
+                predicate: .state(.absentTarget(target)),
+                timeout: 2
+            )
         )),
     ])
 }

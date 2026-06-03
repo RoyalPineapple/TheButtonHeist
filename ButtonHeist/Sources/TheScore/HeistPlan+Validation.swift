@@ -117,7 +117,7 @@ private struct HeistPlanValidator {
     }
 
     private func validate(forEach step: ForEachStep, path: String) -> [HeistPlanValidationFinding] {
-        var findings = validate(steps: step.steps, path: "\(path).steps")
+        var findings: [HeistPlanValidationFinding] = []
         if step.limit > 100 {
             findings.append(.init(
                 severity: mode == .runtime ? .warning : .error,

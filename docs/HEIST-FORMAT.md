@@ -61,7 +61,6 @@ Supported step types:
 | `wait` | `wait` | Wait for one predicate until timeout. |
 | `conditional` | `conditional` | Immediate settled-state branching. |
 | `wait_for_cases` | `wait_for_cases` | Wait until one case predicate matches, or Else handles timeout. |
-| `for_each` | `for_each` | Iterate over semantic matches with a bounded limit. |
 | `warn` | `warn` | Emit a non-failing report message. |
 | `fail` | `fail` | Fail the heist with a message. |
 
@@ -225,42 +224,23 @@ The first matching case wins; no match without Else is a no-op.
 ## Semantic ForEach
 
 Semantic ForEach evaluates a predicate match set, enforces a bounded limit, and
-executes its body through the normal heist pipeline.
+executes its body through the normal heist pipeline. It is currently a
+Swift-authored runtime feature because the wire contract does not yet have a
+durable body AST.
 
-```json
-{
-  "type": "for_each",
-  "for_each": {
-    "matching": { "label": "Delete" },
-    "limit": 20,
-    "element": { "label": "Delete", "ordinal": 0 },
-    "steps": [
-      {
-        "type": "action",
-        "action": {
-          "command": {
-            "type": "activate",
-            "payload": { "label": "Delete", "ordinal": 0 }
-          },
-          "expectation": {
-            "predicate": {
-              "type": "absent",
-              "target": { "label": "Delete", "ordinal": 0 }
-            },
-            "timeout": 2
-          }
-        }
-      }
-    ]
-  }
+```swift
+ForEach(.matching(.label("Delete")), limit: 20) { target in
+  Activate(target)
+    .expect(.absent(target), timeout: .seconds(2))
 }
 ```
 
-The `element` target is the loop element template. Runtime instantiates it to
-the current predicate plus ordinal for each iteration and then actions
-re-resolve normally. The body does not receive cached geometry, UIKit objects,
-or a capture-local handle. Nested runtime ForEach is currently rejected by
-validation.
+At runtime each iteration computes
+`ElementTarget.predicate(matching, ordinal: index)`, calls the Swift-authored
+body with that target, and executes the returned steps. Each body target is the
+real target for that iteration. The body does not receive cached geometry,
+UIKit objects, or a capture-local handle. Nested runtime ForEach is currently
+rejected during execution.
 
 ## Mechanical And Viewport Escape Hatches
 

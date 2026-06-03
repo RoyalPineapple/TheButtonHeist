@@ -118,10 +118,10 @@ func validationReportsEmptyBranchesAndLargeForEachLimit() throws {
         ])),
         .forEach(try ForEachStep(
             matching: matching,
-            limit: 101,
-            element: .predicate(matching, ordinal: 0),
-            steps: [.warn(WarnStep(message: "too many"))]
-        )),
+            limit: 101
+        ) { _ in
+            [.warn(WarnStep(message: "too many"))]
+        }),
     ])
 
     let messages = plan.validate(.strictTest).map(\.message)
