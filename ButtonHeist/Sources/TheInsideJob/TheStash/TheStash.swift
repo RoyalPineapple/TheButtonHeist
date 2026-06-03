@@ -208,8 +208,8 @@ final class TheStash {
     }
 
     /// Produce one visible observation for the settle loop without committing
-    /// it yet. The observation stream commits the proven final screen through
-    /// `commitSettledSemanticObservationForStream`.
+    /// it yet. The observation stream stores and publishes the proven final
+    /// screen through its settled-observation commit path.
     func semanticObservationForSettle() -> Screen? {
         parse()
     }
@@ -220,7 +220,7 @@ final class TheStash {
         parse()
     }
 
-    func commitSettledSemanticObservationForStream(_ screen: Screen) {
+    func storeSettledSemanticObservationForStream(_ screen: Screen) {
         commitVisibleRefresh(screen)
     }
 
