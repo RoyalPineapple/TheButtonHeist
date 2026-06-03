@@ -660,8 +660,8 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
             ))
         case .typeText(let text, let target):
             let resolvedText = try text.resolve(in: environment)
-            return .typeText(TypeTextTarget(
-                text: resolvedText,
+            return .typeText(try TypeTextTarget(
+                validatingText: resolvedText,
                 elementTarget: try target?.resolve(in: environment)
             ))
         case .mechanicalTap(let target):

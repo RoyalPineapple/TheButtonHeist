@@ -501,18 +501,9 @@ private struct HeistCanonicalSwiftDSLRenderer {
     }
 
     private func validateParameter(_ parameter: String) throws {
-        guard isValidIdentifier(parameter) else {
+        guard HeistParameterName.isValid(parameter) else {
             throw HeistCanonicalSwiftDSLError.invalidParameter(parameter)
         }
-    }
-
-    private func isValidIdentifier(_ text: String) -> Bool {
-        guard let first = text.unicodeScalars.first,
-              CharacterSet.letters.union(CharacterSet(charactersIn: "_")).contains(first) else {
-            return false
-        }
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
-        return text.unicodeScalars.allSatisfy { allowed.contains($0) } && !swiftKeywords.contains(text)
     }
 
     private func line(_ text: String, _ indent: Int) -> String {
@@ -537,16 +528,6 @@ private struct HeistCanonicalSwiftDSLRenderer {
         return text
     }
 
-    private var swiftKeywords: Set<String> {
-        [
-            "associatedtype", "class", "deinit", "enum", "extension", "fileprivate", "func", "import",
-            "init", "inout", "internal", "let", "open", "operator", "private", "precedencegroup", "protocol",
-            "public", "rethrows", "static", "struct", "subscript", "typealias", "var", "break", "case",
-            "catch", "continue", "default", "defer", "do", "else", "fallthrough", "for", "guard", "if",
-            "in", "repeat", "return", "throw", "switch", "where", "while", "as", "Any", "catch", "false",
-            "is", "nil", "super", "self", "Self", "throw", "throws", "true", "try",
-        ]
-    }
 }
 
 private struct RenderEnvironment {

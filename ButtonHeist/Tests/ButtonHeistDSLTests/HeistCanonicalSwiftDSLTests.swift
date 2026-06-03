@@ -75,6 +75,18 @@ func canonicalSwiftRendererRejectsRefsOutsideLoopScope() throws {
     }
 }
 
+@Test
+func decodedRuntimeLoopsRejectNonCanonicalSwiftParameters() throws {
+    for json in [invalidElementLoopParameterJSON, invalidStringLoopParameterJSON] {
+        do {
+            _ = try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))
+            Issue.record("Expected invalid loop parameter decode failure")
+        } catch let error as HeistPlanError {
+            #expect(error == .invalidForEachParameter("target-name"))
+        }
+    }
+}
+
 private let fullASTJSON = """
 {
   "version": 1,
@@ -182,6 +194,62 @@ private let fullASTJSON = """
     },
     { "type": "warn", "warn": { "message": "done" } },
     { "type": "fail", "fail": { "message": "stop" } }
+  ]
+}
+"""
+
+private let invalidElementLoopParameterJSON = """
+{
+  "version": 1,
+  "steps": [
+    {
+      "type": "for_each_element",
+      "for_each_element": {
+        "matching": { "label": "Delete" },
+        "limit": 20,
+        "parameter": "target-name",
+        "steps": [
+          {
+            "type": "action",
+            "action": {
+              "command": {
+                "type": "activate",
+                "payload": { "target_ref": "target-name" }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+"""
+
+private let invalidStringLoopParameterJSON = """
+{
+  "version": 1,
+  "steps": [
+    {
+      "type": "for_each_string",
+      "for_each_string": {
+        "values": ["Milk"],
+        "parameter": "target-name",
+        "steps": [
+          {
+            "type": "action",
+            "action": {
+              "command": {
+                "type": "typeText",
+                "payload": {
+                  "text_ref": "target-name",
+                  "target": { "label": "Add item" }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
   ]
 }
 """

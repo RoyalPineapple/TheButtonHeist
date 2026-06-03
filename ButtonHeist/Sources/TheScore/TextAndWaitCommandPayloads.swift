@@ -18,11 +18,24 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
         self.elementTarget = elementTarget
     }
 
+    public init(validatingText text: String, elementTarget: ElementTarget? = nil) throws {
+        try Self.validate(text)
+        self.init(text: text, elementTarget: elementTarget)
+    }
+
+    public static func validate(_ text: String) throws {
+        guard !text.isEmpty else {
+            throw TypeTextTargetError.emptyText
+        }
+    }
+
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "type text target")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         text = try container.decode(String.self, forKey: .text)
-        guard !text.isEmpty else {
+        do {
+            try Self.validate(text)
+        } catch {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath + [CodingKeys.text],
                 debugDescription: "text must be non-empty"
@@ -35,6 +48,17 @@ public struct TypeTextTarget: Codable, Sendable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(text, forKey: .text)
         try container.encodeIfPresent(elementTarget, forKey: .elementTarget)
+    }
+}
+
+public enum TypeTextTargetError: Error, Sendable, Equatable, CustomStringConvertible {
+    case emptyText
+
+    public var description: String {
+        switch self {
+        case .emptyText:
+            return "text must be non-empty"
+        }
     }
 }
 
