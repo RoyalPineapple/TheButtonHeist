@@ -126,5 +126,64 @@ final class StartupConfigurationTests: XCTestCase {
         )
         XCTAssertEqual(configuration, expected)
     }
+
+    func testRuntimeConfigurationAppliesAPIOverridesToResolvedStartupSnapshot() {
+        let startupConfiguration = StartupConfiguration(
+            disableAutoStart: ResolvedStartupValue(value: false, source: .defaultValue),
+            token: ResolvedStartupValue(value: "startup-token", source: .environment),
+            instanceId: ResolvedStartupValue(value: "startup-id", source: .environment),
+            preferredPort: ResolvedStartupValue(value: 5151, source: .environment),
+            allowedScopes: ResolvedStartupValue(value: [.simulator], source: .environment),
+            sessionTimeout: ResolvedStartupValue(value: 12.0, source: .environment),
+            warnings: []
+        )
+
+        let runtimeConfiguration = InsideJobRuntimeConfiguration.resolve(
+            startupConfiguration: startupConfiguration,
+            token: "api-token",
+            instanceId: "api-id",
+            allowedScopes: [.network],
+            port: 4242
+        )
+
+        XCTAssertEqual(runtimeConfiguration.token, "api-token")
+        XCTAssertEqual(runtimeConfiguration.tokenSource, .api)
+        XCTAssertEqual(runtimeConfiguration.sessionIdentity.effectiveInstanceId, "api-id")
+        XCTAssertEqual(runtimeConfiguration.instanceIdSource, .api)
+        XCTAssertEqual(runtimeConfiguration.preferredPort, 4242)
+        XCTAssertEqual(runtimeConfiguration.preferredPortSource, .api)
+        XCTAssertEqual(runtimeConfiguration.allowedScopes, [.network])
+        XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .api)
+        XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
+    }
+
+    func testRuntimeConfigurationUsesExplicitStartupSnapshotForSessionDefaults() {
+        let startupConfiguration = StartupConfiguration(
+            disableAutoStart: ResolvedStartupValue(value: false, source: .defaultValue),
+            token: ResolvedStartupValue(value: "startup-token", source: .environment),
+            instanceId: ResolvedStartupValue(value: "startup-id", source: .environment),
+            preferredPort: ResolvedStartupValue(value: 5151, source: .environment),
+            allowedScopes: ResolvedStartupValue(value: [.usb], source: .infoPlist),
+            sessionTimeout: ResolvedStartupValue(value: 24.0, source: .infoPlist),
+            warnings: []
+        )
+
+        let runtimeConfiguration = InsideJobRuntimeConfiguration.resolve(
+            startupConfiguration: startupConfiguration,
+            token: nil,
+            instanceId: nil,
+            allowedScopes: nil,
+            port: 0
+        )
+
+        XCTAssertNil(runtimeConfiguration.token)
+        XCTAssertEqual(runtimeConfiguration.tokenSource, .generated)
+        XCTAssertEqual(runtimeConfiguration.instanceIdSource, .generated)
+        XCTAssertEqual(runtimeConfiguration.preferredPort, 0)
+        XCTAssertEqual(runtimeConfiguration.preferredPortSource, .defaultValue)
+        XCTAssertEqual(runtimeConfiguration.allowedScopes, [.usb])
+        XCTAssertEqual(runtimeConfiguration.allowedScopesSource, .infoPlist)
+        XCTAssertEqual(runtimeConfiguration.sessionReleaseTimeout, startupConfiguration.sessionTimeout)
+    }
 }
 #endif
