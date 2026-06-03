@@ -39,10 +39,11 @@ extension FenceResponse {
         case .screenshotData(let payload, _):
             return "✓ Screenshot captured (\(Int(payload.width)) × \(Int(payload.height))) — base64 PNG follows\n\(payload.pngData)"
         case .heistExecution(let plan, let result, _):
+            let projection = HeistReportProjection(plan: plan, result: result)
             let completedSteps = result.completedStepCount
             let failedIndex = result.stoppedFailedIndex
-            let checked = result.projectedExpectationsChecked(for: plan)
-            let met = result.projectedExpectationsMet(for: plan)
+            let checked = projection.summary.expectationsChecked
+            let met = projection.summary.expectationsMet
             var text = "Heist: \(completedSteps) step(s) completed in \(result.totalTimingMs)ms"
             if let idx = failedIndex { text += " (failed at step \(idx))" }
             if checked > 0 { text += " [expectations: \(met)/\(checked) met]" }
@@ -59,7 +60,7 @@ extension FenceResponse {
             var text = "Playback: \(completedSteps) step(s) completed in \(totalTimingMs)ms"
             if let index = failedIndex { text += " (failed at step \(index))" }
             if let failure {
-                text += "\n  command: \(failure.step.command.rawValue)"
+                text += "\n  command: \(failure.step.commandName)"
                 if let target = failure.step.target {
                     text += "\n  target: \(target)"
                 }

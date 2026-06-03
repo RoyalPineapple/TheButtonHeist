@@ -16,13 +16,21 @@ public enum PlaybackFailure: Sendable {
     /// The execute call threw an exception
     case thrown(step: FailedStep, error: String, interface: Interface?, diagnosticCaptureFailure: String?)
 
-    /// The step that failed — command name and element target.
+    /// The step that failed — report command name and element target.
     public struct FailedStep: Sendable {
-        public let command: TheFence.Command
+        public let command: TheFence.Command?
+        public let commandName: String
         public let target: ElementTarget?
 
         public init(command: TheFence.Command, target: ElementTarget?) {
             self.command = command
+            self.commandName = command.rawValue
+            self.target = target
+        }
+
+        public init(commandName: String, target: ElementTarget?) {
+            self.command = nil
+            self.commandName = commandName
             self.target = target
         }
     }

@@ -383,18 +383,19 @@ func inspectHeist(_ response: FenceResponse) -> HeistInspection? {
         return nil
     }
     let plannedSteps = plan.steps
+    let projection = HeistReportProjection(plan: plan, result: result)
     return HeistInspection(
         commands: plannedSteps.map(\.commandForInspection),
         steps: plannedSteps,
         executionResult: result,
-        results: result.projectedOutcomes(for: plan).compactMap { projection in
-            projection.response.map { publicJSONObject($0) }
+        results: projection.legacyFlatRows.compactMap { row in
+            row.response.map { publicJSONObject($0) }
         },
         completedSteps: result.completedStepCount,
         failedIndex: result.stoppedFailedIndex,
         totalTimingMs: result.totalTimingMs,
-        expectationsChecked: result.projectedExpectationsChecked(for: plan),
-        expectationsMet: result.projectedExpectationsMet(for: plan),
+        expectationsChecked: projection.summary.expectationsChecked,
+        expectationsMet: projection.summary.expectationsMet,
         accessibilityTrace: accessibilityTrace
     )
 }

@@ -16,60 +16,6 @@ public struct ScreenshotResponseOptions: Sendable, Equatable {
     }
 }
 
-extension HeistExecutionStepResult {
-    func actionResponse(command: TheFence.Command, step: HeistStep) -> FenceResponse? {
-        guard skipped == nil else { return nil }
-        guard let finalResult = expectationActionResult ?? actionResult else {
-            guard step.requiresActionResult else { return nil }
-            return .error("typed heist step produced no action result")
-        }
-        return .action(
-            command: command,
-            result: finalResult,
-            expectation: expectation
-        )
-    }
-
-    func finalActionResult() -> ActionResult? {
-        expectationActionResult ?? actionResult
-    }
-
-    func expectationResult(for _: HeistStep) -> ExpectationResult? {
-        expectation
-    }
-
-    func expectationCounted(for step: HeistStep) -> Bool {
-        expectationResult(for: step)?.predicate != nil
-    }
-
-    func expectationMet(for step: HeistStep) -> Bool? {
-        guard expectationCounted(for: step) else { return nil }
-        return expectationResult(for: step)?.met
-    }
-}
-
-private extension HeistStep {
-    var requiresActionResult: Bool {
-        switch self {
-        case .action, .wait:
-            return true
-        case .conditional, .waitForCases, .forEachElement, .forEachString, .warn, .fail:
-            return false
-        }
-    }
-
-}
-
-extension HeistExecutionResult {
-    var completedStepCount: Int {
-        steps.count { !$0.isSkipped }
-    }
-
-    var stoppedFailedIndex: Int? {
-        failedIndex ?? steps.first { $0.stopsHeist }?.index
-    }
-}
-
 public enum SessionConnectionPhase: String, Sendable, Equatable {
     case disconnected
     case connecting
