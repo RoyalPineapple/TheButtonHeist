@@ -42,6 +42,25 @@ final class WireCommandParityTests: XCTestCase {
         )
     }
 
+    func testCommandHelpKeepsAccessibilitySemanticAndMechanicalBoundaries() {
+        let activate = TheFence.Command.activate.descriptor.description
+        let tap = TheFence.Command.oneFingerTap.descriptor.description
+        let scroll = TheFence.Command.scroll.descriptor.description
+        let scrollToVisible = TheFence.Command.scrollToVisible.descriptor.description
+        let scrollToEdge = TheFence.Command.scrollToEdge.descriptor.description
+
+        XCTAssertTrue(activate.localizedCaseInsensitiveContains("primary accessibility activation"), activate)
+        XCTAssertTrue(activate.localizedCaseInsensitiveContains("semantic UI element"), activate)
+        XCTAssertFalse(activate.localizedCaseInsensitiveContains("tap"), activate)
+
+        XCTAssertTrue(tap.localizedCaseInsensitiveContains("explicit mechanical/spatial tap"), tap)
+        XCTAssertTrue(tap.localizedCaseInsensitiveContains("ordinary control activation should use activate"), tap)
+
+        XCTAssertTrue(scroll.localizedCaseInsensitiveContains("explicit viewport operation"), scroll)
+        XCTAssertTrue(scrollToVisible.localizedCaseInsensitiveContains("explicit viewport/debug operation"), scrollToVisible)
+        XCTAssertTrue(scrollToEdge.localizedCaseInsensitiveContains("explicit viewport operation"), scrollToEdge)
+    }
+
     @ButtonHeistActor
     func testEveryPublicCommandRoutesThroughDescriptorOwnedDecoder() async throws {
         let (fence, _) = makeConnectedFence()

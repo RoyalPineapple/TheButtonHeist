@@ -144,7 +144,8 @@ func makeReceiptTestElement(
     label: String,
     value: String? = nil,
     identifier: String? = nil,
-    traits: [HeistTrait] = [.staticText]
+    traits: [HeistTrait] = [.staticText],
+    actions: [ElementAction] = []
 ) -> HeistElement {
     HeistElement(
         description: label,
@@ -156,7 +157,7 @@ func makeReceiptTestElement(
         frameY: 0,
         frameWidth: 100,
         frameHeight: 44,
-        actions: []
+        actions: actions
     )
 }
 

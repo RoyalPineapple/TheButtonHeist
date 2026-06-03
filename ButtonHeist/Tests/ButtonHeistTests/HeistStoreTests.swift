@@ -356,6 +356,69 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
+    func testRecordingSemanticPhysicalTapEvidenceRecordsActivateIntent() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "semantic-tap-evidence", app: "com.example.app")
+
+        let label = makeReceiptTestElement(label: "Delete", traits: [.staticText])
+        let button = makeReceiptTestElement(
+            label: "Delete",
+            traits: [.button],
+            actions: [.activate]
+        )
+        let actionResult = semanticActionResult(
+            method: .syntheticTap,
+            source: .elementGestureTarget,
+            target: .predicate(ElementPredicate(label: "Delete"), ordinal: 1),
+            subject: button,
+            before: [label, button],
+            after: [label, button]
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .oneFingerTap,
+            args: ["point": .object(["x": .double(20), "y": .double(30)])],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [
+            try activateStep(label: "Delete", traits: [.button]),
+        ])
+    }
+
+    @ButtonHeistActor
+    func testRecordingNonActivatablePhysicalTapEvidenceKeepsMechanicalIntent() async throws {
+        let heistStore = makeHeistStore()
+        try heistStore.startRecording(identifier: "non-activatable-tap-evidence", app: "com.example.app")
+
+        let caption = makeReceiptTestElement(label: "Caption", traits: [.staticText])
+        let actionResult = semanticActionResult(
+            method: .syntheticTap,
+            source: .elementGestureTarget,
+            target: .predicate(ElementPredicate(label: "Caption")),
+            subject: caption,
+            before: [caption],
+            after: [caption]
+        )
+
+        try recordHeistStep(
+            heistStore,
+            command: .oneFingerTap,
+            args: ["element": targetArgumentValue(label: "Caption")],
+            actionResult: actionResult
+        )
+
+        let heist = try heistStore.finishRecording()
+        XCTAssertEqual(heist.body, [
+            .action(try ActionStep(command: .oneFingerTap(TapTarget(
+                selection: .element(.predicate(ElementPredicate(label: "Caption")))
+            )))),
+        ])
+    }
+
+    @ButtonHeistActor
     func testUnsettledTraceDoesNotGenerateMinimumMatcherOrExpectation() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "unsettled-trace", app: "com.example.app")
@@ -462,7 +525,7 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testCoordinateTapRecordingDoesNotInferSemanticIntent() async throws {
+    func testCoordinateTapWithoutSemanticEvidenceRecordsMechanicalIntent() async throws {
         let heistStore = makeHeistStore()
         try heistStore.startRecording(identifier: "coordinate-tap", app: "com.example.app")
 

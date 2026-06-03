@@ -141,6 +141,8 @@ final class SemanticActionabilityProductTests: XCTestCase {
         guard single.result.success, heist.result.success else { return }
         XCTAssertEqual(single.activationCount, 1)
         XCTAssertEqual(heist.activationCount, 1)
+        XCTAssertEqual(single.result.method, .activate)
+        XCTAssertEqual(stepResult.method, .activate)
         XCTAssertEqual(stepResult.success, single.result.success)
         XCTAssertEqual(stepResult.method, single.result.method)
         XCTAssertEqual(stepResult.errorKind, single.result.errorKind)

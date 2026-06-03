@@ -6,7 +6,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 | Command | CLI | MCP | Heist | Description |
 |---------|-----|-----|-------|-------------|
-| `activate` | `activate` | direct | yes | Activate a semantic UI element or one of its named accessibility actions. |
+| `activate` | `activate` | direct | yes | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | `connect` | direct | no | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | `dismiss_keyboard` | direct | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | `drag` | direct | yes | Drag using exactly one typed intent: elementToPoint or pointToPoint. |
@@ -18,14 +18,14 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_devices` | `list_devices` | direct | no | List discovered iOS devices and configured connection targets. |
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
 | `long_press` | `long_press` | direct | yes | Long-press an explicit point or semantic element for a resolved duration. |
-| `one_finger_tap` | `one_finger_tap` | direct | yes | Tap an explicit point or semantic element after actionability resolution. |
+| `one_finger_tap` | `one_finger_tap` | direct | yes | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | `run_heist` | direct | no | Execute an inline typed heist plan. |
-| `scroll` | `scroll` | direct | yes | Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
-| `scroll_to_edge` | `scroll_to_edge` | direct | yes | Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
-| `scroll_to_visible` | `scroll_to_visible` | direct | yes | Make a semantic target actionable and report its fresh geometry. |
+| `scroll` | `scroll` | direct | yes | Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
+| `scroll_to_edge` | `scroll_to_edge` | direct | yes | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
+| `scroll_to_visible` | `scroll_to_visible` | direct | yes | Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
 | `start_heist` | `start_heist` | direct | no | Start recording replayable heist steps from successful commands. |
 | `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic heist fixture. |
@@ -37,7 +37,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 ### `activate`
 
-Activate a semantic UI element or one of its named accessibility actions.
+Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions.
 
 - CLI: direct command `activate`
 - MCP: direct tool
@@ -234,7 +234,7 @@ Parameters:
 
 ### `one_finger_tap`
 
-Tap an explicit point or semantic element after actionability resolution.
+Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate.
 
 - CLI: direct command `one_finger_tap`
 - MCP: direct tool
@@ -316,7 +316,7 @@ Parameters:
 
 ### `scroll`
 
-Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
+Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
 
 - CLI: direct command `scroll`
 - MCP: direct tool
@@ -334,7 +334,7 @@ Parameters:
 
 ### `scroll_to_edge`
 
-Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
+Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
 
 - CLI: direct command `scroll_to_edge`
 - MCP: direct tool
@@ -352,7 +352,7 @@ Parameters:
 
 ### `scroll_to_visible`
 
-Make a semantic target actionable and report its fresh geometry.
+Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry.
 
 - CLI: direct command `scroll_to_visible`
 - MCP: direct tool
