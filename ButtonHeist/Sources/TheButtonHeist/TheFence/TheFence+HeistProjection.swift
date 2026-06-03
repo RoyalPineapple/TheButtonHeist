@@ -216,6 +216,11 @@ struct HeistReportNode {
         (expectation?.met == true && expectation?.predicate != nil ? 1 : 0) + children.reduce(0) { $0 + $1.expectationsMet }
     }
 
+    var expectationMet: Bool? {
+        guard expectation?.predicate != nil else { return nil }
+        return expectation?.met
+    }
+
     var finalActionResultsInExecutionOrder: [ActionResult] {
         [
             action?.finalActionResult,

@@ -41,7 +41,7 @@ extension FenceResponse {
             } else if let failureMessage = row.failureMessage {
                 line += " -> error: \(failureMessage)"
             }
-            if let met = row.node.expectation?.predicate == nil ? nil : row.node.expectation?.met {
+            if let met = row.node.expectationMet {
                 line += met ? " ✓" : " ✗"
             }
             text += "\n\(line)"
