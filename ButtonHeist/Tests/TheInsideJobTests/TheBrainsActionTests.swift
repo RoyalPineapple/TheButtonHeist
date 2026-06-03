@@ -858,7 +858,7 @@ final class TheBrainsActionTests: XCTestCase {
             predicate: .state(.absent(ElementPredicate(label: "Loading"))),
             timeout: 0
         )
-        var waitedSteps: [WaitStep] = []
+        var waitedSteps: [ResolvedWaitStep] = []
         let runtime = heistRuntime(
             observations: [],
             execute: { _ in
@@ -881,7 +881,7 @@ final class TheBrainsActionTests: XCTestCase {
         let step = try XCTUnwrap(heist.steps.first)
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(waitedSteps, [expectation])
+        XCTAssertEqual(waitedSteps, [try expectation.resolve(in: .empty)])
         XCTAssertEqual(step.expectationActionResult?.method, .wait)
         XCTAssertEqual(step.expectation?.met, false)
         XCTAssertEqual(step.expectation?.actual, "no observed accessibility trace")
