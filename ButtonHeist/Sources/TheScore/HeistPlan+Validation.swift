@@ -32,7 +32,7 @@ public struct HeistPlanLintFinding: Sendable, Equatable {
 public extension HeistPlan {
     func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
         var linter = HeistPlanLinter(mode: mode)
-        var traversal = HeistPlanTraversal()
+        let traversal = HeistPlanTraversal()
         traversal.walk(self, visitor: &linter)
         return linter.findings
     }

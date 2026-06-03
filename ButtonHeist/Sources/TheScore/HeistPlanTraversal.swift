@@ -41,7 +41,7 @@ extension HeistPlanTraversalVisitor {
 }
 
 struct HeistPlanTraversal {
-    mutating func walk<V: HeistPlanTraversalVisitor>(
+    func walk<V: HeistPlanTraversalVisitor>(
         _ plan: HeistPlan,
         visitor: inout V
     ) {
@@ -66,7 +66,7 @@ struct HeistPlanTraversal {
         )
     }
 
-    mutating func walk<V: HeistPlanTraversalVisitor>(
+    func walk<V: HeistPlanTraversalVisitor>(
         steps: [HeistStep],
         path: String,
         depth: Int,
@@ -89,7 +89,7 @@ struct HeistPlanTraversal {
         }
     }
 
-    private mutating func walk<V: HeistPlanTraversalVisitor>(
+    private func walk<V: HeistPlanTraversalVisitor>(
         step: HeistStep,
         context: HeistTraversalContext,
         visitor: inout V
@@ -168,7 +168,7 @@ struct HeistPlanTraversal {
         }
     }
 
-    private mutating func walk<V: HeistPlanTraversalVisitor>(
+    private func walk<V: HeistPlanTraversalVisitor>(
         cases: [PredicateCase],
         elseSteps: [HeistStep]?,
         path: String,

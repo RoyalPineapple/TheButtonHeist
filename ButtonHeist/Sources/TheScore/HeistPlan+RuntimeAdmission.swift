@@ -106,7 +106,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
     }
 
     mutating func validate(_ plan: HeistPlan) -> [HeistPlanAdmissionFailure] {
-        var traversal = HeistPlanTraversal()
+        let traversal = HeistPlanTraversal()
         traversal.walk(plan, visitor: &self)
         return failures
     }
@@ -365,7 +365,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         valuePath: String
     ) {
         var validator = StringLoopResolvedPayloadValidator(valuePath: valuePath)
-        var traversal = HeistPlanTraversal()
+        let traversal = HeistPlanTraversal()
         traversal.walk(
             steps: steps,
             path: path,
