@@ -187,9 +187,7 @@ struct PublicHeistExecutionResponse: FencePublicJSONResponse {
         let projection = HeistReportProjection(plan: plan, result: result)
         let failedIndex = result.stoppedFailedIndex
         self.status = PublicStatus(value: failedIndex == nil ? "ok" : "partial")
-        self.results = projection.legacyFlatRows.compactMap { row in
-            row.response.map(PublicResponseModel.init(response:))
-        }
+        self.results = projection.legacyPublicResponses.map(PublicResponseModel.init(response:))
         self.completedSteps = result.completedStepCount
         self.totalTimingMs = result.totalTimingMs
         self.failedIndex = failedIndex

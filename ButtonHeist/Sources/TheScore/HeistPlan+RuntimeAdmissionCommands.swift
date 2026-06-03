@@ -4,7 +4,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateCommandExpressions(
         _ command: HeistActionCommand,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         switch command {
         case .activate(let target), .increment(let target), .decrement(let target), .viewportScrollToVisible(let target):
@@ -52,7 +52,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateGesturePointSelection(
         _ selection: GesturePointSelection,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         if case .element(let target) = selection {
             validateElementTarget(target, path: "\(path).element")
@@ -62,7 +62,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateSwipe(
         _ target: SwipeTarget,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         switch target.selection {
         case .unitElement(let target, _, _), .elementDirection(let target, _):
@@ -75,7 +75,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateDrag(
         _ target: DragTarget,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         switch target.selection {
         case .elementToPoint(let target, _):
@@ -88,7 +88,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateScroll(
         _ selection: ScrollContainerSelection,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         if case .element(let target) = selection {
             validateElementTarget(target, path: "\(path).target")
@@ -98,7 +98,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateTarget(
         _ target: ElementTargetExpr,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         switch target {
         case .target(let target):
@@ -119,7 +119,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateString(
         _ string: StringExpr,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         switch string {
         case .literal(let literal):
@@ -156,7 +156,7 @@ extension HeistPlanRuntimeAdmissionValidator {
     mutating func validateElementPredicate(
         _ predicate: ElementPredicateExpr,
         path: String,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         if let label = predicate.label {
             validateString(label, path: "\(path).label", scope: scope)

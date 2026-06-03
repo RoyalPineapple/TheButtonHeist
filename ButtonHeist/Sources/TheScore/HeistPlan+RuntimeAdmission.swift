@@ -187,7 +187,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
     mutating func validateAction(
         _ action: ActionStep,
         path: String,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
         validateCommand(action.command, path: "\(path).command", scope: scope, environment: environment)
@@ -199,7 +199,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
     mutating func validateCommand(
         _ command: HeistActionCommand,
         path: String,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
         validateCommandExpressions(command, path: path, scope: scope)
@@ -228,7 +228,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
     mutating func validateWait(
         _ wait: WaitStep,
         path: String,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
         validatePredicate(wait.predicate, path: "\(path).predicate", depth: 1, scope: scope)
@@ -272,7 +272,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
     mutating func validatePredicateCase(
         _ predicateCase: PredicateCase,
         path: String,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment
     ) {
         validatePredicate(predicateCase.predicate, path: "\(path).predicate", depth: 1, scope: scope)
@@ -318,7 +318,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         _ step: ForEachStringStep,
         path: String,
         bodyDepth: Int,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         allowsCollectionLoops: Bool
     ) {
@@ -360,7 +360,7 @@ struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
         _ steps: [HeistStep],
         path: String,
         depth: Int,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         valuePath: String
     ) {

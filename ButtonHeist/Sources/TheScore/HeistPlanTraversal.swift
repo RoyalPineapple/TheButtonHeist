@@ -6,7 +6,7 @@ struct HeistTraversalContext {
     let stepIndex: Int?
     let nextStep: HeistStep?
     let allowsCollectionLoops: Bool
-    let scope: AdmissionScope
+    let scope: HeistReferenceScope
     let environment: HeistExecutionEnvironment
 }
 
@@ -71,7 +71,7 @@ struct HeistPlanTraversal {
         path: String,
         depth: Int,
         allowsCollectionLoops: Bool,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         visitor: inout V
     ) {
@@ -173,7 +173,7 @@ struct HeistPlanTraversal {
         elseSteps: [HeistStep]?,
         path: String,
         depth: Int,
-        scope: AdmissionScope,
+        scope: HeistReferenceScope,
         environment: HeistExecutionEnvironment,
         visitor: inout V
     ) {
@@ -237,19 +237,19 @@ private extension HeistTraversalContext {
     }
 }
 
-struct AdmissionScope {
-    static let empty = AdmissionScope()
+struct HeistReferenceScope {
+    static let empty = HeistReferenceScope()
 
     var targetRefs: Set<String> = []
     var stringRefs: Set<String> = []
 
-    func bindingTarget(_ reference: String) -> AdmissionScope {
+    func bindingTarget(_ reference: String) -> HeistReferenceScope {
         var copy = self
         copy.targetRefs.insert(reference)
         return copy
     }
 
-    func bindingString(_ reference: String) -> AdmissionScope {
+    func bindingString(_ reference: String) -> HeistReferenceScope {
         var copy = self
         copy.stringRefs.insert(reference)
         return copy

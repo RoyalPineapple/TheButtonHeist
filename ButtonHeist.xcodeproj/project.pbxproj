@@ -272,8 +272,8 @@
 		8980B0C4D663EA59F07927AF /* HeistStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DC7B1E5D945349D951D363A /* HeistStoreTests.swift */; };
 		8A1C2908B07C993A9BC28DE0 /* DeviceDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */; };
 		8A4315D8CF1AAAD83FE08105 /* HeistDSLTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6733DFCCF620494EE8453865 /* HeistDSLTests.swift */; };
+		8AAA02123D35758F19396113 /* TheFence+HeistReportProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6EF46D3FE620A1DF7165DDE /* TheFence+HeistReportProjection.swift */; };
 		8AF1F692E83E56F575714B8F /* Actions+GestureGeometryResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 809C0B5780687FC4F40017A6 /* Actions+GestureGeometryResolution.swift */; };
-		8D4EF713C91B9BD036149546 /* TheFence+HeistProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3CF65DCD62DE493FF2A7F28 /* TheFence+HeistProjection.swift */; };
 		8DDAB77F92D5C0AC1F4C0F2B /* SettleSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9ADDF552D62895A7A002E496 /* SettleSession.swift */; };
 		8E15B3F0C1DC05A1CAF77FB6 /* WireConversionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 576DC1131A4B4E3E1404CE61 /* WireConversionTests.swift */; };
 		8E1E500B1C7470CB8C024D25 /* HeistPlaybackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCAC03500CC33AA545FDD5C4 /* HeistPlaybackTests.swift */; };
@@ -461,6 +461,7 @@
 		E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */; };
 		E562D0F62864699DD3DB22FE /* BHDemo.app in Dependencies */ = {isa = PBXBuildFile; fileRef = 575B313FA1A35CFD461B9B83 /* BHDemo.app */; };
 		E5BC40CAB1D5966E1F9191AC /* TapTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91C88F950573F5883D9F3B15 /* TapTargets.swift */; };
+		E5CA91E68FBFB8CBD8199A8A /* TheFence+HeistLegacyFlatReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747F240677820D65ADBB3A1B /* TheFence+HeistLegacyFlatReport.swift */; };
 		E5D5E025A0672D93F8FA9D40 /* ScreenFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D79C29B3000357A40270A6 /* ScreenFactory.swift */; };
 		E6249B5295FE8C0005B5066A /* TheTripwire+Pulse.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC74D304B3A4C3503A77A1B3 /* TheTripwire+Pulse.swift */; };
 		E66BC08F71EB5D20C93EE868 /* StrictDecoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7163A8DEDA3A8FBACE0872 /* StrictDecoding.swift */; };
@@ -904,6 +905,7 @@
 		72F076F9BA27D6F0F97D6062 /* ExpectationResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpectationResult.swift; sourceTree = "<group>"; };
 		73F7188B4AF419243A2EE76F /* HeistPlaybackReportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeistPlaybackReportTests.swift; sourceTree = "<group>"; };
 		7415C6DA441AD8CFAA857168 /* AccessibilityTrace+Delta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccessibilityTrace+Delta.swift"; sourceTree = "<group>"; };
+		747F240677820D65ADBB3A1B /* TheFence+HeistLegacyFlatReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+HeistLegacyFlatReport.swift"; sourceTree = "<group>"; };
 		762A9678A59A16CFF629FB3E /* TheFence+FailureTaxonomy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+FailureTaxonomy.swift"; sourceTree = "<group>"; };
 		767DEE6FAE03706BA7D58223 /* TheFence+Formatting+Compact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+Formatting+Compact.swift"; sourceTree = "<group>"; };
 		76D248D786AFC509B2B1B584 /* TheFence+RequestPayload+GestureValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+GestureValidation.swift"; sourceTree = "<group>"; };
@@ -1018,10 +1020,10 @@
 		B327E8A00585684B8DF1E7AE /* DeviceDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDiscovery.swift; sourceTree = "<group>"; };
 		B3587AF13D58E9B2840E15D6 /* ButtonHeistDSLTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "ButtonHeistDSLTests-Info.plist"; sourceTree = "<group>"; };
 		B3B1A6858B71403D4DBB9655 /* InsideJobRuntimeLease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsideJobRuntimeLease.swift; sourceTree = "<group>"; };
-		B3CF65DCD62DE493FF2A7F28 /* TheFence+HeistProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+HeistProjection.swift"; sourceTree = "<group>"; };
 		B52DC7DFD3B9768E788237C8 /* TheFence+CommandArguments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+CommandArguments.swift"; sourceTree = "<group>"; };
 		B53694BEB710AB8F96BF06A7 /* SimpleSocketServer+ClientState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SimpleSocketServer+ClientState.swift"; sourceTree = "<group>"; };
 		B69C08BACDB197409DCB8BB1 /* TheFence+RequestPayload+TapGestures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+RequestPayload+TapGestures.swift"; sourceTree = "<group>"; };
+		B6EF46D3FE620A1DF7165DDE /* TheFence+HeistReportProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TheFence+HeistReportProjection.swift"; sourceTree = "<group>"; };
 		B78A503AAEF00D1A6A3A9CE6 /* TLSIdentityError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSIdentityError.swift; sourceTree = "<group>"; };
 		B81B7B89A758E15463329565 /* String+PathValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+PathValidation.swift"; sourceTree = "<group>"; };
 		B8938E5441D36291E59552BA /* GeometryValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeometryValidation.swift; sourceTree = "<group>"; };
@@ -1341,11 +1343,12 @@
 				EC2771DB546DDE036C0782AC /* TheFence+Formatting+Compact+Session.swift */,
 				BB8D4C2E483F550C29C4FDE2 /* TheFence+Formatting+JSON.swift */,
 				821D139B3D3163A97A58AEBE /* TheFence+Handlers.swift */,
+				747F240677820D65ADBB3A1B /* TheFence+HeistLegacyFlatReport.swift */,
 				A314E25D12BDBDD825B95BDC /* TheFence+HeistPlanning.swift */,
-				B3CF65DCD62DE493FF2A7F28 /* TheFence+HeistProjection.swift */,
 				89F7626DACBB1D629F4C94FC /* TheFence+HeistRecording.swift */,
 				58EB60355A7D9C5A76DB15EB /* TheFence+HeistRecordingComposition.swift */,
 				FCE342E70A5ADC170C389D78 /* TheFence+HeistRecordingReceipt.swift */,
+				B6EF46D3FE620A1DF7165DDE /* TheFence+HeistReportProjection.swift */,
 				F5E24FDE9CA2911FE9390918 /* TheFence+ParameterSpec.swift */,
 				CA752E01A8136738F8789715 /* TheFence+PendingRequestTrackers.swift */,
 				4B0A2A0866EE7E1975FF7580 /* TheFence+Playback.swift */,
@@ -2637,11 +2640,12 @@
 				28F5CFC5C8490148E35536F5 /* TheFence+Formatting+JSON.swift in Sources */,
 				2765930D8582515F8D54B664 /* TheFence+Formatting.swift in Sources */,
 				BBB6F36C1141BC08BD726088 /* TheFence+Handlers.swift in Sources */,
+				E5CA91E68FBFB8CBD8199A8A /* TheFence+HeistLegacyFlatReport.swift in Sources */,
 				F7CE0706BE95850AF0CF3279 /* TheFence+HeistPlanning.swift in Sources */,
-				8D4EF713C91B9BD036149546 /* TheFence+HeistProjection.swift in Sources */,
 				C43778106596E11B4A8FCA99 /* TheFence+HeistRecording.swift in Sources */,
 				852F0F6115A388E737D1EB6C /* TheFence+HeistRecordingComposition.swift in Sources */,
 				7F5596BFC02AC9752C3F424F /* TheFence+HeistRecordingReceipt.swift in Sources */,
+				8AAA02123D35758F19396113 /* TheFence+HeistReportProjection.swift in Sources */,
 				E327E060E6709EE93A5BBEBB /* TheFence+ParameterSpec.swift in Sources */,
 				B3A7E0DD9341201CC97ED43F /* TheFence+PendingRequestTrackers.swift in Sources */,
 				C140A15F6C6D720933A5FA2B /* TheFence+Playback.swift in Sources */,
