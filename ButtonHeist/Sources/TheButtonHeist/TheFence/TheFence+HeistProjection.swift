@@ -138,11 +138,8 @@ private extension HeistStep {
                 return waitForCases.elseSteps
             }
             return nil
-        case .forEach(let forEach):
-            guard let iterationCount = outcome.forEachResult?.iterationCount, iterationCount > 0 else {
-                return nil
-            }
-            return (0..<iterationCount).flatMap { _ in forEach.steps }
+        case .forEach:
+            return nil
         case .action, .wait, .warn, .fail:
             return nil
         }

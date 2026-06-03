@@ -2714,16 +2714,15 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testPlayHeistReportFlattensForEachIterationActions() async throws {
+    func testPlayHeistReportProjectsSwiftAuthoredForEachWithoutDurableBodyFlattening() async throws {
         let matching = ElementPredicate(label: "Delete")
-        let deleteAction = try activateHeistStep(identifier: "delete")
         let heist = HeistPlan(steps: [
             .forEach(try ForEachStep(
                 matching: matching,
-                limit: 20,
-                element: .predicate(matching, ordinal: 0),
-                steps: [deleteAction]
-            )),
+                limit: 20
+            ) { target in
+                [try self.activateHeistStep(target: target)]
+            }),
         ])
         let executionResult = HeistExecutionResult(
             steps: [
@@ -2762,13 +2761,11 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let projection = fence.playbackProjection(contract: contract, result: executionResult)
 
-        XCTAssertEqual(projection.stepResults.map(\.command), ["for_each", "activate", "activate"])
+        XCTAssertEqual(projection.stepResults.map(\.command), ["for_each"])
         XCTAssertTrue(projection.stepResults.allSatisfy(\.passed))
         XCTAssertNil(projection.failedIndex)
         XCTAssertNil(projection.failure)
         XCTAssertEqual(projection.stepResults[0].timeSeconds, 0.020, accuracy: 0.000_001)
-        XCTAssertEqual(projection.stepResults[1].timeSeconds, 0.005, accuracy: 0.000_001)
-        XCTAssertEqual(projection.stepResults[2].timeSeconds, 0.006, accuracy: 0.000_001)
     }
 
     @ButtonHeistActor
@@ -2793,6 +2790,10 @@ final class TheFenceHandlerTests: XCTestCase {
 
     private func activateHeistStep(identifier: String) throws -> HeistStep {
         .action(try ActionStep(command: .activate(.predicate(ElementPredicate(identifier: identifier)))))
+    }
+
+    private func activateHeistStep(target: ElementTarget) throws -> HeistStep {
+        .action(try ActionStep(command: .activate(target)))
     }
 
 }

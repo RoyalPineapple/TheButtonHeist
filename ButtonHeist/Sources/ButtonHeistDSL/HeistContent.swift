@@ -10,6 +10,10 @@ public struct Heist: HeistContent {
 
     public var heistSteps: [HeistStep] { plan.steps }
 
+    public func validate(_ mode: HeistPlanValidationMode) -> [HeistPlanValidationFinding] {
+        plan.validate(mode)
+    }
+
     public init(@HeistBuilder _ content: () throws -> some HeistContent) throws {
         let steps = try content().heistSteps
         self.plan = try HeistPlan.validatedDSLPlan(steps: steps)
@@ -18,8 +22,31 @@ public struct Heist: HeistContent {
 
 private extension HeistPlan {
     static func validatedDSLPlan(steps: [HeistStep]) throws -> HeistPlan {
-        let data = try JSONEncoder().encode(HeistPlan(steps: steps))
-        return try JSONDecoder().decode(HeistPlan.self, from: data)
+        guard !steps.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: [HeistPlanCodingKey("steps")],
+                debugDescription: "HeistPlan requires at least one step"
+            ))
+        }
+        return HeistPlan(steps: steps)
+    }
+}
+
+private struct HeistPlanCodingKey: CodingKey {
+    let stringValue: String
+    let intValue: Int?
+
+    init(_ stringValue: String) {
+        self.stringValue = stringValue
+        self.intValue = nil
+    }
+
+    init?(stringValue: String) {
+        self.init(stringValue)
+    }
+
+    init?(intValue: Int) {
+        return nil
     }
 }
 
@@ -120,18 +147,11 @@ public struct ForEach<Content: HeistContent>: HeistContent {
     public init(
         _ matches: ElementMatches,
         limit: Int = 20,
-        @HeistBuilder _ content: (ElementTarget) throws -> Content
+        @HeistBuilder _ content: @escaping (ElementTarget) throws -> Content
     ) throws {
-        let element = ElementTarget.predicate(matches.predicate, ordinal: ForEach.runtimeElementInitialOrdinal)
-        self.heistSteps = [
-            .forEach(try ForEachStep(
-                matching: matches.predicate,
-                limit: limit,
-                element: element,
-                steps: try content(element).heistSteps
-            )),
-        ]
+        let step = try ForEachStep(matching: matches.predicate, limit: limit) { target in
+            try content(target).heistSteps
+        }
+        self.heistSteps = [.forEach(step)]
     }
-
-    private static var runtimeElementInitialOrdinal: Int { 0 }
 }

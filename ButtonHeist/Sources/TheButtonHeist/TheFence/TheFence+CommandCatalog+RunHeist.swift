@@ -12,7 +12,12 @@ extension TheFence.Command {
                     maxItems: TheFence.DecodeLimits.maxRunHeistSteps,
                     arrayItemType: .object,
                     arrayItemProperties: [
-                        param(.type, .string, required: true, enumValues: ["action", "wait", "warn", "fail"]),
+                        param(
+                            .type,
+                            .string,
+                            required: true,
+                            enumValues: ["action", "wait", "conditional", "wait_for_cases", "warn", "fail"]
+                        ),
                     ],
                     arrayItemAdditionalProperties: true
                 )

@@ -30,6 +30,80 @@ func actionExpectationAttachesWaitStep() throws {
 }
 
 @Test
+func actionWithoutExpectationAttachesExplicitWaiver() throws {
+    let heist = try Heist {
+        Activate(.label("Optional"))
+            .withoutExpectation("No durable semantic outcome")
+    }
+
+    #expect(heist.plan == HeistPlan(steps: [
+        .action(try ActionStep(
+            command: .activate(.label("Optional")),
+            expectationWaiver: "No durable semantic outcome"
+        )),
+    ]))
+}
+
+@Test
+func heistValidateForwardsToPlanValidation() throws {
+    let heist = try Heist {
+        Activate(.label("Save"))
+    }
+
+    #expect(heist.validate(.strictTest).map(\.message) == ["Semantic action has no expectation"])
+}
+
+@Test
+func mechanicalAndViewportNamespacesBuildExplicitEscapeHatches() throws {
+    let heist = try Heist {
+        Mechanical.Tap(x: 12, y: 34)
+        Mechanical.Drag(from: ScreenPoint(x: 1, y: 2), to: ScreenPoint(x: 3, y: 4))
+        Viewport.Scroll(.down)
+        Viewport.ScrollToEdge(.bottom)
+        Viewport.ScrollToVisible(.label("Checkout"))
+    }
+
+    #expect(heist.plan.steps == [
+        .action(try ActionStep(command: .oneFingerTap(TapTarget(selection: .coordinate(ScreenPoint(x: 12, y: 34)))))),
+        .action(try ActionStep(command: .drag(DragTarget(
+            start: .coordinate(ScreenPoint(x: 1, y: 2)),
+            end: ScreenPoint(x: 3, y: 4)
+        )))),
+        .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
+        .action(try ActionStep(command: .scrollToEdge(ScrollToEdgeTarget(edge: .bottom)))),
+        .action(try ActionStep(command: .scrollToVisible(ScrollToVisibleTarget(elementTarget: .label("Checkout"))))),
+    ])
+}
+
+@Test
+func customActionAndRotorBuildSemanticActionSteps() throws {
+    let heist = try Heist {
+        CustomAction("Archive", on: .label("Message"))
+            .expect(.changed(.elements), timeout: .seconds(1))
+        Rotor("Headings", on: .label("Article"), direction: .next)
+            .withoutExpectation("Navigation cursor only")
+    }
+
+    #expect(heist.plan.steps == [
+        .action(try ActionStep(
+            command: .performCustomAction(CustomActionTarget(
+                elementTarget: .label("Message"),
+                actionName: "Archive"
+            )),
+            expectation: WaitStep(predicate: .changed(.elements), timeout: 1)
+        )),
+        .action(try ActionStep(
+            command: .rotor(RotorTarget(
+                elementTarget: .label("Article"),
+                selection: .named("Headings"),
+                direction: .next
+            )),
+            expectationWaiver: "Navigation cursor only"
+        )),
+    ])
+}
+
+@Test
 func waitForBuildsWaitStep() throws {
     let heist = try Heist {
         WaitFor(.present(.label("Home")), timeout: .seconds(5))
@@ -163,7 +237,7 @@ func staticForEachFlattensIntoLinearSteps() throws {
 }
 
 @Test
-func semanticForEachBuildsRuntimeForEachStep() throws {
+func semanticForEachCallsBodyWithRuntimeIterationTarget() throws {
     let matching = ElementPredicate.label("Delete")
     let heist = try Heist {
         try ForEach(.matching(matching), limit: 20) { element in
@@ -172,20 +246,22 @@ func semanticForEachBuildsRuntimeForEachStep() throws {
         }
     }
 
-    #expect(heist.plan.steps == [
-        .forEach(try ForEachStep(
-            matching: matching,
-            limit: 20,
-            element: .predicate(matching, ordinal: 0),
-            steps: [
-                .action(try ActionStep(
-                    command: .activate(.predicate(matching, ordinal: 0)),
-                    expectation: WaitStep(
-                        predicate: .state(.absentTarget(.predicate(matching, ordinal: 0))),
-                        timeout: 2
-                    )
-                )),
-            ]
+    guard case .forEach(let step) = heist.plan.steps.first else {
+        Issue.record("Expected semantic ForEach step")
+        return
+    }
+
+    #expect(step.matching == matching)
+    #expect(step.limit == 20)
+
+    let target = ElementTarget.predicate(matching, ordinal: 3)
+    #expect(try step.steps(for: target) == [
+        .action(try ActionStep(
+            command: .activate(target),
+            expectation: WaitStep(
+                predicate: .state(.absentTarget(target)),
+                timeout: 2
+            )
         )),
     ])
 }
