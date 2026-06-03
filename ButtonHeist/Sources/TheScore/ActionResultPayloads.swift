@@ -114,6 +114,71 @@ public enum ResultPayload: Codable, Sendable {
     }
 }
 
+/// Semantic subject the runtime resolved immediately before dispatching an action.
+///
+/// This is result evidence, not a replay selector. Recording code can combine it
+/// with settled before/after traces to choose a minimum matcher later.
+public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
+    public enum Source: String, Codable, Sendable {
+        case resolvedSemanticTarget
+        case textInputTarget
+        case elementGestureTarget
+    }
+
+    public enum Phase: String, Codable, Sendable {
+        case resolvedBeforeDispatch
+    }
+
+    public let source: Source
+    public let phase: Phase
+    public let target: ElementTarget
+    public let element: HeistElement
+    public let settledObservationSequence: UInt64?
+
+    public init(
+        source: Source,
+        phase: Phase = .resolvedBeforeDispatch,
+        target: ElementTarget,
+        element: HeistElement,
+        settledObservationSequence: UInt64? = nil
+    ) {
+        self.source = source
+        self.phase = phase
+        self.target = target
+        self.element = element
+        self.settledObservationSequence = settledObservationSequence
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case source
+        case phase
+        case target
+        case element
+        case settledObservationSequence
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "ActionSubjectEvidence")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            source: try container.decode(Source.self, forKey: .source),
+            phase: try container.decode(Phase.self, forKey: .phase),
+            target: try container.decode(ElementTarget.self, forKey: .target),
+            element: try container.decode(HeistElement.self, forKey: .element),
+            settledObservationSequence: try container.decodeIfPresent(UInt64.self, forKey: .settledObservationSequence)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(source, forKey: .source)
+        try container.encode(phase, forKey: .phase)
+        try container.encode(target, forKey: .target)
+        try container.encode(element, forKey: .element)
+        try container.encodeIfPresent(settledObservationSequence, forKey: .settledObservationSequence)
+    }
+}
+
 /// The outcome of executing an action command, including post-action diagnostics.
 public struct ActionResult: Codable, Sendable {
     /// Whether the action was delivered and completed normally. `false` means
@@ -141,6 +206,8 @@ public struct ActionResult: Codable, Sendable {
     /// Wall-clock milliseconds from action start to settle decision
     /// (settled, screen-changed, or timed out).
     public let settleTimeMs: Int?
+    /// Semantic subject the runtime resolved before dispatching the action.
+    public let subjectEvidence: ActionSubjectEvidence?
 
     public init(
         success: Bool,
@@ -150,7 +217,8 @@ public struct ActionResult: Codable, Sendable {
         payload: ResultPayload? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
         settled: Bool? = nil,
-        settleTimeMs: Int? = nil
+        settleTimeMs: Int? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil
     ) {
         self.success = success
         self.method = method
@@ -160,6 +228,7 @@ public struct ActionResult: Codable, Sendable {
         self.accessibilityTrace = accessibilityTrace
         self.settled = settled
         self.settleTimeMs = settleTimeMs
+        self.subjectEvidence = subjectEvidence
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -171,6 +240,7 @@ public struct ActionResult: Codable, Sendable {
         case accessibilityTrace
         case settled
         case settleTimeMs
+        case subjectEvidence
     }
 
     public init(from decoder: Decoder) throws {
@@ -184,7 +254,8 @@ public struct ActionResult: Codable, Sendable {
             payload: try container.decodeIfPresent(ResultPayload.self, forKey: .payload),
             accessibilityTrace: try container.decodeIfPresent(AccessibilityTrace.self, forKey: .accessibilityTrace),
             settled: try container.decodeIfPresent(Bool.self, forKey: .settled),
-            settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs)
+            settleTimeMs: try container.decodeIfPresent(Int.self, forKey: .settleTimeMs),
+            subjectEvidence: try container.decodeIfPresent(ActionSubjectEvidence.self, forKey: .subjectEvidence)
         )
     }
 
@@ -198,5 +269,6 @@ public struct ActionResult: Codable, Sendable {
         try container.encodeIfPresent(accessibilityTrace, forKey: .accessibilityTrace)
         try container.encodeIfPresent(settled, forKey: .settled)
         try container.encodeIfPresent(settleTimeMs, forKey: .settleTimeMs)
+        try container.encodeIfPresent(subjectEvidence, forKey: .subjectEvidence)
     }
 }

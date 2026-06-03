@@ -11,6 +11,7 @@ extension TheSafecracker {
         let method: ActionMethod
         let message: String?
         let payload: ResultPayload?
+        let subjectEvidence: ActionSubjectEvidence?
         /// Structural reason for failure when `success == false`. Lets dispatch code
         /// distinguish tree-unavailable from timeout without parsing `message`
         /// (which is user-facing copy, not a control-flow contract).
@@ -21,25 +22,29 @@ extension TheSafecracker {
             method: ActionMethod,
             message: String?,
             payload: ResultPayload?,
+            subjectEvidence: ActionSubjectEvidence?,
             failureKind: FailureKind? = nil
         ) {
             self.success = success
             self.method = method
             self.message = message
             self.payload = payload
+            self.subjectEvidence = subjectEvidence
             self.failureKind = failureKind
         }
 
         static func success(
             method: ActionMethod,
             message: String? = nil,
-            payload: ResultPayload? = nil
+            payload: ResultPayload? = nil,
+            subjectEvidence: ActionSubjectEvidence? = nil
         ) -> InteractionResult {
             InteractionResult(
                 success: true,
                 method: method,
                 message: message,
-                payload: payload
+                payload: payload,
+                subjectEvidence: subjectEvidence
             )
         }
 
@@ -47,6 +52,7 @@ extension TheSafecracker {
             _ method: ActionMethod,
             message: String,
             payload: ResultPayload? = nil,
+            subjectEvidence: ActionSubjectEvidence? = nil,
             failureKind: FailureKind? = nil
         ) -> InteractionResult {
             InteractionResult(
@@ -54,6 +60,19 @@ extension TheSafecracker {
                 method: method,
                 message: message,
                 payload: payload,
+                subjectEvidence: subjectEvidence,
+                failureKind: failureKind
+            )
+        }
+
+        func withSubjectEvidence(_ evidence: ActionSubjectEvidence?) -> InteractionResult {
+            guard success, let evidence else { return self }
+            return InteractionResult(
+                success: success,
+                method: method,
+                message: message,
+                payload: payload,
+                subjectEvidence: evidence,
                 failureKind: failureKind
             )
         }

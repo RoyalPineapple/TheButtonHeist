@@ -47,6 +47,7 @@ final class InteractionObservation {
         payload: ResultPayload? = nil,
         afterStatePayload: ((PostActionObservation.BeforeState) -> ResultPayload?)? = nil,
         errorKind: ErrorKind? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
         before: PostActionObservation.BeforeState,
         settleOutcome: SettleSession.Outcome? = nil
     ) async -> ActionResult {
@@ -55,14 +56,16 @@ final class InteractionObservation {
         if case .cancelled(let cancelMs) = settleResult.outcome {
             return InteractionObservationProjection.failedActionResult(
                 method: method, capture: before.capture, message: "cancelled after \(cancelMs)ms",
-                payload: payload, settled: false, settleTimeMs: cancelMs
+                payload: payload, subjectEvidence: subjectEvidence, settled: false,
+                settleTimeMs: cancelMs
             )
         }
 
         guard let afterScreen = settleResult.finalScreen else {
             return InteractionObservationProjection.failedActionResult(
                 method: method, capture: before.capture, message: "Could not parse post-action accessibility tree",
-                payload: payload, settled: didSettle, settleTimeMs: settleResult.outcome.timeMs
+                payload: payload, subjectEvidence: subjectEvidence, settled: didSettle,
+                settleTimeMs: settleResult.outcome.timeMs
             )
         }
 
@@ -71,7 +74,8 @@ final class InteractionObservation {
             return InteractionObservationProjection.failedActionResult(
                 method: method, capture: before.capture,
                 message: "Could not produce post-action settled semantic observation",
-                payload: payload, settled: didSettle, settleTimeMs: settleResult.outcome.timeMs
+                payload: payload, subjectEvidence: subjectEvidence, settled: didSettle,
+                settleTimeMs: settleResult.outcome.timeMs
             )
         }
         let finalState = await semanticStateAfterDiscovery(after: visibleEvent.sequence)
@@ -95,15 +99,16 @@ final class InteractionObservation {
         guard let postCapture = trace.captures.last else {
             let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
             return InteractionObservationProjection.failedActionResult(
-                method: method, capture: before.capture, message: message, payload: resolvedPayload
+                method: method, capture: before.capture, message: message,
+                payload: resolvedPayload, subjectEvidence: subjectEvidence
             )
         }
 
         let resolvedPayload = success ? (afterStatePayload?(finalState) ?? payload) : payload
         return InteractionObservationProjection.actionResult(
             method: method, capture: postCapture, message: message, payload: resolvedPayload,
-            errorKind: errorKind, accessibilityTrace: trace, settled: didSettle,
-            settleTimeMs: settleResult.outcome.timeMs, success: success
+            errorKind: errorKind, accessibilityTrace: trace, subjectEvidence: subjectEvidence,
+            settled: didSettle, settleTimeMs: settleResult.outcome.timeMs, success: success
         )
     }
 

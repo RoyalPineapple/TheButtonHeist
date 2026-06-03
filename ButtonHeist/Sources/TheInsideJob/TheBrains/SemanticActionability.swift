@@ -347,4 +347,15 @@ final class SemanticActionability {
 
 }
 
+extension SemanticActionability.SemanticActionableTarget {
+    @MainActor
+    func subjectEvidence(source: ActionSubjectEvidence.Source) -> ActionSubjectEvidence {
+        ActionSubjectEvidence(
+            source: source,
+            target: target,
+            element: TheStash.WireConversion.convert(screenElement.element)
+        )
+    }
+}
+
 #endif // canImport(UIKit) && DEBUG

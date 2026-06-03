@@ -40,6 +40,7 @@ struct HeistSemanticObservation {
         payload: ResultPayload?,
         errorKind: ErrorKind? = nil,
         accessibilityTrace: AccessibilityTrace? = nil,
+        subjectEvidence: ActionSubjectEvidence? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil,
         success: Bool
@@ -51,6 +52,7 @@ struct HeistSemanticObservation {
         }
         builder.settled = settled
         builder.settleTimeMs = settleTimeMs
+        builder.subjectEvidence = subjectEvidence
         if success {
             return builder.success(payload: payload)
         }
@@ -63,6 +65,7 @@ struct HeistSemanticObservation {
         message: String?,
         payload: ResultPayload?,
         errorKind: ErrorKind? = .actionFailed,
+        subjectEvidence: ActionSubjectEvidence? = nil,
         settled: Bool? = nil,
         settleTimeMs: Int? = nil
     ) -> ActionResult {
@@ -72,6 +75,7 @@ struct HeistSemanticObservation {
             message: message,
             payload: payload,
             errorKind: errorKind,
+            subjectEvidence: subjectEvidence,
             settled: settled,
             settleTimeMs: settleTimeMs,
             success: false

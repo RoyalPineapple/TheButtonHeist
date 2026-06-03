@@ -97,6 +97,7 @@ extension TheBrains {
             payload: result.payload,
             afterStatePayload: afterStatePayload,
             errorKind: Self.actionErrorKind(for: result),
+            subjectEvidence: result.subjectEvidence,
             before: before
         )
     }

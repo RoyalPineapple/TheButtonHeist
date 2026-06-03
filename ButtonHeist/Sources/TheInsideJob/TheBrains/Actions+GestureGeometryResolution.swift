@@ -11,10 +11,15 @@ extension Actions {
         case failure(TheSafecracker.InteractionResult)
     }
 
+    struct ResolvedGesturePoint {
+        let point: CGPoint
+        let subjectEvidence: ActionSubjectEvidence?
+    }
+
     func resolveGesturePoint(
         selection: GesturePointSelection,
         method: ActionMethod
-    ) async -> GestureResolution<CGPoint> {
+    ) async -> GestureResolution<ResolvedGesturePoint> {
         let actionableTarget: SemanticActionability.SemanticActionableTarget?
         switch selection {
         case .element(let target):
@@ -38,7 +43,7 @@ extension Actions {
         from actionableTarget: SemanticActionability.SemanticActionableTarget?,
         selection: GesturePointSelection,
         method: ActionMethod
-    ) -> GestureResolution<CGPoint> {
+    ) -> GestureResolution<ResolvedGesturePoint> {
         switch selection {
         case .element:
             guard let actionableTarget else {
@@ -48,13 +53,16 @@ extension Actions {
             if let failure = geometryFailure(method: method, field: "point", point: point) {
                 return .failure(failure)
             }
-            return .success(point)
+            return .success(ResolvedGesturePoint(
+                point: point,
+                subjectEvidence: actionableTarget.subjectEvidence(source: .elementGestureTarget)
+            ))
         case .coordinate(let screenPoint):
             let point = screenPoint.cgPoint
             if let failure = geometryFailure(method: method, field: "point", point: point) {
                 return .failure(failure)
             }
-            return .success(point)
+            return .success(ResolvedGesturePoint(point: point, subjectEvidence: nil))
         }
     }
 

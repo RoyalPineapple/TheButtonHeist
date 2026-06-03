@@ -64,14 +64,15 @@ extension Actions {
             return .failure(.typeText, message: "type_text requires non-empty text")
         }
         let elementTarget = target.elementTarget
-        if let failure = await focusTextInput(elementTarget) { return failure }
+        let focusResult = await focusTextInput(elementTarget)
+        if let failure = focusResult.failure { return failure }
 
         let typingResult = await safecracker.typeText(target.text)
         if let diagnostic = typingResult.diagnostic {
             return .failure(.typeText, message: typeTextInjectionFailureMessage(for: diagnostic))
         }
 
-        return .success(method: .typeText)
+        return .success(method: .typeText, subjectEvidence: focusResult.subjectEvidence)
     }
 
     func typeTextPayload(
@@ -93,12 +94,27 @@ extension Actions {
         )
     }
 
+    private struct TextInputFocusResult {
+        let failure: TheSafecracker.InteractionResult?
+        let subjectEvidence: ActionSubjectEvidence?
+
+        static let focused = TextInputFocusResult(failure: nil, subjectEvidence: nil)
+
+        static func focused(_ evidence: ActionSubjectEvidence) -> TextInputFocusResult {
+            TextInputFocusResult(failure: nil, subjectEvidence: evidence)
+        }
+
+        static func failed(_ failure: TheSafecracker.InteractionResult) -> TextInputFocusResult {
+            TextInputFocusResult(failure: failure, subjectEvidence: nil)
+        }
+    }
+
     private func focusTextInput(
         _ elementTarget: ElementTarget?
-    ) async -> TheSafecracker.InteractionResult? {
+    ) async -> TextInputFocusResult {
         guard let elementTarget else {
             guard safecracker.hasActiveTextInput() else {
-                return .failure(
+                return .failed(.failure(
                     .typeText,
                     message: ActionCapabilityDiagnostic.textEntryFailed(
                         operation: "initial focus check",
@@ -106,12 +122,13 @@ extension Actions {
                         safecracker: safecracker,
                         suggestion: "provide elementTarget for a text field or focus an editable field before typing"
                     )
-                )
+                ))
             }
-            return nil
+            return .focused
         }
 
         let liveTarget: TheStash.LiveActionTarget
+        let subjectEvidence: ActionSubjectEvidence
         switch await navigation.actionability.makeActionable(
             for: elementTarget,
             method: .typeText,
@@ -119,23 +136,24 @@ extension Actions {
         ) {
         case .actionable(let actionableTarget):
             liveTarget = actionableTarget.liveTarget
+            subjectEvidence = actionableTarget.subjectEvidence(source: .textInputTarget)
         case .failed(let failure):
-            return failure.interactionResult(commandMethod: .typeText)
+            return .failed(failure.interactionResult(commandMethod: .typeText))
         }
         let point = liveTarget.activationPoint
         guard await safecracker.tap(at: point) else {
-            return .failure(
+            return .failed(.failure(
                 .typeText,
                 message: ActionCapabilityDiagnostic.gestureDispatchFailed(
                     method: .syntheticTap,
                     point: point,
                     receiver: safecracker.tapReceiverDiagnostic(at: point)
                 )
-            )
+            ))
         }
 
         guard await waitForActiveTextInput() else {
-            return .failure(
+            return .failed(.failure(
                 .typeText,
                 message: ActionCapabilityDiagnostic.textEntryFailed(
                     operation: "post-tap keyboard readiness",
@@ -143,9 +161,9 @@ extension Actions {
                     safecracker: safecracker,
                     suggestion: "target an editable text field"
                 )
-            )
+            ))
         }
-        return nil
+        return .focused(subjectEvidence)
     }
 
     private func waitForActiveTextInput() async -> Bool {

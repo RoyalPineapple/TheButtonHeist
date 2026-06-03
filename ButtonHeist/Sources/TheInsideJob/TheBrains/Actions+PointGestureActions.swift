@@ -16,9 +16,13 @@ extension Actions {
         switch await resolveGesturePoint(selection: selection, method: method) {
         case .failure(let result):
             return result
-        case .success(let point):
-            let success = await action(point)
-            return gestureDispatchResult(method: method, diagnosticPoint: point, success: success)
+        case .success(let resolvedPoint):
+            let success = await action(resolvedPoint.point)
+            return gestureDispatchResult(
+                method: method,
+                diagnosticPoint: resolvedPoint.point,
+                success: success
+            ).withSubjectEvidence(resolvedPoint.subjectEvidence)
         }
     }
 
@@ -63,26 +67,30 @@ extension Actions {
             switch await resolveGesturePoint(selection: startSelection, method: .syntheticSwipe) {
             case .failure(let result):
                 return result
-            case .success(let point):
-                startPoint = point
-            }
-            let endPoint: CGPoint
-            switch destination {
-            case .coordinate(let point):
-                endPoint = point.cgPoint
-            case .direction(let direction):
-                let dist = Self.defaultSwipeDistance
-                switch direction {
-                case .up:    endPoint = CGPoint(x: startPoint.x, y: startPoint.y - dist)
-                case .down:  endPoint = CGPoint(x: startPoint.x, y: startPoint.y + dist)
-                case .left:  endPoint = CGPoint(x: startPoint.x - dist, y: startPoint.y)
-                case .right: endPoint = CGPoint(x: startPoint.x + dist, y: startPoint.y)
+            case .success(let resolvedPoint):
+                startPoint = resolvedPoint.point
+                let endPoint: CGPoint
+                switch destination {
+                case .coordinate(let point):
+                    endPoint = point.cgPoint
+                case .direction(let direction):
+                    let dist = Self.defaultSwipeDistance
+                    switch direction {
+                    case .up:    endPoint = CGPoint(x: startPoint.x, y: startPoint.y - dist)
+                    case .down:  endPoint = CGPoint(x: startPoint.x, y: startPoint.y + dist)
+                    case .left:  endPoint = CGPoint(x: startPoint.x - dist, y: startPoint.y)
+                    case .right: endPoint = CGPoint(x: startPoint.x + dist, y: startPoint.y)
+                    }
                 }
+                if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
+                    return failure
+                }
+                return await performResolvedSwipe(
+                    from: startPoint,
+                    to: endPoint,
+                    duration: target.resolvedDuration
+                ).withSubjectEvidence(resolvedPoint.subjectEvidence)
             }
-            if let failure = geometryFailure(method: .syntheticSwipe, field: "swipe point", points: [startPoint, endPoint]) {
-                return failure
-            }
-            return await performResolvedSwipe(from: startPoint, to: endPoint, duration: target.resolvedDuration)
         }
     }
 
@@ -122,6 +130,7 @@ extension Actions {
             return failure
         }
         return await performResolvedSwipe(from: startPoint, to: endPoint, duration: duration)
+            .withSubjectEvidence(actionableTarget.subjectEvidence(source: .elementGestureTarget))
     }
 
     private func performResolvedSwipe(
