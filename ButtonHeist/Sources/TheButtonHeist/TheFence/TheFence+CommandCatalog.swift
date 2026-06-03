@@ -53,12 +53,39 @@ public struct FenceCommandDescriptor: Sendable, Equatable {
         return parameters.map(\.key).filter(elementTargetKeys.contains)
     }
 
+    public var topLevelParameterKeys: Set<String> {
+        Set(parameters.map(\.key))
+    }
+
     public func parameter(named key: FenceParameterKey) -> FenceParameterSpec? {
-        parameters.first { $0.key == key.rawValue }
+        let matches = parameters.flatMap { $0.parameters(named: key) }
+        guard let first = matches.first,
+              matches.dropFirst().allSatisfy({ $0 == first }) else {
+            return nil
+        }
+        return first
     }
 
     public func defaultArgumentValue(for key: FenceParameterKey) -> HeistValue? {
         parameter(named: key)?.defaultValue
+    }
+
+    public func requiredDefaultString(for key: FenceParameterKey) -> String {
+        guard case .string(let value)? = defaultArgumentValue(for: key) else {
+            preconditionFailure("No string default registered for \(command.rawValue).\(key.rawValue)")
+        }
+        return value
+    }
+
+    public func requiredDefaultEnumValue<E>(
+        for key: FenceParameterKey,
+        as type: E.Type
+    ) -> E where E: RawRepresentable, E.RawValue == String {
+        let rawValue = requiredDefaultString(for: key)
+        guard let value = E(rawValue: rawValue) else {
+            preconditionFailure("Invalid default \(rawValue) for \(command.rawValue).\(key.rawValue)")
+        }
+        return value
     }
 
     init(

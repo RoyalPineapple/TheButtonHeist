@@ -130,10 +130,7 @@ extension CLICommandContract {
     }
 
     static func catalogDefaultString(for key: FenceParameterKey) -> String {
-        guard case .string(let value)? = fenceCommand.descriptor.defaultArgumentValue(for: key) else {
-            fatalError("No string default registered for \(fenceCommand.rawValue).\(key.rawValue)")
-        }
-        return value
+        fenceCommand.descriptor.requiredDefaultString(for: key)
     }
 
     static func catalogAllowedValues(for key: FenceParameterKey) -> [String] {

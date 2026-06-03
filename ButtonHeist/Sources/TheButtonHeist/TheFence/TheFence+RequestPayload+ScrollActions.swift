@@ -8,7 +8,8 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let direction = try input.schemaEnum("direction", as: ScrollDirection.self) ?? .down
+        let direction = try input.schemaEnum("direction", as: ScrollDirection.self)
+            ?? Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self)
         return try decodedExecutablePayload(.scroll(ScrollTarget(
             selection: input.scrollContainerSelection(),
             direction: direction
@@ -32,7 +33,8 @@ extension TheFence {
         _ requestId: String,
         _ expectationPayload: ExpectationPayload
     ) throws -> DecodedRequestDispatch {
-        let edge = try input.schemaEnum("edge", as: ScrollEdge.self) ?? .top
+        let edge = try input.schemaEnum("edge", as: ScrollEdge.self)
+            ?? Command.scrollToEdge.descriptor.requiredDefaultEnumValue(for: .edge, as: ScrollEdge.self)
         return try decodedExecutablePayload(.scrollToEdge(ScrollToEdgeTarget(
             selection: input.scrollContainerSelection(),
             edge: edge
