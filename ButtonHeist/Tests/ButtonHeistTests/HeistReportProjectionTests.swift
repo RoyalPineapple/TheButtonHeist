@@ -31,7 +31,6 @@ final class HeistReportProjectionTests: XCTestCase {
         XCTAssertEqual(projection.nodes.map(\.path), ["$.steps[0]"])
         XCTAssertEqual(projection.nodes.first?.kind, .action)
         XCTAssertEqual(projection.nodes.first?.action?.commandName, "activate")
-        XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["activate"])
     }
 
     func testFailedActionSkipsLaterSibling() throws {
@@ -71,10 +70,8 @@ final class HeistReportProjectionTests: XCTestCase {
         let projection = HeistReportProjection(plan: plan, result: result)
 
         XCTAssertEqual(projection.nodes.map(\.status), [.failed, .skipped])
-        XCTAssertEqual(projection.legacyFlatRows.map(\.failureMessage), [
-            "Delete failed",
-            "skipped: heist stopped after step 0",
-        ])
+        XCTAssertEqual(projection.nodes.map(\.message), [nil, "skipped: heist stopped after step 0"])
+        XCTAssertEqual(projection.nodes.first?.action?.finalActionResult?.message, "Delete failed")
     }
 
     func testConditionalSelectedCaseProjectsOnlySelectedChildren() throws {
@@ -156,8 +153,7 @@ final class HeistReportProjectionTests: XCTestCase {
 
         let node = HeistReportProjection(plan: plan, result: result).nodes[0]
 
-        XCTAssertEqual(node.children.map(\.path), ["$.steps[0].conditional.else.steps[0]"])
-        XCTAssertEqual(HeistReportProjection(plan: plan, result: result).legacyFlatRows.map(\.commandName), ["if", "activate"])
+        XCTAssertEqual(node.children.map(\.path), ["$.steps[0].conditional.else_steps[0]"])
     }
 
     func testWaitForTimeoutWithoutElseProjectsWaitFailure() throws {
@@ -235,7 +231,7 @@ final class HeistReportProjectionTests: XCTestCase {
         let node = HeistReportProjection(plan: plan, result: result).nodes[0]
 
         XCTAssertEqual(node.status, .passed)
-        XCTAssertEqual(node.children.map(\.path), ["$.steps[0].wait_for_cases.else.steps[0]"])
+        XCTAssertEqual(node.children.map(\.path), ["$.steps[0].wait_for_cases.else_steps[0]"])
         XCTAssertEqual(node.children.first?.status, .warned)
     }
 
@@ -285,10 +281,9 @@ final class HeistReportProjectionTests: XCTestCase {
             "$.steps[0].for_each_element.iterations[0].steps[0]",
             "$.steps[0].for_each_element.iterations[1].steps[0]",
         ])
-        XCTAssertEqual(HeistReportProjection(plan: plan, result: result).legacyFlatRows.map(\.commandName), ["for_each_element"])
     }
 
-    func testForEachBodyFailureReportsIterationFailureWithoutFlatteningBodyAsLegacyRow() throws {
+    func testForEachBodyFailureReportsIterationFailureInStructuredNodes() throws {
         let forEach = try ForEachStringStep(
             values: ["Milk", "Eggs"],
             parameter: "item",
@@ -340,12 +335,8 @@ final class HeistReportProjectionTests: XCTestCase {
 
         XCTAssertEqual(node.status, .failed)
         XCTAssertEqual(node.children.map(\.status), [.passed, .failed])
-        XCTAssertEqual(node.children[1].children.first?.failureMessage, "field missing")
-        XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["for_each_string"])
-        XCTAssertEqual(
-            projection.legacyFlatRows.first?.failureMessage,
-            "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
-        )
+        XCTAssertEqual(node.children[1].children.first?.action?.finalActionResult?.message, "field missing")
+        XCTAssertEqual(node.message, "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"")
     }
 
     func testWarnAndFailProjectAsStructuralNodes() {
@@ -377,8 +368,6 @@ final class HeistReportProjectionTests: XCTestCase {
 
         XCTAssertEqual(projection.nodes.map(\.kind), [.warn, .fail])
         XCTAssertEqual(projection.nodes.map(\.status), [.warned, .failed])
-        XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["warn", "fail"])
-        XCTAssertEqual(projection.legacyFlatRows[1].failureMessage, "Stop here")
     }
 
     private func actionStep(
@@ -399,8 +388,116 @@ final class HeistReportProjectionTests: XCTestCase {
     }
 }
 
-private extension HeistReportNode {
-    var failureMessage: String? {
-        HeistReportFlatRow(index: 0, node: self).failureMessage
+final class HeistLegacyFlatReportTests: XCTestCase {
+
+    func testLegacyRowsFlattenSelectedStructuralChildren() throws {
+        let elseStep = try actionStep(command: .activate(.target(.predicate(ElementPredicate(label: "Fallback")))))
+        let predicate = AccessibilityPredicate.state(.present(ElementPredicate(label: "Home")))
+        let conditional = try ConditionalStep(
+            cases: [PredicateCase(predicate: predicate, steps: [try actionStep()])],
+            elseSteps: [elseStep]
+        )
+        let plan = HeistPlan(steps: [.conditional(conditional)])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .conditional,
+                    durationMs: 3,
+                    caseSelection: HeistCaseSelectionResult(
+                        cases: [caseMatch(predicate, met: false)],
+                        selectedCaseIndex: nil,
+                        elapsedMs: 1,
+                        elseRan: true
+                    ),
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .activate),
+                            durationMs: 2
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 3
+        )
+
+        let projection = HeistReportProjection(plan: plan, result: result)
+
+        XCTAssertEqual(projection.nodes.first?.children.first?.path, "$.steps[0].conditional.else_steps[0]")
+        XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["if", "activate"])
+    }
+
+    func testLegacyRowsKeepForEachBodyNestedUnderLoopRow() throws {
+        let forEach = try ForEachStringStep(
+            values: ["Milk", "Eggs"],
+            parameter: "item",
+            steps: [try actionStep(command: .typeText(text: .ref("item"), target: nil))]
+        )
+        let plan = HeistPlan(steps: [.forEachString(forEach)])
+        let result = HeistExecutionResult(
+            steps: [
+                HeistExecutionStepResult(
+                    index: 0,
+                    kind: .forEach,
+                    message: "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\"",
+                    durationMs: 30,
+                    stopsHeist: true,
+                    forEachResult: HeistForEachResult(
+                        matchedCount: 2,
+                        limit: 2,
+                        iterationCount: 2,
+                        failureReason: "iteration 1 failed for value \"Eggs\""
+                    ),
+                    childResults: [
+                        HeistExecutionStepResult(
+                            index: 0,
+                            kind: .action,
+                            actionResult: ActionResult(success: true, method: .typeText),
+                            durationMs: 5
+                        ),
+                        HeistExecutionStepResult(
+                            index: 1,
+                            kind: .action,
+                            actionResult: ActionResult(
+                                success: false,
+                                method: .typeText,
+                                message: "field missing",
+                                errorKind: .elementNotFound
+                            ),
+                            durationMs: 6,
+                            stopsHeist: true
+                        ),
+                    ]
+                ),
+            ],
+            totalTimingMs: 30,
+            failedIndex: 0
+        )
+
+        let projection = HeistReportProjection(plan: plan, result: result)
+
+        XCTAssertEqual(projection.legacyFlatRows.map(\.commandName), ["for_each_string"])
+        XCTAssertEqual(
+            projection.legacyFlatRows.first?.failureMessage,
+            "for_each_string stopped after 2 of 2 iteration(s): iteration 1 failed for value \"Eggs\""
+        )
+    }
+
+    private func actionStep(
+        command: HeistActionCommand = .activate(.target(.predicate(ElementPredicate(label: "Button"))))
+    ) throws -> HeistStep {
+        .action(try ActionStep(command: command))
+    }
+
+    private func caseMatch(
+        _ predicate: AccessibilityPredicate,
+        met: Bool
+    ) -> HeistCaseMatchResult {
+        HeistCaseMatchResult(
+            predicate: predicate,
+            result: ExpectationResult(met: met, predicate: predicate)
+        )
     }
 }

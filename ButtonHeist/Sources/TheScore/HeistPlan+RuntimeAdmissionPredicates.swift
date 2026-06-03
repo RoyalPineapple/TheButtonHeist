@@ -5,7 +5,7 @@ extension HeistPlanRuntimeAdmissionValidator {
         _ predicate: AccessibilityPredicateExpr,
         path: String,
         depth: Int,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         switch predicate {
         case .predicate(let predicate):
@@ -67,7 +67,7 @@ extension HeistPlanRuntimeAdmissionValidator {
         _ state: StatePredicateExpr,
         path: String,
         depth: Int,
-        scope: AdmissionScope
+        scope: HeistReferenceScope
     ) {
         checkPredicateDepth(depth, path: path)
         switch state {
