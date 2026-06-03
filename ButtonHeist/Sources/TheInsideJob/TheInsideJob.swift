@@ -19,11 +19,7 @@ public final class TheInsideJob {
     /// `.live` for the process lifetime and further `configure` calls are
     /// ignored with a warning.
     struct ConfigureArgs: Sendable {
-        let token: String?
-        let instanceId: String?
-        let allowedScopes: Set<ConnectionScope>?
-        let port: UInt16
-        let runtimeConfiguration: InsideJobRuntimeConfiguration?
+        let runtimeConfiguration: InsideJobRuntimeConfiguration
     }
 
     enum SharedState {
@@ -38,19 +34,12 @@ public final class TheInsideJob {
         case .live(let existing):
             return existing
         case .pending(let args):
-            let instance = if let configuration = args?.runtimeConfiguration {
-                TheInsideJob(
-                    runtimeConfiguration: configuration,
-                    tlsIdentityProvider: Self.defaultTLSIdentityProvider
-                )
-            } else {
-                TheInsideJob(
-                    token: args?.token,
-                    instanceId: args?.instanceId,
-                    allowedScopes: args?.allowedScopes,
-                    port: args?.port ?? 0
-                )
-            }
+            let runtimeConfiguration = args?.runtimeConfiguration
+                ?? InsideJobRuntimeConfiguration.resolve(startupConfiguration: StartupConfiguration.resolve())
+            let instance = TheInsideJob(
+                runtimeConfiguration: runtimeConfiguration,
+                tlsIdentityProvider: Self.defaultTLSIdentityProvider
+            )
             sharedState = .live(instance)
             return instance
         }
@@ -62,15 +51,18 @@ public final class TheInsideJob {
         allowedScopes: Set<ConnectionScope>? = nil,
         port: UInt16 = 0
     ) {
-        let args = ConfigureArgs(
-            token: token,
-            instanceId: instanceId,
-            allowedScopes: allowedScopes,
-            port: port,
-            runtimeConfiguration: nil
-        )
         switch sharedState {
         case .pending:
+            let startupConfiguration = StartupConfiguration.resolve()
+            let args = ConfigureArgs(
+                runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(
+                    startupConfiguration: startupConfiguration,
+                    token: token,
+                    instanceId: instanceId,
+                    allowedScopes: allowedScopes,
+                    port: port
+                )
+            )
             sharedState = .pending(args)
         case .live:
             insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")
@@ -78,15 +70,11 @@ public final class TheInsideJob {
     }
 
     static func configure(startupConfiguration: StartupConfiguration) {
-        let args = ConfigureArgs(
-            token: nil,
-            instanceId: nil,
-            allowedScopes: nil,
-            port: 0,
-            runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(startupConfiguration: startupConfiguration)
-        )
         switch sharedState {
         case .pending:
+            let args = ConfigureArgs(
+                runtimeConfiguration: InsideJobRuntimeConfiguration.resolve(startupConfiguration: startupConfiguration)
+            )
             sharedState = .pending(args)
         case .live:
             insideJobLogger.warning("TheInsideJob.configure() called after already created — ignoring")

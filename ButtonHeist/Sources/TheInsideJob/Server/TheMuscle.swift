@@ -35,7 +35,7 @@ actor TheMuscle {
     @MainActor
     init(
         explicitToken: String?,
-        sessionReleaseTimeout: TimeInterval? = nil,
+        sessionReleaseTimeout: TimeInterval,
         alerts: AlertPresenter? = nil
     ) {
         let tokenSource = SessionTokenSource(explicitToken: explicitToken)
@@ -46,7 +46,7 @@ actor TheMuscle {
             lockoutDuration: TheMuscle.lockoutDuration
         )
         self.session = TheMuscleSession(
-            releaseTimeout: sessionReleaseTimeout ?? StartupConfiguration.defaultSessionTimeout
+            releaseTimeout: sessionReleaseTimeout
         )
         self.approvalPrompts = MuscleApprovalPromptCallbacks(alerts: alerts ?? AlertPresenter())
     }
