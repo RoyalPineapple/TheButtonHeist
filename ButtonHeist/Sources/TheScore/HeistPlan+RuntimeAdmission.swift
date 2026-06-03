@@ -89,7 +89,7 @@ public extension HeistPlan {
     }
 }
 
-struct HeistPlanRuntimeAdmissionValidator {
+struct HeistPlanRuntimeAdmissionValidator: HeistPlanTraversalVisitor {
     let limits: HeistPlanRuntimeAdmissionLimits
 
     var failures: [HeistPlanAdmissionFailure] = []
@@ -106,108 +106,82 @@ struct HeistPlanRuntimeAdmissionValidator {
     }
 
     mutating func validate(_ plan: HeistPlan) -> [HeistPlanAdmissionFailure] {
-        validateSteps(
-            plan.steps,
-            path: "$.steps",
-            depth: 1,
-            scope: .empty,
-            environment: .empty,
-            allowsCollectionLoops: true
-        )
+        let traversal = HeistPlanTraversal()
+        traversal.walk(plan, visitor: &self)
         return failures
     }
 
-    mutating func validateSteps(
-        _ steps: [HeistStep],
-        path: String,
-        depth: Int,
-        scope: AdmissionScope,
-        environment: HeistExecutionEnvironment,
-        allowsCollectionLoops: Bool
-    ) {
-        for (index, step) in steps.enumerated() {
-            validateStep(
-                step,
-                path: "\(path)[\(index)]",
-                depth: depth,
-                scope: scope,
-                environment: environment,
-                allowsCollectionLoops: allowsCollectionLoops
-            )
-        }
-    }
-
-    mutating func validateStep(
+    mutating func visitStep(
         _ step: HeistStep,
-        path: String,
-        depth: Int,
-        scope: AdmissionScope,
-        environment: HeistExecutionEnvironment,
-        allowsCollectionLoops: Bool
+        context: HeistTraversalContext
     ) {
         stepCount += 1
         if stepCount > limits.maxTotalSteps, !reportedStepLimit {
             reportedStepLimit = true
             fail(
-                path: path,
+                path: context.path,
                 contract: "max total heist steps",
                 observed: "\(stepCount) steps",
                 correction: "Use \(limits.maxTotalSteps) steps or fewer."
             )
         }
-        if depth > limits.maxNestedStepDepth {
+        if context.depth > limits.maxNestedStepDepth {
             fail(
-                path: path,
+                path: context.path,
                 contract: "max nested step depth",
-                observed: "depth \(depth)",
+                observed: "depth \(context.depth)",
                 correction: "Flatten this heist to depth \(limits.maxNestedStepDepth) or less."
             )
         }
+    }
 
-        switch step {
-        case .action(let action):
-            validateAction(action, path: "\(path).action", scope: scope, environment: environment)
-        case .wait(let wait):
-            validateWait(wait, path: "\(path).wait", scope: scope, environment: environment)
-        case .conditional(let conditional):
-            validateConditional(
-                conditional,
-                path: "\(path).conditional",
-                depth: depth,
-                scope: scope,
-                environment: environment
-            )
-        case .waitForCases(let waitForCases):
-            validateWaitForCases(
-                waitForCases,
-                path: "\(path).wait_for_cases",
-                depth: depth,
-                scope: scope,
-                environment: environment
-            )
-        case .forEachElement(let forEach):
-            validateForEachElement(
-                forEach,
-                path: "\(path).for_each_element",
-                depth: depth,
-                scope: scope,
-                environment: environment,
-                allowsCollectionLoops: allowsCollectionLoops
-            )
-        case .forEachString(let forEach):
-            validateForEachString(
-                forEach,
-                path: "\(path).for_each_string",
-                depth: depth,
-                scope: scope,
-                environment: environment,
-                allowsCollectionLoops: allowsCollectionLoops
-            )
-        case .warn(let warn):
-            addString(warn.message, path: "\(path).warn.message", role: "warn message")
-        case .fail(let fail):
-            addString(fail.message, path: "\(path).fail.message", role: "fail message")
-        }
+    mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
+        validateAction(
+            action,
+            path: context.path,
+            scope: context.scope,
+            environment: context.environment
+        )
+    }
+
+    mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
+        validateWait(wait, path: context.path, scope: context.scope, environment: context.environment)
+    }
+
+    mutating func visitWaitForCases(_ waitForCases: WaitForCasesStep, context: HeistTraversalContext) {
+        validateWaitForCases(waitForCases, path: context.path)
+    }
+
+    mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {
+        validatePredicateCase(
+            predicateCase,
+            path: context.path,
+            scope: context.scope,
+            environment: context.environment
+        )
+    }
+
+    mutating func visitForEachElement(_ step: ForEachElementStep, context: HeistTraversalContext) {
+        validateForEachElement(step, path: context.path, allowsCollectionLoops: context.allowsCollectionLoops)
+    }
+
+    mutating func visitForEachString(_ step: ForEachStringStep, context: HeistTraversalContext) {
+        validateForEachString(
+            step,
+            path: context.path,
+            bodyDepth: context.depth + 1,
+            scope: context.scope,
+            environment: context.environment,
+            allowsCollectionLoops: context.allowsCollectionLoops
+        )
+    }
+
+    mutating func visitWarn(_ warn: WarnStep, context: HeistTraversalContext) {
+        addString(warn.message, path: "\(context.path).message", role: "warn message")
+    }
+
+    mutating func visitFail(_ fail: FailStep, context: HeistTraversalContext) {
+        addString(fail.message, path: "\(context.path).message", role: "fail message")
     }
 
     mutating func validateAction(
@@ -217,9 +191,6 @@ struct HeistPlanRuntimeAdmissionValidator {
         environment: HeistExecutionEnvironment
     ) {
         validateCommand(action.command, path: "\(path).command", scope: scope, environment: environment)
-        if let expectation = action.expectation {
-            validateWait(expectation, path: "\(path).expectation", scope: scope, environment: environment)
-        }
         if let waiver = action.expectationWaiver {
             addString(waiver, path: "\(path).without_expectation", role: "expectation waiver")
         }
@@ -283,40 +254,9 @@ struct HeistPlanRuntimeAdmissionValidator {
         }
     }
 
-    mutating func validateConditional(
-        _ conditional: ConditionalStep,
-        path: String,
-        depth: Int,
-        scope: AdmissionScope,
-        environment: HeistExecutionEnvironment
-    ) {
-        for (index, predicateCase) in conditional.cases.enumerated() {
-            validatePredicateCase(
-                predicateCase,
-                path: "\(path).cases[\(index)]",
-                depth: depth,
-                scope: scope,
-                environment: environment
-            )
-        }
-        if let elseSteps = conditional.elseSteps {
-            validateSteps(
-                elseSteps,
-                path: "\(path).else_steps",
-                depth: depth + 1,
-                scope: scope,
-                environment: environment,
-                allowsCollectionLoops: false
-            )
-        }
-    }
-
     mutating func validateWaitForCases(
         _ waitForCases: WaitForCasesStep,
-        path: String,
-        depth: Int,
-        scope: AdmissionScope,
-        environment: HeistExecutionEnvironment
+        path: String
     ) {
         guard waitForCases.timeout >= 0 else {
             fail(
@@ -327,31 +267,11 @@ struct HeistPlanRuntimeAdmissionValidator {
             )
             return
         }
-        for (index, predicateCase) in waitForCases.cases.enumerated() {
-            validatePredicateCase(
-                predicateCase,
-                path: "\(path).cases[\(index)]",
-                depth: depth,
-                scope: scope,
-                environment: environment
-            )
-        }
-        if let elseSteps = waitForCases.elseSteps {
-            validateSteps(
-                elseSteps,
-                path: "\(path).else_steps",
-                depth: depth + 1,
-                scope: scope,
-                environment: environment,
-                allowsCollectionLoops: false
-            )
-        }
     }
 
     mutating func validatePredicateCase(
         _ predicateCase: PredicateCase,
         path: String,
-        depth: Int,
         scope: AdmissionScope,
         environment: HeistExecutionEnvironment
     ) {
@@ -366,22 +286,11 @@ struct HeistPlanRuntimeAdmissionValidator {
                 correction: "Use target_ref or string refs only inside the loop body that defines them."
             )
         }
-        validateSteps(
-            predicateCase.steps,
-            path: "\(path).steps",
-            depth: depth + 1,
-            scope: scope,
-            environment: environment,
-            allowsCollectionLoops: false
-        )
     }
 
     mutating func validateForEachElement(
         _ step: ForEachElementStep,
         path: String,
-        depth: Int,
-        scope: AdmissionScope,
-        environment: HeistExecutionEnvironment,
         allowsCollectionLoops: Bool
     ) {
         guard allowsCollectionLoops else {
@@ -403,26 +312,12 @@ struct HeistPlanRuntimeAdmissionValidator {
                 correction: "Use a limit of \(limits.maxForEachElementLimit) or less."
             )
         }
-
-        let childScope = scope.bindingTarget(step.parameter)
-        let childEnvironment = environment.binding(
-            target: .predicate(step.matching),
-            to: step.parameter
-        )
-        validateSteps(
-            step.steps,
-            path: "\(path).steps",
-            depth: depth + 1,
-            scope: childScope,
-            environment: childEnvironment,
-            allowsCollectionLoops: false
-        )
     }
 
     mutating func validateForEachString(
         _ step: ForEachStringStep,
         path: String,
-        depth: Int,
+        bodyDepth: Int,
         scope: AdmissionScope,
         environment: HeistExecutionEnvironment,
         allowsCollectionLoops: Bool
@@ -449,96 +344,38 @@ struct HeistPlanRuntimeAdmissionValidator {
             addString(value, path: "\(path).values[\(index)]", role: "for_each_string value")
         }
 
-        let childScope = scope.bindingString(step.parameter)
-        let sampleEnvironment = environment.binding(string: step.values.first ?? "", to: step.parameter)
-        validateSteps(
-            step.steps,
-            path: "\(path).steps",
-            depth: depth + 1,
-            scope: childScope,
-            environment: sampleEnvironment,
-            allowsCollectionLoops: false
-        )
-
         for (index, value) in step.values.enumerated() {
-            validateResolvedPayloads(
+            validateResolvedStringLoopPayloads(
                 step.steps,
                 path: "\(path).steps",
+                depth: bodyDepth,
+                scope: scope.bindingString(step.parameter),
                 environment: environment.binding(string: value, to: step.parameter),
                 valuePath: "\(path).values[\(index)]"
             )
         }
     }
 
-    mutating func validateResolvedPayloads(
+    mutating func validateResolvedStringLoopPayloads(
         _ steps: [HeistStep],
         path: String,
+        depth: Int,
+        scope: AdmissionScope,
         environment: HeistExecutionEnvironment,
         valuePath: String
     ) {
-        for (index, step) in steps.enumerated() {
-            let stepPath = "\(path)[\(index)]"
-            switch step {
-            case .action(let action):
-                do {
-                    let command = try action.command.resolve(in: environment)
-                    try validateDirectCommandContract(command)
-                    if let expectation = action.expectation {
-                        _ = try expectation.resolve(in: environment)
-                    }
-                } catch {
-                    fail(
-                        path: stepPath,
-                        contract: "string loop value must lower through the direct command contract",
-                        observed: "\(valuePath) resolved to \(summarize(error))",
-                        correction: "Use loop string values that keep every referenced command payload valid."
-                    )
-                }
-            case .wait(let wait):
-                do {
-                    _ = try wait.resolve(in: environment)
-                } catch {
-                    fail(
-                        path: stepPath,
-                        contract: "string loop value must resolve wait predicates",
-                        observed: "\(valuePath) resolved to \(summarize(error))",
-                        correction: "Use loop string values that keep every referenced wait predicate valid."
-                    )
-                }
-            case .conditional(let conditional):
-                validateResolvedPayloads(
-                    conditional.cases.flatMap(\.steps),
-                    path: "\(stepPath).conditional.cases.steps",
-                    environment: environment,
-                    valuePath: valuePath
-                )
-                if let elseSteps = conditional.elseSteps {
-                    validateResolvedPayloads(
-                        elseSteps,
-                        path: "\(stepPath).conditional.else_steps",
-                        environment: environment,
-                        valuePath: valuePath
-                    )
-                }
-            case .waitForCases(let waitForCases):
-                validateResolvedPayloads(
-                    waitForCases.cases.flatMap(\.steps),
-                    path: "\(stepPath).wait_for_cases.cases.steps",
-                    environment: environment,
-                    valuePath: valuePath
-                )
-                if let elseSteps = waitForCases.elseSteps {
-                    validateResolvedPayloads(
-                        elseSteps,
-                        path: "\(stepPath).wait_for_cases.else_steps",
-                        environment: environment,
-                        valuePath: valuePath
-                    )
-                }
-            case .forEachElement, .forEachString, .warn, .fail:
-                break
-            }
-        }
+        var validator = StringLoopResolvedPayloadValidator(valuePath: valuePath)
+        let traversal = HeistPlanTraversal()
+        traversal.walk(
+            steps: steps,
+            path: path,
+            depth: depth,
+            allowsCollectionLoops: false,
+            scope: scope,
+            environment: environment,
+            visitor: &validator
+        )
+        failures += validator.failures
     }
 
     func validateDirectCommandContract(_ message: ClientMessage) throws {
@@ -575,21 +412,67 @@ struct HeistPlanRuntimeAdmissionValidator {
     }
 }
 
-struct AdmissionScope {
-    static let empty = AdmissionScope()
+private struct StringLoopResolvedPayloadValidator: HeistPlanTraversalVisitor {
+    let valuePath: String
 
-    var targetRefs: Set<String> = []
-    var stringRefs: Set<String> = []
+    var failures: [HeistPlanAdmissionFailure] = []
 
-    func bindingTarget(_ reference: String) -> AdmissionScope {
-        var copy = self
-        copy.targetRefs.insert(reference)
-        return copy
+    let encoder = JSONEncoder()
+    let decoder = JSONDecoder()
+
+    mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
+        do {
+            let command = try action.command.resolve(in: context.environment)
+            try validateDirectCommandContract(command)
+        } catch {
+            fail(
+                path: context.path,
+                contract: "string loop value must lower through the direct command contract",
+                observed: "\(valuePath) resolved to \(summarize(error))",
+                correction: "Use loop string values that keep every referenced command payload valid."
+            )
+        }
     }
 
-    func bindingString(_ reference: String) -> AdmissionScope {
-        var copy = self
-        copy.stringRefs.insert(reference)
-        return copy
+    mutating func visitWait(_ wait: WaitStep, context: HeistTraversalContext) {
+        do {
+            let resolved = try wait.resolve(in: context.environment)
+            try validateDirectCommandContract(.wait(WaitTarget(
+                predicate: resolved.predicate,
+                timeout: resolved.timeout
+            )))
+        } catch {
+            fail(
+                path: context.path,
+                contract: "string loop value must resolve wait predicates",
+                observed: "\(valuePath) resolved to \(summarize(error))",
+                correction: "Use loop string values that keep every referenced wait predicate valid."
+            )
+        }
+    }
+
+    func validateDirectCommandContract(_ message: ClientMessage) throws {
+        let data = try encoder.encode(message)
+        _ = try decoder.decode(ClientMessage.self, from: data)
+    }
+
+    mutating func fail(
+        path: String,
+        contract: String,
+        observed: String,
+        correction: String
+    ) {
+        failures.append(HeistPlanAdmissionFailure(
+            path: path,
+            contract: contract,
+            observed: observed,
+            correction: correction
+        ))
+    }
+
+    func summarize(_ error: Error) -> String {
+        let text = String(describing: error)
+        guard text.count > 220 else { return text }
+        return "\(text.prefix(217))..."
     }
 }

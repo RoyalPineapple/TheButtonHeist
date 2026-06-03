@@ -31,98 +31,59 @@ public struct HeistPlanLintFinding: Sendable, Equatable {
 
 public extension HeistPlan {
     func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
-        HeistPlanLinter(mode: mode).lint(steps: steps, path: "$.steps")
+        var linter = HeistPlanLinter(mode: mode)
+        let traversal = HeistPlanTraversal()
+        traversal.walk(self, visitor: &linter)
+        return linter.findings
     }
 }
 
-private struct HeistPlanLinter {
+private struct HeistPlanLinter: HeistPlanTraversalVisitor {
     let mode: HeistPlanLintMode
 
-    func lint(steps: [HeistStep], path: String) -> [HeistPlanLintFinding] {
-        var findings: [HeistPlanLintFinding] = []
-        for (index, step) in steps.enumerated() {
-            findings += lint(step: step, path: "\(path)[\(index)]")
-            if isViewportSetup(step), let next = steps[safe: index + 1], next.isSemanticActionStep {
-                findings.append(viewportBeforeSemanticActionFinding(path: "\(path)[\(index)]"))
-            }
-        }
-        return findings
-    }
+    var findings: [HeistPlanLintFinding] = []
 
-    private func lint(step: HeistStep, path: String) -> [HeistPlanLintFinding] {
-        switch step {
-        case .action(let step):
-            return lint(action: step, path: "\(path).action")
-        case .wait:
-            return []
-        case .conditional(let step):
-            return lint(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).conditional")
-        case .waitForCases(let step):
-            return lint(cases: step.cases, elseSteps: step.elseSteps, path: "\(path).wait_for_cases")
-        case .forEachElement(let step):
-            return lint(forEachElement: step, path: "\(path).for_each_element")
-        case .forEachString(let step):
-            return lint(forEachString: step, path: "\(path).for_each_string")
-        case .warn, .fail:
-            return []
+    mutating func visitStep(_ step: HeistStep, context: HeistTraversalContext) {
+        if isViewportSetup(step), context.nextStep?.isSemanticActionStep == true {
+            findings.append(viewportBeforeSemanticActionFinding(path: context.path))
         }
     }
 
-    private func lint(action: ActionStep, path: String) -> [HeistPlanLintFinding] {
-        var findings: [HeistPlanLintFinding] = []
+    mutating func visitAction(_ action: ActionStep, context: HeistTraversalContext) {
         switch action.command.validationKind {
         case .semantic:
             if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
-                findings.append(missingExpectationFinding(path: path))
+                findings.append(missingExpectationFinding(path: context.path))
             }
         case .typeTextWithoutTarget:
             if mode.requiresExpectationFinding {
-                findings.append(typeTextTargetFinding(path: path))
+                findings.append(typeTextTargetFinding(path: context.path))
             }
         case .mechanical:
             if mode == .strictTest {
-                findings.append(mechanicalFinding(path: path))
+                findings.append(mechanicalFinding(path: context.path))
             }
         case .viewport:
             if mode == .strictTest {
-                findings.append(viewportFinding(path: path))
+                findings.append(viewportFinding(path: context.path))
             }
         case .ambient:
             if action.expectation == nil, action.expectationWaiver == nil, mode.requiresExpectationFinding {
-                findings.append(ambientExpectationFinding(path: path))
+                findings.append(ambientExpectationFinding(path: context.path))
             }
         }
-        return findings
     }
 
-    private func lint(
-        cases: [PredicateCase],
-        elseSteps: [HeistStep]?,
-        path: String
-    ) -> [HeistPlanLintFinding] {
-        var findings: [HeistPlanLintFinding] = []
-        for (index, predicateCase) in cases.enumerated() {
-            let casePath = "\(path).cases[\(index)]"
-            if predicateCase.steps.isEmpty {
-                findings.append(emptyBranchFinding(path: casePath))
-            }
-            findings += lint(steps: predicateCase.steps, path: "\(casePath).steps")
+    mutating func visitPredicateCase(_ predicateCase: PredicateCase, context: HeistTraversalContext) {
+        if predicateCase.steps.isEmpty {
+            findings.append(emptyBranchFinding(path: context.path))
         }
-        if let elseSteps {
-            if elseSteps.isEmpty {
-                findings.append(emptyBranchFinding(path: "\(path).else_steps"))
-            }
-            findings += lint(steps: elseSteps, path: "\(path).else_steps")
+    }
+
+    mutating func visitElseSteps(_ steps: [HeistStep], context: HeistTraversalContext) {
+        if steps.isEmpty {
+            findings.append(emptyBranchFinding(path: context.path))
         }
-        return findings
-    }
-
-    private func lint(forEachElement step: ForEachElementStep, path: String) -> [HeistPlanLintFinding] {
-        lint(steps: step.steps, path: "\(path).steps")
-    }
-
-    private func lint(forEachString step: ForEachStringStep, path: String) -> [HeistPlanLintFinding] {
-        lint(steps: step.steps, path: "\(path).steps")
     }
 
     private func missingExpectationFinding(path: String) -> HeistPlanLintFinding {
@@ -233,11 +194,5 @@ private extension HeistPlanLintMode {
         case .recordingQuality, .strictTest:
             return true
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Index) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

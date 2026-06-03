@@ -120,6 +120,7 @@ func lintReportsEmptyBranches() throws {
     let messages = plan.lint(.strictTest).map(\.message)
 
     #expect(messages == ["Branch has no steps"])
+    #expect(plan.lint(.strictTest).map(\.path) == ["$.steps[0].conditional.cases[0]"])
 }
 
 @Test
@@ -206,6 +207,39 @@ func runtimeAdmissionRejectsInvalidRefs() throws {
         let failures = plan.runtimeAdmissionFailures()
         #expect(failures.contains { $0.contract.contains(expected) }, "\(label): \(failures)")
     }
+}
+
+@Test
+func runtimeAdmissionRejectsRefsOutsideTheirLoopScope() throws {
+    let plan = HeistPlan(steps: [
+        .forEachString(try ForEachStringStep(
+            values: ["Milk"],
+            parameter: "item",
+            steps: [.warn(WarnStep(message: "inside string loop"))]
+        )),
+        .action(try ActionStep(command: .typeText(
+            text: .ref("item"),
+            target: .target(.predicate(.label("Search")))
+        ))),
+        .forEachElement(try ForEachElementStep(
+            matching: .label("Delete"),
+            limit: 1,
+            parameter: "target",
+            steps: [.warn(WarnStep(message: "inside element loop"))]
+        )),
+        .action(try ActionStep(command: .activate(.ref("target")))),
+    ])
+
+    let failures = plan.runtimeAdmissionFailures()
+
+    #expect(failures.contains {
+        $0.path == "$.steps[1].action.command.payload.text"
+            && $0.contract == "text_ref must resolve in the current heist scope"
+    })
+    #expect(failures.contains {
+        $0.path == "$.steps[3].action.command.payload.target"
+            && $0.contract == "target_ref must resolve in the current heist scope"
+    })
 }
 
 @Test
@@ -296,31 +330,33 @@ func runtimeAdmissionRejectsNestedCollectionLoops() throws {
         parameter: "item",
         steps: [.warn(WarnStep(message: "nested"))]
     )
-    let plans = [
-        HeistPlan(steps: [
+    let cases: [(HeistPlan, String)] = [
+        (HeistPlan(steps: [
             .conditional(try ConditionalStep(cases: [
                 PredicateCase(predicate: .state(.present(.label("Home"))), steps: [.forEachString(nested)]),
             ])),
-        ]),
-        HeistPlan(steps: [
+        ]), "$.steps[0].conditional.cases[0].steps[0].for_each_string"),
+        (HeistPlan(steps: [
             .waitForCases(try WaitForCasesStep(
                 timeout: 1,
                 cases: [PredicateCase(predicate: .state(.present(.label("Home"))), steps: [.forEachString(nested)])]
             )),
-        ]),
-        HeistPlan(steps: [
+        ]), "$.steps[0].wait_for_cases.cases[0].steps[0].for_each_string"),
+        (HeistPlan(steps: [
             .forEachElement(try ForEachElementStep(
                 matching: .label("Delete"),
                 limit: 1,
                 parameter: "target",
                 steps: [.forEachString(nested)]
             )),
-        ]),
+        ]), "$.steps[0].for_each_element.steps[0].for_each_string"),
     ]
 
-    for plan in plans {
+    for (plan, path) in cases {
         let failures = plan.runtimeAdmissionFailures()
-        #expect(failures.contains { $0.contract == "collection ForEach steps are top-level only" })
+        #expect(failures.contains {
+            $0.path == path && $0.contract == "collection ForEach steps are top-level only"
+        }, "\(path): \(failures)")
     }
 }
 
