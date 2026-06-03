@@ -1,4 +1,8 @@
-/// Identifies which action handler produced an ActionResult.
+/// Identifies the command behavior represented by an `ActionResult`.
+///
+/// Activation-point dispatch that completes an `activate` command still reports
+/// `.activate`; `.syntheticTap` is reserved for explicit mechanical
+/// `one_finger_tap` requests.
 public enum ActionMethod: String, Codable, Sendable {
     case activate
     case increment

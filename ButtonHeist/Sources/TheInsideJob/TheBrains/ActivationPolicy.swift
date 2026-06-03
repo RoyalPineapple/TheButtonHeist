@@ -5,7 +5,14 @@ import UIKit
 import AccessibilitySnapshotParser
 import TheScore
 
-/// Ordered activation recovery policy for `activate`.
+/// Ordered activation delivery pipeline for `activate`.
+///
+/// ButtonHeist treats accessibility as the interaction contract. `activate`
+/// first asks UIKit to perform the element's primary accessibility activation
+/// with `accessibilityActivate()`. When UIKit declines/defaults, ButtonHeist
+/// still delivers the same `activate` command by dispatching at the element's
+/// fresh accessibility activation point after semantic resolution, reveal, and
+/// live geometry acquisition.
 struct ActivationPolicy {
 
     enum RefreshResult {
@@ -16,13 +23,13 @@ struct ActivationPolicy {
         case failure(TheSafecracker.InteractionResult)
     }
 
-    var activate: @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome
+    var accessibilityActivate: @MainActor (TheStash.LiveActionTarget) -> TheStash.ActivateOutcome
     var refreshAndResolve: @MainActor () async -> RefreshResult
-    var syntheticTap: @MainActor (CGPoint) async -> Bool
+    var activationPointDispatch: @MainActor (CGPoint) async -> Bool
 
     @MainActor
     func apply(to liveTarget: TheStash.LiveActionTarget) async -> TheSafecracker.InteractionResult {
-        let initialOutcome = activate(liveTarget)
+        let initialOutcome = accessibilityActivate(liveTarget)
         if initialOutcome == .success {
             return .success(method: .activate)
         }
@@ -37,14 +44,14 @@ struct ActivationPolicy {
             return result
         }
 
-        let retryOutcome = activate(retryLiveTarget)
+        let retryOutcome = accessibilityActivate(retryLiveTarget)
         if retryOutcome == .success {
             return .success(method: .activate)
         }
 
-        let tapPoint = retryLiveTarget.activationPoint
-        if await syntheticTap(tapPoint) {
-            return .success(method: .syntheticTap)
+        let activationPoint = retryLiveTarget.activationPoint
+        if await activationPointDispatch(activationPoint) {
+            return .success(method: .activate)
         }
 
         return .failure(
@@ -65,10 +72,13 @@ struct ActivationPolicy {
         case .objectDeallocated:
             observed = "live target deallocated after semantic refresh"
         case .refused:
-            observed = "accessibilityActivate returned false after semantic refresh"
+            observed = "accessibilityActivate() declined after semantic refresh"
         }
-        return "activate failed: \(observed); synthetic tap at fresh activation point also failed for " +
-            ActionCapabilityDiagnostic.formatElement(screenElement)
+        return "activate failed: \(observed); activation-point dispatch was attempted at the fresh " +
+            "accessibility activation point and did not complete for " +
+            "\(ActionCapabilityDiagnostic.formatElement(screenElement)); correction: target an element " +
+            "with primary accessibility activation, or use an explicit mechanical gesture when the " +
+            "test intent is viewport coordinate delivery"
     }
 }
 

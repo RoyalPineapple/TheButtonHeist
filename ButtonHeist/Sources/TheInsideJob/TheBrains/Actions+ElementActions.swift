@@ -72,13 +72,16 @@ extension Actions {
 
     // MARK: - Accessibility Actions
 
+    /// Deliver `activate` through the accessibility contract:
+    /// semantic target -> reveal -> fresh live accessibility geometry ->
+    /// `accessibilityActivate()` -> activation-point dispatch if UIKit declines.
     func executeActivate(_ target: ElementTarget) async -> TheSafecracker.InteractionResult {
         return await performElementAction(
             target: target,
             method: .activate
         ) { context in
             await ActivationPolicy(
-                activate: stash.activate,
+                accessibilityActivate: stash.activate,
                 refreshAndResolve: {
                     switch await self.navigation.actionability.makeActionableAfterActivationRetryRefresh(
                         for: context.target
@@ -92,7 +95,7 @@ extension Actions {
                         return .failure(failure.interactionResult(commandMethod: .activate))
                     }
                 },
-                syntheticTap: safecracker.tap
+                activationPointDispatch: safecracker.tap
             ).apply(to: context.liveTarget)
         }
     }
