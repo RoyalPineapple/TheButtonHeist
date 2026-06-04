@@ -7,7 +7,8 @@ extension TheFence.Command {
                 .oneFingerTap, requestDecoder: TheFence.decodeOneFingerTapRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation,
-                description: "Tap an explicit point or semantic element after actionability resolution."
+                description: "Explicit mechanical/spatial tap. An element target supplies live geometry; "
+                    + "ordinary control activation should use activate."
             ),
             commandDescriptor(
                 .longPress, requestDecoder: TheFence.decodeLongPressRequest,
@@ -36,13 +37,15 @@ extension TheFence.Command {
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.direction, .string, enumValues: fenceEnumValues(ScrollDirection.self), defaultValue: .string(ScrollDirection.down.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor."
+                description: "Explicit viewport operation: scroll one page in the visible viewport, "
+                    + "or within a semantic target's owning scroll ancestor."
             ),
             commandDescriptor(
                 .scrollToVisible, requestDecoder: TheFence.decodeScrollToVisibleRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
-                description: "Make a semantic target actionable and report its fresh geometry."
+                description: "Explicit viewport/debug operation: make a semantic target actionable "
+                    + "and report its fresh geometry."
             ),
             commandDescriptor(
                 .scrollToEdge, requestDecoder: TheFence.decodeScrollToEdgeRequest,
@@ -50,14 +53,16 @@ extension TheFence.Command {
                 parameters: FenceParameterBlocks.elementTarget + [
                     param(.edge, .string, enumValues: fenceEnumValues(ScrollEdge.self), defaultValue: .string(ScrollEdge.top.rawValue)),
                 ] + FenceParameterBlocks.expectation,
-                description: "Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge."
+                description: "Explicit viewport operation: scroll the visible viewport, "
+                    + "or a semantic target's owning scroll ancestor, to a requested edge."
             ),
             commandDescriptor(
                 .activate, requestDecoder: TheFence.decodeActivateRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget
                     + [param(.action, .string), FenceParameterBlocks.incrementCount] + FenceParameterBlocks.expectation,
-                description: "Activate a semantic UI element or one of its named accessibility actions."
+                description: "Perform primary accessibility activation on a semantic UI element, "
+                    + "or one of its named accessibility actions."
             ),
             commandDescriptor(
                 .rotor, requestDecoder: TheFence.decodeRotorRequest,

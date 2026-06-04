@@ -32,6 +32,14 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(output, "drag: ok")
     }
 
+    func testExplicitOneFingerTapKeepsMechanicalResultIdentity() {
+        let result = ActionResult(success: true, method: .syntheticTap)
+        let output = FenceResponse.action(command: .oneFingerTap, result: result).compactFormatted()
+
+        XCTAssertEqual(result.method, .syntheticTap)
+        XCTAssertEqual(output, "one_finger_tap: ok")
+    }
+
     func testHumanHeistFormattingCountsNestedProjectedExpectations() throws {
         let expected = AccessibilityPredicate.state(.present(ElementPredicate(label: "Done")))
         let childAction = try HeistStep.action(ActionStep(

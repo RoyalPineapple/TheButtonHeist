@@ -171,6 +171,12 @@ final class ActivationPolicyTests: XCTestCase {
             "actions=[activate]",
             "correction: target an element with primary accessibility activation",
         ])
+        XCTAssertDiagnostic(result.message, doesNotContain: [
+            "fall" + "back",
+            "re" + "covery",
+            "synthetic " + "tap",
+            "synthetic" + "Tap",
+        ])
     }
 
     private func makePolicy(
@@ -228,6 +234,26 @@ final class ActivationPolicyTests: XCTestCase {
             XCTAssertTrue(
                 message.contains(fragment),
                 "Expected diagnostic to contain '\(fragment)'. Message: \(message)",
+                file: file,
+                line: line
+            )
+        }
+    }
+
+    private func XCTAssertDiagnostic(
+        _ message: String?,
+        doesNotContain fragments: [String],
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard let message else {
+            XCTFail("Expected diagnostic message", file: file, line: line)
+            return
+        }
+        for fragment in fragments {
+            XCTAssertFalse(
+                message.contains(fragment),
+                "Expected diagnostic to omit '\(fragment)'. Message: \(message)",
                 file: file,
                 line: line
             )

@@ -150,6 +150,38 @@ func canonicalSwiftRendererRendersAmbientActions() throws {
 }
 
 @Test
+func canonicalSwiftRendererSeparatesSemanticMechanicalAndViewportActions() throws {
+    let plan = HeistPlan(body: [
+        .action(try ActionStep(command: .performCustomAction(CustomActionTarget(
+            elementTarget: .predicate(.label("Message")),
+            actionName: "Archive"
+        )))),
+        .action(try ActionStep(command: .rotor(RotorTarget(
+            elementTarget: .predicate(.label("Article")),
+            selection: .named("Headings"),
+            direction: .next
+        )))),
+        .action(try ActionStep(command: .oneFingerTap(TapTarget(
+            selection: .coordinate(ScreenPoint(x: 12, y: 34))
+        )))),
+        .action(try ActionStep(command: .scroll(ScrollTarget(direction: .down)))),
+    ])
+
+    #expect(plan.runtimeAdmissionFailures().isEmpty)
+    #expect(try plan.canonicalSwiftDSL() == """
+    try Heist {
+        CustomAction("Archive", on: .label("Message"))
+
+        Rotor("Headings", on: .label("Article"), direction: .next)
+
+        Mechanical.Tap(x: 12, y: 34)
+
+        Viewport.Scroll(.down)
+    }
+    """)
+}
+
+@Test
 func elementUnitPointSwipeIsDurableAndCanonical() throws {
     let command = HeistActionCommand.mechanicalSwipe(SwipeTarget(selection: .unitElement(
         .predicate(.label("Carousel")),

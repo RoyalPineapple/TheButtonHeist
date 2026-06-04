@@ -6,7 +6,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 | Tool | Description |
 |------|-------------|
-| `activate` | Activate a semantic UI element or one of its named accessibility actions. |
+| `activate` | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
 | `drag` | Drag using exactly one typed intent: elementToPoint or pointToPoint. |
@@ -18,14 +18,14 @@ _Generated from `TheFence.Command.descriptors`._
 | `list_devices` | List discovered iOS devices and configured connection targets. |
 | `list_targets` | List configured connection targets and the default target. |
 | `long_press` | Long-press an explicit point or semantic element for a resolved duration. |
-| `one_finger_tap` | Tap an explicit point or semantic element after actionability resolution. |
+| `one_finger_tap` | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate. |
 | `ping` | Check connection health without reading accessibility state. |
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | Execute an inline typed heist plan. |
-| `scroll` | Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
-| `scroll_to_edge` | Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
-| `scroll_to_visible` | Make a semantic target actionable and report its fresh geometry. |
+| `scroll` | Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
+| `scroll_to_edge` | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
+| `scroll_to_visible` | Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry. |
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
 | `start_heist` | Start recording replayable heist steps from successful commands. |
 | `stop_heist` | Stop heist recording and save a deterministic heist fixture. |
@@ -37,7 +37,7 @@ _Generated from `TheFence.Command.descriptors`._
 
 ### `activate`
 
-Activate a semantic UI element or one of its named accessibility actions.
+Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions.
 
 Parameters:
 
@@ -174,7 +174,7 @@ Parameters:
 
 ### `one_finger_tap`
 
-Tap an explicit point or semantic element after actionability resolution.
+Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary control activation should use activate.
 
 Parameters:
 
@@ -231,7 +231,7 @@ Parameters:
 
 ### `scroll`
 
-Scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
+Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
 
 Parameters:
 
@@ -244,7 +244,7 @@ Parameters:
 
 ### `scroll_to_edge`
 
-Scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
+Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
 
 Parameters:
 
@@ -257,7 +257,7 @@ Parameters:
 
 ### `scroll_to_visible`
 
-Make a semantic target actionable and report its fresh geometry.
+Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry.
 
 Parameters:
 

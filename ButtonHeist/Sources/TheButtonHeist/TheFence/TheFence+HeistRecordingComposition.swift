@@ -92,6 +92,9 @@ struct HeistRecordingComposition {
                 direction: target.direction
             ))
         case .oneFingerTap(let target):
+            if let activationTarget = activationTarget(actionResult: actionResult) {
+                return .activate(activationTarget)
+            }
             return .oneFingerTap(TapTarget(
                 selection: normalizedGesturePoint(target.selection, actionResult: actionResult)
             ))
@@ -171,6 +174,18 @@ struct HeistRecordingComposition {
         actionResult: ActionResult
     ) -> ElementTarget {
         minimumTarget(actionResult: actionResult) ?? target
+    }
+
+    private static func activationTarget(actionResult: ActionResult) -> ElementTarget? {
+        guard let evidence = actionResult.subjectEvidence,
+              isActivatable(evidence.element)
+        else { return nil }
+        return minimumTarget(actionResult: actionResult)
+    }
+
+    private static func isActivatable(_ element: HeistElement) -> Bool {
+        element.actions.contains(.activate)
+            || element.traits.contains { AccessibilityPolicy.interactiveTraits.contains($0) }
     }
 
     private static func minimumTarget(actionResult: ActionResult) -> ElementTarget? {
