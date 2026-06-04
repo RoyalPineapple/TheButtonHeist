@@ -31,8 +31,8 @@ definitions, not arbitrary Swift functions:
 
 ```swift
 enum LibraryScreen {
-    static let addToCart = HeistDef<String>("addToCart", parameter: "item") { item in
-        Activate(.label(item))
+    static let addToCart = HeistDef<String>("addToCart") { input in
+        Activate(.label(input))
 
         Activate(.label("Add to Cart"))
             .expect(.present(.label("Cart")))
