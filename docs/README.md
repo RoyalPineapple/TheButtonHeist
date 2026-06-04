@@ -15,7 +15,6 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 | [Command Reference](reference/commands.md) | Generated command names, CLI exposure, heist/playback eligibility, and parameters |
 | [MCP Tool Reference](reference/mcp-tools.md) | Generated MCP tool surface projected from TheFence |
 | [Wire Protocol](WIRE-PROTOCOL.md) | Raw TheScore transport: envelopes, handshake, authentication, TLS transport, and wire-only examples |
-| [0.5.0 Release Notes](RELEASE-NOTES-0.5.0.md) | Accessibility contract runtime release notes |
 | [Authentication](AUTH.md) | Token auth, session locking, UI approval pending/denial/timeout states |
 | [USB Connectivity](USB_DEVICE_CONNECTIVITY.md) | Connecting to physical devices over CoreDevice IPv6 tunnels without enabling LAN scope |
 | [Bonjour Troubleshooting](BONJOUR_TROUBLESHOOTING.md) | MDM stealth mode workarounds |

@@ -2387,7 +2387,7 @@ final class TheFenceHandlerTests: XCTestCase {
     private func writeTemporaryHeist(_ heist: HeistPlan) throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
         let heistURL = tempDir.appendingPathComponent("test-\(UUID().uuidString).heist")
-        try HeistStore.writeHeist(heist, to: heistURL)
+        try HeistFileIO.write(heist, to: heistURL)
         return heistURL
     }
 

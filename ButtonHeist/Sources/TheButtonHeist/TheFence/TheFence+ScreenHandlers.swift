@@ -42,7 +42,7 @@ extension TheFence {
         }
 
         do {
-            let url = try screenshotStore.writeScreenshotArtifact(
+            let url = try screenshotArtifacts.writeScreenshot(
                 base64Data: screen.pngData,
                 outputPath: request.outputPath,
                 command: .getScreen

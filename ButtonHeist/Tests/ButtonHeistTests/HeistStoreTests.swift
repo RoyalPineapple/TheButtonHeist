@@ -853,7 +853,7 @@ final class HeistStoreTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testWriteAndReadHeist() async throws {
+    func testHeistFileIORoundTripsHeist() async throws {
         let heist = HeistPlan(body: [
                 try activateStep(label: "Go", traits: [.button]),
                 .action(try ActionStep(command: .typeText(TypeTextTarget(text: "test")))),
@@ -861,9 +861,9 @@ final class HeistStoreTests: XCTestCase {
         )
 
         let filePath = tempDirectory.appendingPathComponent("test.heist")
-        try HeistStore.writeHeist(heist, to: filePath)
+        try HeistFileIO.write(heist, to: filePath)
 
-        let loaded = try HeistStore.readHeist(from: filePath)
+        let loaded = try HeistFileIO.read(from: filePath)
         XCTAssertEqual(loaded, heist)
     }
 

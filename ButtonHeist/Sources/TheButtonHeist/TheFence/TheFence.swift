@@ -89,7 +89,7 @@ public final class TheFence {
         )
     }
     let heistStore: HeistStore
-    let screenshotStore: ScreenshotStore
+    let screenshotArtifacts: ScreenshotArtifactWriter
     let pendingRequests = PendingRequestTrackers()
 
     // Lifecycle owners
@@ -99,7 +99,7 @@ public final class TheFence {
     public init(configuration: Configuration) {
         self.config = configuration
         self.heistStore = HeistStore(baseDirectory: configuration.heistStoreBaseDirectory)
-        self.screenshotStore = ScreenshotStore(baseDirectory: configuration.heistStoreBaseDirectory)
+        self.screenshotArtifacts = ScreenshotArtifactWriter(baseDirectory: configuration.heistStoreBaseDirectory)
         let configuredToken = configuration.token ?? EnvironmentKey.buttonheistToken.value
         self.handoff.token = configuredToken
         self.handoff.driverId = EnvironmentKey.buttonheistDriverId.value
