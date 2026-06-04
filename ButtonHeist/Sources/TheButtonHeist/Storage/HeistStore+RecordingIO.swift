@@ -4,7 +4,7 @@ import TheScore
 
 extension HeistStore {
 
-    func applyRecordingEffect(_ effect: HeistRecordingComposition.Effect) throws {
+    func applyRecordingEffect(_ effect: HeistRecordingEffect) throws {
         switch effect {
         case .ignore:
             return

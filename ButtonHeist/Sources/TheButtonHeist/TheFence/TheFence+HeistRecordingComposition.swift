@@ -1,15 +1,15 @@
 import TheScore
 
+enum HeistRecordingEffect {
+    case ignore
+    case dropPendingViewportSetup
+    case append([HeistStep])
+}
+
 struct HeistRecordingComposition {
     let request: TheFence.ParsedRequest
     let dispatchedResponse: FenceResponse
     let validatedResponse: FenceResponse
-
-    enum Effect {
-        case ignore
-        case dropPendingViewportSetup
-        case append([HeistStep])
-    }
 
     func steps() throws -> [HeistStep] {
         switch try effect() {
@@ -20,19 +20,19 @@ struct HeistRecordingComposition {
         }
     }
 
-    func effect() throws -> Effect {
+    func effect() throws -> HeistRecordingEffect {
         guard request.command.descriptor.isHeistExecutable else { return .ignore }
         guard let dispatchedReceipt = dispatchedResponse.heistRecordingReceipt,
               dispatchedReceipt.actionResult.success else {
-            return request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
+            return HeistRecordingEffectPolicy.unrecordedSemanticEffect(for: request)
         }
         guard let finalReceipt = validatedResponse.heistRecordingReceipt,
               finalReceipt.shouldRecord else {
-            return request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
+            return HeistRecordingEffectPolicy.unrecordedSemanticEffect(for: request)
         }
         if request.expectationPayload.expectation != nil,
            finalReceipt.expectation?.met != true {
-            return request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
+            return HeistRecordingEffectPolicy.unrecordedSemanticEffect(for: request)
         }
         guard let messages = request.executableMessages,
               let message = messages.first,
@@ -54,15 +54,18 @@ struct HeistRecordingComposition {
             return .ignore
         }
 
-        guard !Self.hasUnrecordableSemanticEvidence(message, actionResult: dispatchedReceipt.actionResult) else {
+        guard !HeistRecordingEffectPolicy.hasUnrecordableSemanticEvidence(
+            message,
+            actionResult: dispatchedReceipt.actionResult
+        ) else {
             return .dropPendingViewportSetup
         }
 
-        let normalizedCommand = Self.normalizedCommand(
+        let normalizedCommand = RecordingActionNormalization.normalizedCommand(
             message,
             actionResult: dispatchedReceipt.actionResult
         )
-        let expectation = Self.recordedExpectation(
+        let expectation = RecordingExpectationInference.recordedExpectation(
             request: request,
             actionResult: dispatchedReceipt.actionResult,
             finalReceipt: finalReceipt
@@ -72,8 +75,14 @@ struct HeistRecordingComposition {
             expectation: expectation
         ))])
     }
+}
 
-    private static func hasUnrecordableSemanticEvidence(
+enum HeistRecordingEffectPolicy {
+    static func unrecordedSemanticEffect(for request: TheFence.ParsedRequest) -> HeistRecordingEffect {
+        request.consumesPendingViewportSetup ? .dropPendingViewportSetup : .ignore
+    }
+
+    static func hasUnrecordableSemanticEvidence(
         _ message: ClientMessage,
         actionResult: ActionResult
     ) -> Bool {
@@ -82,17 +91,19 @@ struct HeistRecordingComposition {
               actionResult.accessibilityTrace?.captures.first != nil
         else { return false }
         if message.requiresMinimumSemanticRecordingTarget {
-            return minimumTarget(actionResult: actionResult) == nil
+            return RecordingTargetSelection.minimumTarget(actionResult: actionResult) == nil
         }
         if case .oneFingerTap = message,
            let evidence = actionResult.subjectEvidence,
-           isActivatable(evidence.element) {
-            return minimumTarget(actionResult: actionResult) == nil
+           RecordingTargetSelection.isActivatable(evidence.element) {
+            return RecordingTargetSelection.minimumTarget(actionResult: actionResult) == nil
         }
         return false
     }
+}
 
-    private static func recordedExpectation(
+enum RecordingExpectationInference {
+    static func recordedExpectation(
         request: TheFence.ParsedRequest,
         actionResult: ActionResult,
         finalReceipt: FenceResponse.HeistRecordingReceipt
@@ -107,171 +118,9 @@ struct HeistRecordingComposition {
         return inferredExpectation(actionResult: actionResult)
     }
 
-    private static func normalizedCommand(
-        _ message: ClientMessage,
-        actionResult: ActionResult
-    ) -> ClientMessage {
-        switch message {
-        case .activate(let target):
-            return .activate(normalizedTarget(target, actionResult: actionResult))
-        case .increment(let target):
-            return .increment(normalizedTarget(target, actionResult: actionResult))
-        case .decrement(let target):
-            return .decrement(normalizedTarget(target, actionResult: actionResult))
-        case .performCustomAction(let target):
-            return .performCustomAction(CustomActionTarget(
-                elementTarget: normalizedTarget(target.elementTarget, actionResult: actionResult),
-                actionName: target.actionName
-            ))
-        case .rotor(let target):
-            return .rotor(RotorTarget(
-                elementTarget: normalizedTarget(target.elementTarget, actionResult: actionResult),
-                selection: target.selection,
-                direction: target.direction
-            ))
-        case .oneFingerTap(let target):
-            if let activationTarget = activationTarget(actionResult: actionResult) {
-                return .activate(activationTarget)
-            }
-            return .oneFingerTap(TapTarget(
-                selection: normalizedGesturePoint(target.selection, actionResult: actionResult)
-            ))
-        case .longPress(let target):
-            return .longPress(LongPressTarget(
-                selection: normalizedGesturePoint(target.selection, actionResult: actionResult),
-                duration: target.duration
-            ))
-        case .swipe(let target):
-            return .swipe(normalizedSwipe(target, actionResult: actionResult))
-        case .drag(let target):
-            return .drag(normalizedDrag(target, actionResult: actionResult))
-        case .typeText(let target):
-            return .typeText(TypeTextTarget(
-                text: target.text,
-                elementTarget: target.elementTarget.map {
-                    normalizedTarget($0, actionResult: actionResult)
-                }
-            ))
-        default:
-            return message
-        }
-    }
-
-    private static func normalizedGesturePoint(
-        _ selection: GesturePointSelection,
-        actionResult: ActionResult
-    ) -> GesturePointSelection {
-        switch selection {
-        case .element(let target):
-            return .element(normalizedTarget(target, actionResult: actionResult))
-        case .coordinate:
-            return selection
-        }
-    }
-
-    private static func normalizedSwipe(
-        _ target: SwipeTarget,
-        actionResult: ActionResult
-    ) -> SwipeTarget {
-        let selection: SwipeGestureSelection
-        switch target.selection {
-        case .unitElement(let element, let start, let end):
-            selection = .unitElement(
-                normalizedTarget(element, actionResult: actionResult),
-                start: start,
-                end: end
-            )
-        case .elementDirection(let element, let direction):
-            selection = .elementDirection(
-                normalizedTarget(element, actionResult: actionResult),
-                direction
-            )
-        case .point:
-            selection = target.selection
-        }
-        return SwipeTarget(selection: selection, duration: target.duration)
-    }
-
-    private static func normalizedDrag(
-        _ target: DragTarget,
-        actionResult: ActionResult
-    ) -> DragTarget {
-        switch target.selection {
-        case .elementToPoint(let element, let end):
-            return DragTarget(
-                selection: .elementToPoint(normalizedTarget(element, actionResult: actionResult), end: end),
-                duration: target.duration
-            )
-        case .pointToPoint:
-            return target
-        }
-    }
-
-    private static func normalizedTarget(
-        _ target: ElementTarget,
-        actionResult: ActionResult
-    ) -> ElementTarget {
-        minimumTarget(actionResult: actionResult) ?? target
-    }
-
-    private static func activationTarget(actionResult: ActionResult) -> ElementTarget? {
-        guard let evidence = actionResult.subjectEvidence,
-              isActivatable(evidence.element)
-        else { return nil }
-        return minimumTarget(actionResult: actionResult)
-    }
-
-    private static func isActivatable(_ element: HeistElement) -> Bool {
-        element.actions.contains(.activate)
-            || element.traits.contains { AccessibilityPolicy.interactiveTraits.contains($0) }
-    }
-
-    private static func minimumTarget(actionResult: ActionResult) -> ElementTarget? {
-        guard actionResult.settled != false,
-              let evidence = actionResult.subjectEvidence,
-              let trace = actionResult.accessibilityTrace,
-              let before = trace.captures.first
-        else { return nil }
-
-        let elements = before.interface.projectedElements
-        guard let index = contextIndex(for: evidence, in: elements) else { return nil }
-        let context = PredicateSelectionContext(
-            elements: elements.enumerated().map { offset, element in
-                PredicateSelectionContext.Element(id: "\(offset)", element: element)
-            },
-            screenId: before.context.screenId,
-            semanticHash: before.hash,
-            scope: .visible
-        )
-        return minimumUniquePredicate(for: "\(index)", in: context)?.target
-    }
-
-    private static func contextIndex(
-        for evidence: ActionSubjectEvidence,
-        in elements: [HeistElement]
-    ) -> Int? {
-        if let targetIndex = index(of: evidence.target, in: elements) {
-            return targetIndex
-        }
-        let equalIndices = elements.indices.filter { elements[$0] == evidence.element }
-        return equalIndices.count == 1 ? equalIndices[0] : nil
-    }
-
-    private static func index(of target: ElementTarget, in elements: [HeistElement]) -> Int? {
-        switch target {
-        case .predicate(let predicate, let ordinal):
-            let matches = elements.indices.filter { predicate.matches(elements[$0]) }
-            if let ordinal {
-                guard matches.indices.contains(ordinal) else { return nil }
-                return matches[ordinal]
-            }
-            return matches.count == 1 ? matches[0] : nil
-        }
-    }
-
     private static func inferredExpectation(actionResult: ActionResult) -> WaitStep? {
         guard actionResult.settled != false,
-              let target = minimumTarget(actionResult: actionResult),
+              let target = RecordingTargetSelection.minimumTarget(actionResult: actionResult),
               let trace = actionResult.accessibilityTrace,
               let before = trace.captures.first,
               let after = trace.captures.last,
@@ -284,9 +133,9 @@ struct HeistRecordingComposition {
 
         let beforeElements = before.interface.projectedElements
         let afterElements = after.interface.projectedElements
-        guard let beforeIndex = index(of: target, in: beforeElements) else { return nil }
+        guard let beforeIndex = RecordingTargetSelection.index(of: target, in: beforeElements) else { return nil }
         let beforeElement = beforeElements[beforeIndex]
-        guard let afterIndex = index(of: target, in: afterElements) else {
+        guard let afterIndex = RecordingTargetSelection.index(of: target, in: afterElements) else {
             return WaitStep(predicate: .state(.absentTarget(target)), timeout: 10)
         }
         return currentStateExpectation(
@@ -347,6 +196,175 @@ struct HeistRecordingComposition {
     }
 }
 
+enum RecordingActionNormalization {
+    static func normalizedCommand(
+        _ message: ClientMessage,
+        actionResult: ActionResult
+    ) -> ClientMessage {
+        switch message {
+        case .activate(let target):
+            return .activate(RecordingTargetSelection.normalizedTarget(target, actionResult: actionResult))
+        case .increment(let target):
+            return .increment(RecordingTargetSelection.normalizedTarget(target, actionResult: actionResult))
+        case .decrement(let target):
+            return .decrement(RecordingTargetSelection.normalizedTarget(target, actionResult: actionResult))
+        case .performCustomAction(let target):
+            return .performCustomAction(CustomActionTarget(
+                elementTarget: RecordingTargetSelection.normalizedTarget(target.elementTarget, actionResult: actionResult),
+                actionName: target.actionName
+            ))
+        case .rotor(let target):
+            return .rotor(RotorTarget(
+                elementTarget: RecordingTargetSelection.normalizedTarget(target.elementTarget, actionResult: actionResult),
+                selection: target.selection,
+                direction: target.direction
+            ))
+        case .oneFingerTap(let target):
+            if let activationTarget = RecordingTargetSelection.activationTarget(actionResult: actionResult) {
+                return .activate(activationTarget)
+            }
+            return .oneFingerTap(TapTarget(
+                selection: normalizedGesturePoint(target.selection, actionResult: actionResult)
+            ))
+        case .longPress(let target):
+            return .longPress(LongPressTarget(
+                selection: normalizedGesturePoint(target.selection, actionResult: actionResult),
+                duration: target.duration
+            ))
+        case .swipe(let target):
+            return .swipe(normalizedSwipe(target, actionResult: actionResult))
+        case .drag(let target):
+            return .drag(normalizedDrag(target, actionResult: actionResult))
+        case .typeText(let target):
+            return .typeText(TypeTextTarget(
+                text: target.text,
+                elementTarget: target.elementTarget.map {
+                    RecordingTargetSelection.normalizedTarget($0, actionResult: actionResult)
+                }
+            ))
+        default:
+            return message
+        }
+    }
+
+    private static func normalizedGesturePoint(
+        _ selection: GesturePointSelection,
+        actionResult: ActionResult
+    ) -> GesturePointSelection {
+        switch selection {
+        case .element(let target):
+            return .element(RecordingTargetSelection.normalizedTarget(target, actionResult: actionResult))
+        case .coordinate:
+            return selection
+        }
+    }
+
+    private static func normalizedSwipe(
+        _ target: SwipeTarget,
+        actionResult: ActionResult
+    ) -> SwipeTarget {
+        let selection: SwipeGestureSelection
+        switch target.selection {
+        case .unitElement(let element, let start, let end):
+            selection = .unitElement(
+                RecordingTargetSelection.normalizedTarget(element, actionResult: actionResult),
+                start: start,
+                end: end
+            )
+        case .elementDirection(let element, let direction):
+            selection = .elementDirection(
+                RecordingTargetSelection.normalizedTarget(element, actionResult: actionResult),
+                direction
+            )
+        case .point:
+            selection = target.selection
+        }
+        return SwipeTarget(selection: selection, duration: target.duration)
+    }
+
+    private static func normalizedDrag(
+        _ target: DragTarget,
+        actionResult: ActionResult
+    ) -> DragTarget {
+        switch target.selection {
+        case .elementToPoint(let element, let end):
+            return DragTarget(
+                selection: .elementToPoint(
+                    RecordingTargetSelection.normalizedTarget(element, actionResult: actionResult),
+                    end: end
+                ),
+                duration: target.duration
+            )
+        case .pointToPoint:
+            return target
+        }
+    }
+}
+
+enum RecordingTargetSelection {
+    static func normalizedTarget(
+        _ target: ElementTarget,
+        actionResult: ActionResult
+    ) -> ElementTarget {
+        minimumTarget(actionResult: actionResult) ?? target
+    }
+
+    static func activationTarget(actionResult: ActionResult) -> ElementTarget? {
+        guard let evidence = actionResult.subjectEvidence,
+              isActivatable(evidence.element)
+        else { return nil }
+        return minimumTarget(actionResult: actionResult)
+    }
+
+    static func isActivatable(_ element: HeistElement) -> Bool {
+        element.actions.contains(.activate)
+            || element.traits.contains { AccessibilityPolicy.interactiveTraits.contains($0) }
+    }
+
+    static func minimumTarget(actionResult: ActionResult) -> ElementTarget? {
+        guard actionResult.settled != false,
+              let evidence = actionResult.subjectEvidence,
+              let trace = actionResult.accessibilityTrace,
+              let before = trace.captures.first
+        else { return nil }
+
+        let elements = before.interface.projectedElements
+        guard let index = contextIndex(for: evidence, in: elements) else { return nil }
+        let context = PredicateSelectionContext(
+            elements: elements.enumerated().map { offset, element in
+                PredicateSelectionContext.Element(id: "\(offset)", element: element)
+            },
+            screenId: before.context.screenId,
+            semanticHash: before.hash,
+            scope: .visible
+        )
+        return minimumUniquePredicate(for: "\(index)", in: context)?.target
+    }
+
+    private static func contextIndex(
+        for evidence: ActionSubjectEvidence,
+        in elements: [HeistElement]
+    ) -> Int? {
+        if let targetIndex = index(of: evidence.target, in: elements) {
+            return targetIndex
+        }
+        let equalIndices = elements.indices.filter { elements[$0] == evidence.element }
+        return equalIndices.count == 1 ? equalIndices[0] : nil
+    }
+
+    static func index(of target: ElementTarget, in elements: [HeistElement]) -> Int? {
+        switch target {
+        case .predicate(let predicate, let ordinal):
+            let matches = elements.indices.filter { predicate.matches(elements[$0]) }
+            if let ordinal {
+                guard matches.indices.contains(ordinal) else { return nil }
+                return matches[ordinal]
+            }
+            return matches.count == 1 ? matches[0] : nil
+        }
+    }
+}
+
 private extension TheFence.ParsedRequest {
     var consumesPendingViewportSetup: Bool {
         executableMessages?.contains { $0.consumesPendingViewportSetup } == true
@@ -355,17 +373,7 @@ private extension TheFence.ParsedRequest {
 
 private extension ClientMessage {
     var consumesPendingViewportSetup: Bool {
-        switch self {
-        case .activate, .increment, .decrement, .performCustomAction, .rotor:
-            return true
-        case .typeText(let target):
-            return target.elementTarget != nil
-        case .oneFingerTap, .longPress, .swipe, .drag, .scroll, .scrollToVisible,
-             .scrollToEdge, .editAction, .setPasteboard, .resignFirstResponder,
-             .clientHello, .authenticate, .requestInterface, .ping, .status,
-             .getPasteboard, .requestScreen, .wait, .heistPlan:
-            return false
-        }
+        requiresMinimumSemanticRecordingTarget
     }
 
     var requiresMinimumSemanticRecordingTarget: Bool {
