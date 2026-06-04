@@ -138,6 +138,11 @@ final class WaitForIntegrationTests: XCTestCase {
         ) != nil
     }
 
+    private func mutateVisibleHierarchy(_ body: () -> Void) {
+        body()
+        insideJob.brains.stash.markDirtyFromTripwire()
+    }
+
     // MARK: - 1. Element already present — returns immediately
 
     func testWaitForAlreadyPresentReturnsImmediately() async throws {
@@ -360,8 +365,7 @@ final class WaitForIntegrationTests: XCTestCase {
         let didObserveBaseline = await waitForSettledVisibleObservation()
         XCTAssertTrue(didObserveBaseline)
 
-        let addTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
+        mutateVisibleHierarchy {
             _ = self.addLabel("WaitForChange-Delayed")
         }
 
@@ -369,7 +373,6 @@ final class WaitForIntegrationTests: XCTestCase {
             expectation: .changed(.appeared(ElementPredicate(label: "WaitForChange-Delayed"))),
             timeout: 5.0
         )
-        await addTask.value
         for subview in window.subviews where subview.accessibilityLabel == "WaitForChange-Delayed" {
             subview.removeFromSuperview()
         }
@@ -425,8 +428,7 @@ final class WaitForIntegrationTests: XCTestCase {
         ))
         XCTAssertNotNil(insideJob.brains.stash.currentScreen.findElement(heistId: offViewportHeistId))
 
-        let updateTask = Task { @MainActor in
-            await self.insideJob.tripwire.yieldRealFrames(2)
+        mutateVisibleHierarchy {
             // Mutate a tracked update property (value) while keeping the element's
             // identity (identifier/label) stable so before/after pair on the same
             // diffPairingKey and the change registers as an elements update.
@@ -437,7 +439,6 @@ final class WaitForIntegrationTests: XCTestCase {
             expectation: .changed(.elements),
             timeout: 5.0
         )
-        await updateTask.value
 
         XCTAssertTrue(result.success, result.message ?? "changed wait did not observe visible update")
         XCTAssertNotNil(
