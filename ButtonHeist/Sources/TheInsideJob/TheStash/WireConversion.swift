@@ -141,8 +141,8 @@ extension TheStash {
             guard case .container(let container, _) = node else { return nil }
             return InterfaceContainerAnnotation(
                 path: path,
-                stableId: screen.liveCapture.containerStableIdsByPath[path]
-                    ?? screen.liveCapture.containerStableIds[container]
+                containerName: screen.liveCapture.containerNamesByPath[path]
+                    ?? screen.liveCapture.containerNames[container]
             )
         }
     }

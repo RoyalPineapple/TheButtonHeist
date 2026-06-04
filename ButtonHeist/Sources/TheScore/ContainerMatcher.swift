@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Container Matching
 
-/// Stable names for parser accessibility container categories.
+/// Canonical names for parser accessibility container categories.
 public enum ContainerTypeName: String, Codable, CaseIterable, Sendable {
     case semanticGroup
     case list
@@ -18,7 +18,7 @@ public enum ContainerTypeName: String, Codable, CaseIterable, Sendable {
 /// containers have different identity fields and are matched in different tree
 /// positions.
 public struct ContainerMatcher: Codable, Sendable, Equatable {
-    public let stableId: HeistContainer?
+    public let containerName: ContainerName?
     public let type: ContainerTypeName?
     public let label: String?
     public let value: String?
@@ -26,14 +26,14 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
     public let isModalBoundary: Bool?
 
     public init(
-        stableId: HeistContainer? = nil,
+        containerName: ContainerName? = nil,
         type: ContainerTypeName? = nil,
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
         isModalBoundary: Bool? = nil
     ) {
-        self.stableId = stableId
+        self.containerName = containerName
         self.type = type
         self.label = label
         self.value = value
@@ -42,15 +42,47 @@ public struct ContainerMatcher: Codable, Sendable, Equatable {
     }
 
     public var hasPredicates: Bool {
-        stableId?.isEmpty == false || type != nil || label?.isEmpty == false ||
+        containerName?.isEmpty == false || type != nil || label?.isEmpty == false ||
             value?.isEmpty == false || identifier?.isEmpty == false || isModalBoundary != nil
+    }
+
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case containerName
+        case type
+        case label
+        case value
+        case identifier
+        case isModalBoundary
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "container matcher")
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            containerName: try container.decodeIfPresent(ContainerName.self, forKey: .containerName),
+            type: try container.decodeIfPresent(ContainerTypeName.self, forKey: .type),
+            label: try container.decodeIfPresent(String.self, forKey: .label),
+            value: try container.decodeIfPresent(String.self, forKey: .value),
+            identifier: try container.decodeIfPresent(String.self, forKey: .identifier),
+            isModalBoundary: try container.decodeIfPresent(Bool.self, forKey: .isModalBoundary)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(containerName, forKey: .containerName)
+        try container.encodeIfPresent(type, forKey: .type)
+        try container.encodeIfPresent(label, forKey: .label)
+        try container.encodeIfPresent(value, forKey: .value)
+        try container.encodeIfPresent(identifier, forKey: .identifier)
+        try container.encodeIfPresent(isModalBoundary, forKey: .isModalBoundary)
     }
 }
 
 extension ContainerMatcher: CustomStringConvertible {
     public var description: String {
         ScoreDescription.call("containerMatcher", [
-            ScoreDescription.stringField("stableId", stableId),
+            ScoreDescription.stringField("containerName", containerName),
             ScoreDescription.valueField("type", type),
             ScoreDescription.stringField("label", label),
             ScoreDescription.stringField("value", value),

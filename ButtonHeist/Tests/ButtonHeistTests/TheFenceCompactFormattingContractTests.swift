@@ -1,4 +1,5 @@
 import XCTest
+import AccessibilitySnapshotModel
 @testable import ButtonHeist
 import TheScore
 
@@ -202,6 +203,184 @@ final class TheFenceCompactFormattingContractTests: XCTestCase {
         XCTAssertEqual(action["commandName"] as? String, "activate")
         XCTAssertEqual(actionResult["status"] as? String, "error")
         XCTAssertEqual(actionResult["message"] as? String, "nested button failed")
+    }
+
+    func testCompactInterfaceRendersNestedContainersAndElements() {
+        let output = FenceResponse.compactInterface(formattingFixtureInterface(), detail: .summary)
+
+        XCTAssertEqual(output, """
+        4 elements
+        group label="Actions" id="actions" containerName="semantic_actions__actions"
+          [0] "Submit" button
+          table rows=3 columns=4 containerName="orders_table"
+            [1] "Order ID" staticText
+          tab_bar containerName="main_tabs"
+            [2] "Home" tabBarItem
+        scrollable containerName="main_scroll" viewport=390x400 content=390x1200 modal=true
+          [3] "Bottom" staticText
+        """)
+        XCTAssertFalse(output.contains("<"), output)
+        XCTAssertFalse(output.contains("semanticGroup"), output)
+        XCTAssertFalse(output.contains("dataTable"), output)
+        XCTAssertFalse(output.contains("tabBar containerName"), output)
+        XCTAssertFalse(output.contains("stableId"), output)
+    }
+
+    func testCompactContainerEscapesLabelsAndContainerNames() {
+        let interface = makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestSemanticContainer(
+                    label: "Actions \"Primary\"\nPane",
+                    value: "hot\u{0001}",
+                    identifier: "actions\"id"
+                ),
+                containerName: "semantic\n\"actions",
+                children: [
+                    .element(makeReceiptTestElement(label: "Submit")),
+                ]
+            ),
+        ])
+
+        let output = FenceResponse.compactInterface(interface, detail: .summary)
+
+        XCTAssertTrue(output.contains(#"label="Actions \"Primary\"\nPane""#), output)
+        XCTAssertTrue(output.contains(#"value="hot\u0001""#), output)
+        XCTAssertTrue(output.contains(#"id="actions\"id""#), output)
+        XCTAssertTrue(output.contains(#"containerName="semantic\n\"actions""#), output)
+        XCTAssertFalse(output.contains("stableId"), output)
+    }
+
+    func testCompactSummaryOmitsContainerGeometryAndFullIncludesFrame() {
+        let interface = formattingFixtureInterface()
+
+        let summary = FenceResponse.compactInterface(interface, detail: .summary)
+        let full = FenceResponse.compactInterface(interface, detail: .full)
+
+        XCTAssertFalse(summary.contains("frame="), summary)
+        XCTAssertTrue(
+            full.contains(#"group label="Actions" id="actions" containerName="semantic_actions__actions" frame=(0,40,200,100)"#),
+            full
+        )
+        XCTAssertTrue(summary.contains(#"scrollable containerName="main_scroll" viewport=390x400 content=390x1200"#), summary)
+    }
+
+    func testHumanInterfaceRendersHierarchyAndRespectsDetail() {
+        let interface = formattingFixtureInterface()
+
+        let summary = FenceResponse.interface(interface, detail: .summary).humanFormatted()
+        let full = FenceResponse.interface(interface, detail: .full).humanFormatted()
+
+        XCTAssertTrue(summary.contains(#"group "Actions" id="actions" containerName: semantic_actions__actions"#), summary)
+        XCTAssertTrue(summary.contains(#"  [ 0] "Submit" traits=button actions=activate"#), summary)
+        XCTAssertTrue(summary.contains(#"  table rows=3 columns=4 containerName: orders_table"#), summary)
+        XCTAssertTrue(summary.contains(#"scrollable"#), summary)
+        XCTAssertTrue(summary.contains(#"  containerName: main_scroll"#), summary)
+        XCTAssertTrue(summary.contains(#"  viewport: 390x400"#), summary)
+        XCTAssertTrue(summary.contains(#"  content: 390x1200"#), summary)
+        XCTAssertFalse(summary.contains("frame="), summary)
+        XCTAssertFalse(summary.contains("stableId"), summary)
+        XCTAssertTrue(full.contains(#"group "Actions" id="actions" containerName: semantic_actions__actions frame=(0,40,200,100)"#), full)
+    }
+
+    func testCompactScreenshotIncludeInterfaceTextRules() {
+        let interface = formattingFixtureInterface()
+        let payload = ScreenPayload(pngData: "abc", width: 100, height: 200, interface: interface)
+
+        XCTAssertEqual(
+            FenceResponse.screenshotData(payload: payload, options: .init(includeInterface: false)).compactFormatted(),
+            "screenshot: 100x200"
+        )
+
+        let withInterface = FenceResponse.screenshotData(
+            payload: payload,
+            options: .init(includeInterface: true)
+        ).compactFormatted()
+        XCTAssertTrue(withInterface.hasPrefix("screenshot: 100x200\n4 elements\n"), withInterface)
+        XCTAssertTrue(
+            withInterface.contains(
+                #"group label="Actions" id="actions" containerName="semantic_actions__actions" frame=(0,40,200,100)"#
+            ),
+            withInterface
+        )
+        XCTAssertFalse(withInterface.contains("stableId"), withInterface)
+
+        XCTAssertEqual(
+            FenceResponse.screenshotData(
+                payload: ScreenPayload(pngData: "abc", width: 100, height: 200, interface: nil),
+                options: .init(includeInterface: true)
+            ).compactFormatted(),
+            "screenshot: 100x200\ninterface: unavailable"
+        )
+    }
+
+    func testHumanScreenshotIncludeInterfaceUnavailable() {
+        let output = FenceResponse.screenshot(
+            path: "/tmp/screen.png",
+            payload: ScreenPayload(pngData: "abc", width: 100, height: 200, interface: nil),
+            options: .init(includeInterface: true)
+        ).humanFormatted()
+
+        XCTAssertTrue(output.contains("✓ Screenshot saved: /tmp/screen.png"), output)
+        XCTAssertTrue(output.contains("interface: unavailable"), output)
+    }
+
+    private func formattingFixtureInterface() -> Interface {
+        let submit = makeReceiptTestElement(label: "Submit", traits: [.button], actions: [.activate])
+        let orderId = makeReceiptTestElement(label: "Order ID", traits: [.staticText])
+        let home = makeReceiptTestElement(label: "Home", traits: [.tabBarItem])
+        let bottom = makeReceiptTestElement(label: "Bottom", traits: [.staticText])
+
+        return makeReceiptTestInterface(nodes: [
+            .container(
+                makeReceiptTestSemanticContainer(
+                    label: "Actions",
+                    identifier: "actions",
+                    frameX: 0,
+                    frameY: 40,
+                    frameWidth: 200,
+                    frameHeight: 100
+                ),
+                containerName: "semantic_actions__actions",
+                children: [
+                    .element(submit),
+                    .container(
+                        makeReceiptTestContainer(
+                            type: .dataTable(rowCount: 3, columnCount: 4),
+                            frameX: 8,
+                            frameY: 52,
+                            frameWidth: 180,
+                            frameHeight: 36
+                        ),
+                        containerName: "orders_table",
+                        children: [.element(orderId)]
+                    ),
+                    .container(
+                        makeReceiptTestContainer(
+                            type: .tabBar,
+                            frameX: 0,
+                            frameY: 140,
+                            frameWidth: 200,
+                            frameHeight: 44
+                        ),
+                        containerName: "main_tabs",
+                        children: [.element(home)]
+                    ),
+                ]
+            ),
+            .container(
+                makeReceiptTestScrollableContainer(
+                    contentWidth: 390,
+                    contentHeight: 1200,
+                    frameX: 0,
+                    frameY: 220,
+                    frameWidth: 390,
+                    frameHeight: 400,
+                    isModalBoundary: true
+                ),
+                containerName: "main_scroll",
+                children: [.element(bottom)]
+            ),
+        ])
     }
 
 }

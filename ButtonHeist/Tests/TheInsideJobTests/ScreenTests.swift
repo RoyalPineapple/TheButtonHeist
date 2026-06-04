@@ -27,7 +27,7 @@ final class ScreenTests: XCTestCase {
         Screen.ScreenElement(
             heistId: heistId,
             contentSpaceOrigin: contentSpaceOrigin,
-            scrollContainerStableId: contentSpaceOrigin.map { _ in "test_scroll" },
+            scrollContainerName: contentSpaceOrigin.map { _ in "test_scroll" },
             element: makeElement(label: label ?? heistId)
         )
     }
@@ -509,7 +509,7 @@ final class ScreenTests: XCTestCase {
                 "button_scrolled_away": Screen.ScreenElement(
                     heistId: "button_scrolled_away",
                     contentSpaceOrigin: CGPoint(x: 0, y: 1_000),
-                    scrollContainerStableId: "test_scroll",
+                    scrollContainerName: "test_scroll",
                     element: scrolledAway
                 ),
                 "button_visible": Screen.ScreenElement(
@@ -522,7 +522,7 @@ final class ScreenTests: XCTestCase {
                 .element(scrolledAway, traversalIndex: 0),
                 .element(visible, traversalIndex: 1)
             ],
-            containerStableIds: [:],
+            containerNames: [:],
             heistIdByElement: [
                 scrolledAway: "button_scrolled_away",
                 visible: "button_visible"

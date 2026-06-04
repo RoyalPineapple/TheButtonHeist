@@ -13,7 +13,7 @@ extension TheBurglar {
     /// Walk the hierarchy tree to compute each container's accessibility frame
     /// and whether it is nested under a scrollable ancestor. Container identity
     /// is semantic parser evidence; live scroll-view conversion is dispatch
-    /// evidence and must not feed stable ids or interface hashes.
+    /// evidence and must not feed generated container names or interface hashes.
     struct ContainerIdentityContext {
         let contentFrames: [AccessibilityContainer: CGRect]
         let contentFramesByPath: [TreePath: CGRect]
@@ -217,13 +217,13 @@ extension TheBurglar {
         }
     }
 
-    // MARK: - Stable Container Identity
+    // MARK: - Container Naming
 
-    /// Compute a readable handle prefix for a parser container, derived from
-    /// its own exposed values. Container handles are capture-local tree
-    /// projections; `buildContainerStableIdIndex` appends a deterministic
+    /// Compute a readable generated name prefix for a parser container, derived
+    /// from its own exposed values. Container names are capture-local tree
+    /// projections; `buildContainerNameIndex` appends a deterministic
     /// subtree hash when multiple containers share this prefix in one parse.
-    static func stableId(
+    static func containerName(
         for container: AccessibilityContainer,
         contentFrame: CGRect
     ) -> String {
@@ -248,7 +248,7 @@ extension TheBurglar {
     }
 
     /// Bucket size (in points) used when hashing a container frame into a
-    /// stable identifier. Round-to-nearest-8pt tolerates the minor layout
+    /// generated container name. Round-to-nearest-8pt tolerates the minor layout
     /// drift produced by Auto Layout re-resolves, Dynamic Type rounding, and
     /// sub-pixel alignment, while still distinguishing visually distinct
     /// containers. 8pt aligns with UIKit's 8-point design grid, so a "same"

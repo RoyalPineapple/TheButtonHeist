@@ -1,5 +1,6 @@
 import Foundation
 
+import AccessibilitySnapshotModel
 import TheScore
 
 extension FenceResponse {
@@ -21,8 +22,8 @@ extension FenceResponse {
             return Self.formatPongHuman(payload)
         case .devices(let devices):
             return formatDeviceList(devices)
-        case .interface(let interface, _):
-            return formatInterface(interface)
+        case .interface(let interface, let detail):
+            return formatInterface(interface, detail: detail)
         case .action(let command, let result, let expectation):
             var text = formatActionResult(command: command, result)
             if let expectation {
@@ -34,10 +35,18 @@ extension FenceResponse {
                 }
             }
             return text
-        case .screenshot(let path, let payload, _):
-            return "✓ Screenshot saved: \(path)  (\(Int(payload.width)) × \(Int(payload.height)))"
-        case .screenshotData(let payload, _):
-            return "✓ Screenshot captured (\(Int(payload.width)) × \(Int(payload.height))) — base64 PNG follows\n\(payload.pngData)"
+        case .screenshot(let path, let payload, let options):
+            return formatScreenshot(
+                summary: "✓ Screenshot saved: \(path)  (\(Int(payload.width)) × \(Int(payload.height)))",
+                payload: payload,
+                options: options
+            )
+        case .screenshotData(let payload, let options):
+            return formatScreenshot(
+                summary: "✓ Screenshot captured (\(Int(payload.width)) × \(Int(payload.height))) — base64 PNG follows\n\(payload.pngData)",
+                payload: payload,
+                options: options
+            )
         case .heistExecution(let plan, let result, _):
             let projection = HeistReportProjection(plan: plan, result: result)
             let completedSteps = result.completedStepCount
@@ -154,7 +163,7 @@ extension FenceResponse {
 
     // MARK: - Human Format Helpers
 
-    private func formatInterface(_ interface: Interface) -> String {
+    private func formatInterface(_ interface: Interface, detail: InterfaceDetail) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .medium
 
@@ -164,34 +173,183 @@ extension FenceResponse {
         if interface.projectedElements.isEmpty {
             output += "  (no elements)\n"
         } else {
-            for (i, element) in interface.projectedElements.enumerated() {
-                output += formatElement(element, displayIndex: i)
-            }
+            output += formatTreeLines(interface, detail: detail).joined(separator: "\n")
+            output += "\n"
         }
         output += String(repeating: "-", count: 60)
         return output
     }
 
-    private func formatElement(_ element: HeistElement, displayIndex: Int) -> String {
-        var output = ""
-        let index = String(format: "  [%2d]", displayIndex)
-        let label = element.label ?? element.description
-        output += "\(index) \(label)\n"
+    private final class HumanLineIndexCounter {
+        var value = 0
+    }
 
-        if let value = element.value, !value.isEmpty {
-            output += "       Value: \(value)\n"
+    private func formatTreeLines(_ interface: Interface, detail: InterfaceDetail) -> [String] {
+        let counter = HumanLineIndexCounter()
+        let elementAnnotations = interface.annotations.elementByPath
+        let containerAnnotations = interface.annotations.containerByPath
+        return interface.tree.enumerated().flatMap { index, node in
+            formatTreeLines(
+                node,
+                path: TreePath([index]),
+                depth: 0,
+                detail: detail,
+                counter: counter,
+                elementAnnotations: elementAnnotations,
+                containerAnnotations: containerAnnotations
+            )
         }
-        if let identifier = element.identifier, !identifier.isEmpty {
-            output += "       ID: \(identifier)\n"
+    }
+
+    private func formatTreeLines(
+        _ node: AccessibilityHierarchy,
+        path: TreePath,
+        depth: Int,
+        detail: InterfaceDetail,
+        counter: HumanLineIndexCounter,
+        elementAnnotations: [TreePath: InterfaceElementAnnotation],
+        containerAnnotations: [TreePath: InterfaceContainerAnnotation]
+    ) -> [String] {
+        let prefix = String(repeating: "  ", count: depth)
+        switch node {
+        case .element(let element, _):
+            let projected = HeistElement(
+                accessibilityElement: element,
+                annotation: elementAnnotations[path]
+            )
+            let displayIndex = counter.value
+            counter.value += 1
+            return [prefix + formatElement(projected, displayIndex: displayIndex, detail: detail)]
+        case .container(let container, let children):
+            let containerLines = formatContainerLines(
+                container,
+                annotation: containerAnnotations[path],
+                detail: detail
+            ).map { prefix + $0 }
+            let childLines = children.enumerated().flatMap { index, child in
+                formatTreeLines(
+                    child,
+                    path: path.appending(index),
+                    depth: depth + 1,
+                    detail: detail,
+                    counter: counter,
+                    elementAnnotations: elementAnnotations,
+                    containerAnnotations: containerAnnotations
+                )
+            }
+            return containerLines + childLines
+        }
+    }
+
+    private func formatElement(_ element: HeistElement, displayIndex: Int, detail: InterfaceDetail) -> String {
+        var parts: [String] = [String(format: "[%2d]", displayIndex)]
+        var labelValue = Self.quotedString(Self.nonEmpty(element.label) ?? element.description)
+        if let value = Self.nonEmpty(element.value) {
+            labelValue += " value=\(Self.quotedString(value))"
+        }
+        parts.append(labelValue)
+
+        let traits = element.traits.filter { $0.rawValue != "none" }
+        if !traits.isEmpty {
+            parts.append("traits=\(traits.map(\.rawValue).joined(separator: " | "))")
         }
         if !element.actions.isEmpty {
-            output += "       Actions: \(element.actions.map(\.description).joined(separator: ", "))\n"
+            parts.append("actions=\(element.actions.map(\.description).joined(separator: ", "))")
         }
-        if let rotors = element.rotors, !rotors.isEmpty {
-            output += "       Rotors: \(rotors.map { $0.name }.joined(separator: ", "))\n"
+        if let rotors = element.rotors?.compactMap({ Self.nonEmpty($0.name) }), !rotors.isEmpty {
+            parts.append("rotors=\(rotors.map(Self.quotedString).joined(separator: ", "))")
         }
-        output += "       Frame: (\(Int(element.frameX)), \(Int(element.frameY))) \(Int(element.frameWidth))×\(Int(element.frameHeight))\n"
-        return output
+        if let hint = Self.nonEmpty(element.hint) {
+            parts.append("hint=\(Self.quotedString(hint))")
+        }
+        if let identifier = Self.nonEmpty(element.identifier) {
+            parts.append("id=\(Self.quotedString(identifier))")
+        }
+        if detail == .full {
+            parts.append("frame=(\(Int(element.frameX)),\(Int(element.frameY)),\(Int(element.frameWidth)),\(Int(element.frameHeight)))")
+            parts.append("activation=(\(Int(element.activationPointX)),\(Int(element.activationPointY)))")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func formatContainerLines(
+        _ container: AccessibilityContainer,
+        annotation: InterfaceContainerAnnotation?,
+        detail: InterfaceDetail
+    ) -> [String] {
+        var parts: [String]
+        switch container.type {
+        case .semanticGroup(let label, let value, let identifier):
+            parts = ["group"]
+            if let label = Self.nonEmpty(label) { parts.append(Self.quotedString(label)) }
+            if let value = Self.nonEmpty(value) { parts.append("value=\(Self.quotedString(value))") }
+            if let identifier = Self.nonEmpty(identifier) { parts.append("id=\(Self.quotedString(identifier))") }
+            if let containerName = Self.nonEmpty(annotation?.containerName) {
+                parts.append("containerName: \(containerName)")
+            }
+        case .list:
+            parts = ["list"]
+            if let containerName = Self.nonEmpty(annotation?.containerName) {
+                parts.append("containerName: \(containerName)")
+            }
+        case .landmark:
+            parts = ["landmark"]
+            if let containerName = Self.nonEmpty(annotation?.containerName) {
+                parts.append("containerName: \(containerName)")
+            }
+        case .dataTable(let rowCount, let columnCount):
+            parts = ["table", "rows=\(rowCount)", "columns=\(columnCount)"]
+            if let containerName = Self.nonEmpty(annotation?.containerName) {
+                parts.append("containerName: \(containerName)")
+            }
+        case .tabBar:
+            parts = ["tab_bar"]
+            if let containerName = Self.nonEmpty(annotation?.containerName) {
+                parts.append("containerName: \(containerName)")
+            }
+        case .scrollable(let contentSize):
+            let frame = container.frame
+            var lines = ["scrollable"]
+            if let containerName = Self.nonEmpty(annotation?.containerName) {
+                lines.append("  containerName: \(containerName)")
+            }
+            lines.append("  viewport: \(Int(frame.size.width))x\(Int(frame.size.height))")
+            lines.append("  content: \(Int(contentSize.width))x\(Int(contentSize.height))")
+            if container.isModalBoundary {
+                lines.append("  modal: true")
+            }
+            if detail == .full {
+                lines.append(
+                    "  frame: (\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.size.width)),\(Int(frame.size.height)))"
+                )
+            }
+            return lines
+        }
+        if container.isModalBoundary {
+            parts.append("modal=true")
+        }
+        if detail == .full {
+            let frame = container.frame
+            parts.append(
+                "frame=(\(Int(frame.origin.x)),\(Int(frame.origin.y)),\(Int(frame.size.width)),\(Int(frame.size.height)))"
+            )
+        }
+        return [parts.joined(separator: " ")]
+    }
+
+    private func formatScreenshot(
+        summary: String,
+        payload: ScreenPayload,
+        options: ScreenshotResponseOptions
+    ) -> String {
+        guard options.includeInterface else { return summary }
+        var lines = [summary]
+        if let interface = payload.interface {
+            lines.append(formatInterface(interface, detail: .full))
+        } else {
+            lines.append("interface: unavailable")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func formatActionResult(command: TheFence.Command, _ result: ActionResult) -> String {

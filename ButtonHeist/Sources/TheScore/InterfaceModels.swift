@@ -33,7 +33,7 @@ extension TreePath: Comparable {
 /// Button Heist metadata attached to one parser element.
 ///
 /// `AccessibilityElement` is the accessibility fact. These annotations are
-/// BH affordances derived from a parse: targeting handle plus supported action
+/// BH affordances derived from a parse: targeting metadata plus supported action
 /// names. They are keyed by capture-local tree path so the accessibility tree
 /// itself stays full-fidelity and unmodified.
 public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable {
@@ -49,15 +49,15 @@ public struct InterfaceElementAnnotation: Codable, Equatable, Hashable, Sendable
 /// Button Heist metadata attached to one parser container.
 ///
 /// Container type, modal state, and geometry live on `AccessibilityContainer`.
-/// The only BH addition is the capture-local stable id used for subtree
-/// targeting and tree-diff references.
+/// The only BH addition is the generated container name used for subtree
+/// targeting and tree-diff references within the current capture shape.
 public struct InterfaceContainerAnnotation: Codable, Equatable, Hashable, Sendable {
     public let path: TreePath
-    public let stableId: HeistContainer?
+    public let containerName: ContainerName?
 
-    public init(path: TreePath, stableId: HeistContainer?) {
+    public init(path: TreePath, containerName: ContainerName?) {
         self.path = path
-        self.stableId = stableId
+        self.containerName = containerName
     }
 }
 
@@ -140,7 +140,7 @@ public struct Interface: Codable, Equatable, Sendable {
             guard let annotation = containersByPath[oldPath] else { return nil }
             return InterfaceContainerAnnotation(
                 path: newPath,
-                stableId: annotation.stableId
+                containerName: annotation.containerName
             )
         }
         return InterfaceAnnotations(elements: elements, containers: containers)

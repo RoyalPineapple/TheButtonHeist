@@ -23,8 +23,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | `rotor` | direct | yes | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | `run_heist` | direct | no | Execute an inline typed heist plan. |
-| `scroll` | `scroll` | direct | yes | Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
-| `scroll_to_edge` | `scroll_to_edge` | direct | yes | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
+| `scroll` | `scroll` | direct | yes | Explicit viewport operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
+| `scroll_to_edge` | `scroll_to_edge` | direct | yes | Explicit viewport operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | `scroll_to_visible` | direct | yes | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
 | `start_heist` | `start_heist` | direct | no | Start composing successful interactions into a semantic heist test. |
@@ -126,6 +126,8 @@ Parameters:
 ### `get_interface`
 
 Read the app accessibility hierarchy, optionally scoped to a subtree.
+
+containerName is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target and is not recorded into heists.
 
 - CLI: direct command `get_interface`
 - MCP: direct tool
@@ -316,7 +318,7 @@ Parameters:
 
 ### `scroll`
 
-Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
+Explicit viewport operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName.
 
 - CLI: direct command `scroll`
 - MCP: direct tool
@@ -328,13 +330,14 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
+| `container` | `string` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
 ### `scroll_to_edge`
 
-Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
+Explicit viewport operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge.
 
 - CLI: direct command `scroll_to_edge`
 - MCP: direct tool
@@ -346,6 +349,7 @@ Parameters:
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
+| `container` | `string` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |

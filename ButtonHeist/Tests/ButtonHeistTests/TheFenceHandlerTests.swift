@@ -261,7 +261,7 @@ final class TheFenceHandlerTests: XCTestCase {
                     frameWidth: 200,
                     frameHeight: 100
                 ),
-                stableId: "semantic_actions__actions",
+                containerName: "semantic_actions__actions",
                 children: [.element(submit), .element(cancel)]
             ),
             .element(footer),
@@ -278,7 +278,7 @@ final class TheFenceHandlerTests: XCTestCase {
                         frameWidth: 200,
                         frameHeight: 60
                     ),
-                    stableId: "semantic_actions__secondary_actions",
+                    containerName: "semantic_actions__secondary_actions",
                     children: [.element(archive)]
                 ),
                 at: 2
@@ -988,29 +988,45 @@ final class TheFenceHandlerTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testScrollRejectsPublicContainerHandle() async {
+    func testScrollRejectsContainerObject() async {
         await assertValidationError(
             command: .scroll,
-            arguments: ["container": .object(["captureLocalRef": .string("main_scroll")])],
+            arguments: ["container": .object(["unexpected": .string("main_scroll")])],
             contains: "schema validation failed for container"
         )
     }
 
     @ButtonHeistActor
-    func testScrollRejectsPublicStableId() async {
+    func testScrollRejectsPublicContainerName() async {
         await assertValidationError(
             command: .scroll,
-            arguments: ["stableId": .string("main_scroll")],
-            contains: "schema validation failed for stableId"
+            arguments: ["containerName": .string("main_scroll")],
+            contains: "schema validation failed for containerName"
         )
     }
 
     @ButtonHeistActor
-    func testScrollToEdgeRejectsPublicStableId() async {
+    func testScrollAllowsContainerArgument() async {
+        await assertPassesValidation(
+            command: .scroll,
+            arguments: ["direction": .string("down"), "container": .string("main_scroll")]
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollToEdgeRejectsPublicContainerName() async {
         await assertValidationError(
             command: .scrollToEdge,
-            arguments: ["edge": .string("bottom"), "stableId": .string("main_scroll")],
-            contains: "schema validation failed for stableId"
+            arguments: ["edge": .string("bottom"), "containerName": .string("main_scroll")],
+            contains: "schema validation failed for containerName"
+        )
+    }
+
+    @ButtonHeistActor
+    func testScrollToEdgeAllowsContainerArgument() async {
+        await assertPassesValidation(
+            command: .scrollToEdge,
+            arguments: ["edge": .string("bottom"), "container": .string("main_scroll")]
         )
     }
 
@@ -2231,7 +2247,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 3)
         let container = tree[1]["container"] as! [String: Any]
-        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
+        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
         let children = container["children"] as! [[String: Any]]
         XCTAssertEqual(children.count, 2)
     }
@@ -2260,7 +2276,7 @@ final class TheFenceHandlerTests: XCTestCase {
 
         let response = try await fence.execute(command: .getInterface, values: [
             "subtree": .object([
-                "container": .object(["stableId": .string("semantic_actions__actions")]),
+                "container": .string("semantic_actions__actions"),
             ]),
         ])
 
@@ -2276,7 +2292,7 @@ final class TheFenceHandlerTests: XCTestCase {
         let tree = interface["tree"] as! [[String: Any]]
         XCTAssertEqual(tree.count, 1)
         let container = tree[0]["container"] as! [String: Any]
-        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
+        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
         let children = container["children"] as! [[String: Any]]
         XCTAssertEqual(children.count, 2)
         XCTAssertEqual((children[0]["element"] as? [String: Any])?["label"] as? String, "Submit")
@@ -2314,21 +2330,23 @@ final class TheFenceHandlerTests: XCTestCase {
         )
     }
 
-    func testContainerStableIdAppearsInSummaryJsonAndCompactOutput() {
+    func testContainerNameAppearsInSummaryJsonAndCompactOutput() {
         let response = FenceResponse.interface(selectionTestInterface(), detail: .summary)
 
         let json = publicJSONObject(response)
         let interface = json["interface"] as! [String: Any]
         let tree = interface["tree"] as! [[String: Any]]
         let container = tree[1]["container"] as! [String: Any]
-        XCTAssertEqual(container["stableId"] as? String, "semantic_actions__actions")
+        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
+        XCTAssertEqual(container["containerName"] as? String, "semantic_actions__actions")
         XCTAssertNil(container["frameX"], "summary should expose identity, not geometry")
 
         let compact = response.compactFormatted()
         XCTAssertTrue(
-            compact.contains("semanticGroup stableId=\"semantic_actions__actions\" id=\"actions\" \"Actions\""),
+            compact.contains(#"group label="Actions" id="actions" containerName="semantic_actions__actions""#),
             compact
         )
+        XCTAssertFalse(compact.contains("stableId"), compact)
     }
 
     @ButtonHeistActor

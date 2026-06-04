@@ -23,8 +23,8 @@ _Generated from `TheFence.Command.descriptors`._
 | `play_heist` | Play back a heist file and return step diagnostics on failure. |
 | `rotor` | Move through an element rotor by direction. The server holds the rotor cursor while in rotor mode (entering at the first item); any other interaction exits rotor mode and drops the cursor. |
 | `run_heist` | Execute an inline typed heist plan. |
-| `scroll` | Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
-| `scroll_to_edge` | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
+| `scroll` | Explicit viewport operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName. |
+| `scroll_to_edge` | Explicit viewport operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge. |
 | `scroll_to_visible` | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | Write text to the general pasteboard from within the app. |
 | `start_heist` | Start composing successful interactions into a semantic heist test. |
@@ -101,6 +101,8 @@ Parameters:
 ### `get_interface`
 
 Read the app accessibility hierarchy, optionally scoped to a subtree.
+
+containerName is ButtonHeist's generated name for a container in the current interface capture. It is useful for inspection and viewport/debug commands. It is not a semantic target and is not recorded into heists.
 
 Parameters:
 
@@ -231,26 +233,28 @@ Parameters:
 
 ### `scroll`
 
-Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor.
+Explicit viewport operation: scroll one page in the visible viewport, within a semantic target's owning scroll ancestor, or for direct debug requests, within a current containerName.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
+| `container` | `string` | no | - | - |
 | `direction` | `string` | no | `"down"` | `up`, `down`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |
 
 ### `scroll_to_edge`
 
-Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge.
+Explicit viewport operation: scroll the visible viewport, a semantic target's owning scroll ancestor, or for direct debug requests, a current containerName, to a requested edge.
 
 Parameters:
 
 | Parameter | Type | Required | Default | Values |
 |-----------|------|----------|---------|--------|
 | `target` | `object` | no | - | - |
+| `container` | `string` | no | - | - |
 | `edge` | `string` | no | `"top"` | `top`, `bottom`, `left`, `right` |
 | `expect` | `object` | no | - | - |
 | `timeout` | `number` | no | - | - |

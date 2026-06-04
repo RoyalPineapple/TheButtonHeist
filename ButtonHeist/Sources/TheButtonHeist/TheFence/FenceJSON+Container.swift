@@ -14,7 +14,7 @@ struct PublicContainer: Encodable {
     let contentWidth: Double?
     let contentHeight: Double?
     let isModalBoundary: Bool?
-    let stableId: String?
+    let containerName: String?
     let frameX: Double?
     let frameY: Double?
     let frameWidth: Double?
@@ -84,7 +84,7 @@ struct PublicContainer: Encodable {
             self.contentHeight = Self.sanitizedDouble(contentSize.height)
         }
         self.isModalBoundary = container.isModalBoundary ? true : nil
-        self.stableId = annotation?.stableId
+        self.containerName = annotation?.containerName
         self.children = children
         guard detail == .full else {
             self.frameX = nil

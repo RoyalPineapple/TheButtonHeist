@@ -36,9 +36,9 @@ extension AccessibilityContainer {
     }
 
     func matches(_ matcher: ContainerMatcher, annotation: InterfaceContainerAnnotation?) -> Bool {
-        if let stableId = matcher.stableId {
-            if stableId.isEmpty { return false }
-            guard annotation?.stableId == stableId else { return false }
+        if let containerName = matcher.containerName {
+            if containerName.isEmpty { return false }
+            guard annotation?.containerName == containerName else { return false }
         }
         if let type = matcher.type {
             guard typeName == type else { return false }

@@ -62,6 +62,23 @@ extension Navigation {
                 )
             }
             return .resolved(.uiScrollView(scrollView))
+        case .container(let containerName):
+            let candidates = scrollCandidates(requiredAxis: axis).filter {
+                stash.liveContainerName(for: $0.container) == containerName
+            }
+            guard !candidates.isEmpty else {
+                return .failed(
+                    "\(commandName) failed: no visible scroll container named \(containerName) " +
+                        "supports \(Self.axisDescription(axis)); refresh get_interface and use a current containerName"
+                )
+            }
+            guard candidates.count == 1, let plan = candidates.first else {
+                return .failed(
+                    "\(commandName) ambiguous: multiple visible scroll containers named \(containerName) " +
+                        "support \(Self.axisDescription(axis)); refresh get_interface and use a current containerName"
+                )
+            }
+            return .resolved(plan.target)
         case .visibleContainer:
             let candidates = scrollCandidates(requiredAxis: axis)
             guard !candidates.isEmpty else {

@@ -256,6 +256,57 @@ func nonDurableActionShapeFailsAdmissionAndRenderingWithSameReason() throws {
     }
 }
 
+@Test
+func containerNameViewportActionsAreNotDurableHeistDSL() throws {
+    let commands: [HeistActionCommand] = [
+        .viewportScroll(ScrollTarget(selection: .container("scrollable_0_0_40_50"), direction: .down)),
+        .viewportScrollToEdge(ScrollToEdgeTarget(selection: .container("scrollable_0_0_40_50"), edge: .bottom)),
+    ]
+
+    for command in commands {
+        let plan = HeistPlan(body: [.action(try ActionStep(command: command))])
+        let reason = try #require(command.durableHeistActionFailure)
+
+        #expect(reason.contains("containerName is not a durable heist action"))
+        #expect(plan.runtimeAdmissionFailures().contains {
+            $0.contract == "durable heist action support"
+                && $0.observed == reason
+        })
+
+        do {
+            _ = try plan.canonicalSwiftDSL()
+            Issue.record("Expected containerName viewport action to fail canonical rendering")
+        } catch let error as HeistCanonicalSwiftDSLError {
+            #expect(error == .unsupportedAction(reason))
+        }
+    }
+
+    let jsonPlan = try JSONDecoder().decode(HeistPlan.self, from: Data("""
+    {
+      "version": 2,
+      "body": [
+        {
+          "type": "action",
+          "action": {
+            "command": {
+              "type": "scroll",
+              "payload": {
+                "container": "scrollable_0_0_40_50",
+                "direction": "down"
+              }
+            }
+          }
+        }
+      ]
+    }
+    """.utf8))
+
+    #expect(jsonPlan.runtimeAdmissionFailures().contains {
+        $0.contract == "durable heist action support"
+            && $0.observed == "scroll containerName is not a durable heist action"
+    })
+}
+
 private let fullASTJSON = """
 {
   "version": 2,

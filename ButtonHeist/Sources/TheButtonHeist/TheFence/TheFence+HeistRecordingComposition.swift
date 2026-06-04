@@ -93,16 +93,15 @@ enum HeistRecordingEffectPolicy {
         step: HeistStep
     ) -> HeistRecordingEffect {
         switch command {
-        case .scroll where expectation == nil,
-             .scrollToEdge where expectation == nil:
-            return .deferUntilFinish([step])
+        case .scroll, .scrollToEdge:
+            return .discardDeferredSetup
         case .activate, .increment, .decrement, .performCustomAction, .rotor:
             return .appendReplacingDeferredSetup([step])
         case .typeText(let target) where target.elementTarget != nil:
             return .appendReplacingDeferredSetup([step])
         case .scrollToVisible:
             return .discardDeferredSetup
-        case .oneFingerTap, .longPress, .swipe, .drag, .scroll, .scrollToEdge,
+        case .oneFingerTap, .longPress, .swipe, .drag,
              .typeText, .editAction, .setPasteboard, .resignFirstResponder,
              .clientHello, .authenticate, .requestInterface, .ping, .status,
              .getPasteboard, .requestScreen, .wait, .heistPlan:

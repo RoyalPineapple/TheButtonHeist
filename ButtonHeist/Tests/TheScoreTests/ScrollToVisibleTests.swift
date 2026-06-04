@@ -50,19 +50,19 @@ final class ScrollToVisibleTests: XCTestCase {
         }
     }
 
-    func testScrollToVisibleTargetRejectsPublicStableId() throws {
-        let data = Data(#"{"label":"Settings","stableId":"main_scroll"}"#.utf8)
+    func testScrollToVisibleTargetRejectsPublicContainerName() throws {
+        let data = Data(#"{"label":"Settings","containerName":"main_scroll"}"#.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(ScrollToVisibleTarget.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "stableId""#])
+            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "containerName""#])
         }
     }
 
     func testScrollToVisibleRequestEnvelopeRejectsUnknownPayloadKey() throws {
         let data = Data("""
-        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToVisible","payload":{"label":"Settings","containerId":"main_scroll"}}
+        {"buttonHeistVersion":"\(buttonHeistVersion)","type":"scrollToVisible","payload":{"label":"Settings","unexpected":"main_scroll"}}
         """.utf8)
         XCTAssertThrowsError(try JSONDecoder().decode(RequestEnvelope.self, from: data)) { error in
-            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "containerId""#])
+            assertDecodingError(error, contains: [#"Unknown scroll_to_visible target field "unexpected""#])
         }
     }
 
