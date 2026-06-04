@@ -13,7 +13,7 @@ Every iOS app has a second interface: the one VoiceOver uses.
 
 It describes the app in the language users depend on: labels, roles, values, states, actions. That interface is a contract: if users can do something visually, the app should expose it semantically.
 
-Button Heist treats that interface the way a person would: as the app.
+Button Heist executes against that interface as the app's accessibility contract.
 
 It turns the VoiceOver route into an executable route for agents and durable tests:
 semantic intent in, settled evidence out.
