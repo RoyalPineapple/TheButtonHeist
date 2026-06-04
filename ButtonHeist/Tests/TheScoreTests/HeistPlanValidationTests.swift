@@ -88,7 +88,7 @@ func recordingQualityAllowsExplicitExpectationWaiver() throws {
 
     #expect(messages.contains("Mechanical command appears in strict semantic-test mode"))
     #expect(messages.contains("Viewport command appears in strict semantic-test mode"))
-    #expect(messages.contains("Viewport setup immediately precedes a semantic action"))
+    #expect(messages.contains("Pre-action viewport movement immediately precedes a semantic action"))
 }
 
 @Test

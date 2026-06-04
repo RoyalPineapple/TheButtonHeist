@@ -6,6 +6,11 @@ enum HeistRecordingEffect {
     case append([HeistStep])
 }
 
+/// Projects a validated interaction response into a durable heist recording
+/// effect.
+///
+/// Recording composition owns the evidence-to-step decision. It does not
+/// dispatch commands, validate expectations, resolve targets, or write storage.
 struct HeistRecordingComposition {
     let request: TheFence.ParsedRequest
     let dispatchedResponse: FenceResponse

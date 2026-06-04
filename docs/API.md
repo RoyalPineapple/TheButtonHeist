@@ -1,12 +1,14 @@
 # Button Heist API
 
 This page documents the public integration contracts and invariants around
-Button Heist. It is not a command or parameter registry.
+Button Heist. It is not a command or parameter catalog.
 
 Generated references are the source of truth for executable surface area:
 
+- [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) - canonical product
+  contract, boundary map, and conformance cases
 - [Command Reference](reference/commands.md) - canonical `TheFence.Command`
-  names, CLI exposure, batch/playback eligibility, and parameters
+  names, CLI exposure, heist/playback eligibility, and parameters
 - [MCP Tool Reference](reference/mcp-tools.md) - MCP adapter tools projected
   from the Fence command contract
 - [Wire Protocol](WIRE-PROTOCOL.md) - transport envelopes, handshake,
@@ -16,8 +18,8 @@ Generated references are the source of truth for executable surface area:
 ## Contract Layers
 
 Button Heist has one product command contract: `TheFence.Command`. CLI
-commands, JSON-lines stdin, MCP tools, batches, and heist playback all route through
-that contract. MCP exposes one tool per exposed command, projected from
+commands, JSON-lines stdin, MCP tools, heist execution, and playback all route
+through that contract. MCP exposes one tool per exposed command, projected from
 Fence-owned command descriptors.
 
 The raw wire protocol lives one layer lower in TheScore. Wire message
@@ -129,10 +131,10 @@ they do not replace the underlying captures.
 
 **Location**: `ButtonHeist/Sources/TheButtonHeist/TheFence/`
 
-TheFence is the shared orchestration layer for CLI, JSON-lines stdin, MCP, batch,
-and heist playback. It owns command parsing, schema validation, connection
-coordination through TheHandoff, typed responses, batch policy, expectations,
-and recording/replay integration.
+TheFence is the shared orchestration layer for CLI, JSON-lines stdin, MCP,
+heist execution, and playback. It owns command parsing, schema validation,
+connection coordination through TheHandoff, typed responses, heist planning,
+expectations, and recording/replay integration.
 
 Use the generated [Command Reference](reference/commands.md) for command names
 and parameters.

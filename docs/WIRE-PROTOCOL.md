@@ -1,7 +1,7 @@
 # Button Heist Wire Protocol
 
 This document describes the raw TheScore transport between Button Heist clients
-and the iOS host. It is not the CLI, MCP, batch, or heist command registry.
+and the iOS host. It is not the CLI, MCP, or heist command catalog.
 
 Use generated references for product command surfaces:
 
@@ -18,7 +18,7 @@ connection. Wire-format changes ship with a product version bump.
 ## Command Layers
 
 Button Heist has one product command contract: `TheFence.Command`. CLI,
-session JSON, MCP tools, batches, and heist playback adapt to command names
+session JSON, MCP tools, heist execution, and playback adapt to command names
 such as `get_interface`, `activate`, and `scroll_to_visible`.
 
 The wire protocol is lower-level transport. Its `type` values are TheScore

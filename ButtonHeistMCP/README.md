@@ -18,12 +18,12 @@ identity, parameter names, and schemas are owned by the Fence command contract.
 
 Each MCP tool maps 1:1 to a TheFence command name. TheFence command names are
 the product command contract; wire message discriminators are a lower transport
-layer and are documented separately in the wire protocol. `run_batch.steps` use
-batch-executable canonical TheFence command requests and reject nested
-`run_batch` or commands whose descriptors are not batch-executable.
+layer and are documented separately in the wire protocol. `run_heist` executes
+a typed heist plan through the same semantic action/wait runtime used by direct
+commands.
 
 The generated [MCP Tool Reference](../docs/reference/mcp-tools.md) is the
-current tool and schema registry. This README stays at the adapter behavior
+current tool and schema reference. This README stays at the adapter behavior
 layer.
 
 ## Runtime Behavior
@@ -32,7 +32,7 @@ layer.
 - Reuses a single `TheFence` instance and auto-reconnects when the next tool call arrives
 - Resets an idle timeout after every tool call and disconnects when inactive
 - Returns screenshot metadata plus an artifact path by default; pass `inlineData=true` on `get_screen` to opt into capped MCP image content
-- `get_screen` is not batch-executable; capture screenshots before or after `run_batch`
+- `get_screen` is an explicit inspection command; capture screenshots before or after `run_heist`
 
 ## Environment
 

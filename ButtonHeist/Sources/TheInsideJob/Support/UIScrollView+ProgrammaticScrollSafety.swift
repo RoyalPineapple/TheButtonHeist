@@ -18,7 +18,7 @@ extension UIScrollView {
     /// private subclass can still flow through `_stopScrollDecelerationNotify`
     /// and `_scrollViewDidEndDecelerating`, even with `animated: false`, so the
     /// crash is not avoidable by disabling animation. Synthetic swipes are not
-    /// a good exploration fallback either: they enter the page-transition path
+    /// a good exploration substitute either: they enter the page-transition path
     /// and can change the app's current page instead of passively revealing
     /// off-screen content.
     @MainActor

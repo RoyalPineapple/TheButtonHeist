@@ -6,6 +6,9 @@ import TheScore
 private let defaultSemanticObservationTimeout: Double = 1
 
 /// Owns the before/body/after observation contract for executable interactions.
+///
+/// It coordinates settled semantic evidence. It does not choose command
+/// payloads, resolve actionability, decide recording policy, or format reports.
 @MainActor
 final class InteractionObservation {
     private let stash: TheStash

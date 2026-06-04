@@ -15,21 +15,24 @@ extension TheFence.Command {
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.gesturePointSelection
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Long-press an explicit point or semantic element for a resolved duration."
+                description: "Explicit mechanical/spatial long press on a point "
+                    + "or element-relative point for a resolved duration."
             ),
             commandDescriptor(
                 .swipe, requestDecoder: TheFence.decodeSwipeRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.swipeIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
+                description: "Explicit mechanical/spatial swipe using exactly one typed intent: "
+                    + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
             ),
             commandDescriptor(
                 .drag, requestDecoder: TheFence.decodeDragRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.dragIntents
                     + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation,
-                description: "Drag using exactly one typed intent: elementToPoint or pointToPoint."
+                description: "Explicit mechanical/spatial drag using exactly one typed intent: "
+                    + "elementToPoint or pointToPoint."
             ),
             commandDescriptor(
                 .scroll, requestDecoder: TheFence.decodeScrollRequest,
@@ -44,8 +47,8 @@ extension TheFence.Command {
                 .scrollToVisible, requestDecoder: TheFence.decodeScrollToVisibleRequest,
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.elementTarget + FenceParameterBlocks.expectation,
-                description: "Explicit viewport/debug operation: make a semantic target actionable "
-                    + "and report its fresh geometry."
+                description: "Explicit viewport/debug operation: move the viewport until a "
+                    + "semantic target is visible and report its fresh geometry."
             ),
             commandDescriptor(
                 .scrollToEdge, requestDecoder: TheFence.decodeScrollToEdgeRequest,

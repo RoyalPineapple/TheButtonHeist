@@ -40,7 +40,7 @@ public struct ServerInfo: Codable, Sendable {
     public let screenHeight: Double
     /// Per-launch session identifier
     public let instanceId: String
-    /// Human-readable instance identifier (from INSIDEJOB_ID env var, or shortId fallback)
+    /// Human-readable instance identifier (from INSIDEJOB_ID env var, or generated shortId)
     public let instanceIdentifier: String
     /// Port the server is listening on
     public let listeningPort: UInt16

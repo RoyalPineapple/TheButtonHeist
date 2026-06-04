@@ -6,10 +6,13 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 
 | Document | Description |
 |----------|-------------|
+| [Accessibility Contract](ACCESSIBILITY-CONTRACT.md) | Canonical product contract, boundary map, pipeline, and conformance cases |
 | [Architecture](ARCHITECTURE.md) | Load-bearing product contracts and the compact component map |
 | [API](API.md) | Product API invariants and integration contracts; generated references own commands and parameters |
 | [Swift Heist Authoring](SWIFT-HEIST-AUTHORING.md) | Source authoring boundary between Swift DSL, HeistPlan, and `.heist` JSON |
-| [Command Reference](reference/commands.md) | Generated command names, CLI exposure, batch/playback eligibility, and parameters |
+| [Recording Contract](RECORDING-CONTRACT.md) | How successful runtime evidence becomes durable semantic heist steps |
+| [Semantic Actionability](SEMANTIC-ACTIONABILITY.md) | Runtime boundary from semantic targets to actionable live targets |
+| [Command Reference](reference/commands.md) | Generated command names, CLI exposure, heist/playback eligibility, and parameters |
 | [MCP Tool Reference](reference/mcp-tools.md) | Generated MCP tool surface projected from TheFence |
 | [Wire Protocol](WIRE-PROTOCOL.md) | Raw TheScore transport: envelopes, handshake, authentication, TLS transport, and wire-only examples |
 | [0.5.0 Release Notes](RELEASE-NOTES-0.5.0.md) | Accessibility contract runtime release notes |
@@ -21,3 +24,4 @@ Technical documentation for Button Heist internals. The blueprints, not the sale
 ## See Also
 
 - [Project Overview](../README.md) — Quick start and architecture
+- [Examples](../examples/README.md) — Canonical semantic command, heist, and recording examples

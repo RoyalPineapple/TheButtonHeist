@@ -6,7 +6,7 @@ AI agents need to operate iOS apps. The existing approach — read the screen's 
 
 ## The Insight
 
-VoiceOver users don't tap coordinates. They navigate a semantic interface: labels, values, traits, actions. "Tap the Sign In button" works on every device, every screen size, every orientation. The accessibility layer is already a stable, device-independent API for interacting with UI. Nobody was using it that way for agents.
+VoiceOver users don't compute coordinates. They navigate a semantic interface: labels, values, traits, actions. "Activate the Sign In button" works on every device, every screen size, every orientation. The accessibility layer is already a stable, device-independent API for interacting with UI. Nobody was using it that way for agents.
 
 ## What Button Heist Does
 
@@ -18,11 +18,11 @@ Three properties make this work:
 
 **Delta responses.** Every action returns exactly what changed: which elements appeared, disappeared, or updated. The agent doesn't need to re-read the entire screen after every tap. On a 50-action workflow, this eliminates 50 full-screen reads.
 
-**Composable actions.** Because addressing is stable and deterministic, actions can be batched. Five steps in one call, each with an inline expectation that verifies the outcome. If step 3 fails, the batch stops there. Coordinate-based tools can't batch — each tap depends on reading the screen after the previous one.
+**Composable actions.** Because addressing is stable and deterministic, actions can be composed into heist programs. Five semantic steps can run with inline expectations that verify the outcome. If step 3 fails, the heist stops there. Coordinate-based tools cannot compose this way because each gesture depends on reading the screen after the previous one.
 
 ## Side by Side
 
-The difference is visible in a single action. Here's what it looks like to tap "Settings" in both tools — actual calls from the benchmark traces.
+The difference is visible in a single action. Here's what it looks like to activate "Settings" in both tools — actual calls from the benchmark traces.
 
 **Button Heist** — one call, semantic target, structured delta back:
 

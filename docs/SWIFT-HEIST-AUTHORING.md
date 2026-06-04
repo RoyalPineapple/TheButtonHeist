@@ -22,7 +22,9 @@ not recover:
 
 At runtime, Button Heist executes only `HeistPlan`. The Swift DSL is an
 authoring convenience that produces a plan; JSON is a durable representation of
-that plan. Swift DSL and JSON are two projections of the same AST.
+that plan. Swift DSL and JSON are two projections of the same AST. That AST
+belongs to the broader [Accessibility Contract](ACCESSIBILITY-CONTRACT.md):
+semantic intent enters the runtime and settled semantic evidence comes back.
 
 Reusable heist helpers that should survive JSON must be written as heist
 definitions, not arbitrary Swift functions:
@@ -73,8 +75,9 @@ Runtime admission and lint are separate:
 - Runtime admission rejects plans that cannot safely execute.
 - `.recordingQuality` lint flags recordings that read like transcripts instead of
   compact semantic tests.
-- `.strictTest` lint treats missing expectations, mechanical commands, viewport
-  setup before semantic actions, and empty branches as test quality failures.
+- `.strictTest` lint treats missing expectations, mechanical commands,
+  pre-action viewport movement before semantic actions, and empty branches as
+  test quality failures.
 
 Mechanical and viewport commands are explicit escape hatches. Use the namespace
 to make that intent visible:
@@ -85,7 +88,7 @@ Viewport.Scroll(.down)
 Viewport.ScrollToVisible(.label("Checkout"))
 ```
 
-Normal semantic actions do not need viewport setup. `Activate`, `TypeText`,
+Normal semantic actions do not need pre-action viewport movement. `Activate`, `TypeText`,
 `Increment`, `Decrement`, custom actions, and rotors own reveal, actionability,
 and live geometry through the runtime pipeline.
 
@@ -135,7 +138,7 @@ Swift Heist does not preserve:
 - native Swift loop intent unless the source used Button Heist `ForEach`
 - arbitrary helper functions or closure structure
 - comments, whitespace, imports, or local constants
-- hidden viewport setup for semantic actions
+- hidden pre-action viewport movement for semantic actions
 - arbitrary dynamic code over the wire
 - generic variables beyond scoped `target_ref` and string refs
 

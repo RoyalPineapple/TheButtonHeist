@@ -3,6 +3,12 @@ import UIKit
 
 import TheScore
 
+/// Converts a semantic target into a fresh live target that can receive the
+/// requested accessibility action.
+///
+/// It owns reveal, bounded viewport movement, and live geometry acquisition.
+/// It does not choose matchers, dispatch actions, or evaluate post-action
+/// expectations.
 @MainActor
 final class SemanticActionability {
 

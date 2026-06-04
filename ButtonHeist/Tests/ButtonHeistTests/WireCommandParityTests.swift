@@ -17,7 +17,18 @@ final class WireCommandParityTests: XCTestCase {
 
         XCTAssertEqual(
             type?.enumValues,
-            ["action", "wait", "conditional", "wait_for_cases", "for_each_element", "for_each_string", "warn", "fail"]
+            [
+                "action",
+                "wait",
+                "conditional",
+                "wait_for_cases",
+                "for_each_element",
+                "for_each_string",
+                "heist",
+                "invoke",
+                "warn",
+                "fail",
+            ]
         )
     }
 
@@ -27,7 +38,7 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(direction?.enumValues, fenceEnumValues(SwipeDirection.self))
     }
 
-    func testDescriptorDefaultsOwnCommandFallbackValues() {
+    func testDescriptorDefaultsOwnCommandDefaultValues() {
         XCTAssertEqual(
             TheFence.Command.scroll.descriptor.requiredDefaultEnumValue(for: .direction, as: ScrollDirection.self),
             .down

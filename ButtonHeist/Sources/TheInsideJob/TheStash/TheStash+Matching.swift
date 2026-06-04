@@ -129,7 +129,7 @@ extension TheStash {
     /// Single entry point for predicate-based element lookup. Returns up to `limit`
     /// matching ScreenElements using exact-or-miss semantics: case-insensitive
     /// equality with typography folding on string fields, exact bitmask comparison
-    /// on traits. There is no substring fallback — a miss is a miss, and the agent
+    /// on traits. There is no substring matching path; a miss is a miss, and the agent
     /// gets structured suggestions through the `.notFound` diagnostic path. Matches
     /// are returned in the committed screen's semantic order: live hierarchy
     /// entries first, then known entries retained from exploration. Viewport

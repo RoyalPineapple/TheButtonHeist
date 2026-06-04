@@ -9,7 +9,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `activate` | `activate` | direct | yes | Perform primary accessibility activation on a semantic UI element, or one of its named accessibility actions. |
 | `connect` | `connect` | direct | no | Establish or switch the active connection to a Button Heist app. |
 | `dismiss_keyboard` | `dismiss_keyboard` | direct | yes | Dismiss the on-screen keyboard through the current first responder or keyboard action path. |
-| `drag` | `drag` | direct | yes | Drag using exactly one typed intent: elementToPoint or pointToPoint. |
+| `drag` | `drag` | direct | yes | Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint. |
 | `edit_action` | `edit_action` | direct | yes | Perform an edit action on the current first responder. |
 | `get_interface` | `get_interface` | direct | no | Read the app accessibility hierarchy, optionally scoped to a subtree. |
 | `get_pasteboard` | `get_pasteboard` | direct | no | Read text from the general pasteboard. |
@@ -17,7 +17,7 @@ _Generated from `TheFence.Command.descriptors`._
 | `get_session_state` | `get_session_state` | direct | no | Inspect connection, device, and last-action session state. |
 | `list_devices` | `list_devices` | direct | no | List discovered iOS devices and configured connection targets. |
 | `list_targets` | `list_targets` | direct | no | List configured connection targets and the default target. |
-| `long_press` | `long_press` | direct | yes | Long-press an explicit point or semantic element for a resolved duration. |
+| `long_press` | `long_press` | direct | yes | Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration. |
 | `one_finger_tap` | `one_finger_tap` | direct | yes | Explicit mechanical/spatial tap. An element target supplies live geometry; ordinary accessible controls should use the semantic command path. |
 | `ping` | `ping` | direct | no | Check connection health without reading accessibility state. |
 | `play_heist` | `play_heist` | direct | no | Play back a heist file and return step diagnostics on failure. |
@@ -25,13 +25,13 @@ _Generated from `TheFence.Command.descriptors`._
 | `run_heist` | `run_heist` | direct | no | Execute an inline typed heist plan. |
 | `scroll` | `scroll` | direct | yes | Explicit viewport operation: scroll one page in the visible viewport, or within a semantic target's owning scroll ancestor. |
 | `scroll_to_edge` | `scroll_to_edge` | direct | yes | Explicit viewport operation: scroll the visible viewport, or a semantic target's owning scroll ancestor, to a requested edge. |
-| `scroll_to_visible` | `scroll_to_visible` | direct | yes | Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry. |
+| `scroll_to_visible` | `scroll_to_visible` | direct | yes | Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry. |
 | `set_pasteboard` | `set_pasteboard` | direct | yes | Write text to the general pasteboard from within the app. |
 | `start_heist` | `start_heist` | direct | no | Start composing successful interactions into a semantic heist test. |
 | `stop_heist` | `stop_heist` | direct | no | Stop heist recording and save a deterministic semantic heist fixture. |
-| `swipe` | `swipe` | direct | yes | Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
+| `swipe` | `swipe` | direct | yes | Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection. |
 | `type_text` | `type_text` | direct | yes | Type non-empty text, optionally after making a semantic target actionable. |
-| `wait` | `wait` | direct | yes | Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions. |
+| `wait` | `wait` | direct | yes | Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations. |
 
 ## Details
 
@@ -89,7 +89,7 @@ Parameters:
 
 ### `drag`
 
-Drag using exactly one typed intent: elementToPoint or pointToPoint.
+Explicit mechanical/spatial drag using exactly one typed intent: elementToPoint or pointToPoint.
 
 - CLI: direct command `drag`
 - MCP: direct tool
@@ -215,7 +215,7 @@ _None._
 
 ### `long_press`
 
-Long-press an explicit point or semantic element for a resolved duration.
+Explicit mechanical/spatial long press on a point or element-relative point for a resolved duration.
 
 - CLI: direct command `long_press`
 - MCP: direct tool
@@ -352,7 +352,7 @@ Parameters:
 
 ### `scroll_to_visible`
 
-Explicit viewport/debug operation: make a semantic target actionable and report its fresh geometry.
+Explicit viewport/debug operation: move the viewport until a semantic target is visible and report its fresh geometry.
 
 - CLI: direct command `scroll_to_visible`
 - MCP: direct tool
@@ -417,7 +417,7 @@ Parameters:
 
 ### `swipe`
 
-Swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
+Explicit mechanical/spatial swipe using exactly one typed intent: elementDirection, elementUnitPoints, pointToPoint, or pointDirection.
 
 - CLI: direct command `swipe`
 - MCP: direct tool
@@ -456,7 +456,7 @@ Parameters:
 
 ### `wait`
 
-Wait until an accessibility predicate is satisfied: present/absent poll the current interface; changed rides settled UI transitions.
+Wait until an accessibility predicate is satisfied within timeout by evaluating settled semantic observations.
 
 - CLI: direct command `wait`
 - MCP: direct tool

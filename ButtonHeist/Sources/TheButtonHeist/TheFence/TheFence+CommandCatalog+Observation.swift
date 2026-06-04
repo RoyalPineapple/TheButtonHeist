@@ -23,8 +23,8 @@ extension TheFence.Command {
                 isHeistExecutable: true,
                 parameters: FenceParameterBlocks.wait,
                 mcpAnnotations: MCPToolAnnotationSpec(readOnlyHint: true),
-                description: "Wait until an accessibility predicate is satisfied: present/absent poll the "
-                    + "current interface; changed rides settled UI transitions."
+                description: "Wait until an accessibility predicate is satisfied within timeout "
+                    + "by evaluating settled semantic observations."
             ),
         ]
     }

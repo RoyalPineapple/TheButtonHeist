@@ -2,6 +2,11 @@ import Foundation
 
 @_spi(ButtonHeistInternals) import TheScore
 
+/// Projects a heist plan and its execution result into the structured report
+/// tree used by public JSON and report adapters.
+///
+/// The projection describes what execution already produced. It does not run
+/// steps, evaluate predicates, resolve targets, or decide admission.
 struct HeistReportProjection {
     let summary: HeistReportSummary
     let nodes: [HeistReportNode]

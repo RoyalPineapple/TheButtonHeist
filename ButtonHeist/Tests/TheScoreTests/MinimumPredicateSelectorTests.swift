@@ -130,7 +130,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
         XCTAssertEqual(selection.candidate.tier, .identityWithState)
     }
 
-    func testStateOnlyFallback() throws {
+    func testStateOnlyDisambiguation() throws {
         let selected = makeElement(traits: [.selected])
         let notSelected = makeElement()
         let context = makeContext([
@@ -144,7 +144,7 @@ final class MinimumPredicateSelectorTests: XCTestCase {
         XCTAssertEqual(selection.candidate.tier, .stateOnly)
     }
 
-    func testOrdinalFallbackUsesStrongestSemanticCandidate() throws {
+    func testOrdinalDisambiguationUsesStrongestSemanticCandidate() throws {
         let first = makeElement(label: "Delete", traits: [.button])
         let second = makeElement(label: "Delete", traits: [.button])
         let context = makeContext([
@@ -156,9 +156,9 @@ final class MinimumPredicateSelectorTests: XCTestCase {
         let secondSelection = try XCTUnwrap(minimumUniquePredicate(for: "second", in: context))
 
         XCTAssertEqual(firstSelection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 0))
-        XCTAssertEqual(firstSelection.candidate.tier, .ordinalFallback)
+        XCTAssertEqual(firstSelection.candidate.tier, .ordinalDisambiguation)
         XCTAssertEqual(secondSelection.target, .predicate(ElementPredicate(label: "Delete", traits: [.button]), ordinal: 1))
-        XCTAssertEqual(secondSelection.candidate.tier, .ordinalFallback)
+        XCTAssertEqual(secondSelection.candidate.tier, .ordinalDisambiguation)
     }
 
     func testGeometryIsExcludedFromGeneratedCandidates() {
