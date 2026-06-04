@@ -37,7 +37,7 @@ final class SemanticObservationStream {
         let continuation: CheckedContinuation<Void, Never>
     }
 
-    private unowned let stash: TheStash
+    private weak var stash: TheStash?
     private let tripwire: TheTripwire
 
     private var nextSubscriptionID: UInt64 = 0
@@ -152,14 +152,28 @@ final class SemanticObservationStream {
         _ screen: Screen,
         scope: SemanticObservationScope = .visible
     ) -> SettledSemanticObservationEvent {
+        guard let stash else {
+            preconditionFailure("SemanticObservationStream cannot commit after TheStash is released")
+        }
         stash.storeSettledSemanticObservationForStream(screen)
-        return publishCurrentSettledObservation(scope: scope)
+        return publishCurrentSettledObservation(scope: scope, stash: stash)
     }
 
     func settlePostActionObservation(
         baselineTripwireSignal: TheTripwire.TripwireSignal,
         settleOutcome providedOutcome: SettleSession.Outcome? = nil
     ) async -> (settle: SettleSession.Outcome, event: SettledSemanticObservationEvent?) {
+        guard let stash else {
+            return (
+                SettleSession.Outcome(
+                    outcome: .cancelled(timeMs: 0),
+                    events: [],
+                    finalScreen: nil,
+                    elementsByKey: [:]
+                ),
+                nil
+            )
+        }
         let outcome: SettleSession.Outcome
         if let providedOutcome {
             outcome = providedOutcome
@@ -190,7 +204,8 @@ final class SemanticObservationStream {
     }
 
     private func publishCurrentSettledObservation(
-        scope: SemanticObservationScope = .visible
+        scope: SemanticObservationScope = .visible,
+        stash: TheStash
     ) -> SettledSemanticObservationEvent {
         settledSequence += 1
         let observation = SettledSemanticObservation(
@@ -199,7 +214,7 @@ final class SemanticObservationStream {
             screen: stash.currentScreen,
             tripwireSignal: tripwire.tripwireSignal()
         )
-        let event = makeEvent(observation: observation, previous: latestEvent)
+        let event = makeEvent(observation: observation, previous: latestEvent, stash: stash)
         latestEvent = event
         latestObservationIsDirty = false
         passiveObservationSettledReading = tripwire.latestReading
@@ -285,13 +300,15 @@ final class SemanticObservationStream {
 
     private func makeEvent(
         observation: SettledSemanticObservation,
-        previous: SettledSemanticObservationEvent?
+        previous: SettledSemanticObservationEvent?,
+        stash: TheStash
     ) -> SettledSemanticObservationEvent {
         let previousCapture = previous?.trace.captures.last
         let currentCapture = semanticTraceCapture(
             for: observation,
             sequence: previousCapture == nil ? 1 : 2,
-            parentHash: previousCapture?.hash
+            parentHash: previousCapture?.hash,
+            stash: stash
         )
         let trace = if let previousCapture {
             AccessibilityTrace(captures: [previousCapture, currentCapture])
@@ -311,7 +328,8 @@ final class SemanticObservationStream {
     private func semanticTraceCapture(
         for observation: SettledSemanticObservation,
         sequence: Int,
-        parentHash: String?
+        parentHash: String?,
+        stash: TheStash
     ) -> AccessibilityTrace.Capture {
         let interface = stash.semanticInterfaceWithHash(for: observation.screen).interface
         let windows = observation.tripwireSignal.windowStack.windows.enumerated().map { index, window in
@@ -344,9 +362,13 @@ final class SemanticObservationStream {
     }
 
     private func performObservationCycle(scope: SemanticObservationScope) async -> Bool {
+        guard let stash else {
+            stop()
+            return false
+        }
         switch scope {
         case .visible:
-            return await observeVisibleSemanticState()
+            return await observeVisibleSemanticState(stash: stash)
         case .discovery:
             guard let discoveryObservation else {
                 markDirtyFromTripwire()
@@ -354,13 +376,13 @@ final class SemanticObservationStream {
                 return true
             }
             await discoveryObservation()
-            _ = publishCurrentSettledObservation(scope: .discovery)
+            _ = publishCurrentSettledObservation(scope: .discovery, stash: stash)
             await Task.yield()
             return true
         }
     }
 
-    private func observeVisibleSemanticState() async -> Bool {
+    private func observeVisibleSemanticState(stash: TheStash) async -> Bool {
         if let reading = tripwire.latestReading,
            !latestObservationIsDirty,
            passiveObservationSettledReading?.tick == reading.tick {
